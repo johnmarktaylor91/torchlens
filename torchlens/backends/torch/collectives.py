@@ -361,7 +361,7 @@ def _c10d_group_seq(group: Any) -> tuple[int | None, str | None]:
         the boundary record where the witness vanished.
     """
 
-    from torchlens.utils._torch_compat import (
+    from torchlens._utils._torch_compat import (
         mark_torch_capability_missing,
         probe_c10d_capabilities,
     )
@@ -523,8 +523,8 @@ def _emit_boundary_op(
     """
 
     from ... import _state
-    from ...data_classes.internal_types import FuncExecutionContext
-    from ...utils.tensor_utils import safe_copy
+    from ..._data_classes.internal_types import FuncExecutionContext
+    from ..._utils.tensor_utils import safe_copy
     from ._tl import get_tensor_label, set_tensor_label
     from .ops import (
         _record_label_version_snapshot,
@@ -744,7 +744,7 @@ def _make_collective_wrap(site: CollectiveSite, original: Callable[..., Any]) ->
         async_op = bool(bound.get("async_op", False)) or site.attr in ("isend", "irecv")
         witness_policy = str(getattr(trace, "distributed_witness", "none") or "none")
 
-        from ...utils.rng import log_current_autocast_state, log_current_rng_states
+        from ..._utils.rng import log_current_autocast_state, log_current_rng_states
 
         save_rng = getattr(trace, "save_rng_states", False)
         rng_states = log_current_rng_states(torch_only=True) if save_rng else {}

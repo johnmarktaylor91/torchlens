@@ -42,7 +42,7 @@ def test_gated_mlp_recipe_populates_all_facets_with_real_values() -> None:
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
 
     view = log.modules["mlp"].facets
-    assert view.recipe_source == "gated_mlp"
+    assert view.function_source == "gated_mlp"
     assert view.up_out.shape == (2, 3, 16)
     assert view.gated_out.shape == (2, 3, 16)
     assert view.intermediate.shape == (2, 3, 16)

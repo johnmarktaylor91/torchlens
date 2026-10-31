@@ -45,7 +45,7 @@ def test_home_path_never_reaches_signature_regardless_of_flag(tmp_path: Path) ->
     trace = tl.trace(_SignatureModel(), torch.randn(2, 4))
     for flag in (True, False):
         bundle = tmp_path / f"sig_{flag}.tlspec"
-        tl.save(trace, bundle, overwrite=True, include_source=flag)
+        trace.save(bundle, overwrite=True, include_source=flag)
         blob = _bundle_bytes(bundle)
         assert _HOME.encode() not in blob, f"$HOME leaked at include_source={flag}"
         assert _CFG.encode() not in blob, f"absolute config path leaked at include_source={flag}"
@@ -54,7 +54,7 @@ def test_home_path_never_reaches_signature_regardless_of_flag(tmp_path: Path) ->
 def test_source_derived_default_dropped_when_source_excluded(tmp_path: Path) -> None:
     trace = tl.trace(_SignatureModel(), torch.randn(2, 4))
     bundle = tmp_path / "no_source.tlspec"
-    tl.save(trace, bundle, overwrite=True, include_source=False)
+    trace.save(bundle, overwrite=True, include_source=False)
     blob = _bundle_bytes(bundle)
     assert _CANARY_DEFAULT.encode() not in blob, (
         "source-derived signature default survived include_source=False"
@@ -88,7 +88,7 @@ def test_signature_nested_default_bracket_is_not_split() -> None:
 def test_func_signature_scrubbed_in_manifest_sites(tmp_path: Path) -> None:
     trace = tl.trace(_SignatureModel(), torch.randn(2, 4))
     bundle = tmp_path / "sites.tlspec"
-    tl.save(trace, bundle, overwrite=True, include_source=False)
+    trace.save(bundle, overwrite=True, include_source=False)
     manifest = json.loads((bundle / "manifest.json").read_text())
     text = json.dumps(manifest)
     assert _CANARY_DEFAULT not in text

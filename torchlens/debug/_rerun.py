@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
 __all__ = ["clone_input_tree", "isolated_capture", "preserved_rng_state"]
 
@@ -39,7 +39,7 @@ def _initialized_cuda_devices() -> list[int]:
         Device ordinals with a live CUDA context, or an empty list.
     """
 
-    from ..utils.tensor_utils import _is_cuda_initialized
+    from .._utils.tensor_utils import _is_cuda_initialized
 
     if _is_cuda_initialized() and torch.cuda.is_available():
         return list(range(torch.cuda.device_count()))
@@ -143,7 +143,7 @@ def isolated_capture(
     seed:
         Seed applied to Python, NumPy, and torch generators inside the
         preserved-RNG scope before the forward runs. It is also routed to
-        ``CaptureOptions(random_seed=...)`` (unless the caller's ``capture``
+        ``CaptureOptions(seed=...)`` (unless the caller's ``capture``
         options carry an explicit ``random_seed``), because unseeded captures
         pick a FRESH private seed per capture by design (R57) and would
         defeat same-seed reproduction.
@@ -182,14 +182,14 @@ def isolated_capture(
     run_trace_kwargs = dict(trace_kwargs)
     capture_options = run_trace_kwargs.get("capture")
     if capture_options is None:
-        run_trace_kwargs["capture"] = CaptureOptions(random_seed=seed)
-    elif not capture_options.is_field_explicit("random_seed"):
+        run_trace_kwargs["capture"] = CaptureOptions(seed=seed)
+    elif not capture_options.is_field_explicit("seed"):
         explicit_values = {
             field_name: value
             for field_name, value in capture_options.as_dict().items()
             if capture_options.is_field_explicit(field_name)
         }
-        explicit_values["random_seed"] = seed
+        explicit_values["seed"] = seed
         run_trace_kwargs["capture"] = CaptureOptions(**explicit_values)
     with preserved_rng_state():
         random.seed(seed)

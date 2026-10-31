@@ -16,7 +16,7 @@ no license file (its setup file declares MIT) and **zennit** is LGPL: from both,
 vocabulary only -- no source copied, ported, generated-from, or vendored.
 Permissively licensed work is different: the named CODE borrows are ported
 with a license notice in the source file -- treescope (Apache-2.0,
-`torchlens/notebook/_truncation.py`) and TransformerLens's `FactoredMatrix`
+`torchlens/_notebook/_truncation.py`) and TransformerLens's `FactoredMatrix`
 (MIT, `torchlens/mechinterp/_factored.py`) -- and Apache-2.0 reuse carries
 NOTICE attribution. Do not over-apply the cleanroom rule to permissively licensed
 work; do not under-apply it to unlicensed or copyleft work.

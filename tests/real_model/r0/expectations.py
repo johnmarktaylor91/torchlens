@@ -235,7 +235,6 @@ EXPECTED_TRACE_PARAM_COLLISIONS = (
     "intervene",
     "lookback",
     "profile",
-    "recipes",
     "save",
     "storage",
     "streaming",

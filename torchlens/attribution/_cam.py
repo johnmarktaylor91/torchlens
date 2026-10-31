@@ -19,8 +19,8 @@ from torchlens.attribution._cam_grid import (
 )
 from torchlens.attribution._core import (
     _DOCS_POINTER as _INTEGER_DOCS_POINTER,
+    Attribution,
     AttributionError,
-    AttributionResult,
     InputKwargs,
     _AttributionTarget,
     _Caller,
@@ -160,7 +160,7 @@ def grad_cam(
     image: Image.Image | None = None,
     alpha: float = 0.6,
     cmap: str = "magma",
-) -> AttributionResult:
+) -> Attribution:
     """Compute Grad-CAM for a convolution-style or token-grid layer.
 
     Parameters
@@ -277,7 +277,7 @@ def grad_cam(
         mode="bilinear",
         align_corners=False,
     )
-    return AttributionResult(
+    return Attribution(
         method="grad_cam",
         values=upsampled_cam.detach(),
         target_repr=_target_repr(target),

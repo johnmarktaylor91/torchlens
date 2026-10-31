@@ -14,10 +14,10 @@ from torch import nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
-from torchlens import load, save, trace as trace_fn  # noqa: E402
+from torchlens import load, trace as trace_fn  # noqa: E402
+from torchlens._data_classes.trace import Trace  # noqa: E402
 from torchlens._io import BlobRef  # noqa: E402
-from torchlens.data_classes.trace import Trace  # noqa: E402
-from torchlens.io import rehydrate_nested  # noqa: E402
+from torchlens.io import materialize_nested  # noqa: E402
 
 PYARROW_AVAILABLE = importlib.util.find_spec("pyarrow") is not None
 
@@ -143,8 +143,8 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
     streamed_log = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path),
     )
     assert (bundle_path / "manifest.json").exists()
     assert (bundle_path / "metadata.pkl").exists()
@@ -180,12 +180,10 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     live_log = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_arg_values=True, random_seed=0
-        ),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True, seed=0),
     )
 
-    save(live_log, source_path, include_saved_args=True)
+    live_log.save(source_path, include_saved_args=True)
     lazy_log = load(source_path, lazy=True, materialize_nested=False)
 
     nested_blob_layer = next(
@@ -196,10 +194,10 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     assert nested_blob_layer.out_ref is not None
     assert _contains_blob_ref(nested_blob_layer.saved_args)
 
-    rehydrate_nested(lazy_log)
+    materialize_nested(lazy_log)
 
     assert not _contains_blob_ref(nested_blob_layer.saved_args)
-    save(lazy_log, resaved_path, include_saved_args=True)
+    lazy_log.save(resaved_path, include_saved_args=True)
     restored = load(resaved_path, lazy=False)
 
     live_layer = _first_saved_layer(live_log)
@@ -226,8 +224,8 @@ def test_streaming_keep_outs_in_memory_false_materializes_from_refs(
     streamed_log = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
     eager_log = load(bundle_path, lazy=False)
 
@@ -251,8 +249,8 @@ def test_streaming_keep_outs_in_memory_true_keeps_tensor_and_ref(tmp_path: Path)
     streamed_log = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=True),
     )
 
     saved_layers = _saved_layers(streamed_log)

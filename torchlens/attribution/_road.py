@@ -27,12 +27,12 @@ from torchlens.attribution._curve_settings import CurveFeatures
 from torchlens.attribution._curves import (
     _DEFAULT_PATCH,
     _DEFAULT_STEPS,
-    CurveResult,
+    PerturbationCurve,
     _curve,
     _CurveRequest,
 )
 from torchlens.attribution._eval_maps import _DOCS_POINTER
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 
 RoadRanking: TypeAlias = Literal["most_relevant_first", "least_relevant_first"]
 
@@ -169,14 +169,14 @@ def road_curve(  # noqa: PLR0913 - public door: keyword-only evaluation settings
     input_kwargs: InputKwargs = None,
     *,
     target: _AttributionTarget,
-    attribution: AttributionResult | Any,
+    attribution: Attribution | Any,
     ranking: RoadRanking = "most_relevant_first",
-    n_steps: int = _DEFAULT_STEPS,
+    num_steps: int = _DEFAULT_STEPS,
     features: CurveFeatures = "auto",
     patch_size: int | tuple[int, int] = _DEFAULT_PATCH,
     noise_std: float = _DEFAULT_NOISE_STD,
     seed: int = 0,
-) -> CurveResult:
+) -> PerturbationCurve:
     """Remove features by noisy linear imputation and record the target score (ROAD).
 
     ROAD, "remove and debias" (Rong et al., ICML 2022): the deletion curve
@@ -186,7 +186,7 @@ def road_curve(  # noqa: PLR0913 - public door: keyword-only evaluation settings
     the mask's shape does not leak into the score. ``ranking`` removes the
     most relevant features first (MoRF, default) or the least relevant
     first (LeRF). Every step is a recorded intervention
-    (``CurveStep.intervention``) holding the step's imputed values.
+    (``CurveStep.build_interventions``) holding the step's imputed values.
 
     Parameters
     ----------
@@ -206,7 +206,7 @@ def road_curve(  # noqa: PLR0913 - public door: keyword-only evaluation settings
     ranking
         ``"most_relevant_first"`` (default, MoRF) or
         ``"least_relevant_first"`` (LeRF).
-    n_steps
+    num_steps
         Number of steps after the unperturbed start (default 20).
     features
         Feature grouping as in :func:`deletion_curve` (default ``"auto"``:
@@ -237,7 +237,7 @@ def road_curve(  # noqa: PLR0913 - public door: keyword-only evaluation settings
         target,
         attribution,
         "zeros",
-        n_steps,
+        num_steps,
         features,
         patch_size,
         imputer=_noisy_linear_imputer(float(noise_std), seed),
@@ -251,4 +251,4 @@ def road_curve(  # noqa: PLR0913 - public door: keyword-only evaluation settings
         "noise_std": float(noise_std),
         "seed": seed,
     }
-    return dataclasses.replace(result, metric="road", settings=settings)
+    return dataclasses.replace(result, kind="road", settings=settings)

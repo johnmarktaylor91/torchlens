@@ -112,7 +112,7 @@ def test_host_entropy_observed_as_divergence() -> None:
     report = check_determinism(_HostEntropyModel(), torch.randn(2, 4), runs=2, seed=3)
     assert report.verdict == "nondeterminism_observed"
     assert report.first_divergence is not None
-    shared = report.first_bad_thing
+    shared = report.first_problem
     assert shared.tool == "check_determinism"
     assert shared.kind == "nondeterminism"
     assert shared.detection_basis == "double_run"

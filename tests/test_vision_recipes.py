@@ -192,7 +192,7 @@ def test_gated_mlp_refuses_a_non_silu_gate() -> None:
     model = Qwen2ForCausalLM(config).eval()
     trace = tl.trace(model, torch.tensor([[1, 2, 3]]))
     view = trace.modules["model.layers.0.mlp"].facets
-    menu = view.menu()
+    menu = view.declared()
     assert menu["gated_out"].status == "structurally_absent"
     assert "hidden_act='gelu'" in str(menu["gated_out"].detail)
     assert menu["intermediate"].status == "structurally_absent"
@@ -230,7 +230,7 @@ def test_clip_vision_attention_per_head_facets_equal_independent_computation() -
     view = trace.modules[address].facets
     assert trace.modules[address].class_name == "CLIPAttention"
     for facet in ("q", "k", "v", "attn_out", "scores", "pattern", "z", "result"):
-        assert view.menu()[facet].status == "available_now", facet
+        assert view.declared()[facet].status == "available_now", facet
     reference = _clip_vision_reference(attn, view["input"].value)
     # q/k/v are served [batch, pos, head, d_head]; the reference is head-major.
     for facet in ("q", "k", "v"):
@@ -266,7 +266,7 @@ def test_clip_sdpa_serves_projections_and_reconstructs_on_request() -> None:
     model, trace = _capture("clip", "sdpa")
     address = "vision_model.encoder.layers.0.self_attn"
     view = trace.modules[address].facets
-    menu = view.menu()
+    menu = view.declared()
     for facet in ("q", "k", "v", "attn_out"):
         assert menu[facet].status == "available_now", facet
     assert menu["pattern"].status == "needs_capture"

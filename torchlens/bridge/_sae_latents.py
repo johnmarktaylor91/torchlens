@@ -239,7 +239,7 @@ class _SAEFamily:
 
         codec = _LatentCodec(self.name, self.sae, index)
         primitive = TransformPrimitive("codec", (codec,), capability_class="codec")
-        home = FacetSpec.from_home(record, recipe_id=f"sae:{self.name}")
+        home = FacetSpec.from_home(record, function_id=f"sae:{self.name}")
         return home._append(primitive)
 
     def _check_range(self, index: int | tuple[int, ...], record: Any) -> None:
@@ -507,7 +507,7 @@ def logged_splice_trace(
 
     import torchlens as tl
 
-    from ..utils.tensor_utils import get_tensor_label
+    from .._utils.tensor_utils import get_tensor_label
 
     module = module_for_site(clean, site_label, bridge="splice(..., log_latents=True)")
     raw: dict[str, str | None] = {}

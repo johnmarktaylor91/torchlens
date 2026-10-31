@@ -24,12 +24,8 @@ import mlx.nn as nn  # noqa: E402
 import torchlens as tl  # noqa: E402
 import torchlens.backends.mlx.backend as mlx_backend  # noqa: E402
 import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
-from torchlens.backends import (  # noqa: E402
-    BackendRuntimeCompatibilityError,
-    BackendUnsupportedError,
-    get_backend_spec,
-)
 from torchlens.backends.mlx import GradOptions  # noqa: E402
+from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError  # noqa: E402
 
 
 class TinyMLP(nn.Module):
@@ -294,7 +290,7 @@ def test_mlx_derived_grads_match_value_and_grad_oracle() -> None:
     assert trace.derived_grads["inputs.0"].provenance["mechanism"] == "mlx_value_and_grad"
     assert trace.params["proj.weight"].grad is trace.derived_grads["params.proj.weight"].grad
     assert trace.params["proj.bias"].grad is trace.derived_grads["params.proj.bias"].grad
-    assert len(trace.intermediate_derived_grads) == 0
+    assert len(trace.autograd.intermediate_derived_grads) == 0
 
 
 @pytest.mark.optional
@@ -322,9 +318,9 @@ def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
     mx.eval(expected, hidden_op.derived_grad)
 
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
-    assert hidden_op.label in trace.intermediate_derived_grads
+    assert hidden_op.label in trace.autograd.intermediate_derived_grads
     np.testing.assert_allclose(np.asarray(hidden_op.derived_grad), np.asarray(expected))
-    record = trace.intermediate_derived_grads[hidden_op.label]
+    record = trace.autograd.intermediate_derived_grads[hidden_op.label]
     assert record.provenance["mechanism"] == "mlx_custom_vjp_tap_value_and_grad"
     assert record.provenance["status"] == "exact"
     assert record.provenance["oracle"] == (
@@ -361,7 +357,7 @@ def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
         if op.has_saved_activation and not op.is_input and not op.is_output
     }
     assert saved
-    assert all(label in trace.intermediate_derived_grads for label in saved), saved
+    assert all(label in trace.autograd.intermediate_derived_grads for label in saved), saved
 
     def suffix(boundary: mx.array) -> mx.array:
         """Return the scalar loss from the relu boundary onward."""
@@ -371,7 +367,7 @@ def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
     expected = mx.grad(suffix)(relu_op.out)
     mx.eval(expected, relu_op.derived_grad)
     np.testing.assert_allclose(np.asarray(relu_op.derived_grad), np.asarray(expected))
-    assert trace.intermediate_derived_grads[relu_op.label].provenance["status"] == "exact"
+    assert trace.autograd.intermediate_derived_grads[relu_op.label].provenance["status"] == "exact"
 
 
 @pytest.mark.optional
@@ -435,7 +431,7 @@ def test_mlx_intermediate_derived_grads_duplicate_signature_skip(
 
     first_multiply = next(op for op in trace.layer_list if op.func_name == "multiply")
 
-    assert first_multiply.label not in trace.intermediate_derived_grads
+    assert first_multiply.label not in trace.autograd.intermediate_derived_grads
     assert first_multiply.derived_grad is None
 
 
@@ -456,7 +452,7 @@ def test_mlx_intermediate_derived_grads_do_not_pollute_module_call_counts() -> N
 
     assert trace.modules["proj"].num_calls == 1
     assert set(trace.module_calls.keys()) == {"self:1", "proj:1"}
-    assert trace.module_calls["proj:1"].num_ops >= 1
+    assert len(trace.module_calls["proj:1"].ops) >= 1
 
 
 @pytest.mark.optional
@@ -496,7 +492,7 @@ def test_mlx_intermediate_derived_grads_oracle_fail_skips_public_record(
     )
 
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
-    assert len(trace.intermediate_derived_grads) == 0
+    assert len(trace.autograd.intermediate_derived_grads) == 0
     assert all(op.derived_grad is None for op in trace.layer_list)
 
 
@@ -562,7 +558,7 @@ def test_mlx_derived_grads_are_not_backward_capture() -> None:
     with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
-        _ = trace.backward_passes
+        _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
         _ = trace.saved_grad_ops
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
@@ -584,8 +580,8 @@ def test_mlx_trace_draw_smokes(tmp_path: Path) -> None:
 
     trace = tl.trace(TinyMLP(), _tiny_mlp_input())
     rendered = trace.draw(
-        vis_outpath=str(tmp_path / "mlx_trace"),
-        vis_fileformat="pdf",
+        path=str(tmp_path / "mlx_trace"),
+        file_format="pdf",
         vis_save_only=True,
     )
 
@@ -627,7 +623,7 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
     }
     bundle_path = tmp_path / "mlx-materialized.tlspec"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path)
     manifest = tl.io.inspect_tlspec(bundle_path)
 
@@ -643,7 +639,7 @@ def test_mlx_save_load_materializes_public_payloads(tmp_path: Path) -> None:
     status = loaded.validate_forward_pass([])
     assert status is loaded.validation_replay_status
     assert status.state == "unavailable"
-    assert status.available is False
+    assert status.is_available is False
     assert status.reason == "loaded_trace_runtime_capture_stripped"
     assert status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):
@@ -662,7 +658,7 @@ def test_mlx_save_load_lazy_ref_materializes_public_payloads(tmp_path: Path) -> 
     }
     bundle_path = tmp_path / "mlx-lazy-materialized.tlspec"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path, lazy=True)
     manifest = tl.io.inspect_tlspec(bundle_path)
 
@@ -689,7 +685,7 @@ def test_mlx_save_load_missing_runtime_falls_back_to_audit_metadata(
     trace = tl.trace(TinyMLP(), _tiny_mlp_input())
     bundle_path = tmp_path / "mlx-missing-runtime.tlspec"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
 
     def _missing_mlx_runtime() -> Any:
         """Pretend ``mlx.core`` is unavailable during payload decode."""
@@ -725,7 +721,7 @@ def test_mlx_static_func_save_filters_public_payloads(tmp_path: Path) -> None:
     _assert_static_save_summary(trace, {"relu"})
 
     bundle_path = tmp_path / "mlx-selective-materialized.tlspec"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path)
     manifest = tl.io.inspect_tlspec(bundle_path)
     loaded_saved_ops = [op for op in loaded.layer_list if op.has_saved_activation]
@@ -743,11 +739,11 @@ def test_mlx_static_label_contains_and_composite_save_work() -> None:
     """MLX allows label, contains, and safe boolean composites for static save."""
 
     label_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label("relu_1_3_raw:1"))
-    contains_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.contains("relu"))
+    contains_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label_contains("relu"))
     composite_trace = tl.trace(
         TinyMLP(),
         _tiny_mlp_input(),
-        save=tl.func("linear") & ~tl.contains("linear_2"),
+        save=tl.func("linear") & ~tl.label_contains("linear_2"),
     )
 
     _assert_static_save_summary(label_trace, {"relu"})
@@ -759,7 +755,7 @@ def test_mlx_static_label_contains_and_composite_save_work() -> None:
 @pytest.mark.parametrize(
     ("selector", "pattern"),
     [
-        (tl.output(0), "unsupported selector kind 'output'"),
+        (tl.model_output(0), "unsupported selector kind 'output'"),
         (tl.where(_always_true, name_hint="always"), "tl.where"),
     ],
 )
@@ -778,7 +774,7 @@ def test_mlx_static_save_rejects_unsupported_selector_kinds(
 def test_mlx_capability_flags_match_materialized_contract() -> None:
     """MLX capability exports should advertise materialized array payloads."""
 
-    spec = get_backend_spec("mlx")
+    spec = tl.backends.spec("mlx")
 
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.intermediate_derived_grads is True

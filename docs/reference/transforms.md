@@ -19,8 +19,8 @@ from torchlens import transforms as T
 paths = tl.extract_dataset(
     model, stimuli,
     layers=["layer3", "layer4", "avgpool"],
-    output_dir="run/",
-    transform={
+    path="run/",
+    output_transform={
         "layer3": T.chain(T.flatten(), T.srp(1024, seed=0)),
         "layer4": T.srp(4096, seed=0),
         T.DEFAULT: T.chain(T.flatten(), T.unit_norm(), T.cast("bfloat16")),

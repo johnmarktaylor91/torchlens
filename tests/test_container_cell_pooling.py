@@ -18,11 +18,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._trace_core.op_store import PooledCell
-from torchlens.data_classes.op import (
+from torchlens._data_classes.op import (
     _container_pool_key,
     _pool_container_cells,
 )
+from torchlens._trace_core.op_store import PooledCell
 
 
 class _Stack(nn.Module):

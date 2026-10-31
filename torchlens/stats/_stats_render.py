@@ -131,13 +131,13 @@ def sparkline(counts: tuple[int, ...], *, style: str = "ascii") -> str:
 def _zero_field(stats: TensorStats) -> str | None:
     """The D10 zero field: FORM is the control, never a threshold."""
 
-    if stats.zero_count is None or stats.zero_count == 0 or stats.true_count is not None:
+    if stats.num_zero is None or stats.num_zero == 0 or stats.num_true is not None:
         return None
-    if stats.all_zero:
+    if stats.is_all_zero:
         return None
-    if stats.numel >= 1000 and stats.zero_count / stats.numel >= 0.01:
-        return f"zero={100.0 * stats.zero_count / stats.numel:.3g}%"
-    return f"zero={stats.zero_count}/{format_count(stats.numel)}"
+    if stats.numel >= 1000 and stats.num_zero / stats.numel >= 0.01:
+        return f"zero={100.0 * stats.num_zero / stats.numel:.3g}%"
+    return f"zero={stats.num_zero}/{format_count(stats.numel)}"
 
 
 def _health_fields(stats: TensorStats) -> list[str]:
@@ -145,9 +145,9 @@ def _health_fields(stats: TensorStats) -> list[str]:
 
     fields = []
     for name, count in (
-        ("nan", stats.nan_count),
-        ("+inf", stats.posinf_count),
-        ("-inf", stats.neginf_count),
+        ("nan", stats.num_nan),
+        ("+inf", stats.num_posinf),
+        ("-inf", stats.num_neginf),
     ):
         if count == 0:
             continue
@@ -188,17 +188,17 @@ def _distribution_zone(stats: TensorStats, style: str, *, spark: bool = True) ->
             else format_sig(stats.finite_min, 5)
         )
         special = f"= {token}"
-    elif stats.all_true:
+    elif stats.is_all_true:
         special = "all_true"
-    elif stats.all_false:
+    elif stats.is_all_false:
         special = "all_false"
-    elif stats.true_count is not None:
-        special = f"true={stats.true_count}/{format_count(stats.numel)}"
-    elif stats.no_finite_values:
+    elif stats.num_true is not None:
+        special = f"true={stats.num_true}/{format_count(stats.numel)}"
+    elif stats.has_no_finite_values:
         special = "no_finite_values"
-    elif stats.all_zero:
+    elif stats.is_all_zero:
         special = "all_zero"
-    elif constant is not None and stats.sd == 0:
+    elif constant is not None and stats.std == 0:
         special = f"constant={value_token(constant)}"
     if special is not None:
         return [special]
@@ -219,7 +219,7 @@ def _distribution_zone(stats: TensorStats, style: str, *, spark: bool = True) ->
             and stats.finite_min is not None
             and stats.finite_max is not None
         ):
-            mark = "~" if stats.histogram_evidence.sampled else ""
+            mark = "~" if stats.histogram_evidence.is_sampled else ""
             parts.append(
                 f"[{format_sig(stats.finite_min)} {mark}"
                 f"{sparkline(stats.histogram_counts, style=style)} "
@@ -227,20 +227,20 @@ def _distribution_zone(stats: TensorStats, style: str, *, spark: bool = True) ->
             )
         elif stats.finite_min is not None and stats.finite_max is not None:
             parts.append(f"[{format_sig(stats.finite_min)} .. {format_sig(stats.finite_max)}]")
-    label = "|mean|" if stats.magnitude_basis else "mean"
-    sd_label = "|sd|" if stats.magnitude_basis else "sd"
+    label = "|mean|" if stats.is_magnitude_based else "mean"
+    sd_label = "|sd|" if stats.is_magnitude_based else "sd"
     if stats.mean is not None:
-        if stats.mean_evidence.sampled:
+        if stats.mean_evidence.is_sampled:
             parts.append(f"{label}=~{format_sampled(stats.mean, stats.mean_se)}")
         else:
             parts.append(f"{label}={format_sig(stats.mean)}")
     elif stats.mean_evidence.policy == "unavailable" and stats.mean_evidence.reason:
         parts.append(f"{label}=unavailable({stats.mean_evidence.reason})")
-    if stats.sd is not None:
-        if stats.sd_evidence.sampled:
-            parts.append(f"{sd_label}=~{format_sampled(stats.sd, stats.sd_se)}")
+    if stats.std is not None:
+        if stats.std_evidence.is_sampled:
+            parts.append(f"{sd_label}=~{format_sampled(stats.std, stats.std_se)}")
         else:
-            parts.append(f"{sd_label}={format_sig(stats.sd)}")
+            parts.append(f"{sd_label}={format_sig(stats.std)}")
     return parts
 
 
@@ -270,9 +270,9 @@ def render_core_line(
         if zero_field:
             parts.append(zero_field)
         parts.extend(_health_fields(stats))
-        if stats.sd_evidence.sampled and stats.sd_evidence.sample_size:
+        if stats.std_evidence.is_sampled and stats.std_evidence.sample_size:
             parts.append(
-                f"(sampled {format_count(stats.sd_evidence.sample_size)}/"
+                f"(sampled {format_count(stats.std_evidence.sample_size)}/"
                 f"{format_count(stats.numel)})"
             )
         if stats.role is not None:

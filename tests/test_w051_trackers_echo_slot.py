@@ -1,4 +1,4 @@
-"""W051-TRACK / AUD-CODE 2.15: an ``echo=`` sink-open failure must release the
+"""W051-TRACK / AUD-CODE 2.15: an ``narrate=`` sink-open failure must release the
 capture reservation on the error path.
 
 The echo sink opens its path eagerly; before the fix the open ran between the
@@ -13,7 +13,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.options import EchoOptions
+from torchlens.options import NarrationOptions
 
 
 def _model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
@@ -29,7 +29,7 @@ def test_echo_sink_open_failure_releases_capture_slot_while_exception_is_held(
     model, x = _model_and_input()
     missing = tmp_path / "no_such_dir" / "echo.log"
     with pytest.raises(FileNotFoundError) as info:
-        tl.trace(model, x, echo=EchoOptions(sink=str(missing)))
+        tl.trace(model, x, narrate=NarrationOptions(sink=str(missing)))
     # ``info`` keeps the exception (and its frames) alive: the exact shape
     # that leaked the reservation before the fix.
     assert info.value is not None
@@ -46,6 +46,6 @@ def test_echo_sink_open_failure_leaves_no_runtime_context(tmp_path) -> None:  # 
 
     model, x = _model_and_input()
     with pytest.raises(FileNotFoundError):
-        tl.trace(model, x, echo=EchoOptions(sink=str(tmp_path / "missing" / "e.log")))
+        tl.trace(model, x, narrate=NarrationOptions(sink=str(tmp_path / "missing" / "e.log")))
     with _state.capture_reservation():
         pass  # admitted: the slot is free

@@ -44,6 +44,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import (
+    NumericAttestationStatus,
+    PathFaithfulness,
+    WitnessCompleteness,
+)
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
     PathDivergenceError,
@@ -52,17 +57,12 @@ from torchlens.errors import (
     RunnableTLSPECError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    NumericAttestationStatus,
-    PathFaithfulness,
-    WitnessCompleteness,
-)
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
     capture_container_structure=True,
     cache=False,
-    random_seed=0,
+    seed=0,
 )
 
 
@@ -86,9 +86,9 @@ def _save_load(
 
 
 def _verdict(loaded: tl.Trace, inputs: Any, **kwargs: Any) -> tuple[str, str]:
-    """Run with ``return_diverged`` and return (path_faithfulness, attestation) values."""
+    """Run with ``on_divergence="return"`` and return (path_faithfulness, attestation) values."""
 
-    result = loaded.run(inputs=inputs, on_divergence="return_diverged", **kwargs)
+    result = loaded.run(inputs=inputs, on_divergence="return", **kwargs)
     return (
         result.report.path_faithfulness.value,
         result.report.numeric_attestation.value,
@@ -715,9 +715,9 @@ class TestCorr25LivePoisonSpine:
         # next GC pass, making the test GC-timing-dependent).
         model = _LossyLiveModel()
         trace = tl.trace(model, x, capture=_CAPTURE)
-        result = trace.run(inputs=x, on_divergence="return_diverged")
+        result = trace.run(inputs=x, on_divergence="return")
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-        assert result.report.poisoned is True
+        assert result.report.is_poisoned is True
         with pytest.raises(PoisonedRunError):
             result.trace.to_pandas()
 
@@ -728,7 +728,7 @@ class TestCorr25LivePoisonSpine:
         trace = tl.trace(model, x, capture=_CAPTURE)
         result = trace.run(inputs=x)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-        assert result.report.poisoned is False
+        assert result.report.is_poisoned is False
         assert len(result.trace.to_pandas()) > 0
 
 
@@ -791,7 +791,7 @@ trace.save(sys.argv[1], level="runnable")
 
 _CORR2_3_CONSUME = """
 import sys, torch, torchlens as tl
-from torchlens.utils._torch_compat import get_current_function_mode_stack
+from torchlens._utils._torch_compat import get_current_function_mode_stack
 
 before = get_current_function_mode_stack()
 assert before == [], before
@@ -845,7 +845,7 @@ class _PropertyTrapTensor(torch.Tensor):
 class TestCorr26SubclassAdmission:
     """Unsupported subclasses fail typed at phase 0 under both policies."""
 
-    @pytest.mark.parametrize("policy", ("raise", "return_diverged"))
+    @pytest.mark.parametrize("policy", ("raise", "return"))
     def test_property_trap_subclass_fails_typed(self, policy: str, tmp_path: Path) -> None:
         x = torch.randn(2, 3)
         loaded = _save_load(_AddPair(), (x, x.clone()), tmp_path, acts=True)
@@ -884,7 +884,7 @@ class TestCorr27CloneGradFidelity:
 
         x = torch.randn(3, requires_grad=True)
         loaded = _save_load(_Double(), x, tmp_path, acts=True)
-        result = loaded.run(inputs=x.detach(), on_divergence="return_diverged")
+        result = loaded.run(inputs=x.detach(), on_divergence="return")
         assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
         assert result.output.requires_grad is False
 
@@ -897,7 +897,7 @@ class TestCorr27CloneGradFidelity:
 _CPU_ONLY_READINESS = """
 import sys, torch, torchlens as tl
 from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.runnable import ReadinessStatus
+from torchlens._runnable import ReadinessStatus
 
 assert not torch.cuda.is_available()
 loaded = tl.load(sys.argv[1])
@@ -960,7 +960,7 @@ class TestCudaStagingAndReadiness:
             descriptor = loaded.runnable_descriptor
             assert descriptor is not None
             assert descriptor.ambient_context.attestation_ineligible_context is True
-            result = loaded.run(inputs=x, on_divergence="return_diverged")
+            result = loaded.run(inputs=x, on_divergence="return")
         finally:
             torch.use_deterministic_algorithms(deterministic_before)
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -1316,8 +1316,8 @@ class TestOutputCapabilityMetaGates:
         import re
         import typing
 
-        from torchlens.ir import container as container_module
-        from torchlens.ir.container import CONTAINER_KIND_CAPABILITIES, ContainerSpec
+        from torchlens._ir import container as container_module
+        from torchlens._ir.container import CONTAINER_KIND_CAPABILITIES, ContainerSpec
 
         declared = set(typing.get_args(ContainerSpec.__dataclass_fields__["kind"].type))
         table = set(CONTAINER_KIND_CAPABILITIES)
@@ -1356,8 +1356,8 @@ class TestOutputCapabilityMetaGates:
     def test_forged_namedtuple_flag_cannot_suppress_recompute(self) -> None:
         """secB_1 adversarial pin: a hand-edited lossy_reconstruction=False is impotent."""
 
+        from torchlens._ir.container import ContainerSpec
         from torchlens._runnable_execution import _spec_node_reconstruction_lossy
-        from torchlens.ir.container import ContainerSpec
 
         forged = ContainerSpec(
             kind="namedtuple",
@@ -1370,8 +1370,8 @@ class TestOutputCapabilityMetaGates:
         assert _spec_node_reconstruction_lossy(forged) is True
 
     def test_plain_namedtuple_spec_recompute_stays_lossless(self) -> None:
+        from torchlens._ir.container import ContainerSpec
         from torchlens._runnable_execution import _spec_node_reconstruction_lossy
-        from torchlens.ir.container import ContainerSpec
 
         plain = ContainerSpec(
             kind="namedtuple",
@@ -1388,7 +1388,7 @@ class TestOutputCapabilityMetaGates:
     ) -> None:
         """3-ADJ-3: undeclared registrations refuse instances with extra state."""
 
-        from torchlens.ir.container import _CONTAINER_REGISTRY, register_container
+        from torchlens._ir.container import _CONTAINER_REGISTRY, register_container
 
         class _Holder:
             def __init__(self, a: torch.Tensor, b: torch.Tensor) -> None:
@@ -1422,7 +1422,7 @@ class TestContractLockstep:
     def test_contract_error_table_matches_enum_exactly(self) -> None:
         import re
 
-        from torchlens.runnable import RunnableErrorCode
+        from torchlens._runnable import RunnableErrorCode
 
         doc = (
             Path(__file__).resolve().parents[1]
@@ -1444,7 +1444,7 @@ class TestAliasEngineUnit:
 
     @staticmethod
     def _relation(left: torch.Tensor, right: torch.Tensor) -> str:
-        from torchlens.utils.alias_footprint import touched_bytes_relation
+        from torchlens._utils.alias_footprint import touched_bytes_relation
 
         return touched_bytes_relation(left, right)
 
@@ -1484,7 +1484,7 @@ class TestAliasEngineUnit:
         assert self._relation(base[:0], base) == "disjoint"
 
     def test_over_cap_intersecting_is_unknown_never_disjoint(self) -> None:
-        from torchlens.utils.alias_footprint import ALIAS_ENUMERATION_ELEMENT_CAP
+        from torchlens._utils.alias_footprint import ALIAS_ENUMERATION_ELEMENT_CAP
 
         big = torch.zeros(ALIAS_ENUMERATION_ELEMENT_CAP + 2, 2)
         # Incongruent element grids inside one storage with intersecting bounds and

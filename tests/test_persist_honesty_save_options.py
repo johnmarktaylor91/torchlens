@@ -34,8 +34,7 @@ def _blob_count(path) -> int:
 
 def test_executable_level_refuses_explicit_saved_args_opt_out(trace, tmp_path):
     with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.save(
-            trace,
+        trace.save(
             tmp_path / "bundle",
             level="executable_with_callables",
             include_saved_args=False,
@@ -46,8 +45,7 @@ def test_executable_level_refuses_explicit_saved_args_opt_out(trace, tmp_path):
 
 def test_executable_level_refuses_explicit_rng_states_opt_out(trace, tmp_path):
     with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.save(
-            trace,
+        trace.save(
             tmp_path / "bundle",
             level="executable_with_callables",
             include_rng_states=False,
@@ -62,16 +60,16 @@ def test_executable_level_refuses_explicit_rng_states_opt_out(trace, tmp_path):
 )
 def test_payload_free_levels_refuse_explicit_payload_opt_in(trace, tmp_path, level, flag):
     with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.save(trace, tmp_path / "bundle", level=level, **{flag: True})
+        trace.save(tmp_path / "bundle", level=level, **{flag: True})
     assert excinfo.value.fields["code"] == "save_payload_level_conflict"
 
 
 def test_omitted_flags_keep_level_defaults(trace, tmp_path):
     """Defaults per level are unchanged: the sentinel only detects EXPLICIT values."""
 
-    tl.save(trace, tmp_path / "portable", level="portable")
-    tl.save(trace, tmp_path / "audit", level="audit")
-    tl.save(trace, tmp_path / "exec", level="executable_with_callables")
+    trace.save(tmp_path / "portable", level="portable")
+    trace.save(tmp_path / "audit", level="audit")
+    trace.save(tmp_path / "exec", level="executable_with_callables")
     # audit ships no payload blobs; executable ships strictly more than portable
     # (the saved-args/RNG payloads its level exists for).
     assert _blob_count(tmp_path / "audit") == 0
@@ -82,15 +80,13 @@ def test_omitted_flags_keep_level_defaults(trace, tmp_path):
 
 
 def test_explicit_flags_matching_level_defaults_stay_accepted(trace, tmp_path):
-    tl.save(
-        trace,
+    trace.save(
         tmp_path / "exec",
         level="executable_with_callables",
         include_saved_args=True,
         include_rng_states=True,
     )
-    tl.save(
-        trace,
+    trace.save(
         tmp_path / "audit",
         level="audit",
         include_outs=False,
@@ -100,6 +96,6 @@ def test_explicit_flags_matching_level_defaults_stay_accepted(trace, tmp_path):
 
 
 def test_portable_explicit_flags_keep_historical_meaning(trace, tmp_path):
-    tl.save(trace, tmp_path / "with_args", include_saved_args=True)
-    tl.save(trace, tmp_path / "no_args", include_saved_args=False)
+    trace.save(tmp_path / "with_args", include_saved_args=True)
+    trace.save(tmp_path / "no_args", include_saved_args=False)
     assert _blob_count(tmp_path / "with_args") > _blob_count(tmp_path / "no_args")

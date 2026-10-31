@@ -19,7 +19,7 @@ import torch
 
 from torchlens._errors import (
     ArgumentTypeError,
-    CaptureContextError,
+    CaptureNotActiveError,
     KeywordConflictError,
 )
 from torchlens.bridge import depyf as bdepyf
@@ -46,7 +46,7 @@ def _fake_depyf(monkeypatch: pytest.MonkeyPatch, *, prepare_debug: Any | None) -
 
 def test_depyf_prepare_debug_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     _fake_depyf(monkeypatch, prepare_debug=None)
-    with pytest.raises(CaptureContextError) as info:
+    with pytest.raises(CaptureNotActiveError) as info:
         bdepyf.dump(torch.nn.Linear(2, 2), torch.randn(1, 2), tmp_path)
     assert isinstance(info.value, RuntimeError)
     _assert_code(info.value, "bridge_depyf_prepare_debug_missing")
@@ -55,7 +55,7 @@ def test_depyf_prepare_debug_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 def test_depyf_nothing_dumped(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     _fake_depyf(monkeypatch, prepare_debug=lambda path, **kwargs: contextlib.nullcontext())
     monkeypatch.setattr(torch, "compile", lambda model: model)
-    with pytest.raises(CaptureContextError) as info:
+    with pytest.raises(CaptureNotActiveError) as info:
         bdepyf.dump(torch.nn.Linear(2, 2), torch.randn(1, 2), tmp_path)
     _assert_code(info.value, "bridge_depyf_nothing_dumped")
 

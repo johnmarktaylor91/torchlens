@@ -30,13 +30,13 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens._io.bundle import _RenameAwareUnpickler
 from torchlens._io.rehydrate import _assign_rehydrated_field
 from torchlens._io.state_keys import (
     PortableStateKeyError,
     refuse_callable_shadowing_state_keys,
 )
-from torchlens.data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
 
@@ -54,7 +54,7 @@ def _build(tmp_path: Path) -> Path:
     cap = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
     trace = tl.trace(_M().eval(), torch.randn(2, 4), capture=cap)
     bundle = tmp_path / "base.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     return bundle
 
 

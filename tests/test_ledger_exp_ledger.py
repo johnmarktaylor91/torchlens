@@ -42,7 +42,7 @@ def test_arm_opens_entry_and_contextvar_scopes(tmp_path: Path) -> None:
         entries = led.entries()
         assert list(entries) == ["e1"]
         entry = entries["e1"]
-        assert not entry.draft
+        assert not entry.is_draft
         assert entry.hypothesis_declared_at_seq is not None
         assert entry.metric_declared_at_seq is not None
         assert entry.metric == "logit diff"
@@ -55,7 +55,7 @@ def test_arm_opens_entry_and_contextvar_scopes(tmp_path: Path) -> None:
 def test_draft_without_hypothesis_and_verdict_basis_honesty(tmp_path: Path) -> None:
     led = ledger(tmp_path / "run.tlledger")
     try:
-        assert led.entries()["e1"].draft
+        assert led.entries()["e1"].is_draft
         assert " DRAFT" in led.entries()["e1"].overview_line()
         # A verdict with no basis is legal and VISIBLY weaker.
         led.verdict("inconclusive", text="eyeballed")
@@ -104,8 +104,8 @@ def test_verdict_vocabulary_closed(tmp_path: Path) -> None:
 def test_kill_minus_nine_invariant_and_torn_tail_disclosure(tmp_path: Path) -> None:
     path = tmp_path / "run.tlledger"
     led = ledger(path, hypothesis="h", metric="m")
-    step = led.material_step("site_sweep")
-    led.finalize_step(step, outcome="completed")
+    step = led.begin_step("site_sweep")
+    led.end_step(step, outcome="completed")
     n_events = len(led.events)
     led.close()
 
@@ -153,19 +153,19 @@ def test_quarantine_on_sink_death_returns_material_result(tmp_path: Path) -> Non
 
     led = ledger(tmp_path / "run.tlledger", hypothesis="h")
     try:
-        step = led.material_step("vary")
+        step = led.begin_step("vary")
         # Kill the sink AFTER material work.
         led._handle.close()
         material = {"the": "bundle"}
         with pytest.warns(TorchLensWarning, match="QUARANTINED"):
-            result = led.finalize_step(step, outcome="completed", material_result=material)
+            result = led.end_step(step, outcome="completed", material_result=material)
         assert result is material  # the material result is returned unharmed
         with pytest.raises(BundleExperimentError) as excinfo:
             led.observe("entry is disarmed")
         assert excinfo.value.fields["code"] == "ledger_entry_quarantined"
         # Explicit save() RAISES on a dead sink (no material result at risk).
         with pytest.raises(BundleExperimentError):
-            led.save()
+            led.flush()
     finally:
         with contextlib.suppress(BundleExperimentError):
             led.close()
@@ -176,11 +176,11 @@ def test_on_record_error_raise_opt_in(tmp_path: Path) -> None:
 
     led = ledger(tmp_path / "run.tlledger", hypothesis="h", on_record_error="raise")
     try:
-        step = led.material_step("vary")
+        step = led.begin_step("vary")
         led._handle.close()
         material = {"the": "bundle"}
         with pytest.raises(BundleExperimentError) as excinfo:
-            led.finalize_step(step, outcome="completed", material_result=material)
+            led.end_step(step, outcome="completed", material_result=material)
         fields = excinfo.value.fields
         assert fields["code"] == "ledger_write_failed"
         assert fields["material_action_completed"] is True
@@ -227,10 +227,10 @@ def test_nested_arming_refuses_same_scope(tmp_path: Path) -> None:
 def test_ledger_json_is_reference_only(tmp_path: Path) -> None:
     path = tmp_path / "run.tlledger"
     led = ledger(path, hypothesis="ablating head 5 drops the Paris logit", metric="logit")
-    step = led.material_step(
+    step = led.begin_step(
         "site_sweep", refs=[EvidenceRef(kind="bundle", uri="sweep_bundle", digest="a" * 64)]
     )
-    led.finalize_step(step, outcome="completed")
+    led.end_step(step, outcome="completed")
     led.observe("head 5 moved the logit", value=11.09)
     led.verdict("supports", basis=[step])
     led.close()
@@ -248,10 +248,10 @@ def test_ledger_json_is_reference_only(tmp_path: Path) -> None:
 def test_serving_tools_read_live_artifact(tmp_path: Path) -> None:
     path = tmp_path / "run.tlledger"
     led = ledger(path, hypothesis="h", metric="m", question="q?")
-    step = led.material_step(
+    step = led.begin_step(
         "site_sweep", refs=[EvidenceRef(kind="bundle", uri="missing_bundle", digest="b" * 64)]
     )
-    led.finalize_step(step, outcome="completed")
+    led.end_step(step, outcome="completed")
     led.observe("reading", value=1.0)
     led.verdict("supports", basis=[step])
 
@@ -291,7 +291,7 @@ def test_emission_one_step_per_operation(tmp_path: Path) -> None:
     from torch import nn
 
     import torchlens as tl
-    from torchlens.experiment import site_sweep
+    from torchlens.experiment import sweep_sites
 
     class _Tiny(nn.Module):
         def __init__(self) -> None:
@@ -311,7 +311,7 @@ def test_emission_one_step_per_operation(tmp_path: Path) -> None:
 
     led = ledger(tmp_path / "run.tlledger", hypothesis="h", metric="m")
     try:
-        bundle = site_sweep(
+        bundle = sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),
@@ -349,10 +349,10 @@ def test_mcp_server_serves_the_three_ledger_tools(tmp_path: Path) -> None:
 
     path = tmp_path / "run.tlledger"
     led = ledger(path, hypothesis="h", metric="m")
-    step = led.material_step(
+    step = led.begin_step(
         "site_sweep", refs=[EvidenceRef(kind="bundle", uri="gone", digest="c" * 64)]
     )
-    led.finalize_step(step, outcome="completed")
+    led.end_step(step, outcome="completed")
     led.verdict("not_assessed")
     led.close()
 

@@ -7,20 +7,20 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from .errors import (
-    ReattachError,
-    RunCapabilityUnavailableError,
-    RunPreconditionError,
-)
-from .runnable import (
-    ContractCheck,
+from torchlens._runnable import ContractCheck, ReadinessReport
+
+from ._runnable import (
     ControlWitness,
     ControlWitnessKind,
-    ReadinessReport,
     ReadinessStatus,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotRole,
+)
+from .errors import (
+    ReattachError,
+    RunCapabilityUnavailableError,
+    RunPreconditionError,
 )
 
 if TYPE_CHECKING:
@@ -173,7 +173,7 @@ def raise_analysis_run_unavailable(trace: Any) -> None:
     raise RunCapabilityUnavailableError(
         "This loaded Trace is analysis-only and has no sparse run descriptor. "
         "Remedy: save a runnable artifact at capture time with "
-        "tl.save(trace, path, level='runnable') and load that instead.",
+        "trace.save(path, level='runnable') and load that instead.",
         code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
         readiness=readiness,
         diagnostics=diagnostics,
@@ -516,7 +516,7 @@ def _inventory_site_positions(descriptor: SparseRunDescriptor) -> set[Any]:
     arity from surviving witnesses (the secA-F1 self-referential lane).
     """
 
-    from torchlens.runnable import decode_input_site_position
+    from torchlens._runnable import decode_input_site_position
 
     try:
         positions = {

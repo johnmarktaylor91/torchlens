@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens.errors import SelectionError
 
 
 class _Net(nn.Module):
@@ -37,7 +37,7 @@ def capture():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
     try:
         yield trace
@@ -64,7 +64,7 @@ def test_act_selection_scalar_refuses_typed(capture, bad_value) -> None:
 def test_edge_selection_scalar_refuses_typed(capture) -> None:
     """EDGE lane: same refusal, same teaching."""
 
-    edge = next(e for e in capture.edges if e.parent_label == "relu_1_2")
+    edge = next(e for e in capture.graph.edges if e.parent_label == "relu_1_2")
     fork = capture.fork()
     with pytest.raises(SelectionError) as excinfo:
         fork.do(edge.__selection__(), 0.0)
@@ -77,7 +77,7 @@ def test_param_selection_scalar_refuses_typed(capture) -> None:
 
     fork = capture.fork()
     with pytest.raises(SelectionError) as excinfo:
-        fork.do(tl.params("c1.weight"), 0.0)
+        fork.do(tl.param("c1.weight"), 0.0)
     assert excinfo.value.fields["code"] == "selection_apply_invalid"
     assert "replacement value" in str(excinfo.value)
 

@@ -66,7 +66,7 @@ class PrecisionRow:
 
 
 @dataclass(frozen=True)
-class BisectPrecisionResult(FoundReport):
+class BisectPrecisionReport(FoundReport):
     """Result of :func:`bisect_precision`.
 
     Parameters
@@ -128,7 +128,7 @@ def bisect_precision(
     rtol: float | None = None,
     atol: float | None = None,
     seed: int = 0,
-) -> BisectPrecisionResult:
+) -> BisectPrecisionReport:
     """Locate the first op whose native-precision output drifts from fp64.
 
     Both runs execute on fresh deep copies through the shared isolated-rerun
@@ -163,7 +163,7 @@ def bisect_precision(
 
     Returns
     -------
-    BisectPrecisionResult
+    BisectPrecisionReport
         First divergence plus the full per-op comparison table.
     """
 
@@ -198,7 +198,7 @@ def bisect_precision(
 
 def _compare_traces(
     native_trace: Any, reference_trace: Any, *, rtol: float | None, atol: float | None
-) -> BisectPrecisionResult:
+) -> BisectPrecisionReport:
     """Walk both traces in execution order and build the comparison result."""
 
     reference_ops = {_op_label(op): op for op in _compute_ops(reference_trace)}
@@ -300,7 +300,7 @@ def _build_result(
     first: PrecisionRow | None,
     rows: list[PrecisionRow],
     skipped: list[tuple[str, str]],
-) -> BisectPrecisionResult:
+) -> BisectPrecisionReport:
     """Assemble the result object with an honest summary message."""
 
     skip_note = (
@@ -332,7 +332,7 @@ def _build_result(
             f"No precision divergence beyond tolerance across {len(rows)} compared "
             f"op(s).{skip_note}"
         )
-    return BisectPrecisionResult(
+    return BisectPrecisionReport(
         found=first is not None,
         label=None if first is None else first.label,
         func_name=None if first is None else first.func_name,

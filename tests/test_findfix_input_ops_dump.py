@@ -23,7 +23,6 @@ import pytest
 import torch
 from support.structural_grouper import legacy_structural_grouping
 
-import torchlens as tl
 from tests.test_trace_boundary_ops_multipass import _loop_trace
 from torchlens.agent import call_tool
 
@@ -37,7 +36,7 @@ def saved_loop(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[str
     for label, value in zip(expected, inputs, strict=True):
         assert torch.equal(trace[label].out, value)
     path = tmp_path_factory.mktemp("findfix_dump") / "loop_inputs.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     return path, expected
 
 

@@ -102,9 +102,9 @@ def _draw_source(log: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> 
 
     return str(
         log.draw(
-            vis_outpath=str(tmp_path / name),
+            path=str(tmp_path / name),
             vis_save_only=True,
-            vis_fileformat="pdf",
+            file_format="pdf",
             **kwargs,
         )
     )

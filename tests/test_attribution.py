@@ -6,6 +6,7 @@ import pytest
 import torch
 from torch import Tensor, nn
 
+import torchlens
 import torchlens.attribution as attribution
 
 
@@ -275,7 +276,7 @@ def test_integrated_gradients_completeness_on_smooth_mlp() -> None:
         inputs,
         target=1,
         baseline=baseline,
-        n_steps=256,
+        num_steps=256,
     )
 
     with torch.no_grad():
@@ -303,7 +304,7 @@ def test_smoothgrad_seed_determinism() -> None:
         model,
         inputs,
         target=lambda output: output.sum(),
-        n_samples=12,
+        num_samples=12,
         noise_level=0.35,
         seed=123,
     )
@@ -311,7 +312,7 @@ def test_smoothgrad_seed_determinism() -> None:
         model,
         inputs,
         target=lambda output: output.sum(),
-        n_samples=12,
+        num_samples=12,
         noise_level=0.35,
         seed=123,
     )
@@ -319,7 +320,7 @@ def test_smoothgrad_seed_determinism() -> None:
         model,
         inputs,
         target=lambda output: output.sum(),
-        n_samples=12,
+        num_samples=12,
         noise_level=0.35,
         seed=456,
     )
@@ -362,7 +363,7 @@ def test_integrated_gradients_two_input_shapes_and_completeness() -> None:
         (first, second),
         target=lambda output: output.sum(),
         baseline=(first_baseline, second_baseline),
-        n_steps=512,
+        num_steps=512,
     )
 
     assert isinstance(result.values, tuple)
@@ -417,7 +418,7 @@ def test_integrated_gradients_rejects_mismatched_baseline_structure() -> None:
     first = torch.tensor([[0.5, -1.0]])
     second = torch.tensor([[2.0, 3.0]])
 
-    with pytest.raises(attribution.AttributionError, match="baseline must mirror"):
+    with pytest.raises(torchlens.errors.AttributionError, match="baseline must mirror"):
         attribution.integrated_gradients(
             model,
             (first, second),

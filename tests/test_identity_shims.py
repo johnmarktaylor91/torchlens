@@ -34,7 +34,7 @@ import torch.nn.functional as F
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.utils import _torch_compat
+from torchlens._utils import _torch_compat
 
 
 def _flag(name: str) -> bool:
@@ -490,7 +490,7 @@ class TestSubclassCtorUnderWitness:
             ):
                 assert exited == (owned,)
                 raise RuntimeError("ctor failed")
-            from torchlens.utils._torch_compat import get_current_dispatch_mode_stack
+            from torchlens._utils._torch_compat import get_current_dispatch_mode_stack
 
             stack = get_current_dispatch_mode_stack()
             assert stack is not None and stack[-1] is owned
@@ -534,12 +534,12 @@ class TestAsSubclassOpIdentity:
         torch.manual_seed(0)
         if not _flag("HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE"):
             # Floor-torch capability gap (torch 2.1/2.2): see
-            # SubclassConstructionUnderDispatchModeError.
+            # TensorSubclassUnsupportedError.
             from torchlens.backends.torch._modes import (
-                SubclassConstructionUnderDispatchModeError,
+                TensorSubclassUnsupportedError,
             )
 
-            with pytest.raises(SubclassConstructionUnderDispatchModeError) as excinfo:
+            with pytest.raises(TensorSubclassUnsupportedError) as excinfo:
                 tl.validation.validate_forward_pass(Model(), torch.randn(2, 3))
             assert excinfo.value.fields["code"] == "subclass_ctor_under_dispatch_mode_unsupported"
             return
@@ -634,7 +634,7 @@ class TestShimLifecycle:
         assert not getattr(inner, "_torchlens_identity_shim", False)
 
     def test_capability_flags_reported_in_snapshot(self):
-        from torchlens.utils._torch_compat import get_torch_capability_snapshot
+        from torchlens._utils._torch_compat import get_torch_capability_snapshot
 
         snapshot = get_torch_capability_snapshot()
         for name in (

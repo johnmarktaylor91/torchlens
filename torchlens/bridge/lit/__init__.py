@@ -245,7 +245,7 @@ def model(
     name: str | None = None,
     max_minibatch_size: int = 8,
     max_new_tokens: int = 16,
-    top_k: int = 10,
+    k: int = 10,
     attention: Any = None,
 ) -> Any:
     """Wrap a live torch model as a real LIT ``Model`` (memo D1-D11, D18-D19).
@@ -281,7 +281,7 @@ def model(
         LIT minibatch bound (memo D9: batching is what makes warm_start fast).
     max_new_tokens:
         Fixed deterministic-generation length (causal LM only).
-    top_k:
+    k:
         Next-token candidates per row (causal LM only).
     attention:
         REFUSED (memo D12): LIT deleted its attention panel upstream; the type
@@ -340,7 +340,7 @@ def model(
     )
     if task == "classification":
         return TorchLensLitClassifier(live, tokenizer, config, resolved_labels)
-    return TorchLensLitCausalLM(live, tokenizer, config, max_new_tokens, top_k)
+    return TorchLensLitCausalLM(live, tokenizer, config, max_new_tokens, k)
 
 
 def dataset(

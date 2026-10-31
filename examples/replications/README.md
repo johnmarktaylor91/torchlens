@@ -21,7 +21,7 @@ The TorchLens calls used: `tl.trace` with `tl.options.CaptureOptions`,
 `torchlens.mechinterp.head_scores` with `torchlens.mechinterp.FixedPeriodInduction`,
 `torchlens.mechinterp.direct_logit_contributions` over `torchlens.mechinterp.full_decomposition`,
 `trace.fork`, `attach_hooks` with a `tl.facet(...).in_module(...)` selector, `run`, and
-`tl.save`.
+`Trace.save`.
 
 ## Data
 

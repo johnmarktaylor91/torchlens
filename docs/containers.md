@@ -1,6 +1,6 @@
 # Containers
 
-TorchLens records input and output container structure for supported Python containers and exposes it as a lightweight runtime view. The public names in this guide are provisional for review: `Container`, `input_at`, `output_at`, `register_container`, and `capture_container_structure`.
+TorchLens records input and output container structure for supported Python containers and exposes it as a lightweight runtime view. The public names in this guide are provisional for review: `torchlens.types.Container`, `torchlens.types.register_container`, and the `capture_container_structure` option.
 
 ## Runtime View
 
@@ -43,16 +43,6 @@ The FINAL model-output snapshot is recorded on every capture (one `ContainerSpec
 
 Input-container reconstruction and module-boundary container records require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or per-op container specs recorded after capture or after `.tlspec` load without enabling intervention replay metadata. `intervention_ready=True` also captures that structure as part of its broader replay-template metadata. (The former `capture_output_structure=` alias is removed.)
 
-## Nested Output Selection
-
-`tl.output_at(path)` selects an output leaf by nested path:
-
-```python
-site = trace.resolve_sites(tl.output_at(("past_key_values", 0, 1))).first()
-```
-
-The selector matches TorchLens typed paths for dict keys, HuggingFace `ModelOutput` keys, namedtuple/dataclass fields, and tuple/list indices.
-
 ## Visualization
 
 Container visualization is opt-in so default graph output remains unchanged.
@@ -71,10 +61,10 @@ Container membership is a per-pass fact. On a rolled graph, a multi-pass (recurr
 
 ## Custom Containers
 
-Register proprietary containers with `tl.register_container(type, flatten, unflatten)`.
+Register proprietary containers with `tl.types.register_container(type, flatten, unflatten)`.
 
 ```python
-tl.register_container(
+tl.types.register_container(
     PairBox,
     lambda value: ([value.left, value.right], None),
     lambda aux, children: PairBox(children[0], children[1]),

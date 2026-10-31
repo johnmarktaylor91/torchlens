@@ -10,7 +10,7 @@ cert5 inspector that previously lacked coverage:
 * MAJOR-2 -- intervention-spec save/load silently stringified non-string dict keys.
 * MAJOR-3 -- ``DIRECTION_AGNOSTIC_KINDS`` omitted output/output_at/input_at, so a
   validly-composed forward-output & backward selector resolved to 0 sites.
-* MAJOR-4 -- ``SuperOp.diff_pair`` silently truncated a vector member to element 0
+* MAJOR-4 -- ``SuperOp.compare`` silently truncated a vector member to element 0
   when compared against a scalar member.
 """
 
@@ -24,7 +24,7 @@ import torch
 import torchlens as tl
 from torchlens.intervention._metrics import (
     cosine_distance,
-    relative_l1_scalar,
+    relative_l1,
 )
 from torchlens.intervention._super._base import _TensorBearing
 from torchlens.intervention.errors import UnserializableDictKeyError
@@ -34,6 +34,7 @@ from torchlens.intervention.save import (
     _serialize_value,
     _SerializedState,
 )
+from torchlens.intervention.selectors import output_at
 from torchlens.options import ReplayOptions
 
 
@@ -137,7 +138,7 @@ def test_fork_shares_optimizer_aliasing_live_params() -> None:
 def test_fork_policy_shares_optimizer_but_keeps_it_off_the_display_field_order() -> None:
     """MAJOR-1: ``_optimizer`` has a SHARE policy yet stays out of FIELD_ORDER."""
 
-    from torchlens.constants import MODEL_LOG_FIELD_ORDER
+    from torchlens._constants import MODEL_LOG_FIELD_ORDER
     from torchlens.intervention.types import (
         MODEL_LOG_FIELD_FORK_POLICY,
         ForkFieldPolicy,
@@ -192,13 +193,13 @@ def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(intervention_ready=True, save_grads="all"),
     )
-    branch0 = log.find_sites(tl.output_at(0))
+    branch0 = log.find_sites(output_at(0))
     assert branch0, "expected output_at(0) to match the first tuple branch"
     log.log_backward(branch0[0].out.sum())
 
     # A backward-only selector composed with a forward output-position selector
     # must bridge the GradFn site back to its paired forward op.
-    composed = log.find_sites(tl.output_at(0) & tl.grad_input())
+    composed = log.find_sites(output_at(0) & tl.grad_input())
     assert len(composed) >= 1
 
 
@@ -221,10 +222,10 @@ def test_relative_l1_scalar_rejects_numel_mismatch(
 ) -> None:
     """The scalar fallback rejects both mismatch orientations without truncation."""
     with pytest.raises(ValueError, match="equal element counts"):
-        relative_l1_scalar(left, right)
+        relative_l1(left, right)
 
     if check_scalar_control:
-        assert float(relative_l1_scalar(torch.tensor(1.0), torch.tensor(2.0))) == 1.0
+        assert float(relative_l1(torch.tensor(1.0), torch.tensor(2.0))) == 1.0
 
 
 def test_diff_row_scalar_vs_vector_member_raises_not_truncates() -> None:

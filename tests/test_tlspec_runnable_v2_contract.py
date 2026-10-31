@@ -17,12 +17,12 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.errors import RunCapabilityUnavailableError, RunPreconditionError
-from torchlens.runnable import (
+from torchlens._runnable import (
     RUNNABLE_TLSPEC_SCHEMA_VERSION,
     ReadinessStatus,
     RunnableErrorCode,
 )
+from torchlens.errors import RunCapabilityUnavailableError, RunPreconditionError
 
 
 class _TinyModel(nn.Module):
@@ -39,7 +39,7 @@ def _save_runnable(tmp_path: Path, **save_kwargs: Any) -> Path:
     x = torch.randn(2, 4)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tmp_path / "artifact.tlspec"
-    tl.save(trace, str(bundle), level="runnable", **save_kwargs)
+    trace.save(str(bundle), level="runnable", **save_kwargs)
     return bundle
 
 

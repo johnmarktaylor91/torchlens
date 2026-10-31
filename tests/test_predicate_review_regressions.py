@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir.selector_eval import ensure_supported, selector_from_spec
 from torchlens.intervention.errors import (
     SelectorCapabilityError,
     SiteResolutionError,
@@ -29,7 +30,6 @@ from torchlens.intervention.selectors import (
     SelectorKind,
 )
 from torchlens.intervention.types import TargetSpec
-from torchlens.ir.selector_eval import ensure_supported, selector_from_spec
 
 
 class TinyConvNet(nn.Module):
@@ -129,8 +129,10 @@ def test_nary_live_backward_matcher_does_not_crash() -> None:
             capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
         )
         armed.log_backward(armed[armed.output_layers[0]].out.sum(), retain_graph=True)
-    grad_fns = {g.label: g for g in armed.grad_fns}
-    selector = CompositeSelector("and", (tl.grad_input(), tl.func("relu"), tl.contains("relu")))
+    grad_fns = {g.label: g for g in armed.autograd.grad_fns}
+    selector = CompositeSelector(
+        "and", (tl.grad_input(), tl.func("relu"), tl.label_contains("relu"))
+    )
     grads = (torch.ones(1),)
     matches = {
         label: live_backward_selector_matches(
@@ -152,7 +154,7 @@ def test_flat_nary_followed_by_conjunction_capture() -> None:
 
     flat = CompositeSelector(
         "and",
-        (tl.func("conv2d"), tl.contains("conv"), tl.followed_by(tl.func("relu"))),
+        (tl.func("conv2d"), tl.label_contains("conv"), tl.followed_by(tl.func("relu"))),
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -190,13 +192,13 @@ def test_flat_nary_followed_by_conjunction_capture() -> None:
 def test_contains_raw_only_substring_matches_nothing_posthoc(conv_trace: Any) -> None:
     """FIX: ``contains("_raw")`` matched every op via ``_layer_label_raw``."""
 
-    assert conv_trace.find_sites(tl.contains("_raw"), max_fanout=10**6).labels() == ()
+    assert conv_trace.find_sites(tl.label_contains("_raw"), max_fanout=10**6).labels() == ()
 
 
 def test_regex_raw_suffix_matches_nothing_posthoc(conv_trace: Any) -> None:
     """FIX: ``regex(r"_raw$")`` matched every op via ``_layer_label_raw``."""
 
-    assert conv_trace.find_sites(tl.regex(r"_raw$"), max_fanout=10**6).labels() == ()
+    assert conv_trace.find_sites(tl.label_matches(r"_raw$"), max_fanout=10**6).labels() == ()
 
 
 def test_exact_raw_label_still_matches_posthoc(conv_trace: Any) -> None:
@@ -410,7 +412,7 @@ def test_site_upfront_refusal_set_matches_evaluator_contract() -> None:
     short-circuiting sibling.
     """
 
-    from torchlens.ir.selector_eval import _evaluate_subject
+    from torchlens._ir.selector_eval import _evaluate_subject
 
     site = SimpleNamespace(
         layer_label="relu_1_1", lookup_keys=(), func_name="relu", layer_type="relu"
@@ -474,7 +476,7 @@ def test_bare_string_live_is_exact_raw_label() -> None:
     fired: list[str] = []
 
     def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        fired.append(str(hook.layer_log.get("layer_label")))
+        fired.append(str(hook.op.get("layer_label")))
         return out
 
     with warnings.catch_warnings():
@@ -499,7 +501,7 @@ def test_strict_rejects_nested_where(conv_trace: Any) -> None:
 def test_capture_module_fallback_for_nontorch_backend() -> None:
     """Non-torch capture subjects fall back to the single ``module`` candidate."""
 
-    from torchlens.ir.selector_eval import evaluate
+    from torchlens._ir.selector_eval import evaluate
 
     subject = SimpleNamespace(
         output_of_module_calls=(),
@@ -526,15 +528,15 @@ def test_followed_by_conjunction_is_association_insensitive() -> None:
     """
 
     def _mid() -> BaseSelector:
-        return tl.func("conv2d") & tl.followed_by(tl.func("relu")) & tl.contains("conv")
+        return tl.func("conv2d") & tl.followed_by(tl.func("relu")) & tl.label_contains("conv")
 
     def _tail() -> BaseSelector:
-        return tl.func("conv2d") & tl.contains("conv") & tl.followed_by(tl.func("relu"))
+        return tl.func("conv2d") & tl.label_contains("conv") & tl.followed_by(tl.func("relu"))
 
     def _flat() -> BaseSelector:
         return CompositeSelector(
             "and",
-            (tl.func("conv2d"), tl.contains("conv"), tl.followed_by(tl.func("relu"))),
+            (tl.func("conv2d"), tl.label_contains("conv"), tl.followed_by(tl.func("relu"))),
         )
 
     def _saved(predicate: BaseSelector) -> list[str]:
@@ -624,7 +626,7 @@ def test_followed_by_opaque_inner_refuses_typed_never_mangles() -> None:
     """FIX: an opaque-callable temporal inner must refuse typed, never rebuild
     as a ``contains`` selector over its repr string."""
 
-    from torchlens.intervention.errors import OpaqueCallableInExecutableSaveError
+    from torchlens.intervention.errors import OpaqueCallableError
     from torchlens.intervention.save import (
         SaveLevel,
         _target_spec_from_json,
@@ -632,7 +634,7 @@ def test_followed_by_opaque_inner_refuses_typed_never_mangles() -> None:
     )
 
     spec = tl.followed_by(lambda ctx: True).to_target_spec()
-    with pytest.raises(OpaqueCallableInExecutableSaveError):
+    with pytest.raises(OpaqueCallableError):
         _target_spec_to_json(spec, SaveLevel.PORTABLE)
     audit_spec = _target_spec_from_json(_target_spec_to_json(spec, SaveLevel.AUDIT))
     with pytest.raises(SiteResolutionError, match="opaque audit payload"):

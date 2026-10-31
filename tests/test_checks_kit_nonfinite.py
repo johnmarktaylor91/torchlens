@@ -5,7 +5,7 @@ With a scaler S-B never fires and 0 parameters move; without one S-B fires
 and raises BEFORE the write with weights bitwise clean after; the clipping
 collateral count is reported; the nan case sets attribution=smeared and
 names no innocent; the unchecked control corrupts the model. Parameter-
-space nonfinites route to the scheduled scan / audit_params, never to the
+space nonfinites route to the scheduled scan / param_health, never to the
 gradient check (routing separation).
 """
 
@@ -16,7 +16,8 @@ import torch
 import torch.nn as nn
 
 import torchlens.checks as tc
-from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
+import torchlens.errors
+from torchlens._utils._torch_compat import HAS_AMP_GRADSCALER
 
 if HAS_AMP_GRADSCALER:
     from torch.amp import GradScaler
@@ -59,13 +60,13 @@ def test_sb_raise_pre_write_without_scaler(dtype: torch.dtype, kind: str) -> Non
     model = _model(dtype)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     session = tc.ChecksSession(model, optimizer)
-    session.register_nonfinite_gradient_check()
+    session.register_nonfinite_grad_check()
     session.attach()
     before = _snapshot(model)
     try:
         optimizer.zero_grad()
         _poison_backward(model, kind, dtype)
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
     finally:
         session.detach()
@@ -114,12 +115,12 @@ def test_nan_backward_smear_sets_smeared_attribution() -> None:
     model = Poisoned()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     session = tc.ChecksSession(model, optimizer)
-    session.register_nonfinite_gradient_check()
+    session.register_nonfinite_grad_check()
     session.attach()
     try:
         optimizer.zero_grad()
         model(torch.randn(4, 8)).sum().backward()
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
     finally:
         session.detach()
@@ -144,14 +145,14 @@ def test_clip_collateral_counted_and_disclosed() -> None:
     model = _model()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     session = tc.ChecksSession(model, optimizer, clip_norm=1.0)
-    session.register_nonfinite_gradient_check()
+    session.register_nonfinite_grad_check()
     session.attach()
     before = _snapshot(model)
     try:
         optimizer.zero_grad()
         _poison_backward(model, "inf", torch.float32)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
     finally:
         session.detach()
@@ -171,7 +172,7 @@ def test_scaler_makes_the_event_a_harmless_skip(kind: str) -> None:
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     scaler = GradScaler("cpu")
     session = tc.ChecksSession(model, optimizer, scaler=scaler)
-    session.register_nonfinite_gradient_check()  # active, never fires
+    session.register_nonfinite_grad_check()  # active, never fires
     session.attach()
     before = _snapshot(model)
     try:
@@ -203,7 +204,7 @@ def test_param_space_nonfinite_routes_to_scheduled_scan() -> None:
             model[1].weight[0, 0] = float("nan")
         optimizer.zero_grad()
         model(torch.randn(4, 8)).sum().backward()
-        with pytest.raises(tc.CheckViolationError) as exc:
+        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
             optimizer.step()
     finally:
         session.detach()
@@ -222,7 +223,7 @@ def test_actions_demote_per_registration() -> None:
     model = _model()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     session = tc.ChecksSession(model, optimizer)
-    session.register_nonfinite_gradient_check(action="collect")
+    session.register_nonfinite_grad_check(action="collect")
     session.attach()
     try:
         optimizer.zero_grad()

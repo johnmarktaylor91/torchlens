@@ -645,19 +645,19 @@ class AtenCounter(TorchDispatchMode):
 #: used here: the rerun capture installs its own ``sys.setprofile`` hook (the
 #: host RNG monitor), which displaces the profiler for the whole forward.
 PHASES: dict[str, tuple[str, str]] = {
-    "fork": ("torchlens.data_classes.trace", "Trace.fork"),
-    "apply_mutation": ("torchlens.data_classes.trace", "Trace._apply_do_mutation"),
-    "record_audit": ("torchlens.data_classes.trace", "Trace._record_do_intervention_event"),
+    "fork": ("torchlens._data_classes.trace", "Trace.fork"),
+    "apply_mutation": ("torchlens._data_classes.trace", "Trace._apply_do_mutation"),
+    "record_audit": ("torchlens._data_classes.trace", "Trace._record_do_intervention_event"),
     "rerun_capture": ("torchlens.intervention.rerun", "_capture_with_active_spec"),
     "rerun_capture_core": ("torchlens.user_funcs", "_run_model_and_save_specified_outs"),
-    "rng_monitor_window": ("torchlens.utils.rng", "host_nondeterminism_monitor.__enter__"),
+    "rng_monitor_window": ("torchlens._utils.rng", "host_nondeterminism_monitor.__enter__"),
     "rerun_validate": ("torchlens.intervention.rerun", "_validate_rerun_result"),
     "rerun_reconcile_fires": ("torchlens.intervention.rerun", "_reconcile_rerun_hook_fires"),
     "rerun_refresh_state": (
-        "torchlens.data_classes.trace",
+        "torchlens._data_classes.trace",
         "Trace._refresh_matching_rerun_state_from",
     ),
-    "rerun_replace_state": ("torchlens.data_classes.trace", "Trace.replace_state_from"),
+    "rerun_replace_state": ("torchlens._data_classes.trace", "Trace.replace_state_from"),
     "push_replay": ("torchlens.intervention.replay", "_run_replay"),
     "push_cone": ("torchlens.intervention.replay", "cone_of_effect"),
     "push_hook_apply": ("torchlens.intervention.replay", "_apply_replay_hooks"),
@@ -749,7 +749,7 @@ class PhaseTimer:
     def _install_classifier_counters(self) -> None:
         """Count calls into the monitor's per-event classifier helpers."""
 
-        import torchlens.utils.rng as rng
+        import torchlens._utils.rng as rng
 
         cls = rng.host_nondeterminism_monitor
         timer = self
@@ -766,7 +766,7 @@ class PhaseTimer:
     def _install_window_close(self) -> None:
         """Pair the monitor's ``__exit__`` with its ``__enter__`` to time the window."""
 
-        import torchlens.utils.rng as rng
+        import torchlens._utils.rng as rng
 
         cls = rng.host_nondeterminism_monitor
         original_exit = cls.__exit__

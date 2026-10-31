@@ -18,7 +18,7 @@ import types
 
 import pytest
 
-from torchlens.utils import _torch_compat
+from torchlens._utils import _torch_compat
 
 
 class _FakeDTensor:

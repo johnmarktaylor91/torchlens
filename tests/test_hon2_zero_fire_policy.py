@@ -22,12 +22,12 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
-from torchlens.intervention import steer_generate
 from torchlens.intervention.errors import (
     BindingRuntimeError,
     LiveModeLabelError,
     SiteResolutionError,
 )
+from torchlens.intervention.steering import steer_generate
 from torchlens.options import CaptureOptions
 
 _POLICIES = ("warn", "error", "disclose")
@@ -94,7 +94,7 @@ def test_bind_door_policy(policy: str) -> None:
         else:
             assert bound(x).shape == (2, 2)
     assert bound.last_report is not None
-    assert bound.last_report.zero_fire_rule_ids == (bound.spec.rules[0].rule_id,)
+    assert bound.last_report.zero_fire_rule_ids == (bound.recipe.rules[0].rule_id,)
     expected = ["bind_zero_fire"] if policy == "warn" else []
     assert [c for c in _codes(caught) if c.endswith("zero_fire")] == expected
 
@@ -255,7 +255,7 @@ def _fast_steered_case() -> tuple[nn.Module, tl.Trace, Callable[[int], torch.Ten
     def x_of(seed: int) -> torch.Tensor:
         return torch.randn(1, 3, _DIM, generator=torch.Generator().manual_seed(seed))
 
-    spec = tl.when(tl.module("block"), tl.steer(torch.randn(_DIM), magnitude=3.0, feature_axis=-1))
+    spec = tl.when(tl.module("block"), tl.steer(torch.randn(_DIM), strength=3.0, dim=-1))
     trace = tl.trace(model, x_of(0), save=tl.module("block") | tl.module("head"), intervene=spec)
     return model, trace, x_of
 

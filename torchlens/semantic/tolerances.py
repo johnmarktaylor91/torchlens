@@ -3,7 +3,7 @@
 This module is the SEPARATE tolerance model for reconstruction acceptance
 checks (SDPA ``scores``/``pattern``/``z``/``result``, logit-lens style
 projections). It deliberately does NOT reuse the replay tolerance table in
-``torchlens.utils.tensor_utils``: that table models a FAITHFUL REPLAY of one
+``torchlens._utils.tensor_utils``: that table models a FAITHFUL REPLAY of one
 op (same kernel family, same inputs, different accumulation order), where the
 absolute term may sit at denormal scale because a replay never destroys
 precision. A reconstruction is different math: it re-derives a value through

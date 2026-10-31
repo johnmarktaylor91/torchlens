@@ -12,7 +12,7 @@ import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends.mlx import MLXBackend  # noqa: E402
-from torchlens.validation.status import ValidationReplayStatus  # noqa: E402
+from torchlens.validation.status import ValidationStatus  # noqa: E402
 
 
 class _TwoLayerMLP(nn.Module):
@@ -36,16 +36,14 @@ def test_mlx_validation_healthy_two_layer_mlp_passes() -> None:
     assert MLXBackend().validate_trace(trace) is True
     status = trace.validation_replay_status
     assert status.state == "passed"
-    assert status.replayed_node_count >= 1
+    assert status.num_replayed_ops >= 1
 
 
 def test_mlx_validation_registered_spec_dispatches() -> None:
     """The registered spec routes to the real oracle, not the old refusal."""
 
-    from torchlens.backends import get_backend_spec
-
-    spec = get_backend_spec("mlx")
-    assert spec.capabilities.validation_replay is True
+    spec = tl.backends.spec("mlx")
+    assert spec.capabilities.has_validation_replay is True
     assert spec.validate_trace(_healthy_trace()) is True
 
 
@@ -53,7 +51,7 @@ def test_mlx_validation_fails_corrupted_saved_output() -> None:
     """Fail validation when a saved MLX op output payload is corrupted."""
 
     trace = _healthy_trace()
-    victim = next(op for op in trace.layer_list if op.out is not None and op.uses_params)
+    victim = next(op for op in trace.layer_list if op.out is not None and op.has_params)
     with pytest.warns(UserWarning):
         victim.out = victim.out + 1.0
 
@@ -173,10 +171,10 @@ def test_mlx_end_to_end_bare_streaming_flip_refuses_typed() -> None:
     the option. (Interventions are genuinely lifted on MLX now, so the probe
     uses streaming, which remains gated.)"""
 
-    from torchlens.backends import BackendCapabilityConformanceError, get_backend_spec
+    from torchlens.errors import BackendCapabilityConformanceError
 
-    spec = get_backend_spec("mlx")
-    object.__setattr__(spec.capabilities, "streaming", True)
+    spec = tl.backends.spec("mlx")
+    object.__setattr__(spec.capabilities, "has_streaming", True)
     try:
         with pytest.raises(BackendCapabilityConformanceError):
             tl.trace(
@@ -186,7 +184,7 @@ def test_mlx_end_to_end_bare_streaming_flip_refuses_typed() -> None:
                 storage=object(),
             )
     finally:
-        object.__setattr__(spec.capabilities, "streaming", False)
+        object.__setattr__(spec.capabilities, "has_streaming", False)
 
 
 def test_mlx_validation_loaded_payload_stripped_trace_is_unavailable() -> None:
@@ -198,7 +196,7 @@ def test_mlx_validation_loaded_payload_stripped_trace_is_unavailable() -> None:
 
     result = MLXBackend().validate_trace(trace)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unavailable"
     assert result.passed is False
 
@@ -265,7 +263,7 @@ def test_mlx_constant_producer_reports_unverified_gap() -> None:
     trace = tl.trace(_ConstantProducerNet(), mx.ones((1, 4)), backend="mlx")
     result = MLXBackend().validate_trace(trace)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     assert trace._mlx_perturbation_gaps
     assert all(label.startswith("add") for label in trace._mlx_perturbation_gaps)

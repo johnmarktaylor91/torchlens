@@ -18,15 +18,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
-from torchlens.errors import RuntimeSignatureDriftError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     RunnableErrorCode,
     WitnessCompleteness,
 )
+from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
+from torchlens.errors import RuntimeSignatureDriftError
+from torchlens.options import CaptureOptions
 
 
 def _capture(model: nn.Module, x: Any) -> Any:
@@ -122,7 +122,7 @@ def test_capture_on_fallback_never_verifies(tmp_path: Path, model_cls: type[nn.M
     facts = runnable_ledger_facts(trace)
     assert any(fact["kind"] == "caught_exception_control" for fact in facts)
     path = tmp_path / "fallback.tlspec"
-    tl.save(trace, str(path), level="runnable", include_weights=True)
+    trace.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     descriptor = loaded._runnable.descriptor
     assert descriptor.witness_completeness is not WitnessCompleteness.COMPLETE
@@ -139,7 +139,7 @@ def test_capture_on_success_raising_runtime_input_stays_typed(tmp_path: Path) ->
     model = _CholeskyFallbackModel().eval()
     trace = _capture(model, _pd_input())
     path = tmp_path / "success.tlspec"
-    tl.save(trace, str(path), level="runnable", include_weights=True)
+    trace.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     with pytest.raises(RuntimeSignatureDriftError) as captured:
         loaded.run(inputs=_non_pd_input())
@@ -156,7 +156,7 @@ def test_raise_free_model_records_zero_facts_and_stays_verified(tmp_path: Path) 
     trace = _capture(model, x)
     assert runnable_ledger_facts(trace) == ()
     path = tmp_path / "clean.tlspec"
-    tl.save(trace, str(path), level="runnable", include_weights=True)
+    trace.save(str(path), level="runnable", include_weights=True)
     result = tl.load(str(path)).run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
@@ -170,7 +170,7 @@ def test_caught_mutating_failure_downgrades_opaque(tmp_path: Path) -> None:
     facts = runnable_ledger_facts(trace)
     assert any(fact["kind"] == "caught_exception_control" and fact["mutates"] for fact in facts)
     path = tmp_path / "mutating.tlspec"
-    tl.save(trace, str(path), level="runnable", include_weights=True)
+    trace.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     descriptor = loaded._runnable.descriptor
     assert descriptor.witness_completeness is WitnessCompleteness.INCOMPLETE_OPAQUE_SIDE_EFFECT
@@ -199,7 +199,7 @@ def test_successful_unmodeled_host_return_also_downgrades(tmp_path: Path) -> Non
     facts = runnable_ledger_facts(trace)
     assert any(fact["kind"] == "unmodeled_host_return" for fact in facts)
     path = tmp_path / "hostreturn.tlspec"
-    tl.save(trace, str(path), level="runnable", include_weights=True)
+    trace.save(str(path), level="runnable", include_weights=True)
     loaded = tl.load(str(path))
     descriptor = loaded._runnable.descriptor
     assert descriptor.witness_completeness is not WitnessCompleteness.COMPLETE

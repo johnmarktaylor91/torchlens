@@ -40,7 +40,7 @@ DEMO_CONFIGS: list[tuple[str, type[nn.Module], dict[str, object]]] = [
     ("repeated_block_stack_collapsed", demos.RepeatedBlockStack, {"vis_call_depth": 1}),
     ("repeated_block_stack_expanded", demos.RepeatedBlockStack, {"vis_call_depth": 1000}),
     ("two_distinct_loops", demos.TwoDistinctLoops, {"vis_call_depth": 1}),
-    ("buffer_loop", demos.BufferRewriteLoops, {"show_buffer_layers": "always"}),
+    ("buffer_loop", demos.BufferRewriteLoops, {"show_buffers": "always"}),
     ("nested_loop", demos.NestedLoopBlock, {"vis_call_depth": 1}),
     ("parallel_fanout", demos.ParallelFanout, {"vis_call_depth": 1}),
     ("collapsed_block_recurrence", demos.CollapsedBlockRecurrence, {"vis_call_depth": 1000}),
@@ -64,8 +64,8 @@ def test_rolled_edge_labels_have_zero_hard_violations(
     gv_source = trace.draw(
         vis_mode="rolled",
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / name),
+        file_format="dot",
+        path=str(tmp_path / name),
         **kwargs,
     )
     result = audit_gv_source(gv_source)
@@ -214,8 +214,8 @@ def test_container_edge_labels_are_midpoint_and_geometry_clean(tmp_path: Path) -
     gv_source = trace.draw(
         show_containers="labels",
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=str(tmp_path / "container_labels"),
+        file_format="dot",
+        path=str(tmp_path / "container_labels"),
     )
 
     assert '<FONT POINT-SIZE="8">left</FONT>' in gv_source
@@ -256,8 +256,8 @@ def test_container_nodes_have_native_svg_frame_margin(
     trace.draw(
         show_containers="nodes",
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / name),
+        file_format="svg",
+        path=str(tmp_path / name),
     )
 
     edge_brightness = _native_svg_outer_frame_min_brightness(tmp_path / f"{name}.svg")

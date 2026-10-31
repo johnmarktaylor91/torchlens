@@ -72,7 +72,7 @@ config = transformers.BertConfig(
     num_attention_heads=2, intermediate_size=64, num_labels=2,
 )
 model = transformers.BertForSequenceClassification(config).eval()
-result = tl.attribution.text(model, tokenizer, "the film was good", target=1, n_steps=32)
+result = tl.attribution.text(model, tokenizer, "the film was good", target=1, num_steps=32)
 tokens = result.payload().display_tokens
 RESULT = (len(result.scores) == len(tokens), torch.isfinite(result.scores).all().item())
 ```

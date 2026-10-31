@@ -8,6 +8,13 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ... import _state as _st
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._ir.container import (
+    ContainerSpec,
+    OutputPathComponent,
+    TupleIndex,
+)
+from ..._ir.intervention import FireResult
 from ..._state import pause_logging
 from ...capture.arg_positions import (
     _normalize_func_name,
@@ -19,7 +26,6 @@ from ...capture.predicates import (
 from ...capture.projections import (
     get_active_recording_state,
 )
-from ...data_classes.internal_types import FuncExecutionContext
 from ...errors._base import CompatibilityError
 from ...fastlog.types import (
     RecordContext,
@@ -33,18 +39,12 @@ from ...intervention.types import (
     InterventionDecision,
     TargetSpec,
 )
-from ...ir.container import (
-    ContainerSpec,
-    OutputPathComponent,
-    TupleIndex,
-)
-from ...ir.intervention import FireResult
 from ._tl import (
     get_label_list,
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 if TYPE_CHECKING:
     from .ops import (
@@ -457,12 +457,12 @@ def _intervene_reaches_op_door(options: Any) -> bool:
     memo = _OP_DOOR_MEMO.get(id(intervene))
     if memo is not None and memo[0]() is intervene:
         return memo[1]
-    from ...intervention.spec import InterventionSpec
+    from ...intervention.spec import Recipe
 
     reaches = not (
-        isinstance(intervene, InterventionSpec)
+        isinstance(intervene, Recipe)
         and bool(intervene.rules)
-        and all(_is_module_exit_only(rule.where) for rule in intervene.rules)
+        and all(_is_module_exit_only(rule.target) for rule in intervene.rules)
     )
     try:
         intervene_ref = weakref.ref(intervene)
@@ -633,7 +633,7 @@ def _record_predicate_intervention_spec(
             helper=entry.helper_spec,
             metadata=_predicate_hook_metadata(entry, decision),
         )
-    trace.__dict__.pop("intervention_spec", None)
+    trace.__dict__.pop("recipe", None)
     trace.__dict__.pop("_frozen_intervention_spec", None)
     trace.__dict__.pop("_cached_frozen_intervention_spec", None)
 
@@ -691,7 +691,7 @@ def _apply_predicate_intervention(
         # rule id when the intervene= operand is the public immutable spec
         # (consolidated session-transient state, read by _execute_hook's
         # recorder).
-        from ...intervention.spec import InterventionSpec as _PublicSpec
+        from ...intervention.spec import Recipe as _PublicSpec
 
         predicate = getattr(options, "intervene", None)
         if isinstance(predicate, _PublicSpec):

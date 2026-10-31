@@ -7,21 +7,22 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens._runnable import ContractCheck
+
 from . import _state
-from ._runnable_state import (
-    RunResourceCeiling,
-    _guarded_defensive_materialize,
-    runnable_tensor_byte_digest,
-)
-from .runnable import (
-    ContractCheck,
+from ._runnable import (
     InputAttestationFingerprint,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from .utils.alias_footprint import touched_bytes_relation
+from ._runnable_state import (
+    RunResourceCeiling,
+    _guarded_defensive_materialize,
+    runnable_tensor_byte_digest,
+)
+from ._utils.alias_footprint import touched_bytes_relation
 
 if TYPE_CHECKING:
     from ._runnable_execution import (

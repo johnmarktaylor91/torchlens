@@ -21,8 +21,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from torchlens.backends._finalize import _apply_recurrence_relabel_epilogue, _finalize_single_op
-from torchlens.postprocess.loop_grouping_adapter import RecurrenceAssignment
 
 
 def _stub_trace() -> SimpleNamespace:

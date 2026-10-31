@@ -28,7 +28,7 @@ def validate_recording_options(options: RecordingOptions) -> None:
     ------
     RecordingConfigError
         If no event can be selected or disk-only storage conflicts with a
-        static ``keep_grad=True`` default.
+        static ``save_grad=True`` default.
     """
 
     _validate_non_empty_capture(options)
@@ -59,9 +59,9 @@ def validate_postprocess(postprocess: str) -> None:
 def _validate_non_empty_capture(options: RecordingOptions) -> None:
     """Reject statically empty fastlog configurations.
 
-    An armed ``echo=`` narrator is a legal capture on its own ("narrate
+    An armed ``narrate=`` narrator is a legal capture on its own ("narrate
     everything, keep nothing" is the narrate-only fast path, snoop D1): the
-    echo term keeps ``tl.record(model, x, echo=...)`` from being refused as
+    echo term keeps ``tl.record(model, x, narrate=...)`` from being refused as
     capturing nothing.
     """
 
@@ -82,7 +82,7 @@ def _validate_non_empty_capture(options: RecordingOptions) -> None:
 
 
 def _validate_disk_only_keep_grad_defaults(options: RecordingOptions) -> None:
-    """Reject static keep_grad defaults for disk-only storage."""
+    """Reject static save_grad defaults for disk-only storage."""
 
     if (
         options.streaming is None
@@ -94,7 +94,7 @@ def _validate_disk_only_keep_grad_defaults(options: RecordingOptions) -> None:
         ("default_op", options.default_op),
         ("default_module", options.default_module),
     ):
-        if isinstance(default, CaptureSpec) and default.keep_grad:
+        if isinstance(default, CaptureSpec) and default.save_grad:
             raise RecordingConfigError(
-                f"{name} cannot use keep_grad=True with disk-only fastlog storage"
+                f"{name} cannot use save_grad=True with disk-only fastlog storage"
             )

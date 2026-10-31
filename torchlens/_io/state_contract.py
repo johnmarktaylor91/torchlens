@@ -2,7 +2,7 @@
 
 ONE service shared by load, inspect, and digest generation: it enumerates the
 known fields per record contract (through the field registry, which derives
-them from the same ``FIELD_POLICY`` / ``PORTABLE_STATE_SPEC`` tables the
+them from the same ``FIELD_POLICY`` / ``_PORTABLE_STATE_SPEC`` tables the
 serializers use), partitions incoming state into known/unknown BEFORE any
 object mutation, and refuses unknown fields TYPED and SYMMETRICALLY -- the
 refusal fires whether the writer is newer than the reader (additive field)
@@ -150,7 +150,7 @@ def _unknown_field_remedy(declared_version: int | None) -> str:
         "reader no longer declares; load it under the writing release (or "
         "one that still declares the field) and re-save, or inspect inertly "
         "with torchlens.io.inspect_state_contract. A reader that dropped a "
-        "persisted field must carry an alias (PORTABLE_STATE_ALIASES) -- "
+        "persisted field must carry an alias (_PORTABLE_STATE_ALIASES) -- "
         "report this refusal if the artifact is a governed release artifact."
     )
 

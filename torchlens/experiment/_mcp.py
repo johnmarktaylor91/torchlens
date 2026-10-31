@@ -92,7 +92,7 @@ def ledger_entry(path: str, entry_id: str, *, page: int = 0, page_size: int = 50
     }
 
 
-def ledger_evidence(path: str, entry_id: str, ref_index: int = 0) -> dict[str, Any]:
+def ledger_evidence(path: str, entry_id: str, index: int = 0) -> dict[str, Any]:
     """Digest-verify ONE evidence ref, then serve the SAME public queries.
 
     For a bundle artifact ref this loads the bundle and serves its
@@ -102,14 +102,14 @@ def ledger_evidence(path: str, entry_id: str, ref_index: int = 0) -> dict[str, A
 
     served = ledger_entry(path, entry_id, page=0, page_size=10_000)
     refs = served["evidence_refs"]
-    if not refs or ref_index >= len(refs):
+    if not refs or index >= len(refs):
         raise BundleExperimentError(
             f"ledger entry {entry_id!r} has {len(refs)} evidence ref(s); "
-            f"index {ref_index} is out of range",
+            f"index {index} is out of range",
             code="ledger_evidence_unavailable",
             entry_id=entry_id,
         )
-    ref = refs[ref_index]
+    ref = refs[index]
     if ref["availability"] in ("missing", "stale"):
         # The semantic record outlives its tensors by design: missing/stale
         # evidence stays a queryable historical record, never a crash.

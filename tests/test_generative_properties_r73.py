@@ -36,7 +36,7 @@ from torchlens._input_walk import (
     encode_mapping_key,
     reserved_input_path_components,
 )
-from torchlens.merged._artifact import canonical_json_bytes
+from torchlens._merged._artifact import canonical_json_bytes
 
 #: Deterministic default; a nightly fuzz leg may inject fresh seeds.
 _SEED = int(os.environ.get("TORCHLENS_FUZZ_SEED", "20260815"))
@@ -325,8 +325,8 @@ def test_canonical_json_bytes_refuses_the_known_bad_classes() -> None:
     typed merged-artifact schema refusal, never a raw builtin exception.
     """
 
-    from torchlens.merged import MergedErrorCode
-    from torchlens.merged._errors import MergedArtifactError
+    from torchlens._merged import MergedErrorCode
+    from torchlens._merged._errors import MergedArtifactError
 
     bad_payloads: list = [
         {"x": float("nan")},
@@ -389,8 +389,8 @@ def test_canonical_json_bytes_refuses_noncanonical_inputs_typed() -> None:
     TypeError past the module's typed refusal surface.
     """
 
-    from torchlens.merged import MergedErrorCode
-    from torchlens.merged._errors import MergedArtifactError
+    from torchlens._merged import MergedErrorCode
+    from torchlens._merged._errors import MergedArtifactError
 
     bad_payloads = [
         {1: "a"},  # int key: coerced to "1" -> digest collision with {"1": "a"}

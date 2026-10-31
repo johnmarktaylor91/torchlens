@@ -117,8 +117,8 @@ def _render_dot(model: torch.nn.Module, tmp_path: Path, name: str) -> str:
     trace = tl.trace(model, torch.randn(2, 3))
     return str(
         trace.draw(
-            vis_outpath=str(tmp_path / name),
-            vis_fileformat="svg",
+            path=str(tmp_path / name),
+            file_format="svg",
             vis_save_only=True,
             order_siblings=False,
         )

@@ -7,13 +7,13 @@ from typing import Any
 
 import pytest
 
-from torchlens.backends import BackendUnsupportedError
 from torchlens.backends._options import (
     MLX_EXTRA_KWARG_POLICY,
     MLX_PREVIEW_TRACE_OPTION_POLICY,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
 )
+from torchlens.errors import BackendUnsupportedError
 
 
 def _valid_mlx_options() -> dict[str, Any]:
@@ -23,10 +23,10 @@ def _valid_mlx_options() -> dict[str, Any]:
         "layers_to_save": "all",
         "activation_transform": None,
         "detach_saved_activations": False,
-        "save_arg_values": False,
+        "save_args": False,
         "save_grads": None,
-        "save_code_context": False,
-        "save_rng_states": False,
+        "save_source_context": False,
+        "save_rng": False,
         "backward_ready": False,
         "module_filter": None,
         "transform": None,
@@ -42,10 +42,10 @@ def _valid_mlx_options() -> dict[str, Any]:
         ("layers_to_save", ["linear_1_1"]),
         ("activation_transform", lambda value: value),
         ("detach_saved_activations", True),
-        ("save_arg_values", True),
+        ("save_args", True),
         ("save_grads", True),
-        ("save_code_context", True),
-        ("save_rng_states", True),
+        ("save_source_context", True),
+        ("save_rng", True),
         ("backward_ready", True),
         ("module_filter", lambda module: True),
         ("transform", lambda value: value),

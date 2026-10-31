@@ -2,7 +2,7 @@
 
 This page maps BertViz's attention views and Ecco's saliency, logit-lens and
 neuron-factor views to TorchLens: their spelling on the left, the TorchLens spelling on
-the right. The pictures live in `torchlens.tviz` (`import torchlens.tviz as tviz`); their
+the right. The pictures live in `torchlens.transformer` (`import torchlens.transformer as tviz`); their
 spellings are documented-unstable. Saving a picture needs matplotlib
 (`pip install "torchlens[viz]"`).
 
@@ -10,8 +10,8 @@ spellings are documented-unstable. Saving a picture needs matplotlib
 
 | BertViz | TorchLens | Notes |
 | --- | --- | --- |
-| `model(..., output_attentions=True).attentions`, then `head_view(attention, tokens)` | `views = tviz.attention_views(tl.trace(model, ids), tokens=tokens)`, then `tviz.render_attention(views[0], "layer0.pdf")` | One `AttentionView` per attention layer; the render is a per-head grid. |
-| `model_view(attention, tokens)` (every layer and head) | `tviz.render_attention_atlas(views, "atlas.pdf")` | |
+| `model(..., output_attentions=True).attentions`, then `head_view(attention, tokens)` | `views = tviz.attention_views(tl.trace(model, ids), tokens=tokens)`, then `tl.viz.attention(views[0], "layer0.pdf")` | One `AttentionView` per attention layer; the render is a per-head grid. |
+| `model_view(attention, tokens)` (every layer and head) | `tl.viz.attention_atlas(views, "atlas.pdf")` | |
 | Notebook HTML views | `tviz.circuitsvis_attention(views)` | The CircuitsVis bridge, in a notebook. |
 | Keep using BertViz's own HTML views | `head_view(tviz.bertviz_tuple(views), tokens)` | `bertviz_tuple` returns the `output_attentions` tuple layout. It is a recipe, not a supported bridge. |
 | `neuron_view` (query and key vectors behind each score) | `tviz.ScoreDecomposition` records | GPT-2 and BERT families; rotary-embedding families refuse. |
@@ -42,7 +42,7 @@ import tempfile
 import torch
 import transformers
 import torchlens as tl
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 from torchlens.semantic.logit_lens import logit_lens_predictions
 
 torch.manual_seed(0)
@@ -56,7 +56,7 @@ trace = tl.trace(model, ids)
 # BertViz's head view: one view per attention layer, then a per-head grid.
 views = tviz.attention_views(trace, tokens=tokens)
 outdir = tempfile.mkdtemp()
-attention_pdf = tviz.render_attention(views[0], os.path.join(outdir, "layer0.pdf"))
+attention_pdf = tl.viz.attention(views[0], os.path.join(outdir, "layer0.pdf"))
 
 # Ecco's layer predictions: the logit lens, drawn as a ribbon.
 predictions = logit_lens_predictions(trace, k=3)

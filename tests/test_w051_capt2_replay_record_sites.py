@@ -16,9 +16,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._ir.selector_eval import normalize_selector_like
 from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.intervention.selectors import CompositeSelector, LabelSelector
-from torchlens.ir.selector_eval import normalize_selector_like
 
 _N_PASSES = 3
 

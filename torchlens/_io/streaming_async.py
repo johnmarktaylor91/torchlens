@@ -40,7 +40,7 @@ class AsyncWriteFailedError(Exception):
     """Internal signal that a queued blob write failed.
 
     ``BundleStreamWriter`` catches this and converts it into its typed
-    ``TorchLensIOError`` after marking the temp bundle PARTIAL; it never
+    ``ArtifactError`` after marking the temp bundle PARTIAL; it never
     escapes to users.
     """
 

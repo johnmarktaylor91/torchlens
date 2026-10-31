@@ -18,7 +18,7 @@ from dataclasses import dataclass
 import torch
 
 from .. import _state
-from ..constants import get_orig_torch_funcs
+from .._constants import get_orig_torch_funcs
 
 # COMMUTATIVE reflected operator dunders (invoked when a non-tensor is on the LEFT, e.g.
 # ``int & tensor`` routes to ``tensor.__rand__(int)``). For a COMMUTATIVE op the swapped operand

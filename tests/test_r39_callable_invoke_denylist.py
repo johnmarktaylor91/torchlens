@@ -37,14 +37,14 @@ from typing import Any
 import pytest
 import torch
 
-from torchlens.backends.torch.wrappers import wrap_torch
-from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_import_ref
-from torchlens.utils._callable_safety import (
+from torchlens._utils._callable_safety import (
     _is_callable_invoker_name,
     _is_side_effecting_callable_name,
     is_pure_forward_callable,
 )
+from torchlens.backends.torch.wrappers import wrap_torch
+from torchlens.intervention.errors import UntrustedCallableError
+from torchlens.intervention.resolver import resolve_import_ref
 
 # Ensure the torch wrappers are installed so the resolved descriptors mirror the live
 # state (wrapped ops report ``__module__ == 'torchlens.backends.torch.wrappers'``; the

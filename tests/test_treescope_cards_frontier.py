@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.notebook.frontier import nonfinite_frontier
+from torchlens._notebook.frontier import nonfinite_frontier
 
 
 class _Poisoned(nn.Module):

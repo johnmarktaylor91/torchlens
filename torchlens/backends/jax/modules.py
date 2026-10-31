@@ -9,14 +9,14 @@ from contextlib import contextmanager
 from dataclasses import dataclass, fields, is_dataclass
 from typing import Any
 
+from ..._data_classes.param import Param
+from ..._ir.refs import DeviceRef, DtypeRef
 from ...backends._finalize import (
     join_module_address as _join_module_address,
     module_source_metadata as _module_source_metadata,
     numel_from_shape as _numel,
     value_nbytes as _nbytes,
 )
-from ...data_classes.param import Param
-from ...ir.refs import DeviceRef, DtypeRef
 
 MODULE_SCOPE_PREFIX = "tlm_"
 MODULE_CALL_SCOPE_PREFIX = "tlc_"
@@ -508,7 +508,7 @@ def equinox_param_logs(tree: EquinoxModuleTree, trace: Any) -> dict[str, Param]:
         param.backend_address = f"pytree:{address}"
         param.resolver_status = "metadata_only"
         param._param_ref = None
-        param.source_trace = trace
+        param.trace = trace
         param.all_module_addresses = list(
             tree.metadata.get(module_address, {}).get("all_addresses", [module_address])
         )
@@ -567,7 +567,7 @@ def nnx_param_logs(tree: NnxModuleTree, trace: Any) -> dict[str, Param]:
         param.backend_address = f"pytree:{address}"
         param.resolver_status = "metadata_only"
         param._param_ref = None
-        param.source_trace = trace
+        param.trace = trace
         param.all_module_addresses = list(
             tree.metadata.get(module_address, {}).get("all_addresses", [module_address])
         )

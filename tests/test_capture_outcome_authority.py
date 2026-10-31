@@ -37,7 +37,7 @@ from torchlens.capture.outcome import (
 def test_status_vocabulary_is_frozen() -> None:
     assert {status.value for status in CaptureStatus} == {
         "complete",
-        "halted",
+        "stopped",
         "aborted_nonfinite",
         "failed",
         "unattested",
@@ -58,12 +58,12 @@ def test_status_vocabulary_is_frozen() -> None:
 
 
 def test_partial_property_tristate() -> None:
-    assert CaptureOutcome(status=CaptureStatus.COMPLETE).partial is False
-    assert CaptureOutcome(status=CaptureStatus.HALTED).partial is True
-    assert CaptureOutcome(status=CaptureStatus.ABORTED_NONFINITE).partial is True
-    assert CaptureOutcome(status=CaptureStatus.FAILED).partial is True
-    assert CaptureOutcome(status=CaptureStatus.UNATTESTED).partial is None
-    assert CaptureOutcome(status=CaptureStatus.UNKNOWN).partial is None
+    assert CaptureOutcome(status=CaptureStatus.COMPLETE).is_partial is False
+    assert CaptureOutcome(status=CaptureStatus.STOPPED).is_partial is True
+    assert CaptureOutcome(status=CaptureStatus.ABORTED_NONFINITE).is_partial is True
+    assert CaptureOutcome(status=CaptureStatus.FAILED).is_partial is True
+    assert CaptureOutcome(status=CaptureStatus.UNATTESTED).is_partial is None
+    assert CaptureOutcome(status=CaptureStatus.UNKNOWN).is_partial is None
 
 
 def test_payload_round_trip() -> None:
@@ -76,9 +76,9 @@ def test_payload_round_trip() -> None:
         boundary_kind="op",
         boundary_label="relu_1_2_raw",
         frontier_labels=("relu_1_2",),
-        n_ops_committed=7,
+        num_committed_ops=7,
         inference_only=True,
-        settlement_note="secondary: cleanup",
+        note="secondary: cleanup",
     )
     parsed = parse_outcome_payload(outcome.to_payload())
     assert parsed == outcome
@@ -120,9 +120,9 @@ def test_payload_parse_rejects_non_mapping() -> None:
         (CaptureStatus.COMPLETE, False, True, True, False),
         (CaptureStatus.COMPLETE, False, False, False, False),
         # Attested HALTED tolerates falsy finished (the re-raise path).
-        (CaptureStatus.HALTED, False, True, False, True),
-        (CaptureStatus.HALTED, False, True, True, True),
-        (CaptureStatus.HALTED, False, False, True, False),
+        (CaptureStatus.STOPPED, False, True, False, True),
+        (CaptureStatus.STOPPED, False, True, True, True),
+        (CaptureStatus.STOPPED, False, False, True, False),
         (CaptureStatus.ABORTED_NONFINITE, False, False, False, True),
         (CaptureStatus.ABORTED_NONFINITE, False, True, False, False),
         # Attested FAILED tolerates the pre-stamped halted=True secondary class.
@@ -139,7 +139,7 @@ def test_payload_parse_rejects_non_mapping() -> None:
 def test_coherence_matrix(
     status: CaptureStatus, derived: bool, halted: bool, finished: bool, coherent: bool
 ) -> None:
-    outcome = CaptureOutcome(status=status, derived=derived)
+    outcome = CaptureOutcome(status=status, is_derived=derived)
     assert attestation_coherent(outcome, halted=halted, finished=finished) is coherent
 
 
@@ -151,7 +151,7 @@ def test_coherence_matrix(
 @pytest.mark.parametrize(
     ("state", "expected"),
     [
-        ({"_tracing_finished": True, "halted": True}, CaptureStatus.HALTED),
+        ({"_tracing_finished": True, "halted": True}, CaptureStatus.STOPPED),
         ({"_tracing_finished": True, "halted": False}, CaptureStatus.UNATTESTED),
         ({"_tracing_finished": True}, CaptureStatus.UNATTESTED),
         ({"_tracing_finished": False, "halted": True}, CaptureStatus.UNKNOWN),
@@ -165,7 +165,7 @@ def test_coherence_matrix(
 def test_derivation_lattice(state: dict, expected: CaptureStatus) -> None:
     outcome = derive_outcome_from_structural_state(state)
     assert outcome.status is expected
-    assert outcome.derived is True
+    assert outcome.is_derived is True
     # No structural derivation may ever bless COMPLETE.
     assert outcome.status is not CaptureStatus.COMPLETE
 
@@ -179,7 +179,7 @@ def test_derivation_carries_halt_detail() -> None:
             "halt_frontier": "relu_1_2_raw",
         }
     )
-    assert outcome.status is CaptureStatus.HALTED
+    assert outcome.status is CaptureStatus.STOPPED
     assert outcome.reason == "relu_1_2_raw"
     assert outcome.boundary_label == "relu_1_2_raw"
 
@@ -209,8 +209,8 @@ def test_resolve_loaded_degrades_incoherent_attestation_to_unknown() -> None:
     with pytest.warns(RuntimeWarning, match="contradicts"):
         resolved = resolve_loaded_outcome(state)
     assert resolved.status is CaptureStatus.UNKNOWN
-    assert resolved.derived is True
-    assert "attestation_incoherent" in (resolved.settlement_note or "")
+    assert resolved.is_derived is True
+    assert "attestation_incoherent" in (resolved.note or "")
 
 
 def test_resolve_loaded_degrades_unparseable_attestation_to_unknown() -> None:
@@ -222,7 +222,7 @@ def test_resolve_loaded_degrades_unparseable_attestation_to_unknown() -> None:
     with pytest.warns(RuntimeWarning, match="could not parse"):
         resolved = resolve_loaded_outcome(state)
     assert resolved.status is CaptureStatus.UNKNOWN
-    assert "attestation_parse_failed" in (resolved.settlement_note or "")
+    assert "attestation_parse_failed" in (resolved.note or "")
 
 
 def test_resolve_loaded_without_attestation_uses_lattice() -> None:
@@ -258,11 +258,11 @@ def test_capability_table_is_total() -> None:
         ("save_analysis", CaptureStatus.UNKNOWN, "N1"),
         ("validation_entry", CaptureStatus.FAILED, "N2"),
         ("validation_entry", CaptureStatus.UNKNOWN, "N2"),
-        ("live_replay", CaptureStatus.HALTED, "N5"),
+        ("live_replay", CaptureStatus.STOPPED, "N5"),
         ("live_replay", CaptureStatus.FAILED, "N3"),
         ("loaded_sparse_run", CaptureStatus.FAILED, "N3"),
         ("backward", CaptureStatus.UNKNOWN, "N3"),
-        ("save_runnable", CaptureStatus.HALTED, "N4"),
+        ("save_runnable", CaptureStatus.STOPPED, "N4"),
         ("save_runnable", CaptureStatus.FAILED, "N1"),
     ],
 )
@@ -280,13 +280,13 @@ def test_chokepoint_refuses_with_stable_code(
     ("capability", "status"),
     [
         ("save_analysis", CaptureStatus.COMPLETE),
-        ("save_analysis", CaptureStatus.HALTED),
+        ("save_analysis", CaptureStatus.STOPPED),
         ("save_analysis", CaptureStatus.UNATTESTED),
-        ("validation_entry", CaptureStatus.HALTED),
+        ("validation_entry", CaptureStatus.STOPPED),
         ("validation_entry", CaptureStatus.UNATTESTED),
         ("live_replay", CaptureStatus.UNATTESTED),
-        ("loaded_sparse_run", CaptureStatus.HALTED),
-        ("backward", CaptureStatus.HALTED),
+        ("loaded_sparse_run", CaptureStatus.STOPPED),
+        ("backward", CaptureStatus.STOPPED),
         ("save_runnable", CaptureStatus.UNATTESTED),
     ],
 )
@@ -307,7 +307,7 @@ def test_chokepoint_treats_missing_sidecar_as_unknown() -> None:
 
 
 def test_n5_refusal_names_the_rearm_follow_on() -> None:
-    product = _Product(CaptureOutcome(status=CaptureStatus.HALTED))
+    product = _Product(CaptureOutcome(status=CaptureStatus.STOPPED))
     with pytest.raises(CaptureOutcomeError, match="re-arming|halt="):
         require_capture_capability(product, "live_replay")
 

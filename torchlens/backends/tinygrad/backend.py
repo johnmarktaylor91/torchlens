@@ -10,21 +10,19 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import Any, cast
 
-from ..._deprecations import MISSING, MissingType
-from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendUnsupportedError, get_backend_spec
-from ...capture.outcome import stamp_backend_finalized
-from ...data_classes.derived_grad import (
+from torchlens.backends.registry import BackendUnsupportedError
+
+from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
 )
-from ...data_classes.param import Param, ParamAccessor
-from ...data_classes.trace import Trace
-from ...fastlog.types import CaptureSpec
-from ...ir.capture_events import CaptureEvents
-from ...ir.events import (
+from ..._data_classes.param import Param, ParamAccessor
+from ..._data_classes.trace import Trace
+from ..._deprecations import MISSING, MissingType
+from ..._ir.capture_events import CaptureEvents
+from ..._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
     ModuleFrame,
@@ -32,20 +30,24 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ...ir.op_record import amend_preview_output_parent_rebind
-from ...ir.predicate import RecordContext
-from ...ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...options import CaptureOptions, merge_capture_options
-from ...postprocess._materialize import materialize_from_events
-from ...postprocess._selective_save import (
+from ..._ir.op_record import amend_preview_output_parent_rebind
+from ..._ir.predicate import RecordContext
+from ..._ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._postprocess._materialize import materialize_from_events
+from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
     pop_static_label_save_predicate,
 )
-from ...quantities import Duration
+from ..._quantities import Duration
+from ..._trace_core.relation_views import freeze_trace_relation_views
+from ...backends.registry import get_backend_spec
+from ...capture.outcome import stamp_backend_finalized
+from ...fastlog.types import CaptureSpec
+from ...options import CaptureOptions, merge_capture_options
 from ...validation.status import (
     ValidationReplaySource,
-    ValidationReplayStatus,
+    ValidationStatus,
     count_importer_region_annotations,
 )
 from .._finalize import (
@@ -165,7 +167,7 @@ class GradOptions:
             all positional tinygrad tensor input leaves.
         intermediate_grads
             Whether to retain saved op outputs during a separate no-realize
-            backward pass and expose ``trace.intermediate_derived_grads``.
+            backward pass and expose ``trace.autograd.intermediate_derived_grads``.
         """
 
         object.__setattr__(self, "loss_fn", loss_fn)
@@ -363,9 +365,9 @@ class TinygradBackend:
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             compute_input_output_distances=compute_input_output_distances,
             verbose=verbose,
@@ -373,7 +375,7 @@ class TinygradBackend:
             name=name,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             save_visualizations=save_visualizations,
             module_identity_mode=module_identity_mode,
         )
@@ -381,9 +383,9 @@ class TinygradBackend:
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
-        save_arg_values = capture_options.save_arg_values
-        save_code_context = capture_options.save_code_context
-        save_rng_states = capture_options.save_rng_states
+        save_arg_values = capture_options.save_args
+        save_code_context = capture_options.save_source_context
+        save_rng_states = capture_options.save_rng
         recurrence_detection = capture_options.recurrence_detection
         compute_input_output_distances = capture_options.compute_input_output_distances
         verbose = capture_options.verbose
@@ -391,7 +393,7 @@ class TinygradBackend:
         name = capture_options.name
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_raw_output
+        save_raw_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         module_identity_mode = capture_options.module_identity_mode
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
@@ -403,7 +405,7 @@ class TinygradBackend:
         layer_visualizers = _resolve_optional_capture_field(
             capture, "layer_visualizers", layer_visualizers
         )
-        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
         layers_to_save = _default_if_missing(layers_to_save, "all")
         keep_orphans = _default_if_missing(keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")
@@ -451,9 +453,9 @@ class TinygradBackend:
             save_raw_activations=save_raw_activations,
             detach_saved_activations=detach_saved_activations,
             save_grads=save_grads,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             backward_ready=backward_ready,
             module_filter=module_filter,
             transform=transform,
@@ -476,7 +478,7 @@ class TinygradBackend:
             save_raw_input=cast(str | bool, save_raw_input),
             batch_render=cast(str, batch_render),
             output_transform=output_transform,
-            save_raw_output=cast(str | bool, save_raw_output),
+            save_transformed_output=cast(str | bool, save_raw_output),
         )
         trace.capture_events = CaptureEvents()
         trace.capture_start_time = time.time()
@@ -557,7 +559,7 @@ class TinygradBackend:
         trace: Trace,
         *_args: Any,
         **kwargs: Any,
-    ) -> bool | ValidationReplayStatus:
+    ) -> bool | ValidationStatus:
         """Validate a tinygrad trace using UOp replay and metadata invariants.
 
         Parameters
@@ -572,14 +574,14 @@ class TinygradBackend:
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             True when replayed UOp payloads match saved live payload copies.
             Loaded traces whose runtime capture was stripped return an explicit
             unavailable status.
         """
 
         status = trace.validation_replay_status
-        if not status.available:
+        if not status.is_available:
             setattr(trace, "_validation_replay_status", status)
             return status
         try:
@@ -593,12 +595,12 @@ class TinygradBackend:
             raise
         except Exception:
             passed = False
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend="tinygrad",
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
                 payload_load_status=getattr(trace, "payload_load_status", None),
-                failed_node_count=1,
+                num_failed_ops=1,
             )
         setattr(
             trace,
@@ -612,7 +614,7 @@ class TinygradBackend:
         trace: Trace,
         *,
         passed: bool,
-    ) -> ValidationReplayStatus:
+    ) -> ValidationStatus:
         """Build aggregate replay status from tinygrad replay and region counts.
 
         Parameters
@@ -624,7 +626,7 @@ class TinygradBackend:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Failed status when replay failed, unverified status when all
             replayed ops passed but importer-owned regions are present, and
             passed status otherwise.
@@ -636,12 +638,12 @@ class TinygradBackend:
         payload_load_status = getattr(trace, "payload_load_status", None)
         replayed_node_count = len(getattr(trace, "tinygrad_uop_captures", ())) if passed else 0
         unverified_node_count = count_importer_region_annotations(trace) if passed else 0
-        return ValidationReplayStatus.from_replay_counts(
+        return ValidationStatus.from_replay_counts(
             backend="tinygrad",
             source=source,
-            replayed_node_count=replayed_node_count,
-            unverified_node_count=unverified_node_count,
-            failed_node_count=0 if passed else 1,
+            num_replayed_ops=replayed_node_count,
+            num_unverified_ops=unverified_node_count,
+            num_failed_ops=0 if passed else 1,
             payload_load_status=payload_load_status,
         )
 
@@ -702,7 +704,7 @@ class TinygradBackend:
         save_raw_input: str | bool,
         batch_render: str,
         output_transform: object | None,
-        save_raw_output: str | bool,
+        save_transformed_output: str | bool,
         compute_input_output_distances: bool = True,
     ) -> Trace:
         """Construct an empty trace shell via the shared preview constructor."""
@@ -719,7 +721,7 @@ class TinygradBackend:
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             param_source="none",
             compute_input_output_distances=compute_input_output_distances,
         )
@@ -1279,13 +1281,20 @@ class TinygradBackend:
         snapshots = _snapshot_tinygrad_grads(self, leaves)
         try:
             if grad_options.intermediate_grads:
-                trace.intermediate_derived_grads = self._derive_intermediate_grads_no_realize(
-                    trace=trace,
-                    model=model,
-                    args=args,
-                    captured_output=captured_output,
-                    grad_options=grad_options,
-                    snapshots=snapshots,
+                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+
+                set_intermediate_derived_grads(
+                    trace,
+                    (
+                        self._derive_intermediate_grads_no_realize(
+                            trace=trace,
+                            model=model,
+                            args=args,
+                            captured_output=captured_output,
+                            grad_options=grad_options,
+                            snapshots=snapshots,
+                        )
+                    ),
                 )
                 _restore_tinygrad_grads(snapshots)
                 snapshots = _snapshot_tinygrad_grads(self, leaves)
@@ -1378,7 +1387,7 @@ class TinygradBackend:
         if not _tinygrad_outputs_close(self, derived_output, captured_output):
             raise ValueError(
                 "tinygrad intermediate derived gradient run raw output diverged from captured "
-                "raw output; refusing to expose trace.intermediate_derived_grads."
+                "raw output; refusing to expose trace.autograd.intermediate_derived_grads."
             )
         records = _records_for_tinygrad_intermediate_grads(
             backend=self,
@@ -1885,7 +1894,7 @@ def tinygrad_param_logs(tree: TinygradModuleTree, trace: Trace) -> dict[str, Par
             param.backend_address = f"object:{param_address}"
             param.resolver_status = "resolved"
             param._param_ref = cast(Any, tensor)
-            param.source_trace = trace
+            param.trace = trace
             param.all_module_addresses = list(
                 tree.metadata.get(owner, {}).get("all_addresses", [owner])
             )

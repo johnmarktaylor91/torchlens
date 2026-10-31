@@ -292,7 +292,7 @@ def test_embedded_load_refused_on_cve_vulnerable_torch(monkeypatch: pytest.Monke
     """When the CVE-2025-32434 fix is absent, the embedded load fails closed."""
 
     monkeypatch.setattr(
-        "torchlens.utils._torch_compat.HAS_SAFE_WEIGHTS_ONLY_LOAD", False, raising=True
+        "torchlens._utils._torch_compat.HAS_SAFE_WEIGHTS_ONLY_LOAD", False, raising=True
     )
     with pytest.raises(pickle.UnpicklingError, match="CVE-2025-32434"):
         _safe_load_from_bytes(_embedded_tensor_bytes())
@@ -301,7 +301,7 @@ def test_embedded_load_refused_on_cve_vulnerable_torch(monkeypatch: pytest.Monke
 def test_embedded_load_roundtrips_on_fixed_torch() -> None:
     """On a CVE-fixed torch (>= 2.6), a benign embedded tensor still round-trips."""
 
-    from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
+    from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
     if not HAS_SAFE_WEIGHTS_ONLY_LOAD:  # pragma: no cover - depends on runtime torch
         pytest.skip("running torch predates the CVE-2025-32434 fix")
@@ -313,8 +313,8 @@ def test_embedded_load_roundtrips_on_fixed_torch() -> None:
 def test_weights_only_load_capability_in_snapshot() -> None:
     """The named capability flag surfaces in the torch capability snapshot / doctor report."""
 
-    import torchlens.utils as tl_utils
-    from torchlens.utils._torch_compat import get_torch_capability_snapshot
+    import torchlens._utils as tl_utils
+    from torchlens._utils._torch_compat import get_torch_capability_snapshot
 
     snapshot = get_torch_capability_snapshot()
     assert "HAS_SAFE_WEIGHTS_ONLY_LOAD" in snapshot

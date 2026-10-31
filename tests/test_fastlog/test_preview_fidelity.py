@@ -9,7 +9,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.fastlog import RecordContext, RecordContextFieldError
+from torchlens.errors import RecordContextFieldError
+from torchlens.fastlog import RecordContext
 from torchlens.visualization.fastlog_preview import _build_preview_nodes, _make_node_spec_fn
 from torchlens.visualization.node_spec import NodeSpec
 

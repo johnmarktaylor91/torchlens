@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.utils._multipass_access import (
+from torchlens._utils._multipass_access import (
     MISSING,
     MultiPassAmbiguityError,
     get_multipass_attr,
@@ -115,7 +115,7 @@ def test_get_multipass_attr_honesty_guard():
 
     This is the load-bearing honesty guard the whole sprint depends on. Mutation
     proof: replacing the ``except ValueError`` branch in
-    ``torchlens/utils/_multipass_access.py:get_multipass_attr`` with
+    ``torchlens/_utils/_multipass_access.py:get_multipass_attr`` with
     ``return default`` (the naive ``getattr(layer, attr, default)`` behaviour the
     DECISION forbids) makes this assertion return ``0.0`` instead of raising --
     killing the test. Verified executed in R18J_REPORT.md.
@@ -189,7 +189,7 @@ def test_h3_rolled_node_label_time_no_crash(tmp_path):
     graph = log.draw(
         vis_mode="rolled",
         vis_save_only=True,
-        vis_outpath=str(tmp_path / "rolled"),
+        path=str(tmp_path / "rolled"),
         node_label_fields=["label", "memory", "time", "flops", "pass"],
         return_graph=True,
     )
@@ -203,7 +203,7 @@ def test_f5_unrolled_pass_field_shows_real_pass_numbers(tmp_path):
     graph = log.draw(
         vis_mode="unrolled",
         vis_save_only=True,
-        vis_outpath=str(tmp_path / "unrolled"),
+        path=str(tmp_path / "unrolled"),
         node_label_fields=["label", "pass"],
         return_graph=True,
     )
@@ -219,7 +219,7 @@ def test_f2_unrolled_titles_are_resolvable(tmp_path):
     graph = log.draw(
         vis_mode="unrolled",
         vis_save_only=True,
-        vis_outpath=str(tmp_path / "titles"),
+        path=str(tmp_path / "titles"),
         return_graph=True,
     )
     titles = set(re.findall(r"<B>([a-z]+_[0-9_]+:[0-9]+)</B>", graph.source))
@@ -262,7 +262,7 @@ def test_h6_rolled_overlays_do_not_crash(tmp_path, overlay):
         vis_mode="rolled",
         node_overlay=overlay,
         vis_save_only=True,
-        vis_outpath=str(tmp_path / f"ov_{overlay}"),
+        path=str(tmp_path / f"ov_{overlay}"),
         return_graph=True,
     )
     assert graph.source  # rendered without leaking the multi-pass tripwire
@@ -313,7 +313,7 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
         log,
         predicate=lambda ctx: getattr(ctx, "pass_index", None) == 1,
         vis_save_only=True,
-        vis_outpath=str(tmp_path / "preview"),
+        path=str(tmp_path / "preview"),
     )
     # Decisions are keyed per pass (no overwrite) with correct per-pass context.
     preview = _build_preview_nodes(log, lambda ctx: ctx.event_index == 3)

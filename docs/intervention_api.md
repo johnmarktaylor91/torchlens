@@ -19,11 +19,11 @@ Selectors resolve against completed `Trace.layers` records.
 | `tl.label` | `label(name: str)` | Exact final, raw, short, or pass-qualified label. |
 | `tl.func` | `func(name: str)` | Match captured function name OR normalized layer type such as `"relu"` or `"add"`. |
 | `tl.module` | `module(address: str)` | Match a module output boundary. |
-| `tl.contains` | `contains(substring: str)` | Case-insensitive label substring search. |
-| `tl.regex` | `regex(pattern: str)` | Case-sensitive `re.search` over labels. |
+| `tl.label_contains` | `contains(substring: str)` | Case-insensitive label substring search. |
+| `tl.label_matches` | `regex(pattern: str)` | Case-sensitive `re.search` over labels. |
 | `tl.where` | `where(predicate, *, name_hint=None)` | Predicate over layer pass records; non-portable. |
 | `tl.in_module` | `in_module(address: str)` | Match sites contained in a module address. |
-| `tl.grad_fn_label` | `grad_fn_label(name: str)` | Exact backward grad_fn label (backward sites only). |
+| `tl.grad_fn` | `grad_fn(name=None, *, label=None, is_custom=None)` | Backward grad_fn by autograd class name, label substring or custom flag (backward sites only). |
 
 One interpreter evaluates every selector in every lifecycle (capture-time
 `save=`, post-hoc `find_sites`, live hooks); `contains` is case-insensitive and
@@ -93,17 +93,16 @@ Forward helpers return `Edit` objects that can be passed to `set`,
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
-| `tl.zero_ablate` | `zero_ablate(*, force_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
-| `tl.mean_ablate` | `mean_ablate(source=None, *, over="self", force_shape_change=False)` | Portable for supported tensor/self sources; batch-dependent policies can block append. |
-| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, force_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
-| `tl.steer` | `steer(direction, magnitude=1.0, *, coef=None, feature_axis=None, force_shape_change=False)` | Portable when `direction` is serializable tensor data. |
-| `tl.scale` | `scale(factor, *, force_shape_change=False)` | Portable built-in and append-compatible. |
-| `tl.clamp` | `clamp(*, min=None, max=None, force_shape_change=False)` | Portable built-in and append-compatible. |
-| `tl.noise` | `noise(std, *, seed=None, force_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
-| `tl.project_onto` | `project_onto(direction, *, feature_axis=None, force_shape_change=False)` | Portable when `direction` is tensor data. |
-| `tl.project_off` | `project_off(direction, *, feature_axis=None, force_shape_change=False)` | Portable when `direction` is tensor data. |
-| `tl.swap_with` | `swap_with(other_label, *, force_shape_change=False)` | Tensor and Op-like (`.out`) sources work in memory; **string labels are not supported and raise `HookValueError` immediately** -- no execution path resolves a bare label to another site's tensor today. |
-| `tl.splice_module` | `splice_module(module, *, input="in", output="out", force_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
+| `tl.zero_ablate` | `zero_ablate(*, allow_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
+| `tl.mean_ablate` | `mean_ablate(source=None, *, dim="self", allow_shape_change=False)` | Portable for supported tensor/self sources; batch-dependent policies can block append. |
+| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
+| `tl.steer` | `steer(direction, strength=1.0, *, coef=None, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
+| `tl.scale` | `scale(factor, *, allow_shape_change=False)` | Portable built-in and append-compatible. |
+| `tl.clamp` | `clamp(*, low=None, high=None, allow_shape_change=False)` | Portable built-in and append-compatible. |
+| `tl.add_noise` | `add_noise(std, *, seed=None, allow_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
+| `tl.project_onto` | `project_onto(direction, *, dim=None, allow_shape_change=False)` | Portable when `direction` is tensor data. |
+| `tl.project_out` | `project_out(direction, *, dim=None, allow_shape_change=False)` | Portable when `direction` is tensor data. |
+| `tl.splice_module` | `splice_module(module, *, input_route="in", output_route="out", allow_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
 
 The packaged SAE splice experiment, `torchlens.bridge.sae.splice(...)`
 (documented-unstable), composes `splice_module` with fork + push: it swaps a
@@ -120,9 +119,9 @@ Backward helpers are Tier-1 live/rerun-only helpers.
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
-| `tl.bwd_hook` | `bwd_hook(fn)` | Live/rerun-only; not portable. |
-| `tl.grad_zero` | `grad_zero(*, force_shape_change=False)` | Live/rerun-only; not portable. |
-| `tl.grad_scale` | `grad_scale(factor, *, force_shape_change=False)` | Live/rerun-only; not portable. |
+| `tl.hook_grad` | `hook_grad(fn)` | Live/rerun-only; not portable. |
+| `tl.zero_grad` | `zero_grad(*, allow_shape_change=False)` | Live/rerun-only; not portable. |
+| `tl.scale_grad` | `scale_grad(factor, *, allow_shape_change=False)` | Live/rerun-only; not portable. |
 
 Hook callables receive one positional tensor and a required keyword-only
 `hook` context. For forward hooks the positional tensor is the activation; for
@@ -133,10 +132,10 @@ tensor.
 
 ## Attribution Patching
 
-Attribution-patching examples in this guide use the `(corrupt - clean) * patched`
+Attribution-patching examples in this guide use the `(corrupted_graph - clean) * patched`
 sign convention so positive scores mean the patched activation moves the run
 toward the corrupt direction under that local linearization. The more common
-TransformerLens presentation is `grad * (clean - corrupt)`. Both are valid as
+TransformerLens presentation is `grad * (clean - corrupted_graph)`. Both are valid as
 long as the sign convention is named and used consistently.
 
 ## Raw PyTorch Forward Hooks
@@ -195,13 +194,13 @@ Forward exceptions keep the historical behavior unless you opt in. With
 the original exception. With `on_forward_error="return_partial"`, `tl.record(...)` returns a
 failed partial `Recording`; `return_output=True` returns `(None, partial)` because there is no
 valid model output. Failed partials carry `status="partial_error"`, `failed=True`,
-string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields. user-op
+string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials are not topology-complete, so `Recording.to_trace()` and
-`Recording.log_backward()` reject them.
+`Recording.backward()` reject them.
 
 For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
-`tl.partial.from_failed_capture(exc)`.
+`tl._partial.from_failed_capture(exc)`.
 
 ## Trace Mutators
 
@@ -209,7 +208,7 @@ For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
 | --- | --- |
 | `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
 | `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
-| `log.do(...)` / `tl.do(log, ...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
+| `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
 | `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
 | `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
@@ -229,7 +228,7 @@ this is a disclosure, never a refusal.
 `log.do([(selection, edit), ...])` applies a list of selection and edit pairs
 as one transaction with one intervention event. Activation (ACT) pairs attach
 together and push once. A batch may also carry parameter selections
-(`tl.params(...)`) and dataflow edge selections (from `log.edges`); on the
+(`tl.param(...)`) and dataflow edge selections (from `log.graph.edges`); on the
 replay engine the pairs then run in order exactly as one `do()` per pair would
 (each run of consecutive activation pairs attaches and pushes together; each
 parameter or edge pair goes through its own substitution path), and the result
@@ -280,10 +279,10 @@ drawn as planned sites.
 
 ## Bundle
 
-Construct with `tl.bundle(...)` or `tl.Bundle(...)`:
+Construct with `tl.Bundle(...)`:
 
 ```python
-bundle = tl.bundle({"clean": clean_log, "patched": patched_log}, baseline="clean")
+bundle = tl.Bundle({"clean": clean_log, "patched": patched_log}, baseline="clean")
 ```
 
 Common operations:
@@ -318,4 +317,4 @@ operands they actually read.
 
 | TransformerLens pattern | TorchLens pattern |
 | --- | --- |
-| `act_patch` attribution patching | Attach a `tl.bwd_hook(...)` gradient observer at the site, then `log.run(model, x)` under the active spec and score from the captured gradients/outs. |
+| `act_patch` attribution patching | Attach a `tl.hook_grad(...)` gradient observer at the site, then `log.run(model, x)` under the active spec and score from the captured gradients/outs. |

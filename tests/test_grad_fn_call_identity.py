@@ -18,8 +18,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes._trace_accessors import TraceGradFnCallAccessor
-from torchlens.data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes._trace_accessors import TraceGradFnCallAccessor
+from torchlens._data_classes.grad_fn_call import GradFnCall
 
 
 class _TraceStandIn:
@@ -28,6 +28,12 @@ class _TraceStandIn:
     def __init__(self, calls: list[GradFnCall]) -> None:
         self._calls = calls
         self._backward_projection_revision = 0
+
+    @property
+    def autograd(self) -> _TraceStandIn:
+        """Serve ``trace.autograd.grad_fn_calls`` from the stand-in itself."""
+
+        return self
 
     @property
     def grad_fn_calls(self) -> TraceGradFnCallAccessor:
@@ -96,7 +102,7 @@ def test_ordinal_index_on_live_backward_trace():
         capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
-    calls = list(trace.grad_fn_calls.values())
+    calls = list(trace.autograd.grad_fn_calls.values())
     assert calls, "backward capture produced no GradFnCall records"
     assert [call.ordinal_index for call in calls] == list(range(len(calls)))
     trace.cleanup()

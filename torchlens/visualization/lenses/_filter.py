@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any
 from ..._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 __all__ = [
     "BRIDGED_EDGE_LEGEND_LINE",
@@ -159,17 +159,17 @@ def _token_predicate(token: str) -> Callable[[Any], bool]:
 
 
 def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
-    """Resolve a Selection operand to its SiteEntry rows on this trace.
+    """Resolve a Selection operand to its Site rows on this trace.
 
     A ResolvedSelection bound to a foreign trace refuses typed -- alignment
     (``align_to``) is the one explicit door for cross-trace reuse.
     """
 
-    from torchlens.selection import ResolvedSelection, Selection
+    from torchlens._selection import Selection, Selector
 
-    if isinstance(selection, ResolvedSelection):
+    if isinstance(selection, Selection):
         resolved: Any = selection
-    elif isinstance(selection, Selection):
+    elif isinstance(selection, Selector):
         resolved = selection.resolve(trace)
     elif hasattr(selection, "__selection__"):
         resolved = selection.__selection__().resolve(trace)
@@ -184,7 +184,7 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
             remedy="pass the unresolved Selection, or align_to(this_trace) first",
             argument="display_filter",
         )
-    if isinstance(resolved, ResolvedSelection):
+    if isinstance(resolved, Selection):
         return tuple(resolved)
     return tuple(getattr(resolved, "entries", ()))
 
@@ -206,7 +206,7 @@ def _selection_labels(trace: Trace, selection: Any) -> frozenset[str]:
     entries = _resolve_selection_operand(trace, selection)
     labels: set[str] = set()
     structural: set[str] = set()
-    for entry in entries:  # SiteEntry rows (family level: zero-mask sites count)
+    for entry in entries:  # Site rows (family level: zero-mask sites count)
         site_key = getattr(entry, "site_key", None)
         if isinstance(site_key, tuple) and site_key:
             layer_label = str(site_key[0])

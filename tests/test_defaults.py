@@ -171,11 +171,11 @@ def test_trace_defaults_are_stable(
     assert captured_calls[-1]["activation_transform"] is None
     assert captured_calls[-1]["mark_layer_depths"] is True
     assert captured_calls[-1]["detach_saved_activations"] is False
-    assert captured_calls[-1]["save_arg_values"] is False
+    assert captured_calls[-1]["save_args"] is False
     assert captured_calls[-1]["save_grads"] is False
     assert captured_calls[-1]["num_context_lines"] == 7
-    assert captured_calls[-1]["save_code_context"] is False
-    assert captured_calls[-1]["save_rng_states"] is False
+    assert captured_calls[-1]["save_source_context"] is False
+    assert captured_calls[-1]["save_rng"] is False
     assert captured_calls[-1]["recurrence_detection"] is True
     assert captured_calls[-1]["save_outs_to"] is None
     assert captured_calls[-1]["keep_outs_in_memory"] is True
@@ -197,14 +197,14 @@ def test_trace_accepts_explicit_opt_in_overrides(
         capture=tl.options.CaptureOptions(
             layers_to_save=None,
             compute_input_output_distances=True,
-            save_code_context=True,
+            save_source_context=True,
             recurrence_detection=False,
         ),
     )
 
     assert result is dummy_logs[-1]
     assert captured_calls[-1]["mark_layer_depths"] is True
-    assert captured_calls[-1]["save_code_context"] is True
+    assert captured_calls[-1]["save_source_context"] is True
     assert captured_calls[-1]["recurrence_detection"] is False
     assert dummy_logs[-1].render_calls == []
 
@@ -275,7 +275,9 @@ def test_log_model_metadata_forces_metadata_defaults(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(user_funcs, "trace", _fake_trace)
 
-    result = tl.io.log_model_metadata(_TinyModel(), _tiny_input())
+    # The public spelling left the surface (a metadata-only capture is a plain
+    # trace); the wrapper behind it keeps its metadata-only defaults.
+    result = user_funcs.log_model_metadata(_TinyModel(), _tiny_input())
 
     assert result is dummy_log
     # The metadata wrapper migrated from the deprecated flat kwargs to the
@@ -295,7 +297,7 @@ def test_summary_uses_metadata_only_defaults(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    result = tl.visualization.summary(_TinyModel(), _tiny_input(), depth=2)
+    result = tl.summary(_TinyModel(), _tiny_input(), depth=2)
 
     assert result == "summary output"
     assert captured_calls[-1]["layers_to_save"] is None
@@ -314,7 +316,7 @@ def test_validate_forward_pass_uses_validation_overrides(
     result = tl.validation.validate_forward_pass(
         _TinyModel(),
         _tiny_input(),
-        random_seed=123,
+        seed=123,
         validate_metadata=False,
     )
 
@@ -325,9 +327,9 @@ def test_validate_forward_pass_uses_validation_overrides(
     assert replay_call["mark_layer_depths"] is False
     assert replay_call["detach_saved_activations"] is False
     assert replay_call["save_grads"] is False
-    assert replay_call["save_arg_values"] is True
-    assert replay_call["save_rng_states"] is True
-    assert reproducibility_call["save_arg_values"] is False
-    assert reproducibility_call["save_rng_states"] is False
+    assert replay_call["save_args"] is True
+    assert replay_call["save_rng"] is True
+    assert reproducibility_call["save_args"] is False
+    assert reproducibility_call["save_rng"] is False
     assert dummy_logs[-2].validate_calls[-1]["validate_metadata"] is False
     assert dummy_logs[-2].cleanup_calls == 1

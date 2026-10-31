@@ -46,7 +46,7 @@ def _observable_payload_retention(trace: Any) -> Any:
 
 def _observable_edges_available(trace: Any) -> Any:
     try:
-        _ = trace.edges
+        _ = trace.graph.edges
         return True
     except Exception:
         return False

@@ -194,8 +194,8 @@ def test_neutral_collapsed_fill_under_active_channel(tmp_path: Any) -> None:
         # else in the same picture.
         graph = log.draw(
             **resolution.draw_kwargs,
-            vis_outpath=str(tmp_path / "neutral"),
-            vis_fileformat="svg",
+            path=str(tmp_path / "neutral"),
+            file_format="svg",
             vis_save_only=True,
             return_graph=True,
         )
@@ -216,6 +216,6 @@ def test_skins_compose_with_lenses(skin: str, tmp_path: Any) -> None:
     log = tl.trace(nn.Linear(4, 4), torch.randn(1, 4))
     try:
         resolution = lenses.resolve_lens(log, "overview", skin=skin)
-        assert resolution.draw_kwargs["vis_theme"] == skin
+        assert resolution.draw_kwargs["theme"] == skin
     finally:
         log.cleanup()

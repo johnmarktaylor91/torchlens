@@ -9,10 +9,11 @@ from __future__ import annotations
 import pytest
 import torch
 
+import torchlens.errors
 import torchlens.trackers as trk
-from torchlens.observability import HistorySchemaError
+from torchlens._utils._torch_compat import HAS_AMP_GRADSCALER
+from torchlens.errors import HistorySchemaError
 from torchlens.trackers._errors import WatchConfigError, WatchRuntimeError
-from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
 _requires_gradscaler = pytest.mark.skipif(
     not HAS_AMP_GRADSCALER,
@@ -54,7 +55,7 @@ class TestTierP:
         assert steps[-1] == 107  # last step force-sampled at close
         assert 105 in steps  # the cadence hit (105 % 5 == 0)
         report = session.close()
-        assert report.final_sample_forced
+        assert report.is_final_sample_forced
         assert report.first_step == 100
         assert report.last_step == 107
 
@@ -283,7 +284,7 @@ class TestLoudFailures:
 
         model, opt = _mlp()
         narrow = trk.MemorySink(capabilities=frozenset({"scalar", "text_manifest"}))
-        with pytest.raises(trk.SinkProtocolError) as info:
+        with pytest.raises(torchlens.errors.SinkProtocolError) as info:
             trk.watch(model, to=narrow, optimizer=opt, hist_every=10)
         assert info.value.fields["code"] == "tracker_sink_capability_missing"
         assert narrow.scalars == []
@@ -361,7 +362,7 @@ class TestLoudFailures:
         sink = trk.MemorySink()
         session = trk.watch(model, to=sink, optimizer=opt)
         report = session.close()
-        assert report.disabled
+        assert report.is_disabled
         assert [p.tag for p in sink.scalars] == ["torchlens/run/disabled"]
 
 
@@ -392,7 +393,7 @@ class TestTierM:
             signals=("activations", "gradients"),
             select=("transformer.h.0",),
             optimizer=opt,
-            example_input=example,
+            inputs=example,
             every=1,
         )
         with session, session.step(100):
@@ -418,7 +419,7 @@ class TestTierM:
                 to=trk.MemorySink(),
                 signals=("activations",),
                 select=("no.such.module",),
-                example_input=example,
+                inputs=example,
             )
         code = getattr(info.value, "fields", {}).get("code", "")
         assert code in ("watch_plan_empty", "watch_selector_matched_no_sites")

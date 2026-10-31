@@ -19,8 +19,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.observability import HistoryCollector, WatchSettings, region, session
-from torchlens.observability._session import active_session
+from torchlens._observability import HistoryCollector, WatchSettings, region, session
+from torchlens._observability._session import active_session
 
 
 def _model() -> nn.Sequential:

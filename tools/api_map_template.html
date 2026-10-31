@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>TorchLens API map</title>
+<style>
+:root {
+  --surface: #ffffff;
+  --surface-2: #f6f6f3;
+  --ink: #1f1f1e;
+  --muted: #555650;
+  --grid: #e6e5e0;
+  --accent: #0072b2;
+  --accent-ink: #0072b2;
+  --mark: #fff1b3;
+  --k-module: #0072b2;
+  --k-class: #d55e00;
+  --k-function: #009e73;
+  --k-property: #cc79a7;
+  --k-data: #555650;
+  --focus: #0072b2;
+  --sp-xs: 4px; --sp-sm: 8px; --sp-md: 12px; --sp-lg: 20px; --sp-xl: 32px;
+  --r-sm: 4px; --r-md: 8px;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --surface: #17191b;
+  --surface-2: #1f2225;
+  --ink: #f6f6f4;
+  --muted: #bec2c3;
+  --grid: #41464a;
+  --accent: #56b4e9;
+  --accent-ink: #7cc4ee;
+  --mark: #5a4a00;
+  --k-module: #56b4e9;
+  --k-class: #f0a35c;
+  --k-function: #3fcf9f;
+  --k-property: #e6a3cb;
+  --k-data: #bec2c3;
+  --focus: #56b4e9;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: #17191b;
+    --surface-2: #1f2225;
+    --ink: #f6f6f4;
+    --muted: #bec2c3;
+    --grid: #41464a;
+    --accent: #56b4e9;
+    --accent-ink: #7cc4ee;
+    --mark: #5a4a00;
+    --k-module: #56b4e9;
+    --k-class: #f0a35c;
+    --k-function: #3fcf9f;
+    --k-property: #e6a3cb;
+    --k-data: #bec2c3;
+    --focus: #56b4e9;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { height: 100%; scroll-padding-top: 120px; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: 14px/1.45 var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+}
+a { color: var(--accent-ink); }
+code, pre, .sig, .mono { font-family: var(--font-mono); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-sm); }
+button { font: inherit; color: inherit; }
+mark { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+.visually-hidden { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+/* Header and controls */
+header.top {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--grid);
+  padding: calc(var(--sp-sm) + env(safe-area-inset-top, 0px)) var(--sp-lg) var(--sp-sm);
+}
+.title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-xs) var(--sp-md); }
+h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+.meta { color: var(--muted); font-size: 12px; }
+.meta code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-radius: var(--r-sm); border: 1px solid var(--grid); }
+.controls { display: flex; flex-wrap: wrap; gap: var(--sp-sm); align-items: center; margin-top: var(--sp-sm); }
+.search { flex: 1 1 200px; display: flex; align-items: center; gap: var(--sp-sm); position: relative; }
+.search input {
+  width: 100%; min-height: 36px; padding: 6px 100px 6px 12px;
+  border: 1px solid var(--grid); border-radius: var(--r-md);
+  background: var(--surface-2); color: var(--ink); font: 14px var(--font-sans);
+}
+.search input::placeholder { color: var(--muted); }
+.search .count { position: absolute; right: 44px; font-size: 12px; color: var(--muted); pointer-events: none; }
+.search .clear { position: absolute; right: 4px; min-width: 32px; min-height: 28px; border: 0; background: transparent; color: var(--muted); border-radius: var(--r-sm); cursor: pointer; }
+.search .clear:hover { color: var(--ink); background: var(--grid); }
+.btn {
+  min-height: 32px; padding: 4px 10px; border: 1px solid var(--grid); border-radius: var(--r-md);
+  background: var(--surface-2); color: var(--ink); cursor: pointer; font-size: 13px; line-height: 1.2;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn:hover { border-color: var(--muted); }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.group { display: inline-flex; gap: 0; }
+.group .btn { border-radius: 0; margin-left: -1px; }
+.group .btn:first-child { border-radius: var(--r-md) 0 0 var(--r-md); margin-left: 0; }
+.group .btn:last-child { border-radius: 0 var(--r-md) var(--r-md) 0; }
+.group .lbl { font-size: 12px; color: var(--muted); padding: 0 8px; align-self: center; }
+
+/* Tree */
+main { padding: var(--sp-md) var(--sp-lg) var(--sp-xl); max-width: 1400px; }
+section.tree { margin-bottom: var(--sp-lg); }
+section.tree > h2 {
+  font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+  margin: var(--sp-lg) 0 var(--sp-sm); font-weight: 600;
+}
+section.tree > h2 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: var(--sp-sm); }
+ul.kids { list-style: none; margin: 0; padding: 0 0 0 var(--sp-lg); border-left: 1px solid var(--grid); }
+ul.kids.root { padding-left: 0; border-left: 0; }
+li.node { margin: 0; }
+li.group {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+  padding: var(--sp-sm) 0 2px 30px; font-weight: 600;
+}
+.row {
+  display: grid; grid-template-columns: 24px auto minmax(0, 1fr); column-gap: 6px; align-items: start;
+  min-height: 28px; padding: 3px 4px 3px 0; border-radius: var(--r-sm); cursor: pointer;
+}
+.row:hover { background: var(--surface-2); }
+li.node.current > .row { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.tog {
+  width: 24px; height: 24px; margin-top: 1px; border: 0; background: transparent; cursor: pointer;
+  color: var(--muted); border-radius: var(--r-sm); display: inline-flex; align-items: center; justify-content: center; padding: 0;
+}
+.tog:hover { background: var(--grid); color: var(--ink); }
+.tog svg { width: 12px; height: 12px; transition: transform 160ms ease; }
+li.node.open > .row .tog svg { transform: rotate(90deg); }
+.tog.leaf { visibility: hidden; }
+.badge {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 4px;
+  font-size: 11px; line-height: 1; color: var(--muted); letter-spacing: 0.02em;
+  min-width: 62px; white-space: nowrap;
+}
+.badge::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--k-data); flex: none; }
+.badge.k-module::before, .badge.k-package::before { background: var(--k-module); }
+.badge.k-class::before { background: var(--k-class); border-radius: 50%; }
+.badge.k-function::before, .badge.k-method::before { background: var(--k-function); }
+.badge.k-property::before { background: var(--k-property); }
+.badge.k-root::before { background: var(--k-module); }
+.main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--sp-sm); min-width: 0; }
+.name { font-weight: 600; color: var(--ink); text-decoration: none; font-family: var(--font-mono); font-size: 13.5px; }
+.name:hover { text-decoration: underline; }
+li.node.internal > .row .name { color: var(--muted); font-weight: 500; }
+.sig { font-size: 12.5px; color: var(--muted); word-break: break-word; }
+.sig .pn { color: var(--ink); }
+.sig .kw { color: var(--k-class); }
+.doc1 { flex-basis: 100%; color: var(--muted); font-size: 13px; margin-top: 1px; }
+.doc1 code, .details pre code { font-size: 12.5px; background: var(--surface-2); border-radius: 3px; padding: 0 3px; }
+li.node.open > .row .doc1 code, .details pre code { background: var(--surface); }
+.alias-note { font-size: 12px; color: var(--muted); min-width: 0; max-width: 100%; }
+.alias-note code { font-size: 12px; overflow-wrap: anywhere; word-break: break-all; }
+.main > * { min-width: 0; max-width: 100%; }
+.more { border: 1px solid var(--grid); background: var(--surface-2); color: var(--accent-ink); border-radius: 3px; font: 12px var(--font-mono); padding: 0 6px; min-height: 22px; cursor: pointer; margin-left: 2px; }
+.more:hover { border-color: var(--muted); }
+.more-demo { border: 1px solid var(--grid); background: var(--surface); color: var(--accent-ink); border-radius: 3px; font: 12px var(--font-mono); padding: 0 6px; line-height: 18px; }
+.tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.tag { font-size: 11px; color: var(--muted); border: 1px solid var(--grid); border-radius: 3px; padding: 0 5px; line-height: 16px; }
+.tag.all { border-style: dashed; }
+.legend-bar { border-bottom: 1px solid var(--grid); padding: var(--sp-sm) var(--sp-lg); font-size: 13px; line-height: 20px; color: var(--muted); background: var(--surface-2); }
+.legend-bar summary { cursor: pointer; color: var(--ink); font-weight: 600; font-size: 13px; line-height: 20px; padding: 2px 0; }
+.legend-bar summary:hover { color: var(--accent); }
+.legend-items { columns: 300px; column-gap: 24px; margin-top: var(--sp-sm); }
+.legend-items .item { display: block; break-inside: avoid; margin: 0 0 6px; }
+.legend-items .item .badge, .legend-items .item .tag, .legend-items .item .mark { margin-right: 4px; vertical-align: middle; }
+.legend-items .item .badge { margin-right: 2px; }
+.legend-items .item b { color: var(--ink); font-weight: 600; }
+.mark { font-family: var(--font-mono); font-size: 11px; color: var(--ink); border: 1px solid var(--grid); border-radius: 3px; padding: 0 5px; line-height: 16px; background: var(--surface); }
+.count-hidden { font-size: 11px; color: var(--muted); }
+
+.details { margin: 2px 0 var(--sp-sm) 30px; padding: var(--sp-sm) var(--sp-md); border: 1px solid var(--grid); border-radius: var(--r-md); background: var(--surface-2); font-size: 13px; }
+.details pre { margin: 0 0 var(--sp-sm); white-space: pre-wrap; word-break: break-word; font-size: 12.5px; line-height: 1.45; max-width: 90ch; }
+.details .src { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: var(--sp-xs) var(--sp-md); }
+.details .src code { font-size: 12px; }
+.details .note { color: var(--muted); font-size: 12px; margin-top: var(--sp-xs); }
+.details .fullsig { font-size: 12.5px; margin: 0 0 var(--sp-sm); white-space: pre-wrap; word-break: break-word; color: var(--muted); }
+.details .fullsig .pn { color: var(--ink); }
+.details .fullsig .kw { color: var(--k-class); }
+.details .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 2px; }
+
+.empty { color: var(--muted); padding: var(--sp-lg) 0; }
+.empty b { color: var(--ink); }
+
+/* Help panel */
+.help {
+  position: fixed; inset: auto var(--sp-lg) calc(var(--sp-lg) + env(safe-area-inset-bottom, 0px)) auto;
+  max-width: 400px; width: calc(100% - 2 * var(--sp-lg)); background: var(--surface); color: var(--ink);
+  border: 1px solid var(--grid); border-radius: var(--r-md); padding: var(--sp-md) var(--sp-lg);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.18); z-index: 10; font-size: 13px;
+}
+.help[hidden] { display: none; }
+.help h3 { margin: 0 0 var(--sp-sm); font-size: 14px; }
+.help table { border-collapse: collapse; width: 100%; }
+.help td { padding: 2px 6px 2px 0; vertical-align: top; }
+.help kbd { font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--grid); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--surface-2); }
+.help .close { position: absolute; top: 6px; right: 6px; min-width: 32px; min-height: 32px; border: 0; background: transparent; cursor: pointer; color: var(--muted); border-radius: var(--r-sm); }
+.help .close:hover { background: var(--grid); color: var(--ink); }
+.legend { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: var(--sp-sm) 0; align-items: start; }
+.legend > .tag, .legend > .badge { justify-self: start; align-self: start; margin-top: 2px; }
+
+footer { color: var(--muted); font-size: 12px; padding: var(--sp-lg); border-top: 1px solid var(--grid); }
+footer code { font-size: 12px; }
+
+@media (max-width: 640px) {
+  header.top, main, footer { padding-left: var(--sp-md); padding-right: var(--sp-md); }
+  ul.kids { padding-left: var(--sp-md); }
+  li.group { padding-left: 24px; }
+  .row { grid-template-columns: 24px minmax(0, 1fr); }
+  .badge { grid-column: 2; min-width: 0; margin-top: 2px; }
+  .main { grid-column: 2; }
+  .details { margin-left: var(--sp-sm); }
+  .controls .group .lbl { padding-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .tog svg { transition: none; } }
+@media print { header.top { position: static; } .controls, .help { display: none; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="title-row">
+    <h1>TorchLens API map</h1>
+    <span class="meta">built from commit <code>__COMMIT__</code> <span id="built-at">on __BUILT__</span> <span id="counts"></span></span>
+  </div>
+  <div class="controls">
+    <div class="search">
+      <input id="q" type="search" aria-label="Search names, argument names and summaries" placeholder="Search names" title="Press / to focus; matches names, argument names and summaries" autocomplete="off" spellcheck="false">
+      <span class="count" id="count" aria-live="polite"></span>
+      <button class="clear" id="clear" type="button" aria-label="Clear search" hidden>&#x2715;</button>
+    </div>
+    <div class="group" role="group" aria-label="Open the trees to a depth">
+      <span class="lbl">Open depth</span>
+      <button class="btn" type="button" data-depth="1" title="Open every row one level deep">1</button>
+      <button class="btn" type="button" data-depth="2" title="Open every row two levels deep">2</button>
+      <button class="btn" type="button" data-depth="3" title="Open every row three levels deep">3</button>
+      <button class="btn" type="button" data-depth="99" title="Open every row to the bottom">All</button>
+      <button class="btn" type="button" id="collapse" title="Close every row">Collapse</button>
+    </div>
+    <button class="btn" type="button" id="internals" aria-pressed="false" title="Also list private modules and underscore names">Internals</button>
+    <button class="btn" type="button" id="theme" aria-label="Theme: automatic" title="Switch between automatic, light and dark">Theme: auto</button>
+    <button class="btn" type="button" id="helpbtn" aria-label="Keyboard shortcuts and what clicks do" aria-expanded="false" title="Keyboard shortcuts and what clicks do">Shortcuts</button>
+  </div>
+</header>
+
+<details class="legend-bar" id="legend" open>
+  <summary>Legend: what the badges, tags and marks on each row mean</summary>
+  <div class="legend-items">
+    <p class="item"><span class="badge k-package">package</span> <span class="badge k-class">class</span> <span class="badge k-function">function</span> <span class="badge k-property">property</span> <span class="badge k-field">field</span> Kind of the row: package (a directory with <code>__init__.py</code>), module (one file), class, function or method, property (read like an attribute), dataclass field, attribute, constant, enum member.</p>
+    <p class="item"><span class="tag">L4 core</span> Implementation layer from <code>torchlens/_architecture.py</code>: the number is the layer (L0 is the foundation; a higher layer may import a lower one, never the reverse), the word its tier: <b>core</b> (L0 to L5, the capture engine and its data), <b>appliance</b> (L6, tools on the core), <b>present</b> (L7, rendering and reports), <b>bridge</b> (L8, adapters to external tools), <b>recipe</b> (L9, workflows over the rest). Not a deprecation mark.</p>
+    <p class="item"><span class="tag">facade</span> A thin lazy namespace module (<code>torchlens</code> itself, <code>torchlens.io</code>) that re-exports things defined deeper; a role, not a layer. A root row shows the layer of the implementation it stands for and adds "facade" when the name is reached through such a module; in the package tree the facade module itself carries only "facade".</p>
+    <p class="item"><span class="mark">same as</span> An alias row: the name re-exports a definition that lives elsewhere. The badges and tags sit on the real home, which the "same as" link opens.</p>
+    <p class="item"><span class="tag">legacy root</span> A root <code>tl.NAME</code> implemented at L6 or above. Supported and kept at the top level until the next major release; the deeper module is the long-term spelling.</p>
+    <p class="item"><span class="tag all">__all__</span> Dashed: declared in <code>torchlens.__all__</code>. Root names without it are public too (they are in the frozen surface table) but <code>from torchlens import *</code> skips them.</p>
+    <p class="item"><span class="tag">dataclass</span> Python detail tags: frozen, enum, settable (property with a setter), classmethod, staticmethod, contextmanager, async.</p>
+    <p class="item"><span class="mark">+N internal</span> N non-public members (underscore names, private modules), hidden until <b>Internals</b> is on.</p>
+    <p class="item"><span class="mark">=MISSING</span> An argument you may leave out: <code>MISSING</code> is the TorchLens sentinel for "not passed", so the option's own default applies and an omitted argument is told apart from one passed explicitly.</p>
+    <p class="item"><span class="mark">rows</span> Rows list argument names with short defaults (underscore-prefixed parameters left out); a blue <span class="more-demo">N more)</span> chip folds the rest of a long signature and opens on click. Click a row for the full typed signature, docstring and defining file; the caret opens its children.</p>
+    <p class="item"><span class="mark">summaries</span> The one-line summary and the full docstring are the source's own text, shown verbatim. Codes in them such as "F20", "C01 item 18" or "L6 stage 1" are the project's internal plan references, not the layer tags on this page; "out" and "outs" mean a layer's captured output.</p>
+  </div>
+</details>
+
+<main>
+  <section class="tree" id="tree-tl">
+    <h2>Root surface <span class="hint">import torchlens as tl; everything reachable as tl.NAME</span></h2>
+    <ul class="kids root" data-root="tl"></ul>
+  </section>
+  <section class="tree" id="tree-pkg">
+    <h2>Package tree <span class="hint">every module under torchlens/, with its classes and functions</span></h2>
+    <ul class="kids root" data-root="torchlens"></ul>
+  </section>
+  <p class="empty" id="empty" hidden></p>
+</main>
+
+<footer>
+  Generated from the source at commit <code>__COMMIT__</code>; never edited by hand. Regenerate with <code>__COMMAND__</code>.
+  Root public names come from the frozen surface table; below the root, a name is public when its module lists it in <code>__all__</code> or it has no leading underscore.
+</footer>
+
+<aside class="help" id="help" hidden role="dialog" aria-label="Keys and clicks">
+  <button class="close" type="button" id="helpclose" aria-label="Close">&#x2715;</button>
+  <h3>Keys and clicks</h3>
+  <table>
+    <tr><td><kbd>/</kbd></td><td>focus the search box; <kbd>Esc</kbd> clears it</td></tr>
+    <tr><td><kbd>i</kbd></td><td>show or hide internals (private modules, underscore names)</td></tr>
+    <tr><td><kbd>t</kbd></td><td>cycle the theme (auto, light, dark)</td></tr>
+    <tr><td><kbd>?</kbd></td><td>this panel</td></tr>
+    <tr><td>caret</td><td>open or close the children of a row</td></tr>
+    <tr><td>row</td><td>show the full signature with types, the docstring and the defining file</td></tr>
+    <tr><td>name</td><td>puts the row's path in the address bar: a link you can share or bookmark</td></tr>
+  </table>
+  <p class="meta">The legend for badges, tags and marks sits under the toolbar (click its title to fold or unfold it). Searching with <code>?q=word</code> in the address bar opens the page on that search; <code>#tl.trace</code> opens on that row.</p>
+</aside>
+
+<script id="api-map-data" type="application/json">/*__DATA__*/</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("api-map-data").textContent);
+  var N = DATA.nodes, FILES = DATA.files, ROOTS = DATA.roots;
+  var KIND_ORDER = {root: 0, package: 20, module: 21, "class": 10, "function": 11, method: 31, property: 30,
+                    field: 28, attribute: 29, member: 27, constant: 40, variable: 41, external: 50, dynamic: 51};
+  var CLASS_ORDER = {field: 0, attribute: 1, member: 2, property: 3, method: 4, "class": 5};
+  var GROUPS = {
+    root: [["Entry points", function (n) { return n.r !== undefined; }],
+           ["Classes", function (n) { return target(n).k === "class"; }],
+           ["Functions", function (n) { return target(n).k === "function"; }],
+           ["Namespaces", function (n) { var k = target(n).k; return k === "package" || k === "module"; }],
+           ["Data", function (n) { var k = target(n).k; return k === "constant" || k === "variable"; }],
+           ["Other", function () { return true; }]],
+    module: [["Classes", function (n) { return target(n).k === "class"; }],
+             ["Functions", function (n) { return target(n).k === "function"; }],
+             ["Submodules", function (n) { var k = target(n).k; return k === "package" || k === "module"; }],
+             ["Data", function (n) { var k = target(n).k; return k === "constant" || k === "variable"; }],
+             ["Other", function () { return true; }]],
+    "class": [["Fields", function (n) { var k = n.k; return k === "field" || k === "attribute" || k === "member"; }],
+              ["Properties", function (n) { return n.k === "property"; }],
+              ["Methods", function (n) { return n.k === "method"; }],
+              ["Nested", function () { return true; }]]
+  };
+  var state = {internals: false, theme: "auto", query: "", open: {}, details: {}};
+  var paths = {};   // node id -> [display paths]
+  var byPath = {};  // display path -> node id
+  var hits = null;  // Set of display paths to show while searching
+  var hitNodes = null;
+  var tokens = [];
+
+  try {
+    state.internals = localStorage.getItem("tl-api-map:internals") === "1";
+    state.theme = localStorage.getItem("tl-api-map:theme") || "auto";
+  } catch (e) {}
+
+  function node(id) { return N[id]; }
+  function target(n) { return n.A !== undefined ? N[n.A] : n; }
+  function kids(n) { var t = target(n); return t.c || []; }
+  function isInternal(n) { return !!n.x; }
+  function visible(n) { return state.internals || !isInternal(n); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
+
+  // Display paths: each node can sit under both roots. The full index is built
+  // on first use (search), so opening the page costs only the first screen.
+  var indexed = false;
+  function index(id, path, depth) {
+    (paths[id] = paths[id] || []).push(path);
+    byPath[path] = id;
+    if (depth > 40) return;
+    var n = node(id), cs = kids(n);
+    for (var i = 0; i < cs.length; i++) {
+      var c = node(cs[i]);
+      index(cs[i], path + "." + c.n, depth + 1);
+    }
+  }
+  function ensureIndex() {
+    if (indexed) return;
+    indexed = true;
+    Object.keys(ROOTS).forEach(function (name) { index(ROOTS[name], name, 0); });
+  }
+  // Resolve one display path by walking names from its root (no full index needed).
+  function idForPath(path) {
+    if (indexed) return byPath[path];
+    var parts = path.split("."), id = ROOTS[parts[0]];
+    if (id === undefined) return undefined;
+    for (var i = 1; i < parts.length; i++) {
+      var cs = kids(node(id)), next;
+      for (var j = 0; j < cs.length; j++) { if (node(cs[j]).n === parts[i]) { next = cs[j]; break; } }
+      if (next === undefined) return undefined;
+      id = next;
+    }
+    return id;
+  }
+  function pathsOf(id) { ensureIndex(); return paths[id] || []; }
+
+  function sortKids(parentId, ids) {
+    var p = target(node(parentId));
+    var isClass = p.k === "class";
+    var isRoot = p.k === "root";
+    return ids.slice().sort(function (a, b) {
+      var na = node(a), nb = node(b);
+      if (isRoot) {
+        var ra = na.r === undefined ? 1e9 : na.r, rb = nb.r === undefined ? 1e9 : nb.r;
+        if (ra !== rb) return ra - rb;
+      }
+      var order = isClass ? CLASS_ORDER : KIND_ORDER;
+      var ka = order[na.k] === undefined ? 99 : order[na.k], kb = order[nb.k] === undefined ? 99 : order[nb.k];
+      if (ka !== kb) return ka - kb;
+      return na.n.localeCompare(nb.n);
+    });
+  }
+
+  function groupsFor(parentId) {
+    var k = target(node(parentId)).k;
+    if (k === "root") return GROUPS.root;
+    if (k === "class") return GROUPS["class"];
+    if (k === "package" || k === "module") return GROUPS.module;
+    return null;
+  }
+
+  function highlight(text) {
+    if (!tokens.length) return esc(text);
+    var lower = text.toLowerCase();
+    for (var i = 0; i < tokens.length; i++) {
+      var t = tokens[i], at = lower.indexOf(t);
+      if (at >= 0) {
+        return esc(text.slice(0, at)) + "<mark>" + esc(text.slice(at, at + t.length)) + "</mark>" + esc(text.slice(at + t.length));
+      }
+    }
+    return esc(text);
+  }
+
+  // Light reStructuredText: ``code``, :role:`target` and `single` become <code>.
+  function rst(html) {
+    return html
+      .replace(/``([^`]+)``/g, "<code>$1</code>")
+      .replace(/:[a-z]+:`~?([^`]+)`/g, "<code>$1</code>")
+      .replace(/(^|[\s(])`([^`]+)`/g, "$1<code>$2</code>");
+  }
+  var TAG_TITLES = {
+    "facade": "a thin lazy namespace module (not a layer)",
+    "legacy root": "root name implemented at L6 or above; kept until the next major release",
+    "__all__": "listed in torchlens.__all__",
+    "dataclass": "a dataclass: the fields are its constructor arguments",
+    "frozen": "frozen dataclass: instances cannot be changed",
+    "enum": "an enumeration: the members are its values",
+    "settable": "property with a setter",
+    "classmethod": "called on the class; the first argument is the class",
+    "staticmethod": "no implicit first argument",
+    "contextmanager": "use in a with statement",
+    "async": "coroutine function"
+  };
+  var LAYER_WORDS = {core: "the capture engine and its data (L0 to L5)", appliance: "an appliance built on the core (L6)", present: "presentation: rendering and reports (L7)", bridge: "a bridge to an external tool (L8)", recipe: "a recipe over the rest (L9)"};
+  function tagTitle(g) {
+    if (TAG_TITLES[g]) return TAG_TITLES[g];
+    var m = /^(L\d) (\w+)$/.exec(g);
+    if (m) return "implementation layer " + m[1] + ": " + (LAYER_WORDS[m[2]] || m[2]);
+    return "";
+  }
+  function tagHTML(g) {
+    var t = tagTitle(g);
+    return '<span class="tag' + (g === "__all__" ? " all" : "") + '"' + (t ? ' title="' + esc(t) + '"' : "") + '>' + esc(g) + '</span>';
+  }
+  var FOLD_AT = 12, FOLD_SHOW = 8;
+  function renderBrief(pieces, params) {
+    if (!pieces || !pieces.length) return "";
+    if (pieces.length <= FOLD_AT) return '<code class="sig">' + renderSig("(" + pieces.join(", ") + ")", params) + '</code>';
+    var head = renderSig("(" + pieces.slice(0, FOLD_SHOW).join(", ") + ", ", params);
+    var rest = pieces.length - FOLD_SHOW;
+    return '<code class="sig"><span class="sig-short">' + head + '<button class="more" type="button" aria-expanded="false" title="Show the remaining argument names">' + rest + ' more)</button></span>'
+         + '<span class="sig-long" hidden>' + renderSig("(" + pieces.join(", ") + ")", params) + '<button class="more" type="button" aria-expanded="true" title="Fold the argument list">fewer</button></span></code>';
+  }
+
+  function renderSig(sig, params) {
+    if (!sig) return "";
+    var out = esc(sig);
+    (params || []).forEach(function (p) {
+      var re = new RegExp("(\\(|, )(\\*{0,2})(" + p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?=[,:=)\\s])");
+      out = out.replace(re, function (m, pre, stars, name) {
+        var hit = tokens.some(function (t) { return name.toLowerCase().indexOf(t) >= 0; });
+        return pre + stars + '<span class="pn">' + (hit ? "<mark>" + esc(name) + "</mark>" : esc(name)) + "</span>";
+      });
+    });
+    return out.replace(/( -&gt; )/, '<span class="kw">$1</span>');
+  }
+
+  function rowHTML(id, path) {
+    var n = node(id), t = target(n);
+    var cs = kids(n), shown = cs.filter(function (c) { return visible(node(c)); });
+    var hidden = cs.length - shown.length;
+    var kind = n.k === "root" ? "root" : t.k;
+    var html = '<div class="row" title="Click for the full signature, docstring and source location">';
+    html += '<button class="tog' + (shown.length ? "" : " leaf") + '" type="button" aria-label="Open the children of ' + esc(n.n) + '" aria-expanded="false">'
+          + '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+    html += '<span class="badge k-' + esc(kind) + '">' + esc(kind) + '</span>';
+    html += '<div class="main">';
+    html += '<a class="name" href="#' + esc(path) + '">' + highlight(n.n) + '</a>';
+    if (t.q && t.q.length) html += renderBrief(t.q, t.a);
+    else if (t.s && t.k === "property") html += '<code class="sig">' + renderSig(t.s, []) + '</code>';
+    // A root alias carries its own layer tag from the surface table; the target's layer tag would repeat it.
+    var own = n.t || [];
+    var tags = own.concat(n.A !== undefined ? (t.t || []).filter(function (g) { return own.indexOf(g) < 0 && !/^(L\d|FACADE)$/.test(g); }) : []);
+    if (tags.length) html += '<span class="tags">' + tags.map(tagHTML).join("") + '</span>';
+    if (hidden && !state.internals) html += '<span class="count-hidden">+' + hidden + ' internal</span>';
+    if (n.A !== undefined && n.o && n.k !== "root") {
+      var seen = /^(namespace|re-export) of (.+)$/.exec(n.o);
+      if (seen) html += '<span class="alias-note">same as <code>' + esc(seen[2]) + '</code></span>';
+    }
+    if (t.d) html += '<span class="doc1">' + rst(highlight(t.d)) + '</span>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function detailsHTML(id) {
+    var n = node(id), t = target(n);
+    var html = '<div class="details">';
+    if (t.s) html += '<p class="label">Signature</p><div class="fullsig mono">' + esc(t.n) + renderSig(t.s, t.a) + '</div>';
+    if (t.D) html += '<pre>' + rst(esc(t.D)) + '</pre>';
+    else if (!t.d) html += '<p class="note">No docstring.</p>';
+    html += '<div class="src">';
+    if (t.f !== undefined) html += '<span>defined in <code>' + esc(FILES[t.f]) + (t.l ? ":" + t.l : "") + '</code></span>';
+    if (t.b && t.b.length) html += '<span>bases: <code>' + esc(t.b.join(", ")) + '</code></span>';
+    if (n.A !== undefined) {
+      var tp = pathsOf(n.A);
+      var other = tp.filter(function (p) { return p.indexOf("torchlens.") === 0; })[0] || tp[0];
+      if (other) html += '<span>canonical: <a href="#' + esc(other) + '">' + esc(other) + '</a></span>';
+    }
+    html += '</div>';
+    if (n.o) html += '<div class="note">' + esc(n.o) + '</div>';
+    if (t.o && t.o !== n.o) html += '<div class="note">' + esc(t.o) + '</div>';
+    if (t.x && t.d && !t.D) html += '<div class="note">Internal row: the summary line above is all the page carries; the full docstring is in the file.</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function li(id, path) {
+    var n = node(id);
+    var el = document.createElement("li");
+    el.className = "node k-" + target(n).k + (isInternal(n) ? " internal" : "");
+    el.dataset.path = path;
+    el.dataset.id = id;
+    el.innerHTML = rowHTML(id, path);
+    var shouldOpen = hits ? hasHitDescendant(path) : !!state.open[path];
+    if (shouldOpen) openKids(el, true);
+    if (!hits && state.details[path]) showDetails(el, true);
+    return el;
+  }
+
+  function hasHitDescendant(path) {
+    var pre = path + ".";
+    var any = false;
+    hits.forEach(function (p) { if (!any && p.indexOf(pre) === 0) any = true; });
+    return any;
+  }
+
+  function renderKids(el) {
+    var id = el.dataset.id, path = el.dataset.path;
+    var ul = document.createElement("ul");
+    ul.className = "kids";
+    fillList(ul, id, path);
+    return ul;
+  }
+
+  function fillList(ul, parentId, parentPath) {
+    var cs = sortKids(parentId, kids(node(parentId)));
+    var groups = groupsFor(parentId);
+    var shown = [];
+    cs.forEach(function (c) {
+      var cn = node(c);
+      if (!visible(cn)) return;
+      var cpath = parentPath + "." + cn.n;
+      if (hits && !hits.has(cpath)) return;
+      shown.push([c, cpath]);
+    });
+    if (!groups || shown.length < 8) {
+      shown.forEach(function (pair) { ul.appendChild(li(pair[0], pair[1])); });
+      return;
+    }
+    var used = {};
+    groups.forEach(function (g) {
+      var members = shown.filter(function (pair) { return !used[pair[1]] && g[1](node(pair[0])); });
+      if (!members.length) return;
+      var head = document.createElement("li");
+      head.className = "group"; head.textContent = g[0];
+      ul.appendChild(head);
+      members.forEach(function (pair) { used[pair[1]] = true; ul.appendChild(li(pair[0], pair[1])); });
+    });
+  }
+
+  function openKids(el, yes) {
+    var path = el.dataset.path;
+    var btn = el.querySelector(":scope > .row .tog");
+    if (yes) {
+      if (el.classList.contains("open")) return;
+      el.classList.add("open");
+      btn.setAttribute("aria-expanded", "true");
+      el.appendChild(renderKids(el));
+      if (!hits) state.open[path] = true;
+    } else {
+      el.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
+      el.querySelectorAll(":scope > ul.kids").forEach(function (x) { x.remove(); });
+      if (!hits) delete state.open[path];
+    }
+  }
+
+  function showDetails(el, yes) {
+    var path = el.dataset.path;
+    var existing = el.querySelector(":scope > .details");
+    if (yes) {
+      if (existing) return;
+      var d = document.createElement("div"); d.innerHTML = detailsHTML(el.dataset.id);
+      el.insertBefore(d.firstChild, el.querySelector(":scope > ul.kids"));
+      state.details[path] = true;
+    } else {
+      if (existing) existing.remove();
+      delete state.details[path];
+    }
+  }
+
+  function renderAll() {
+    document.querySelectorAll("ul.kids.root").forEach(function (ul) {
+      var rootName = ul.dataset.root, rootId = ROOTS[rootName];
+      ul.innerHTML = "";
+      fillList(ul, rootId, rootName);
+    });
+    var empty = document.getElementById("empty");
+    if (hits && hitNodes.size === 0) {
+      empty.hidden = false;
+      empty.innerHTML = 'Nothing matches <b>' + esc(state.query) + '</b>' + (state.internals ? "." : ' among public names. Try <b>Show internals</b> for private modules and underscore names.');
+    } else {
+      empty.hidden = true;
+    }
+  }
+
+  // Search ------------------------------------------------------------
+  var searchText = {};
+  function textOf(id) {
+    if (searchText[id] !== undefined) return searchText[id];
+    var n = node(id), t = target(n);
+    var s = (n.n + " " + (t.a || []).join(" ") + " " + (t.d || "")).toLowerCase();
+    searchText[id] = s;
+    return s;
+  }
+  function runSearch(q) {
+    state.query = q;
+    tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
+    var countEl = document.getElementById("count"), clear = document.getElementById("clear");
+    clear.hidden = !q;
+    if (!tokens.length) { hits = null; hitNodes = null; countEl.textContent = ""; renderAll(); return; }
+    ensureIndex();
+    hits = new Set(); hitNodes = new Set();
+    var nodeHits = 0;
+    Object.keys(paths).forEach(function (id) {
+      var n = node(id);
+      if (!visible(n) || n.k === "root") return;
+      var text = textOf(id);
+      var ok = tokens.every(function (t) { return text.indexOf(t) >= 0; });
+      if (!ok) return;
+      var counted = false;
+      paths[id].forEach(function (p) {
+        var parts = p.split("."), acc = parts[0];
+        if (parts.length < 2) return;
+        for (var i = 1; i < parts.length - 1; i++) {
+          acc += "." + parts[i];
+          var aid = byPath[acc];
+          if (aid !== undefined && !visible(node(aid))) return;
+        }
+        if (!counted) { nodeHits++; counted = true; }
+        hitNodes.add(p);
+        var acc2 = parts[0];
+        hits.add(acc2);
+        for (var j = 1; j < parts.length; j++) { acc2 += "." + parts[j]; hits.add(acc2); }
+      });
+    });
+    countEl.textContent = nodeHits ? nodeHits + (nodeHits === 1 ? " match" : " matches") : "no match";
+    renderAll();
+  }
+  var timer = null;
+  var q = document.getElementById("q");
+  q.addEventListener("input", function () {
+    clearTimeout(timer);
+    timer = setTimeout(function () { runSearch(q.value.trim()); }, 140);
+  });
+  document.getElementById("clear").addEventListener("click", function () { q.value = ""; runSearch(""); q.focus(); });
+
+  // Tree interaction ----------------------------------------------------
+  document.querySelector("main").addEventListener("click", function (ev) {
+    var more = ev.target.closest(".more");
+    if (more) {
+      var sig = more.closest("code.sig");
+      sig.querySelectorAll(".sig-short, .sig-long").forEach(function (x) { x.hidden = !x.hidden; });
+      return;
+    }
+    var tog = ev.target.closest(".tog");
+    if (tog) { var el = tog.closest("li.node"); openKids(el, !el.classList.contains("open")); return; }
+    if (ev.target.closest("a")) return;
+    var row = ev.target.closest(".row");
+    if (row) { var el2 = row.closest("li.node"); showDetails(el2, !el2.querySelector(":scope > .details")); }
+  });
+
+  function expandTo(depth) {
+    document.querySelectorAll("ul.kids.root").forEach(function (ul) { expandUl(ul, depth, 1); });
+  }
+  function expandUl(ul, depth, level) {
+    if (level > depth) return;
+    Array.prototype.forEach.call(ul.children, function (el) {
+      if (!el.classList.contains("node") || el.querySelector(":scope > .row .tog.leaf")) return;
+      openKids(el, true);
+      var sub = el.querySelector(":scope > ul.kids");
+      if (sub) expandUl(sub, depth, level + 1);
+    });
+  }
+  document.querySelectorAll("[data-depth]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var d = parseInt(b.dataset.depth, 10);
+      collapseAll(); expandTo(d);
+    });
+  });
+  function collapseAll() {
+    state.open = {}; state.details = {};
+    document.querySelectorAll("li.node.open").forEach(function (el) { openKids(el, false); });
+    document.querySelectorAll("li.node > .details").forEach(function (d) { d.remove(); });
+  }
+  document.getElementById("collapse").addEventListener("click", collapseAll);
+
+  // Internals toggle ----------------------------------------------------
+  var internalsBtn = document.getElementById("internals");
+  function applyInternals() {
+    internalsBtn.setAttribute("aria-pressed", state.internals ? "true" : "false");
+    internalsBtn.textContent = state.internals ? "Internals: on" : "Internals";
+    try { localStorage.setItem("tl-api-map:internals", state.internals ? "1" : "0"); } catch (e) {}
+    searchText = {};
+    if (hits) runSearch(state.query); else renderAll();
+  }
+  internalsBtn.addEventListener("click", function () { state.internals = !state.internals; applyInternals(); });
+
+  // Theme -------------------------------------------------------------
+  var themeBtn = document.getElementById("theme");
+  function applyTheme() {
+    var root = document.documentElement;
+    if (state.theme === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", state.theme);
+    themeBtn.textContent = "Theme: " + state.theme;
+    themeBtn.setAttribute("aria-label", "Theme: " + state.theme + " (click to change)");
+    try { localStorage.setItem("tl-api-map:theme", state.theme); } catch (e) {}
+  }
+  themeBtn.addEventListener("click", function () {
+    state.theme = state.theme === "auto" ? "light" : state.theme === "light" ? "dark" : "auto";
+    applyTheme();
+  });
+
+  // Help ----------------------------------------------------------------
+  var help = document.getElementById("help"), helpBtn = document.getElementById("helpbtn");
+  function showHelp(yes) { help.hidden = !yes; helpBtn.setAttribute("aria-expanded", yes ? "true" : "false"); }
+  helpBtn.addEventListener("click", function () { showHelp(help.hidden); });
+  document.getElementById("helpclose").addEventListener("click", function () { showHelp(false); });
+
+  document.addEventListener("keydown", function (ev) {
+    var inField = /INPUT|TEXTAREA/.test(ev.target.tagName);
+    if (ev.key === "Escape") {
+      if (!help.hidden) { showHelp(false); return; }
+      if (q.value) { q.value = ""; runSearch(""); }
+      q.blur();
+      return;
+    }
+    if (inField) return;
+    if (ev.key === "/") { ev.preventDefault(); q.focus(); q.select(); }
+    else if (ev.key === "?") { showHelp(help.hidden); }
+    else if (ev.key === "i") { state.internals = !state.internals; applyInternals(); }
+    else if (ev.key === "t") { themeBtn.click(); }
+  });
+
+  // Deep links ------------------------------------------------------------
+  function reveal(path) {
+    if (!path || idForPath(path) === undefined) return false;
+    var parts = path.split("."), acc = parts[0];
+    var ul = document.querySelector('ul.kids.root[data-root="' + acc + '"]');
+    if (!ul) return false;
+    var el = null;
+    for (var i = 1; i < parts.length; i++) {
+      acc += "." + parts[i];
+      el = ul.querySelector(':scope > li.node[data-path="' + acc.replace(/"/g, '\\"') + '"]');
+      if (!el) return false;
+      if (i < parts.length - 1) { openKids(el, true); ul = el.querySelector(":scope > ul.kids"); if (!ul) return false; }
+    }
+    if (el) {
+      showDetails(el, true);
+      openKids(el, true);
+      document.querySelectorAll("li.node.current").forEach(function (x) { x.classList.remove("current"); });
+      el.classList.add("current");
+      var row = el.querySelector(":scope > .row");
+      var header = document.querySelector("header.top");
+      var top = row.getBoundingClientRect().top + window.scrollY - (header ? header.offsetHeight : 0) - 12;
+      window.scrollTo(0, Math.max(0, top));
+      var name = el.querySelector(":scope > .row .name"); if (name) name.focus({preventScroll: true});
+    }
+    return true;
+  }
+  function onHash() {
+    var h = decodeURIComponent(location.hash.slice(1));
+    if (!h) return;
+    var id = idForPath(h);
+    if (id === undefined) return;
+    if (!visible(node(id)) && !state.internals) { state.internals = true; applyInternals(); }
+    if (hits) { q.value = ""; runSearch(""); }
+    reveal(h);
+  }
+  window.addEventListener("hashchange", onHash);
+
+  // Header counts and build time in the viewer's zone -----------------------
+  (function () {
+    var c = DATA.counts || {};
+    var pub = function (k) { return c["public_" + k] || 0; };
+    var mods = pub("module") + pub("package"), cls = pub("class"), fns = pub("function"), meth = pub("method") + pub("property");
+    document.getElementById("counts").textContent = "(" + DATA.root_count + " root names; " + mods + " public modules, " + cls + " classes, " + fns + " functions, " + meth + " methods and properties)";
+    var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) UTC$/.exec(DATA.built || "");
+    if (m) {
+      var d = new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]));
+      try {
+        var fmt = new Intl.DateTimeFormat(undefined, {dateStyle: "medium", timeStyle: "short", timeZoneName: "short"});
+        document.getElementById("built-at").textContent = "on " + fmt.format(d);
+      } catch (e) {}
+    }
+  })();
+
+  applyTheme();
+  applyInternals();
+  var initialQuery = "";
+  try { initialQuery = new URLSearchParams(location.search).get("q") || ""; } catch (e) {}
+  if (initialQuery) { q.value = initialQuery; runSearch(initialQuery.trim()); }
+  var legend = document.getElementById("legend");
+  try { if (localStorage.getItem("tl-api-map:legend") === "closed") legend.open = false; } catch (e) {}
+  legend.addEventListener("toggle", function () {
+    try { localStorage.setItem("tl-api-map:legend", legend.open ? "open" : "closed"); } catch (e) {}
+  });
+  onHash();
+})();
+</script>
+</body>
+</html>

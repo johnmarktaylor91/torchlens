@@ -111,9 +111,9 @@ def test_draw_backward_renders(tmp_path: Path) -> None:
     outpath = tmp_path / "backward_graph"
 
     dot = trace.draw_backward(
-        vis_outpath=str(outpath),
+        path=str(outpath),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     assert "digraph" in dot
@@ -126,9 +126,9 @@ def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "grad_fns"),
+        path=str(tmp_path / "grad_fns"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     assert "addmm_back" in dot
@@ -141,9 +141,9 @@ def test_backward_graph_intervening_visual_distinction(tmp_path: Path) -> None:
     trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
 
     dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "intervening"),
+        path=str(tmp_path / "intervening"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     assert "[i] " in dot
@@ -154,9 +154,9 @@ def test_backward_graph_custom_grad_fn_distinction(tmp_path: Path) -> None:
     trace = _log_backward_model(_CustomModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "custom"),
+        path=str(tmp_path / "custom"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     assert "doublefn_back" in dot
@@ -168,9 +168,9 @@ def test_backward_graph_cross_references_forward_layers(tmp_path: Path) -> None:
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "cross_ref"),
+        path=str(tmp_path / "cross_ref"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     assert "@linear_1_1" in dot
@@ -182,9 +182,9 @@ def test_backward_graph_unrolled_clusters_by_backward_pass(tmp_path: Path) -> No
     trace = _log_two_backward_passes(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "unrolled"),
+        path=str(tmp_path / "unrolled"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         vis_mode="unrolled",
     )
 
@@ -200,9 +200,9 @@ def test_backward_graph_bwd_filter_limits_visible_passes(tmp_path: Path) -> None
     trace = _log_two_backward_passes(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "filtered"),
+        path=str(tmp_path / "filtered"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         vis_mode="unrolled",
         bwd=2,
     )
@@ -217,9 +217,9 @@ def test_backward_graph_marks_order_and_accumulation_edges(tmp_path: Path) -> No
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw_backward(
-        vis_outpath=str(tmp_path / "order_accum"),
+        path=str(tmp_path / "order_accum"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
 
     # vizmech item 17: "order 1" on EVERY node of an ordinary backward is a
@@ -276,9 +276,9 @@ def test_forward_graph_unchanged(tmp_path: Path) -> None:
     )
     trace = _log_backward_model(model, x)
     trace.draw_backward(
-        vis_outpath=str(tmp_path / "backward"),
+        path=str(tmp_path / "backward"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
     show_model_graph(
         model,

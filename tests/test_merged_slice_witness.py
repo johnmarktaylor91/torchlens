@@ -11,19 +11,15 @@ from __future__ import annotations
 
 import pytest
 
+from torchlens._merged import BoundaryConsistency, derive_merge
+from torchlens._merged._errors import MergedFinding
+from torchlens._merged._evidence import RankEvidence
 from torchlens.distributed._ledger import (
     GroupLifecycleEvent,
     GroupLifecycleLedger,
     membership_digest_for_ranks,
 )
-from torchlens.merged import (
-    BoundaryConsistency,
-    MergeAlignment,
-    MergeValueStatus,
-    derive_merge,
-)
-from torchlens.merged._errors import MergedFinding
-from torchlens.merged._evidence import RankEvidence
+from torchlens.types import MergeAlignment, MergeValueStatus
 
 WORLD = membership_digest_for_ranks([0, 1])
 
@@ -242,9 +238,9 @@ def test_merged_finding_payload_round_trip_preserves_key_and_ranks() -> None:
         key=(WORLD, 0, "coll", 3),
         ranks=(0, 1),
     )
-    payload = finding.to_payload()
-    rebuilt = MergedFinding.from_payload(payload)
+    payload = finding.to_dict()
+    rebuilt = MergedFinding.from_dict(payload)
     assert rebuilt == finding
 
     keyless = MergedFinding(kind="presence_gap", detail="no key")
-    assert MergedFinding.from_payload(keyless.to_payload()) == keyless
+    assert MergedFinding.from_dict(keyless.to_dict()) == keyless

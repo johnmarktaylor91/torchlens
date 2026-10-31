@@ -15,11 +15,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens import at_step
 from torchlens._errors import ArgumentTypeError
-from torchlens.intervention import at_step
+from torchlens._ir.selector_eval import normalize_selector_like
 from torchlens.intervention.errors import SelectorCapabilityError, SiteResolutionError
-from torchlens.ir.selector_eval import normalize_selector_like
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 
 class Step(nn.Module):
@@ -51,8 +51,8 @@ def _episode_trace(model: Root, x: torch.Tensor, **kwargs) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        episode=EpisodeSpec(
-            stepped_module=model.step, n_steps=model.n_steps, step_output_kind="digest"
+        episode=EpisodeOptions(
+            stepped_module=model.step, num_steps=model.n_steps, step_output_kind="digest"
         ),
         **kwargs,
     )
@@ -206,7 +206,7 @@ def test_stamps_survive_save_load(tmp_path):
     model = Root()
     log = _episode_trace(model, torch.randn(2, 4))
     target = tmp_path / "episode.tlspec"
-    tl.save(log, target)
+    log.save(target)
     loaded = tl.load(target)
     assert {op.label: op.episode_step for op in loaded.layer_list} == {
         op.label: op.episode_step for op in log.layer_list

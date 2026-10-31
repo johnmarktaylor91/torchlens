@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.viz.feature_maps import feature_map_evolution
+from torchlens.viz.feature_maps import feature_maps
 
 
 class _TinyConv(nn.Module):
@@ -60,7 +60,7 @@ def _annotated_trace(model: nn.Module) -> tl.Trace:
     """Capture the conv fixture and store feature-map annotation blobs."""
 
     trace = tl.trace(model, _input_batch(), save=tl.func("conv2d"))
-    feature_map_evolution(trace, save=tl.func("conv2d"))
+    feature_maps(trace, save=tl.func("conv2d"))
     assert isinstance(trace._annotation_blobs, dict) and trace._annotation_blobs
     return trace
 
@@ -82,7 +82,7 @@ def test_rerun_same_shape_drops_annotation_blobs() -> None:
     model = _TinyConv().eval()
     trace = _annotated_trace(model)
     stale_maps = trace._annotation_blobs["featmap:layer:conv2d_1_1:maps"].clone()
-    tl.run(trace, model, _input_batch(offset=1.0))
+    trace.run(model, _input_batch(offset=1.0))
     assert trace._annotation_blobs is None, (
         "rerun kept stale annotation blobs; draw() would render the OLD "
         f"activations (stale mean {stale_maps.mean():.4f}) on the new batch"

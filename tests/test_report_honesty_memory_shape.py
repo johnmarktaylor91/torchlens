@@ -46,7 +46,7 @@ def test_memory_shaped_scoped_reader_rss_stays_flat(tmp_path: Path) -> None:
     model = nn.Sequential(*layers)
     trace = tl.trace(model, torch.randn(4, 512, 1024), save=tl.func("relu"))
     destination = tmp_path / "big.tlspec"
-    tl.save(trace, destination)
+    trace.save(destination)
     del trace
 
     loaded = tl.load(destination, lazy=True)

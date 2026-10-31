@@ -19,7 +19,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.intervention.errors import BundleRelationshipError
+from torchlens.intervention.errors import BundleComparisonError
 from torchlens.intervention.types import Relationship
 
 pytestmark = pytest.mark.slow
@@ -92,22 +92,22 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
 
     turn1 = tl.trace(model, turn1_ids)
     turn2 = tl.trace(model, turn2_ids)
-    bundle = tl.bundle({"turn1": turn1, "turn2": turn2})
+    bundle = tl.Bundle({"turn1": turn1, "turn2": turn2})
 
     # Path-1 shape on a real chat model: the derived relationship is the
     # identity rank, exactly the evidence the old gate accepted as proof of
     # input equality.
-    assert bundle.relationship("turn1", "turn2") is Relationship.SAME_OBJECT
+    assert bundle.comparability("turn1", "turn2") is Relationship.SAME_OBJECT
 
     # WITHOUT the ordering row, the refusal is the input predicate's own
     # (right reason: the turns captured different input values).
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at("model.norm")
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
 
     # WITH the ordering row, topology takes precedence over input evidence.
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.compare_at("model.norm")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]
@@ -117,13 +117,13 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
     bundle.save(str(path))
     loaded = tl.load(str(path))
 
-    loaded_rel = loaded.relationship("turn1", "turn2")
+    loaded_rel = loaded.comparability("turn1", "turn2")
     # Rank audit: identity evidence does not survive serialization; the
     # loaded pair settles to the graph/input-signature evidence that
     # round-trips (different lengths -> different input signature).
     assert loaded_rel is Relationship.SHARED_GRAPH_DIFFERENT_INPUT
 
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         loaded.compare_at("model.norm")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]

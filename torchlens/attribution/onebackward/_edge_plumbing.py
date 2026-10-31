@@ -105,7 +105,7 @@ def mint_grad_input_use_map(trace: Any) -> GradInputUseMap:
     ----------
     trace:
         Live torch trace with edge provenance
-        (``intervention_ready``-gated ``trace.edges``).
+        (``intervention_ready``-gated ``trace.graph.edges``).
 
     Returns
     -------
@@ -122,7 +122,7 @@ def mint_grad_input_use_map(trace: Any) -> GradInputUseMap:
 
     index = read_edge_index(trace)
     try:
-        edge_records = list(trace.edges)
+        edge_records = list(trace.graph.edges)
     except Exception as exc:  # noqa: BLE001 - typed re-raise below
         raise ReadError(
             "Edge-use provenance is unavailable on this trace, so the "

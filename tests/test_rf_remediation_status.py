@@ -153,8 +153,8 @@ def test_grouped_convolution_keeps_spatial_windows_with_channel_upper_bound() ->
 @pytest.mark.parametrize("surface", ["check", "verify"])
 def test_poisoned_trace_refuses_receptive_field_verdicts(surface: str) -> None:
     """RF verdict producers share the monotonic poisoned-trace refusal gate."""
+    from torchlens._runnable import PathFaithfulness, mark_trace_path_status
     from torchlens.errors import PoisonedRunError
-    from torchlens.runnable import PathFaithfulness, mark_trace_path_status
 
     model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
     trace = _trace(model, torch.ones(1, 1, 5, 5, requires_grad=True))

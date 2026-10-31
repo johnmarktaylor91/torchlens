@@ -15,8 +15,8 @@ from ._render_utils import html_escape, render_dot_to_file, strip_known_extensio
 from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
 if TYPE_CHECKING:
+    from .._data_classes.trace import Trace
     from ..bundle import Bundle
-    from ..data_classes.trace import Trace
 
 
 DiffLayout = Literal["paired"]
@@ -32,9 +32,9 @@ def bundle_diff(
     right: str | Trace | None = None,
     baseline: str | Trace | None = None,
     on: DiffTensorField = "out",
-    vis_outpath: str = "bundle_diff",
+    path: str = "bundle_diff",
     vis_save_only: bool = False,
-    vis_fileformat: str = "svg",
+    file_format: str = "svg",
     theme: str = "paper",
     max_pairs: int | None = 16,
     include_unmatched: bool = False,
@@ -57,11 +57,11 @@ def bundle_diff(
         Baseline forwarded to ``bundle.delta_map``. Defaults to ``left``.
     on:
         Tensor field forwarded to ``bundle.delta_map``.
-    vis_outpath:
+    path:
         Output path, with or without a recognised extension.
     vis_save_only:
         Whether to suppress opening the rendered artifact.
-    vis_fileformat:
+    file_format:
         Output format. Any Graphviz-supported format (e.g., ``"svg"``,
         ``"pdf"``, ``"png"``). Accessibility metadata is only embedded for
         ``"svg"``.
@@ -117,11 +117,11 @@ def bundle_diff(
         theme_name=theme,
         include_unmatched=include_unmatched,
     )
-    outpath = strip_known_extension(vis_outpath)
-    source = render_dot_to_file(dot, outpath, vis_fileformat, vis_save_only)
-    if vis_fileformat == "svg":
+    outpath = strip_known_extension(path)
+    source = render_dot_to_file(dot, outpath, file_format, vis_save_only)
+    if file_format == "svg":
         _add_svg_accessibility(
-            f"{outpath}.{vis_fileformat}",
+            f"{outpath}.{file_format}",
             _aria_label(left_name, right_name, _metric_display_name(metric), on),
         )
     return source

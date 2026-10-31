@@ -7,29 +7,27 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ._runnable_state import (
-    PreparedRunnableState,
-    runnable_tensor_byte_digest,
-)
-from .runnable import (
+from torchlens._runnable import ContractCheck, ReadinessReport, RunnableDiagnostic, RunReport
+
+from ._runnable import (
     NONDETERMINISTIC_SOURCE_VOCABULARY,
     RUN_TRUNCATION_CAUSE_VOCABULARY,
     RUN_TRUNCATION_REGIME_VOCABULARY,
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
-    ContractCheck,
     InputAttestationFingerprint,
     NumericAttestationStatus,
     PathFaithfulness,
-    ReadinessReport,
-    RunnableDiagnostic,
     RunnableErrorCode,
-    RunReport,
     RunTruncation,
     SparseRunDescriptor,
     StateSource,
     WitnessCompleteness,
     derived_witness_completeness,
+)
+from ._runnable_state import (
+    PreparedRunnableState,
+    runnable_tensor_byte_digest,
 )
 
 if TYPE_CHECKING:
@@ -232,9 +230,9 @@ def _run_report(
         path_faithfulness=path_faithfulness,
         first_mismatch=first_mismatch,
         numeric_attestation=numeric_attestation,
-        poisoned=poisoned,
+        is_poisoned=poisoned,
         nondeterministic_sources=declared_sources,
-        state_carried=bool(state_carried),
+        has_carried_state=bool(state_carried),
         truncation=truncation,
         truncated=truncation is not None,
         stopped_at=None if truncation is None else truncation.stopped_at,

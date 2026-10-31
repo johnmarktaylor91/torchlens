@@ -22,7 +22,7 @@ the forward as patched so far (the MIB circuit-track convention), and the
 recorded edits are the values that fork wrote, one per receiver.
 
 An EDGE table records neither its corrupted inputs nor its metric (its rows
-are not re-scorable), so the caller passes the ``corrupted=`` and
+are not re-scorable), so the caller passes the ``corrupted_input=`` and
 ``metric=`` it was scored with, keeping ``edge_scores``' meanings; the table's
 example count, reduction, method, edge names and sender shapes are checked
 against the component graph rebuilt on the audit's trace. Rows whose status
@@ -47,17 +47,15 @@ from torchlens.attribution._result import AttributionError
 # The reductions ``edge_scores`` records, mapped to the reduction over examples.
 _REDUCTIONS = {"sum_positions_mean_examples": "mean", "sum_positions_sum_examples": "sum"}
 _METHODS = ("eap", "eap_ig")
-_AUDIT_CALL = (
-    "tl.attribution.causal_audit(model, x, claim=claim, corrupted=corrupted, metric=metric, k=1)"
-)
+_AUDIT_CALL = "tl.attribution.causal_audit(model, x, claim=claim, corrupted_input=corrupted, metric=metric, k=1)"
 _RESCORED_CALL = (
     "tl.attribution.causal_audit(model, x, claim=torchlens.mechinterp.edge_scores(model, x, "
-    "corrupted=corrupted, metric=metric), corrupted=corrupted, metric=metric, k=1)"
+    "corrupted_input=corrupted, metric=metric), corrupted_input=corrupted, metric=metric, k=1)"
 )
 #: The cheaper spelling the many-units warning names for an EDGE table.
 EDGES_REMEDY = (
     "pass per_unit=False to measure only the sets, or edges= to audit the largest rows only, "
-    "e.g. tl.attribution.causal_audit(model, x, claim=claim, corrupted=corrupted, "
+    "e.g. tl.attribution.causal_audit(model, x, claim=claim, corrupted_input=corrupted, "
     "metric=metric, edges=[row.address[0] for row in sorted((row for row in claim.rows() "
     "if row.status == 'ok'), key=lambda row: -abs(row.score))[:200]])"
 )
@@ -109,7 +107,7 @@ class _EdgesPlan(_SitesPlan):
         from torchlens.mechinterp import patch_edges
 
         with torch.no_grad():
-            return patch_edges(self.trace, self._edges(keys), corrupt=self.corrupt)
+            return patch_edges(self.trace, self._edges(keys), corrupted_graph=self.corrupt)
 
     def ablated_score(self, keys: tuple[tuple[int, ...], ...]) -> float:
         """Score a fork of the trace with the edges of ``keys`` patched together.
@@ -130,7 +128,7 @@ class _EdgesPlan(_SitesPlan):
     def unit_scores(self) -> dict[tuple[int, ...], float]:
         """Score every edge patched alone, one ``patch_edges`` fork each.
 
-        ``site_sweep`` takes one edit for every candidate; each edge's patch
+        ``sweep_sites`` takes one edit for every candidate; each edge's patch
         writes its own value, so the edges are not swept.
         """
 
@@ -230,7 +228,7 @@ def _check_request(request: _AuditRequest, rows: tuple[Any, ...]) -> str:
     if request.corrupted is None or request.metric is None:
         missing = [
             name
-            for name, value in (("corrupted", request.corrupted), ("metric", request.metric))
+            for name, value in (("corrupted_input", request.corrupted), ("metric", request.metric))
             if value is None
         ]
         raise _edge_refusal(
@@ -248,8 +246,8 @@ def _check_request(request: _AuditRequest, rows: tuple[Any, ...]) -> str:
         )
     if not (isinstance(request.ablation, str) and request.ablation == "zero"):
         raise _edge_refusal(
-            f"ablation={request.ablation!r} was given; an edge is tested by patching in the "
-            "sender's corrupted value, so ablation= does not apply",
+            f"edit={request.ablation!r} was given; an edge is tested by patching in the "
+            "sender's corrupted value, so edit= does not apply",
             _AUDIT_CALL,
             code="attribution_eval_setting_invalid",
         )
@@ -273,7 +271,8 @@ def _check_request(request: _AuditRequest, rows: tuple[Any, ...]) -> str:
 def _graphs(request: _AuditRequest) -> tuple[Any, Any, Any]:
     """Return the audit's trace, its component graph and the corrupted run's graph."""
 
-    from torchlens.mechinterp import MechInterpError, component_graph
+    from torchlens.mechinterp import component_graph
+    from torchlens.mechinterp._errors import MechInterpError
 
     trace = _edge_trace(request, request.inputs)
     try:
@@ -292,8 +291,8 @@ def _graphs(request: _AuditRequest) -> tuple[Any, Any, Any]:
             found = None if other is None else tuple(other.value.shape)
             raise _edge_refusal(
                 f"node {name!r} is {tuple(node.value.shape)} on the clean inputs and {found} on "
-                "corrupted=; edge scores compare one node on two inputs of one shape",
-                "pass the corrupted= torchlens.mechinterp.edge_scores was given, the same shape as x, "
+                "corrupted_input=; edge scores compare one node on two inputs of one shape",
+                "pass the corrupted_input= torchlens.mechinterp.edge_scores was given, the same shape as x, "
                 f"e.g. {_AUDIT_CALL}",
                 code="attribution_audit_claim_misaligned",
             )
@@ -363,7 +362,7 @@ def _chosen(request: _AuditRequest, ok: dict[str, int]) -> set[str] | None:
             if unknown
             else "edges= is empty",
             "pass names of the table's ok rows, e.g. tl.attribution.causal_audit(model, x, "
-            "claim=claim, corrupted=corrupted, metric=metric, k=1, edges=[row.address[0] for "
+            "claim=claim, corrupted_input=corrupted, metric=metric, k=1, edges=[row.address[0] for "
             "row in claim.rows() if row.status == 'ok'][:2])",
             code="attribution_eval_setting_invalid",
         )

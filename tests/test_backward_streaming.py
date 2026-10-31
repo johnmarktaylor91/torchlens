@@ -134,11 +134,11 @@ def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
     trace, expected = _logged_backward_stream(source_path)
     roundtrip_path = tmp_path / "roundtrip.tl"
 
-    tl.save(trace, roundtrip_path)
+    trace.save(roundtrip_path)
     restored = tl.load(roundtrip_path, lazy=True)
     label = next(iter(expected))
     grad_fn_handle = next(
-        grad_fn_handle for grad_fn_handle in restored.grad_fns if grad_fn_handle.op
+        grad_fn_handle for grad_fn_handle in restored.autograd.grad_fns if grad_fn_handle.op
     )
 
     assert restored.has_backward_pass is True

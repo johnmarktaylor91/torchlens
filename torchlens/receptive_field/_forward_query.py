@@ -36,7 +36,7 @@ from ._rules import _RuleResult
 from ._types import ReceptiveField, ReceptiveFieldBox, ReceptiveFieldDirection
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
 
 
 _TRANSPOSE_CANDIDATE_BUDGET = 4096

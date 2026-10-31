@@ -198,7 +198,7 @@ def test_aim_run_on_a_local_repo_has_parity(trace: Any, aim_run: Any, tmp_path: 
     run = _open_run(aim, tmp_path)
     recorder = _TrackRecorder(run)
     try:
-        result = tl.export.aim(trace, run=recorder, prefix="tl")
+        result = tl.export.aim(trace, to=recorder, prefix="tl")
         # Read back through the live Aim run object: re-opening a just-closed run
         # by hash did not return its params or series under aim 3.29 (probed).
         _assert_aim_parity(trace, result, recorder, run)

@@ -45,7 +45,7 @@ class RecordingFinder:
         self.in_window = []
 
     def find_spec(self, fullname, path=None, target=None):
-        rng = sys.modules.get("torchlens.utils.rng")
+        rng = sys.modules.get("torchlens._utils.rng")
         if rng is not None and getattr(rng, "_ACTIVE_MONITOR", None) is not None:
             self.in_window.append(fullname)
         return None

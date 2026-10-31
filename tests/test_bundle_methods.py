@@ -68,7 +68,7 @@ def _capture_pair(seed: int, offset: float) -> tl.Bundle:
         baseline_model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
     )
     changed = tl.trace(changed_model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    return tl.bundle({"baseline": baseline, "changed": changed}, baseline="baseline")
+    return tl.Bundle({"baseline": baseline, "changed": changed}, baseline="baseline")
 
 
 def test_bundle_call_accessors_resolve_listed_labels() -> None:
@@ -80,7 +80,7 @@ def test_bundle_call_accessors_resolve_listed_labels() -> None:
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
-    bundle = tl.bundle({"first": trace, "second": trace}, baseline="first")
+    bundle = tl.Bundle({"first": trace, "second": trace}, baseline="first")
 
     module_label = next(iter(bundle.module_calls))
     grad_fn_label = next(iter(bundle.grad_fn_calls))
@@ -156,7 +156,7 @@ def test_bundle_add_remove_accept_single_and_list_forms() -> None:
         torch.randn(2, 3),
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
-    bundle = tl.bundle({"a": log_a})
+    bundle = tl.Bundle({"a": log_a})
 
     assert bundle.add(log_b, names="b") is bundle
     assert bundle.add([log_c], names=["c"]) is bundle

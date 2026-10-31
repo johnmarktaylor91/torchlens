@@ -79,7 +79,7 @@ def _setup() -> tuple[nn.Module, torch.Tensor]:
 def _steer() -> Any:
     """Return a deterministic steer at the site."""
 
-    return tl.steer(torch.linspace(-1.0, 1.0, _DIM), magnitude=3.0, feature_axis=-1)
+    return tl.steer(torch.linspace(-1.0, 1.0, _DIM), strength=3.0, dim=-1)
 
 
 def _save() -> Any:

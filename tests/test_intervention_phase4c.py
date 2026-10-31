@@ -10,6 +10,7 @@ import torch
 import torchlens as tl
 from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import LiveModeLabelError, SiteResolutionError
+from torchlens.intervention.selectors import output_at
 from torchlens.options import CaptureOptions
 
 
@@ -370,8 +371,8 @@ def test_module_selector_save_is_exact_for_trace_and_record() -> None:
     "selector",
     [
         tl.label("relu_1_2"),
-        tl.contains("relu_1_2"),
-        tl.regex("relu_1_2"),
+        tl.label_contains("relu_1_2"),
+        tl.label_matches("relu_1_2"),
     ],
 )
 def test_predicate_intervention_rejects_finalized_label_styles(selector: object) -> None:
@@ -436,7 +437,7 @@ def test_live_regex_and_output_at_selectors_execute() -> None:
         torch.randn(2, 3),
         capture=CaptureOptions(
             intervention_ready=True,
-            hooks={tl.regex("relu"): _zero_hook},
+            hooks={tl.label_matches("relu"): _zero_hook},
         ),
     )
     chunk_log = tl.trace(
@@ -444,7 +445,7 @@ def test_live_regex_and_output_at_selectors_execute() -> None:
         torch.randn(2, 4),
         capture=CaptureOptions(
             intervention_ready=True,
-            hooks={tl.output_at(1): _zero_hook},
+            hooks={output_at(1): _zero_hook},
         ),
     )
 
@@ -464,7 +465,7 @@ def test_input_at_live_hook_target_rejects_with_honest_error() -> None:
             torch.randn(2, 3),
             capture=CaptureOptions(
                 intervention_ready=True,
-                hooks={tl.input_at(0): _zero_hook},
+                hooks={tl.model_input(0): _zero_hook},
             ),
         )
 

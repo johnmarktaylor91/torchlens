@@ -45,7 +45,7 @@ def test_unverified_capture_drops_feedforward_and_bounds_its_counts() -> None:
     text = _summary(trace)
     assert "purely feedforward" not in text
     assert "structure unverified" in text
-    assert f"at least {trace.num_tensors} total tensors" in text
+    assert f"at least {len(trace)} total tensors" in text
     assert f"at least {trace.num_layers_with_params} parameter operations" in text
     assert f"at least {trace.num_params} params total" in text
     assert "lower bound" in text

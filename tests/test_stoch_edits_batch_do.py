@@ -16,7 +16,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention import reference, sample_from, sampling_records
+from torchlens.intervention import population, sample_from
+from torchlens.intervention.stochastic import sampling_records
 
 
 class _TwoBlock(nn.Module):
@@ -79,7 +80,7 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
 
     log = _trace()
     baseline = log["relu_1_2"].out
-    donors = reference(torch.stack([baseline + 1, baseline + 2, baseline + 3]), origin="d")
+    donors = population(torch.stack([baseline + 1, baseline + 2, baseline + 3]), origin="d")
     plan = sample_from(donors, seed=3, share_draw="per_group")
     fork = log.fork()
     fork.do(
@@ -159,10 +160,10 @@ def _cross_kind_pairs(fork: tl.Trace, order: tuple[str, ...], bad: str = "") -> 
             "refused by the test edit", code="test_edit_refused", remedy="none"
         )
 
-    edge = next(e for e in fork.edges if e.parent_label == "relu_1_2")
+    edge = next(e for e in fork.graph.edges if e.parent_label == "relu_1_2")
     pairs = {
         "ACT": (fork["relu_1_2"].__selection__(), _refuse if bad == "ACT" else tl.scale(2.0)),
-        "PARAM": (tl.params("b.weight"), _wrong_shape if bad == "PARAM" else tl.scale(0.25)),
+        "PARAM": (tl.param("b.weight"), _wrong_shape if bad == "PARAM" else tl.scale(0.25)),
         "EDGE": (edge.__selection__(), _wrong_shape if bad == "EDGE" else tl.add(0.25)),
     }
     return [pairs[kind] for kind in order]

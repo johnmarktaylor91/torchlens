@@ -21,11 +21,12 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load_file
 
-from ..backends import BackendRuntimeCompatibilityError
-from ..data_classes._state_adapter import state_items
-from ..data_classes.trace import Trace
-from ..ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
-from . import BlobRef, FieldPolicy, PayloadLoadHints, TorchLensIOError, prerelease as _prerelease
+from torchlens.backends.registry import BackendRuntimeCompatibilityError
+
+from .._data_classes._state_adapter import state_items
+from .._data_classes.trace import Trace
+from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
+from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
 from ._torch_symbols import torch_attr
 from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef, _file_identity
@@ -194,7 +195,7 @@ def rehydrate_trace(
         # An artifact written before the root call counted among saved module
         # calls stores a count without it; re-derive the stored scalar from the
         # loaded records so it matches ``saved_module_calls``.
-        from ..postprocess.saved_summary import refresh_saved_module_call_count
+        from .._postprocess.saved_summary import refresh_saved_module_call_count
 
         refresh_saved_module_call_count(trace)
 
@@ -223,7 +224,7 @@ def _bind_conditional_arms(trace: Trace) -> None:
         Rehydrated trace whose runtime-only conditional bindings should be restored.
     """
 
-    from ..data_classes.trace import ConditionalAccessor
+    from .._data_classes.trace import ConditionalAccessor
 
     accessor = getattr(trace, "conditionals", None)
     if not isinstance(accessor, ConditionalAccessor):
@@ -359,12 +360,12 @@ def _build_manifest_index(
 
     tensors = manifest.get("tensors", [])
     if not isinstance(tensors, list):
-        raise TorchLensIOError("Portable manifest must contain a list under 'tensors'.")
+        raise ArtifactError("Portable manifest must contain a list under 'tensors'.")
     index: dict[str, dict[str, Any]] = {}
     for entry in tensors:
         blob_id = entry.get("blob_id")
         if not isinstance(blob_id, str):
-            raise TorchLensIOError("Portable manifest tensor entries must include string blob_id.")
+            raise ArtifactError("Portable manifest tensor entries must include string blob_id.")
         index[blob_id] = entry
     return index
 
@@ -457,7 +458,7 @@ def _rehydrate_object(
     """Walk a rehydrated object graph and materialize blob refs in place."""
 
     if depth > _PORTABLE_WALK_MAX_DEPTH:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Portable metadata exceeds the maximum depth of {_PORTABLE_WALK_MAX_DEPTH}."
         )
 
@@ -475,7 +476,7 @@ def _rehydrate_object(
     obj_id = id(value)
     cached = seen.get(obj_id)
     if cached is _REHYDRATE_IN_PROGRESS:
-        raise TorchLensIOError("Portable metadata contains a cycle through an immutable container.")
+        raise ArtifactError("Portable metadata contains a cycle through an immutable container.")
     if cached is not None:
         return cached
     if kind == _REHYDRATE_TUPLE:
@@ -586,7 +587,7 @@ def _rehydrate_object(
 
     seen[obj_id] = value
 
-    spec = getattr(value_type, "PORTABLE_STATE_SPEC", None)
+    spec = getattr(value_type, "_PORTABLE_STATE_SPEC", None)
     if spec is None:
         return value
 
@@ -734,7 +735,7 @@ def _materialize_recursive_blob_refs(
     """Materialize ``BlobRef`` objects inside nested containers and portable objects."""
 
     if depth > _PORTABLE_WALK_MAX_DEPTH:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Portable payload exceeds the maximum depth of {_PORTABLE_WALK_MAX_DEPTH}."
         )
 
@@ -756,7 +757,7 @@ def _materialize_recursive_blob_refs(
     if isinstance(value, (list, tuple, dict, set, frozenset)):
         value_id = id(value)
         if value_id in active_ids:
-            raise TorchLensIOError("Portable payload contains a cyclic container.")
+            raise ArtifactError("Portable payload contains a cyclic container.")
         child_active_ids = active_ids | {value_id}
     else:
         child_active_ids = active_ids
@@ -796,7 +797,7 @@ def _materialize_recursive_blob_refs(
         return {recurse(item) for item in value}
     if isinstance(value, frozenset):
         return frozenset(recurse(item) for item in value)
-    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
     if spec is not None and type(value).__name__ == "GradientRecord":
         for field_name, field_value in list(state_items(value)):
             if field_name not in spec:
@@ -856,7 +857,7 @@ def _materialize_blob_ref(
         )
 
     if blob_ref.blob_id not in manifest_index:
-        raise TorchLensIOError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
+        raise ArtifactError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
     entry = manifest_index[blob_ref.blob_id]
     relative_path = (
         entry.relative_path
@@ -869,7 +870,7 @@ def _materialize_blob_ref(
         resolved_blobs_dir=resolved_blobs_dir,
     )
     if not blob_path.exists():
-        raise TorchLensIOError(f"Tensor blob not found at {blob_path}.")
+        raise ArtifactError(f"Tensor blob not found at {blob_path}.")
 
     # The digest and the load are two separate opens of the same path (the load
     # is mmap-backed). Bracket the hash with the file identity and re-check it
@@ -879,19 +880,19 @@ def _materialize_blob_ref(
     try:
         pre_hash_identity = _file_identity(blob_path.stat())
     except OSError as exc:
-        raise TorchLensIOError(f"Failed to access blob at {blob_path}.") from exc
+        raise ArtifactError(f"Failed to access blob at {blob_path}.") from exc
     observed_sha256 = sha256_of_file(blob_path)
     expected_sha256 = entry.sha256 if isinstance(entry, TensorEntry) else entry.get("sha256")
     if expected_sha256 is not None and observed_sha256 != expected_sha256:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"blob at {blob_path} sha256 mismatch; expected {expected_sha256} got {observed_sha256}"
         )
     try:
         pre_load_identity = _file_identity(blob_path.stat())
     except OSError as exc:
-        raise TorchLensIOError(f"Failed to access blob at {blob_path}.") from exc
+        raise ArtifactError(f"Failed to access blob at {blob_path}.") from exc
     if pre_load_identity != pre_hash_identity:
-        raise TorchLensIOError(f"blob at {blob_path} changed between integrity check and load.")
+        raise ArtifactError(f"blob at {blob_path} changed between integrity check and load.")
 
     tensor = _load_safetensors_tensor(blob_path, map_location, entry)
     return materialize_transport_tensor(
@@ -1015,12 +1016,12 @@ def _manifest_entry_for_blob_ref(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the blob id is missing from the manifest.
     """
 
     if blob_ref.blob_id not in manifest_index:
-        raise TorchLensIOError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
+        raise ArtifactError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
     entry = manifest_index[blob_ref.blob_id]
     if isinstance(entry, TensorEntry):
         return entry
@@ -1053,7 +1054,7 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the dtype string is unknown to the runtime.
     """
 
@@ -1064,7 +1065,7 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
     # dtype is a ``torch.__dict__`` entry and still resolves.
     dtype_obj = torch_attr(dtype_name)
     if not isinstance(dtype_obj, torch.dtype):
-        raise TorchLensIOError(f"Unsupported dtype string in manifest: {dtype_name}.")
+        raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj
 
 
@@ -1097,7 +1098,7 @@ def _load_safetensors_tensor(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the blob does not contain exactly one tensor.
     """
 
@@ -1108,20 +1109,20 @@ def _load_safetensors_tensor(
     try:
         tensor_map = load_file(blob_path, device=device)
     except ImportError as exc:
-        raise TorchLensIOError(
+        raise ArtifactError(
             "Portable bundle load requires the safetensors backend. Install safetensors>=0.4."
         ) from exc
     except (OSError, SafetensorError, ValueError) as exc:
-        raise TorchLensIOError(f"Failed to materialize blob at {blob_path}.") from exc
+        raise ArtifactError(f"Failed to materialize blob at {blob_path}.") from exc
 
     if len(tensor_map) != 1:
-        raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
+        raise ArtifactError(f"Expected a single tensor in blob file {blob_path}.")
     tensor = next(iter(tensor_map.values()))
     requires_grad = (
         entry.requires_grad if isinstance(entry, TensorEntry) else entry.get("requires_grad", False)
     )
     if not isinstance(requires_grad, bool):
-        raise TorchLensIOError("Manifest tensor entry 'requires_grad' must be a boolean.")
+        raise ArtifactError("Manifest tensor entry 'requires_grad' must be a boolean.")
     if requires_grad:
         tensor.requires_grad_(True)
     return tensor
@@ -1247,7 +1248,7 @@ def rehydrate_nested(
 
     >>> import torchlens as tl
     >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
-    >>> tl.io.rehydrate_nested(log)
+    >>> tl.io.materialize_nested(log)
 
     Parameters
     ----------
@@ -1260,20 +1261,20 @@ def rehydrate_nested(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the source bundle is unavailable or has drifted since load.
     """
 
     bundle_path = _source_bundle_path_for_trace(trace)
     manifest_path = bundle_path / "manifest.json"
     if not manifest_path.exists():
-        raise TorchLensIOError(f"Source bundle manifest not found at {manifest_path}.")
+        raise ArtifactError(f"Source bundle manifest not found at {manifest_path}.")
 
     expected_manifest_sha256 = getattr(trace, "_source_bundle_manifest_sha256", None)
     if expected_manifest_sha256 is not None:
         observed_manifest_sha256 = sha256_of_file(manifest_path)
         if observed_manifest_sha256 != expected_manifest_sha256:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 "source bundle manifest has changed since load; materialize refs and retry"
             )
 
@@ -1345,7 +1346,7 @@ def _rehydrate_nested_object(
     """
 
     if depth > _PORTABLE_WALK_MAX_DEPTH:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Portable metadata exceeds the maximum depth of {_PORTABLE_WALK_MAX_DEPTH}."
         )
     if isinstance(value, (str, int, float, bool, type(None), torch.dtype, torch.device, BlobRef)):
@@ -1353,7 +1354,7 @@ def _rehydrate_nested_object(
     obj_id = id(value)
     cached = seen.get(obj_id)
     if cached is _REHYDRATE_IN_PROGRESS:
-        raise TorchLensIOError("Portable metadata contains a cycle through an immutable container.")
+        raise ArtifactError("Portable metadata contains a cycle through an immutable container.")
     if cached is not None:
         return cached
     if isinstance(value, tuple):
@@ -1479,7 +1480,7 @@ def _rehydrate_nested_object(
 
     seen[obj_id] = value
 
-    spec = getattr(type(value), "PORTABLE_STATE_SPEC", None)
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
     if spec is None:
         return value
 
@@ -1537,7 +1538,7 @@ def _source_bundle_path_for_trace(trace: Trace) -> Path:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the model log does not retain a source bundle reference.
     """
 
@@ -1553,6 +1554,4 @@ def _source_bundle_path_for_trace(trace: Trace) -> Path:
         if isinstance(grad_ref, LazyActivationRef):
             return grad_ref.source_bundle_path
 
-    raise TorchLensIOError(
-        "Trace does not retain a source bundle path for nested blob rehydration."
-    )
+    raise ArtifactError("Trace does not retain a source bundle path for nested blob rehydration.")

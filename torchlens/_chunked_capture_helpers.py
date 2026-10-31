@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import collections.abc
 import time
+from dataclasses import dataclass
 from typing import Any
 
+from ._data_classes.trace import Trace
 from ._deprecations import MISSING
 from ._trace_state import TraceState
-from .data_classes.trace import Trace
 from .fastlog.options import HaltPredicateFn
 from .intervention.errors import AppendMismatchError, ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate
-from .options import StreamingOptions
+from .options import StorageOptions
 
 
 def _should_store_auto_coerced_raw_input(original: Any, coerced: Any) -> bool:
@@ -43,7 +44,7 @@ def _validate_chunked_forward_capture(
     hooks: Any | None,
     intervene: InterventionPredicate | None,
     halt: HaltPredicateFn | None,
-    streaming: StreamingOptions,
+    streaming: StorageOptions,
 ) -> None:
     """Reject unsupported ``trace(chunk_size=...)`` option combinations.
 
@@ -84,7 +85,7 @@ def _validate_chunked_forward_capture(
         raise ChunkedForwardConfigError("chunk_size cannot be combined with intervene=.")
     if halt is not None:
         raise ChunkedForwardConfigError("chunk_size cannot be combined with halt=.")
-    if streaming.bundle_path is not None or streaming.out_callback is not None:
+    if streaming.bundle_path is not None or streaming.on_save is not None:
         raise ChunkedForwardConfigError(
             "chunk_size is in-memory only in v1 and cannot be combined with streaming storage."
         )
@@ -117,23 +118,12 @@ def _validate_chunk_append_candidate(old_trace: Trace, new_trace: Trace) -> None
         raise AppendMismatchError("topology or site labels changed")
 
 
-def _append_chunk_trace_state(
-    trace: Trace,
-    new_trace: Trace,
-    *,
-    chunk_size: int,
-    total_batch_size: int,
-    append_sequence_id: int,
-    chunk_paths: tuple[str, ...] | None,
-) -> None:
-    """Append a chunk trace while preserving predicate-save public behavior.
+@dataclass(frozen=True)
+class _ChunkAppend:
+    """Bookkeeping for one appended chunk, recorded on the trace's run history.
 
-    Parameters
+    Attributes
     ----------
-    trace:
-        Existing accumulated trace to mutate.
-    new_trace:
-        Freshly captured chunk trace to append.
     chunk_size:
         Leading batch size for the appended chunk.
     total_batch_size:
@@ -142,6 +132,25 @@ def _append_chunk_trace_state(
         One-based append sequence identifier.
     chunk_paths:
         Normalized public chunk paths.
+    """
+
+    chunk_size: int
+    total_batch_size: int
+    append_sequence_id: int
+    chunk_paths: tuple[str, ...] | None
+
+
+def _append_chunk_trace_state(trace: Trace, new_trace: Trace, chunk: _ChunkAppend) -> None:
+    """Append a chunk trace while preserving predicate-save public behavior.
+
+    Parameters
+    ----------
+    trace:
+        Existing accumulated trace to mutate.
+    new_trace:
+        Freshly captured chunk trace to append.
+    chunk:
+        The appended chunk's sizes, sequence identifier and chunk paths.
 
     Returns
     -------
@@ -158,7 +167,7 @@ def _append_chunk_trace_state(
     try:
         trace._predicate_save_options = None
         new_trace._predicate_save_options = None
-        trace.append_state_from(new_trace)
+        trace._append_state_from(new_trace)
     finally:
         if old_predicate_options is MISSING:
             trace.__dict__.pop("_predicate_save_options", None)
@@ -170,7 +179,7 @@ def _append_chunk_trace_state(
             new_trace._predicate_save_options = new_predicate_options
 
     trace.is_appended = True
-    trace._append_sequence_id = append_sequence_id
+    trace._append_sequence_id = chunk.append_sequence_id
     trace.state = TraceState.APPENDED
     trace._has_direct_writes = False
     trace._out_recipe_revision = getattr(trace, "_spec_revision", 0)
@@ -184,12 +193,12 @@ def _append_chunk_trace_state(
         "append": True,
         "strict": False,
         "hooks": 0,
-        "chunk_size": chunk_size,
-        "total_batch_size": total_batch_size,
-        "append_sequence_id": append_sequence_id,
+        "chunk_size": chunk.chunk_size,
+        "total_batch_size": chunk.total_batch_size,
+        "append_sequence_id": chunk.append_sequence_id,
         "old_graph_shape_hash": old_hash,
         "new_graph_shape_hash": new_hash,
-        "chunk_paths": chunk_paths,
+        "chunk_paths": chunk.chunk_paths,
     }
     trace.append_history.append(dict(trace.last_run))
     trace._record_operation(
@@ -198,9 +207,9 @@ def _append_chunk_trace_state(
         started_at=started_at,
         duration_s=duration_s,
         hook_count=0,
-        chunk_size=chunk_size,
-        total_batch_size=total_batch_size,
-        append_sequence_id=append_sequence_id,
+        chunk_size=chunk.chunk_size,
+        total_batch_size=chunk.total_batch_size,
+        append_sequence_id=chunk.append_sequence_id,
         old_graph_shape_hash=old_hash,
         new_graph_shape_hash=new_hash,
     )

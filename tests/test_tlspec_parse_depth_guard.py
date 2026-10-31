@@ -151,7 +151,7 @@ def test_deeply_nested_manifest_does_not_crash_load(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     bundle = tmp_path / "deep.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
 
     manifest_path = bundle / "manifest.json"
     text = manifest_path.read_text()
@@ -167,7 +167,7 @@ def test_deeply_nested_manifest_does_not_crash_load(tmp_path: Path) -> None:
     except RecursionError:  # pragma: no cover - the exact failure we forbid
         pytest.fail("uncaught RecursionError escaped tl.load() on a deep manifest")
     except Exception:
-        pass  # any typed disposition (TorchLensIOError / analysis-only) is acceptable
+        pass  # any typed disposition (ArtifactError / analysis-only) is acceptable
 
 
 def test_normal_bundle_still_loads(tmp_path: Path) -> None:
@@ -179,7 +179,7 @@ def test_normal_bundle_still_loads(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     bundle = tmp_path / "clean.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     loaded = tl.load(str(bundle))
     assert loaded is not None
 
@@ -351,8 +351,8 @@ def test_read_bounded_still_refuses_a_file_that_exceeds_the_ceiling(tmp_path: Pa
 # offenders, each with why it is exempt or still pending.
 BARE_JSON_READ_LEDGER = {
     # PERMANENT: reads a first-party file shipped inside the wheel
-    # (torchlens/autoroute/data/imagenet1k_labels.json), not an artifact boundary.
-    "autoroute/_builtin_output.py": "package-shipped label table, not untrusted input",
+    # (torchlens/_autoroute/data/imagenet1k_labels.json), not an artifact boundary.
+    "_autoroute/_builtin_output.py": "package-shipped label table, not untrusted input",
 }
 
 

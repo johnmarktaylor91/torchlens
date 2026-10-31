@@ -89,13 +89,13 @@ def test_add_refuses_string_member_typed() -> None:
 
 def test_apply_passes_member_name_to_two_arg_callable() -> None:
     bundle = _pair()
-    result = bundle.apply(lambda log, name: name)
+    result = bundle.map(lambda log, name: name)
     assert result == {"baseline": "baseline", "changed": "changed"}
 
 
 def test_apply_single_arg_contract_unchanged() -> None:
     bundle = _pair()
-    result = bundle.apply(lambda log: type(log).__name__)
+    result = bundle.map(lambda log: type(log).__name__)
     assert set(result.values()) == {"Trace"}
 
 
@@ -105,13 +105,13 @@ def test_apply_var_positional_receives_name() -> None:
     def collect(*args: object) -> int:
         return len(args)
 
-    assert set(bundle.apply(collect).values()) == {2}
+    assert set(bundle.map(collect).values()) == {2}
 
 
 def test_apply_uninspectable_callable_falls_back_single_arg() -> None:
     bundle = _pair()
     # repr is (obj, /): one positional parameter -> single-arg call.
-    result = bundle.apply(repr)
+    result = bundle.map(repr)
     assert all(isinstance(value, str) for value in result.values())
 
 
@@ -122,11 +122,11 @@ def test_apply_uninspectable_callable_falls_back_single_arg() -> None:
 
 def test_relate_is_a_real_method() -> None:
     assert hasattr(tl.Bundle, "relate")
-    assert hasattr(tl.Bundle, "derive_episode_status")
+    assert hasattr(tl.Bundle, "episode_status")
     assert inspect.isfunction(tl.Bundle.relate)
     bundle = _pair()
     bundle.relate({"kind": "alternative_of", "from": "changed", "to": "baseline", "params": {}})
-    assert bundle.member_relations[0].kind == "alternative_of"
+    assert bundle.relations[0].kind == "alternative_of"
 
 
 # ---------------------------------------------------------------------------
@@ -137,9 +137,9 @@ def test_relate_is_a_real_method() -> None:
 def test_bundle_id_minted_random_and_distinct() -> None:
     first = _pair()
     second = _pair()
-    assert first.bundle_id != second.bundle_id
-    assert len(first.bundle_id) == 16
-    int(first.bundle_id, 16)  # hex
+    assert first.id != second.id
+    assert len(first.id) == 16
+    int(first.id, 16)  # hex
 
 
 def test_fork_carries_relations_baseline_and_anchors() -> None:
@@ -148,24 +148,24 @@ def test_fork_carries_relations_baseline_and_anchors() -> None:
     child = bundle.fork()
 
     # Relation table carried (the historical drop is the 0b defect).
-    assert [row.kind for row in child.member_relations] == ["alternative_of"]
+    assert [row.kind for row in child.relations] == ["alternative_of"]
     assert child.baseline_name == "baseline"
 
     # New identity, anchored source.
-    assert child.bundle_id != bundle.bundle_id
-    assert child._forked_from_bundle_id == bundle.bundle_id
+    assert child.id != bundle.id
+    assert child._forked_from_bundle_id == bundle.id
 
     # Per-member origin anchors.
     anchor = child._member_construction["changed"]
     assert anchor["origin"] == "forked"
-    assert anchor["source_bundle_id"] == bundle.bundle_id
+    assert anchor["source_bundle_id"] == bundle.id
     assert anchor["source_member"] == "changed"
 
     # Chronology rows on BOTH containers, chained from seq 1.
     assert bundle._operations[-1].kind == "fork"
-    assert bundle._operations[-1].params["child_bundle_id"] == child.bundle_id
+    assert bundle._operations[-1].params["child_bundle_id"] == child.id
     assert child._operations[0].kind == "fork"
-    assert child._operations[0].params["source_bundle_id"] == bundle.bundle_id
+    assert child._operations[0].params["source_bundle_id"] == bundle.id
     validate_operation_chain(bundle._operations)
     validate_operation_chain(child._operations)
 

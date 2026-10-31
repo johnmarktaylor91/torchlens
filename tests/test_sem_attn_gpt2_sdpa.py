@@ -13,7 +13,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.semantic import MissingFacetError
+from torchlens.errors import MissingFacetError
 
 pytest.importorskip("transformers")
 
@@ -40,7 +40,7 @@ def test_plain_sdpa_capture_declares_actionable_absences(sdpa_captures):
 
     _model, plain, _ready = sdpa_captures
     view = plain.modules[ATTN_ADDRESS].facets
-    menu = view.menu()
+    menu = view.declared()
     for facet in ("scores", "pattern", "z", "result"):
         assert menu[facet].status == "needs_capture", facet
     # The pattern absence teaches BOTH remedies at the point of failure.
@@ -82,7 +82,7 @@ def test_reconstruction_ready_serves_checked_read_only_facets(sdpa_captures):
     # the checked reconstruction gate on Conv1D projections (the mikit F4/F5
     # tolerance/orientation bundle, owned by lane A03) -- declaration is the
     # A01 contract, a wrong tensor is never served.
-    assert "result" in view.menu()
+    assert "result" in view.declared()
 
 
 def test_head_view_slices_reconstructed_facets(sdpa_captures):

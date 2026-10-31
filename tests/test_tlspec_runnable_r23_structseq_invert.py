@@ -11,15 +11,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, SparseRunDescriptor
 from torchlens.errors import PathDivergenceError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, SparseRunDescriptor
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
     capture_container_structure=True,
     cache=False,
-    random_seed=0,
+    seed=0,
 )
 
 

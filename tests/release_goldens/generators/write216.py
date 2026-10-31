@@ -20,7 +20,7 @@ x = torch.randn(1, 3, 32, 32)
 fn = getattr(tl, "log_forward_pass", None) or getattr(tl, "get_model_activations", None)
 print("capture fn:", fn.__name__ if fn else None)
 log = fn(m, x)
-tl.save(log, out)
+log.save(out)
 d = json.load(open(os.path.join(out, "manifest.json")))
 print("MANIFEST_KEYS", json.dumps(sorted(d.keys())))
 for k in ("io_format_version", "tlspec_version", "torchlens_version", "save_level"):

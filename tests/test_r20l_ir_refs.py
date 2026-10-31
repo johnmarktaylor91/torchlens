@@ -14,8 +14,8 @@ import dataclasses
 
 import torch
 
-from torchlens.ir.predicate import RecordContext
-from torchlens.ir.refs import DeviceRef, DtypeRef
+from torchlens._ir.predicate import RecordContext
+from torchlens._ir.refs import DeviceRef, DtypeRef
 
 
 class TestBackendFieldDivergence:

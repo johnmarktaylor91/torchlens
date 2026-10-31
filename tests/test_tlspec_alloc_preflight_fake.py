@@ -39,6 +39,13 @@ import torch.nn.functional as F
 import torchlens as tl
 import torchlens._runnable_execution as rex
 from tests.test_tlspec_runnable_alloc_bomb import _tamper
+from torchlens._runnable import (
+    LiteralAtom,
+    LiteralAtomKind,
+    LiteralSequence,
+    LiteralSequenceKind,
+    LiteralTorchSymbol,
+)
 from torchlens._runnable_execution import (
     _MAX_DECODE_NESTING_DEPTH,
     _decode_literal,
@@ -53,13 +60,6 @@ from torchlens.errors import (
     RunCapabilityUnavailableError,
     RunnableTLSPECError,
     RuntimeSignatureDriftError,
-)
-from torchlens.runnable import (
-    LiteralAtom,
-    LiteralAtomKind,
-    LiteralSequence,
-    LiteralSequenceKind,
-    LiteralTorchSymbol,
 )
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
@@ -99,7 +99,7 @@ def _build(
 ) -> Path:
     trace = tl.trace(model.eval(), x, **_CAPTURE, **trace_kwargs)
     bundle = tmp_path / name
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     return bundle
 
 

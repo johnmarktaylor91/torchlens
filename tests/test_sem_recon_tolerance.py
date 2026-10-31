@@ -135,7 +135,7 @@ def test_replay_table_untouched_by_this_model() -> None:
     table goes red here.
     """
 
-    from torchlens.utils.tensor_utils import _tolerances_for_dtype
+    from torchlens._utils.tensor_utils import _tolerances_for_dtype
 
     rtol, atol = _tolerances_for_dtype(torch.float32)
     finfo = torch.finfo(torch.float32)
@@ -212,7 +212,7 @@ def test_per_head_result_orientation_from_module_class(projection: str) -> None:
     log = tl.trace(
         model,
         [q, k, v],
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     try:
         module = log.modules["self"]

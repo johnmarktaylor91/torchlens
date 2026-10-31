@@ -42,12 +42,12 @@ from torchlens._distributed import (
     DistributedFinding,
     detect_distributed_state,
 )
+from torchlens._utils import _torch_compat
 from torchlens.backends.torch._ops_interventions import (
     _pop_tensor_live_fire_results,
     _set_tensor_live_fire_results,
 )
-from torchlens.distributed import has_vetted_snapshot
-from torchlens.utils import _torch_compat
+from torchlens.distributed import is_vetted_build
 
 DISTRIBUTED_ROW_KEYS = ("dtensor", "device_mesh", "tensor_parallel", "pipeline_parallel")
 
@@ -210,10 +210,10 @@ def test_dense_model_rows_all_pass_and_capture_succeeds() -> None:
     x = torch.randn(2, 4)
     report = tl.compat.report(model, x)
     for key in DISTRIBUTED_ROW_KEYS:
-        row = report.row(key)
+        row = report.check(key)
         assert row.status == "pass", f"{key} status"
         assert row.severity == "ok", f"{key} severity"
-        assert row.detected is False, f"{key} detected"
+        assert row.is_detected is False, f"{key} detected"
         assert row.suggestion == "", f"{key} suggestion"
 
     trace = tl.trace(model, x)
@@ -225,7 +225,7 @@ def test_all_four_rows_are_always_present() -> None:
     """The rows exist whether or not anything was detected."""
 
     report = tl.compat.report(TinyModel(), torch.randn(2, 4))
-    keys = {row.key for row in report.rows}
+    keys = {row.key for row in report.checks}
     for key in DISTRIBUTED_ROW_KEYS:
         assert key in keys
 
@@ -624,8 +624,8 @@ def test_report_row_marks_refusal_and_matches_detection() -> None:
     model = TinyModel()
     model.fc.weight = nn.Parameter(_fake_dtensor((4, 4)), requires_grad=False)
 
-    row = tl.compat.report(model, torch.randn(2, 4)).row("dtensor")
-    assert row.detected is True
+    row = tl.compat.report(model, torch.randn(2, 4)).check("dtensor")
+    assert row.is_detected is True
     assert row.status == "scope"
     assert row.severity == "error"
     assert "DistributedCaptureUnsupportedError" in row.details
@@ -644,18 +644,18 @@ def test_non_refusing_row_is_warning_not_error(monkeypatch: pytest.MonkeyPatch) 
     )
     model = TinyModel()
     model.stages = [_FakePipelineStage()]  # type: ignore[assignment]
-    refusing_row = tl.compat.report(model, torch.randn(2, 4)).row("pipeline_parallel")
+    refusing_row = tl.compat.report(model, torch.randn(2, 4)).check("pipeline_parallel")
     assert refusing_row.severity == "error"
 
-    clean_row = tl.compat.report(TinyModel(), torch.randn(2, 4)).row("device_mesh")
+    clean_row = tl.compat.report(TinyModel(), torch.randn(2, 4)).check("device_mesh")
     assert clean_row.severity == "ok"
     assert "DistributedCaptureUnsupportedError" not in clean_row.details
 
-    dtensor_clear = tl.compat.report(TinyModel(), torch.randn(2, 4)).row("dtensor")
+    dtensor_clear = tl.compat.report(TinyModel(), torch.randn(2, 4)).check("dtensor")
     assert "bounded entry scan" in dtensor_clear.details
     assert "slots-only" in dtensor_clear.details
 
-    tp_clear = tl.compat.report(TinyModel(), torch.randn(2, 4)).row("tensor_parallel")
+    tp_clear = tl.compat.report(TinyModel(), torch.randn(2, 4)).check("tensor_parallel")
     assert "user-wrapped or opaque hook" in tp_clear.details
 
 
@@ -683,7 +683,7 @@ def test_typed_error_is_reachable_from_public_errors_namespace() -> None:
 def test_capability_snapshot_exposes_distributed_flags() -> None:
     """Every graceful-degradation point is visible as a named ``HAS_*`` flag."""
 
-    from torchlens.utils._torch_compat import get_torch_capability_snapshot
+    from torchlens._utils._torch_compat import get_torch_capability_snapshot
 
     snapshot = get_torch_capability_snapshot()
     for flag in ("HAS_DTENSOR", "HAS_DEVICE_MESH", "HAS_PIPELINING"):
@@ -692,15 +692,15 @@ def test_capability_snapshot_exposes_distributed_flags() -> None:
 
 
 def test_doctor_reports_distributed_capability_flags() -> None:
-    """``tl.utils.doctor()`` surfaces the new flags like every other capability.
+    """``tl.report.doctor()`` surfaces the new flags like every other capability.
 
     The capability row is a grouped absences-first summary (r-b4 R26-4): a
     flag appears in the row text by name only when it is absent; a present
     flag is served through the full snapshot accessor the row points at.
     """
 
-    snapshot = tl.utils.capability_snapshot()
-    text = str(tl.utils.doctor())
+    snapshot = tl._utils.capability_snapshot()
+    text = str(tl.report.doctor())
     for flag in ("HAS_DTENSOR", "HAS_DEVICE_MESH", "HAS_PIPELINING"):
         assert flag in snapshot
         if not snapshot[flag]:
@@ -900,8 +900,8 @@ def test_real_tensor_parallel_capture_refuses_instead_of_lying(
         "tensor_parallel",
     ]
 
-    row = tl.compat.report(model, x).row("dtensor")
-    assert row.detected is True
+    row = tl.compat.report(model, x).check("dtensor")
+    assert row.is_detected is True
     assert row.severity == "error"
     assert "Detected structurally" not in row.details, "real DTensor is an exact match"
 
@@ -925,7 +925,7 @@ def test_real_dense_model_still_captures_with_distributed_initialized(
     model = TinyModel()
     x = torch.randn(2, 4)
     assert detect_distributed_state(model, x) == ()
-    if has_vetted_snapshot():
+    if is_vetted_build():
         trace = tl.trace(model, x)
     else:
         with pytest.warns(UserWarning, match="uncaptured_collective_op"):

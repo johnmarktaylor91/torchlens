@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
+from torchlens._data_classes.layer import Layer
 
 
 class _Tiny(nn.Module):

@@ -8,13 +8,13 @@ from typing import Any, cast
 
 import pytest
 
+from torchlens._ir.events import JaxEquationKind
 from torchlens.backends.jax.jaxpr import (
     ALL_JAX_EQUATION_KINDS,
     JAX_REPLAY_HANDLERS,
     JaxEquationCapture,
     replay_equation,
 )
-from torchlens.ir.events import JaxEquationKind
 
 
 def _capture_for_kind(kind: object) -> JaxEquationCapture:

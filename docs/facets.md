@@ -42,7 +42,7 @@ the unified named access layer. If a module was called more than once,
 `keys()`, iteration, `in`, `has(name)`, and item/attribute access are
 available-now surfaces: recipes run once and only facets readable in the current
 capture appear. `.get(name, default)` returns `default` for any facet that is not
-available now. Use the provisional `menu()` accessor for declaration-level
+available now. Use the provisional `declared()` accessor for declaration-level
 discovery; it reports every structural and declared recipe facet with status
 `available_now`, `structurally_absent`, `needs_capture`, or
 `declared_not_produced`, including any enabled aliases.
@@ -132,13 +132,13 @@ the global registry changes later.
 Per-trace and context additions are also capture-time only:
 
 ```python
-log = tl.trace(model, x, recipes=[my_attention])
+log = tl.trace(model, x, facets=[my_attention])
 
-with tl.facets.using(my_attention):
+with tl.facets.adding(my_attention):
     log = tl.trace(model, x)
 ```
 
-`tl.facets.reset()` restores the process registry to built-ins. `tl.facets.list()`
+`tl.facets.reset()` restores the process registry to built-ins. `tl.facets.functions()`
 and `tl.facets.info(class_name)` expose registry metadata.
 
 Conflict resolution is deterministic: `class_qualname` is more specific than
@@ -204,7 +204,7 @@ Use `tl.facet(name)` for a named facet and `tl.head(index, name)` or
 log = tl.trace(
     model,
     x,
-    capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+    capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
 )
 edited = log.fork("ablated")
 edited.attach_hooks(tl.head(3, "q"), tl.zero_ablate())
@@ -317,8 +317,8 @@ pattern = log.modules["blocks.0.attn"].facets.pattern
 z = log.modules["blocks.0.attn"].facets.z
 ```
 
-`reconstruction_ready=True` enables `save_arg_values=True` and
-`save_rng_states=True`. The reconstruction uses the SDPA op's saved Q/K/V args,
+`reconstruction_ready=True` enables `save_args=True` and
+`save_rng=True`. The reconstruction uses the SDPA op's saved Q/K/V args,
 so RoPE models use the post-RoPE tensors that actually fed the fused kernel, not
 the q_proj/k_proj outputs.
 
@@ -332,7 +332,7 @@ result            sum per-head W_O contributions and compare to output projectio
 
 GQA/MQA uses PyTorch SDPA's `enable_gqa` repeat-interleave convention. Causal
 masks and boolean/additive tensor masks are supported. Nonzero SDPA dropout is
-fail-closed for now; the facet is marked `needs_capture` in `facets.menu()` and
+fail-closed for now; the facet is marked `needs_capture` in `facets.declared()` and
 item or attribute access raises `MissingFacetError` naming dropout/RNG as the
 missing prerequisite rather than serving an unvalidated value.
 
@@ -432,10 +432,10 @@ denominator, probabilities and ranks are taken), the one masking that cannot be
 redone on the retained rows afterwards; the trace's first input must be a saved
 integer token-id tensor (`logit_lens_mask_input_unavailable` otherwise). For
 entropy, KL to the final output, cross-entropy and rank along the trajectory in
-one call, see `tl.stats.measure_trajectory` in
+one call, see `tl.mechinterp.measure_trajectory` in
 [docs/reference/stats.md](reference/stats.md).
 
-It shares `facet=` / `layers=` / `lens=` / `validate=` semantics (and the
+It shares `facet=` / `layers=` / `lens=` / `verify=` semantics (and the
 fail-closed lens validation) with `logit_lens`. Probabilities always use the
 full-vocabulary softmax denominator. `include_native=True` (the default)
 appends a row served directly from the model's CAPTURED output logits,
@@ -516,13 +516,13 @@ TransformerLens hook-name aliases are off by default. Enable them once per
 process:
 
 ```python
-tl.facets.enable_transformerlens_aliases()
+tl.facets.enable_transformer_lens_aliases()
 ```
 
 When enabled, aliases such as `hook_pattern`, `hook_z`, `hook_result`,
 `hook_resid_pre`, `hook_resid_mid`, and `hook_resid_post` resolve to native
 TorchLens facets when those native facets exist.
-`torchlens.semantic.transformer_lens_aliases_enabled()` reports the current
+`torchlens.facets.transformer_lens_aliases_enabled()` reports the current
 process-wide state.
 
 ## Migration Cheat Sheet
@@ -542,7 +542,7 @@ nnsight module.path.output       -> log.modules["module.path"].facets["out"]
 
 ## Coverage and Recipe Maintenance
 
-`torchlens.semantic.facet_coverage(log)` (DOCUMENTED-UNSTABLE spelling) reports
+`torchlens.facets.coverage(log)` (DOCUMENTED-UNSTABLE spelling) reports
 per-module recipe coverage for a completed trace: which recipes matched, which
 declared facets are readable, typed absence reasons, an inventory of
 structural-only module classes (recipe candidates), and disclosed rows for
@@ -612,10 +612,10 @@ written; P2 provides no public policy and refuses these writes by default.
 Conflict policy: same-home facet writes compose in attach order when their write
 masks do not overlap; overlapping writes raise before rerun.
 
-`recipes=`: `tl.trace` argument for additive per-trace facet recipes captured in
+`facets=`: `tl.trace` argument for additive per-trace facet recipes captured in
 that trace's registry snapshot.
 
-`using()`: `tl.facets.using(...)` context manager for additive context-local
+`using()`: `tl.facets.adding(...)` context manager for additive context-local
 recipes used only by traces captured inside the context.
 
 `reset()`: `tl.facets.reset()` restores the process registry to built-in recipes.

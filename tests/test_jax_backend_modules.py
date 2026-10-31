@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
+from torchlens.errors import BackendUnsupportedError
 from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.validation.invariants import check_metadata_invariants
 
@@ -649,9 +649,9 @@ def _assert_pytree_draw_surface(trace: Any, tmp_path: Path) -> None:
     """Assert graph drawing remains available."""
 
     dot = trace.draw(
-        vis_outpath=str(tmp_path / "pytree_graph"),
+        path=str(tmp_path / "pytree_graph"),
         vis_save_only=True,
-        vis_fileformat="dot",
+        file_format="dot",
     )
     assert isinstance(dot, str)
 

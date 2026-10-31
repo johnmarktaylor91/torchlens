@@ -51,14 +51,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import build_sparse_run_descriptor
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     WitnessCompleteness,
 )
-from torchlens.utils._torch_compat import HAS_GENERATOR_CLONE_STATE
-from torchlens.utils.rng import (
+from torchlens._utils._torch_compat import HAS_GENERATOR_CLONE_STATE
+from torchlens._utils.rng import (
     _DEFAULT_GENERATOR_HOLDER_MODULES,
     _TORCH_RNG_DEVICE_SPEC,
     _TORCH_RNG_MODULE_SPECS,
@@ -74,6 +73,7 @@ from torchlens.utils.rng import (
     set_random_seed,
     set_rng_from_saved_states,
 )
+from torchlens.options import CaptureOptions
 
 _MONITORED_DISPOSITIONS = frozenset({"entropy", "mutation", "replayable_read"})
 
@@ -843,7 +843,7 @@ def _capture(model: nn.Module, x: torch.Tensor, *, seed: int) -> tl.Trace:
             intervention_ready=True,
             capture_container_structure=True,
             cache=False,
-            random_seed=seed,
+            seed=seed,
         ),
     )
 

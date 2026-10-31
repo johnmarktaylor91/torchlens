@@ -24,7 +24,7 @@ from torch import nn
 from ._tl import is_forward_call_decorated, mark_forward_call_decorated
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 
 def restore_undecorated_forward(module: nn.Module) -> None:
@@ -202,7 +202,7 @@ def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
         Submodule ``forward`` attributes are replaced in place.
     """
 
-    from ...utils._call_site import register_module_boundary_wrapper
+    from ..._utils._call_site import register_module_boundary_wrapper
     from .model_prep import module_forward_decorator
 
     register_module_boundary_wrapper(module_forward_decorator, "decorated_forward")

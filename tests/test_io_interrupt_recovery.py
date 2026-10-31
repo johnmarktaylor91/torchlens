@@ -124,7 +124,7 @@ def test_bundle_save_recovery_failure_never_masks_the_interrupt(
 
     trace = _trace(3)
     target = tmp_path / "b.tl"
-    tl.save(trace, target)
+    trace.save(target)
     before = sorted(p.name for p in target.iterdir())
 
     def interrupting_dump(state, handle):  # type: ignore[no-untyped-def]
@@ -139,7 +139,7 @@ def test_bundle_save_recovery_failure_never_masks_the_interrupt(
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         with pytest.raises(KeyboardInterrupt):
-            tl.save(trace, target, overwrite=True)
+            trace.save(target, overwrite=True)
 
     assert any("recovery step 'mark-partial' itself failed" in str(w.message) for w in caught)
     # The backup restore still ran: the pre-existing bundle is back in place.

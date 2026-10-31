@@ -26,7 +26,7 @@
    (`backends/_finalize.py`); nothing resets it per pass.
 9. Portable `.tlspec` public schema is manifest-only; executable callables are not portable.
 9a. Rehydration floor: artifacts stamped `tlspec_version` < 6 refuse to load with the typed
-    `tl.errors.ArtifactVersionBelowFloorError`; legacy field-alias resurrection ladders are
+    `tl.errors.ArtifactTooOldError`; legacy field-alias resurrection ladders are
     deleted. The first tlspec-6 writer was released torchlens 2.31.0, so 2.31.0 / 2.32.4
     artifacts load (the floor is the stamp, never a release name). Legacy 2.16 intervention
     specs remain loadable (floor covers Trace rehydration only). Save dry-runs `metadata.pkl`
@@ -156,7 +156,7 @@
 18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
     internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
     Stage 6 enforces input/state, per-call/output, and control-witness honesty before exposure;
-    default divergence raises with rollback, while `return_diverged` is the sole monotonic poisoned
+    default divergence raises with rollback, while `on_divergence="return"` is the sole monotonic poisoned
     opt-in. Incomplete witness coverage is `unverifiable`; sparse-only and ineligible activation
     runs report numeric attestation as `not_applicable`.
 18a. `Trace.run(inputs=..., fast=True)` is an explicit stateful static-loop mode: loaded sparse
@@ -178,10 +178,10 @@
     `Trace._fast_run_session` is a session-time `FieldPolicy.DROP` field (ordered under a private
     name, never persisted), ledgered in
     `tests/test_schema_lockstep.py::PRIVATE_ORDERED_DROP_FIELDS`.
-19. Runnable public vocabulary is frozen in `torchlens.runnable`: readiness is `ready|unavailable`,
+19. Runnable vocabulary is frozen in the private `torchlens._runnable` (a user reads the report enums as `tl.types.*`): readiness is `ready|unavailable`,
     faithfulness is `verified|diverged|unverifiable`, state source is
     `live_model_state|embedded_capture_state|user_state_dict|random_initialization|not_applicable`,
-    and divergence policy is `raise|return_diverged`. Error handling uses `RunnableErrorCode`, never
+    and divergence policy is `raise|return`. Error handling uses `RunnableErrorCode`, never
     exception-message matching. r37 adds the frozen codes `state_alias_topology_unsupported`
     (save-time refusal of distinct-object overlapping/unprovable bound-state alias topology; tied
     live-identity state stages as ONE alias-group allocation instead) and `context_field_invalid`
@@ -192,7 +192,7 @@
     containers carrying extra per-instance state refuse at runnable save
     (`missing_output_container_contract`; one per-kind capability table --
     `CONTAINER_KIND_CAPABILITIES` -- governs capture proof, save refusal, and forged-flag-proof
-    load recompute; `tl.register_container` gains an explicit `state_complete=` declaration).
+    load recompute; `tl.types.register_container` gains an explicit `state_complete=` declaration).
     Host nondeterminism outside the two replayable global engines (RNG instances incl.
     outside-held NumPy Generators via a chained `sys`/`threading.setprofile` classifier + a cheap
     model-attribute state digest (no process-wide gc scan), bare

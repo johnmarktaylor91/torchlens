@@ -8,7 +8,21 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ..._data_classes._nonfinite import record_op_nonfinite
+from ..._data_classes.op import (
+    _recursive_safe_copy,
+)
+from ..._ir.events import (
+    FunctionCallRef,
+    ModuleFrame,
+)
+from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._state import pause_logging
+from ..._utils.display import _timed_phase
+from ..._utils.tensor_utils import (
+    fp8_widen_for_numeric_ops,
+    safe_copy,
+)
 from ...capture.predicates import (
     _evaluate_keep_op,
 )
@@ -17,10 +31,6 @@ from ...capture.projections import (
 )
 from ...capture.session import capture_session_for
 from ...capture.stop import stop_directive_for_trace
-from ...data_classes._nonfinite import record_op_nonfinite
-from ...data_classes.op import (
-    _recursive_safe_copy,
-)
 from ...fastlog.types import (
     CaptureSpec,
     RecordContext,
@@ -28,19 +38,9 @@ from ...fastlog.types import (
 from ...intervention.selectors import (
     BaseSelector,
 )
-from ...ir.events import (
-    FunctionCallRef,
-    ModuleFrame,
-)
-from ...ir.predicate import RetroactiveCaptureDecision
-from ...utils.display import _timed_phase
-from ...utils.tensor_utils import (
-    fp8_widen_for_numeric_ops,
-    safe_copy,
-)
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 if TYPE_CHECKING:
     from .ops import (
@@ -252,6 +252,7 @@ def _make_layer_log_entry(
             raw_index,
             t,
             retain_activation=not (keep_by_predicate and save_this_activation),
+            raw_label=fields_dict.get("_label_raw"),
         )
     _note_module_filter_suppression(self, keep_by_predicate, save_this_activation)
     if keep_by_predicate and save_this_activation:

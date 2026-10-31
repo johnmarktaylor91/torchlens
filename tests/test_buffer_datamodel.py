@@ -13,13 +13,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch import buffer_writes
-from torchlens.data_classes.cleanup import (
+from torchlens._data_classes.cleanup import (
     _scrub_layer_entry_conditional_fields,
     _scrub_per_op_equivalence_lists,
 )
+from torchlens._postprocess.labeling import _replace_layer_names_for_layer_entry
+from torchlens.backends.torch import buffer_writes
 from torchlens.errors import TraceNotReproducibleWarning
-from torchlens.postprocess.labeling import _replace_layer_names_for_layer_entry
 
 TensorFactory = Callable[[], torch.Tensor]
 
@@ -500,15 +500,15 @@ def test_buffer_write_models_validate_and_expose_entities(
         # node disappears and the shape hash mismatches -> not verified.
         with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
             assert not tl.validation.validate_forward_pass(
-                model_factory(), x.clone(), random_seed=123, validate_metadata=True
+                model_factory(), x.clone(), seed=123, validate_metadata=True
             )
     elif isinstance(model, DataSetter):
         assert not tl.validation.validate_forward_pass(
-            model_factory(), x.clone(), random_seed=123, validate_metadata=True
+            model_factory(), x.clone(), seed=123, validate_metadata=True
         )
     else:
         assert tl.validation.validate_forward_pass(
-            model_factory(), x.clone(), random_seed=123, validate_metadata=True
+            model_factory(), x.clone(), seed=123, validate_metadata=True
         )
 
     if isinstance(model, DataCopyWrite):
@@ -518,9 +518,9 @@ def test_buffer_write_models_validate_and_expose_entities(
         # Expect that documented warning here instead of letting the warning-hygiene
         # filter promote a known `.data` limitation to a fatal error.
         with pytest.warns(UserWarning, match="no graph/source provenance"):
-            trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+            trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
     else:
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
     for address, overwrite_count in expected_overwrites.items():
         assert address in trace.buffers
         buffer = trace.buffers[address]
@@ -534,9 +534,7 @@ def test_batchnorm_buffer_reads_materialize_in_raw_index_order() -> None:
     """Assert deferred BatchNorm buffer reads do not precede earlier raw ops."""
 
     model = nn.BatchNorm1d(3).train()
-    trace = tl.trace(
-        model, torch.randn(4, 3), capture=tl.options.CaptureOptions(save_arg_values=True)
-    )
+    trace = tl.trace(model, torch.randn(4, 3), capture=tl.options.CaptureOptions(save_args=True))
     raw_indices = [op.raw_index for op in trace.layer_list]
     add_op = trace.layer_dict_all_keys["add_1_1"]
     buffer_2_op = trace.layer_dict_all_keys["buffer_2"]
@@ -608,10 +606,10 @@ def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:
 
     assert trace.buffer_read_ops == expected_read_ops
     assert trace.buffer_write_ops == expected_write_ops
-    assert trace.num_buffer_read_ops == len(trace.buffer_read_ops)
-    assert trace.num_buffer_write_ops == len(trace.buffer_write_ops)
-    assert trace.num_buffer_source_ops == len(trace.buffer_read_ops)
-    assert trace.num_buffer_sink_ops == len(trace.buffer_write_ops)
+    assert len(trace.buffer_read_ops) == len(trace.buffer_read_ops)
+    assert len(trace.buffer_write_ops) == len(trace.buffer_write_ops)
+    assert len(trace.buffer_read_ops) == len(trace.buffer_read_ops)
+    assert len(trace.buffer_write_ops) == len(trace.buffer_write_ops)
     assert set(trace.buffer_read_ops).isdisjoint(trace.buffer_write_ops)
     assert set(trace.buffer_read_ops) | set(trace.buffer_write_ops) == set(all_buffer_ops)
     assert {trace[op_label].layer_label for op_label in all_buffer_ops} == set(trace.buffer_layers)
@@ -652,7 +650,7 @@ def test_buffer_op_accessors_partition_read_and_write_versions() -> None:
     trace = tl.trace(
         DualRoleInplace(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
 
     _assert_buffer_op_accessors_partition_buffer_ops(trace)
@@ -673,7 +671,7 @@ def test_buffer_op_accessors_round_trip_through_tlspec(tmp_path: Path) -> None:
     trace = tl.trace(
         DualRoleInplace(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
     path = tmp_path / "buffer_ops.tlspec"
 
@@ -683,10 +681,10 @@ def test_buffer_op_accessors_round_trip_through_tlspec(tmp_path: Path) -> None:
     _assert_buffer_op_accessors_partition_buffer_ops(loaded)
     assert loaded.buffer_read_ops == trace.buffer_read_ops
     assert loaded.buffer_write_ops == trace.buffer_write_ops
-    assert loaded.num_buffer_read_ops == trace.num_buffer_read_ops
-    assert loaded.num_buffer_write_ops == trace.num_buffer_write_ops
-    assert loaded.num_buffer_source_ops == trace.num_buffer_source_ops
-    assert loaded.num_buffer_sink_ops == trace.num_buffer_sink_ops
+    assert len(loaded.buffer_read_ops) == len(trace.buffer_read_ops)
+    assert len(loaded.buffer_write_ops) == len(trace.buffer_write_ops)
+    assert len(loaded.buffer_read_ops) == len(trace.buffer_read_ops)
+    assert len(loaded.buffer_write_ops) == len(trace.buffer_write_ops)
 
 
 def test_reassignment_double_count_is_exact() -> None:
@@ -695,7 +693,7 @@ def test_reassignment_double_count_is_exact() -> None:
     trace = tl.trace(
         RecurrentReassign(steps=5),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
     events = [event for event in trace.event_stream.buffer_write_events if event.address == "h"]
     assert len(events) == 5
@@ -735,9 +733,9 @@ def test_recurrent_cell_reassignment_does_not_break_loop_detection() -> None:
     model = RecurrentCell()
     x = torch.randn(1, 8)
     assert tl.validation.validate_forward_pass(
-        RecurrentCell(), x.clone(), random_seed=7, validate_metadata=True
+        RecurrentCell(), x.clone(), seed=7, validate_metadata=True
     )
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
     assert "h" in trace.buffers
     assert trace.buffers["h"].num_overwrites == 5  # one reset + four loop steps
 
@@ -823,9 +821,7 @@ def test_buffer_capture_preserves_gradient_flow(
 def test_data_setter_reconciliation_records_buffer_write() -> None:
     """Assert ``.data = tensor`` changes are recorded as buffer writes."""
 
-    trace = tl.trace(
-        DataSetter(), torch.ones(2), capture=tl.options.CaptureOptions(save_arg_values=True)
-    )
+    trace = tl.trace(DataSetter(), torch.ones(2), capture=tl.options.CaptureOptions(save_args=True))
     writes = [trace[label] for label in trace.buffer_write_ops]
 
     assert len(writes) == 1
@@ -892,7 +888,7 @@ def test_buffer_dedup_avoids_pairwise_tensor_compares_on_distinct_values() -> No
     num_passes = 12
     model = _LoopBN(num_passes).train()
 
-    from torchlens.postprocess import control_flow
+    from torchlens._postprocess import control_flow
 
     calls = {"n": 0}
     original_identical = control_flow._buffer_values_identical

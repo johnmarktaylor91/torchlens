@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any, cast
 import graphviz
 
 from .._errors import InvalidArgumentError
-from ..utils.display import user_stacklevel
+from .._utils.display import user_stacklevel
 
 #: Live viewer child handles (r-b6 R40-1). Retained so every launch can reap
 #: previously-exited viewers; without this the discarded ``Popen`` handle left
@@ -102,7 +102,7 @@ def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> boo
     # launching a desktop viewer is never appropriate there, and a
     # "headless, skipping auto-open" note would be misleading noise. Bail out
     # before any viewer launch or announcement.
-    from ..utils.display import in_notebook
+    from .._utils.display import in_notebook
 
     if in_notebook():
         return False
@@ -165,7 +165,7 @@ RENDER_TIMEOUT_SECONDS = 120
 # hard ``graphviz`` import (R40). Render call sites and tests monkeypatch
 # ``_render_utils.run_bounded_subprocess``, so the viz-facing wrapper lives
 # here and adds the ONE viz-specific behavior on top of the shared seam.
-from ..utils._subprocess import (  # noqa: E402
+from .._utils._subprocess import (  # noqa: E402
     _HAS_PROCESS_GROUPS,  # noqa: F401  (re-export: tests pin the spawn contract)
     run_bounded_subprocess as _run_bounded_subprocess_shared,
 )
@@ -183,7 +183,7 @@ def run_bounded_subprocess(
 ) -> subprocess.CompletedProcess[Any]:
     """Run ``cmd`` through the shared bounded spawn seam, refusing typed.
 
-    Delegates to :func:`torchlens.utils._subprocess.run_bounded_subprocess`
+    Delegates to :func:`torchlens._utils._subprocess.run_bounded_subprocess`
     (the ONE spawn discipline) and adds the viz-specific door: a missing
     Graphviz binary raises the typed install-remedy refusal instead of a raw
     ``FileNotFoundError: 'dot'`` naming neither Graphviz nor the remedy

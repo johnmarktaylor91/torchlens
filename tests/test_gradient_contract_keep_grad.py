@@ -15,17 +15,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens import add, replace_with, scale, zero_ablate, zero_grad
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import (
-    InterventionDecision,
-    add,
     compose,
-    grad_zero,
     keep_grad,
-    replace_with,
-    scale,
-    zero_ablate,
 )
+from torchlens.intervention.types import InterventionDecision
 
 _SITE = "linear_1_1"
 _X = torch.randn(2, 4, generator=torch.Generator().manual_seed(0), dtype=torch.float64)
@@ -144,7 +140,7 @@ def test_keep_grad_is_idempotent_and_marks_the_edit() -> None:
     assert once.portability == "opaque_audit"
 
 
-@pytest.mark.parametrize("bad", [grad_zero(), object()], ids=["backward_edit", "not_an_edit"])
+@pytest.mark.parametrize("bad", [zero_grad(), object()], ids=["backward_edit", "not_an_edit"])
 def test_keep_grad_refuses_what_is_not_a_forward_edit(bad: Any) -> None:
     with pytest.raises(InvalidArgumentError) as caught:
         keep_grad(bad)

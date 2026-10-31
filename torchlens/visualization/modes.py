@@ -10,16 +10,16 @@ from typing import TYPE_CHECKING, Any, Final, cast
 import torch
 
 from .._literals import VisNodeModeLiteral
-from ..quantities import Duration
-from ..utils._multipass_access import get_multipass_attr, is_multipass_layer
-from ..utils.display import human_readable_size
+from .._quantities import Duration
+from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils.display import human_readable_size
 from ._label_format import format_shape
 from .node_spec import NodeSpec
 
 if TYPE_CHECKING:
-    from ..data_classes.layer import Layer
-    from ..data_classes.module import Module
-    from ..data_classes.op import Op
+    from .._data_classes.layer import Layer
+    from .._data_classes.module import Module
+    from .._data_classes.op import Op
 
 #: Mode presets receive the per-pass ``Op`` on unrolled nodes and the
 #: aggregate ``Layer`` on rolled nodes, so per-pass rows (``t=``, ``call=``)

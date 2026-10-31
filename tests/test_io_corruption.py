@@ -15,11 +15,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import load, save
-from torchlens._io import TorchLensIOError
+from torchlens import load
+from torchlens._data_classes.trace import Trace
+from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._io.manifest import sha256_of_file
-from torchlens.data_classes.trace import Trace
 
 
 class _CorruptionModel(nn.Module):
@@ -68,11 +68,9 @@ def _save_bundle(tmp_path: Path, path_name: str = "bundle.tl") -> Path:
     torch.manual_seed(0)
     model = _CorruptionModel()
     inputs = torch.randn(2, 4)
-    trace = tl.trace(
-        model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0)
-    )
+    trace = tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", seed=0))
     bundle_path = tmp_path / path_name
-    save(trace, bundle_path)
+    trace.save(bundle_path)
     return bundle_path
 
 
@@ -162,7 +160,7 @@ def test_truncated_safetensors_blob_raises_with_blob_path(tmp_path: Path) -> Non
     layer = _first_saved_layer(lazy_log)
 
     with pytest.raises(
-        TorchLensIOError,
+        ArtifactError,
         match=rf"Failed to materialize blob at {re.escape(str(blob_path))}\.",
     ):
         layer.materialize_out()
@@ -178,7 +176,7 @@ def test_missing_blob_file_raises_with_blob_id(tmp_path: Path) -> None:
     blob_path.unlink()
 
     with pytest.raises(
-        TorchLensIOError,
+        ArtifactError,
         match=rf"missing blob files for blob_id\(s\): {re.escape(tensor_entry['blob_id'])}",
     ):
         load(bundle_path)
@@ -192,7 +190,7 @@ def test_corrupt_metadata_pickle_raises_with_metadata_path(tmp_path: Path) -> No
     metadata_path.write_bytes(b"not a pickle")
 
     with pytest.raises(
-        TorchLensIOError,
+        ArtifactError,
         match=rf"Failed to load bundle metadata from {re.escape(str(metadata_path))}\.",
     ):
         load(bundle_path)
@@ -209,14 +207,14 @@ def test_load_front_door_causes_carry_distinct_codes(tmp_path: Path) -> None:
     real = _save_bundle(tmp_path, "real.tl")
     link = tmp_path / "link.tl"
     link.symlink_to(real, target_is_directory=True)
-    with pytest.raises(TorchLensIOError) as sym:
+    with pytest.raises(ArtifactError) as sym:
         load(link)
     assert sym.value.fields.get("code") == "load_path_symlink_rejected"
 
     # (2) missing manifest is its own cause, distinct from unreadable (R65).
     empty = tmp_path / "empty.tl"
     empty.mkdir()
-    with pytest.raises(TorchLensIOError) as missing:
+    with pytest.raises(ArtifactError) as missing:
         load(empty)
     assert missing.value.fields.get("code") == "manifest_missing"
 
@@ -224,14 +222,14 @@ def test_load_front_door_causes_carry_distinct_codes(tmp_path: Path) -> None:
     not_object = tmp_path / "notobj.tl"
     not_object.mkdir()
     (not_object / "manifest.json").write_text("[1, 2, 3]", encoding="utf-8")
-    with pytest.raises(TorchLensIOError) as scalar:
+    with pytest.raises(ArtifactError) as scalar:
         load(not_object)
     assert scalar.value.fields.get("code") == "manifest_not_json_object"
 
     # (4) metadata-integrity refusal (corrupt / denylisted pickle stream).
     integrity = _save_bundle(tmp_path, "integrity.tl")
     (integrity / "metadata.pkl").write_bytes(b"not a pickle")
-    with pytest.raises(TorchLensIOError) as bad_pickle:
+    with pytest.raises(ArtifactError) as bad_pickle:
         load(integrity)
     assert bad_pickle.value.fields.get("code") == "bundle_metadata_integrity_refused"
 
@@ -241,7 +239,7 @@ def test_load_front_door_causes_carry_distinct_codes(tmp_path: Path) -> None:
     generic = _save_bundle(tmp_path, "generic.tl")
     (generic / "metadata.pkl").unlink()
     (generic / "metadata.pkl").mkdir()
-    with pytest.raises(TorchLensIOError) as generic_fail:
+    with pytest.raises(ArtifactError) as generic_fail:
         load(generic)
     assert generic_fail.value.fields.get("code") == "bundle_load_failed"
 
@@ -250,7 +248,7 @@ def test_manifest_schema_violations_refuse_with_stable_code(tmp_path: Path) -> N
     """R65-1: the malformed-manifest family carries ``manifest_schema_invalid``.
 
     Fail-before: ~36 schema refusals in ``_io/manifest.py`` raised bare
-    ``TorchLensIOError`` with no code, no remedy field, and no artifact path
+    ``ArtifactError`` with no code, no remedy field, and no artifact path
     at the load-a-possibly-tampered-artifact boundary.
     """
 
@@ -261,7 +259,7 @@ def test_manifest_schema_violations_refuse_with_stable_code(tmp_path: Path) -> N
     tampered = dict(manifest)
     tampered["n_out_blobs"] = "three"
     _write_manifest(bundle_path, tampered)
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         load(bundle_path)
     assert excinfo.value.fields.get("code") == "manifest_schema_invalid"
     assert excinfo.value.fields.get("remedy")
@@ -270,7 +268,7 @@ def test_manifest_schema_violations_refuse_with_stable_code(tmp_path: Path) -> N
     # The Manifest.read seam stamps the artifact path onto schema refusals.
     from torchlens._io.manifest import Manifest
 
-    with pytest.raises(TorchLensIOError) as via_read:
+    with pytest.raises(ArtifactError) as via_read:
         Manifest.read(bundle_path / "manifest.json")
     assert via_read.value.fields.get("code") == "manifest_schema_invalid"
     assert via_read.value.file_path == str(bundle_path / "manifest.json")
@@ -281,7 +279,7 @@ def test_manifest_schema_violations_refuse_with_stable_code(tmp_path: Path) -> N
     entry = _first_tensor_entry(tampered)
     del entry["sha256"]
     _write_manifest(bundle_path, tampered)
-    with pytest.raises(TorchLensIOError) as forged:
+    with pytest.raises(ArtifactError) as forged:
         load(bundle_path)
     assert forged.value.fields.get("code") == "manifest_schema_invalid"
 
@@ -302,18 +300,18 @@ def test_version_policy_refusals_carry_distinct_codes(tmp_path: Path) -> None:
     base = _read_manifest(bundle_path)
 
     # (1) artifact newer than the runtime.
-    with pytest.raises(TorchLensIOError) as newer:
+    with pytest.raises(ArtifactError) as newer:
         enforce_version_policy(Manifest.from_dict({**base, "tlspec_version": TLSPEC_VERSION + 1}))
     assert newer.value.fields.get("code") == "artifact_version_above_runtime"
     assert newer.value.fields.get("remedy")
 
     # (2) torch major mismatch.
-    with pytest.raises(TorchLensIOError) as drift:
+    with pytest.raises(ArtifactError) as drift:
         enforce_version_policy(Manifest.from_dict({**base, "torch_version": "1.0.0"}))
     assert drift.value.fields.get("code") == "bundle_torch_incompatible"
 
     # (3) producer version unverifiable under PEP 440.
-    with pytest.raises(TorchLensIOError) as producer:
+    with pytest.raises(ArtifactError) as producer:
         enforce_version_policy(Manifest.from_dict({**base, "torchlens_version": "not-a-version"}))
     assert producer.value.fields.get("code") == "bundle_producer_unverifiable"
 
@@ -327,7 +325,7 @@ def test_manifest_write_failure_refuses_typed(tmp_path: Path) -> None:
     manifest = Manifest.from_dict(_read_manifest(bundle_path))
     target_dir = tmp_path / "is_a_directory"
     target_dir.mkdir()
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         manifest.write(target_dir)
     assert excinfo.value.fields.get("code") == "manifest_write_failed"
     assert excinfo.value.fields.get("remedy")
@@ -353,7 +351,7 @@ def test_io_artifact_door_codes_are_provoked(tmp_path: Path) -> None:
     assert level.value.fields["code"] == "artifact_save_level_unsupported"
 
     with pytest.raises(ValueError) as payload:
-        tl.save(source, tmp_path / "weights.tl", level="portable", include_weights=True)
+        source.save(tmp_path / "weights.tl", level="portable", include_weights=True)
     assert payload.value.fields["code"] == "save_payload_level_conflict"
 
 
@@ -383,7 +381,7 @@ def test_tampered_manifest_field_raises_with_field_name(tmp_path: Path) -> None:
     tensor_entry["dtype"] = "totally_fake_dtype"
     _write_manifest(bundle_path, manifest)
 
-    with pytest.raises(TorchLensIOError, match=r"Unsupported dtype string in manifest"):
+    with pytest.raises(ArtifactError, match=r"Unsupported dtype string in manifest"):
         load(bundle_path, lazy=True)
 
 
@@ -395,7 +393,7 @@ def test_stale_blob_counts_raise_with_count_field(tmp_path: Path) -> None:
     manifest["n_out_blobs"] += 1
     _write_manifest(bundle_path, manifest)
 
-    with pytest.raises(TorchLensIOError, match=r"n_out_blobs"):
+    with pytest.raises(ArtifactError, match=r"n_out_blobs"):
         load(bundle_path)
 
 
@@ -428,7 +426,7 @@ def test_checksum_mismatch_raises_with_blob_id_and_path(tmp_path: Path) -> None:
     blob_path.write_bytes(bytes(blob_bytes))
 
     with pytest.raises(
-        TorchLensIOError,
+        ArtifactError,
         match=(
             rf"Checksum mismatch for blob_id={re.escape(tensor_entry['blob_id'])} at "
             rf"{re.escape(str(blob_path))}\."
@@ -441,7 +439,7 @@ def test_checksum_mismatch_raises_with_blob_id_and_path(tmp_path: Path) -> None:
 #
 # r49 migrated ``SafeBundleUnpickler`` from the C ``pickle.Unpickler`` to the pure-Python
 # ``pickle._Unpickler``. The C VM translated EVERY corrupt/truncated/malformed stream into
-# ``pickle.UnpicklingError`` (which the load path maps to ``TorchLensIOError``); the
+# ``pickle.UnpicklingError`` (which the load path maps to ``ArtifactError``); the
 # pure-Python VM instead leaks bare ``IndexError`` (stack underflow), ``struct.error``
 # (truncated fixed-width read), ``KeyError`` (missing memo), ``UnicodeDecodeError`` (bad
 # utf-8), ``EOFError`` (truncation), etc. ``_DenyMissingDispatch`` only restored the
@@ -507,7 +505,7 @@ def test_secA_corpus_e2e_metadata_raises_torchlens_io_error(tmp_path: Path, face
     metadata_path.write_bytes(_CORRUPTION_CORPUS[facet])
 
     with pytest.raises(
-        TorchLensIOError,
+        ArtifactError,
         match=rf"Failed to load bundle metadata from {re.escape(str(metadata_path))}\.",
     ):
         load(bundle_path)
@@ -529,7 +527,7 @@ def test_secA_valid_bundle_still_round_trips(tmp_path: Path) -> None:
 # An exception that arose while executing APPLICATION/reconstruction code (a REDUCE
 # callable's body, a ``__setstate__``, a ``find_class`` import) propagates RAW with its
 # identity intact, so the ``bundle.py`` load sites keep it as the DIRECT ``__cause__``
-# of ``TorchLensIOError`` (the pre-existing legacy-bundle live-resource contract,
+# of ``ArtifactError`` (the pre-existing legacy-bundle live-resource contract,
 # pinned by ``test_io_bundle.py::
 # test_legacy_multi_trace_bundle_load_typeerror_raises_torchlens_io_error``). These two
 # tests lock the narrowed boundary from BOTH sides.
@@ -574,6 +572,6 @@ def test_corrupt_manifest_json_refuses_manifest_unreadable(tmp_path: Path) -> No
     corrupt = tmp_path / "corrupt.tl"
     corrupt.mkdir()
     (corrupt / "manifest.json").write_text("{not valid json", encoding="utf-8")
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         load(corrupt)
     assert excinfo.value.fields.get("code") == "manifest_unreadable"

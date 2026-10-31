@@ -42,8 +42,8 @@ from torch import nn
 
 from ._distributed import check_distributed_capture
 from ._input_walk import INPUT_TREE_MAX_DEPTH
+from ._utils._torch_compat import get_tracing_tensor_types
 from .errors._base import CompatibilityError, TorchLensWarning
-from .utils._torch_compat import get_tracing_tensor_types
 
 # ---------------------------------------------------------------------------
 # Per-tensor detectors

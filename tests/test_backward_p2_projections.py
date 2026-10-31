@@ -66,18 +66,20 @@ def test_backward_passes_and_grad_fn_calls_are_event_projections() -> None:
     trace = _captured_two_pass_trace()
     try:
         assert trace.num_backward_passes == 2
-        backward_passes = trace.backward_passes
+        backward_passes = trace.autograd.backward_passes
         assert [backward_pass.pass_index for backward_pass in backward_passes] == [1, 2]
         assert backward_passes[0] is backward_passes.for_pass(1)
-        assert trace.last_backward_pass.pass_index == 2
+        assert trace.autograd.last_backward_pass.pass_index == 2
         assert backward_passes.for_pass(2).trigger == "backward"
 
-        reused_grad_fn = next(grad_fn for grad_fn in trace.grad_fns if len(grad_fn.calls) == 2)
+        reused_grad_fn = next(
+            grad_fn for grad_fn in trace.autograd.grad_fns if len(grad_fn.calls) == 2
+        )
         assert [call.ordinal for call in reused_grad_fn.calls.values()] == [1, 2]
         assert [call.backward_pass_index for call in reused_grad_fn.calls.values()] == [1, 2]
         assert reused_grad_fn.calls[0].call_label == f"{reused_grad_fn.label}:1"
         assert reused_grad_fn.calls.for_pass(2).call_label == f"{reused_grad_fn.label}:2"
-        assert trace.grad_fn_calls[f"{reused_grad_fn.label}:2"].backward_pass_index == 2
+        assert trace.autograd.grad_fn_calls[f"{reused_grad_fn.label}:2"].backward_pass_index == 2
     finally:
         trace.cleanup()
 
@@ -87,13 +89,13 @@ def test_backward_labels_are_native_discovery_order_for_paired_nodes() -> None:
 
     trace = _captured_two_pass_trace()
     try:
-        labels = [grad_fn.label for grad_fn in trace.grad_fns]
+        labels = [grad_fn.label for grad_fn in trace.autograd.grad_fns]
         assert all(re.fullmatch(r"[a-z0-9_]+_back_[1-9]\d*_[1-9]\d*", label) for label in labels)
-        paired = [grad_fn for grad_fn in trace.grad_fns if grad_fn.has_op]
+        paired = [grad_fn for grad_fn in trace.autograd.grad_fns if grad_fn.has_op]
         assert paired
         assert all(grad_fn.op_label not in grad_fn.label for grad_fn in paired)
-        assert [grad_fn.step_index for grad_fn in trace.grad_fns] == list(
-            range(1, len(trace.grad_fns) + 1)
+        assert [grad_fn.step_index for grad_fn in trace.autograd.grad_fns] == list(
+            range(1, len(trace.autograd.grad_fns) + 1)
         )
     finally:
         trace.cleanup()
@@ -104,7 +106,7 @@ def test_backward_projection_structural_invariants_trip_on_corruption() -> None:
 
     trace = _captured_two_pass_trace()
     try:
-        victim = next(grad_fn for grad_fn in trace.grad_fns if len(grad_fn.calls) == 2)
+        victim = next(grad_fn for grad_fn in trace.autograd.grad_fns if len(grad_fn.calls) == 2)
         # Corrupt only the projected calls dict: deleting journal events instead
         # would trip the deletion-visible seq invariant before this pin fires.
         call = victim.calls._dict.pop(2)
@@ -135,10 +137,10 @@ def test_higher_order_autograd_grad_records_creator_order() -> None:
         first_grad = torch.autograd.grad(loss, x, create_graph=True, retain_graph=True)[0]
         torch.autograd.grad(first_grad.sum(), x, retain_graph=True)
 
-        assert [backward_pass.order for backward_pass in trace.backward_passes] == [1, 2]
+        assert [backward_pass.order for backward_pass in trace.autograd.backward_passes] == [1, 2]
         higher_order_grad_fns = [
             grad_fn
-            for grad_fn in trace.grad_fns
+            for grad_fn in trace.autograd.grad_fns
             if grad_fn.origin_backward_pass == 1 and grad_fn.creator_object_id is not None
         ]
         assert higher_order_grad_fns
@@ -146,7 +148,7 @@ def test_higher_order_autograd_grad_records_creator_order() -> None:
         assert all(grad_fn.differentiates is not None for grad_fn in higher_order_grad_fns)
         assert all(
             backward_pass.order_attribution_coverage == 1.0
-            for backward_pass in trace.backward_passes
+            for backward_pass in trace.autograd.backward_passes
         )
     finally:
         trace.cleanup()
@@ -173,15 +175,18 @@ def test_higher_order_nodes_reach_third_order() -> None:
 
         created_in_second_pass = [
             grad_fn
-            for grad_fn in trace.grad_fns
+            for grad_fn in trace.autograd.grad_fns
             if grad_fn.origin_backward_pass == 2 and grad_fn.creator_object_id is not None
         ]
         assert created_in_second_pass
         assert 3 in {grad_fn.order for grad_fn in created_in_second_pass}
-        assert max(grad_fn.order for grad_fn in trace.grad_fns if grad_fn.order is not None) >= 3
+        assert (
+            max(grad_fn.order for grad_fn in trace.autograd.grad_fns if grad_fn.order is not None)
+            >= 3
+        )
         assert all(
             backward_pass.order_attribution_coverage == 1.0
-            for backward_pass in trace.backward_passes
+            for backward_pass in trace.autograd.backward_passes
         )
     finally:
         trace.cleanup()
@@ -215,7 +220,11 @@ def test_third_order_scalar_chain_records_root_based_pass_order() -> None:
         grad = torch.autograd.grad(grad, model.w, create_graph=True, retain_graph=True)[0]
         torch.autograd.grad(grad, model.w, retain_graph=True)
 
-        assert [backward_pass.order for backward_pass in trace.backward_passes] == [1, 2, 3]
+        assert [backward_pass.order for backward_pass in trace.autograd.backward_passes] == [
+            1,
+            2,
+            3,
+        ]
     finally:
         trace.cleanup()
 
@@ -240,15 +249,17 @@ def test_higher_order_induction_stress_reaches_expected_depth() -> None:
         for _pass_index in range(num_grad_passes):
             grad = torch.autograd.grad(grad.sum(), x, create_graph=True, retain_graph=True)[0]
 
-        assert [backward_pass.order for backward_pass in trace.backward_passes] == list(
+        assert [backward_pass.order for backward_pass in trace.autograd.backward_passes] == list(
             range(1, num_grad_passes + 1)
         )
-        resolved_orders = {grad_fn.order for grad_fn in trace.grad_fns if grad_fn.order is not None}
+        resolved_orders = {
+            grad_fn.order for grad_fn in trace.autograd.grad_fns if grad_fn.order is not None
+        }
         assert set(range(1, num_grad_passes + 2)).issubset(resolved_orders)
         assert max(resolved_orders) == num_grad_passes + 1
         assert all(
             grad_fn.order == trace.grad_fn_logs[grad_fn.creator_object_id].order + 1
-            for grad_fn in trace.grad_fns
+            for grad_fn in trace.autograd.grad_fns
             if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )
     finally:
@@ -274,13 +285,15 @@ def test_higher_order_mixed_order_pass_records_reused_and_created_nodes() -> Non
         grad = torch.autograd.grad(grad.sum(), x, create_graph=True, retain_graph=True)[0]
         torch.autograd.grad(grad.sum(), x, create_graph=True, retain_graph=True)
 
-        label_to_order = {grad_fn.label: grad_fn.order for grad_fn in trace.grad_fns}
+        label_to_order = {grad_fn.label: grad_fn.order for grad_fn in trace.autograd.grad_fns}
         second_pass_orders = {
-            label_to_order[call.label] for call in trace.backward_passes.for_pass(2).grad_fn_calls
+            label_to_order[call.label]
+            for call in trace.autograd.backward_passes.for_pass(2).grad_fn_calls
         }
         assert {1, 2}.issubset(second_pass_orders)
         assert any(
-            grad_fn.origin_backward_pass == 2 and grad_fn.order == 3 for grad_fn in trace.grad_fns
+            grad_fn.origin_backward_pass == 2 and grad_fn.order == 3
+            for grad_fn in trace.autograd.grad_fns
         )
     finally:
         trace.cleanup()
@@ -316,7 +329,7 @@ def test_backward_epoch_publication_is_atomic(monkeypatch: pytest.MonkeyPatch) -
     try:
         out = trace[trace.output_layers[0]].out
         out.backward(retain_graph=True)
-        _ = trace.grad_fns  # materialize the baseline projection + epoch
+        _ = trace.autograd.grad_fns  # materialize the baseline projection + epoch
 
         real_adopt = record_rows.adopt_rows
         adopt_calls: list[str] = []
@@ -342,9 +355,9 @@ def test_backward_epoch_publication_is_atomic(monkeypatch: pytest.MonkeyPatch) -
         # Retry (without the injection) fully converges: one epoch holding
         # all three kinds, stamps matching the facade.
         monkeypatch.setattr(record_rows, "adopt_rows", real_adopt)
-        grad_fns = trace.grad_fns
+        grad_fns = trace.autograd.grad_fns
         assert len(grad_fns) > 0
-        assert len(trace.backward_passes) == 2
+        assert len(trace.autograd.backward_passes) == 2
         assert len(core.backward_epochs) == 1
         epoch = core.backward_epochs[0]
         assert set(epoch.stores) == {"grad_fn", "grad_fn_call", "backward_pass"}
@@ -355,12 +368,12 @@ def test_backward_epoch_publication_is_atomic(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_save_works_after_two_differentiable_backward_passes(tmp_path) -> None:
-    """grind-r6 b5 R45 (sol HIGH root, probe-proven): tl.save after 2x create_graph.
+    """grind-r6 b5 R45 (sol HIGH root, probe-proven): Trace.save after 2x create_graph.
 
     The higher-order rewalk parked its label type counter in
     ``trace.__dict__["_backward_grad_fn_type_counter"]`` -- an undeclared
-    private field with no PORTABLE_STATE_SPEC row, so ``tl.save`` raised
-    TorchLensIOError after two differentiable grad passes. The counter is
+    private field with no _PORTABLE_STATE_SPEC row, so ``Trace.save`` raised
+    ArtifactError after two differentiable grad passes. The counter is
     now rewalk-scoped scratch and never touches the trace.
     """
 
@@ -376,6 +389,6 @@ def test_save_works_after_two_differentiable_backward_passes(tmp_path) -> None:
         trace.log_backward(trace[-1].out.sum(), retain_graph=True, create_graph=True)
         trace.log_backward(trace[-1].out.sum(), create_graph=True)
         assert "_backward_grad_fn_type_counter" not in trace.__dict__
-        tl.save(trace, str(tmp_path / "two_pass.tlspec"))
+        trace.save(str(tmp_path / "two_pass.tlspec"))
     finally:
         trace.cleanup()

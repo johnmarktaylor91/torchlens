@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .invariants import (
         MetadataInvariantError,
         _param_address_index,
@@ -297,7 +297,7 @@ def _check_param_xrefs(ml: Trace) -> None:
     - Used Param usage lists reciprocate through Op/Layer ``_param_logs``.
     - ``layers_with_params`` layer membership matches Param.used_by_layers.
     - Co-parent params are symmetric and resolve.
-    - uses_params == True implies _param_logs is non-empty.
+    - has_params == True implies _param_logs is non-empty.
     - layers_with_params values are valid layer labels.
     """
     name = "param_xrefs"
@@ -355,13 +355,13 @@ def _check_param_xrefs(ml: Trace) -> None:
                 param_address_index = _param_address_index(ml)
             _check_param_co_parent_links(param_address_index, param, name)
 
-    # uses_params forward check
+    # has_params forward check
     for lpl in ml.layer_list:
-        if lpl.uses_params:
+        if lpl.has_params:
             if not lpl._param_logs:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{lpl.layer_label}' has uses_params=True but _param_logs is empty",
+                    f"Layer '{lpl.layer_label}' has has_params=True but _param_logs is empty",
                 )
 
     # layers_with_params labels exist

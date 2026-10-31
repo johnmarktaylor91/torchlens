@@ -171,7 +171,7 @@ def test_episode_intervene_refusal_keeps_injections_unreachable(chain) -> None:
 
     model, x = chain
     root = _Root(model).eval()
-    spec = tl.options.EpisodeSpec(stepped_module=model, n_steps=3)
+    spec = tl.options.EpisodeOptions(stepped_module=model, num_steps=3)
     for capture in (None, _LOGGED):
         kwargs = {"capture": capture} if capture is not None else {}
         with pytest.raises(Exception) as excinfo:

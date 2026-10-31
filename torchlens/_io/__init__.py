@@ -6,7 +6,7 @@ bundles backed by ``safetensors``, and rehydrates those bundles into eager or
 lazy model logs. Portable bundles are for archival and analysis, not replay:
 ``validate_forward_pass()`` is unsupported after ``torchlens.load()``,
 expert ``lazy=True, materialize_nested=False`` loads must call
-``torchlens.io.rehydrate_nested()`` before re-save, and lazy refs open,
+``torchlens.io.materialize_nested()`` before re-save, and lazy refs open,
 verify, and close blob files per materialization instead of sharing handles.
 
 Split per the persistence four-way ruling (architecture memo 3.2 / s9 item
@@ -37,15 +37,16 @@ from .format_contract import (
     coerce_container_typed_state,
     default_fill_state,
     raise_if_manifest_below_floor,
+    raise_if_saved_by_older_major,
     read_tlspec_version,
 )
 from .format_errors import (
+    ArtifactError,
     ArtifactRuntimeIncompatibleError,
     ArtifactSchemaAgeWarning,
-    ArtifactVersionAboveRuntimeError,
-    ArtifactVersionBelowFloorError,
+    ArtifactTooNewError,
+    ArtifactTooOldError,
     PreReleaseArtifactError,
-    TorchLensIOError,
     UnknownPersistedFieldError,
 )
 from .prerelease import validate_prerelease_state
@@ -62,27 +63,28 @@ __all__ = [
     "TLSPEC_VERSION",
     "ArtifactRuntimeIncompatibleError",
     "ArtifactSchemaAgeWarning",
-    "ArtifactVersionAboveRuntimeError",
-    "ArtifactVersionBelowFloorError",
+    "ArtifactTooNewError",
+    "ArtifactTooOldError",
     "BlobRef",
     "FieldPolicy",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "PreReleaseArtifactError",
-    "TorchLensIOError",
+    "ArtifactError",
     "UnknownPersistedFieldError",
     "above_ceiling_error",
     "below_floor_error",
     "raise_if_manifest_below_floor",
+    "raise_if_saved_by_older_major",
     "coerce_container_typed_state",
     "default_fill_state",
     "read_tlspec_version",
-    "rehydrate_nested",
+    "materialize_nested",
     "validate_prerelease_state",
 ]
 
 
-def rehydrate_nested(
+def materialize_nested(
     trace: Any,
     *,
     map_location: str | torch.device = "cpu",
@@ -107,7 +109,7 @@ def rehydrate_nested(
     --------
     >>> import torchlens as tl
     >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
-    >>> tl.io.rehydrate_nested(log)
+    >>> tl.io.materialize_nested(log)
     >>> log.save("demo_bundle_copy")
     """
 

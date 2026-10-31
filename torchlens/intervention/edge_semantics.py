@@ -179,7 +179,7 @@ def distribution_relation(trace: Any, record: Any) -> EdgeDistributionRelation |
         The corroborated verdict, or ``None``.
     """
 
-    from ..utils.fail_open import fail_open
+    from .._utils.fail_open import fail_open
 
     if record.arg_kind != "positional" or tuple(record.arg_path) != (0,):
         return None

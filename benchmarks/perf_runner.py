@@ -484,7 +484,7 @@ def _operation(
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.fastlog.record(model, x, default_op=False, default_module=True)
+        return lambda: tl.record(model, x, default_op=False, default_module=True)
     if operation == "fastlog_zero":
         import torchlens as tl
 
@@ -492,7 +492,7 @@ def _operation(
         state["fastlog_zero_policy"] = (
             "save=False predicate, default_op=False, default_module=False"
         )
-        return lambda: tl.fastlog.record(
+        return lambda: tl.record(
             model,
             x,
             save=lambda _ctx: False,
@@ -521,7 +521,7 @@ def _operation(
         _prime_target_model(model, x, device)
         names = _select_fastlog_names(model, x, 0.10)
         state["fastlog_selected_func_names"] = sorted(names)
-        return lambda: tl.fastlog.record(
+        return lambda: tl.record(
             model,
             x,
             save=lambda ctx: getattr(ctx, "func_name", None) in names,
@@ -534,7 +534,7 @@ def _operation(
         _prime_target_model(model, x, device)
         names = _select_fastlog_names(model, x, 0.50)
         state["fastlog_selected_func_names"] = sorted(names)
-        return lambda: tl.fastlog.record(
+        return lambda: tl.record(
             model,
             x,
             save=lambda ctx: getattr(ctx, "func_name", None) in names,
@@ -545,7 +545,7 @@ def _operation(
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.fastlog.record(model, x, default_op=True, default_module=True)
+        return lambda: tl.record(model, x, default_op=True, default_module=True)
     if operation == "aux_validate":
         import torchlens as tl
 

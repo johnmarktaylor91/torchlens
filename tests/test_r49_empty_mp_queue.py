@@ -28,9 +28,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
+from torchlens._utils.rng import host_nondeterminism_monitor
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
-from torchlens.utils.rng import host_nondeterminism_monitor
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
 
@@ -48,7 +48,7 @@ class _EmptyMpQueueModel(nn.Module):
 
 
 def _roundtrip(model: nn.Module, x: torch.Tensor, tmp: Path) -> tl.RunResult:
-    trace = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    trace = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
     path = tmp / "r49_mpqueue.tlspec"
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True, include_activations=True)

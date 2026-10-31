@@ -1,12 +1,9 @@
-"""The postprocess recording/enforcement axes matrix (design-ppdag-v3 §8.1).
+"""Capture axes that reach different ``postprocess()`` code paths.
 
 Every axis is one FRESH capture reaching ``postprocess()`` (refresh included
-— it is a fresh capture projected onto the source trace afterwards). The
-matrix is the shared input of the one-time declaration seeding sweep
-(``tools/record_postprocess_matrix.py``), the read-before-write findings
-classification, and the env-gated read-enforcement CI leg. A configuration
-that gates postprocess code paths belongs here: the honest residual of read
-enforcement is exactly the axes NOT in this matrix.
+-- it is a fresh capture projected onto the source trace afterwards). The
+matrix is shared test input (schema lockstep, buffer data model, step-6 merge).
+A configuration that gates postprocess code paths belongs here.
 """
 
 from __future__ import annotations
@@ -220,7 +217,7 @@ class AssigningVarNamesModel(nn.Module):
     Closes the matrix gap behind the ``("11.5", "var_names")`` permanent
     no-op row (module-internal calls never name the wrapped function in
     their assignment line, so the oracle axes resolve to the empty
-    default). Runs under ``save_code_context=True``.
+    default). Runs under ``save_source_context=True``.
     """
 
     def __init__(self) -> None:
@@ -256,7 +253,7 @@ def _axis_backward_armed() -> Any:
 def _axis_save_code_context() -> Any:
     _seed_everything()
     model, model_input = _oracle_case("plain_cnn")
-    return tl.trace(model, model_input, capture=tl.options.CaptureOptions(save_code_context=True))
+    return tl.trace(model, model_input, capture=tl.options.CaptureOptions(save_source_context=True))
 
 
 def _axis_streaming(tmp_dir: str) -> Any:
@@ -473,7 +470,7 @@ def _axis_var_names() -> Any:
     return tl.trace(
         AssigningVarNamesModel().eval(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
 
 

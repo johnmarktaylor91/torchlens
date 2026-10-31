@@ -35,7 +35,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.ir.events import BackwardCoverageGap, GradFnDiscovered, GradFnFired
+from torchlens._ir.events import BackwardCoverageGap, GradFnDiscovered, GradFnFired
 
 
 class _TwoHead(nn.Module):
@@ -128,7 +128,7 @@ def test_hooks_firing_after_pass_close_open_an_implicit_pass() -> None:
     pass2 = [e for e in all_fired if e.pass_index == 2]
     assert len(pass2) == len(pass1)  # the same graph re-fired, fully accounted
     _assert_timing_pairs_coherent(all_fired)
-    assert len(trace.grad_fn_fire_timings) == len(all_fired)
+    assert len(trace.autograd.grad_fn_fire_timings) == len(all_fired)
 
 
 def test_interrupted_backward_discards_stale_timing_stamps() -> None:

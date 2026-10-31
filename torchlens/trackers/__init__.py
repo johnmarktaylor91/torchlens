@@ -2,7 +2,7 @@
 
 TorchLens never builds dashboards; it computes MORE and BETTER statistics
 than the trackers' built-in watchers and FEEDS their dashboards. One
-collection/reduction engine (the C06 ``torchlens.observability`` substrate)
+collection/reduction engine (the C06 ``torchlens._observability`` substrate)
 produces immutable, tensor-free records; this package owns conversion,
 namespace rendering, buffering, delivery, and sink failures:
 
@@ -32,24 +32,18 @@ own receivers -- TorchLens owns the engine, they own the sink.
 
 from __future__ import annotations
 
+from .._observability._artifact import HistoryReader
+from .._observability._render import HistoryView, SeriesPoint
 from ._amp import (
     SCALE_EVIDENCE,
     correct_histogram,
-    correct_spine,
-    corrected_gradient_block,
+    correct_running_stats,
+    corrected_grad_block,
     observed_grad_scale,
     unscale_stage,
 )
 from ._callbacks import HFTrainerWatchCallback, LightningWatchCallback, derived_cadence
 from ._comet import CometSink
-from ._errors import (
-    SinkDeliveryError,
-    SinkProtocolError,
-    TagGrammarError,
-    TrackersError,
-    WatchConfigError,
-    WatchRuntimeError,
-)
 from ._graph import (
     TIMING_EVIDENCE,
     GraphIR,
@@ -68,7 +62,6 @@ from ._protocol import (
 from ._records import (
     EMISSION_SCHEMA_VERSION,
     FAMILIES,
-    TAG_SAFETY_CHECK_VERSION,
     HistogramPoint,
     ScalarPoint,
     StepEmission,
@@ -79,7 +72,7 @@ from ._records import (
     build_manifest,
     emission_from_block,
     histogram_points,
-    spine_scalars,
+    running_stats_scalars,
 )
 from ._sinks import JSONL_FORMAT, JSONLSink, MemorySink
 from ._tensorboard import TensorBoardSink, detect_relays
@@ -96,6 +89,8 @@ from ._watch import (
 __tl_layer__ = "L8"
 
 __all__ = [
+    "HistoryView",
+    "SeriesPoint",
     "CAPABILITIES",
     "DEFAULT_EVERY",
     "DELIVERY_STATES",
@@ -104,7 +99,6 @@ __all__ = [
     "JSONL_FORMAT",
     "SCALE_EVIDENCE",
     "SIGNALS",
-    "TAG_SAFETY_CHECK_VERSION",
     "TIMING_EVIDENCE",
     "WANDB_BUCKET_CAP",
     "WANDB_SAFE_DESCRIPTOR",
@@ -115,31 +109,26 @@ __all__ = [
     "GraphNodeIR",
     "HFTrainerWatchCallback",
     "HistogramPoint",
+    "HistoryReader",
     "JSONLSink",
     "LightningWatchCallback",
     "MLflowSink",
     "MemorySink",
     "ScalarPoint",
     "Sink",
-    "SinkDeliveryError",
-    "SinkProtocolError",
     "StepEmission",
     "TagGrammar",
-    "TagGrammarError",
     "TensorBoardSink",
     "TextPoint",
-    "TrackersError",
     "WandbSink",
-    "WatchConfigError",
-    "WatchRuntimeError",
     "WatchSession",
     "architecture_fingerprint",
     "assert_tag_safe",
     "build_graph_ir",
     "build_manifest",
     "correct_histogram",
-    "correct_spine",
-    "corrected_gradient_block",
+    "correct_running_stats",
+    "corrected_grad_block",
     "derived_cadence",
     "detect_relays",
     "emission_from_block",
@@ -148,7 +137,7 @@ __all__ = [
     "node_name_for",
     "observed_grad_scale",
     "require_capabilities",
-    "spine_scalars",
+    "running_stats_scalars",
     "unscale_stage",
     "watch",
 ]

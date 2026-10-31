@@ -13,7 +13,7 @@ runs (round 54 ``free_2``). This module owns the ONE bounded reader every manife
 Both violations surface as ``json.JSONDecodeError`` so every existing
 ``except (OSError, json.JSONDecodeError)`` handler at the call sites catches them
 unchanged and applies its existing disposition (``None`` / typed
-``TorchLensIOError``) -- an over-nested artifact degrades typed, never crashes.
+``ArtifactError``) -- an over-nested artifact degrades typed, never crashes.
 ``RecursionError`` is also caught as a belt in case the ambient recursion limit is
 below the depth ceiling.
 """

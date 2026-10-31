@@ -44,11 +44,11 @@ material record, never duplicates it).
 
 ## Site sweeps and the effect table
 
-`torchlens.experiment.site_sweep(baseline, candidates=, edit=, metric=,
+`torchlens.experiment.sweep_sites(baseline, candidates=, edit=, metric=,
 retain=, engine="live_hook", model=, x=)` runs ONE candidate engine (the
 occlusion loop generalized): preflight once, serial execution in stable
 order, EXTRACT BEFORE CLEANUP, retain/release under policy (`"all"`,
-`"none"`, `top_k(k)` rolling by |effect|; `retain_ceiling_bytes=` arms the
+`"none"`, `k(k)` rolling by |effect|; `retain_ceiling_bytes=` arms the
 BEFORE-the-first-candidate byte preflight over the lower-bound aggregation
 in `torchlens.experiment.retained_bytes`). `edit=`, `metric=`, and `retain=`
 are REQUIRED — which ablation is sound, what to measure, and what evidence
@@ -66,7 +66,7 @@ tuples) refuse as `site_sweep_duplicate_candidates` unless `replicates=True`.
 The complete per-candidate
 effect table — released, refused, and failed rows included — persists in the
 bundle artifact (`member_effect_table_v1`) and survives member release and
-save/load. `bundle.effects()` serves it; `.most_changed()` is the MEMBER
+save/load. `bundle.effects()` serves it; `.rank_changes()` is the MEMBER
 axis; `.top(k).selection()` is the explicit tier-c conversion (session-only);
 `bundle.measure_members(metric=)` recomputes a NEW metric over members that
 still exist and names the unmeasured; `order="chain"` also returns the

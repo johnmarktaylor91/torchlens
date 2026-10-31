@@ -63,10 +63,10 @@ def test_quantized_capture_has_value_parity_and_discloses(kind: str) -> None:
 def test_bitsandbytes_compat_row_reads_pass_warning() -> None:
     """Detection reads pass/warning (verified capture, disclosed degradation)."""
 
-    row = report(_quantized_net("8bit"), torch.randn(1, 16)).row("bitsandbytes_8bit_4bit")
-    assert (row.detected, row.status, row.severity) == (True, "pass", "warning")
-    clean_row = report(nn.Linear(4, 2), torch.randn(1, 4)).row("bitsandbytes_8bit_4bit")
-    assert (clean_row.detected, clean_row.severity) == (False, "ok")
+    row = report(_quantized_net("8bit"), torch.randn(1, 16)).check("bitsandbytes_8bit_4bit")
+    assert (row.is_detected, row.status, row.severity) == (True, "pass", "warning")
+    clean_row = report(nn.Linear(4, 2), torch.randn(1, 4)).check("bitsandbytes_8bit_4bit")
+    assert (clean_row.is_detected, clean_row.severity) == (False, "ok")
 
 
 @pytest.mark.heavy

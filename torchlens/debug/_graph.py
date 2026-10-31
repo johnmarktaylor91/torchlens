@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.trace import Trace
 
-from .._debug_report import DebugReport, table_report, trace_subject
+from .._debug_report import Report, table_report, trace_subject
 from ._common import (
     _compute_ops,
     _op_from_label,
@@ -30,7 +30,7 @@ LineageDirection = Literal["ancestors", "descendants", "both"]
 
 
 @dataclass(frozen=True)
-class LineageResult(DebugReport):
+class LineageReport(Report):
     """Result returned by :func:`lineage`.
 
     Parameters
@@ -80,7 +80,7 @@ def lineage(
     *,
     direction: str = "ancestors",
     max_depth: int | None = None,
-) -> LineageResult:
+) -> LineageReport:
     """Walk graph lineage for a completed trace.
 
     Parameters
@@ -96,21 +96,21 @@ def lineage(
 
     Returns
     -------
-    LineageResult
+    LineageReport
         Traversal result with unavailable lookups reported in ``message``.
     """
 
     start_op, error = _resolve_op(trace, op_or_label)
     if direction not in {"ancestors", "descendants", "both"}:
         requested = str(getattr(op_or_label, "label", op_or_label))
-        return LineageResult(
+        return LineageReport(
             start_label=requested,
             direction=direction,
             nodes=[],
             message="unavailable: direction must be 'ancestors', 'descendants', or 'both'",
         )
     if start_op is None:
-        return LineageResult(
+        return LineageReport(
             start_label=str(op_or_label),
             direction=direction,
             nodes=[],
@@ -149,7 +149,7 @@ def lineage(
                 continue
             queue.append((child_op, depth + 1))
 
-    return LineageResult(
+    return LineageReport(
         start_label=start_label,
         direction=direction,
         nodes=nodes,
@@ -187,7 +187,7 @@ def _activation_row(label: str, status: str, reason: str) -> dict[str, Any]:
     }
 
 
-def compare_rows(
+def _compare_rows(
     trace_a: Trace,
     trace_b: Trace,
     *,
@@ -222,7 +222,7 @@ def compare_rows(
         returns it directly.
     """
 
-    from torchlens.runnable import refuse_poisoned_trace
+    from torchlens._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(trace_a, "faithful comparison")
     refuse_poisoned_trace(trace_b, "faithful comparison")
@@ -326,7 +326,7 @@ def compare(
     *,
     rtol: float = 1e-5,
     atol: float = 1e-8,
-) -> DebugReport:
+) -> Report:
     """Compare saved dense floating activations across two traces.
 
     Parameters
@@ -342,14 +342,14 @@ def compare(
 
     Returns
     -------
-    DebugReport
+    Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         One row per pass-qualified op with summary counts in ``df.attrs``.
-        The optional view over :func:`compare_rows` (the pandas-free core).
+        The optional view over :func:`_compare_rows` (the pandas-free core).
     """
 
-    rows, attrs = compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
+    rows, attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
     pd = _require_pandas()
     frame = pd.DataFrame(
         rows,
@@ -386,7 +386,7 @@ def first_divergence(
     (``allclose=False``), mismatched shape, or exists in only one trace.
     Rows whose payloads could not be compared (unsaved, non-tensor,
     device-mismatch) are NOT divergences; they are disclosed under
-    ``attrs["activation_unavailable"]`` by :func:`compare_rows`, and a
+    ``attrs["activation_unavailable"]`` by :func:`_compare_rows`, and a
     divergence inside such a region cannot be excluded.
 
     Parameters
@@ -407,7 +407,7 @@ def first_divergence(
         compared row diverged.
     """
 
-    rows, _attrs = compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
+    rows, _attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
     for row in rows:
         if row["status"] in ("only-a", "only-b"):
             return row
@@ -509,7 +509,7 @@ def dead_neurons_rows(
     return rows, attrs
 
 
-def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> DebugReport:
+def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Report:
     """Find units that are inactive or zero-variance in one completed trace.
 
     A single trace is a single example; zero-variance here is an insufficient-sample
@@ -527,7 +527,7 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Debug
 
     Returns
     -------
-    DebugReport
+    Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         Columns are ``op``, ``total_units``, ``dead_count``, ``dead_frac``,

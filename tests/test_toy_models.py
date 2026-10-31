@@ -16,7 +16,7 @@ import torch
 import torchlens as tl
 from torchlens import trace
 from torchlens.errors import TraceNotReproducibleWarning
-from torchlens.io import log_model_metadata
+from torchlens.user_funcs import log_model_metadata
 from torchlens.validation import validate_forward_pass
 from torchlens.visualization import show_model_graph
 
@@ -1793,9 +1793,9 @@ def test_trace_layers_to_save(default_input1):
 
 
 def test_trace_save_arg_values(default_input1):
-    """Test save_arg_values=True populates saved_args on entries."""
+    """Test save_args=True populates saved_args on entries."""
     model = example_models.SimpleFF()
-    mh = trace(model, default_input1, capture=tl.options.CaptureOptions(save_arg_values=True))
+    mh = trace(model, default_input1, capture=tl.options.CaptureOptions(save_args=True))
     assert mh.save_arg_values is True
     # At least one non-input layer should have saved_args
     found = False
@@ -1843,7 +1843,7 @@ def test_log_model_metadata(default_input1):
     model = example_models.SimpleFF()
     mh = log_model_metadata(model, default_input1)
     assert len(mh.layer_labels) > 0
-    assert mh.num_tensors > 0
+    assert len(mh) > 0
 
 
 def test_trace_getitem_by_index(default_input1):
@@ -1926,7 +1926,7 @@ def test_view_mutation_unsqueeze(input_2d):
     """Mutation through unsqueeze view should be logged without error."""
     model = example_models.ViewMutationUnsqueeze()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
+    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_args=True))
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1935,7 +1935,7 @@ def test_view_mutation_reshape(input_2d):
     """Mutation through reshape view should be logged without error."""
     model = example_models.ViewMutationReshape()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
+    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_args=True))
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1944,7 +1944,7 @@ def test_view_mutation_transpose(input_2d):
     """Mutation through transpose view should be logged without error."""
     model = example_models.ViewMutationTranspose()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
+    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_args=True))
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1953,7 +1953,7 @@ def test_multiple_view_mutations(input_2d):
     """Multiple views mutated independently should be logged without error."""
     model = example_models.MultipleViewMutations()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
+    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_args=True))
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1962,7 +1962,7 @@ def test_chained_view_mutation(input_2d):
     """Mutation through chained views should be logged without error."""
     model = example_models.ChainedViewMutation()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
+    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_args=True))
     assert mh is not None
     assert len(mh.layer_labels) > 0
 
@@ -1971,7 +1971,7 @@ def test_output_matches_parent_no_false_positive(input_2d):
     """No mutation model: verify no false-positive child tensor variations."""
     model = example_models.OutputMatchesParent()
     assert validate_forward_pass(model, input_2d)
-    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_arg_values=True))
+    mh = trace(model, input_2d, capture=tl.options.CaptureOptions(save_args=True))
     assert mh is not None
     assert len(mh.layer_labels) > 0
     # No layer should have child tensor variations since nothing is mutated
@@ -2507,12 +2507,12 @@ def test_type_cast_chain():
 def test_like_ops():
     model = example_models.LikeOpsModel()
     x = torch.rand(3, 3)
-    assert validate_forward_pass(model, x, random_seed=42)
+    assert validate_forward_pass(model, x, seed=42)
     show_model_graph(
         model,
         x,
         view="unrolled",
-        random_seed=42,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "like_ops")
         ),
@@ -2677,12 +2677,12 @@ def test_forward_hooks(input_2d):
 def test_simple_vae():
     model = example_models.SimpleVAE()
     x = torch.rand(2, 1, 28, 28)
-    assert validate_forward_pass(model, x, random_seed=42)
+    assert validate_forward_pass(model, x, seed=42)
     show_model_graph(
         model,
         x,
         view="unrolled",
-        random_seed=42,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "generative-models", "simple_vae")
         ),
@@ -2872,12 +2872,12 @@ def test_sparse_autoencoder():
 def test_denoising_autoencoder():
     model = example_models.DenoisingAutoencoder()
     x = torch.rand(2, 784)
-    assert validate_forward_pass(model, x, random_seed=42)
+    assert validate_forward_pass(model, x, seed=42)
     show_model_graph(
         model,
         x,
         view="unrolled",
-        random_seed=42,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
             save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "denoising_autoencoder"),
@@ -2902,12 +2902,12 @@ def test_vq_vae():
 def test_beta_vae():
     model = example_models.BetaVAE()
     x = torch.rand(2, 784)
-    assert validate_forward_pass(model, x, random_seed=42)
+    assert validate_forward_pass(model, x, seed=42)
     show_model_graph(
         model,
         x,
         view="unrolled",
-        random_seed=42,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "beta_vae")
         ),
@@ -2918,12 +2918,12 @@ def test_conditional_vae():
     model = example_models.ConditionalVAE()
     x = torch.rand(2, 784)
     label = torch.randint(0, 10, (2,))
-    assert validate_forward_pass(model, (x, label), random_seed=42)
+    assert validate_forward_pass(model, (x, label), seed=42)
     show_model_graph(
         model,
         (x, label),
         view="unrolled",
-        random_seed=42,
+        seed=42,
         visualization=tl.options.VisualizationOptions(
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "conditional_vae")
         ),
@@ -3272,7 +3272,7 @@ def test_feature_pyramid_net():
 def test_hierarchical_vae():
     model = example_models.HierarchicalVAE()
     x = torch.rand(4, 16)
-    assert validate_forward_pass(model, x, random_seed=1)
+    assert validate_forward_pass(model, x, seed=1)
     show_model_graph(
         model,
         x,

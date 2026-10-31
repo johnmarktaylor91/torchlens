@@ -2,7 +2,7 @@
 
 This document is the **frozen specification** for cross-rank merged traces
 produced by `tl.merge_ranks()` and persisted as `merged-directory` artifacts.
-It plays the same role for `torchlens.merged` that
+It plays the same role for `torchlens._merged` that
 `runnable_tlspec_contract.md` plays for runnable artifacts: the enum and
 finding-kind tables below are release-gated against the code by
 ordered-list-equality tests (`tests/test_merged_engine.py::TestContractLockstep`).
@@ -37,7 +37,7 @@ Member cores must carry a mergeable settled capture outcome: a member whose
 settled outcome is FAILED, ABORTED_NONFINITE, or UNKNOWN refuses typed at
 input resolution (`merge_input_invalid`, reason
 `member_outcome_not_mergeable`) for live traces and path-loaded bundles
-alike. HALTED (and legacy UNATTESTED) members merge and are DISCLOSED —
+alike. STOPPED (and legacy UNATTESTED) members merge and are DISCLOSED —
 `MergedTrace.member_outcomes` maps each rank to its settled status string and
 `summary()` carries the non-complete disclosure ahead of the witness-coverage
 line, so the presenter never claims `attested_complete` silently over a
@@ -106,7 +106,7 @@ conflicted
 
 `merged.stored_alignment` is frozen at merge time in the descriptor;
 `merged.alignment` is the EFFECTIVE value — stored, lowered to `partial` by a
-non-empty `load_degradations` ledger. An unparseable rank core can never
+non-empty `degradations` ledger. An unparseable rank core can never
 support an effective `aligned`. Every presentation of `aligned` carries the
 witness-coverage line.
 
@@ -153,7 +153,7 @@ interchangeable refuse.
   seq DELTAS from each rank's first recorded key per `(group_uid, channel)`;
   absolute bases are never compared (arming histories legitimately differ).
 - **PRE-JOIN membership-lineage audit** (`torchlens.distributed.
-  audit_membership_lineages`) runs BEFORE any joining or gap derivation, at
+  verify_membership_lineages`) runs BEFORE any joining or gap derivation, at
   merge time and again at load rederivation. A conflicted membership refuses
   STRUCTURALLY: no uid of it joins and no unmatched key of it becomes a
   presence gap. The named remedy is `torchlens.distributed.arm()` at process
@@ -239,7 +239,7 @@ At every load:
    canonical-JSON EXACT equality with the descriptor cache is required — any
    inequality is tamper.
 3. **Environment degradations.** A member that no longer parses on this
-   runtime enters `load_degradations`; the rederivation covers the parsable
+   runtime enters `degradations`; the rederivation covers the parsable
    subset, the STORED verdicts stay visible as stored, and the effective
    alignment is capped at `partial`. Exact-equality is not evaluable in this
    case and is not claimed.
@@ -283,7 +283,7 @@ unreachable. After `release()`:
 
 - The derivation record stays readable: `alignment` / `value_status` (stored and
   effective), `rank_ids`, `expected_ranks`, `joins`, `gaps`, `findings`,
-  `report`, `load_degradations`, `summary()`, `to_pandas()`, and
+  `report`, `degradations`, `summary()`, `to_pandas()`, and
   `happens_before()` all keep working.
 - Every surface that must resolve a member trace — `ranks`, `__getitem__` (all
   spellings), `super_op()`, `join_ops()`, and `save()` — refuses typed with

@@ -22,8 +22,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture_honesty import capture_honesty_facts, honesty_banner_lines
-from torchlens.data_classes._nonfinite import _has_nonfinite
-from torchlens.runnable import PathFaithfulness
+from torchlens._data_classes._nonfinite import _has_nonfinite
+from torchlens._runnable import PathFaithfulness
 
 ESC = "\x1b"
 
@@ -74,7 +74,7 @@ def test_explain_text_is_escape_free() -> None:
     # D14 (F09): explain serves the basis in hand and never scans; arm the
     # evidence through the explicit spelling first.
     assert trace.nonfinite_ops
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert ESC not in report
     # The non-finite evidence still names the site in plain text.
     assert "truediv" in report
@@ -146,7 +146,7 @@ def test_log_value_read_back_and_renders() -> None:
     view = trace.logged_values
     view["gate_mean"] = -1.0
     assert trace.logged_values == {"gate_mean": 0.25}
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert "Logged values" in report and "gate_mean = 0.25" in report
     dump = trace.to_agent_json(max_ops=1)
     assert dump["logged_values"] == {"gate_mean": 0.25}
@@ -163,7 +163,7 @@ def test_logged_values_render_is_bounded() -> None:
             return torch.relu(x)
 
     trace = tl.trace(_Logging(), torch.randn(2, 3))
-    report = tl.report.explain(trace)
+    report = trace.explain()
     section = report[report.index("Logged values") :]
     for line in section.splitlines():
         assert len(line) < 120
@@ -185,7 +185,7 @@ def test_guide_next_steps_are_reader_executable() -> None:
     assert steps["inventory"] == "trace.bill_of_materials()"
     assert steps["resource_profile"] == "trace.profile(level='module')"
     assert steps["nonfinite_evidence"] == "trace.first_nonfinite()"
-    assert steps["environment_diagnosis"] == "tl.utils.doctor()"
+    assert steps["environment_diagnosis"] == "tl.report.doctor()"
 
 
 def test_guide_next_steps_are_conditional_on_state() -> None:
@@ -213,7 +213,7 @@ def test_explain_and_agent_json_refuse_trace_slice_typed() -> None:
     trace = _clean_trace()
     trace_slice = trace.between(trace.layer_labels[0], trace.layer_labels[-1])
     with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
-        tl.report.explain(trace_slice)
+        tl.Trace.explain(trace_slice)
     assert exc_info.value.fields["code"] == "report_subject_unsupported"
     with pytest.raises(tl.errors.InvalidArgumentError):
         tl.Trace.to_agent_json(trace_slice)
@@ -226,7 +226,7 @@ def test_explain_refuses_recording_typed() -> None:
         nn.Sequential(nn.Linear(3, 4), nn.ReLU()), torch.randn(2, 3), save=tl.func("relu")
     )
     with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
-        tl.report.explain(recording)
+        tl.Trace.explain(recording)
     assert "to_trace" in str(exc_info.value)
 
 
@@ -237,7 +237,7 @@ def test_poisoned_trace_stops_rendering_clean() -> None:
     trace._runnable.poisoned = True
     trace._runnable.path_faithfulness = PathFaithfulness.DIVERGED
 
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert "POISONED" in report and "NOT" in report
     dump = trace.to_agent_json(max_ops=1)
     assert dump["capture"]["poisoned"] is True
@@ -295,7 +295,7 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     """The row cell carries the grouped summary; the accessor the full dump."""
 
     report = tl.compat.report(nn.Linear(3, 4), torch.randn(2, 3))
-    row = report.row("torch_capabilities")
+    row = report.check("torch_capabilities")
     assert "capabilities present" in row.details
     snapshot = report.capability_snapshot()
     assert isinstance(snapshot, dict) and len(snapshot) > 10
@@ -311,8 +311,8 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     # absence count instead of a magic number -- it still catches a
     # regression to the legacy verbose per-flag dump, which does not share
     # this structure.
-    from torchlens.utils import format_capability_summary
-    from torchlens.utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
+    from torchlens._utils import format_capability_summary
+    from torchlens._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
 
     absent = [name for name, available in snapshot.items() if not available]
     missing = [name for name in absent if name not in OPTIONAL_CAPABILITY_FLAGS]
@@ -334,7 +334,7 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
 def test_doctor_report_repr_is_bounded() -> None:
     """DoctorReport repr is the designed multi-line render with capped lines."""
 
-    doctor_report = tl.utils.doctor()
+    doctor_report = tl.report.doctor()
     rendered = repr(doctor_report)
     assert rendered.startswith("TorchLens doctor report:")
     for line in rendered.splitlines():
@@ -363,7 +363,7 @@ def test_episode_facts_surface_on_report_surfaces() -> None:
         },
         "rows": [],
     }
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert "Episode capture" in report
     assert "NON-VERIFYING" in report
     dump = trace.to_agent_json(max_ops=1)

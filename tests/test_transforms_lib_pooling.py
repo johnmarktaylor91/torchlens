@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+from torchlens.errors import TransformContractError
 from torchlens.transforms import (
     BTD,
     NCHW,
@@ -20,17 +21,15 @@ from torchlens.transforms import (
     SpecialTokenFacts,
     TensorSpec,
     TransformContext,
-    TransformContractError,
     chain,
     channel_mean,
     cls_token,
-    coerce_transform,
-    pipeline_from_record,
-    pipeline_record,
     pool_spatial,
     pool_tokens,
     unit_norm,
 )
+from torchlens.transforms._coerce import coerce_transform
+from torchlens.transforms._pipeline import pipeline_from_record, pipeline_record
 
 
 def _right_padded() -> tuple[torch.Tensor, torch.Tensor]:

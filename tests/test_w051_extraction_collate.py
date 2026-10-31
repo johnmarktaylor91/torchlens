@@ -15,8 +15,8 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
-from torchlens.dataset_extraction import extract_dataset
 
 
 class _OneInput(nn.Module):
@@ -68,7 +68,7 @@ def test_pair_items_refuse_typed_when_forward_binds_one_positional(
             stimuli,
             {"h": "fc1"},
             batch_size=3,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
         )
     fields = excinfo.value.fields
@@ -87,7 +87,7 @@ def test_pair_items_bind_when_forward_declares_two_positionals(tmp_path: Path) -
         [(x[i], y[i]) for i in range(7)],
         {"h": "fc1"},
         batch_size=3,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
     assert len(paths) == 3
@@ -100,7 +100,7 @@ def test_var_positional_forward_is_left_alone(tmp_path: Path) -> None:
         [(x[i], y[i]) for i in range(7)],
         {"h": "fc1"},
         batch_size=3,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
     assert len(paths) == 3
@@ -113,7 +113,7 @@ def test_user_collate_returning_the_input_is_the_taught_door(tmp_path: Path) -> 
         [(x[i], y[i]) for i in range(7)],
         {"h": "fc1"},
         batch_size=3,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         collate=lambda items: torch.stack([a for a, _ in items]),
     )

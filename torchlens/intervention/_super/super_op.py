@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from ._accessor_base import SuperAccessor
+from ._accessor_base import SharedNamesMixin, SuperAccessor
 from ._base import Super, _TensorBearing
 
 if TYPE_CHECKING:
-    from ...data_classes.aten_op import AtenOp
-    from ...data_classes.layer import Layer
-    from ...data_classes.op import Op
+    from ..._data_classes.aten_op import AtenOp
+    from ..._data_classes.layer import Layer
+    from ..._data_classes.op import Op
     from .._topology.topology import SupergraphNode
 
 
@@ -24,7 +24,7 @@ class SuperOp(Super["Op"], _TensorBearing):
         bundle_trace_names: list[str] | None = None,
         *,
         members: dict[str, Any] | None = None,
-        query: Any | None = None,
+        selector: Any | None = None,
     ) -> None:
         """Initialize a node view.
 
@@ -38,7 +38,7 @@ class SuperOp(Super["Op"], _TensorBearing):
             Optional legacy trace-name order.
         members:
             Dict keyed by bundle member name.
-        query:
+        selector:
             Original site query.
         """
 
@@ -60,7 +60,7 @@ class SuperOp(Super["Op"], _TensorBearing):
         super().__init__(
             label,
             cast(dict[str, "Op"], resolved_members),
-            query=query,
+            selector=selector,
             bundle_member_names=bundle_member_names,
         )
 
@@ -113,7 +113,7 @@ class SuperAtenOp(Super["AtenOp"]):
         super().__init__(
             label,
             resolved_members,
-            query=decomposition_slot,
+            selector=decomposition_slot,
             bundle_member_names=resolved_names,
         )
         self.decomposition_slot = decomposition_slot
@@ -166,8 +166,10 @@ class SuperAtenOp(Super["AtenOp"]):
         )
 
 
-class SuperOpAccessor(SuperAccessor["Op", SuperOp]):
+class SuperOpAccessor(SharedNamesMixin, SuperAccessor["Op", SuperOp]):
     """Dict-like Bundle accessor returning SuperOp objects."""
+
+    _names_kind = "ops"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize an op accessor for ``bundle``.
@@ -206,8 +208,10 @@ class SuperOpAccessor(SuperAccessor["Op", SuperOp]):
         return None
 
 
-class SuperLayerAccessor(SuperAccessor["Layer", SuperLayer]):
+class SuperLayerAccessor(SharedNamesMixin, SuperAccessor["Layer", SuperLayer]):
     """Dict-like Bundle accessor returning SuperLayer objects."""
+
+    _names_kind = "layers"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize a layer accessor for ``bundle``.

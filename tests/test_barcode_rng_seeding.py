@@ -13,8 +13,8 @@ import random
 
 import numpy as np
 
-from torchlens.utils.hashing import make_random_barcode, seed_barcode_rng
-from torchlens.utils.rng import set_random_seed
+from torchlens._utils.hashing import make_random_barcode, seed_barcode_rng
+from torchlens._utils.rng import set_random_seed
 
 
 def test_set_random_seed_makes_barcodes_reproducible() -> None:

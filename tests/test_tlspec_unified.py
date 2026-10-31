@@ -15,9 +15,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TLSPEC_VERSION, ArtifactSchemaAgeWarning, TorchLensIOError
+from torchlens._io import TLSPEC_VERSION, ArtifactError, ArtifactSchemaAgeWarning
 from torchlens._io.tlspec import _TlSpecWriter
-from torchlens.backends import BackendPayloadUnsupportedError
+from torchlens.errors import BackendPayloadUnsupportedError
 from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import _SUPPORTED_JSON_SCHEMA_KEYWORDS, validate_tlspec
@@ -137,7 +137,7 @@ def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
         capture=CaptureOptions(
             intervention_ready=intervention_ready,
             layers_to_save="all",
-            random_seed=0,
+            seed=0,
         ),
     )
 
@@ -399,7 +399,7 @@ def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="intended_use"):
         validate_tlspec(path)
-    with pytest.raises(TorchLensIOError, match="intended_use"):
+    with pytest.raises(ArtifactError, match="intended_use"):
         tl.load(path)
 
 
@@ -421,7 +421,7 @@ def test_unified_load_rejects_desynchronized_body_index(
         manifest["body_index"][0]["filename"] = "blobs/ghost.safetensors"
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="body_index"):
+    with pytest.raises(ArtifactError, match="body_index"):
         tl.load(path)
 
 
@@ -452,15 +452,15 @@ def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
     the typed floor error; legacy 2.16 intervention specs remain accepted.
     """
 
-    from torchlens.errors import ArtifactVersionBelowFloorError
+    from torchlens.errors import ArtifactTooOldError
 
     fixture_path = (
         Path(__file__).parent / "fixtures" / "tlspec_v2_16" / "F2_modellog_tiny_cnn.tlspec"
     )
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
         validate_tlspec(fixture_path)
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
         tl.load(fixture_path)
 
 
@@ -569,14 +569,14 @@ def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Pa
     manifest["tlspec_version"] = TLSPEC_VERSION + 1
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match=str(TLSPEC_VERSION + 1)):
+    with pytest.raises(ArtifactError, match=str(TLSPEC_VERSION + 1)):
         tl.load(path)
 
 
 def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
     """Validation enforces the same portable-version ceiling as loading."""
 
-    from torchlens._io import ArtifactVersionAboveRuntimeError
+    from torchlens._io import ArtifactTooNewError
 
     path = tmp_path / "newer_validation_version.tlspec"
     _captured_log().save(path)
@@ -590,7 +590,7 @@ def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
         f"up to {TLSPEC_VERSION}."
     )
 
-    with pytest.raises(ArtifactVersionAboveRuntimeError, match=re.escape(expected)) as excinfo:
+    with pytest.raises(ArtifactTooNewError, match=re.escape(expected)) as excinfo:
         validate_tlspec(path)
     assert excinfo.value.fields["code"] == "artifact_version_above_runtime"
 
@@ -631,7 +631,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
         x,
         capture=CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_clamp(0, 0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp_grad(0, 0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 
@@ -659,7 +659,7 @@ def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
         UnifiedSavedOrphanModel(),
         x,
         save=tl.func("randn"),
-        capture=CaptureOptions(random_seed=1),
+        capture=CaptureOptions(seed=1),
     )
     path = tmp_path / "orphan_records.tlspec"
     expected_payload = log.orphan_records[0]["payload_ref"].detach().clone()
@@ -684,7 +684,7 @@ def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) 
     torch.manual_seed(2101)
     model = torchvision_models.resnet18(weights=None).eval()
     x = torch.randn(1, 3, 64, 64)
-    log = tl.trace(model, x, capture=CaptureOptions(random_seed=2101))
+    log = tl.trace(model, x, capture=CaptureOptions(seed=2101))
     path = tmp_path / "resnet18_full_default.tlspec"
 
     log.save(path, level="portable")
@@ -703,7 +703,7 @@ def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -
     """Bundle.save writes unified manifests that load as Bundle objects."""
 
     log = _captured_log()
-    bundle = tl.bundle({"baseline": log}, baseline="baseline")
+    bundle = tl.Bundle({"baseline": log}, baseline="baseline")
     path = tmp_path / f"bundle_{level}.tlspec"
 
     bundle.save(path, level=level)
@@ -782,10 +782,10 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
 
     assert isinstance(loaded, tl.Trace)
     assert loaded.has_backward_pass is True
-    assert loaded.backward_passes.for_pass(1).pass_index == 1
+    assert loaded.autograd.backward_passes.for_pass(1).pass_index == 1
     assert manifest["backward_summary"]["has_backward_pass"] is True
     assert manifest["backward_summary"]["num_backward_passes"] == log.num_backward_passes
-    assert manifest["backward_summary"]["num_grad_fns"] == log.num_grad_fns
+    assert manifest["backward_summary"]["num_grad_fns"] == len(log.autograd.grad_fns)
     assert manifest["backward_summary"]["gradient_blob_count"] >= 1
     assert "grad" in manifest["backward_summary"]["gradient_blob_kinds"]
     assert any(entry["intended_use"] == "grad" for entry in manifest["body_index"])
@@ -985,7 +985,7 @@ def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> No
     trace = tl.trace(MlxTinyModel(), mx.ones((1, 3)))
     path = tmp_path / "mlx_public_materialized.tlspec"
 
-    tl.save(trace, path, level="portable")
+    trace.save(path, level="portable")
     validate_tlspec(path)
     manifest = _read_manifest(path)
 
@@ -1048,7 +1048,7 @@ def test_schema_v2_materialized_missing_tensors_entry_codec_fails_closed(tmp_pat
     del manifest["tensors"][0]["codec"]
     _write_manifest(path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="codec"):
+    with pytest.raises(ArtifactError, match="codec"):
         tl.load(path)
 
 
@@ -1056,7 +1056,7 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unexpected codec-registry failures surface as ``TorchLensIOError``."""
+    """Unexpected codec-registry failures surface as ``ArtifactError``."""
 
     import torchlens._io.bundle as bundle_module
 
@@ -1069,7 +1069,7 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
 
     monkeypatch.setattr(bundle_module, "get_payload_codec", _exploding_codec_lookup)
 
-    with pytest.raises(TorchLensIOError, match="Failed to resolve the payload codec"):
+    with pytest.raises(ArtifactError, match="Failed to resolve the payload codec"):
         tl.load(path)
 
 
@@ -1145,7 +1145,7 @@ def test_intervene_trace_round_trips_transient_dedup_state(
     )
     path = tmp_path / f"{helper_name}.tlspec"
 
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     replaced_ops = [op for op in loaded.layer_list if op.intervention_replaced]
 

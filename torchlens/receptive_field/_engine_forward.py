@@ -39,8 +39,8 @@ from ._rules import _rf_rules_epoch, _RuleResult
 from ._types import ReceptiveField, ReceptiveFieldDirection, ReceptiveFieldStatus
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 _TARGET_SOLUTION_CACHE_SIZE = 8

@@ -32,7 +32,7 @@ from torchlens.experiment import (
     ledger_entry,
     ledger_evidence,
     ledger_overview,
-    site_sweep,
+    sweep_sites,
 )
 from torchlens.experiment._ledger import EvidenceRef, _artifact_digest
 
@@ -69,7 +69,7 @@ def test_flagship_gallery_end_to_end(tmp_path: Path) -> None:
         # ---- material phase -------------------------------------------------
         baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
         candidates = head_ablation_candidates(baseline, module, heads=n_heads)
-        bundle = site_sweep(
+        bundle = sweep_sites(
             baseline,
             candidates=candidates,
             edit=tl.zero_ablate(),
@@ -87,7 +87,7 @@ def test_flagship_gallery_end_to_end(tmp_path: Path) -> None:
         assert set(per_candidate) == set(candidates)
         assert all(row.resolved_site_count == 1 for row in per_candidate.values())
         assert all(row.status == "completed" for row in per_candidate.values())
-        top_candidate, top_delta = view.most_changed(top_n=1)[0]
+        top_candidate, top_delta = view.rank_changes(k=1)[0]
         report = bundle.why(top_candidate)
         assert report.lineage_status == "exact"
         assert report.member_suffix, "the variant has no construction suffix"
@@ -109,7 +109,7 @@ def test_flagship_gallery_end_to_end(tmp_path: Path) -> None:
             EvidenceRef(
                 kind="bundle",
                 uri="sweep_bundle",
-                object_id=bundle.bundle_id,
+                object_id=bundle.id,
                 digest=_artifact_digest(bundle_path),
             ),
             reason="bundle persisted after the sweep step",
@@ -137,7 +137,7 @@ def test_flagship_gallery_end_to_end(tmp_path: Path) -> None:
         assert entry["metric_declared_at_seq"] < min(
             event["seq"] for event in entry["events"] if event["kind"] == "material_step_started"
         ), "declaration order is a checkable fact (never post-hoc pre-registration)"
-        evidence = ledger_evidence(str(ledger_path), "e1", ref_index=1)
+        evidence = ledger_evidence(str(ledger_path), "e1", index=1)
         assert evidence["ref"]["availability"] == "persisted"
         served_tables = evidence["served"]["effect_tables"]
         assert list(served_tables.values())[0]["rows"], "served effect table is empty"
@@ -165,7 +165,7 @@ def test_emission_overhead_is_bounded(tmp_path: Path) -> None:
 
     def one_sweep() -> None:
         baseline = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-        site_sweep(
+        sweep_sites(
             baseline,
             candidates=["relu_1_2"],
             edit=tl.zero_ablate(),

@@ -75,7 +75,7 @@ def _options() -> RecordingOptions:
 def test_root_only_model_emits_root_events() -> None:
     """Root-only models still get synthetic root enter and exit events."""
 
-    output, recording = tl.fastlog.record(
+    output, recording = tl.record(
         RootOnly(),
         torch.ones(1),
         save=_options().keep_op,
@@ -95,7 +95,7 @@ def test_root_only_model_emits_root_events() -> None:
 def test_shared_module_called_twice_has_balanced_events() -> None:
     """A shared child module called twice emits balanced enter/exit events."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         SharedModule(),
         torch.ones(1, 3),
         save=_options().keep_op,
@@ -120,7 +120,7 @@ def test_shared_module_called_twice_has_balanced_events() -> None:
 def test_identity_passthrough_has_module_events() -> None:
     """Identity modules are represented even when their tensor ops through."""
 
-    output, recording = tl.fastlog.record(
+    output, recording = tl.record(
         IdentityModel(),
         torch.ones(1),
         save=_options().keep_op,
@@ -138,7 +138,7 @@ def test_forward_exception_cleans_logging_state() -> None:
     """Forward exceptions leave global logging and recording state inactive."""
 
     with pytest.raises(RuntimeError, match="forward failed"):
-        tl.fastlog.record(
+        tl.record(
             RaisingModel(),
             torch.ones(1),
             save=_options().keep_op,
@@ -160,7 +160,7 @@ def test_predicate_exception_cleans_logging_state() -> None:
         raise RuntimeError(f"bad predicate for {ctx.kind}")
 
     with pytest.raises(PredicateError, match="fastlog predicate failed"):
-        tl.fastlog.record(
+        tl.record(
             RootOnly(),
             torch.ones(1),
             halt=bad_halt,

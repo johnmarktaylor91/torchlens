@@ -19,8 +19,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 
 class HostScalarEscapeModel(nn.Module):
@@ -72,7 +72,7 @@ def test_fast_run_host_scalar_escape_changed_input_never_verified(tmp_path: Path
 
     ordinary = tl.load(path).run(inputs=changed)
     assert ordinary.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert ordinary.report.poisoned
+    assert ordinary.report.is_poisoned
 
     loaded = tl.load(path)
     first = loaded.run(inputs=original, fast=True)
@@ -80,7 +80,7 @@ def test_fast_run_host_scalar_escape_changed_input_never_verified(tmp_path: Path
 
     fast = loaded.run(inputs=changed, fast=True)
     assert fast.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert fast.report.poisoned
+    assert fast.report.is_poisoned
     # The wrong replayed value must never be blessed: the report matches the
     # ordinary provider's verdict on the identical artifact and input.
     assert fast.report.path_faithfulness is ordinary.report.path_faithfulness
@@ -133,7 +133,7 @@ def test_fast_run_layout_twin_never_verified(tmp_path: Path) -> None:
 
     fast = loaded.run(inputs=twin, fast=True)
     assert fast.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert fast.report.poisoned
+    assert fast.report.is_poisoned
 
 
 def test_fast_sparse_run_consumes_alias_unresolved_flag() -> None:
@@ -419,7 +419,7 @@ def _saved_all_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> P
                 cache=False,
             ),
         )
-    tl.save(captured, path, level="runnable", include_weights=True)
+    captured.save(path, level="runnable", include_weights=True)
     return path
 
 
@@ -549,7 +549,7 @@ def test_fast_sparse_runs_post_execution_contract_checks(tmp_path: Path) -> None
             ),
         )
     path = tmp_path / "m.tlspec"
-    tl.save(captured, path, level="runnable", include_weights=True)
+    captured.save(path, level="runnable", include_weights=True)
 
     ordinary = tl.load(path)
     with pytest.raises(PathDivergenceError):
@@ -583,7 +583,7 @@ def test_every_witness_family_consumer_reachable_from_fast_provider() -> None:
     import inspect
 
     import torchlens._fast_run as fast_run_module
-    from torchlens.runnable import WITNESS_FAMILY_REGISTRY
+    from torchlens._runnable import WITNESS_FAMILY_REGISTRY
 
     # Scoped scan: the sparse session class body plus its constructor path
     # (build/prepare seams live at module level but are called from build()).
@@ -661,7 +661,7 @@ def test_fast_bind_outputs_refuses_op_label_slot_arity_mismatch() -> None:
     from types import SimpleNamespace
 
     from torchlens._fast_run import _FastSparseSession
-    from torchlens.runnable import RunnableErrorCode
+    from torchlens._runnable import RunnableErrorCode
 
     slots_by_id = {
         "s1": SimpleNamespace(

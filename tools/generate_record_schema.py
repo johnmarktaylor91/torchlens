@@ -2,7 +2,7 @@
 
 One declared schema, generated artifacts (docs/reference/trace_core_design.md
 section 3.4): this tool derives one ``StorageBinding`` per declared field for
-all 12 record classes and writes ``torchlens/data_classes/_schema_bindings.py``
+all 12 record classes and writes ``torchlens/_data_classes/_schema_bindings.py``
 as reviewable, deterministic source. A CI test regenerates and diffs, so the
 bindings can never drift from the classes silently.
 
@@ -24,7 +24,7 @@ from typing import Any
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-_OUT_PATH = _REPO_ROOT / "torchlens" / "data_classes" / "_schema_bindings.py"
+_OUT_PATH = _REPO_ROOT / "torchlens" / "_data_classes" / "_schema_bindings.py"
 
 _HEADER = '''"""GENERATED storage bindings for the declared record schema. DO NOT EDIT.
 
@@ -247,18 +247,18 @@ def _classify(
 def _collect() -> dict[str, list[tuple[str, str, str | None, str]]]:
     """Build the schema-key -> [(field, kind, annotation, mutability)] map."""
 
-    from torchlens.data_classes import op as op_module
-    from torchlens.data_classes.aten_op import AtenOp
-    from torchlens.data_classes.backward_pass import BackwardPass
-    from torchlens.data_classes.buffer import Buffer
-    from torchlens.data_classes.func_call_location import FuncCallLocation
-    from torchlens.data_classes.grad_fn import GradFn
-    from torchlens.data_classes.grad_fn_call import GradFnCall
-    from torchlens.data_classes.layer import Layer
-    from torchlens.data_classes.module import Module, ModuleCall
-    from torchlens.data_classes.op import Op
-    from torchlens.data_classes.param import Param
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes import op as op_module
+    from torchlens._data_classes.aten_op import AtenOp
+    from torchlens._data_classes.backward_pass import BackwardPass
+    from torchlens._data_classes.buffer import Buffer
+    from torchlens._data_classes.func_call_location import FuncCallLocation
+    from torchlens._data_classes.grad_fn import GradFn
+    from torchlens._data_classes.grad_fn_call import GradFnCall
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.module import Module, ModuleCall
+    from torchlens._data_classes.op import Op
+    from torchlens._data_classes.param import Param
+    from torchlens._data_classes.trace import Trace
 
     op_container_defaults = dict(getattr(op_module, "_LAYER_PASS_LOG_CONTAINER_DEFAULTS", {}))
     op_container_defaults.update(getattr(op_module, "_LAYER_PASS_LOG_DEFAULT_FILL", {}))
@@ -302,8 +302,8 @@ def collect_primitive_candidate_bindings() -> dict[str, str]:
 
     from dataclasses import replace
 
+    from torchlens._data_classes.aten_op import AtenOp
     from torchlens._io import FieldPolicy
-    from torchlens.data_classes.aten_op import AtenOp
 
     candidate: dict[str, str] = {}
     for name, policy in AtenOp.FIELD_POLICY.items():

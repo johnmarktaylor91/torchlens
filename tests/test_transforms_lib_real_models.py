@@ -26,22 +26,22 @@ from tests.transforms_corpus.loader import (
     load_vendored,
     resnet50_checkpoint_cached,
 )
+from torchlens.errors import TransformContractError
 from torchlens.stats import PCA, load_fitted, save_fitted
 from torchlens.transforms import (
     BTD,
     SpecialTokenFacts,
     TransformContext,
-    TransformContractError,
     cast,
     chain,
     cls_token,
     flatten,
     pca_apply,
-    pipeline_from_record,
     pool_tokens,
     srp,
     unit_norm,
 )
+from torchlens.transforms._pipeline import pipeline_from_record
 
 pytestmark = [pytest.mark.slow, pytest.mark.real_model]
 
@@ -160,8 +160,8 @@ def test_resnet50_heterogeneous_extraction_end_to_end(tmp_path) -> None:
         stimuli,
         layers=["layer2", "layer3", "layer4", "avgpool"],
         batch_size=4,
-        output_dir=out_dir,
-        transform=dict(chains),
+        path=out_dir,
+        output_transform=dict(chains),
         progress=False,
     )
     from torchlens.dataset_extraction import load_extraction
@@ -384,8 +384,8 @@ def test_opaque_chain_discloses_identification_only(tmp_path) -> None:
         stimuli,
         layers=["avgpool"],
         batch_size=4,
-        output_dir=out_dir,
-        transform=lambda tensor: tensor.flatten(1),
+        path=out_dir,
+        output_transform=lambda tensor: tensor.flatten(1),
         progress=False,
     )
     from torchlens.dataset_extraction import load_extraction

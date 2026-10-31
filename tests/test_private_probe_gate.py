@@ -1,7 +1,7 @@
 """r-b4 R26-2: structural gate -- private torch API touches stay inside `_torch_compat`.
 
 The CLAUDE.md rule ("every fragile torch-private-API probe routes through
-``torchlens/utils/_torch_compat.py`` and flips a named ``HAS_*`` flag") was
+``torchlens/_utils/_torch_compat.py`` and flips a named ``HAS_*`` flag") was
 unenforced: probes kept escaping the boundary (the fail-open census probe, the
 unguarded dispatcher-schema census, the silent DTensor geometry import, the
 ``python -O``-stripped TensorBase assert, ...). This AST gate makes the rule
@@ -30,7 +30,7 @@ _PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "torchlens"
 #: The sanctioned boundary modules: the torch compat chokepoint and its TF
 #: sibling (the ONLY module allowed to import ``tensorflow.python``).
 _BOUNDARY_FILES = {
-    "torchlens/utils/_torch_compat.py",
+    "torchlens/_utils/_torch_compat.py",
     "torchlens/backends/tf/_tf_compat.py",
 }
 
@@ -116,7 +116,7 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
     # entire declared 2.1->2.12+ floor. Unguarded on purpose: if torch ever
     # moves them the read fails LOUDLY at call time -- there is no
     # silent-degradation path for a capability flag to disclose.
-    "torchlens/data_classes/_trace_validation.py": frozenset(
+    "torchlens/_data_classes/_trace_validation.py": frozenset(
         {"torch.nn.modules.batchnorm._BatchNorm"}
     ),
     "torchlens/intervention/rerun.py": frozenset(
@@ -133,7 +133,7 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
     # the declared 2.1->2.12+ floor. From-import spellings, unguarded on
     # purpose: if torch ever moves them the import fails LOUDLY -- there is
     # no silent-degradation path for a capability flag to disclose.
-    "torchlens/quickstart/_primitive.py": frozenset(
+    "torchlens/_quickstart/_primitive.py": frozenset(
         {
             "from torch.nn.modules.batchnorm import _BatchNorm",
             "from torch.nn.modules.instancenorm import _InstanceNorm",
@@ -349,7 +349,7 @@ def test_private_torch_touches_match_the_ledger_exactly() -> None:
         if touches - _ALLOWED_PRIVATE_TOUCHES.get(rel, frozenset())
     }
     assert not unsanctioned, (
-        "Private torch API touch(es) outside torchlens/utils/_torch_compat.py: "
+        "Private torch API touch(es) outside torchlens/_utils/_torch_compat.py: "
         f"{unsanctioned}. Route the probe through a _torch_compat accessor with a "
         "named HAS_* flag (CLAUDE.md rule), or -- for a genuinely fail-closed "
         "touch -- add a reason-bearing ledger row in this test."

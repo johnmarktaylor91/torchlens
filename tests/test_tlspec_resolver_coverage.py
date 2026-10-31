@@ -15,9 +15,9 @@ from torch.nn import functional as F
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
 from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
+from torchlens._runnable import ResolverRecord, ResolverStatus, RunnableErrorCode
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-from torchlens.runnable import ResolverRecord, ResolverStatus, RunnableErrorCode
 
 RELEASE_MAX_UNRESOLVED_TORCH_KEYS = 0
 """Release threshold for the representative corpus's unique torch registry keys."""

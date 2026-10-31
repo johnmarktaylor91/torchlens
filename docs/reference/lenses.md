@@ -15,7 +15,7 @@ from torchlens.visualization import lenses
 
 trace = tl.trace(nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)), torch.randn(2, 8))
 out = Path(globals().get("DOCS_TMPDIR", "/tmp")) / "speed"
-lenses.draw_with_lens(trace, "speed", skin="paper", vis_fileformat="svg", vis_outpath=str(out))
+lenses.draw_with_lens(trace, "speed", skin="paper", file_format="svg", path=str(out))
 resolution = lenses.resolve_lens(trace, "speed")   # inspect without drawing
 ```
 

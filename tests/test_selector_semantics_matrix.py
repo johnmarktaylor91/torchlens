@@ -67,6 +67,7 @@ from torchlens.intervention.selectors import (
     BaseSelector,
     CompositeSelector,
     grad_fn_label,
+    output_at,
 )
 from torchlens.intervention.types import TargetSpec
 
@@ -267,7 +268,7 @@ def _probe_live(model_key: str, make_selector: Callable[[], Any]) -> Any:
     fired: list[str] = []
 
     def _probe_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        fired.append(str(hook.layer_log.get("layer_label")))
+        fired.append(str(hook.op.get("layer_label")))
         return out
 
     try:
@@ -326,7 +327,7 @@ def _probe_live_backward(make_selector: Callable[[], Any]) -> Any:
         log = _backward_trace("conv")
         grads = (torch.ones(1),)
         matched = []
-        for site in log.grad_fns:
+        for site in log.autograd.grad_fns:
             if live_backward_selector_matches(
                 selector, site, 1, grad_input=grads, grad_output=grads
             ):
@@ -378,8 +379,8 @@ def _probe_spec(
     is resolved via ``find_sites`` and the labels are stored in the cell.
     """
 
+    from torchlens._ir.selector_eval import selector_from_spec
     from torchlens.intervention.selectors import _classify_selector_direction
-    from torchlens.ir.selector_eval import selector_from_spec
 
     try:
         selector = make_selector()
@@ -450,12 +451,12 @@ def _where_relu() -> Any:
 FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("label_final", "conv", lambda: tl.label("relu_1_2")),
     ("label_raw", "conv", lambda: tl.label("relu_1_3_raw")),
-    ("contains_lower", "conv", lambda: tl.contains("relu")),
-    ("contains_upper", "conv", lambda: tl.contains("RELU")),
-    ("contains_mixed", "conv", lambda: tl.contains("Conv2d")),
-    ("regex_lower", "conv", lambda: tl.regex(r"relu_\d")),
-    ("regex_upper", "conv", lambda: tl.regex(r"RELU")),
-    ("regex_anchored", "conv", lambda: tl.regex(r"^conv2d_2")),
+    ("contains_lower", "conv", lambda: tl.label_contains("relu")),
+    ("contains_upper", "conv", lambda: tl.label_contains("RELU")),
+    ("contains_mixed", "conv", lambda: tl.label_contains("Conv2d")),
+    ("regex_lower", "conv", lambda: tl.label_matches(r"relu_\d")),
+    ("regex_upper", "conv", lambda: tl.label_matches(r"RELU")),
+    ("regex_anchored", "conv", lambda: tl.label_matches(r"^conv2d_2")),
     ("func_relu", "conv", lambda: tl.func("relu")),
     ("func_add_type", "conv", lambda: tl.func("add")),
     ("func_add_dunder", "conv", lambda: tl.func("__add__")),
@@ -464,9 +465,9 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("module_address", "conv", lambda: tl.module("features.0")),
     ("in_module_container", "conv", lambda: tl.in_module("features")),
     ("in_module_pass", "conv", lambda: tl.in_module("features:1")),
-    ("output_index", "conv", lambda: tl.output(0)),
-    ("output_at_0", "conv", lambda: tl.output_at((0,))),
-    ("input_at_0", "conv", lambda: tl.input_at(0)),
+    ("output_index", "conv", lambda: tl.model_output(0)),
+    ("output_at_0", "conv", lambda: output_at((0,))),
+    ("input_at_0", "conv", lambda: tl.model_input(0)),
     ("where_type_relu", "conv", _where_relu),
     ("and_func_inmodule", "conv", lambda: tl.func("relu") & tl.in_module("features")),
     ("or_funcs", "conv", lambda: tl.func("relu") | tl.func("conv2d")),
@@ -474,7 +475,7 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     (
         "and_nested_three",
         "conv",
-        lambda: (tl.func("relu") & tl.in_module("features")) & tl.contains("relu"),
+        lambda: (tl.func("relu") & tl.in_module("features")) & tl.label_contains("relu"),
     ),
     (
         "followed_by_combo",
@@ -486,10 +487,10 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("facet_named", "conv", lambda: tl.facet("q")),
     ("head_indexed", "conv", lambda: tl.head(0)),
     ("grad_fn_on_forward", "conv", lambda: tl.grad_fn("ReluBackward0")),
-    ("split_output_0", "split", lambda: tl.output(0)),
-    ("split_output_1", "split", lambda: tl.output(1)),
+    ("split_output_0", "split", lambda: tl.model_output(0)),
+    ("split_output_1", "split", lambda: tl.model_output(1)),
     ("split_func_chunk_out1", "split", lambda: tl.func("chunk", output=1)),
-    ("split_contains_mul", "split", lambda: tl.contains("mul")),
+    ("split_contains_mul", "split", lambda: tl.label_contains("mul")),
     ("loop_in_module_block", "loop", lambda: tl.in_module("block")),
     ("loop_in_module_pass2", "loop", lambda: tl.in_module("block:2")),
     ("loop_module_block", "loop", lambda: tl.module("block")),
@@ -497,19 +498,19 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("loop_label_recurrent", "loop", lambda: tl.label("linear_1_1")),
     # Raw/short spellings live only in the exact-label universe post-hoc:
     # substring/regex over them would make contains("raw") match every op.
-    ("contains_raw_sub", "conv", lambda: tl.contains("_raw")),
-    ("regex_raw_anchor", "conv", lambda: tl.regex(r"_raw$")),
+    ("contains_raw_sub", "conv", lambda: tl.label_contains("_raw")),
+    ("regex_raw_anchor", "conv", lambda: tl.label_matches(r"_raw$")),
     # Typed output-path components against real container outputs.
-    ("dict_output_at_logits", "dictout", lambda: tl.output_at(("logits",))),
-    ("dict_output_at_aux0", "dictout", lambda: tl.output_at(("aux", 0))),
-    ("dict_output_at_aux1", "dictout", lambda: tl.output_at(("aux", 1))),
-    ("dict_output_name", "dictout", lambda: tl.output("logits")),
-    ("nt_output_at_main", "ntout", lambda: tl.output_at(("main",))),
-    ("nt_output_at_extra", "ntout", lambda: tl.output_at(("extra",))),
+    ("dict_output_at_logits", "dictout", lambda: output_at(("logits",))),
+    ("dict_output_at_aux0", "dictout", lambda: output_at(("aux", 0))),
+    ("dict_output_at_aux1", "dictout", lambda: output_at(("aux", 1))),
+    ("dict_output_name", "dictout", lambda: tl.model_output("logits")),
+    ("nt_output_at_main", "ntout", lambda: output_at(("main",))),
+    ("nt_output_at_extra", "ntout", lambda: output_at(("extra",))),
     # MODEL_INPUT container paths (positive input_at cells).
-    ("dictin_input_at_a", "dictin", lambda: tl.input_at("a")),
-    ("dictin_input_at_b", "dictin", lambda: tl.input_at("b")),
-    ("dictin_input_at_missing", "dictin", lambda: tl.input_at("zzz")),
+    ("dictin_input_at_a", "dictin", lambda: tl.model_input("a")),
+    ("dictin_input_at_b", "dictin", lambda: tl.model_input("b")),
+    ("dictin_input_at_missing", "dictin", lambda: tl.model_input("zzz")),
     # torch.func transform boundary ops (positive func_transform cells).
     ("vmap_transform_any", "vmap", lambda: tl.func_transform()),
     ("vmap_transform_vmap", "vmap", lambda: tl.func_transform("vmap")),
@@ -517,12 +518,12 @@ FORWARD_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
 )
 
 #: Post-hoc resolution at DEFAULT max_fanout (F-3: the broadened ``func`` kind
-#: must be characterized where SiteAmbiguityError can actually fire).
+#: must be characterized where AmbiguousSiteError can actually fire).
 DEFAULT_FANOUT_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("func_relu", "conv", lambda: tl.func("relu")),
     ("func_conv2d", "conv", lambda: tl.func("conv2d")),
     ("func_add_type", "conv", lambda: tl.func("add")),
-    ("contains_relu", "conv", lambda: tl.contains("relu")),
+    ("contains_relu", "conv", lambda: tl.label_contains("relu")),
     ("not_func_missing", "conv", lambda: ~tl.func("zzz_missing")),
 )
 
@@ -537,7 +538,9 @@ LIVE_BACKWARD_CASES: tuple[tuple[str, Callable[[], Any]], ...] = (
     ("bwd_and_binary", lambda: tl.grad_fn("ReluBackward0") & tl.grad_input()),
     (
         "bwd_and_nary_flat",
-        lambda: CompositeSelector("and", (tl.grad_input(), tl.func("relu"), tl.contains("relu"))),
+        lambda: CompositeSelector(
+            "and", (tl.grad_input(), tl.func("relu"), tl.label_contains("relu"))
+        ),
     ),
     ("bwd_not", lambda: ~tl.grad_input()),
     ("bwd_label_finalized", lambda: tl.label("relu_back_1_9")),
@@ -611,15 +614,15 @@ BACKWARD_CASES: tuple[tuple[str, Callable[[], Any]], ...] = (
     ("backward_pass_2", lambda: tl.in_backward_pass(2)),
     (
         "bwd_and_direction_agnostic",
-        lambda: tl.grad_fn("ReluBackward0") & tl.contains("relu"),
+        lambda: tl.grad_fn("ReluBackward0") & tl.label_contains("relu"),
     ),
     ("bwd_plain_label", lambda: tl.label("relu_back_1_9")),
     ("bwd_not_accumulate", lambda: ~tl.grad_fn("AccumulateGrad")),
     # Direction-agnostic container kinds must intersect with backward kinds
     # through the grad_fn boundary-alias bridge (deleted-code invariant).
-    ("bwd_output_at_and_grad_input", lambda: tl.output_at((0,)) & tl.grad_input()),
-    ("bwd_output0_and_grad_input", lambda: tl.output(0) & tl.grad_input()),
-    ("bwd_input_at_and_grad_output", lambda: tl.input_at(0) & tl.grad_output()),
+    ("bwd_output_at_and_grad_input", lambda: output_at((0,)) & tl.grad_input()),
+    ("bwd_output0_and_grad_input", lambda: tl.model_output(0) & tl.grad_input()),
+    ("bwd_input_at_and_grad_output", lambda: tl.model_input(0) & tl.grad_output()),
 )
 
 #: Backward composition against container/multi-output models: the
@@ -627,14 +630,14 @@ BACKWARD_CASES: tuple[tuple[str, Callable[[], Any]], ...] = (
 #: ``output(0) & grad_input()`` and ``output_at(path) & grad_input()``
 #: NON-vacuously intersect (deleted-code invariant; conv-only cells are []).
 BACKWARD_CONTAINER_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
-    ("split_output0_and_grad_input", "split", lambda: tl.output(0) & tl.grad_input()),
-    ("split_output1_and_grad_input", "split", lambda: tl.output(1) & tl.grad_input()),
+    ("split_output0_and_grad_input", "split", lambda: tl.model_output(0) & tl.grad_input()),
+    ("split_output1_and_grad_input", "split", lambda: tl.model_output(1) & tl.grad_input()),
     (
         "dictout_output_at_logits_and_grad_input",
         "dictout",
-        lambda: tl.output_at(("logits",)) & tl.grad_input(),
+        lambda: output_at(("logits",)) & tl.grad_input(),
     ),
-    ("dictout_output_at_logits", "dictout", lambda: tl.output_at(("logits",))),
+    ("dictout_output_at_logits", "dictout", lambda: output_at(("logits",))),
 )
 
 #: Selector compositions expected to be decided at construction time.

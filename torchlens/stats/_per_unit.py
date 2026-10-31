@@ -251,7 +251,7 @@ class Quantile:
     and restores as protected engines, and two runs with the same seed and
     the same update stream produce identical estimates.
 
-    With ``unit_axis=`` each unit keeps its own reservoir and ``result()``
+    With ``unit_axis=`` each unit keeps its own reservoir and ``compute()``
     maps each quantile to a ``float64 [units]`` tensor. Every unit sees the
     same number of values, so one slot draw per value serves all units: each
     unit's reservoir is a uniform subsample of its own values, with the same
@@ -385,7 +385,7 @@ class Quantile:
         last = last.scatter_reduce(0, inverse, torch.arange(kept_slots.numel()), reduce="amax")
         reservoir[:, unique_slots] = rows[:, kept_columns[last]]
 
-    def result(self) -> dict[float, float] | dict[float, torch.Tensor]:
+    def compute(self) -> dict[float, float] | dict[float, torch.Tensor]:
         """Return finalized quantile estimates.
 
         Returns
@@ -496,11 +496,11 @@ def _row_ids(
 class TopK:
     """Streaming top-k value tracker, pooled or per unit with example ids.
 
-    Pooled (the default), ``result()`` is the ``k`` largest scalars seen.
-    With ``unit_axis=``, ``result()`` is a :class:`UnitTopK`: per unit, its
+    Pooled (the default), ``compute()`` is the ``k`` largest scalars seen.
+    With ``unit_axis=``, ``compute()`` is a :class:`UnitTopK`: per unit, its
     ``k`` largest values with the example id and position each came from.
     The example id defaults to the example's index in the update stream
-    (under ``tl.aggregate``, its index in the dataloader's iteration order;
+    (under ``tl.stats.aggregate``, its index in the dataloader's iteration order;
     the dataset index for an unshuffled loader); ``update(example_ids=...)``
     names them instead. Ties break toward the lowest example id, then the
     lowest position, so results do not depend on batch boundaries. NaN
@@ -662,7 +662,7 @@ class TopK:
             )
             values[start:stop], kept_ids[start:stop], kept_positions[start:stop] = merged
 
-    def result(self) -> list[float] | UnitTopK:
+    def compute(self) -> list[float] | UnitTopK:
         """Return top values in descending order.
 
         Returns

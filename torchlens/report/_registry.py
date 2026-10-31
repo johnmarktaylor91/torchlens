@@ -77,22 +77,6 @@ REQUIREMENT_TOKENS: tuple[str, ...] = (
 
 
 @dataclass(frozen=True)
-class NextStep:
-    """One typed cross-link record (D23).
-
-    Rendered ONLY when the triggering evidence is in hand; at most two
-    human-facing links per render; no link invokes its target.
-    """
-
-    trigger_code: str
-    question: str
-    command: str
-    reason: str
-    cost_class: str
-    requires: tuple[str, ...]
-
-
-@dataclass(frozen=True)
 class SurfaceEntry:
     """One registry row (D22)."""
 
@@ -125,7 +109,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
     ),
     SurfaceEntry(
         key="explain",
-        spelling="tl.report.explain(trace)",
+        spelling="trace.explain()",
         subject="CAPTURE",
         register="NARRATIVE",
         invariants=("mints_no_facts", "truncation_disclosed"),
@@ -134,11 +118,11 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         requires=(),
         refuses_when="never (degrades to a partial-capture diagnosis)",
         cost_class="metadata_only",
-        example="tl.report.explain(trace)",
+        example="trace.explain()",
     ),
     SurfaceEntry(
         key="profile",
-        spelling="trace.profile(sort_by=..., top_k=...)",
+        spelling="trace.profile(sort_by=..., k=...)",
         subject="RUN-RESOURCES",
         register="RANK",
         invariants=("truncation_disclosed", "instrumented_time_labeled", "conserves_totals"),
@@ -166,8 +150,8 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         example="tl.report.cost_tree(trace)",
     ),
     SurfaceEntry(
-        key="flops_report",
-        spelling="tl.report.flops_report(trace_or_model, ...)",
+        key="flops",
+        spelling="tl.report.flops(trace_or_model, ...)",
         subject="RUN-RESOURCES",
         register="SHAPE",
         invariants=("conserves_totals", "mints_no_facts"),
@@ -176,7 +160,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         requires=("finished_trace",),
         refuses_when="the trace door is passed model-door inputs",
         cost_class="metadata_only",
-        example="tl.report.flops_report(trace)",
+        example="tl.report.flops(trace)",
     ),
     SurfaceEntry(
         key="stats_table",
@@ -206,7 +190,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
     ),
     SurfaceEntry(
         key="health_facts",
-        spelling="tl.report.health_facts(trace)",
+        spelling="trace.health_facts",
         subject="RUN-HEALTH",
         register="SHAPE",
         invariants=("mints_no_facts",),
@@ -215,7 +199,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         requires=("finished_trace",),
         refuses_when="never (an underivable basis is the NOT-CHECKED shape)",
         cost_class="payload_scan",
-        example="tl.report.health_facts(trace)",
+        example="trace.health_facts",
     ),
     SurfaceEntry(
         key="bill_of_materials",
@@ -286,21 +270,8 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         example="tl.report.roofline(trace)",
     ),
     SurfaceEntry(
-        key="instrumented_rate",
-        spelling="tl.report.instrumented_rate(trace)",
-        subject="RUN-RESOURCES",
-        register="RANK",
-        invariants=("instrumented_time_labeled",),
-        answers="The boxed CPU-only FLOPs-per-instrumented-second triage diagnostic.",
-        reads_sections=("compute",),
-        requires=("finished_trace",),
-        refuses_when="every timed op executed on CUDA (host time is not a CUDA rate)",
-        cost_class="metadata_only",
-        example="tl.report.instrumented_rate(trace)",
-    ),
-    SurfaceEntry(
-        key="cost_report",
-        spelling="tl.report.cost_report(model, x)",
+        key="overhead",
+        spelling="tl.report.overhead(model, x)",
         subject="RUN-RESOURCES",
         register="SHAPE",
         invariants=("mints_no_facts",),
@@ -309,11 +280,11 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         requires=("live_model",),
         refuses_when="an unknown tier is requested",
         cost_class="new_forward",
-        example="tl.report.cost_report(model, x, repeats=1)",
+        example="tl.report.overhead(model, x, repeats=1)",
     ),
     SurfaceEntry(
         key="doctor",
-        spelling="tl.utils.doctor()",
+        spelling="tl.report.doctor()",
         subject="ENVIRONMENT",
         register="VERDICT",
         invariants=("checks_and_skips_complete",),
@@ -322,7 +293,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         requires=(),
         refuses_when="never",
         cost_class="env_probe",
-        example="tl.utils.doctor()",
+        example="tl.report.doctor()",
     ),
 )
 
@@ -348,7 +319,7 @@ class CapabilityRow:
 
     key: str
     spelling: str
-    available: bool
+    is_available: bool
     reason: str
     cost_class: str
 
@@ -363,7 +334,7 @@ class CapabilityCard:
     def __repr__(self) -> str:
         """Bounded identity card (F10/D31): rows point, never dump."""
 
-        available = sum(1 for row in self.rows if row.available)
+        available = sum(1 for row in self.rows if row.is_available)
         return (
             f"CapabilityCard({self.object_kind}: {available}/{len(self.rows)} "
             f"available; print() for the card, read .rows)"
@@ -373,8 +344,8 @@ class CapabilityCard:
         """Render the card: available members first, refusals with reasons."""
 
         lines = [f"capability card ({self.object_kind}):"]
-        for row in sorted(self.rows, key=lambda item: (not item.available, item.key)):
-            marker = "ok " if row.available else "NO "
+        for row in sorted(self.rows, key=lambda item: (not item.is_available, item.key)):
+            marker = "ok " if row.is_available else "NO "
             lines.append(f"  {marker} {row.spelling:<44} [{row.cost_class}] {row.reason}")
         return "\n".join(lines)
 
@@ -390,7 +361,7 @@ def _object_kind(trace_like: Any) -> str:
     return "trace"
 
 
-def capability_card(trace_like: Any) -> CapabilityCard:
+def capability_card(trace: Any) -> CapabilityCard:
     """Build the capability card for one trace-like object (D24).
 
     Metadata-only by construction: requirement tokens are evaluated
@@ -398,7 +369,7 @@ def capability_card(trace_like: Any) -> CapabilityCard:
     runs a forward.
     """
 
-    kind = _object_kind(trace_like)
+    kind = _object_kind(trace)
     rows: list[CapabilityRow] = []
     for entry in SURFACE_REGISTRY:
         available = True
@@ -406,7 +377,7 @@ def capability_card(trace_like: Any) -> CapabilityCard:
         if "finished_trace" in entry.requires and kind == "partial_trace":
             available = False
             reason = (
-                "partial capture: use tl.report.explain(partial) for the diagnosis or "
+                "partial capture: use partial.explain() for the diagnosis or "
                 "partial.audit() for the degraded findings"
             )
         if "live_model" in entry.requires:
@@ -416,7 +387,7 @@ def capability_card(trace_like: Any) -> CapabilityCard:
             CapabilityRow(
                 key=entry.key,
                 spelling=entry.spelling,
-                available=available,
+                is_available=available,
                 reason=reason,
                 cost_class=entry.cost_class,
             )

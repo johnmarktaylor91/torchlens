@@ -5,7 +5,7 @@ explicit, versioned contract amendment superseding the frozen `sparse_recorded_t
 text; v1 artifacts remain covered by the legacy posture in section 1a).
 
 This is the single implementation contract for the complete sparse runnable `.tlspec` surface. The
-definitions in `torchlens.runnable` are its behavior-free typed mirror. A disagreement between this
+definitions in `torchlens._runnable` are its behavior-free typed mirror. A disagreement between this
 document and those types is a release-blocking schema defect. Neither may change without an explicit,
 versioned contract amendment.
 
@@ -78,7 +78,7 @@ Other fixed sets are:
 | Enum | Values |
 |---|---|
 | `PathFaithfulness` | `verified`, `diverged`, `unverifiable` |
-| `DivergencePolicy` | `raise`, `return_diverged` |
+| `DivergencePolicy` | `raise`, `return` |
 | `ReadinessStatus` | `ready`, `unavailable` |
 | `RunProvider` | `live`, `loaded_sparse`, `loaded_analysis` |
 | `StateSource` | `live_model_state`, `embedded_capture_state`, `user_state_dict`, `random_initialization`, `not_applicable` |
@@ -95,7 +95,7 @@ recipe.
 | Node | Exact fields | Constraint |
 |---|---|---|
 | `LiteralAtom` | `kind`, `value` | kind is `none`, `bool`, `int`, `float`, `str`, or `ellipsis`; value has exactly that Python type (`None` for `none` and for `ellipsis` -- the atom KIND, not the wire value, disambiguates a real `None` index from a `...` index) |
-| `LiteralSlice` | `start`, `stop`, `step` | each component is a `LiteralAtom` restricted to kind `none` or `int`; **classifier-first (r71 B)** -- a semantic-typed component (`IntEnum`, int subclass) refuses `semantic_scalar_type`; decodes to `slice(start, stop, step)` |
+| `LiteralSlice` | `start`, `stop`, `step` | each component is a `LiteralAtom` restricted to kind `none` or `int`; **classifier-first (r71 B)** -- a semantic-typed component (`IntEnum`, int subclass) refuses `semantic_scalar_type`; decodes to `plane(start, stop, step)` |
 | `LiteralTorchSymbol` | `qualname` | non-callable symbol below an explicitly allowlisted stock torch root |
 | `LiteralSequence` | `kind`, `items` | kind is `list` or `tuple`; items are ordered literal nodes |
 | `LiteralMapping` | `entries` | ordered `LiteralMappingEntry` nodes; duplicate keys invalid |
@@ -103,7 +103,7 @@ recipe.
 | `LiteralTupleKey` | `items` | ordered `LiteralAtom` or `LiteralTupleKey` nodes only |
 
 Floats round-trip without coercion, including non-finite values. Booleans are not integers. Dict
-order, tuple versus list, key types, nesting, and `None` are preserved. A Python `slice` (e.g. the
+order, tuple versus list, key types, nesting, and `None` are preserved. A Python `plane` (e.g. the
 key of `x[:, 3:]`), a bare `Ellipsis` (`x[..., 0]`), and a bare `None` newaxis index (`x[:, None]`)
 are inert value types with no callables or imports, so they round-trip exactly through the
 `LiteralSlice` node and the `none`/`ellipsis` `LiteralAtom` kinds -- including inside the tuple key
@@ -144,11 +144,11 @@ every recursive `NonTensorLiteral` edge routes through -- `LiteralSlice` start/s
 `_encode_literal`, `LiteralMapping` keys and `LiteralTupleKey` items via the classifier-backed
 `encode_mapping_key`. It is both implementation authority and a future-kind meta-test: a new
 composite node without a declared component policy REDs. secA-F1 (an `IntEnum` /  int-subclass
-`slice` component laundering into a plain `int` because `_encode_slice_component` gated only
+`plane` component laundering into a plain `int` because `_encode_slice_component` gated only
 `isinstance(int)`) is closed: the encoder classifies first, the snapshot preflight applies the
-component policy to composite `slice` leaves (the SAME `semantic_scalar_type` refusal at save
+component policy to composite `plane` leaves (the SAME `semantic_scalar_type` refusal at save
 and in the symmetric runtime snapshot), and `_literal_leaf_equal` compares slices
-component-by-component through the scalar rules -- `slice.__eq__` (value-only) is never the
+component-by-component through the scalar rules -- `plane.__eq__` (value-only) is never the
 authority.
 
 No runnable-save input-boundary path may fail untyped: every producer-preflight refusal
@@ -268,7 +268,7 @@ The invariant (deletion-closure), stated once:
 > or an UNVERIFIABLE floor, never VERIFIED. The single out-of-scope boundary is coherent
 > reauthoring (threat-model subsection below).
 
-**Registry v2.** `WITNESS_FAMILY_REGISTRY` (`torchlens/runnable.py`, discriminator
+**Registry v2.** `WITNESS_FAMILY_REGISTRY` (`torchlens/_runnable.py`, discriminator
 `witness_family_registry_v2`) is a closed table of typed `FamilySpec` rows -- one per
 verdict-steering witness family. It now covers the four DIRECT control kinds (`scalar_bool`,
 `loop_predicate`, `conditional_arm_entry`, `tensor_derived_scalar_literal`) that r70's
@@ -693,7 +693,7 @@ input-conditional at run time, not a static descriptor flag.
 The producer can emit a runnable descriptor only when the source capture recorded replay-template
 metadata. Users must capture with
 `capture=tl.options.CaptureOptions(intervention_ready=True)` (or flat
-`intervention_ready=True`) before `tl.save(..., level="runnable")`. This capture flag is required
+`intervention_ready=True`) before `trace.save(..., level="runnable")`. This capture flag is required
 even when the user intends replay without an intervention. Omitting it produces a typed
 `RunnablePreflightError` with the `MISSING_CALLABLE_REF` finding; analysis saves remain available,
 but save-time code never guesses or reconstructs missing call templates.
@@ -777,7 +777,7 @@ honest tensor-only `load_state_dict` binds identically in both lanes. The embedd
 ceiling is untouched: an extra-state model still cannot report `verified` (missing
 comparison basis, coherent in both lanes). If NEITHER capture-time record exists
 (`state_dict()` not a mapping at the capture boundary), the dead save refuses loudly and
-typed (`TorchLensIOError`, mirroring the `include_weights=True` lane) -- never a silent
+typed (`ArtifactError`, mirroring the `include_weights=True` lane) -- never a silent
 under-declaration.
 
 1. A computational group lacks a key, uses another ref schema, requests custom/import code, or is
@@ -931,7 +931,7 @@ The hard invariant is:
 
 Sparse raw-value rule (r69 E): a runnable save scrubs the Trace `raw_input`/`raw_output`
 diagnostic fields to `None` under the sparse effective `DROP` policy BEFORE any field-specific
-raw-value serialization runs -- including when the ordinary `save_raw_input`/`save_raw_output`
+raw-value serialization runs -- including when the ordinary `save_raw_input`/`save_transformed_output`
 policy is `True` or `"small"` and for nested tensor/string containers. An effective
 `DROP`/`WEAKREF_STRIP` always wins over a field-specific serializer, so the diagnostic
 raw-value policy can never re-introduce a tensor into the value-free sparse core (a fully
@@ -983,7 +983,7 @@ and unordered/opaque containers are unsupported runnable outputs at every depth 
 typed producer refusal -- refuse-unless-proved, never accept-unless-flagged.
 
 r37 adds ONE per-kind reconstruction capability table (`CONTAINER_KIND_CAPABILITIES` in
-`torchlens/ir/container.py`) shared by spec construction, this producer proof, and the runtime
+`torchlens/_ir/container.py`) shared by spec construction, this producer proof, and the runtime
 independent recompute; a kind existing in only one site fails a coverage meta-test. The load-time
 recompute and sparse reconstruction are additionally coupled through ONE shared plain-substitution
 predicate (`_reconstruction_would_substitute_plain`), so any future gate/reconstruction criterion
@@ -1055,7 +1055,7 @@ instance-state rules it encodes:
   the exact-type gate (extra instance state is not type-observable on the trusted bases); honest
   captures never produce a stateful instance because the save refuses it.
 - `registered` requires the registration's explicit `state_complete=True` declaration
-  (`tl.register_container(..., state_complete=True)`) before an instance carrying extra
+  (`tl.types.register_container(..., state_complete=True)`) before an instance carrying extra
   `__dict__` state may save (`registered_container_instance_state` otherwise); the declaration is
   the trusted statement that `unflatten` restores everything `flatten` observed.
 - `opaque` is always a typed save refusal.
@@ -1079,9 +1079,9 @@ The torch ladder is fixed:
    The one non-torch exact entry is the closed TorchLens synthetic-op table: the module-boundary
    identity op (`nn.Identity` and pass-through module outputs, minted by
    `_state._decorated_identity`) is keyed `custom` / `identity` /
-   `torchlens.utils.display:identity` and resolves, by that exact key only, to the in-memory
-   `torchlens.utils.display.identity` (a pure pass-through; provenance
-   `torchlens_synthetic:torchlens.utils.display.identity`). No module is imported for it.
+   `torchlens._utils.display:identity` and resolves, by that exact key only, to the in-memory
+   `torchlens._utils.display.identity` (a pure pass-through; provenance
+   `torchlens_synthetic:torchlens._utils.display.identity`). No module is imported for it.
 2. Explicit producer-version-bounded aliases in `utils/_torch_compat.py`, including
    `Tensor`/`_TensorBase`/`TensorBase` and enumerated private-to-public mappings. Aliases never
    reinterpret exact matches. Current-runtime target availability remains capability-detected.
@@ -1163,7 +1163,7 @@ buffer_sink_routing_mutable
 preflight refusal for a HALTED capture: the taken-path DAG ends at the halt frontier, so a
 runnable descriptor would replay a truncated program while claiming faithfulness to the full
 forward. Analysis-level saves of halted captures remain allowed; the refusal surfaces as
-`RunnablePreflightError` at `tl.save(level="runnable")` entry.
+`RunnablePreflightError` at `trace.save(path, level="runnable")` entry.
 
 `user_intervention_not_replayable` is also the RUN-time ceiling diagnostic (stage
 `hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run(inputs=...,
@@ -1467,7 +1467,7 @@ Exception classes are `RunnableTLSPECError(TorchLensError)`,
 `RunPreconditionError(ConfigurationError, ValueError)`,
 `RuntimeSignatureDriftError(CompatibilityError, RuntimeError)`,
 `PathDivergenceError(ValidationError, RuntimeError, ValueError)`,
-`NumericAttestationError(ValidationError, RuntimeError)`,
+`ReplayValueMismatchError(ValidationError, RuntimeError)`,
 `PoisonedRunError(ValidationError, RuntimeError)`, and
 `SparseCorePayloadError(ValidationError, AssertionError)`. Each also subclasses
 `RunnableTLSPECError`. The machine code is in its diagnostic/report; exception text is not a
@@ -1603,7 +1603,7 @@ def run(
     *,
     seed: int | None = None,
     fast: bool = False,
-    on_divergence: DivergencePolicy = DivergencePolicy.RAISE,
+    on_divergence: DivergencePolicy = "raise",
 ) -> RunResult: ...
 
 def load_state_dict(self, sd: Mapping[str, Any]) -> None: ...
@@ -1642,7 +1642,7 @@ input shape/dtype, and saved plus model-output structure/shape/dtype on every ca
 change that alters the name sequence, count, shape, or dtype at a requested site cannot be silently
 relabelled as the captured activation: those mismatches raise `PathDivergenceError`. Subject to the
 caller's assertion that unsaved internals remain static, unchanged requested-site observables retain
-their captured labels. `return_diverged` is unavailable in fast mode. Fast iterations
+their captured labels. `on_divergence="return"` is unavailable in fast mode. Fast iterations
 deliberately reuse one result Trace in place, so callers needing immutable per-example results must
 copy the selected tensors. Cleanup removes the cached hooks/session. An explicit `seed` reseeds the
 native call; omitting it leaves native ambient RNG behavior intact.
@@ -1679,7 +1679,7 @@ persistence/trainability, and alias coherence are verified. Missing, unexpected,
 module mismatches and alias conflicts are errors. Positional/shape-only matching is forbidden.
 Strict staging never silently random-fills a missing key. Intermediates are never initialized.
 
-`tl.save(trace, path, level="runnable", include_weights=True)` is the confirmed Stage 7 spelling.
+`trace.save(path, level="runnable", include_weights=True)` is the confirmed Stage 7 spelling.
 The default is false and writes no weight entries. When true, load decodes the schema-versioned
 weight family and validates it atomically through this same strict contract before returning the
 Trace. A run that uses it reports `embedded_capture_state` with no random-filled slots. Explicitly
@@ -1763,7 +1763,7 @@ complete witnesses. `diverged` means an observed contradiction. `unverifiable` m
 without contradiction but incomplete witnesses. No mismatch alone never promotes to verified.
 
 Default `on_divergence=raise` stops at first contradiction, rolls back all updates, and raises
-`PathDivergenceError`. The only opt-in is `return_diverged`: it may finish the recorded schedule but
+`PathDivergenceError`. The only opt-in is `on_divergence="return"`: it may finish the recorded schedule but
 returns a permanently, monotonically poisoned result/Trace. Contradiction is diverged; incomplete
 proof is unverifiable; both have `poisoned=true`. The mark cannot be cleared by another run.
 
@@ -2410,7 +2410,7 @@ Loaded sparse `.run(inputs=...)` must match the captured top-level model input s
 Extra positional arguments or keyword arguments not present in the captured site set are observed
 input-tree contradictions and cannot be ignored or reported `verified`, including for captures of
 Python variadic signatures whose recorded taken path contains only a finite concrete site set
-(`INPUT_ARITY_EXTRA`; default policy raises `PathDivergenceError`, `return_diverged` returns
+(`INPUT_ARITY_EXTRA`; default policy raises `PathDivergenceError`, `on_divergence="return"` returns
 `diverged`). Dataclass model-input containers are traversed by declared fields using the same
 tensor/non-tensor leaf vocabulary as tuples, mappings, and namedtuples; a tensor-only dataclass is
 fully witnessable (`verified`, attestation-eligible), while a genuinely-opaque dataclass field still
@@ -2438,7 +2438,7 @@ exists, which a source meta-test pins.
 ### Three-valued input alias topology
 
 Runtime input aliasing against the de-aliased capture is judged by ONE shared three-valued
-touched-byte engine (`torchlens.utils.alias_footprint`, r37 INV-2 (split out of tensor_utils in e11dd787)): identity (`a is b`) and PROVED
+touched-byte engine (`torchlens._utils.alias_footprint`, r37 INV-2 (split out of tensor_utils in e11dd787)): identity (`a is b`) and PROVED
 overlap of recorded-disjoint inputs are observed contradictions (`diverged`); PROVED disjointness
 passes; anything unproven is `unknown`, which adds the `input_alias_topology_unresolved` ceiling
 -- `unverifiable` path, `not_applicable` attestation -- never `overlap` by assumption and never
@@ -2981,7 +2981,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
   refusal (value-dependent control flow took another branch) is a PATH DIVERGENCE on the live
   provider: it settles through the shared divergence-policy spine with code
   `call_structure_mismatch` (`details["reason"] == "refresh_graph_changed"`, stage
-  `refresh_graph_signature`). `on_divergence=return_diverged` returns the poisoned `diverged`
+  `refresh_graph_signature`). `on_divergence="return"` returns the poisoned `diverged`
   result through the one finalizer (`output` is `None`: no faithful refreshed output exists; the
   returned fork retains the SOURCE capture's values under the poison mark). The default `raise`
   carries `fields["code"]`, `["path_faithfulness"]`, `["first_mismatch"]`, `["contract_check"]`,
@@ -3011,7 +3011,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
   (`provider == loaded_analysis`) carrying STRAY runnable blobs still hard-fails.
 - **Divergence-aware call raise (corr2_4).** Shape/dtype/device input checks stay SOFT so an
   EXECUTABLE divergent input (a changed batch dimension) returns `diverged` + poison under
-  `return_diverged`. But an admitted-but-INEXECUTABLE divergent input (a wrong feature shape that
+  `on_divergence="return"`. But an admitted-but-INEXECUTABLE divergent input (a wrong feature shape that
   fails the native call) surfaces as `PathDivergenceError` carrying the first-failed input check --
   NOT `RuntimeSignatureDriftError`, which stays reserved for genuine resolved-callable / torch-version
   drift with all input checks passing. Both policies roll back the transactional fork. The live
@@ -3022,7 +3022,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
 
 ## 12. Optional-payload API spelling and docs lockstep
 
-`include_weights` and `include_activations` are confirmed on `tl.save`/`Trace.save` with
+`include_weights` and `include_activations` are confirmed on `Trace.save`/`Trace.save` with
 `level="runnable"`. Both default false and are independent. Weights mean the full `state_dict`
 (named parameters plus persistent buffers), not only trainable weights. Activations mean exactly the
 already-retained capture-time `save=` selection, not a second selector.
@@ -3036,7 +3036,7 @@ class body (including class-level constants), `__init__`/`forward` source, docst
 kept by default. Because it is a shareable artifact, this disclosure is explicit: a default save
 ships the model source.
 
-`include_source: bool = True` on `tl.save`/`Trace.save` is the opt-out. It applies at **every** save
+`include_source: bool = True` on `Trace.save`/`Trace.save` is the opt-out. It applies at **every** save
 `level` (audit, executable_with_callables, portable, runnable) because the source blob and
 `code_context` are backend-neutral metadata scrubbed on the one shared serialization path.
 
@@ -3060,15 +3060,15 @@ Model preparation harvests every public, non-callable module instance attribute 
 `Module.custom_attributes`, and portable saves persist the whole channel by default -- arbitrary
 user values (config scalars, but equally tokens, host paths, usernames, or large containers a
 module happens to hold as public attributes) ship in the shareable artifact.
-`include_custom_attributes: bool = True` on `tl.save`/`Trace.save` is the opt-out: `False` drops
+`include_custom_attributes: bool = True` on `Trace.save`/`Trace.save` is the opt-out: `False` drops
 the entire channel from the artifact (the live `Trace` is untouched). Values are NEVER rewritten
 or partially scrubbed -- the channel ships verbatim or not at all, because a save that silently
 mutates documented metadata values is worse than the disclosure problem it would paper over.
 Every save writes a `custom_attributes_disclosure` entry in `manifest.json` naming the channel:
-the effective `included` flag, the count of modules carrying attributes, and the bounded sorted
+the effective `is_included` flag, the count of modules carrying attributes, and the bounded sorted
 union of top-level key names (names only, never values). Sparse runnable cores always drop the
 field regardless of the flag (it is in the sparse DROP set), and their disclosure records
-`included: false`.
+`is_included: false`.
 
 ### Captured pre-forward buffer values and `include_buffer_values` (privacy disclosure)
 
@@ -3077,10 +3077,10 @@ caches), capture records the value the buffer held BEFORE the forward in
 `Trace._buffer_initial_values`, and every save level -- audit included -- shipped those tensors
 verbatim with no flag, warning, or manifest row. Buffer values are training-data-derived state,
 so the channel gets the same belt as custom attributes: `include_buffer_values: bool = True` on
-`tl.save`/`Trace.save` (and `tl.to_disk` for streaming) is the opt-out; `False` drops the entire
+`Trace.save`/`Trace.save` (and `tl.to_disk` for streaming) is the opt-out; `False` drops the entire
 channel from the artifact, values are never rewritten or partially scrubbed, and the live `Trace`
 is untouched. Every save writes a `buffer_values_disclosure` entry in `manifest.json` (the
-effective `included` flag, `buffer_count`, and the bounded sorted `buffer_names` -- names only,
+effective `is_included` flag, `buffer_count`, and the bounded sorted `buffer_names` -- names only,
 never values), and a save that actually embeds captured buffer values warns the saver. Sparse
 runnable cores always drop the field regardless of the flag; used non-persistent buffers ship
 there separately as the REQUIRED, independently disclosed `runnable_nonpersistent_buffer_v1`
@@ -3102,7 +3102,7 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
 - `non_tensor_args_tensor_slots_and_context_v2` -- the call recipe introduced by this
   amendment, carrying the REQUIRED `CallExecutionContext` per call. SUPERSEDED: the shipped
   recipe is `non_tensor_args_tensor_slots_context_and_obligations_v3`
-  (`torchlens/runnable.py::RUNNABLE_CALL_RECIPE_VERSION`), which additionally stamps the r71
+  (`torchlens/_runnable.py::RUNNABLE_CALL_RECIPE_VERSION`), which additionally stamps the r71
   typed witness obligations.
 - `CallExecutionContext` / `AutocastDeviceContext` -- per-call autocast (explicit disabled) and
   grad/inference mode, entered tightly around each resolved call at replay.
@@ -3127,7 +3127,7 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
   outside its closed vocabulary (section 7).
 - `CONTAINER_KIND_CAPABILITIES` (r37) -- the one per-kind output reconstruction capability table
   shared by spec construction, producer proof, and runtime recompute (section 5).
-- `tl.register_container(..., state_complete=...)` (r37) -- the explicit trusted declaration that
+- `tl.types.register_container(..., state_complete=...)` (r37) -- the explicit trusted declaration that
   a registered container's hooks round-trip all per-instance state; without it, runnable saves
   refuse instances carrying extra state.
 - `stage_state_to_slot_devices` (r37) -- the single atomic run-preparation staging authority for

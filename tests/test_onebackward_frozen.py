@@ -174,7 +174,7 @@ class TestFrozenSemantics:
                 gpt2_trace, target=_output_seed(gpt2_trace), method="grad", reduce="sum"
             )
         assert 0 < table.provenance.frozen_fired_count <= table.provenance.frozen_resolved_count
-        frozen_rows = [row for row in table.rows() if row.frozen_resolved]
+        frozen_rows = [row for row in table.rows() if row.is_frozen_resolved]
         assert frozen_rows
         assert all(row.frozen_reached is not None for row in frozen_rows)
 

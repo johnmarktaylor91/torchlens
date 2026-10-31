@@ -10,7 +10,7 @@ from .source_graph import SourceGraph
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from ..data_classes.module import Module
+    from .._data_classes.module import Module
     from ._render_common import RenderEdge, RenderedNodeEmission
     from .auto_collapse import ModuleRepeatFold
 

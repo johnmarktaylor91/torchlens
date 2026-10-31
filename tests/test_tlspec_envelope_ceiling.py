@@ -1,7 +1,7 @@
 """G3 ceiling consolidation: one typed above-ceiling refusal at every door.
 
 Every "artifact is newer than this runtime" site raises
-``ArtifactVersionAboveRuntimeError`` through the one ``above_ceiling_error``
+``ArtifactTooNewError`` through the one ``above_ceiling_error``
 chokepoint; runtime-axis refusals (torch major mismatch) are the distinct
 ``ArtifactRuntimeIncompatibleError``; and ``tl.fastlog.recover`` re-raises
 governed compatibility refusals instead of salvaging them (D-ECO-9).
@@ -13,10 +13,10 @@ import pytest
 
 from torchlens._io import (
     TLSPEC_VERSION,
+    ArtifactError,
     ArtifactRuntimeIncompatibleError,
-    ArtifactVersionAboveRuntimeError,
-    ArtifactVersionBelowFloorError,
-    TorchLensIOError,
+    ArtifactTooNewError,
+    ArtifactTooOldError,
     above_ceiling_error,
     read_tlspec_version,
 )
@@ -26,8 +26,8 @@ FUTURE_VERSION = TLSPEC_VERSION + 1
 
 def test_chokepoint_builds_structured_refusal() -> None:
     err = above_ceiling_error(observed=FUTURE_VERSION, subject="Bundle", path="/tmp/x")
-    assert isinstance(err, ArtifactVersionAboveRuntimeError)
-    assert isinstance(err, TorchLensIOError)
+    assert isinstance(err, ArtifactTooNewError)
+    assert isinstance(err, ArtifactError)
     assert err.fields["code"] == "artifact_version_above_runtime"
     assert err.fields["observed"] == FUTURE_VERSION
     assert err.fields["ceiling_tlspec_version"] == TLSPEC_VERSION
@@ -37,7 +37,7 @@ def test_chokepoint_builds_structured_refusal() -> None:
 
 @pytest.mark.smoke
 def test_pickle_state_gate_raises_typed() -> None:
-    with pytest.raises(ArtifactVersionAboveRuntimeError) as excinfo:
+    with pytest.raises(ArtifactTooNewError) as excinfo:
         read_tlspec_version({"tlspec_version": FUTURE_VERSION}, cls_name="Trace")
     assert excinfo.value.fields["code"] == "artifact_version_above_runtime"
 
@@ -47,7 +47,7 @@ def test_validation_entry_raises_typed_not_bare_valueerror() -> None:
 
     from torchlens.validation import _validate_tlspec_version_ceiling
 
-    with pytest.raises(ArtifactVersionAboveRuntimeError) as excinfo:
+    with pytest.raises(ArtifactTooNewError) as excinfo:
         _validate_tlspec_version_ceiling(FUTURE_VERSION)
     assert excinfo.value.fields["code"] == "artifact_version_above_runtime"
     # The load path's ``except ValueError`` laundering wrap can never catch it.
@@ -73,7 +73,7 @@ def test_manifest_policy_gate_raises_typed() -> None:
     from torchlens._io.manifest import Manifest, enforce_version_policy
 
     base = _reference_manifest_dict()
-    with pytest.raises(ArtifactVersionAboveRuntimeError):
+    with pytest.raises(ArtifactTooNewError):
         Manifest.from_dict({**base, "tlspec_version": FUTURE_VERSION})
     with pytest.raises(ArtifactRuntimeIncompatibleError) as drift:
         enforce_version_policy(Manifest.from_dict({**base, "torch_version": "1.0.0"}))
@@ -136,8 +136,8 @@ def test_recover_reraises_governed_refusals() -> None:
 
     from torchlens.fastlog.recover import _GOVERNED_COMPATIBILITY_REFUSALS
 
-    assert ArtifactVersionBelowFloorError in _GOVERNED_COMPATIBILITY_REFUSALS
-    assert ArtifactVersionAboveRuntimeError in _GOVERNED_COMPATIBILITY_REFUSALS
+    assert ArtifactTooOldError in _GOVERNED_COMPATIBILITY_REFUSALS
+    assert ArtifactTooNewError in _GOVERNED_COMPATIBILITY_REFUSALS
     assert ArtifactRuntimeIncompatibleError in _GOVERNED_COMPATIBILITY_REFUSALS
 
 
@@ -159,12 +159,12 @@ def test_recover_refuses_future_version_bundle(tmp_path) -> None:
 
     from torchlens.fastlog import recover
 
-    with pytest.raises(ArtifactVersionAboveRuntimeError):
+    with pytest.raises(ArtifactTooNewError):
         recover(bundle)
 
 
 def test_public_errors_registry_serves_new_classes() -> None:
     import torchlens.errors as errors
 
-    assert errors.ArtifactVersionAboveRuntimeError is ArtifactVersionAboveRuntimeError
+    assert errors.ArtifactTooNewError is ArtifactTooNewError
     assert errors.ArtifactRuntimeIncompatibleError is ArtifactRuntimeIncompatibleError

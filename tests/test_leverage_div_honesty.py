@@ -40,7 +40,7 @@ def test_overlay_zero_match_refuses(tmp_path):
     _, _, trace = _traced_toy()
     scores = {"s1|relu|relu||1": 1.0, "some_foreign_label": 2.0}
     with pytest.raises(InvalidArgumentError) as excinfo:
-        trace.draw(node_overlay=scores, vis_outpath=str(tmp_path / "g"), vis_save_only=True)
+        trace.draw(node_overlay=scores, path=str(tmp_path / "g"), vis_save_only=True)
     assert excinfo.value.fields["code"] == "node_overlay_zero_match"
 
 
@@ -50,7 +50,7 @@ def test_overlay_partial_match_discloses(tmp_path):
     _, _, trace = _traced_toy()
     scores = {"relu_1_2": 1.0, "not_a_real_label": 2.0}
     with pytest.warns(TorchLensWarning) as warning_records:
-        trace.draw(node_overlay=scores, vis_outpath=str(tmp_path / "g"), vis_save_only=True)
+        trace.draw(node_overlay=scores, path=str(tmp_path / "g"), vis_save_only=True)
     codes = {getattr(record.message, "fields", {}).get("code") for record in warning_records}
     assert "node_overlay_partial_match" in codes
 
@@ -59,7 +59,7 @@ def test_overlay_full_match_renders_silently(tmp_path, recwarn):
     """A fully-realized mapping renders without overlay warnings."""
 
     _, _, trace = _traced_toy()
-    trace.draw(node_overlay={"relu_1_2": 1.0}, vis_outpath=str(tmp_path / "g"), vis_save_only=True)
+    trace.draw(node_overlay={"relu_1_2": 1.0}, path=str(tmp_path / "g"), vis_save_only=True)
     codes = {getattr(record.message, "fields", {}).get("code", None) for record in recwarn.list}
     assert "node_overlay_partial_match" not in codes
 
@@ -126,7 +126,7 @@ def test_do_empty_site_table_refuses():
     _, _, trace = _traced_toy()
     fork = trace.fork()
     with pytest.raises(SiteResolutionError) as excinfo:
-        fork.do(SiteTable((), query="nothing"), tl.zero_ablate())
+        fork.do(SiteTable((), selector="nothing"), tl.zero_ablate())
     assert excinfo.value.fields["code"] == "site_table_empty"
 
 

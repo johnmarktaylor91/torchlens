@@ -29,5 +29,5 @@ def test_pretrained_sae_recipe_names_gemma_scope_one_and_two() -> None:
     assert "gemma-scope-2b-pt-res-canonical" in text
     assert "gemma-scope-2-270m-pt-res" in text
     assert "resolve_alias(trace, sae.cfg.metadata.hook_name)" in text
-    assert 'splice_module(transcoder, input="in")' in text
+    assert 'splice_module(transcoder, input_route="in")' in text
     assert 'pip install "sae-lens==6.54.0"' in text

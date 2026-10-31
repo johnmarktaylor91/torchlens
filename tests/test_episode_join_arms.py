@@ -23,7 +23,7 @@ from torchlens.capture._episode_ledger import (
     escalation_spec,
 )
 from torchlens.errors import EpisodeDeclarationError, EpisodeJoinError
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 
 class TinyLM(nn.Module):
@@ -187,7 +187,7 @@ def _envelope(log) -> dict:
 def test_continuous_feeds_grade_continuous(runner_cls) -> None:
     model = TinyLM()
     log = tl.trace(
-        runner_cls(model, 4), _prompt(), episode=EpisodeSpec(stepped_module=model, n_steps=4)
+        runner_cls(model, 4), _prompt(), episode=EpisodeOptions(stepped_module=model, num_steps=4)
     )
     envelope = _envelope(log)
     assert envelope["schema"] == "episode_step_join_v1"
@@ -210,7 +210,7 @@ def test_direct_float_feed_grades_continuous_on_digest_basis() -> None:
     log = tl.trace(
         DirectLoop(model, 3),
         torch.randn(1, 6),
-        episode=EpisodeSpec(stepped_module=model, n_steps=3, step_output_kind="none"),
+        episode=EpisodeOptions(stepped_module=model, num_steps=3, step_output_kind="none"),
     )
     envelope = _envelope(log)
     assert envelope["grades"] == [None, "continuous", "continuous"]
@@ -222,7 +222,7 @@ def test_captured_transform_grades_transformed_via_graph_witness() -> None:
     log = tl.trace(
         TransformedLoop(model, 3),
         torch.randn(1, 6),
-        episode=EpisodeSpec(stepped_module=model, n_steps=3, step_output_kind="none"),
+        episode=EpisodeOptions(stepped_module=model, num_steps=3, step_output_kind="none"),
     )
     envelope = _envelope(log)
     assert envelope["grades"] == [None, "transformed", "transformed"]
@@ -236,7 +236,7 @@ def test_context_replacement_grades_exogenous() -> None:
     log = tl.trace(
         ReplacedLoop(model, 3),
         torch.randn(1, 6),
-        episode=EpisodeSpec(stepped_module=model, n_steps=3, step_output_kind="none"),
+        episode=EpisodeOptions(stepped_module=model, num_steps=3, step_output_kind="none"),
     )
     envelope = _envelope(log)
     assert envelope["grades"][1] == "exogenous"
@@ -253,7 +253,7 @@ def _broken_capture(n_inject: int = 2):
     log = tl.trace(
         ToolInjectRunner(model, 4, inject_at=2, n_inject=n_inject),
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model, n_steps=4),
+        episode=EpisodeOptions(stepped_module=model, num_steps=4),
     )
     return log
 
@@ -336,7 +336,7 @@ def test_refuse_arm_raises_at_settlement_with_partial_evidence() -> None:
         tl.trace(
             ToolInjectRunner(model, 4),
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=4, on_feed_break="refuse"),
+            episode=EpisodeOptions(stepped_module=model, num_steps=4, on_feed_break="refuse"),
         )
     exc = excinfo.value
     assert exc.fields["code"] == "episode_feed_break_exogenous"
@@ -364,7 +364,7 @@ def test_closed_feed_halts_at_next_step_entry_with_verbatim_text() -> None:
         tl.trace(
             ToolInjectRunner(model, 4),
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=4, feed="closed"),
+            episode=EpisodeOptions(stepped_module=model, num_steps=4, feed="closed"),
         )
     exc = excinfo.value
     assert exc.fields["code"] == "episode_feed_closed_violation"
@@ -394,7 +394,7 @@ def test_closed_feed_continuous_episode_captures_normally() -> None:
     log = tl.trace(
         GreedyRunner(model, 4),
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model, n_steps=4, feed="closed"),
+        episode=EpisodeOptions(stepped_module=model, num_steps=4, feed="closed"),
     )
     assert _envelope(log)["break_step"] is None
     assert log.outcome.status.name == "COMPLETE"
@@ -407,7 +407,9 @@ def test_closed_feed_with_declared_crossing_stops_before_entry() -> None:
         tl.trace(
             ToolInjectRunner(model, 4),
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=4, feed="closed", crossings=(2,)),
+            episode=EpisodeOptions(
+                stepped_module=model, num_steps=4, feed="closed", crossings=(2,)
+            ),
         )
     exc = excinfo.value
     assert exc.fields["code"] == "episode_declared_crossing_stop"
@@ -426,7 +428,7 @@ def test_declared_crossing_grades_declared_and_claims_refuse() -> None:
     log = tl.trace(
         ToolInjectRunner(model, 4),
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model, n_steps=4, crossings=(2,)),
+        episode=EpisodeOptions(stepped_module=model, num_steps=4, crossings=(2,)),
     )
     envelope = _envelope(log)
     assert envelope["grades"] == [None, "continuous", "declared", "continuous"]
@@ -448,7 +450,7 @@ def test_oversize_entries_degrade_to_digest_basis_never_a_guess(monkeypatch) -> 
     monkeypatch.setattr("torchlens.capture._episode_join.ENTRY_SNAPSHOT_ELEMENT_CEILING", 0)
     model = TinyLM()
     log = tl.trace(
-        GreedyRunner(model, 3), _prompt(), episode=EpisodeSpec(stepped_module=model, n_steps=3)
+        GreedyRunner(model, 3), _prompt(), episode=EpisodeOptions(stepped_module=model, num_steps=3)
     )
     envelope = _envelope(log)
     # Token ids were not snapshotted (ceiling 0); entry digests never match
@@ -465,7 +467,7 @@ def test_unchecked_join_refuses_series_claim() -> None:
 
     model = TinyLM()
     log = tl.trace(
-        GreedyRunner(model, 3), _prompt(), episode=EpisodeSpec(stepped_module=model, n_steps=3)
+        GreedyRunner(model, 3), _prompt(), episode=EpisodeOptions(stepped_module=model, num_steps=3)
     )
     payload = log.annotations["episode"]
     import json
@@ -493,13 +495,13 @@ def test_feed_and_break_arm_tokens_are_closed_vocabularies() -> None:
         tl.trace(
             runner,
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=2, feed="ajar"),  # type: ignore[arg-type]
+            episode=EpisodeOptions(stepped_module=model, num_steps=2, feed="ajar"),  # type: ignore[arg-type]
         )
     with pytest.raises(EpisodeDeclarationError, match="closed vocabulary"):
         tl.trace(
             runner,
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=2, on_feed_break="warn"),  # type: ignore[arg-type]
+            episode=EpisodeOptions(stepped_module=model, num_steps=2, on_feed_break="warn"),  # type: ignore[arg-type]
         )
 
 
@@ -510,13 +512,13 @@ def test_crossing_declarations_are_validated() -> None:
         tl.trace(
             runner,
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=2, crossings=(0,)),
+            episode=EpisodeOptions(stepped_module=model, num_steps=2, crossings=(0,)),
         )
     with pytest.raises(EpisodeDeclarationError, match="only 2 steps"):
         tl.trace(
             runner,
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=2, crossings=(5,)),
+            episode=EpisodeOptions(stepped_module=model, num_steps=2, crossings=(5,)),
         )
 
 
@@ -544,7 +546,7 @@ def test_forced_feed_joins_still_measure() -> None:
     log = tl.trace(
         ForcedRunner(model, (5, 6, 7)),
         _prompt(),
-        episode=EpisodeSpec(stepped_module=model, n_steps=3, forced_tokens=(5, 6, 7)),
+        episode=EpisodeOptions(stepped_module=model, num_steps=3, forced_tokens=(5, 6, 7)),
     )
     envelope = _envelope(log)
     assert envelope["claim"] == "measured"

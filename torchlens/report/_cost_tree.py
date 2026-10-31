@@ -37,7 +37,7 @@ from .._errors import InvalidArgumentError
 from ._compute_truth import ComputeAggregation, compute_aggregation, row_mac_flops
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 
 class _RemainderMass(NamedTuple):
@@ -64,10 +64,10 @@ COST_COLUMN_ADDITIVITY: dict[str, bool] = {
     "subtree_pct": False,
     "self_forward_mac_flops": True,
     "self_backward_flops": True,
-    "self_total_flops": True,
+    "self_forward_backward_flops": True,
     "subtree_forward_mac_flops": False,
     "subtree_backward_flops": False,
-    "subtree_total_flops": False,
+    "subtree_forward_backward_flops": False,
 }
 
 #: The counting convention of each FLOPs column family. The forward
@@ -112,9 +112,9 @@ class CostTreeRow:
     self_pct / subtree_pct:
         The same families as percents of the whole-capture KNOWN partition
         total (D4/D6) -- never of a visible-row sum.
-    n_ops:
+    num_ops:
         Compute ops owned directly (self scope).
-    n_unknown_ops:
+    num_unknown_ops:
         Directly-owned ops with no cost rule (an EVENT count, D4).
     passes:
         Distinct pass count over directly-owned ops (annotated, never
@@ -130,7 +130,7 @@ class CostTreeRow:
         GradFn calls (matmul and convolution families, fma2), recompute
         included; ``None`` when no backward was counted (the tree's
         ``backward_state`` says whether it was not run or is unknown).
-    self_total_flops / subtree_total_flops:
+    self_forward_backward_flops / subtree_forward_backward_flops:
         Forward MAC work plus executed backward; ``None`` with the backward.
     """
 
@@ -144,16 +144,16 @@ class CostTreeRow:
     subtree_flops: int | None
     self_pct: float | None
     subtree_pct: float | None
-    n_ops: int
-    n_unknown_ops: int
+    num_ops: int
+    num_unknown_ops: int
     passes: int | None
     folded: int
     self_forward_mac_flops: int | None = None
     subtree_forward_mac_flops: int | None = None
     self_backward_flops: int | None = None
     subtree_backward_flops: int | None = None
-    self_total_flops: int | None = None
-    subtree_total_flops: int | None = None
+    self_forward_backward_flops: int | None = None
+    subtree_forward_backward_flops: int | None = None
 
 
 @dataclass(frozen=True)
@@ -167,7 +167,7 @@ class CostTree:
     those rows, disclosed so a truncated view never reads as complete).
 
     ``backward_state`` is the three-state backward answer
-    (``tl.report.backward_status``); ``backward_total`` is the executed
+    (``tl.report.backward_status``); ``total_backward_flops`` is the executed
     backward count when one was counted (the self backward column sums to
     it exactly, unattributed calls included as their own row), else
     ``None``; ``column_conventions`` names each FLOPs column's convention.
@@ -179,8 +179,8 @@ class CostTree:
     hidden_flops: int
     column_additivity: dict[str, bool]
     backward_state: str = "grad_disabled"
-    backward_total: int | None = None
-    forward_mac_total: int = 0
+    total_backward_flops: int | None = None
+    total_forward_mac_flops: int = 0
     column_conventions: dict[str, str] = field(default_factory=dict)
 
     def __repr__(self) -> str:
@@ -233,7 +233,7 @@ def _structure_digest(
 def build_cost_tree(
     trace: Trace,
     *,
-    top_k: int | None = None,
+    k: int | None = None,
     max_depth: int | None = None,
     fold_repeats: bool = True,
     aggregation: ComputeAggregation | None = None,
@@ -244,8 +244,8 @@ def build_cost_tree(
     ----------
     trace:
         Finished trace.
-    top_k:
-        Keep the ``top_k`` largest OWNER/SUBTOTAL rows per parent (by
+    k:
+        Keep the ``k`` largest OWNER/SUBTOTAL rows per parent (by
         subtree mass); hidden siblings collapse into one deterministic
         REMAINDER row per parent. Denominators are unaffected (D6).
     max_depth:
@@ -260,11 +260,11 @@ def build_cost_tree(
         from the trace when omitted.
     """
 
-    if top_k is not None and (not isinstance(top_k, int) or isinstance(top_k, bool) or top_k < 1):
+    if k is not None and (not isinstance(k, int) or isinstance(k, bool) or k < 1):
         raise InvalidArgumentError(
-            f"top_k must be a positive integer or None; got {top_k!r}.",
+            f"k must be a positive integer or None; got {k!r}.",
             code="cost_tree_top_k_invalid",
-            remedy="Pass top_k >= 1 to keep the k largest rows per parent, or None for all.",
+            remedy="Pass k >= 1 to keep the k largest rows per parent, or None for all.",
         )
     if max_depth is not None and (
         not isinstance(max_depth, int) or isinstance(max_depth, bool) or max_depth < 0
@@ -279,7 +279,7 @@ def build_cost_tree(
     builder = _TreeBuilder(
         trace,
         agg,
-        top_k=top_k,
+        top_k=k,
         max_depth=max_depth,
         fold_repeats=fold_repeats,
     )
@@ -378,7 +378,7 @@ class _TreeBuilder:
         self.bwd_unattributed = int(status.unattributed_flops or 0)
         if not self.backward_known:
             return
-        for attribution in status.attributions:
+        for attribution in status.flops_attributions:
             for row in attribution.rows:
                 if row.op_label is None:
                     self.bwd_no_op += int(row.flops or 0)
@@ -472,16 +472,16 @@ class _TreeBuilder:
                 subtree_flops=flops,
                 self_pct=_pct(flops, self.partition_total),
                 subtree_pct=_pct(flops, self.partition_total),
-                n_ops=n_ops,
-                n_unknown_ops=n_unknown,
+                num_ops=n_ops,
+                num_unknown_ops=n_unknown,
                 passes=passes,
                 folded=1,
                 self_forward_mac_flops=mac,
                 subtree_forward_mac_flops=mac,
                 self_backward_flops=bwd,
                 subtree_backward_flops=bwd,
-                self_total_flops=total,
-                subtree_total_flops=total,
+                self_forward_backward_flops=total,
+                subtree_forward_backward_flops=total,
             )
         )
 
@@ -515,16 +515,16 @@ class _TreeBuilder:
                 subtree_flops=self.subtree_flops.get(label, 0) * folded,
                 self_pct=_pct(row_self, self.partition_total),
                 subtree_pct=_pct(self.subtree_flops.get(label, 0) * folded, self.partition_total),
-                n_ops=own_ops * folded,
-                n_unknown_ops=self.self_unknown.get(label, 0) * folded,
+                num_ops=own_ops * folded,
+                num_unknown_ops=self.self_unknown.get(label, 0) * folded,
                 passes=(len(self.self_passes.get(label, ())) or None),
                 folded=folded,
                 self_forward_mac_flops=self_mac,
                 subtree_forward_mac_flops=sub_mac,
                 self_backward_flops=self._bwd(self_bwd),
                 subtree_backward_flops=self._bwd(sub_bwd),
-                self_total_flops=self._total(self_mac, self_bwd),
-                subtree_total_flops=self._total(sub_mac, sub_bwd),
+                self_forward_backward_flops=self._total(self_mac, self_bwd),
+                subtree_forward_backward_flops=self._total(sub_mac, sub_bwd),
             )
         )
         if is_root and (own > 0 or own_ops > 0 or own_bwd > 0):
@@ -671,16 +671,16 @@ class _TreeBuilder:
                 subtree_flops=self.partition_total,
                 self_pct=_pct(0, self.partition_total),
                 subtree_pct=_pct(self.partition_total, self.partition_total),
-                n_ops=0,
-                n_unknown_ops=0,
+                num_ops=0,
+                num_unknown_ops=0,
                 passes=None,
                 folded=1,
                 self_forward_mac_flops=0,
                 subtree_forward_mac_flops=mac_total,
                 self_backward_flops=self._bwd(0),
                 subtree_backward_flops=self._bwd(bwd_total),
-                self_total_flops=self._total(0, 0),
-                subtree_total_flops=self._total(mac_total, bwd_total),
+                self_forward_backward_flops=self._total(0, 0),
+                subtree_forward_backward_flops=self._total(mac_total, bwd_total),
             )
         )
         if direct or self.self_ops.get(None, 0) or self.self_bwd.get(None, 0):
@@ -763,7 +763,7 @@ class _TreeBuilder:
                     subtree_pct=_pct(sub_flops, self.partition_total),
                     subtree_forward_mac_flops=sub_mac,
                     subtree_backward_flops=self._bwd(sub_bwd),
-                    subtree_total_flops=self._total(sub_mac, sub_bwd),
+                    subtree_forward_backward_flops=self._total(sub_mac, sub_bwd),
                 )
                 break
 
@@ -783,8 +783,8 @@ class _TreeBuilder:
             hidden_flops=self.hidden_flops,
             column_additivity=dict(COST_COLUMN_ADDITIVITY),
             backward_state=self.backward_state,
-            backward_total=self.backward_total,
-            forward_mac_total=sum(self.self_mac.values()),
+            total_backward_flops=self.backward_total,
+            total_forward_mac_flops=sum(self.self_mac.values()),
             column_conventions=dict(COST_COLUMN_CONVENTIONS),
         )
 
@@ -818,7 +818,7 @@ def format_cost_tree(tree: CostTree) -> str:
     as not run or unknown, never 0.
     """
 
-    counted = tree.backward_total is not None
+    counted = tree.total_backward_flops is not None
     head = f"{'call':<44} {'self FLOPs':>14} {'self%':>7} {'subtree FLOPs':>14} {'subtree%':>9}"
     if counted:
         head += f" {'fwd MAC':>12} {'bwd':>12} {'fwd MAC+bwd':>12}"
@@ -839,7 +839,7 @@ def format_cost_tree(tree: CostTree) -> str:
                 for value in (
                     row.self_forward_mac_flops,
                     row.self_backward_flops,
-                    row.self_total_flops,
+                    row.self_forward_backward_flops,
                 )
             )
         lines.append(line)
@@ -860,9 +860,9 @@ def format_cost_tree(tree: CostTree) -> str:
 def _backward_footer(tree: CostTree) -> str:
     """One line on the backward columns: counted with its convention, or why absent."""
 
-    if tree.backward_total is not None:
+    if tree.total_backward_flops is not None:
         return (
-            f"executed backward: {tree.backward_total} FLOPs (matmul and convolution "
+            f"executed backward: {tree.total_backward_flops} FLOPs (matmul and convolution "
             "families, fma2); fwd MAC = 2 x true MACs, the same convention"
         )
     if tree.backward_state == "grad_disabled":

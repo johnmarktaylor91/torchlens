@@ -94,7 +94,7 @@ def test_streaming_finalize_does_not_destroy_concurrent(
 ) -> None:
     """The streaming finalize refuses a concurrently-published target (no overwrite)."""
 
-    from torchlens._io import TorchLensIOError, streaming as streaming_mod
+    from torchlens._io import ArtifactError, streaming as streaming_mod
 
     target = tmp_path / "stream.tlspec"
     real_fsync = streaming_mod.fsync_tree
@@ -104,7 +104,7 @@ def test_streaming_finalize_does_not_destroy_concurrent(
         return real_fsync(path)
 
     monkeypatch.setattr(streaming_mod, "fsync_tree", racing_fsync)
-    with pytest.raises(TorchLensIOError, match="already exists"):
+    with pytest.raises(ArtifactError, match="already exists"):
         tl.trace(
             nn.Linear(4, 4),
             torch.randn(2, 4),

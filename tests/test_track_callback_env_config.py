@@ -14,7 +14,7 @@ import pytest
 import torch
 
 import torchlens.trackers as trk
-from torchlens.trackers import WatchConfigError
+from torchlens.errors import WatchConfigError
 from torchlens.trackers._callback_config import UNSET, resolve_callback_settings
 
 

@@ -147,7 +147,7 @@ def test_input_source_matches_existing_input_gradient() -> None:
     _, target = _conv_endpoints(trace)
     input_op = next(op for op in trace.layer_list if op.is_input)
 
-    existing = gradient_for_unit(target, (0, 0, 2, 2), input=input_op, retain_graph=True)
+    existing = gradient_for_unit(target, (0, 0, 2, 2), input_op=input_op, retain_graph=True)
     source_result = gradient_for_unit(target, (0, 0, 2, 2), source=input_op, retain_graph=True)
 
     assert source_result.op_label == existing.op_label

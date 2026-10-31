@@ -730,7 +730,7 @@ class StructureDischarge:
     table; the digest pairs witness which graphs were joined.
 
     The comparison envelope (D5, identity-v0): ``structure_digest`` /
-    ``real_digest`` are the RAW PUBLIC digests (``tl.hash.trace``, untouched
+    ``real_digest`` are the RAW PUBLIC digests (``tl.fingerprint.trace``, untouched
     byte-for-byte by this wave); the ``comparison_*`` digests are the
     vocabulary-normalized pair — equal to the public pair at identity-v0.
     ``claim_counts`` breaks the per-claim table down by kind;
@@ -998,7 +998,7 @@ def discharge_against(structure_trace: Any, real_trace: Any) -> StructureDischar
     """Discharge a structure-only trace's hypotheses against a real capture.
 
     The join is POSITIONAL over ``layer_list``, LICENSED BY DIGEST EQUALITY
-    of the address-free graph-shape hash (``tl.hash.trace``): the digest
+    of the address-free graph-shape hash (``tl.fingerprint.trace``): the digest
     covers each record's index and parent_indices, so equal digests guarantee
     identically-ordered record sequences and record *i* corresponds to record
     *i* — repeated ops, recurrent passes, multi-output layers, and symmetric
@@ -1009,7 +1009,7 @@ def discharge_against(structure_trace: Any, real_trace: Any) -> StructureDischar
     side table (G5) and NEVER mutates either trace.
     """
 
-    from .. import hash as tl_hash
+    from .. import fingerprint as tl_hash
 
     _require_discharge_preconditions(structure_trace, real_trace)
     _discharge_preflight(structure_trace, real_trace)

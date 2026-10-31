@@ -199,6 +199,6 @@ def test_torchlens_summary_wrapper() -> None:
     """The top-level wrapper should return the rendered summary string."""
     model = TinySummaryModel()
     x = torch.randn(1, 3, 8, 8)
-    summary_text = tl.visualization.summary(model, x)
+    summary_text = tl.summary(model, x)
     assert isinstance(summary_text, str)
     assert summary_text.startswith("TinySummaryModel | input (1, 3, 8, 8) float32")

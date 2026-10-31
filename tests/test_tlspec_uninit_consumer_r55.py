@@ -69,7 +69,7 @@ def _build(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor) -> Path
     with _realistic_nondeterministic_fill():
         trace = tl.trace(model.eval(), x, **_CAPTURE)
     bundle = tmp_path / name
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     return bundle
 
 

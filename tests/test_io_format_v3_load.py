@@ -9,8 +9,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
-from torchlens.ir.workspaces import (
+from torchlens._data_classes.trace import Trace
+from torchlens._ir.workspaces import (
     LEGACY_TRACE_BUILD_STATE_KEYS,
     ModuleCaptureWorkspace,
     RawGraphWorkspace,
@@ -28,9 +28,9 @@ _DROPPED_CAPTURE_FIELDS = (
 def test_load_pre_floor_golden_refuses_typed() -> None:
     """The checked-in pre-floor golden bundle refuses with the floor named."""
 
-    from torchlens.errors import ArtifactVersionBelowFloorError
+    from torchlens.errors import ArtifactTooOldError
 
-    with pytest.raises(ArtifactVersionBelowFloorError, match="torchlens 2.31.0"):
+    with pytest.raises(ArtifactTooOldError, match="torchlens 2.31.0"):
         tl.load(str(V3_GOLDEN))
 
 
@@ -41,7 +41,7 @@ def test_save_load_roundtrip_v4(tmp_path: Path) -> None:
     trace = tl.trace(model, torch.randn(2, 4))
     path = tmp_path / "roundtrip.tlspec"
 
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
 
     for field_name in _DROPPED_CAPTURE_FIELDS:

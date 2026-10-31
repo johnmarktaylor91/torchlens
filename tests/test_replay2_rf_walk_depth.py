@@ -130,7 +130,7 @@ def test_deep_chain_validate_forward_pass_completes() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         passed = tl.validation.validate_forward_pass(
-            _DeepConvChain(DEPTH), torch.randn(1, 1, LENGTH), random_seed=0
+            _DeepConvChain(DEPTH), torch.randn(1, 1, LENGTH), seed=0
         )
     failure = tl.validation.last_validation_failure()
     assert passed is True, failure.summary() if failure is not None else "no failure record"

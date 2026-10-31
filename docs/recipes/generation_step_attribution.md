@@ -58,7 +58,7 @@ steps = []
 for t in range(n_prompt, ids.shape[1]):
     token_t = int(ids[0, t])
     result = tl.attribution.text(
-        model, tokenizer, generated_text, target=(t - 1, token_t), n_steps=32
+        model, tokenizer, generated_text, target=(t - 1, token_t), num_steps=32
     )
     steps.append((t, result))
 
@@ -101,7 +101,7 @@ contrast = tl.attribution.text(
     tokenizer,
     generated_text,
     target=lambda out: out[0, t - 1, token_t] - out[0, t - 1, foil],
-    n_steps=32,
+    num_steps=32,
 )
 RESULT = contrast.scores.shape == (ids.shape[1],)
 ```

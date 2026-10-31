@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 from ...errors._base import TorchLensWarning
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 __all__ = [
     "BAND_CEILING",

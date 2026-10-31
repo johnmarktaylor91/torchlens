@@ -14,15 +14,15 @@ import numpy as np
 import pytest
 import torch
 
-from torchlens.utils import rng as rngmod
-from torchlens.utils._rng_channels import call_site_argcount
-from torchlens.utils.rng import (
+from torchlens._utils import rng as rngmod
+from torchlens._utils._rng_channels import call_site_argcount
+from torchlens._utils.rng import (
     AutocastRestore,
     execute_with_restored_rng_autocast,
     host_nondeterminism_monitor,
     log_current_autocast_state,
 )
-from torchlens.utils.tensor_utils import (
+from torchlens._utils.tensor_utils import (
     _copy_tensor_payload,
     copy_tensor_payload,
     tensor_nanequal,

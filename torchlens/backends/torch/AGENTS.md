@@ -30,6 +30,9 @@ Core capture path:
   own marker, so pushes and pops nest across captures hooking one node) and
   `executing_grad_fn_ref`, the one executing-node resolver the census, the private
   ATen recorder and the checkpoint unpack evidence all call.
+- `_grad_fn_source.py` — best-effort grad-fn source metadata for `GradFn` records
+  (custom-autograd detection; class and method source file, line, signature,
+  docstring), split out of `backward.py` under its size ratchet.
 
 Safety net and honesty:
 - `belt.py` — the mechanical BELT: protocol-invisible stale-reference coverage
@@ -77,7 +80,7 @@ Backend integration:
   (`CaptureEvents.append_amendment`, nine exact-set families) and folds through the ONE
   reducer `amended_op_records()`. grad-fn handles live ONLY in the journal side index
   (`grad_fn_handles_by_label_raw`); records never carry them. The one sanctioned in-place
-  carve-out — the fastlog ancestry backfill on a cook-owned `copy_for_replay` projection —
+  carve-out — the fastlog ancestry backfill on a cook-owned `_copy_for_replay` projection —
   is pinned (with every other op-lane mutator) by the closed ledger in
   `tests/producer_parity/test_op_lane_inplace_writers.py`.
 - Preview backends keep emitting compat `OpEvent`s until S15 and adapt at the one ingest

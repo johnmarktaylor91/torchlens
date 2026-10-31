@@ -13,8 +13,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
-from torchlens.utils.arg_handling import (
+from torchlens._utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
+from torchlens._utils.arg_handling import (
     _alias_candidate_pairs,
     _record_unpreserved_tensor_aliases,
 )

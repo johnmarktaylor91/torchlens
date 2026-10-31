@@ -384,7 +384,7 @@ def test_module_selectors_never_resolve_to_the_output_alias(
         site.layer_label for site in sites
     ]
     # Display stamp unchanged: the alias still names the module calls its producer sits in.
-    from torchlens.ir.selector_eval import module_address_matches
+    from torchlens._ir.selector_eval import module_address_matches
 
     stamped = [
         op

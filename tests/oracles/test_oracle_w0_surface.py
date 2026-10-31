@@ -172,7 +172,7 @@ def test_class_member_license_channels_are_alive() -> None:
 def test_class_walk_is_import_state_independent() -> None:
     """The class walk normalizes import state (train-bounce regression pin).
 
-    ``torchlens.kernel_telemetry`` installs ``gpu_kernels`` on ``Op``/
+    ``torchlens._kernel_telemetry`` installs ``gpu_kernels`` on ``Op``/
     ``AtenOp`` at import time; without normalization the walk counted
     differently depending on which tests imported it first (green alone,
     red in a smoke session). The walk must always see the opt-in members,

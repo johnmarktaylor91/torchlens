@@ -704,7 +704,7 @@ def test_transform_metadata_pandas_and_tlspec_round_trip(tmp_path: Path) -> None
     dataframe = log.to_pandas()
     path = tmp_path / "vmap.tlspec"
 
-    tl.save(log, path)
+    log.save(path)
     loaded = cast(Trace, tl.load(path))
 
     assert bool(dataframe.loc[dataframe["type"] == "vmap", "is_transform"].iloc[0])
@@ -998,7 +998,7 @@ def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
     assert recording.records[0].ctx.transform_kind == "vmap"
 
     path = tmp_path / "matrix-vmap.tlspec"
-    tl.save(predicate_log, path)
+    predicate_log.save(path)
     loaded = cast(Trace, tl.load(path))
     assert loaded.transforms[0].transform_kind == "vmap"
 

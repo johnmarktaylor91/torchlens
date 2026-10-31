@@ -325,7 +325,7 @@ def _op_facet_spec(op: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
             f"attention op {label!r} was not saved",
             f"save=... including {label!r}",
         )
-    return FacetSpec.from_home(op, home_kind="op", recipe_id=recipe_id)
+    return FacetSpec.from_home(op, home_kind="op", function_id=recipe_id)
 
 
 _OUTPUT_PROJECTION_CHILD_NAMES = ("o_proj", "c_proj", "out_proj", "dense", "out_lin", "o")
@@ -371,11 +371,11 @@ def _eager_result_spec(module: Any, z_op: Any) -> FacetSpec | AbsenceReason:
         return needs_capture(
             "per-head result validates against the output projection's captured "
             f"output, which is unavailable: {projection_out.detail}",
-            projection_out.save_hint or "save=... including the output projection output",
+            projection_out.remedy or "save=... including the output projection output",
         )
     bias_spec = parameter_spec(projection, "bias", "attention_eager")
     bias = bias_spec if isinstance(bias_spec, FacetSpec) else None
-    z_spec = FacetSpec.from_home(z_op, home_kind="op", recipe_id="attention_eager")
+    z_spec = FacetSpec.from_home(z_op, home_kind="op", function_id="attention_eager")
     projection_class = str(getattr(projection, "class_name", "") or "")
 
     def _compute() -> torch.Tensor | MissingFacet:
@@ -383,7 +383,7 @@ def _eager_result_spec(module: Any, z_op: Any) -> FacetSpec | AbsenceReason:
 
         return _eager_result_checked(z_spec, weight_spec, bias, projection_out, projection_class)
 
-    return FacetSpec.computed(_compute, recipe_id="attention_eager", recipe_version="a01")
+    return FacetSpec.computed(_compute, function_id="attention_eager", function_version="a01")
 
 
 def _output_projection_child(module: Any) -> Any | None:

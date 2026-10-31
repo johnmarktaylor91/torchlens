@@ -77,5 +77,5 @@ def test_trace_finders_use_available_now_semantics() -> None:
 
     assert list(log.attention_blocks()) == []
     assert list(log.modules_with_facet("normalized")) == []
-    assert log.modules["attn"].facets.menu()["q"].status == "needs_capture"
-    assert log.modules["norm"].facets.menu()["normalized"].status == "needs_capture"
+    assert log.modules["attn"].facets.declared()["q"].status == "needs_capture"
+    assert log.modules["norm"].facets.declared()["normalized"].status == "needs_capture"

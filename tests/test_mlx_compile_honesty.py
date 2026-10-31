@@ -18,11 +18,11 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
 from torchlens.backends.mlx.backend import (  # noqa: E402
     _find_mlx_compiled_attributes,
     _mlx_traced_transform_type,
 )
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 
 class _TinyMLP(nn.Module):

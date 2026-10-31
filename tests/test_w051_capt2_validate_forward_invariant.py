@@ -47,7 +47,7 @@ def test_validate_forward_returns_false_on_metadata_invariant_failure(monkeypatc
     assert verdict is False
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check == CHECK_METADATA_INVARIANT
+    assert failure.check_name == CHECK_METADATA_INVARIANT
     assert "forced by the L9 regression test" in failure.message
 
 

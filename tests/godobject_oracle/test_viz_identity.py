@@ -52,7 +52,7 @@ torch.manual_seed({seed})
 trace = tl.trace(VizCNN(), torch.linspace(-1.0, 1.0, 16).reshape(1, 1, 4, 4))
 with tempfile.TemporaryDirectory() as tmp:
     source = trace.draw(
-        vis_save_only=True, vis_fileformat="svg", vis_outpath=tmp + "/g"
+        vis_save_only=True, file_format="svg", path=tmp + "/g"
     )
 print(hashlib.sha256(source.encode()).hexdigest())
 """
@@ -106,8 +106,8 @@ def _dot(trace: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
 
     return trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "graph"),
+        file_format="svg",
+        path=str(tmp_path / "graph"),
         **kwargs,
     )
 
@@ -256,13 +256,13 @@ def test_backward_dot_in_process_stable(tmp_path: Path) -> None:
 
     first = trace.draw_backward(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "b1"),
+        file_format="svg",
+        path=str(tmp_path / "b1"),
     )
     second = trace.draw_backward(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "b2"),
+        file_format="svg",
+        path=str(tmp_path / "b2"),
     )
     assert first == second
 

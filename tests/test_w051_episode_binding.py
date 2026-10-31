@@ -34,7 +34,7 @@ from torchlens.capture._episode_derivation import (
 )
 from torchlens.capture._episode_ledger import episode_ledger_for
 from torchlens.errors import TorchLensError, TorchLensWarning
-from torchlens.options import CaptureOptions, EpisodeSpec
+from torchlens.options import CaptureOptions, EpisodeOptions
 
 V = 16
 N_STEPS = 3
@@ -69,8 +69,8 @@ def _episode(model: _Greedy, prompt: int, **extra) -> tl.Trace:
     return tl.trace(
         model,
         torch.tensor([[prompt]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS),
-        capture=CaptureOptions(random_seed=0),
+        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
+        capture=CaptureOptions(seed=0),
         **extra,
     )
 
@@ -78,7 +78,7 @@ def _episode(model: _Greedy, prompt: int, **extra) -> tl.Trace:
 def _save(trace: tl.Trace, path) -> str:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(trace, path)
+        trace.save(path)
     return glob.glob(str(path) + "/**/metadata.pkl", recursive=True)[0]
 
 
@@ -178,7 +178,9 @@ def test_value_free_ledger_binds_with_the_basis_disclosed() -> None:
     log = tl.trace(
         model,
         torch.tensor([[1]]),
-        episode=EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS, step_output_kind="none"),
+        episode=EpisodeOptions(
+            stepped_module=model.step, num_steps=N_STEPS, step_output_kind="none"
+        ),
         save=tl.in_module("step.emb"),
     )
     attestation = log.episode_coupling

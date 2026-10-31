@@ -1,10 +1,10 @@
 {
-  "tlspec_version": 9,
-  "torchlens_version": "2.34.1",
-  "torch_version": "2.13.0+cu130",
+  "tlspec_version": 10,
+  "torchlens_version": "2.36.1",
+  "torch_version": "2.13.0+cpu",
   "python_version": "3.10.20",
   "platform": "linux-x86_64",
-  "created_at": "2026-08-28T06:19:56Z",
+  "created_at": "2026-10-31T09:22:58Z",
   "bundle_format": "directory",
   "n_layers": 9,
   "n_out_blobs": 3,
@@ -26,7 +26,7 @@
       "layout": "strided",
       "bytes": 64,
       "sha256": "034097c03052748c1e736f30e7b04deeb31cbf69829a32a804c7544b79878c17",
-      "requires_grad": false
+      "requires_grad": true
     },
     {
       "blob_id": "0000000002",
@@ -43,7 +43,7 @@
       "layout": "strided",
       "bytes": 64,
       "sha256": "98855f9077846939e1509ec9462c14098e5636cb8136186a55b3f329dc67978f",
-      "requires_grad": false
+      "requires_grad": true
     },
     {
       "blob_id": "0000000003",
@@ -60,7 +60,7 @@
       "layout": "strided",
       "bytes": 64,
       "sha256": "5c0df04bc73dedc3461a9f868e9936594df6e4fb423de775c956455c104b4a7e",
-      "requires_grad": false
+      "requires_grad": true
     }
   ],
   "unsupported_tensors": [],
@@ -91,11 +91,11 @@
       ]
     },
     "rng_state_digests": {
-      "torch": "bde40bfd2f14541a153d5053a8db87513d70d87bd7accee217fef01c1b0ab33d"
+      "torch": "6f9d75d0fbbceb714536e09a20beab283cc76bd0bc46f02f0dbd81ef4bb7b3ea"
     },
     "input_hash": "unavailable:PayloadUnavailableError",
     "model_structure_hash": "b64e0ca91fabdcea447df157d84acafa3a15fa0b31d821d01699510bada0a362",
-    "git_commit_hash": "4b2fccb808c9ca838b84ac2ea389c6de61b984b9"
+    "git_commit_hash": "8177837d997276f26f111c962696c132320687bb"
   },
   "custom_attributes_disclosure": {
     "included": true,
@@ -115,11 +115,11 @@
   },
   "kind": "trace",
   "schema_version": 1,
-  "model_signature": "tests.test_agent_surface_helpers.RepeatedBlockNet",
+  "model_signature": "test_agent_surface_helpers.RepeatedBlockNet",
   "model_fingerprint": {
     "parameter_meta_hash": "77987320eae30dd2031428b62ff8be2746befe0736358a7a84775cb1d7d9e335",
     "buffer_meta_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-    "class_qualname": "tests.test_agent_surface_helpers.RepeatedBlockNet",
+    "class_qualname": "test_agent_surface_helpers.RepeatedBlockNet",
     "extra_metadata": {
       "model_class_name": "RepeatedBlockNet",
       "graph_shape_hash": "dffe4d652ec201519de8c84fac345b8604878df523b4d7f85a2c790fe78e6154",

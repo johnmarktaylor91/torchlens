@@ -7,8 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import GraphBreaksNormalizationError, GraphBreaksUnavailableError
-from torchlens.utils import _torch_compat
+from torchlens._utils import _torch_compat
+from torchlens.errors import GraphBreaksNormalizationError, GraphBreaksUnavailableError
 
 
 class _ExplicitBreakModel(nn.Module):

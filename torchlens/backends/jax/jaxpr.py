@@ -8,7 +8,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal, TypeAlias, cast
 
-from ...ir.events import JaxEquationKind
+from ..._ir.events import JaxEquationKind
 from ..registry import BackendUnsupportedError
 from .modules import decode_module_call_scope, decode_module_scope
 

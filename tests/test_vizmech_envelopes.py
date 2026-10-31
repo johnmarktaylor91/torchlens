@@ -55,8 +55,8 @@ def _draw(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor, **kwargs
     trace = tl.trace(model, x)
     return trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / name),
+        file_format="svg",
+        path=str(tmp_path / name),
         **kwargs,
     )
 

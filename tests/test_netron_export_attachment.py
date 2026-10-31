@@ -160,5 +160,5 @@ def test_attachment_without_path_refuses(log: Any) -> None:
     """The companion is a second FILE; memory-only serving cannot carry it."""
 
     with pytest.raises(tl.errors.ConfigurationError) as excinfo:
-        tl.export.netron(log, None, attachment=True, open=True)
+        tl.export.netron(log, None, attachment=True, serve=True)
     assert excinfo.value.fields["code"] == "netron_attachment_invalid"

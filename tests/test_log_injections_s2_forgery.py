@@ -56,7 +56,7 @@ def _tampered_load(tmp_path, tamper):
     x = torch.randn(2, 4)
     logged = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
     path = tmp_path / "forged.tlspec"
-    tl.save(logged, str(path))
+    logged.save(str(path))
     metadata_path = path / "metadata.pkl"
     with metadata_path.open("rb") as handle:
         state = pickle.load(handle)

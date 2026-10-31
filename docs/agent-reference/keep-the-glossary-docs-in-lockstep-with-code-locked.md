@@ -26,7 +26,7 @@ state, then optional embedded capture state, then the versioned
 `torchlens_role_init_v2` fallback (degenerate-total: empty slots consume zero RNG); random reports
 name every initialized slot.
 
-`tl.save(trace, path, level="runnable", include_weights=True)` bundles the full capture-time
+`trace.save(path, level="runnable", include_weights=True)` bundles the full capture-time
 `state_dict` (all named parameters plus persistent buffers) as the separate, schema-versioned
 `state_dict_v1` blob family. The default is `include_weights=False`, so the sparse core stays
 tensor-value-free. Load validates embedded state through the same strict binder; run reports
@@ -40,7 +40,7 @@ topology refuses at save with `state_alias_topology_unsupported`. Payload blobs 
 allocating, and one atomic run-preparation staging pass moves all state families to their recorded
 devices (a CUDA artifact on a CPU-only host loads for analysis and refuses `.run()` typed).
 
-`tl.save(trace, path, level="runnable", include_activations=True)` independently archives exactly
+`trace.save(path, level="runnable", include_activations=True)` independently archives exactly
 the activations already retained by the capture-time `save=` decision, including retained raw and
 transformed outputs, as `selected_activation_v2` with physical `InputAttestationFingerprint`
 eligibility records. Load exposes them through
@@ -67,13 +67,13 @@ and keeps refusing train-mode writers. Unproven (`None`) evidence, a value-chang
 mode claim contradicting the evidence, a refreshed rerun's own journal recording a
 value-changing write the target does not prove, or diverging target-vs-refreshed evidence
 (compared per sink label) refuses with the typed `BufferSinkRoutingError` carrying
-`RunnableErrorCode.BUFFER_SINK_ROUTING_MUTABLE` (provisional spelling, documented-unstable;
+code `"buffer_sink_routing_mutable"` (provisional spelling, documented-unstable;
 pinned "computational graph changed" message term preserved). A loaded sparse Trace binds cloned
 input leaves plus staged/random state and executes its resolved taken-path DAG under
 `pause_logging()`. Both return `RunResult(output, trace, report)` and leave the source Trace
 unchanged. Analysis-only loads raise typed `run_capability_unavailable`. Stage 5 populates
 `report.path_faithfulness`; Stage 6 enforces the three-layer honesty transaction. Divergence raises
-and rolls back by default; `return_diverged` is the sole opt-in and returns a monotonic poisoned
+and rolls back by default; `on_divergence="return"` is the sole opt-in and returns a monotonic poisoned
 Trace refused by validation, export, faithful comparison, and path-assuming intervention chaining.
 Incomplete witness coverage is `unverifiable`, never `verified`; numeric attestation is
 `not_applicable` for sparse-only or ineligible activation-payload runs. Model outputs with ZERO
@@ -136,7 +136,7 @@ Cluster C: instance-state inspection is fail-closed (`inspect_instance_state`; a
 property/descriptor-shadowed `__dict__` or a custom `__getattribute__`/`__getattr__` on a
 declared-schema container refuses `instance_state_uninspectable` without running the hook).
 Cluster B: slice/composite-literal components are classifier-first (a semantic scalar can never
-launder through a `slice` component). Cluster D: reserved input-path sentinels (the whole `\x00`
+launder through a `plane` component). Cluster D: reserved input-path sentinels (the whole `\x00`
 namespace) are escaped by the key codec so a real dict key equal to a marker round-trips.
 
 The declared state model is the capture-time `state_dict` (named parameters plus persistent buffers)
@@ -153,7 +153,7 @@ whole-storage byte comparison + per-consumption sampling, with the raw `data_ptr
 to `unverifiable`, and a read-only exposure staying `verified`. Full boundary in
 `docs/reference/runnable_tlspec_contract.md` section 11.
 
-The frozen runnable enums live in `torchlens.runnable`: `ReadinessStatus`, `RunProvider`,
+The frozen runnable enums live in `torchlens._runnable`: `ReadinessStatus`, `RunProvider`,
 `StateSource`, `PathFaithfulness`, `DivergencePolicy`, `NumericAttestationStatus`, and
 `RunnableErrorCode`. Public code branches on these values or the structured report, not exception
 text. The exhaustive error vocabulary and release threshold are maintained in

@@ -56,7 +56,7 @@ def main() -> None:
 
     print(trace.transforms)
     print(trace["vmap_1_1"].transform_config)
-    trace.draw(vis_outpath="vmap_masked_toy_transformer", vis_save_only=True)
+    trace.draw(path="vmap_masked_toy_transformer", vis_save_only=True)
 
 
 if __name__ == "__main__":

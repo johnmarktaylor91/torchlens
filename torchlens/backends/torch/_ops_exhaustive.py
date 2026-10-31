@@ -5,24 +5,24 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ...capture.projections import LiveOpView
-from ...capture.stop import evaluate_halt_stop
-from ...data_classes.internal_types import FuncExecutionContext
-from ...data_classes.op import (
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._data_classes.op import (
     Op,
 )
-from ...ir.events import (
+from ..._ir.events import (
     FunctionCallRef,
 )
-from ...ir.intervention import FunctionEventInput
-from ...utils._torch_compat import (
+from ..._ir.intervention import FunctionEventInput
+from ..._utils._torch_compat import (
     saved_tensors_default_hooks_active,
 )
-from ...utils.collections import index_nested
-from ...utils.display import _timed_phase
-from ...utils.tensor_utils import (
+from ..._utils.collections import index_nested
+from ..._utils.display import _timed_phase
+from ..._utils.tensor_utils import (
     safe_copy,
 )
+from ...capture.projections import LiveOpView
+from ...capture.stop import evaluate_halt_stop
 from ._tl import (
     get_tensor_label,
     set_tensor_label,
@@ -37,7 +37,7 @@ from .tensor_tracking import (
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 if TYPE_CHECKING:
     from .ops import (
@@ -267,7 +267,7 @@ def _emit_exhaustive_operation_events(
             if isinstance(samples_store, dict):
                 call_samples = samples_store.pop(f"call:{func_call_id}", None)
                 if call_samples is not None:
-                    from ...observe._device_memory import flat_field_projection
+                    from ..._observe._device_memory import flat_field_projection
 
                     samples_store[fields_dict_onetensor["_label_raw"]] = call_samples
                     delta_value, peak_value = flat_field_projection(call_samples)

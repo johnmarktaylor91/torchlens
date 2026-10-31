@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from ..capture.flops import ATTENTION_FULL_SQUARE_FUNCS, ATTENTION_FULL_SQUARE_NOTE
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 Shape = tuple[int, ...]
 
@@ -110,7 +110,7 @@ def op_kernel_groups(op: Any) -> tuple[Shape | None, int | None]:
 def _role_hint_candidates(record: Any) -> list[Any]:
     """Role-hint tables to try for one module record (class first)."""
 
-    from ..data_classes._module_role_hints import (
+    from .._data_classes._module_role_hints import (
         ROLE_HINTS_BY_MODULE_TYPE,
         role_hints_for_module_class,
     )
@@ -138,7 +138,7 @@ def _ordered_output_labels(trace: Trace, record: Any, call: Any) -> list[str]:
     return order. Any unmatched or ambiguous name keeps execution order.
     """
 
-    from ..data_classes._module_role_hints import multi_output_role_from_path
+    from .._data_classes._module_role_hints import multi_output_role_from_path
 
     labels = [str(label) for label in getattr(call, "output_ops", ()) or ()]
     paths = list(getattr(call, "output_paths", ()) or ())

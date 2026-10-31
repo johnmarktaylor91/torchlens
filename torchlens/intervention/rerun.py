@@ -14,13 +14,13 @@ import torch
 from torch import nn
 
 from .._chunking import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
+from .._data_classes._trace_accessors import boundary_label_rows
 from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
-from ..data_classes._trace_accessors import boundary_label_rows
+from .._utils._torch_compat import tensor_has_named_dims
+from .._utils.hashing import compute_graph_shape_hash
 from ..options import ReplayOptions, merge_replay_options
-from ..utils._torch_compat import tensor_has_named_dims
-from ..utils.hashing import compute_graph_shape_hash
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from ._rerun_predicate import (
     plan_rerun_spec,
@@ -36,7 +36,7 @@ from ._zero_fire import (
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
-    AppendStreamingNotSupportedError,
+    AppendStreamingUnsupportedError,
     BatchNormTrainModeWarning,
     ChunkedForwardConfigError,
     ControlFlowDivergenceError,
@@ -48,12 +48,12 @@ from .hooks import normalize_hooks_from_spec
 from .runtime import active_intervention_context
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .hooks import NormalizedHookEntry
 
 
 def run(
-    log: Trace,
+    trace: Trace,
     model: nn.Module,
     x: Any = None,
     *,
@@ -62,16 +62,16 @@ def run(
     output_transform: Any | None = None,
     fast_refused: str | None = None,
 ) -> Trace:
-    """Full-forward run with the active intervention spec from ``log``.
+    """Full-forward run with the active intervention spec from ``trace``.
 
     Re-executes ``model`` through TorchLens decorated wrappers with the current
     intervention spec installed in runtime context. A fresh ``Trace`` is
-    built off to the side, validated, then atomically swapped into ``log``.
+    built off to the side, validated, then atomically swapped into ``trace``.
     Concurrent reads during run are unsupported; no lock is taken.
 
     Parameters
     ----------
-    log:
+    trace:
         Trace to update in place after the fresh run validates.
     model:
         Model to execute through the run engine.
@@ -94,7 +94,7 @@ def run(
     Returns
     -------
     Trace
-        The same ``log`` object after atomic run-state replacement.
+        The same ``trace`` object after atomic run-state replacement.
     """
 
     replay_options = merge_replay_options(replay=replay)
@@ -104,7 +104,7 @@ def run(
                 "rerun(chunk_size=...) cannot be combined with append=True."
             )
         return _chunked_rerun(
-            log,
+            trace,
             model,
             x,
             chunk_size=replay_options.chunk_size,
@@ -113,23 +113,23 @@ def run(
             output_transform=output_transform,
         )
     if replay_options.append:
-        return _append_rerun(log, model, x, strict=replay_options.strict)
-    _preflight(log, model, x)
+        return _append_rerun(trace, model, x, strict=replay_options.strict)
+    _preflight(trace, model, x)
     model = _unwrap_compiled_model(model)
-    _warn_if_direct_writes_will_be_overlaid(log)
+    _warn_if_direct_writes_will_be_overlaid(trace)
 
-    spec = getattr(log, "_intervention_spec", None)
+    spec = getattr(trace, "_intervention_spec", None)
     refuse_changed_staged_helpers(spec, door="rerun")
-    spec_plan = plan_rerun_spec(log, spec)
+    spec_plan = plan_rerun_spec(trace, spec)
     refuse_unmatchable_staged_labels(spec_plan.capture_spec)
     hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
     started_at = time.monotonic()
-    old_hash = getattr(log, "graph_shape_hash", None)
-    old_raw_hash = getattr(log, "_raw_event_shape_hash", None)
+    old_hash = getattr(trace, "graph_shape_hash", None)
+    old_raw_hash = getattr(trace, "_raw_event_shape_hash", None)
 
     with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
-            log,
+            trace,
             model,
             x,
             intervention_spec=spec_plan.capture_spec,
@@ -137,28 +137,28 @@ def run(
             output_transform=output_transform,
             intervene_predicate=spec_plan.intervene_predicate,
         )
-    _refuse_shifted_raw_index_resave(log, new_log)
+    _refuse_shifted_raw_index_resave(trace, new_log)
     settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
+    new_log.facet_registry_snapshot = getattr(trace, "facet_registry_snapshot", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(
-        new_log, hook_plan, source_log=log
+        new_log, hook_plan, source_log=trace
     )
 
-    divergence_count = _validate_rerun_result(new_log, log, strict=replay_options.strict)
+    divergence_count = _validate_rerun_result(new_log, trace, strict=replay_options.strict)
     fast_refresh = False
     if divergence_count == 0:
-        fast_refresh = log._refresh_matching_rerun_state_from(new_log)
+        fast_refresh = trace._refresh_matching_rerun_state_from(new_log)
     if fast_refresh:
-        _merge_rerun_host_rng_verdict(log, new_log)
+        _merge_rerun_host_rng_verdict(trace, new_log)
         _release_discarded_capture(new_log)
     else:
-        log.replace_state_from(new_log)
-    log.is_appended = False
-    log._append_sequence_id = 0
-    log.append_history = []
+        trace.replace_state_from(new_log)
+    trace.is_appended = False
+    trace._append_sequence_id = 0
+    trace.append_history = []
 
     history_record = _build_ledger_record(
-        log,
+        trace,
         started_at=started_at,
         old_hash=old_hash,
         new_hash=getattr(new_log, "graph_shape_hash", None),
@@ -171,13 +171,13 @@ def run(
         hook_fire_count=hook_fire_count,
         unfired_hook_count=len(unfired_hook_ids),
     )
-    log.state = TraceState.RERUN_PROPAGATED
-    log.last_run = {
+    trace.state = TraceState.RERUN_PROPAGATED
+    trace.last_run = {
         "engine": "rerun",
         "timestamp": time.monotonic(),
         "started_at": started_at,
         "duration_s": time.monotonic() - started_at,
-        "spec_revision": getattr(log, "_spec_revision", 0),
+        "spec_revision": getattr(trace, "_spec_revision", 0),
         "strict": replay_options.strict,
         "append": False,
         "hooks": len(hook_plan),
@@ -188,14 +188,14 @@ def run(
         "fast_refused": fast_refused,
         "shape_varied": False,
         "old_graph_shape_hash": old_hash,
-        "new_graph_shape_hash": getattr(log, "graph_shape_hash", None),
+        "new_graph_shape_hash": getattr(trace, "graph_shape_hash", None),
         "old_raw_event_shape_hash": old_raw_hash,
-        "new_raw_event_shape_hash": getattr(log, "_raw_event_shape_hash", None),
+        "new_raw_event_shape_hash": getattr(trace, "_raw_event_shape_hash", None),
     }
-    log._record_operation(**history_record)
-    log._has_direct_writes = False
-    log._out_recipe_revision = getattr(log, "_spec_revision", 0)
-    return log
+    trace._record_operation(**history_record)
+    trace._has_direct_writes = False
+    trace._out_recipe_revision = getattr(trace, "_spec_revision", 0)
+    return trace
 
 
 def _release_discarded_capture(new_log: Trace) -> None:
@@ -371,7 +371,7 @@ def _append_rerun(
 
     del strict
     if _is_streaming_append_active(log):
-        raise AppendStreamingNotSupportedError(_streaming_append_error_message(log))
+        raise AppendStreamingUnsupportedError(_streaming_append_error_message(log))
     _preflight(log, model, x)
     model = _unwrap_compiled_model(model)
     _preflight_append(log, model)
@@ -404,7 +404,7 @@ def _append_rerun(
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
-    log.append_state_from(new_log)
+    log._append_state_from(new_log)
     log.is_appended = True
     log._append_sequence_id = int(getattr(log, "_append_sequence_id", 0)) + 1
     log.state = TraceState.APPENDED
@@ -486,7 +486,7 @@ def _streaming_append_error_message(log: Trace) -> str:
     if getattr(log, "_out_writer", None) is not None:
         details.append("bundle_path streaming")
     if getattr(log, "_out_sink", None) is not None:
-        details.append("out_callback streaming")
+        details.append("on_save streaming")
     details_text = ", ".join(details) if details else "streaming"
     return (
         f"Trace {getattr(log, 'model_class_name', None)!r} has active {details_text}; "
@@ -575,12 +575,12 @@ def _validate_append_hook_plan(
             raise AppendBatchDependenceError(
                 f"helper {helper_name!r} is not batch-independent; append is unsafe"
             )
-        force_shape_change = bool(entry.metadata.get("force_shape_change", False)) or bool(
-            dict(helper.kwargs).get("force_shape_change", False)
+        force_shape_change = bool(entry.metadata.get("allow_shape_change", False)) or bool(
+            dict(helper.kwargs).get("allow_shape_change", False)
         )
         if force_shape_change and not bool(getattr(helper, "compatible_with_append", False)):
             raise AppendMismatchError(
-                f"helper {helper_name!r} may change out shape and is not compatible_with_append"
+                f"helper {helper_name!r} may change out shape and its compatible_with_append is False"
             )
 
 
@@ -978,19 +978,19 @@ def _capture_with_active_spec(
             activation_transform=getattr(log, "activation_transform", None),
             grad_transform=getattr(log, "grad_transform", None),
             save_raw_activations=getattr(log, "save_raw_activations", True),
-            save_raw_gradients=getattr(log, "save_raw_gradients", True),
+            save_raw_grads=getattr(log, "save_raw_gradients", True),
             save_mode=getattr(log, "save_mode", "copy"),
             capture_tensor_grad_hooks=getattr(log, "capture_tensor_grad_hooks", True),
             mark_layer_depths=getattr(log, "mark_layer_depths", False),
             detach_saved_activations=getattr(log, "detach_saved_activations", False),
-            save_arg_values=getattr(log, "save_arg_values", False),
+            save_args=getattr(log, "save_arg_values", False),
             save_grads=save_grads_policy not in (None, False),
             grads_to_save=grads_to_save,
-            random_seed=getattr(log, "random_seed", None),
+            seed=getattr(log, "random_seed", None),
             num_context_lines=getattr(log, "num_context_lines", 7),
             optimizer=getattr(log, "_optimizer", None),
-            save_code_context=getattr(log, "save_code_context", False),
-            save_rng_states=getattr(log, "save_rng_states", False),
+            save_source_context=getattr(log, "save_code_context", False),
+            save_rng=getattr(log, "save_rng_states", False),
             recurrence_detection=getattr(log, "recurrence_detection", True),
             # Inherit the source trace's readiness: forcing ``True`` armed the host
             # RNG monitor (most of a rerun's cost) and minted replay templates the
@@ -1008,7 +1008,7 @@ def _capture_with_active_spec(
             # A rerun measures CPU peaks only if the source opted in.
             measure_host_peak_memory=bool(getattr(log, "measure_host_peak_memory", False)),
             output_transform=output_transform,
-            save_raw_output=getattr(log, "save_raw_output", "small"),
+            save_transformed_output=getattr(log, "save_raw_output", "small"),
             intervene_predicate=intervene_predicate,
             **_rerun_save_kwargs(log),
         )

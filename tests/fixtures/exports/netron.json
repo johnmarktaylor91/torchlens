@@ -264,7 +264,7 @@
       "value": "true"
     },
     {
-      "key": "torchlens.runnable",
+      "key": "torchlens._runnable",
       "value": "false"
     },
     {

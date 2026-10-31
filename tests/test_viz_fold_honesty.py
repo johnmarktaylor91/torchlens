@@ -161,8 +161,8 @@ def test_fold_honesty_uniform_plateau_dot_differs(tmp_path) -> None:
             collapse="auto",
             fold_repeats=True,
             vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(outpath),
+            file_format="dot",
+            path=str(outpath),
         )
         sources.append((tmp_path / f"plateau_{variant}.dot").read_text())
     assert sources[0] != sources[1], (
@@ -188,8 +188,8 @@ def test_fold_honesty_dot_sources_differ(tmp_path) -> None:
             collapse="max",
             fold_repeats=True,
             vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(outpath),
+            file_format="dot",
+            path=str(outpath),
         )
         sources.append((tmp_path / f"fold_{variant}.dot").read_text())
     assert sources[0] != sources[1], (
@@ -276,8 +276,8 @@ def test_fold_honesty_topology_dot_differs(tmp_path) -> None:
                 collapse=mode,
                 fold_repeats=True,
                 vis_save_only=True,
-                vis_fileformat="dot",
-                vis_outpath=str(outpath),
+                file_format="dot",
+                path=str(outpath),
             )
             sources.append((tmp_path / f"topo_{mode}_{variant}.dot").read_text())
         assert sources[0] != sources[1], (
@@ -360,8 +360,8 @@ def test_fold_honesty_scalar_operand_dot_differs(tmp_path) -> None:
                 collapse=mode,
                 fold_repeats=True,
                 vis_save_only=True,
-                vis_fileformat="dot",
-                vis_outpath=str(outpath),
+                file_format="dot",
+                path=str(outpath),
             )
             sources.append((tmp_path / f"scalar_{mode}_{variant}.dot").read_text())
         assert sources[0] != sources[1], (
@@ -445,8 +445,8 @@ def test_fold_honesty_exterior_binding_dot_differs(tmp_path) -> None:
                 collapse=mode,
                 fold_repeats=True,
                 vis_save_only=True,
-                vis_fileformat="dot",
-                vis_outpath=str(outpath),
+                file_format="dot",
+                path=str(outpath),
             )
             sources.append((tmp_path / f"bind_{mode}_{variant}.dot").read_text())
         assert sources[0] != sources[1], (
@@ -561,8 +561,8 @@ def test_fold_repeats_true_root_child_dot_not_inert(tmp_path) -> None:
             collapse="none",
             fold_repeats=fold_repeats,
             vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(outpath),
+            file_format="dot",
+            path=str(outpath),
         )
         sources[fold_repeats] = (tmp_path / f"root_fold_{fold_repeats}.dot").read_text()
     assert sources[True] != sources[False], (

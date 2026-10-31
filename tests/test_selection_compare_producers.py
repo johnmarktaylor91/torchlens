@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError
+from torchlens.errors import SelectionError
 
 _RELU = "relu_1_2"
 _TANH = "tanh_1_2"
@@ -185,7 +185,7 @@ def test_top_changed_matches_manual_ranking(log, log_b):
     expected = torch.zeros_like(keys, dtype=torch.bool)
     expected[torch.argsort(keys, descending=True, stable=True)[:7]] = True
     assert torch.equal(resolved[0].mask.reshape(-1), expected)
-    assert resolved[0].selected_count == 7
+    assert resolved[0].num_selected == 7
     assert _relations(resolved) == ["exact"]
 
 
@@ -194,7 +194,7 @@ def test_top_changed_fraction_least_moved_and_signed(log, log_b):
 
     numel = log[_RELU].out.numel()
     fractional = tl.top_changed(log_b, _RELU, fraction=0.01).resolve(log)
-    assert fractional[0].selected_count == math.ceil(0.01 * numel)
+    assert fractional[0].num_selected == math.ceil(0.01 * numel)
     least = tl.top_changed(log_b, _RELU, 4, largest=False).resolve(log)
     abs_keys = _delta(log, log_b, _RELU).abs().reshape(-1)
     expected_least = torch.zeros_like(abs_keys, dtype=torch.bool)
@@ -224,7 +224,7 @@ def test_global_default_population_spans_saved_sites(log, log_b):
 
     resolved = tl.top_changed(log_b, None, 10).resolve(log)
     assert len(resolved) > 1
-    assert sum(entry.selected_count for entry in resolved) == 10
+    assert sum(entry.num_selected for entry in resolved) == 10
 
 
 def test_changed_nan_delta_never_satisfies():
@@ -381,7 +381,7 @@ def test_param_population_refuses_kind(log_b):
     """Differential producers read ACT payloads; PARAM populations refuse typed."""
 
     with pytest.raises(SelectionError) as excinfo:
-        tl.changed(log_b, tl.params("encoder.0.weight"))
+        tl.changed(log_b, tl.param("encoder.0.weight"))
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 
@@ -420,7 +420,7 @@ def test_repr_stability_pins(log_b):
         f"Selection[ACT](changed(vs={label!r}, above=0.0, below=None, by='abs', "
         "within=saved_sites))"
     )
-    assert repr(tl.stable_across_passes(_TANH, tol=0.5, passes=[1, 3])) == (
+    assert repr(tl.stable_across_passes(_TANH, atol=0.5, passes=[1, 3])) == (
         "Selection[ACT](stable_across_passes(tol=0.5, passes=[1, 3], "
         f"within=Selection[ACT](site({_TANH!r}))))"
     )
@@ -442,8 +442,8 @@ def _stacked_passes(rec_log, passes=(1, 2, 3)) -> torch.Tensor:
 def test_stable_selects_the_pass_invariant_unit(rec_log):
     """The engineered constant unit is stable; masks land on every pass site."""
 
-    resolved = tl.stable_across_passes(_TANH, tol=1e-9).resolve(rec_log)
-    assert [entry.site_key for entry in resolved] == [(_TANH, 1), (_TANH, 2), (_TANH, 3)]
+    resolved = tl.stable_across_passes(_TANH, atol=1e-9).resolve(rec_log)
+    assert [entry.key for entry in resolved] == [(_TANH, 1), (_TANH, 2), (_TANH, 3)]
     stacked = _stacked_passes(rec_log)
     expected = (stacked.max(dim=0).values - stacked.min(dim=0).values) <= 1e-9
     for entry in resolved:
@@ -470,8 +470,8 @@ def test_pass_variance_bounds_match_manual(rec_log):
 def test_explicit_pass_window_restricts_evidence_and_family(rec_log):
     """passes=[2, 3] uses only that window and touches only those sites."""
 
-    resolved = tl.stable_across_passes(_TANH, tol=1e-6, passes=[2, 3]).resolve(rec_log)
-    assert [entry.site_key for entry in resolved] == [(_TANH, 2), (_TANH, 3)]
+    resolved = tl.stable_across_passes(_TANH, atol=1e-6, passes=[2, 3]).resolve(rec_log)
+    assert [entry.key for entry in resolved] == [(_TANH, 2), (_TANH, 3)]
     stacked = _stacked_passes(rec_log, passes=(2, 3))
     expected = (stacked.max(dim=0).values - stacked.min(dim=0).values) <= 1e-6
     for entry in resolved:
@@ -500,7 +500,7 @@ def test_window_construction_floor_and_validation():
     with pytest.raises(ValueError, match="at least one bound"):
         tl.pass_variance(_TANH)
     with pytest.raises(ValueError, match="non-negative"):
-        tl.stable_across_passes(_TANH, tol=-1.0)
+        tl.stable_across_passes(_TANH, atol=-1.0)
 
 
 def test_single_pass_layer_refuses_vacuous_claim(log):
@@ -519,13 +519,13 @@ def test_single_pass_layer_refuses_vacuous_claim(log):
 def test_cross_pass_shape_drift_refuses():
     """A layer whose index space drifts across the window refuses typed."""
 
-    from torchlens.selection import SelectionProvenance, SiteEntry, _mask_whole
-    from torchlens.selection_compare import _pass_groups, _PassTerm
+    from torchlens._selection import SelectionProvenance, Site, _mask_whole
+    from torchlens._selection_compare import _pass_groups, _PassTerm
 
-    def _entry(pass_index: int, shape: tuple[int, ...]) -> SiteEntry:
-        return SiteEntry(
+    def _entry(pass_index: int, shape: tuple[int, ...]) -> Site:
+        return Site(
             kind="ACT",
-            site_key=("grow_1_1", pass_index),
+            key=("grow_1_1", pass_index),
             provenance=SelectionProvenance(relation="exact", source="test"),
             _mask=_mask_whole(shape),
         )
@@ -578,7 +578,7 @@ def test_cross_pass_nan_never_selected():
         site = "sqrt_1_2"
         nan_any = torch.isnan(trace[f"{site}:1"].out) | torch.isnan(trace[f"{site}:2"].out)
         assert nan_any.any()
-        stable = tl.stable_across_passes(site, tol=1e30).resolve(trace)
+        stable = tl.stable_across_passes(site, atol=1e30).resolve(trace)
         assert not (stable[0].mask & nan_any).any()
         swing = tl.pass_variance(site, above=-1.0).resolve(trace)
         assert not (swing[0].mask & nan_any).any()
@@ -590,7 +590,7 @@ def test_population_restriction_intersects_across_the_window(rec_log):
     """The element population is the intersection of the window entries' masks."""
 
     population = tl.sign(_TANH, "positive")  # per-pass masks differ
-    resolved = tl.stable_across_passes(population, tol=1e30).resolve(rec_log)
+    resolved = tl.stable_across_passes(population, atol=1e30).resolve(rec_log)
     per_pass = [rec_log[f"{_TANH}:{p}"].out > 0 for p in (1, 2, 3)]
     intersection = per_pass[0] & per_pass[1] & per_pass[2]
     for entry in resolved:
@@ -638,7 +638,7 @@ def test_do_zero_ablates_a_stable_unit_at_every_pass():
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     try:
-        selection = tl.stable_across_passes(_TANH, tol=1e-9)
+        selection = tl.stable_across_passes(_TANH, atol=1e-9)
         resolved = selection.resolve(trace)
         assert resolved[0].mask[0, 0]
         fork = trace.fork()

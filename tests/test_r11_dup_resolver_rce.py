@@ -1,8 +1,8 @@
 """Round-11 security regression: duplicate container-type resolver RCE.
 
-r10 hardened the container-type resolver in ``torchlens/ir/container.py`` into a strict
+r10 hardened the container-type resolver in ``torchlens/_ir/container.py`` into a strict
 default-deny, never-import gate. But a PARALLEL resolver survived in
-``torchlens/data_classes/op.py``: the public inspection property ``Op.multi_output_type``
+``torchlens/_data_classes/op.py``: the public inspection property ``Op.multi_output_type``
 called its own ``importlib.import_module(container_spec.type_module)`` on the
 attacker-controlled, portable ``ContainerSpec`` strings (they ride through the safe
 unpickler untouched -- it gates GLOBALS, not string field VALUES). Reading that documented
@@ -11,7 +11,7 @@ executing its top-level code = arbitrary-code execution -- even though ``trace.r
 already guarded through the ``ir/container.py`` path.
 
 The fix consolidates BOTH sinks onto the SINGLE default-deny resolver
-``torchlens.ir.container.resolve_container_type``: it never imports a bundle-controlled
+``torchlens._ir.container.resolve_container_type``: it never imports a bundle-controlled
 module name (resolves only from ``sys.modules``), decides admissibility by name against the
 recorded container kind, and returns a graceful qualified-name string only when the type is
 not resolvable without importing. A legit ``torch.max`` / ``torch.topk`` structseq (or
@@ -32,8 +32,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir import container as _ir_container
-from torchlens.ir.container import (
+from torchlens._ir import container as _ir_container
+from torchlens._ir.container import (
     ContainerReconstructionError,
     resolve_container_type,
 )
@@ -72,7 +72,7 @@ def test_op_py_has_no_second_import_module_resolver() -> None:
     against regression by asserting the vulnerable primitive is absent from the module.
     """
 
-    op_src = Path(_ir_container.__file__).parent.parent / "data_classes" / "op.py"
+    op_src = Path(_ir_container.__file__).parent.parent / "_data_classes" / "op.py"
     text = op_src.read_text()
     assert "import_module" not in text, (
         "op.py must route container-type resolution through the single hardened "
@@ -94,7 +94,7 @@ def test_legit_multi_output_type_resolves_live_and_after_load(tmp_path) -> None:
     assert live_type is torch.return_types.max
 
     bundle = os.path.join(str(tmp_path), "m.tlspec")
-    tl.save(trace, bundle, level="runnable")
+    trace.save(bundle, level="runnable")
     loaded = tl.load(bundle)
     loaded_type = _multi_output_op(loaded).multi_output_type
     assert loaded_type is torch.return_types.max
@@ -159,7 +159,7 @@ def test_end_to_end_tampered_bundle_property_read_is_safe(tmp_path) -> None:
         trace = _trace_max_model()
         bundle = os.path.join(str(tmp_path / "bundle_dir"), "m.tlspec")
         os.makedirs(os.path.dirname(bundle), exist_ok=True)
-        tl.save(trace, bundle, level="runnable")
+        trace.save(bundle, level="runnable")
 
         pkl = os.path.join(bundle, "metadata.pkl")
         raw = open(pkl, "rb").read()

@@ -79,6 +79,6 @@ def test_log_scale_mapping_and_explicit_fractions_match_the_loop() -> None:
 def test_malformed_curves_refuse_typed(args, kwargs) -> None:
     """Length mismatch, unsorted fractions, mapping plus fractions, NaN and log of 0 refuse."""
 
-    with pytest.raises(torchlens.mechinterp.MechInterpError) as caught:
+    with pytest.raises(torchlens.errors.MechInterpError) as caught:
         torchlens.mechinterp.circuit_performance_ratio(*args, **kwargs)
     assert caught.value.fields["code"] == "mi_faithfulness_curve_invalid"

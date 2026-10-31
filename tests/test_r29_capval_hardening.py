@@ -61,9 +61,9 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.backends.torch.ops as tlops
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -156,10 +156,11 @@ def _assert_layout_launder_closed(model_factory: Any, tmp_path: Path) -> None:
         return  # fail-closed at save or at divergence: both honest
     max_diff = (result.output - oracle).abs().max().item()
     assert not (
-        result.report.path_faithfulness is PathFaithfulness.VERIFIED and not result.report.poisoned
+        result.report.path_faithfulness is PathFaithfulness.VERIFIED
+        and not result.report.is_poisoned
     ), f"FALSE VERIFIED reopened: layout twin missed oracle 1 by {max_diff}"
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 def test_f1_swap_rebind_layout_read_ceils(tmp_path: Path) -> None:
@@ -184,7 +185,7 @@ def test_f1_pointer_preserving_rebind_stays_verified(tmp_path: Path) -> None:
     )
     oracle = _PointerPreservingRebindLayoutRead().eval()(capture_input.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert (result.output - oracle).abs().max().item() < 1e-6
 
 
@@ -373,7 +374,7 @@ def test_f3b_postprocess_edge_drop_fails_invariants(monkeypatch: pytest.MonkeyPa
     the sealed capture-time edge truth and must raise.
     """
 
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
     from torchlens.validation.invariants import (
         MetadataInvariantError,
         check_metadata_invariants,
@@ -412,7 +413,7 @@ def test_f3b_postprocess_edge_drop_fails_invariants(monkeypatch: pytest.MonkeyPa
     trace = tl.trace(
         _MulTrivialProducer().eval(),
         torch.randn(4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     assert state["dropped"] > 0, "injection did not drop any edge -- inconclusive"
     # Two independent tripwires catch this plant: the capture-sealed
@@ -439,7 +440,7 @@ def test_f3b_honest_capture_passes_invariants() -> None:
     trace = tl.trace(
         _MulTrivialProducer().eval(),
         torch.randn(4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     assert check_metadata_invariants(trace)
 
@@ -459,7 +460,7 @@ def _final_twin_sub_trace() -> Any:
     trace = tl.trace(
         _TwinSub().eval(),
         torch.randn(4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     sub_op = next(o for o in trace.ops if o.func_name == "__sub__")
     return trace, sub_op

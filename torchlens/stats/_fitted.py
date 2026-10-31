@@ -130,8 +130,8 @@ class FittedPCA:
     components: torch.Tensor
     mean: torch.Tensor
     explained_variance: torch.Tensor
-    n_samples: int
-    n_features: int
+    num_samples: int
+    num_features: int
     fit_scope: str
     digest: str
 
@@ -140,7 +140,7 @@ class FittedPCA:
 
         k = int(self.components.shape[0]) if self.components.dim() >= 1 else 0
         return (
-            f"FittedPCA(k={k}, n_features={self.n_features}, n_samples={self.n_samples}, "
+            f"FittedPCA(k={k}, num_features={self.num_features}, num_samples={self.num_samples}, "
             f"fit_scope={self.fit_scope!r}, digest={self.digest!r})"
         )
 
@@ -191,8 +191,8 @@ def save_fitted(fitted: Any, path: str | Path) -> Path:
     metadata = {
         "schema": FITTED_SIDECAR_SCHEMA,
         "digest": fitted.digest,
-        "n_samples": str(fitted.n_samples),
-        "n_features": str(fitted.n_features),
+        "n_samples": str(fitted.num_samples),
+        "n_features": str(fitted.num_features),
         "fit_scope": fitted.fit_scope,
     }
     save_file(
@@ -229,7 +229,7 @@ def load_fitted(path: str | Path, *, encoder: Callable[[Any], Any] | None = None
     FittedPCA | StreamingStat | dict
         The rehydrated fitted payload; for an accumulator state, an
         accumulator that keeps folding as if never interrupted (a
-        ``tl.aggregate`` cache entry loads as a ``{metric: accumulator}``
+        ``tl.stats.aggregate`` cache entry loads as a ``{metric: accumulator}``
         dict).
 
     Raises
@@ -307,8 +307,8 @@ def load_fitted(path: str | Path, *, encoder: Callable[[Any], Any] | None = None
         components=components,
         mean=mean,
         explained_variance=explained,
-        n_samples=n_samples,
-        n_features=n_features,
+        num_samples=n_samples,
+        num_features=n_features,
         fit_scope=metadata.get("fit_scope", "unspecified"),
         digest=recorded,
     )

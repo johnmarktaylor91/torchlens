@@ -27,7 +27,7 @@ from torchlens.capture._episode_ledger import (
     write_episode_ledger,
 )
 from torchlens.errors import EpisodeDeclarationError, EpisodeLedgerError, TorchLensWarning
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 
 class TinyLM(nn.Module):
@@ -124,7 +124,7 @@ def _prompt() -> torch.Tensor:
 def _capture_episode(n_steps: int = 4, **trace_kwargs):
     model = TinyLM()
     runner = GreedyRunner(model, n_steps)
-    spec = EpisodeSpec(stepped_module=model, n_steps=n_steps)
+    spec = EpisodeOptions(stepped_module=model, num_steps=n_steps)
     log = tl.trace(runner, _prompt(), episode=spec, **trace_kwargs)
     return log
 
@@ -182,7 +182,7 @@ def test_flat_tally_nested_loops():
 
     model = TinyLM()
     runner = NestedLoopRunner(model, outer=2, inner=3)
-    log = tl.trace(runner, _prompt(), episode=EpisodeSpec(stepped_module=model, n_steps=6))
+    log = tl.trace(runner, _prompt(), episode=EpisodeOptions(stepped_module=model, num_steps=6))
     ledger = episode_ledger_for(log)
     assert ledger is not None
     assert ledger.steps_completed == 6
@@ -197,8 +197,8 @@ def test_flat_tally_nested_loops():
 
 def test_entry_seed_recorded_and_sampled_episode_reproduces():
     model = TinyLM()
-    spec = EpisodeSpec(stepped_module=model, n_steps=4)
-    capture = tl.options.CaptureOptions(random_seed=1234)
+    spec = EpisodeOptions(stepped_module=model, num_steps=4)
+    capture = tl.options.CaptureOptions(seed=1234)
     first = tl.trace(SampledRunner(model, 4), _prompt(), episode=spec, capture=capture)
     second = tl.trace(SampledRunner(model, 4), _prompt(), episode=spec, capture=capture)
     ledger_first = episode_ledger_for(first)
@@ -213,7 +213,7 @@ def test_entry_seed_recorded_and_sampled_episode_reproduces():
 def test_teacher_forcing_is_disclosed_non_verifying():
     model = TinyLM()
     runner = GreedyRunner(model, 3)
-    spec = EpisodeSpec(stepped_module=model, n_steps=3, forced_tokens=(5, 6, 7))
+    spec = EpisodeOptions(stepped_module=model, num_steps=3, forced_tokens=(5, 6, 7))
     log = tl.trace(runner, _prompt(), episode=spec)
     ledger = episode_ledger_for(log)
     assert ledger is not None
@@ -227,7 +227,7 @@ def test_forced_tokens_must_cover_declared_steps():
         tl.trace(
             GreedyRunner(model, 3),
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, n_steps=3, forced_tokens=(5,)),
+            episode=EpisodeOptions(stepped_module=model, num_steps=3, forced_tokens=(5,)),
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
@@ -240,7 +240,7 @@ def test_forced_tokens_must_cover_declared_steps():
 def test_stepped_module_must_be_proper_submodule():
     model = TinyLM()
     with pytest.raises(EpisodeDeclarationError) as excinfo:
-        tl.trace(model, _prompt(), episode=EpisodeSpec(stepped_module=model))
+        tl.trace(model, _prompt(), episode=EpisodeOptions(stepped_module=model))
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
 
@@ -248,7 +248,7 @@ def test_stepped_module_outside_root_refuses():
     model = TinyLM()
     stranger = TinyLM()
     with pytest.raises(EpisodeDeclarationError) as excinfo:
-        tl.trace(GreedyRunner(model, 2), _prompt(), episode=EpisodeSpec(stepped_module=stranger))
+        tl.trace(GreedyRunner(model, 2), _prompt(), episode=EpisodeOptions(stepped_module=stranger))
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
 
@@ -262,7 +262,7 @@ def test_unsnapshotable_declared_state_refuses_before_execution():
         tl.trace(
             runner,
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, state=(unsnapshotable,)),
+            episode=EpisodeOptions(stepped_module=model, state=(unsnapshotable,)),
         )
     assert excinfo.value.fields["code"] == "episode_state_unsnapshotable"
     assert calls_before == 0  # refusal fires at declaration time, pre-forward
@@ -274,7 +274,7 @@ def test_save_none_refuses_value_mode_episode():
         tl.trace(
             GreedyRunner(model, 2),
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model),
+            episode=EpisodeOptions(stepped_module=model),
             capture=tl.options.CaptureOptions(layers_to_save="none"),
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
@@ -291,7 +291,7 @@ def test_structure_only_episode_refuses_typed():
         tl.trace(
             GreedyRunner(model, 2),
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model),
+            episode=EpisodeOptions(stepped_module=model),
             capture=tl.options.CaptureOptions(structure_only=True),
         )
     assert excinfo.value.fields["code"] == "structure_only_episode_unsupported"
@@ -304,7 +304,7 @@ def test_chunked_episode_refuses():
             GreedyRunner(model, 2),
             _prompt(),
             chunk_size=1,
-            episode=EpisodeSpec(stepped_module=model),
+            episode=EpisodeOptions(stepped_module=model),
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
@@ -315,7 +315,7 @@ def test_rng_discipline_only_managed():
         tl.trace(
             GreedyRunner(model, 2),
             _prompt(),
-            episode=EpisodeSpec(stepped_module=model, rng="wild"),  # type: ignore[arg-type]
+            episode=EpisodeOptions(stepped_module=model, rng="wild"),  # type: ignore[arg-type]
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
@@ -342,9 +342,9 @@ def test_halted_episode_ledger_discloses_truncation():
         runner,
         _prompt(),
         halt=halt_after_two,
-        episode=EpisodeSpec(stepped_module=model, n_steps=5),
+        episode=EpisodeOptions(stepped_module=model, num_steps=5),
     )
-    assert log.outcome.status.name == "HALTED"
+    assert log.outcome.status.name == "STOPPED"
     ledger = episode_ledger_for(log)
     assert ledger is not None
     assert ledger.steps_completed < 5
@@ -357,10 +357,10 @@ def test_halted_episode_ledger_discloses_truncation():
 def test_failed_episode_attaches_partial_ledger():
     stepped = BombAtStep(bomb_call=3)
     runner = GreedyRunner(stepped, 5)
-    spec = EpisodeSpec(stepped_module=stepped, n_steps=5)
+    spec = EpisodeOptions(stepped_module=stepped, num_steps=5)
     with pytest.raises(RuntimeError, match="injected step failure") as excinfo:
         tl.trace(runner, _prompt(), episode=spec)
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    partial = tl._partial.from_failed_capture(excinfo.value)
     payload = partial.trace.annotations.get("episode")
     assert payload is not None
     ledger = EpisodeLedger.from_payload(payload)
@@ -449,7 +449,7 @@ def test_episode_key_rides_plain_v8_artifacts(tmp_path):
     path = tmp_path / "plain.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(log, path)
+        log.save(path)
     loaded = tl.load(path)
     assert loaded.annotations["episode"] == log.annotations["episode"]
     assert "episode" in log.annotations  # live trace keeps its session ledger
@@ -463,7 +463,7 @@ def test_episode_key_rides_plain_v8_artifacts(tmp_path):
 @pytest.mark.smoke
 def test_member_outcome_row_mapping_is_total_and_non_upgrading():
     assert row_status_for_member_outcome("COMPLETE", None) == "complete"
-    assert row_status_for_member_outcome("HALTED", None) == "interrupted"
+    assert row_status_for_member_outcome("STOPPED", None) == "interrupted"
     assert row_status_for_member_outcome("ABORTED_NONFINITE", None) == "interrupted"
     assert row_status_for_member_outcome("FAILED", "forward") == "interrupted"
     for phase in ("finalize", "postprocess", "teardown"):
@@ -497,7 +497,7 @@ def test_fold_arms_first_match_and_fail_closed():
     )
     # Arm 3: HALTED member.
     result = derive_episode_status(
-        [("COMPLETE", None), ("HALTED", None)], n_declared=None, ledger=None
+        [("COMPLETE", None), ("STOPPED", None)], n_declared=None, ledger=None
     )
     assert result.status == "episode_halted_at_step" and result.at_step == 1
     # Arm 5: exact shipped spelling disclosed verbatim.

@@ -25,18 +25,18 @@ import torchlens._user_public_impls as user_public_impls
 # imports may be freely re-sorted.
 import torchlens.user_funcs as user_funcs
 from torchlens import Trace, trace as trace_fn
+from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
+    CaptureGapWarning,
     MetadataInvariantError,
-    TorchLensCaptureGapWarning,
     TraceNotReproducibleWarning,
 )
 from torchlens.fastlog import RecordContext
 from torchlens.intervention.types import DictKey
 from torchlens.options import SaveOptions
-from torchlens.utils.tensor_utils import tensor_nanequal
+from torchlens.report import ValidationDiagnostic
 from torchlens.validation import (
-    ValidationDiagnostic,
     check_metadata_invariants,
     get_validation_diagnostics,
     get_validation_failure,
@@ -80,7 +80,7 @@ from torchlens.validation.status import (
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
-    ValidationReplayStatus,
+    ValidationStatus,
 )
 
 _TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
@@ -110,7 +110,7 @@ def _assert_validation_capture_is_clean(model: nn.Module, x: torch.Tensor) -> No
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={})
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
 
 
 def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor) -> None:
@@ -127,9 +127,9 @@ def _assert_validation_fails_only_on_adoption(model: nn.Module, x: torch.Tensor)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert validate_forward_pass(model, [x], input_kwargs={}) is False
-    assert not any(isinstance(item.message, TorchLensCaptureGapWarning) for item in caught)
+    assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "source_provenance"
+    assert failure is not None and failure.check_name == "source_provenance"
     assert failure.extra["reasons"] == ["module_boundary_adoption"]
 
 
@@ -196,20 +196,20 @@ def test_validation_import_path():
 def test_validation_replay_unverified_status_semantics() -> None:
     """Unverified replay status is available but never bool-coerced."""
 
-    status = ValidationReplayStatus.unverified(
+    status = ValidationStatus.unverified(
         backend="jax",
         source="live",
         reason="region_not_per_op_replayable",
         message="synthetic partial replay",
-        replayed_node_count=3,
-        unverified_node_count=2,
+        num_replayed_ops=3,
+        num_unverified_ops=2,
     )
 
     assert status.state == "unverified"
-    assert status.available is True
-    assert status.replayed_node_count == 3
-    assert status.unverified_node_count == 2
-    assert status.failed_node_count == 0
+    assert status.is_available is True
+    assert status.num_replayed_ops == 3
+    assert status.num_unverified_ops == 2
+    assert status.num_failed_ops == 0
     with pytest.raises(TypeError, match="not a boolean"):
         bool(status)
 
@@ -217,31 +217,31 @@ def test_validation_replay_unverified_status_semantics() -> None:
 def test_validation_replay_status_aggregate_fold() -> None:
     """Aggregate replay status keeps failures dominant over unverified regions."""
 
-    mixed_status = ValidationReplayStatus.from_replay_counts(
+    mixed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=4,
-        unverified_node_count=1,
+        num_replayed_ops=4,
+        num_unverified_ops=1,
     )
-    failed_status = ValidationReplayStatus.from_replay_counts(
+    failed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=0,
-        unverified_node_count=3,
-        failed_node_count=2,
+        num_replayed_ops=0,
+        num_unverified_ops=3,
+        num_failed_ops=2,
     )
-    passed_status = ValidationReplayStatus.from_replay_counts(
+    passed_status = ValidationStatus.from_replay_counts(
         backend="jax",
         source="live",
-        replayed_node_count=4,
-        unverified_node_count=0,
+        num_replayed_ops=4,
+        num_unverified_ops=0,
     )
 
     assert mixed_status.state == "unverified"
-    assert mixed_status.replayed_node_count == 4
-    assert mixed_status.unverified_node_count == 1
+    assert mixed_status.num_replayed_ops == 4
+    assert mixed_status.num_unverified_ops == 1
     assert failed_status.state == "failed"
-    assert failed_status.failed_node_count == 2
+    assert failed_status.num_failed_ops == 2
     assert bool(failed_status) is False
     assert passed_status.state == "passed"
     assert bool(passed_status) is True
@@ -280,7 +280,7 @@ def test_validation_decision_recorder_counts_distinct_nodes() -> None:
     # output decision is a different phase entirely (counting it let
     # "exemptions alone" traces pass the no_nodes_replay_validated guard --
     # b1-fable round-2 F1).
-    assert status.replayed_node_count == 1
+    assert status.num_replayed_ops == 1
     assert status.state == "passed"
 
 
@@ -299,7 +299,7 @@ def test_validation_decision_recorder_distinct_node_count_keeps_failure_tripwire
 
     status = recorder.as_status()
 
-    assert status.failed_node_count == 1
+    assert status.num_failed_ops == 1
     assert status.state == "failed"
     assert bool(status) is False
 
@@ -320,7 +320,7 @@ def test_validation_all_exempted_cannot_pass_without_replayed_nodes() -> None:
 
     assert status.state == "unverified"
     assert status.reason == "no_nodes_replay_validated"
-    assert status.replayed_node_count == 0
+    assert status.num_replayed_ops == 0
     with pytest.raises(TypeError, match="not a boolean"):
         bool(status)
 
@@ -340,7 +340,7 @@ def test_validation_positive_replay_coverage_can_still_pass() -> None:
     status = recorder.as_status()
 
     assert status.state == "passed"
-    assert status.replayed_node_count == 1
+    assert status.num_replayed_ops == 1
     assert bool(status) is True
 
 
@@ -840,7 +840,7 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
         with pytest.warns(UserWarning, match="no graph/source provenance"):
             assert validate_forward_pass(model, x, validate_metadata=True) is False
         failure = last_validation_failure()
-        assert failure is not None and failure.check == "source_provenance"
+        assert failure is not None and failure.check_name == "source_provenance"
         with pytest.warns(UserWarning, match="no graph/source provenance"):
             second_trace = tl.trace(
                 model,
@@ -999,7 +999,7 @@ def test_validate_forward_pass_accepts_nested_lstm_module_outputs() -> None:
 
     assert validate_forward_pass(model, x, validate_metadata=True) is True
 
-    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True))
     try:
         path_reprs = {repr(path) for path in trace.module_calls["lstm:1"].output_paths}
 
@@ -1439,7 +1439,7 @@ def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
     assert warning.fields["first_graph_hash"] != warning.fields["retrace_graph_hash"]
     assert warning.fields["first_divergence"] is not None
     assert len(diagnostics) == 1
-    assert diagnostics[0][0].check == "trace_retrace_structure_mismatch"
+    assert diagnostics[0][0].check_name == "trace_retrace_structure_mismatch"
     assert diagnostics[0][0].extra["first_op_count"] == warning.fields["first_op_count"]
 
 
@@ -1487,7 +1487,7 @@ def test_validate_forward_pass_retrace_mismatch_records_a_structured_failure() -
     assert len(observed) == 1
     failure = get_validation_failure(observed[0])
     assert failure is not None
-    assert failure.check == "retrace_mismatch"
+    assert failure.check_name == "retrace_mismatch"
     assert "stateful/non-reproducible" in failure.summary()
 
 
@@ -1643,7 +1643,7 @@ def test_validate_forward_pass_uncopyable_model_does_not_retrace() -> None:
 
     assert execution_count == [2]
     assert len(diagnostics) == 1
-    assert diagnostics[0][0].check == "trace_retrace_pristine_copy_unavailable"
+    assert diagnostics[0][0].check_name == "trace_retrace_pristine_copy_unavailable"
 
 
 def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted() -> None:
@@ -1821,7 +1821,7 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
             is False
         )
         first = get_validation_failure(None)
-        assert first is not None and first.check == "retrace_mismatch"
+        assert first is not None and first.check_name == "retrace_mismatch"
 
         assert (
             user_public_impls._validate_forward_pass_torch(nn.Linear(3, 2), torch.randn(2, 3))
@@ -1839,7 +1839,7 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
         )
         refusal = get_validation_failure(None)
         assert refusal is not None
-        assert refusal.check == "precondition_refusal"
+        assert refusal.check_name == "precondition_refusal"
         assert "cannot prove model-state restoration" in refusal.summary()
 
 
@@ -2120,7 +2120,7 @@ def test_validation_dispatch_op_count_backstop_rejects_synthetic_missed_op() -> 
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     try:
         trace._validation_captured_dispatchable_op_count = len(
@@ -2385,7 +2385,7 @@ def test_completeness_backstop_empty_census_does_not_fail_dispatchless_capture()
 
     model = OnlyDispatchlessOps()
     inputs = torch.randn(2, 3)
-    probe = trace_fn(model, inputs, capture=tl.options.CaptureOptions(random_seed=42))
+    probe = trace_fn(model, inputs, capture=tl.options.CaptureOptions(seed=42))
     try:
         assert probe.num_ops > 0
     finally:
@@ -2851,7 +2851,7 @@ def test_replay_validation_checks_every_recurrent_pass() -> None:
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
 
     assert trace.validate_forward_pass([model(inputs)], validate_metadata=False) is True
@@ -2887,7 +2887,7 @@ def test_validate_forward_pass_metadata_off_rejects_functionless_op_laundering()
 
     model = Tiny()
     x = torch.tensor([-1.0, 2.0])
-    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True))
     try:
         relu_op = next(op for op in trace.layer_list if op.func_name == "relu")
         relu_op.func = None
@@ -2937,7 +2937,7 @@ def test_replay_validation_detects_corrupted_third_recurrent_pass_inputs() -> No
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     third_pass = next(op for op in trace.layer_list if op.label == "linear_1_1:3")
     assert third_pass.saved_args is not None
@@ -2995,7 +2995,7 @@ def test_perturbation_validation_catches_spurious_third_recurrent_pass_edge() ->
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     third_pass = next(op for op in trace.layer_list if op.label == "nantonum_1_1:3")
     first_pass = next(op for op in trace.layer_list if op.label == "nantonum_1_1:1")
@@ -3054,7 +3054,7 @@ def test_replay_validation_checks_every_train_batch_norm_pass() -> None:
     trace = trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     model.load_state_dict(pristine_state)
 
@@ -3283,7 +3283,7 @@ def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
 
     x = torch.tensor([2.0, 3.0, 4.0])
     healthy_trace = trace_fn(
-        CopySourceModel(), x, capture=tl.options.CaptureOptions(save_arg_values=True)
+        CopySourceModel(), x, capture=tl.options.CaptureOptions(save_args=True)
     )
     healthy_copy = next(op for op in healthy_trace.layer_list if op.func_name == "copy_")
 
@@ -3296,9 +3296,7 @@ def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
         is True
     )
 
-    broken_trace = trace_fn(
-        CopySourceModel(), x, capture=tl.options.CaptureOptions(save_arg_values=True)
-    )
+    broken_trace = trace_fn(CopySourceModel(), x, capture=tl.options.CaptureOptions(save_args=True))
     broken_copy = next(op for op in broken_trace.layer_list if op.func_name == "copy_")
     saved_output = broken_copy.out.detach().clone()
 
@@ -3833,11 +3831,9 @@ def _assert_custom_exemption_for_arg(
         Expected exemption result.
     """
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         layer = _only_layer_with_func_name(trace, func_name)
         parent = layer.parent_arg_positions["args"][arg_position]
@@ -3853,9 +3849,7 @@ def test_input_derived_full_validates_without_an_exemption() -> None:
 
     model = _InputDerivedFullModel()
     x = torch.tensor([1.0, 2.0], dtype=torch.float32)
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         assert trace.validate_forward_pass([model(x).detach().clone()]) is True
 
@@ -3923,9 +3917,7 @@ def test_runtime_tensor_fill_value_is_replayed_and_perturbation_sensitive(
         numel *= dimension
     x = torch.arange(1, numel + 1, dtype=dtype).reshape(shape)
     model = _TensorFillFactoryModel(factory_name, fill_source, use_keyword)
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         factory_layer = _only_layer_with_func_name(trace, factory_name)
         fill_domain = "kwargs" if use_keyword else "args"
@@ -4426,7 +4418,7 @@ def test_tensor_nanequal_tolerances_are_dtype_derived_boundary() -> None:
     fp32's rtol=1e-4 = 4.5e11 float64 ULPs.
     """
 
-    from torchlens.utils.tensor_utils import _tolerances_for_dtype
+    from torchlens._utils.tensor_utils import _tolerances_for_dtype
 
     for dtype in (torch.float16, torch.bfloat16, torch.float32, torch.float64):
         eps = torch.finfo(dtype).eps
@@ -4515,7 +4507,7 @@ def test_ground_truth_fp8_doctrine_stays_strict() -> None:
     design, never loosen).
     """
 
-    from torchlens.utils.tensor_utils import get_fp8_dtypes
+    from torchlens._utils.tensor_utils import get_fp8_dtypes
     from torchlens.validation.core import _ground_truth_output_matches_saved
 
     fp8_dtypes = get_fp8_dtypes()
@@ -4644,7 +4636,7 @@ def test_validation_with_gather_index_parent() -> None:
 
     model = _GatherIndexModel()
     x = torch.randn(4, 5)
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
 
 def test_validation_with_functional_scatter_kwargs_full_overwrite() -> None:
@@ -4652,7 +4644,7 @@ def test_validation_with_functional_scatter_kwargs_full_overwrite() -> None:
 
     model = _FunctionalScatterKwargsModel()
     x = torch.randn(5, 7)
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
 
 def test_validation_with_masked_fill():
@@ -4750,11 +4742,9 @@ def test_validation_with_setitem_slice_full_overwrite() -> None:
     model = SetItemSliceOverwriteModel()
     x = torch.randn(1, 3, 1, 4, 4)
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         setitem_layer = _only_layer_with_func_name(trace, "__setitem__")
         destination_parent = setitem_layer.parent_arg_positions["args"][0]
@@ -4801,11 +4791,9 @@ def test_validation_with_index_put_destination_full_overwrite() -> None:
     model = IndexPutOverwriteModel()
     x = torch.randn(4, 5)
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
         destination_parent = index_put_layer.parent_arg_positions["args"][0]
@@ -4855,11 +4843,9 @@ def test_index_put_partial_overwrite_destination_is_not_exempt() -> None:
     model = IndexPutPartialModel()
     x = torch.randn(4, 5)
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
         destination_parent = index_put_layer.parent_arg_positions["args"][0]
@@ -4919,11 +4905,9 @@ def test_index_put_value_parent_equal_to_destination_is_not_exempt() -> None:
     model = IndexPutValueEqualsDestModel()
     x = torch.randn(4, 5)
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
         arg_positions = index_put_layer.parent_arg_positions["args"]
@@ -5071,11 +5055,9 @@ def test_index_put_index_parent_is_not_exempt() -> None:
     model = IndexPutOverwriteModel()
     x = torch.randn(4, 5)
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
         index_parent = index_put_layer.parent_arg_positions["args"][(1, 0)]
@@ -5089,7 +5071,7 @@ def test_index_put_index_parent_is_not_exempt() -> None:
 
 
 def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
-    """save_arg_values=True keeps alias-contract snapshots for in-place ops."""
+    """save_args=True keeps alias-contract snapshots for in-place ops."""
 
     class InplaceModel(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -5102,7 +5084,7 @@ def test_save_arg_values_keeps_inplace_alias_contract_versions() -> None:
     trace = trace_fn(
         InplaceModel(),
         torch.tensor([-2.0, 3.0]),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
 
     assert torch.equal(
@@ -5167,7 +5149,7 @@ def test_trace_save_arg_values_handles_namedtuple_tensor_arguments() -> None:
     trace = trace_fn(
         NamedtupleCatModel(),
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
 
     cat_layer = _only_layer_with_func_name(trace, "cat")
@@ -5208,11 +5190,9 @@ def test_where_different_branches_are_not_condition_exempt() -> None:
     model = _WhereDifferentBranchesModel()
     x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
         condition_parent = where_layer.parent_arg_positions["args"][0]
@@ -5293,9 +5273,7 @@ def test_where_branch_selectedness_uses_saved_condition_not_parent_out() -> None
     model = _WhereBranchSelectionModel("all_false")
     x = torch.randn(2, 3)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
         condition_parent = where_layer.parent_arg_positions["args"][0]
@@ -5317,9 +5295,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
     model = _UnselectedWherePlaceholderModel()
     x = torch.randn(2, 3)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
         unselected_parent = where_layer.parent_arg_positions["args"][2]
@@ -5364,11 +5340,9 @@ def test_remainder_divisor_not_exempt_when_output_differs_from_dividend() -> Non
     model = _RemainderDividendAtLeastDivisorModel()
     x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         remainder_layer = _only_layer_with_func_name(trace, "remainder")
         divisor_parent = remainder_layer.parent_arg_positions["args"][1]
@@ -5396,11 +5370,9 @@ def test_new_tensor_data_arg_is_not_structural_exempt() -> None:
     model = _NewTensorDataArgModel()
     x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         new_tensor_layer = _only_layer_with_func_name(trace, "new_tensor")
         data_parent = new_tensor_layer.parent_arg_positions["args"][1]
@@ -5416,11 +5388,9 @@ def test_populated_multi_output_container_keeps_leaf_paths() -> None:
     model = _PopulatedContainerOutputModel()
     x = torch.tensor([[-1.0, 2.0], [3.0, -4.0]])
 
-    assert validate_forward_pass(model, x, random_seed=123)
+    assert validate_forward_pass(model, x, seed=123)
 
-    trace = trace_fn(
-        model, x, capture=tl.options.CaptureOptions(save_arg_values=True, random_seed=123)
-    )
+    trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         output_paths = {tuple(trace[label].container_path) for label in trace.output_layers}
         output_path_reprs = {repr(path) for path in output_paths}
@@ -5544,7 +5514,7 @@ def _make_clean_log() -> Trace:
     from torchlens import trace as trace_fn
 
     model = _SimpleFF()
-    return trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42))
+    return trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
 
 
 def _make_buffer_write_log() -> Trace:
@@ -5553,7 +5523,7 @@ def _make_buffer_write_log() -> Trace:
     return trace_fn(
         _BufferWriteValidationModel(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
 
 
@@ -5563,7 +5533,7 @@ def _make_func_call_split_log() -> Trace:
     return trace_fn(
         _FuncCallSplitValidationModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
 
 
@@ -5572,7 +5542,7 @@ def _make_root_only_log() -> Trace:
     from torchlens import trace as trace_fn
 
     model = _RootOnlyModel()
-    return trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42))
+    return trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
 
 
 def _relabel_as_mlx_object_module(trace: Trace) -> Trace:
@@ -5623,7 +5593,7 @@ def _make_backward_log() -> Trace:
 
     model = _SimpleFF()
     x = torch.randn(2, 5, requires_grad=True)
-    log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads="all", random_seed=42))
+    log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads="all", seed=42))
     log.log_backward(log[log.output_layers[0]].out.sum())
     return log
 
@@ -5634,7 +5604,7 @@ def _make_mid_forward_backward_log() -> Trace:
 
     model = _MidForwardGradModel()
     x = torch.randn(2, 5, requires_grad=True)
-    capture = tl.options.CaptureOptions(save_grads="all", random_seed=42)
+    capture = tl.options.CaptureOptions(save_grads="all", seed=42)
     with warnings.catch_warnings():  # the recorded autogradgrad op leaves no source-less arg
         warnings.filterwarnings("error", message=".*no graph/source provenance")
         return trace_fn(model, x, capture=capture)
@@ -5699,9 +5669,7 @@ def test_backend_identity_invariants_pass_healthy_resnet() -> None:
 
     torchvision_models = pytest.importorskip("torchvision.models")
     model = torchvision_models.resnet18(weights=None).eval()
-    log = trace_fn(
-        model, torch.randn(1, 3, 32, 32), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    log = trace_fn(model, torch.randn(1, 3, 32, 32), capture=tl.options.CaptureOptions(seed=42))
     try:
         assert log.backend == "torch"
         assert log.module_identity_mode == "torch_module"
@@ -6019,7 +5987,7 @@ def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None
         _SimpleFF(),
         torch.randn(2, 5),
         save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         victim = next(layer for layer in log.layer_list if layer.transformed_out is not None)
@@ -6036,9 +6004,7 @@ def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None
 def test_payload_metadata_invariant_rejects_present_raw_memory_mismatch() -> None:
     """Live raw payload metadata must still be checked when the payload is retained."""
 
-    log = trace_fn(
-        _SimpleFF(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    log = trace_fn(_SimpleFF(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
         victim = next(layer for layer in log.layer_list if layer.has_saved_activation)
         assert victim.out is not None
@@ -6058,7 +6024,7 @@ def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None
         _SimpleFF(),
         torch.randn(2, 5),
         save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         assert any(layer.out is not None for layer in log.layer_list)
@@ -6078,7 +6044,7 @@ def test_payload_metadata_invariant_allows_selective_save_validation() -> None:
         model,
         [x, y],
         save=_save_first_input_record,
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         assert any(not layer.has_saved_activation for layer in log.layer_list)
@@ -6442,7 +6408,7 @@ def test_bad_higher_order_creator_chain_order_raises() -> None:
     log = trace_fn(
         HigherOrderModel(),
         x,
-        capture=tl.options.CaptureOptions(save_grads="all", random_seed=42),
+        capture=tl.options.CaptureOptions(save_grads="all", seed=42),
     )
     try:
         loss = log[log.output_layers[0]].out
@@ -6450,7 +6416,7 @@ def test_bad_higher_order_creator_chain_order_raises() -> None:
         torch.autograd.grad(first_grad.sum(), x, retain_graph=True)
         victim = next(
             grad_fn
-            for grad_fn in log.grad_fns
+            for grad_fn in log.autograd.grad_fns
             if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )
         assert victim.order is not None
@@ -6778,17 +6744,13 @@ class _TupleOutputModule(nn.Module):
 def _make_recurrent_log():
     from torchlens import trace as trace_fn
 
-    return trace_fn(
-        _RecurrentFF(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    return trace_fn(_RecurrentFF(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
 
 
 def _make_nested_log():
     from torchlens import trace as trace_fn
 
-    return trace_fn(
-        _NestedModel(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    return trace_fn(_NestedModel(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
 
 
 def _make_tuple_output_module_log() -> Trace:
@@ -6799,7 +6761,7 @@ def _make_tuple_output_module_log() -> Trace:
     return trace_fn(
         _TupleOutputModule(),
         torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
 
 
@@ -6840,7 +6802,7 @@ def test_corruption_graph_ordering_pass_qualified_back_edge() -> None:
     log = trace_fn(
         _RecurrentOrderingModel(),
         torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         linear_passes = [op for op in log.layer_list if op.func_name == "linear"]
@@ -7094,7 +7056,7 @@ def test_raw_label_survival_roster_is_closed():
     shapes (or in the justified allowlist below).
     """
 
-    from torchlens import constants
+    from torchlens import _constants as constants
     from torchlens.validation.invariants import (
         _RAW_LABEL_BEARING_DICT_FIELDS,
         _RAW_LABEL_BEARING_LIST_FIELDS,
@@ -7129,7 +7091,7 @@ def test_raw_label_survival_roster_is_closed():
     log = trace_fn(
         _ElifBranchModel(),
         torch.randn(3, 3),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     labels = {lpl.layer_label for lpl in log.layer_list} | {lpl.label for lpl in log.layer_list}
     fields = set(constants.OP_LOG_FIELD_ORDER) | set(constants.LAYER_LOG_FIELD_ORDER)
@@ -7190,7 +7152,7 @@ def test_corruption_equivalence_symmetry_one_sided_group():
     log = trace_fn(
         _TwiceLinearEquivalence(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     groups = [op for op in log.compute_ops if op.equivalent_ops]
     assert groups, "expected an equivalence group from the repeated layer"
@@ -7243,7 +7205,7 @@ def test_smoke_canary_plain_captures_trip_no_invariants():
         (_CanaryTupleOut(), torch.randn(3)),
     ]
     for model, x in cases:
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(random_seed=42))
+        log = trace_fn(model, x, capture=tl.options.CaptureOptions(seed=42))
         check_metadata_invariants(log)
         log.cleanup()
         assert validate_forward_pass(model, [x], input_kwargs={})
@@ -7367,7 +7329,7 @@ def test_corruption_connectivity_pruned_orphan_resurrected_into_final_labels() -
     log = trace_fn(
         _PrunedOrphanModel(),
         torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         orphan_raw_label = next(label for label in log._orphan_labels if label.startswith("relu"))
@@ -7516,7 +7478,7 @@ def test_connectivity_accepts_renumbered_orphan_raw_label_collision() -> None:
     log = trace_fn(
         _RenumberedOrphanCollisionModel(),
         torch.randn(5, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         stripped = {label.removesuffix("_raw") for label in log._orphan_labels}
@@ -7541,7 +7503,7 @@ def test_connectivity_accepts_retained_orphan_islands_with_final_labels() -> Non
     log = trace_fn(
         _PrunedOrphanModel(),
         torch.randn(5, 5),
-        capture=CaptureOptions(keep_orphans=True, random_seed=42),
+        capture=CaptureOptions(keep_orphans=True, seed=42),
     )
     try:
         assert log._orphan_labels, "fixture no longer produces orphans"
@@ -7562,7 +7524,7 @@ def test_connectivity_retained_orphan_mapped_to_live_final_label_is_rejected() -
     log = trace_fn(
         _PrunedOrphanModel(),
         torch.randn(5, 5),
-        capture=CaptureOptions(keep_orphans=True, random_seed=42),
+        capture=CaptureOptions(keep_orphans=True, seed=42),
     )
     try:
         orphan_raw_label = next(label for label in log._orphan_labels if label.startswith("relu"))
@@ -7601,7 +7563,7 @@ def test_param_xrefs_accept_used_param_whose_owner_module_is_never_entered() -> 
         (FunctionalParamUse(), torch.randn(2, 3)),
         (nn.TransformerEncoderLayer(8, 2, 16, batch_first=True), torch.randn(2, 5, 8)),
     ):
-        log = trace_fn(model, inputs, capture=tl.options.CaptureOptions(random_seed=42))
+        log = trace_fn(model, inputs, capture=tl.options.CaptureOptions(seed=42))
         try:
             used = [param for param in log.param_logs if param.num_uses_by_ops]
             assert used, "fixture no longer records used params"
@@ -7776,15 +7738,15 @@ class TestValidationBugfixes:
 
 
 class TestValidationNoSavedArgs:
-    """Validation with save_arg_values=False."""
+    """Validation with save_args=False."""
 
     def test_validation_no_args(self):
-        """validate with save_arg_values=False should not crash."""
+        """validate with save_args=False should not crash."""
         from torchlens import trace as trace_fn
 
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_arg_values=False))
+        log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=False))
         assert log is not None
 
 
@@ -8439,7 +8401,7 @@ def test_validation_teardown_is_per_step_fenced(monkeypatch: pytest.MonkeyPatch)
     once the monkeypatch is live, and the single injected failure lands
     exactly where intended: the function's own teardown restore.
     """
-    from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
+    from torchlens._utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
     get_cpu_float8_deterministic_fill_support(force_probe=True)
 
@@ -8623,9 +8585,7 @@ def test_corruption_arm_graph_topology_parent_side_reciprocity() -> None:
     has_children coherence arm cannot absorb the kill.
     """
 
-    log = trace_fn(
-        _DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    log = trace_fn(_DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
         ops = [op for lay in log.layer_list for op in lay.ops]
         parent = next(op for op in ops if len(op.children) >= 2)
@@ -8640,9 +8600,7 @@ def test_corruption_arm_graph_topology_parent_side_reciprocity() -> None:
 def test_corruption_arm_graph_topology_slot_names_non_parent() -> None:
     """Killer for graph_topology#a05: parent_arg_positions naming a non-parent."""
 
-    log = trace_fn(
-        _DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    log = trace_fn(_DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
         ops = [op for lay in log.layer_list for op in lay.ops]
         relu_op = next(op for op in ops if op.label.startswith("relu"))
@@ -8697,9 +8655,7 @@ def test_corruption_arm_special_list_flag_without_membership() -> None:
 def test_corruption_arm_equivalence_registry_group_mismatch() -> None:
     """Killer for equivalence_symmetry#a05: op view != registry group."""
 
-    log = trace_fn(
-        _ReusedLinear(), torch.randn(2, 5), capture=tl.options.CaptureOptions(random_seed=42)
-    )
+    log = trace_fn(_ReusedLinear(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
         key, members = next(
             (k, sorted(v)) for k, v in log.op_equivalence_classes.items() if len(v) >= 2
@@ -8717,7 +8673,7 @@ def test_corruption_arm_param_address_outside_canonical_set() -> None:
     log = trace_fn(
         _TwoLinearChain(),
         torch.randn(2, 5),
-        capture=tl.options.CaptureOptions(random_seed=42),
+        capture=tl.options.CaptureOptions(seed=42),
     )
     try:
         log.param_logs[0].address = "forged.weight"

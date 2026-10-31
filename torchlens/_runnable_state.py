@@ -16,15 +16,14 @@ from typing import Any
 
 import torch
 
+from torchlens._runnable import RunnableDiagnostic
+
 from . import _state
-from ._transport import digest_byte_view
-from .errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
-from .runnable import (
+from ._runnable import (
     CANONICAL_INITIALIZER_BY_ROLE,
     RUNNABLE_INITIALIZER_POLICY_VERSION,
     ControlWitnessKind,
     InitializerPolicy,
-    RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
     StateSlotRole,
@@ -32,9 +31,11 @@ from .runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from .utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
-from .utils._torch_symbols import torch_attr
-from .utils.lazy_state import raise_if_pending_state_slots
+from ._transport import digest_byte_view
+from ._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
+from ._utils._torch_symbols import torch_attr
+from ._utils.lazy_state import raise_if_pending_state_slots
+from .errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
 
 _INPUT_STRUCTURE_SITE_PREFIX = "input_structure:"
 """Canonical site-label prefix for persisted input-boundary structure facts."""
@@ -753,7 +754,7 @@ def snapshot_state_alias_topology(model: object) -> Mapping[str, Any] | None:
     model exposes no named state accessors.
     """
 
-    from .utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
+    from ._utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
 
     named_parameters = getattr(model, "named_parameters", None)
     named_buffers = getattr(model, "named_buffers", None)
@@ -1351,13 +1352,13 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
         warnings.warn(
             TorchLensWarning(
                 "This runnable artifact carries no model weights (the default "
-                "tl.save(level='runnable') is weight-free), so run() filled all "
+                "trace.save(path, level='runnable') is weight-free), so run() filled all "
                 f"{len(random_slot_ids)} state slot(s) with RANDOM "
                 f"torchlens_role_init_v2 values{seed_note}. Outputs come from a "
                 "freshly initialized model, NOT the captured one; the run "
                 "report's 'verified' attests path faithfulness against this "
                 "random state and numeric attestation is not_applicable. "
-                "Remedy: re-save with tl.save(trace, path, level='runnable', "
+                "Remedy: re-save with trace.save(path, level='runnable', "
                 "include_weights=True), or bind real weights with "
                 "trace.load_state_dict(state_dict) before run()",
                 code="runnable_random_init_run",
@@ -2771,7 +2772,7 @@ def _diagnostic(
         current_runtime=str(torch.__version__),
         detection_stage=detection_stage,
         resolver_provenance=None,
-        analysis_load_available=True,
+        is_analysis_load_available=True,
         details=details,
     )
 

@@ -19,17 +19,16 @@ import torch.nn.functional as F
 
 import torchlens as tl
 from torchlens.report import (
-    BACKWARD_STATES,
     backward_estimate,
     backward_status,
-    build_profile,
-    compute_aggregation,
     cost_tree,
-    flops_report,
-    grad_enabled_at_capture,
+    flops,
     padding_waste,
-    position_scaling_class,
+    profile,
 )
+from torchlens.report._compute_truth import compute_aggregation
+from torchlens.report._cost_backward import BACKWARD_STATES, grad_enabled_at_capture
+from torchlens.report._cost_scaling import position_scaling_class
 
 
 class NestedModel(nn.Module):
@@ -100,8 +99,8 @@ def test_honesty_labels_mixed_evidence_differently(sdpa_trace) -> None:
     presence-based honesty() (every non-null flops cell read 'estimated').
     """
 
-    profile = build_profile(sdpa_trace, level="op")
-    honesty = profile.honesty()
+    prof = profile(sdpa_trace, level="op")
+    honesty = prof.evidence_labels()
     labels = set(honesty["flops"])
     assert "formula_exact" in labels, labels
     assert "estimated" in labels, labels
@@ -111,8 +110,8 @@ def test_honesty_vocabulary_and_qualifiers(nested_trace) -> None:
     """D9 column rules: time is never bare 'measured'; params are declared
     inventory; boundary rows are not_applicable, never fabricated."""
 
-    profile = build_profile(nested_trace, level="op")
-    honesty = profile.honesty()
+    prof = profile(nested_trace, level="op")
+    honesty = prof.evidence_labels()
     assert set(honesty["time"]) <= {
         "measured+instrumentation_inclusive",
         "unknown",
@@ -130,11 +129,11 @@ def test_honesty_as_summary_and_inline_evidence(nested_trace) -> None:
     """honesty(as_summary=True) is the disclosure line; to_pandas(evidence=True)
     interleaves per-cell evidence columns (D9's inline form, on the export door)."""
 
-    profile = build_profile(nested_trace, level="op")
-    line = profile.honesty(as_summary=True)
+    prof = profile(nested_trace, level="op")
+    line = prof.evidence_labels(as_summary=True)
     assert isinstance(line, str)
     assert "formula_exact" in line
-    inline = profile.to_pandas(evidence=True)
+    inline = prof.to_pandas(evidence=True)
     columns = list(inline.columns)
     assert columns.index("flops_evidence") == columns.index("flops") + 1
     assert columns.index("time_evidence") == columns.index("time") + 1
@@ -144,8 +143,8 @@ def test_honesty_as_summary_and_inline_evidence(nested_trace) -> None:
 def test_honesty_aggregation_preserves_weakest_evidence(sdpa_trace) -> None:
     """D2: a rollup row holding an estimated member never upgrades to exact."""
 
-    profile = build_profile(sdpa_trace, level="module")
-    honesty = profile.honesty()
+    prof = profile(sdpa_trace, level="module")
+    honesty = prof.evidence_labels()
     # The root module contains the SDPA op: its rollup evidence is the
     # weakest member evidence, never formula_exact.
     assert "estimated" in set(honesty["flops"])
@@ -158,8 +157,8 @@ def test_honesty_aggregation_preserves_weakest_evidence(sdpa_trace) -> None:
 def test_profile_percent_columns_sum_to_100_of_known(nested_trace) -> None:
     """D4: exclusive percents sum to 100% of the KNOWN total."""
 
-    profile = build_profile(nested_trace, level="op")
-    total_pct = sum(value for value in profile.frame["flops_pct"] if value == value)
+    prof = profile(nested_trace, level="op")
+    total_pct = sum(value for value in prof.frame["flops_pct"] if value == value)
     assert total_pct == pytest.approx(100.0)
 
 
@@ -167,8 +166,8 @@ def test_profile_percent_denominator_invariant_under_top_k(nested_trace) -> None
     """D6 corruption plant: a denominator computed after top_k must fail --
     the partition total and per-row percents are unchanged by the view."""
 
-    full = build_profile(nested_trace, level="op")
-    view = build_profile(nested_trace, level="op", top_k=2)
+    full = profile(nested_trace, level="op")
+    view = profile(nested_trace, level="op", k=2)
     assert view.partition_total == full.partition_total
     by_name_full = dict(zip(full.frame["name"], full.frame["flops_pct"], strict=True))
     for name, pct in zip(view.frame["name"], view.frame["flops_pct"], strict=True):
@@ -181,10 +180,10 @@ def test_profile_percent_denominator_invariant_under_top_k(nested_trace) -> None
 def test_profile_roles_and_additivity_metadata(nested_trace) -> None:
     """D5: row roles and column additivity ride every export."""
 
-    op_frame = build_profile(nested_trace, level="op").to_pandas()
+    op_frame = profile(nested_trace, level="op").to_pandas()
     assert set(op_frame["role"].dropna()) == {"OWNER"}
     assert op_frame.attrs["column_additivity"]["flops"] is True
-    module_profile = build_profile(nested_trace, level="module")
+    module_profile = profile(nested_trace, level="module")
     module_frame = module_profile.to_pandas()
     assert set(module_frame["role"].dropna()) == {"SUBTOTAL"}
     # Inclusive family is marked non-additive at module level.
@@ -196,9 +195,9 @@ def test_module_self_family_sums_to_partition_total_not_naive(nested_trace) -> N
     """T-ROOT at module grain: the additive self family sums to the
     partition total; the naive inclusive sum over-counts (forbidden)."""
 
-    profile = build_profile(nested_trace, level="module")
-    frame = profile.frame
-    partition_total = profile.partition_total
+    prof = profile(nested_trace, level="module")
+    frame = prof.frame
+    partition_total = prof.partition_total
     self_sum = int(sum(value for value in frame["flops_self"] if value == value))
     assert self_sum == partition_total
     naive_sum = int(sum(value for value in frame["flops"].dropna()))
@@ -209,12 +208,12 @@ def test_module_self_family_sums_to_partition_total_not_naive(nested_trace) -> N
 def test_profile_totals_row_and_instrumented_label(nested_trace) -> None:
     """sumfam item 12: the explicit totals row and the instrumented label."""
 
-    profile = build_profile(nested_trace, level="op")
-    frame = profile.to_pandas(include_totals=True)
+    prof = profile(nested_trace, level="op")
+    frame = prof.to_pandas(include_totals=True)
     total_row = frame.loc[frame["kind"] == "total"].iloc[0]
     assert total_row["name"] == "TOTAL"
-    assert int(total_row["flops"]) == profile.partition_total
-    assert "time (instrumented)" in repr(profile)
+    assert int(total_row["flops"]) == prof.partition_total
+    assert "time (instrumented)" in repr(prof)
     assert frame.attrs["time_basis"] == "instrumented"
 
 
@@ -223,10 +222,10 @@ def test_call_children_sum_to_parent(nested_trace) -> None:
     """sumfam item 12 children-sum CI: per additive column, the members'
     self mass plus remainder equals the whole (conservation)."""
 
-    profile = build_profile(nested_trace, level="call")
-    frame = profile.frame
+    prof = profile(nested_trace, level="call")
+    frame = prof.frame
     self_sum = int(sum(value for value in frame["flops_self"] if value == value))
-    assert self_sum == profile.partition_total
+    assert self_sum == prof.partition_total
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +270,7 @@ def test_cost_tree_top_k_emits_remainder_and_receipt(nested_trace) -> None:
     display receipt; the denominator never shrinks."""
 
     full = cost_tree(nested_trace)
-    view = cost_tree(nested_trace, top_k=1)
+    view = cost_tree(nested_trace, k=1)
     assert view.partition_total == full.partition_total
     remainder_rows = [row for row in view.rows if row.role == "REMAINDER"]
     assert remainder_rows
@@ -325,8 +324,8 @@ def test_backward_estimate_is_named_door_and_hypothetical(nograd_trace) -> None:
     estimate = backward_estimate(nograd_trace)
     assert estimate.label == "hypothetical"
     assert estimate.hypothetical_flops > 0
-    assert estimate.n_ops_multiplied > 0
-    assert estimate.grad_disabled_at_capture
+    assert estimate.num_multiplied_ops > 0
+    assert estimate.is_grad_disabled_at_capture
     assert "HYPOTHETICAL" in estimate.disclosure
     assert "requires_grad as captured" in estimate.disclosure
     # No default 1.0 multiplier: non-MAC ops are excluded and named.
@@ -348,7 +347,7 @@ def test_backward_status_never_prints_counterfactual(nograd_trace) -> None:
 def test_flops_report_trace_door_blocks_and_raw_ints(nested_trace) -> None:
     """D10: six-block screen; T-RAW-INT: numeric fields are plain ints."""
 
-    report = flops_report(nested_trace)
+    report = flops(nested_trace)
     assert type(report.forward_flops) is int
     assert type(report.true_macs) is int
     text = str(report)
@@ -364,7 +363,7 @@ def test_flops_report_trace_door_blocks_and_raw_ints(nested_trace) -> None:
 def test_flops_report_6nd_absent_without_main_input(nested_trace) -> None:
     """T-6ND-APPLIC: no HF main_input evidence -> the line is ABSENT."""
 
-    report = flops_report(nested_trace)
+    report = flops(nested_trace)
     assert report.six_nd is None
     assert "6ND" not in str(report)
 
@@ -374,7 +373,7 @@ def test_flops_report_6nd_present_with_explicit_d(nested_trace) -> None:
     """D11: an explicit D renders the comparator with N from the dedup
     parameter identity and D counting pads."""
 
-    report = flops_report(nested_trace, main_input_numel=16)
+    report = flops(nested_trace, main_input_numel=16)
     assert report.six_nd is not None
     assert report.six_nd.d_numel == 16
     assert report.six_nd.six_nd == 6 * report.params_unique * 16
@@ -389,7 +388,7 @@ def test_flops_report_model_door_restores_state() -> None:
     model = NestedModel().train()
     example = torch.randn(2, 8)
     rng_before = torch.get_rng_state().clone()
-    report = flops_report(model, example)
+    report = flops(model, example)
     assert model.training  # restored
     assert torch.equal(torch.get_rng_state(), rng_before)
     assert type(report.forward_flops) is int
@@ -401,7 +400,7 @@ def test_flops_report_trace_door_refuses_inputs(nested_trace) -> None:
     from torchlens._errors import InvalidArgumentError
 
     with pytest.raises(InvalidArgumentError, match="model-door"):
-        flops_report(nested_trace, torch.randn(2, 8))
+        flops(nested_trace, torch.randn(2, 8))
 
 
 # ---------------------------------------------------------------------------
@@ -465,9 +464,9 @@ def test_sdpa_is_quadratic_linear_is_linear(sdpa_trace) -> None:
 def test_unknown_ops_disclosed_as_events_never_percent(nested_trace) -> None:
     """D4: the unknown disclosure is an event count + named ledger."""
 
-    profile = build_profile(nested_trace, level="op")
-    assert profile.unknown_events == 0
-    text = repr(profile)
+    prof = profile(nested_trace, level="op")
+    assert prof.unknown_events == 0
+    text = repr(prof)
     assert "%" not in text.split("unknown")[-1] or "unknown" not in text
 
 
@@ -485,7 +484,7 @@ def test_view_argument_codes_are_provoked(nested_trace) -> None:
     from torchlens._errors import InvalidArgumentError
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        cost_tree(nested_trace, top_k=0)
+        cost_tree(nested_trace, k=0)
     assert excinfo.value.fields["code"] == "cost_tree_top_k_invalid"
 
     with pytest.raises(InvalidArgumentError) as excinfo:
@@ -501,9 +500,9 @@ def test_view_argument_codes_are_provoked(nested_trace) -> None:
     assert excinfo.value.fields["code"] == "padding_waste_lengths_invalid"
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        flops_report(NestedModel())
+        flops(NestedModel())
     assert excinfo.value.fields["code"] == "flops_report_inputs_required"
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        flops_report(nested_trace, torch.randn(2, 8))
+        flops(nested_trace, torch.randn(2, 8))
     assert excinfo.value.fields["code"] == "flops_report_trace_door_inputs"

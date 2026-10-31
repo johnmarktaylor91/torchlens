@@ -54,8 +54,8 @@ def _draw(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> tuple
         warnings.simplefilter("always")
         source = trace.draw(
             vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(tmp_path / name),
+            file_format="dot",
+            path=str(tmp_path / name),
             **kwargs,
         )
     messages = [
@@ -80,7 +80,7 @@ def test_rank_layout_discloses_orphans_it_does_not_draw(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
     try:
-        assert trace.orphans
+        assert trace.graph.orphans
         dot_source, dot_messages = _draw(
             trace, tmp_path, "dot", show_orphans=True, vis_node_placement="dot"
         )
@@ -92,7 +92,7 @@ def test_rank_layout_discloses_orphans_it_does_not_draw(tmp_path: Path) -> None:
         )
         assert "orphan__" not in rank_source
         (omission,) = _omission_messages(rank_messages)
-        assert f"{len(trace.orphans)} orphan node" in omission
+        assert f"{len(trace.graph.orphans)} orphan node" in omission
         assert "vis_node_placement='dot'" in omission
 
         _, hidden_messages = _draw(trace, tmp_path, "rank_hidden", vis_node_placement="rank")
@@ -123,7 +123,7 @@ def test_rank_layout_discloses_hook_nodes_it_does_not_draw(tmp_path: Path) -> No
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     try:
-        with pytest.warns(tl.errors.MutateInPlaceWarning):
+        with pytest.warns(tl.errors.TraceMutationWarning):
             trace.set(tl.func("relu"), torch.zeros(2, 3))
         dot_source, dot_messages = _draw(
             trace, tmp_path, "dot", vis_intervention_mode="as_node", vis_node_placement="dot"

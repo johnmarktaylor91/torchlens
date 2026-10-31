@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.distributed import has_vetted_snapshot
+from torchlens.distributed import is_vetted_build
 
 
 class DdpModel(nn.Module):
@@ -70,7 +70,7 @@ def process_group(tmp_path: Path) -> Iterator[None]:
 
 
 def _record_under_group(*args: object, **kwargs: object):
-    """Call tl.fastlog.record, expecting the unvetted-torch disclosure.
+    """Call tl.record, expecting the unvetted-torch disclosure.
 
     Capturing under a genuinely initialized process group lazily arms
     collective capture; on a census-vetted torch build that is silent, and on
@@ -80,10 +80,10 @@ def _record_under_group(*args: object, **kwargs: object):
     gap to route around.
     """
 
-    if has_vetted_snapshot():
-        return tl.fastlog.record(*args, **kwargs)
+    if is_vetted_build():
+        return tl.record(*args, **kwargs)
     with pytest.warns(UserWarning, match="uncaptured_collective_op"):
-        return tl.fastlog.record(*args, **kwargs)
+        return tl.record(*args, **kwargs)
 
 
 def test_ddp_wrapped_model_records_unwrapped_module(process_group: None) -> None:
@@ -106,7 +106,7 @@ def test_ddp_bundle_path_gets_rank_prefix(process_group: None, tmp_path: Path) -
         ddp_model,
         torch.ones(1, 2),
         default_op=True,
-        streaming=tl.options.StreamingOptions(bundle_path=requested, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=requested, retain_in_memory=False),
     )
 
     assert recording.bundle_path == tmp_path / "rank_00" / "bundle.tlfast"
@@ -114,9 +114,9 @@ def test_ddp_bundle_path_gets_rank_prefix(process_group: None, tmp_path: Path) -
 
 
 @pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 def test_process_group_teardown_leaves_distributed_capture_dormant(process_group: None) -> None:
     """A capture under the group arms distributed capture; after teardown it is dormant.
@@ -128,7 +128,7 @@ def test_process_group_teardown_leaves_distributed_capture_dormant(process_group
     """
 
     ddp_model = torch.nn.parallel.DistributedDataParallel(DdpModel())
-    tl.fastlog.record(ddp_model, torch.ones(1, 2), default_op=True)
+    tl.record(ddp_model, torch.ones(1, 2), default_op=True)
     assert tl.distributed.is_armed(), "capture under an initialized group should auto-arm"
 
     torch.distributed.destroy_process_group()

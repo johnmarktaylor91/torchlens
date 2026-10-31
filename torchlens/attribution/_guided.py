@@ -55,7 +55,7 @@ from torchlens.attribution._core import (
     _target_repr,
     _temporarily_eval,
 )
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 
 _RELU_NAMES = frozenset({"relu", "relu_"})
 
@@ -241,7 +241,7 @@ def _modified_backward_attribution(
     target: _AttributionTarget,
     sites: str,
     absolute: bool,
-) -> AttributionResult:
+) -> Attribution:
     """Shared engine for the two named modified-backward methods.
 
     Parameters
@@ -338,7 +338,7 @@ def _modified_backward_attribution(
     values = tuple(gradient.abs() if absolute else gradient for gradient in gradients)
     from torchlens.attribution._core import _value_tree_from_leaves
 
-    return AttributionResult(
+    return Attribution(
         method=rule_name,
         values=_value_tree_from_leaves(prepared, values),
         target_repr=_target_repr(target),
@@ -421,7 +421,7 @@ def guided_backprop(
     target: _AttributionTarget,
     sites: str = "all",
     absolute: bool = False,
-) -> AttributionResult:
+) -> Attribution:
     """Guided backpropagation: positive gradients through exact-ReLU sites.
 
     Every executed exact-ReLU op is rewritten (module-dispatched, functional,
@@ -481,7 +481,7 @@ def deconvolution(
     target: _AttributionTarget,
     sites: str = "all",
     absolute: bool = False,
-) -> AttributionResult:
+) -> Attribution:
     """Deconvolution: positive gradients WITHOUT the forward-ReLU mask.
 
     Every executed exact-ReLU op is rewritten; the backward passes

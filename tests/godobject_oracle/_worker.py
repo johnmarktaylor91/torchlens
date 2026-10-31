@@ -46,8 +46,8 @@ def main() -> int:
             for vis_mode in ("unrolled", "rolled"):
                 source = trace.draw(
                     vis_save_only=True,
-                    vis_fileformat="svg",
-                    vis_outpath=str(Path(tmp) / f"{key}_{vis_mode}"),
+                    file_format="svg",
+                    path=str(Path(tmp) / f"{key}_{vis_mode}"),
                     vis_mode=vis_mode,
                 )
                 renders[f"viz_{key}_{vis_mode}.gv"] = source

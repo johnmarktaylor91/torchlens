@@ -21,7 +21,7 @@ import time
 
 import pytest
 
-from torchlens.utils._subprocess import _HAS_PROCESS_GROUPS, run_bounded_subprocess
+from torchlens._utils._subprocess import _HAS_PROCESS_GROUPS, run_bounded_subprocess
 
 pytestmark = pytest.mark.heavy
 
@@ -66,7 +66,7 @@ def test_grandchild_dies_after_parent_sigkill(tmp_path) -> None:
             f"""
             import os, sys, threading, time
             sys.path.insert(0, {str(os.getcwd())!r})
-            from torchlens.utils._subprocess import run_bounded_subprocess
+            from torchlens._utils._subprocess import run_bounded_subprocess
 
             def run() -> None:
                 # sh (group leader, PDEATHSIG-armed) + a backgrounded

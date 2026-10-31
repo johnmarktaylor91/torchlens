@@ -13,15 +13,15 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.backends._protocol import CaptureBackend
-from torchlens.backends.torch._tl import get_tensor_label
-from torchlens.data_classes.trace import Trace
-from torchlens.ir.workspaces import (
+from torchlens._data_classes.trace import Trace
+from torchlens._ir.workspaces import (
     LEGACY_TRACE_BUILD_STATE_KEYS,
     ModuleCaptureWorkspace,
     RawGraphWorkspace,
     WrapperRuntimeWorkspace,
 )
+from torchlens.backends._protocol import CaptureBackend
+from torchlens.backends.torch._tl import get_tensor_label
 from torchlens.visualization._summary_internal._builder import _live_op_count
 
 
@@ -175,7 +175,7 @@ def test_mid_forward_summary_refuses_typed() -> None:
     running over a half-built trace.
     """
 
-    from torchlens._errors import CaptureContextError
+    from torchlens._errors import CaptureNotActiveError
 
     model = _MidForwardProbe()
     log = tl.trace(
@@ -183,7 +183,7 @@ def test_mid_forward_summary_refuses_typed() -> None:
     )
 
     error = stashed(log, "observations").get("summary_error")
-    assert isinstance(error, CaptureContextError)
+    assert isinstance(error, CaptureNotActiveError)
     assert error.fields["code"] == "trace_not_finished"
     assert "repr(trace)" in str(error)
 

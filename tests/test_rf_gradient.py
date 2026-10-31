@@ -64,7 +64,7 @@ def test_conv_support_is_exact_and_matches_geometric_hull() -> None:
     target = _op(trace, "conv2d")
     input_op = next(op for op in trace.layer_list if op.is_input)
 
-    result = gradient_for_unit(target, (0, 0, 3, 3), input=input_op)
+    result = gradient_for_unit(target, (0, 0, 3, 3), input_op=input_op)
 
     assert result.grad.shape == inputs.shape
     assert result.support_ranges == ((0, 1), (0, 1), (2, 5), (2, 5))
@@ -95,9 +95,9 @@ def test_trace_input_accessor_resolves_for_empirical_rf_queries() -> None:
     accessor_input = trace.input_ops[0]
 
     gradient = target.receptive_field.gradient(
-        (0, 0, 2, 2), input=accessor_input, retain_graph=True
+        (0, 0, 2, 2), input_op=accessor_input, retain_graph=True
     )
-    checked = target.receptive_field.check((0, 0, 2, 2), input=accessor_input)
+    checked = target.receptive_field.check((0, 0, 2, 2), input_op=accessor_input)
 
     assert gradient.support_mask.sum().item() == 9
     assert checked.passed
@@ -136,7 +136,7 @@ def test_effective_mask_and_indices_use_deterministic_flat_ties() -> None:
     trace = tl.trace(model, inputs, capture=capture, save_mode="reference")
     target = _op(trace, "conv2d")
     input_op = next(op for op in trace.layer_list if op.is_input)
-    result = gradient_for_unit(target, (0, 0, 1, 1), input=input_op)
+    result = gradient_for_unit(target, (0, 0, 1, 1), input_op=input_op)
 
     effective = result.effective(0.5)
     expected = torch.zeros_like(result.support_mask)
@@ -175,7 +175,7 @@ def test_training_batchnorm_reports_cross_batch_influence() -> None:
     target = _op(trace, "batch_norm")
     input_op = next(op for op in trace.layer_list if op.is_input)
 
-    result = gradient_for_unit(target, (0, 0, 0, 0), input=input_op)
+    result = gradient_for_unit(target, (0, 0, 0, 0), input_op=input_op)
 
     assert result.grad.shape == inputs.shape
     assert result.batch_support == (0, 1)
@@ -208,7 +208,7 @@ def test_reachable_but_none_gradient_raises_typed_error() -> None:
     input_op = next(op for op in trace.layer_list if op.is_input)
 
     with pytest.raises(ReceptiveFieldUnavailableError, match="reachable.*autograd returned no"):
-        gradient_for_unit(target, (0, 0), input=input_op)
+        gradient_for_unit(target, (0, 0), input_op=input_op)
 
 
 def test_fork_probe_does_not_mint_parent_backward_pass() -> None:

@@ -4,7 +4,7 @@ Before the fix EDGE-kind tier-(ii) entries were excluded from the cone
 re-splice, so any later recompute of the child (a second edge edit on
 another arg, an upstream act edit, a param edit reaching the child)
 silently reverted the substitution while the store, stamp, and audit row
-kept asserting it. Chained ``do(tl.params(p), scale(0.5))`` REPLACED
+kept asserting it. Chained ``do(tl.param(p), scale(0.5))`` REPLACED
 (0.5) instead of composing (0.25) as the act path does.
 """
 
@@ -41,7 +41,7 @@ def two():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
     try:
         yield model, x, trace
@@ -62,7 +62,7 @@ def _edge(trace, position):
     add = _add(trace)
     return next(
         e
-        for e in trace.edges
+        for e in trace.graph.edges
         if e.child_label in (add.label, add.layer_label) and e.arg_path == (position,)
     )
 
@@ -103,7 +103,7 @@ def test_edge_edit_and_param_edit_compose_in_either_order(two, param_first: bool
         b_no_bias = torch.tanh(x @ model.fc2.weight.T)
     steps = [
         lambda: fork.do(_edge(trace, 0).__selection__(), tl.zero_ablate()),
-        lambda: fork.do(tl.params("fc2.bias"), tl.zero_ablate()),
+        lambda: fork.do(tl.param("fc2.bias"), tl.zero_ablate()),
     ]
     for step in steps[::-1] if param_first else steps:
         step()
@@ -131,8 +131,8 @@ def test_chained_param_scaling_composes_and_never_writes_the_live_param(two) -> 
     model, x, trace = two
     live_before = model.fc2.weight.detach().clone()
     fork = trace.fork()
-    fork.do(tl.params("fc2.weight"), tl.scale(0.5))
-    fork.do(tl.params("fc2.weight"), tl.scale(0.5))
+    fork.do(tl.param("fc2.weight"), tl.scale(0.5))
+    fork.do(tl.param("fc2.weight"), tl.scale(0.5))
     with torch.no_grad():
         a = torch.relu(model.fc1(x))
         expected_add = a + torch.tanh(x @ (0.25 * model.fc2.weight).T + model.fc2.bias)

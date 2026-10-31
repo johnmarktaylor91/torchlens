@@ -7,7 +7,7 @@ import pytest
 paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 
@@ -167,7 +167,7 @@ def test_paddle_preview_rejects_random_seed() -> None:
             lambda x: x + 1,
             _input(),
             backend="paddle",
-            capture=tl.options.CaptureOptions(random_seed=123),
+            capture=tl.options.CaptureOptions(seed=123),
         )
 
 

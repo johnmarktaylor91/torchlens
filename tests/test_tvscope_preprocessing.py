@@ -18,8 +18,11 @@ import torch
 
 pytest.importorskip("torchvision")
 
+import torchlens._data_classes._preprocessing_provenance as provenance  # noqa: E402
+import torchlens.errors
 import torchlens.preprocessing as pp  # noqa: E402
-from torchlens.data_classes.trace import ResolvedPreprocessing  # noqa: E402
+import torchlens.preprocessing._records as records  # noqa: E402
+from torchlens._data_classes.trace import ResolvedPreprocessing  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -52,22 +55,22 @@ class TestResolver:
         assert declared.resize_size == 232
         assert declared.crop_size == 224
         assert declared.mean == pytest.approx((0.485, 0.456, 0.406))
-        assert resnet50_v2_resolution.status == pp.STATUS_AUTHORITATIVE
+        assert resnet50_v2_resolution.status == provenance.STATUS_AUTHORITATIVE
         assert resnet50_v2_resolution.transform is not None
 
     def test_detection_authority_declares_nothing(self, detection_resolution) -> None:
         """A real shipped family declares NO fields; resolution stays honest."""
 
         assert detection_resolution.declared is None
-        assert detection_resolution.record.config.get("declares") == "nothing"
+        assert detection_resolution.preprocessing.config.get("declares") == "nothing"
         assert detection_resolution.transform is not None
 
     def test_explicit_mapping_resolves_with_aliases(self) -> None:
         """Explicit declarations accept canonical + alias keys, disclose the rest."""
 
         resolution = pp.resolve({"image_mean": [0.5, 0.5, 0.5], "std": 0.5, "mystery_knob": 3})
-        assert resolution.record.source == "explicit_declaration"
-        assert resolution.status == pp.STATUS_AUTHORITATIVE
+        assert resolution.preprocessing.source == "explicit_declaration"
+        assert resolution.status == provenance.STATUS_AUTHORITATIVE
         assert resolution.declared is not None
         assert resolution.declared.mean == pytest.approx((0.5, 0.5, 0.5))
         assert resolution.declared.extras["unrecognized_keys"] == ["mystery_knob"]
@@ -85,7 +88,7 @@ class TestResolver:
                 "interpolation": "bicubic",
             }
         )
-        assert resolution.record.source == "timm"
+        assert resolution.preprocessing.source == "timm"
         assert resolution.declared is not None
         assert resolution.declared.crop_size == 224
         assert resolution.declared.resize_size == 256
@@ -106,7 +109,7 @@ class TestResolver:
             ]
         )
         resolution = pp.resolve(pipeline)
-        assert resolution.record.source == "compose_pipeline"
+        assert resolution.preprocessing.source == "compose_pipeline"
         assert resolution.declared is not None
         assert resolution.declared.resize_size == 256
         assert resolution.declared.crop_size == 224
@@ -126,7 +129,7 @@ class TestResolver:
         """An opaque callable declares nothing; the callable is preserved."""
 
         resolution = pp.resolve(lambda x: x)
-        assert resolution.status == pp.STATUS_UNKNOWN
+        assert resolution.status == provenance.STATUS_UNKNOWN
         assert resolution.declared is None
         assert resolution.transform is not None
 
@@ -134,8 +137,8 @@ class TestResolver:
         """A plain nn.Module resolves unknown -- never a TorchLens recipe."""
 
         resolution = pp.resolve(model=torch.nn.Linear(4, 4))
-        assert resolution.status == pp.STATUS_UNKNOWN
-        assert resolution.record.source == "unknown"
+        assert resolution.status == provenance.STATUS_UNKNOWN
+        assert resolution.preprocessing.source == "unknown"
         assert resolution.transform is None
 
     def test_registry_extension_wins_over_builtins(self) -> None:
@@ -152,12 +155,12 @@ class TestResolver:
             """Resolve the marker with a distinctive source."""
 
             resolution = pp.unknown_resolution("custom")
-            resolution.record.source = "custom_adapter"
+            resolution.preprocessing.source = "custom_adapter"
             return resolution
 
         pp.register_authority_adapter("custom", probe, adapt)
         try:
-            assert pp.resolve(marker).record.source == "custom_adapter"
+            assert pp.resolve(marker).preprocessing.source == "custom_adapter"
         finally:
             from torchlens.preprocessing import _authorities
 
@@ -211,7 +214,7 @@ class TestAntialiasCoercion:
                 return preset
 
         resolution = pp.resolve(_FakeWeights())
-        report = pp.audit(resolution, resolution)
+        report = pp.compare(resolution, resolution)
         assert report.verdict == "verified"
 
 
@@ -221,7 +224,7 @@ class TestAuditOracle:
     def test_audit_names_mismatched_fields(self, resnet50_v2_resolution) -> None:
         """Wrong constants are named per field, before any extraction."""
 
-        report = pp.audit(resnet50_v2_resolution, {"mean": [0.5] * 3, "std": [0.5] * 3})
+        report = pp.compare(resnet50_v2_resolution, {"mean": [0.5] * 3, "std": [0.5] * 3})
         assert report.verdict == "mismatch"
         assert set(report.mismatched_fields) == {"mean", "std"}
         mean_row = next(f for f in report.findings if f.field == "mean")
@@ -234,21 +237,21 @@ class TestAuditOracle:
     ) -> None:
         """Strict mode refuses BOTH failure kinds, distinctly typed."""
 
-        with pytest.raises(pp.PreprocessingAuditError) as mismatch_info:
-            pp.audit(
+        with pytest.raises(torchlens.errors.PreprocessingAuditError) as mismatch_info:
+            pp.compare(
                 resnet50_v2_resolution,
                 {"mean": [0.5] * 3, "std": [0.5] * 3},
                 strict=True,
             )
         assert mismatch_info.value.fields["code"] == "preprocessing_audit_mismatch"
-        with pytest.raises(pp.PreprocessingAuditError) as unknown_info:
-            pp.audit(detection_resolution, None, strict=True)
+        with pytest.raises(torchlens.errors.PreprocessingAuditError) as unknown_info:
+            pp.compare(detection_resolution, None, strict=True)
         assert unknown_info.value.fields["code"] == "preprocessing_audit_unknown"
 
     def test_permissive_stamps_mismatch_never_raises(self, resnet50_v2_resolution) -> None:
         """Default mode reports; it never raises and never says verified."""
 
-        report = pp.audit(resnet50_v2_resolution, {"mean": [0.5] * 3, "std": [0.5] * 3})
+        report = pp.compare(resnet50_v2_resolution, {"mean": [0.5] * 3, "std": [0.5] * 3})
         assert report.verdict == "mismatch"
 
     def test_fallback_record_never_yields_verified(self) -> None:
@@ -261,16 +264,16 @@ class TestAuditOracle:
             config={"mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]},
             description="fallback",
         )
-        assert fallback.status == pp.STATUS_UNVERIFIED_FALLBACK
-        resolution = pp.Resolution(record=fallback, declared=None, transform=None)
-        report = pp.audit(resolution, None)
+        assert fallback.status == provenance.STATUS_UNVERIFIED_FALLBACK
+        resolution = pp.Resolution(preprocessing=fallback, declared=None, transform=None)
+        report = pp.compare(resolution, None)
         assert report.verdict == "unknown"
         assert "authority_status_unverified_fallback" in report.unknown_reasons
 
     def test_opaque_applied_side_never_matches(self, resnet50_v2_resolution) -> None:
         """An opaque callable's fields are unknown -- never match (memo D4)."""
 
-        report = pp.audit(resnet50_v2_resolution, lambda x: x)
+        report = pp.compare(resnet50_v2_resolution, lambda x: x)
         assert report.verdict == "unknown"
         assert all(f.verdict == "unknown" for f in report.findings)
         assert "opaque_transform" in report.unknown_reasons
@@ -279,7 +282,7 @@ class TestAuditOracle:
     def test_self_audit_of_authoritative_resolution_verifies(self, resnet50_v2_resolution) -> None:
         """Applying the authority's own transform is verified-by-construction."""
 
-        report = pp.audit(resnet50_v2_resolution, resnet50_v2_resolution)
+        report = pp.compare(resnet50_v2_resolution, resnet50_v2_resolution)
         assert report.verdict == "verified"
 
     @pytest.mark.smoke
@@ -288,11 +291,11 @@ class TestAuditOracle:
 
         import json
 
-        report = pp.audit(resnet50_v2_resolution, {"mean": [0.5] * 3})
+        report = pp.compare(resnet50_v2_resolution, {"mean": [0.5] * 3})
         payload = json.loads(json.dumps(report.to_json()))
         assert payload["schema"] == "tl_preprocessing_audit_v1"
         assert payload["verdict"] == report.verdict
-        assert len(payload["findings"]) == len(pp.COMPARABLE_FIELDS)
+        assert len(payload["findings"]) == len(records.COMPARABLE_FIELDS)
 
     def test_status_property_serves_legacy_records(self) -> None:
         """The derived status is read-time: legacy-shaped records serve it."""
@@ -304,7 +307,7 @@ class TestAuditOracle:
             config={},
             description="legacy record without resolution_method",
         )
-        assert legacy.status == pp.STATUS_AUTHORITATIVE
+        assert legacy.status == provenance.STATUS_AUTHORITATIVE
 
 
 class TestDiagnosticsNeverMatch:
@@ -328,7 +331,9 @@ class TestDiagnosticsNeverMatch:
         """NaNs are an intrinsic contradiction."""
 
         result = pp.diagnose(torch.full((2, 3, 4, 4), float("nan")))
-        assert any(f.check == "nonfinite" and f.outcome == "contradiction" for f in result.findings)
+        assert any(
+            f.check_name == "nonfinite" and f.outcome == "contradiction" for f in result.findings
+        )
 
     def test_uint8_under_float_declaration_contradicts(self) -> None:
         """An integer batch cannot have passed a declared float normalization."""
@@ -338,7 +343,7 @@ class TestDiagnosticsNeverMatch:
             torch.randint(0, 255, (2, 3, 4, 4), dtype=torch.uint8), declared=declared
         )
         assert any(
-            f.check == "dtype_regime" and f.outcome == "contradiction" for f in result.findings
+            f.check_name == "dtype_regime" and f.outcome == "contradiction" for f in result.findings
         )
 
     def test_unknown_check_refuses_typed(self) -> None:
@@ -355,7 +360,7 @@ class TestDiagnosticsNeverMatch:
 
         batch = torch.rand(2, 3, 4, 4)
         default = pp.diagnose(batch)
-        assert all(f.check != "confinement" for f in default.findings)
+        assert all(f.check_name != "confinement" for f in default.findings)
         declared = pp.DeclaredPreprocessing(
             mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), value_range=(0.0, 1.0)
         )
@@ -433,7 +438,7 @@ class TestFalsePositiveSuite:
     def test_detection_checkpoint_correct_unit_range_batch(self, detection_resolution) -> None:
         """The declares-nothing family: [0,1] input, verdict unknown, no alarm."""
 
-        report = pp.audit(detection_resolution, None)
+        report = pp.compare(detection_resolution, None)
         assert report.verdict == "unknown"
         result = pp.diagnose(torch.rand(2, 3, 8, 8), declared=detection_resolution.declared)
         assert list(result.contradictions) == []
@@ -456,5 +461,5 @@ class TestFalsePositiveSuite:
         """Unknown is the honest verdict; never an error-grade claim."""
 
         unknown_authority = pp.resolve(model=torch.nn.Linear(2, 2))
-        report = pp.audit(unknown_authority, lambda x: x)
+        report = pp.compare(unknown_authority, lambda x: x)
         assert report.verdict == "unknown"

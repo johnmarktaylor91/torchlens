@@ -35,15 +35,15 @@ from torch import nn
 
 import torchlens as _torchlens
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
     capture_container_structure=True,
     cache=False,
-    random_seed=0,
+    seed=0,
 )
 
 
@@ -224,7 +224,7 @@ def test_input_escape_cell_changed_input_is_never_verified(
 ) -> None:
     """A changed input restales the escape source -> never VERIFIED."""
     loaded = _save_load(factory(), cap_x, tmp_path)
-    result = loaded.run(inputs=changed_x, seed=0, on_divergence="return_diverged")
+    result = loaded.run(inputs=changed_x, seed=0, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
@@ -241,7 +241,7 @@ def test_input_escape_cell_original_input_is_verified(
 ) -> None:
     """The original input recomputes the byte-identical escape source -> VERIFIED."""
     loaded = _save_load(factory(), cap_x, tmp_path)
-    result = loaded.run(inputs=cap_x, seed=0, on_divergence="return_diverged")
+    result = loaded.run(inputs=cap_x, seed=0, on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -359,7 +359,7 @@ def test_state_escape_cell_changed_state_is_never_verified(
     """A changed staged param/buffer restales the escape source -> never VERIFIED."""
     loaded = _save_load(factory(), x, tmp_path)
     loaded.load_state_dict(changed_state)
-    result = loaded.run(inputs=x, seed=0, on_divergence="return_diverged")
+    result = loaded.run(inputs=x, seed=0, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
@@ -375,7 +375,7 @@ def test_state_escape_cell_capture_equivalent_state_is_verified(
 ) -> None:
     """The embedded capture-equivalent state re-digests identically -> VERIFIED."""
     loaded = _save_load(factory(), x, tmp_path)
-    result = loaded.run(inputs=x, seed=0, on_divergence="return_diverged")
+    result = loaded.run(inputs=x, seed=0, on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -409,11 +409,11 @@ def test_pruned_data_bool_predicate_is_state_witnessed(tmp_path: Path) -> None:
     unchanged).
     """
     loaded = _save_load(_DataAliasBoolControl(), _STATE_X_VEC, tmp_path)
-    original = loaded.run(inputs=_STATE_X_VEC, seed=0, on_divergence="return_diverged")
+    original = loaded.run(inputs=_STATE_X_VEC, seed=0, on_divergence="return")
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     changed = _save_load(_DataAliasBoolControl(), _STATE_X_VEC, tmp_path)
     changed.load_state_dict({"gate": torch.tensor(0.0)})
-    changed_result = changed.run(inputs=_STATE_X_VEC, seed=0, on_divergence="return_diverged")
+    changed_result = changed.run(inputs=_STATE_X_VEC, seed=0, on_divergence="return")
     assert changed_result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
@@ -515,7 +515,7 @@ def test_fake_internal_escape_is_witnessed_not_classified_internal(tmp_path: Pat
     original = _save_load(_make_fake_internal_model(), _TWO, tmp_path).run(inputs=_TWO, seed=0)
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     changed = _save_load(_make_fake_internal_model(), _TWO, tmp_path).run(
-        inputs=_TWO_CHANGED, seed=0, on_divergence="return_diverged"
+        inputs=_TWO_CHANGED, seed=0, on_divergence="return"
     )
     assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
@@ -639,7 +639,7 @@ def test_data_alias_inplace_mutation_is_never_verified_with_dropped_write(
     changed_x = torch.tensor([3.0, 4.0, 5.0, 6.0])
     for run_x in (cap_x, changed_x):
         result = _save_load(factory(), cap_x.clone(), tmp_path).run(
-            inputs=run_x.clone(), seed=0, on_divergence="return_diverged"
+            inputs=run_x.clone(), seed=0, on_divergence="return"
         )
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
@@ -681,7 +681,7 @@ def test_host_writeback_through_mutable_alias_is_never_verified(
     """A host write-back through a mutable numpy/__array__ alias is UNVERIFIABLE on the original."""
     x = torch.tensor([1.0, 0.5, 2.0, 0.25])
     result = _save_load(factory(), x.clone(), tmp_path).run(
-        inputs=x.clone(), seed=0, on_divergence="return_diverged"
+        inputs=x.clone(), seed=0, on_divergence="return"
     )
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
@@ -726,11 +726,11 @@ def test_to_dlpack_c_binding_export_is_witnessed_as_escape(tmp_path: Path) -> No
     cap_x = torch.tensor([1.0, 0.5, 2.0, 0.25])
     changed_x = torch.tensor([3.0, 4.0, 5.0, 6.0])
     original = _save_load(_ToDlpackExport(), cap_x.clone(), tmp_path).run(
-        inputs=cap_x.clone(), seed=0, on_divergence="return_diverged"
+        inputs=cap_x.clone(), seed=0, on_divergence="return"
     )
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     changed = _save_load(_ToDlpackExport(), cap_x.clone(), tmp_path).run(
-        inputs=changed_x.clone(), seed=0, on_divergence="return_diverged"
+        inputs=changed_x.clone(), seed=0, on_divergence="return"
     )
     assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
@@ -749,11 +749,11 @@ def test_public_to_dlpack_alias_export_is_witnessed_as_escape(tmp_path: Path) ->
     cap_x = torch.tensor([1.0, 0.5, 2.0, 0.25])
     changed_x = torch.tensor([3.0, 4.0, 5.0, 6.0])
     original = _save_load(_PublicAliasToDlpackExport(), cap_x.clone(), tmp_path).run(
-        inputs=cap_x.clone(), seed=0, on_divergence="return_diverged"
+        inputs=cap_x.clone(), seed=0, on_divergence="return"
     )
     assert original.report.path_faithfulness is PathFaithfulness.VERIFIED
     changed = _save_load(_PublicAliasToDlpackExport(), cap_x.clone(), tmp_path).run(
-        inputs=changed_x.clone(), seed=0, on_divergence="return_diverged"
+        inputs=changed_x.clone(), seed=0, on_divergence="return"
     )
     assert changed.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
@@ -813,7 +813,7 @@ def test_r14_h1_writeback_with_tracked_inplace_is_never_verified(
     """A numpy write-back layered with a tracked in-place op is UNVERIFIABLE (both inputs)."""
     for run_x in (_R14_X, _R14_CHANGED):
         result = _save_load(factory(), _R14_X.clone(), tmp_path).run(
-            inputs=run_x.clone(), seed=0, on_divergence="return_diverged"
+            inputs=run_x.clone(), seed=0, on_divergence="return"
         )
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
@@ -855,7 +855,7 @@ def test_r14_h2_labelled_view_of_data_alias_mutation_is_never_verified(
     """A dropped mutation through a labelled view of .data is UNVERIFIABLE (both inputs)."""
     for run_x in (_R14_X, _R14_CHANGED):
         result = _save_load(factory(), _R14_X.clone(), tmp_path).run(
-            inputs=run_x.clone(), seed=0, on_divergence="return_diverged"
+            inputs=run_x.clone(), seed=0, on_divergence="return"
         )
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
@@ -898,7 +898,7 @@ def test_r14_h3_storage_bridge_host_write_is_never_verified(
     """A host write through a storage-pointer bridge is UNVERIFIABLE (both inputs)."""
     for run_x in (_R14_X, _R14_CHANGED):
         result = _save_load(factory(), _R14_X.clone(), tmp_path).run(
-            inputs=run_x.clone(), seed=0, on_divergence="return_diverged"
+            inputs=run_x.clone(), seed=0, on_divergence="return"
         )
         assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 

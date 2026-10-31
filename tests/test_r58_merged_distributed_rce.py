@@ -27,20 +27,20 @@ from typing import Any
 import pytest
 import torch
 
-from torchlens.distributed._ledger import (
-    GroupLifecycleEvent,
-    GroupLifecycleLedger,
-    membership_digest_for_ranks,
-)
-from torchlens.merged._artifact import load_merged
-from torchlens.merged._enums import (
+from torchlens._merged._artifact import load_merged
+from torchlens._merged._enums import (
     MERGED_BUNDLE_FORMAT,
     MERGED_DESCRIPTOR_KIND,
     MERGED_DESCRIPTOR_SCHEMA_VERSION,
     MERGED_TLSPEC_VERSION,
     MergedErrorCode,
 )
-from torchlens.merged._errors import MergedArtifactError, MergeInputError
+from torchlens._merged._errors import MergedArtifactError, MergeInputError
+from torchlens.distributed._ledger import (
+    GroupLifecycleEvent,
+    GroupLifecycleLedger,
+    membership_digest_for_ranks,
+)
 
 _DIGEST = membership_digest_for_ranks([0, 1])
 
@@ -165,7 +165,7 @@ def test_ledger_epoch_disagreement_refuses_at_evidence_extraction() -> None:
     a ``seeded`` rank to a complete witness.
     """
 
-    from torchlens.merged._evidence import extract_rank_evidence
+    from torchlens._merged._evidence import extract_rank_evidence
 
     boundary = {
         "schema": "collective_boundary_v1",
@@ -501,7 +501,7 @@ def _real_two_rank_artifact(tmp_path: Path) -> Path:
 def _rehash_artifact(art: Path) -> None:
     """Recompute member tree hashes + descriptor checksum after a byte edit."""
 
-    from torchlens.merged._artifact import canonical_json_bytes, tree_hash
+    from torchlens._merged._artifact import canonical_json_bytes, tree_hash
 
     desc_path = art / "merge" / "descriptor.json"
     descriptor = json.loads(desc_path.read_text())

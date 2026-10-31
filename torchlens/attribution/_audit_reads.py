@@ -87,7 +87,7 @@ def _audited_rows(claim: Any) -> tuple[str | None, list[tuple[int, Any]], list[t
     if len(targets) != 1:
         raise _read_refusal(
             f"it holds rows for {len(targets)} targets {targets!r}; the audit measures one target",
-            f"tl.attribution.causal_audit(model, x, claim=claim.for_target({first!r}), "
+            f"tl.attribution.causal_audit(model, x, claim=claim.target({first!r}), "
             f"target={seed}, k=1)"
             if first is not None
             else _read_remedy("target"),
@@ -200,7 +200,7 @@ def _plan_read_audit(request: _AuditRequest, trace: Any) -> _SitesPlan:
     name, edits = _site_edits(
         request.ablation,
         sites,
-        remedy=f"tl.attribution.causal_audit(model, x, claim=claim, target={seed}, ablation=0.0)",
+        remedy=f"tl.attribution.causal_audit(model, x, claim=claim, target={seed}, edit=0.0)",
     )
     grain = audited[0][1].grain if audited else "site"
     return _SitesPlan(

@@ -32,7 +32,7 @@ def _require_trace(log: Any, *, exporter: str) -> None:
         ``export_expected_trace`` when ``log`` is not a ``Trace``.
     """
 
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
     if isinstance(log, Trace):
         return

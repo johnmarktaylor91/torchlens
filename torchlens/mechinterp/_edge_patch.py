@@ -58,7 +58,7 @@ def _input_edge_record(trace: Any, receiver: Any) -> Any:
 
     matches = [
         record
-        for record in trace.edges
+        for record in trace.graph.edges
         if str(trace.ops[str(record.parent_label)].label) == receiver.input_label
         and _innermost_module(trace.ops[str(record.child_label)]) == receiver.norm_address
     ]
@@ -190,7 +190,7 @@ def _write_stage(owner: Any, trace: Any, writes: list[tuple[Any, torch.Tensor]])
         owner.do(pairs)
 
 
-def patch_edges(trace: Any, edges: Iterable[Any], *, corrupt: Any) -> Any:
+def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> Any:
     """Return a fork of ``trace`` with the given edges patched to their corrupted senders.
 
     Parameters
@@ -203,7 +203,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupt: Any) -> Any:
         circuit runs as one call: pass every edge outside it,
         ``[e for name, e in graph.edges.items() if name not in kept]``.
         No edges returns an unpatched fork.
-    corrupt:
+    corrupted_graph:
         The :class:`ComponentGraph` of the corrupted input (same model,
         same shapes); each edge's corrupted contribution is
         ``corrupt.nodes[edge.sender.name].value``.
@@ -234,7 +234,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupt: Any) -> Any:
                     edge.sender.name: live.nodes[edge.sender.name].value for edge in receiver_edges
                 }
             for edge in receiver_edges:
-                corrupt_value = corrupt.nodes[edge.sender.name].value
+                corrupt_value = corrupted_graph.nodes[edge.sender.name].value
                 patched = patched - senders[edge.sender.name] + corrupt_value.to(patched.dtype)
             writes.append((receiver, patched.detach()))
         owner = trace.fork() if result is None else result

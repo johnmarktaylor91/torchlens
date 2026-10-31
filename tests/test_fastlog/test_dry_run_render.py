@@ -56,7 +56,7 @@ def test_repredicate_updates_decisions_without_replacing_events() -> None:
     """Repredicate returns a new trace with shared events and changed decisions."""
 
     trace = tl.fastlog.dry_run(_mlp(), torch.randn(1, 4), save=_keep_linear)
-    updated = trace.repredicate(other_keep_op=_keep_relu)
+    updated = trace.filter(other_keep_op=_keep_relu)
 
     assert updated is not trace
     assert updated.events is trace.events

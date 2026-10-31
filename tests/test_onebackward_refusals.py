@@ -14,8 +14,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import get_gradient_edge_support
 from torchlens.attribution import onebackward as ob
-from torchlens.utils._torch_compat import get_gradient_edge_support
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -92,7 +92,7 @@ class TestLivenessGate:
     def test_loaded_trace_refuses_not_live(self, tmp_path) -> None:
         trace = _trace()
         path = tmp_path / "artifact.tlspec"
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
         _read_error(
             lambda: ob.read_edge_index(loaded),
@@ -321,7 +321,7 @@ class TestPopulationContract:
                 target=ob.seed("output_1", index=(0, 0)),
                 method="grad",
                 reduce="sum",
-                within=tl.params("0.weight"),
+                within=tl.param("0.weight"),
             )
         assert getattr(excinfo.value, "fields", {}).get("code") == "selection_kind_incompatible"
 
@@ -393,7 +393,7 @@ class TestTableRefusals:
         path = table.save(tmp_path / "scalar.json")
         loaded = ob.load_read_table(path)
         assert len(loaded) == len(table)
-        assert loaded.rescorable is False
+        assert loaded.is_rescorable is False
         assert loaded.provenance.rescorable is False
         for key, row in table.items():
             assert loaded[key].score == row.score
@@ -418,7 +418,7 @@ class TestTableRefusals:
         table = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
         )
-        _read_error(lambda: table.for_target("t99"), "read_table_target_unknown")
+        _read_error(lambda: table.target("t99"), "read_table_target_unknown")
         _read_error(lambda: table.column("nonexistent"), "read_table_column_unknown")
         _read_error(lambda: table.to_pandas(values="all"), "read_table_values_mode_invalid")
 
@@ -497,7 +497,7 @@ class TestTypedDoorProvocations:
                 target=ob.seed("output_1", index=(0, 0)),
                 method="grad",
                 reduce="sum",
-                frozen=tl.params("0.weight"),
+                frozen=tl.param("0.weight"),
             )
         assert excinfo.value.fields["code"] == "read_frozen_selection_invalid"
 
@@ -528,7 +528,7 @@ class TestTypedDoorProvocations:
     def test_read_table_target_unknown(self) -> None:
         table = _grad_table(_trace())
         with pytest.raises(ob.ReadError) as excinfo:
-            table.for_target("t99")
+            table.target("t99")
         assert excinfo.value.fields["code"] == "read_table_target_unknown"
 
     @_requires_gradient_edge

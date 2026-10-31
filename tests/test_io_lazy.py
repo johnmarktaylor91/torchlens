@@ -13,10 +13,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import load, save, trace as trace_fn
-from torchlens._io import BlobRef, TorchLensIOError
-from torchlens.data_classes.trace import Trace
-from torchlens.io import rehydrate_nested
+from torchlens import load, trace as trace_fn
+from torchlens._data_classes.trace import Trace
+from torchlens._io import ArtifactError, BlobRef
+from torchlens.io import materialize_nested
 
 
 class _LazyIOModel(nn.Module):
@@ -49,8 +49,8 @@ class _LazyIOModel(nn.Module):
 def _build_log(
     *,
     seed: int = 0,
-    save_arg_values: bool = False,
-    save_rng_states: bool = False,
+    save_args: bool = False,
+    save_rng: bool = False,
 ) -> Trace:
     """Build a deterministic ``Trace`` for lazy I/O tests.
 
@@ -58,9 +58,9 @@ def _build_log(
     ----------
     seed:
         Random seed used for model initialization and inputs.
-    save_arg_values:
+    save_args:
         Whether function arguments should be captured in the log.
-    save_rng_states:
+    save_rng:
         Whether RNG state tensors should be captured in the log.
 
     Returns
@@ -77,9 +77,9 @@ def _build_log(
         inputs,
         capture=tl.options.CaptureOptions(
             layers_to_save="all",
-            save_arg_values=save_arg_values,
-            save_rng_states=save_rng_states,
-            random_seed=seed,
+            save_args=save_args,
+            save_rng=save_rng,
+            seed=seed,
         ),
     )
 
@@ -88,8 +88,8 @@ def _save_bundle(
     tmp_path: Path,
     *,
     seed: int = 0,
-    save_arg_values: bool = False,
-    save_rng_states: bool = False,
+    save_args: bool = False,
+    save_rng: bool = False,
     include_saved_args: bool = False,
     include_rng_states: bool = False,
     path_name: str = "bundle.tl",
@@ -102,9 +102,9 @@ def _save_bundle(
         Temporary test directory.
     seed:
         Random seed used for model initialization and inputs.
-    save_arg_values:
+    save_args:
         Whether function arguments should be captured in the source log.
-    save_rng_states:
+    save_rng:
         Whether RNG state tensors should be captured in the source log.
     include_saved_args:
         Whether nested captured args should be persisted in the bundle.
@@ -121,12 +121,11 @@ def _save_bundle(
 
     trace = _build_log(
         seed=seed,
-        save_arg_values=save_arg_values,
-        save_rng_states=save_rng_states,
+        save_args=save_args,
+        save_rng=save_rng,
     )
     bundle_path = tmp_path / path_name
-    save(
-        trace,
+    trace.save(
         bundle_path,
         include_saved_args=include_saved_args,
         include_rng_states=include_rng_states,
@@ -294,8 +293,8 @@ def test_lazy_resave_detects_manifest_level_drift(tmp_path: Path) -> None:
     manifest["created_at"] = "2099-01-01T00:00:00Z"
     _write_manifest(bundle_path, manifest)
 
-    with pytest.raises(TorchLensIOError, match="source bundle manifest has changed since load"):
-        save(lazy_log, tmp_path / "resaved.tl")
+    with pytest.raises(ArtifactError, match="source bundle manifest has changed since load"):
+        lazy_log.save(tmp_path / "resaved.tl")
 
 
 def test_lazy_resave_detects_blob_level_drift(tmp_path: Path) -> None:
@@ -305,8 +304,8 @@ def test_lazy_resave_detects_blob_level_drift(tmp_path: Path) -> None:
     lazy_log = load(bundle_path, lazy=True)
     _corrupt_one_blob(bundle_path)
 
-    with pytest.raises(TorchLensIOError, match="sha256 mismatch"):
-        save(lazy_log, tmp_path / "resaved.tl")
+    with pytest.raises(ArtifactError, match="sha256 mismatch"):
+        lazy_log.save(tmp_path / "resaved.tl")
 
 
 def test_lazy_resave_fast_copy_produces_valid_bundle(tmp_path: Path) -> None:
@@ -316,7 +315,7 @@ def test_lazy_resave_fast_copy_produces_valid_bundle(tmp_path: Path) -> None:
     lazy_log = load(bundle_path, lazy=True)
     resaved_path = tmp_path / "resaved.tl"
 
-    save(lazy_log, resaved_path)
+    lazy_log.save(resaved_path)
     restored = load(resaved_path, lazy=False)
 
     live_tensor = _first_saved_layer(live_log).out
@@ -332,7 +331,7 @@ def test_rehydrate_nested_materializes_saved_args_blob_refs(tmp_path: Path) -> N
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_arg_values=True,
+        save_args=True,
         include_saved_args=True,
         path_name="saved_args.tl",
     )
@@ -347,7 +346,7 @@ def test_rehydrate_nested_materializes_saved_args_blob_refs(tmp_path: Path) -> N
 
     assert _contains_blob_ref(layer.saved_args)
 
-    rehydrate_nested(lazy_log)
+    materialize_nested(lazy_log)
 
     assert not _contains_blob_ref(layer.saved_args)
     assert any(isinstance(arg, torch.Tensor) for arg in layer.saved_args)
@@ -358,17 +357,17 @@ def test_save_rejects_unmaterialized_nested_blob_refs(tmp_path: Path) -> None:
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_arg_values=True,
+        save_args=True,
         include_saved_args=True,
         path_name="saved_args.tl",
     )
     lazy_log = load(bundle_path, lazy=True, materialize_nested=False)
 
     with pytest.raises(
-        TorchLensIOError,
-        match="Call torchlens.io.rehydrate_nested\\(trace\\) before saving",
+        ArtifactError,
+        match="Call torchlens.io.materialize_nested\\(trace\\) before saving",
     ):
-        save(lazy_log, tmp_path / "resaved.tl", include_saved_args=True)
+        lazy_log.save(tmp_path / "resaved.tl", include_saved_args=True)
 
 
 def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
@@ -378,8 +377,8 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
 
     bundle_path, _ = _save_bundle(
         tmp_path,
-        save_arg_values=True,
-        save_rng_states=True,
+        save_args=True,
+        save_rng=True,
         include_saved_args=True,
         include_rng_states=True,
         path_name="saved_args_and_rng.tl",
@@ -387,8 +386,7 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
     lazy_log = load(bundle_path, lazy=True, materialize_nested=False)
     resaved_path = tmp_path / "resaved_without_nested_fields.tl"
 
-    save(
-        lazy_log,
+    lazy_log.save(
         resaved_path,
         include_saved_args=False,
         include_rng_states=False,
@@ -413,7 +411,7 @@ def test_portable_loaded_logs_reject_validation_entry_points(
     bundle_path, _ = _save_bundle(tmp_path)
     restored = load(bundle_path, lazy=lazy)
 
-    with pytest.raises(TorchLensIOError, match="portable bundles drop them"):
+    with pytest.raises(ArtifactError, match="portable bundles drop them"):
         restored.validate_forward_pass([])
 
 

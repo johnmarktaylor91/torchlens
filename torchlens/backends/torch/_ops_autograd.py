@@ -5,20 +5,20 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ... import _state as _st
-from ..._state import pause_logging
-from ...ir.container import (
+from ..._ir.container import (
     ContainerSpec,
     OutputPathComponent,
 )
-from ...ir.container_registry import (
+from ..._ir.container_registry import (
     ContainerLeafOccurrence,
     FuncSite,
     Phase,
     Role,
     walk_container,
 )
-from ...utils.collections import ensure_iterable
-from ...utils.tensor_utils import (
+from ..._state import pause_logging
+from ..._utils.collections import ensure_iterable
+from ..._utils.tensor_utils import (
     is_functorch_wrapped_tensor,
 )
 from ._tl import (
@@ -27,7 +27,7 @@ from ._tl import (
 from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 from .ops import (
     _OutputTensorEntry,

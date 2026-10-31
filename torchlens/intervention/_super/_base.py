@@ -8,8 +8,8 @@ from typing import Any, ClassVar, Generic, Literal, TypeVar, cast
 import torch
 
 from ..._errors import InvalidArgumentError, PayloadUnavailableError
-from ...errors.episode import CheckpointSeriesLiveParamsError
-from .._metrics import is_scalar_like, relative_l1_scalar, resolve_metric
+from ...errors.episode import ParamEvidenceMissingError
+from .._metrics import is_scalar_like, relative_l1, resolve_metric
 
 T = TypeVar("T")
 S = TypeVar("S", bound="Super[Any]")
@@ -129,7 +129,7 @@ class Super(Generic[T]):
         label: str,
         members: dict[str, T],
         *,
-        query: Any = None,
+        selector: Any = None,
         bundle_member_names: list[str] | None = None,
     ) -> None:
         """Initialize an aligned Super view.
@@ -140,27 +140,27 @@ class Super(Generic[T]):
             Representative label.
         members:
             Resolved objects keyed by bundle member name.
-        query:
-            Original user query, when available.
+        selector:
+            Original user selector, when available.
         bundle_member_names:
             Full bundle member-name order. Missing names are treated as sparse
             alignment gaps and lower ``coverage``.
         """
 
         self._label = label
-        self._query = query
+        self._query = selector
         self._members = dict(members)
         self._bundle_member_names = (
             list(bundle_member_names) if bundle_member_names is not None else list(members)
         )
 
     @classmethod
-    def from_members(cls: type[S], query: Any, members: dict[str, T]) -> S:
+    def from_members(cls: type[S], selector: Any, members: dict[str, T]) -> S:
         """Build a Super view from resolved member objects.
 
         Parameters
         ----------
-        query:
+        selector:
             Original user query.
         members:
             Mapping from bundle member name to resolved object.
@@ -175,12 +175,12 @@ class Super(Generic[T]):
             getattr(
                 next(iter(members.values())),
                 "label",
-                getattr(next(iter(members.values())), "layer_label", repr(query)),
+                getattr(next(iter(members.values())), "layer_label", repr(selector)),
             )
             if members
-            else repr(query)
+            else repr(selector)
         )
-        return cls(str(first_label), members=members, query=query)
+        return cls(str(first_label), members=members, selector=selector)
 
     @property
     def label(self) -> str:
@@ -207,7 +207,7 @@ class Super(Generic[T]):
         return SuperMemberAccessor(self._members)
 
     @property
-    def traces(self) -> set[str]:
+    def names(self) -> set[str]:
         """Return names of bundle members represented by this view.
 
         Returns
@@ -219,7 +219,7 @@ class Super(Generic[T]):
         return set(self._members)
 
     @property
-    def absent_traces(self) -> set[str]:
+    def absent_names(self) -> set[str]:
         """Return bundle member names not represented by this view.
 
         Returns
@@ -240,7 +240,7 @@ class Super(Generic[T]):
             Represented member count.
         """
 
-        return len(self.traces)
+        return len(self.names)
 
     @property
     def num_absent_traces(self) -> int:
@@ -252,10 +252,10 @@ class Super(Generic[T]):
             Absent member count.
         """
 
-        return len(self.absent_traces)
+        return len(self.absent_names)
 
     @property
-    def is_complete_coverage(self) -> bool:
+    def is_complete(self) -> bool:
         """Return whether every bundle member is represented.
 
         Returns
@@ -264,7 +264,7 @@ class Super(Generic[T]):
             Whether this label resolved in every bundle member.
         """
 
-        return not self.absent_traces
+        return not self.absent_names
 
     @property
     def coverage(self) -> float:
@@ -386,7 +386,7 @@ class _TensorBearing:
 
         return self._stacked("grad")
 
-    def diff_pair(
+    def compare(
         self,
         other: str | None = None,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
@@ -489,7 +489,7 @@ class _TensorBearing:
         """Return a tensor field keyed by member name.
 
         This is the ONE funnel every cross-member tensor read passes through
-        (``diff_pair``, ``aggregate``, ``out``/``grad`` via ``_stacked``, and
+        (``compare``, ``aggregate``, ``out``/``grad`` via ``_stacked``, and
         the SuperParam ``weight_norm_diff``), so the checkpoint live-ref
         guard lives here: for parameter-claim views with two or more members
         it refuses BEFORE any member tensor is resolved.
@@ -530,7 +530,7 @@ class _TensorBearing:
 
         Raises
         ------
-        CheckpointSeriesLiveParamsError
+        ParamEvidenceMissingError
             With stable code ``checkpoint_series_live_params`` when any
             member lacks immutable parameter evidence.
         """
@@ -564,7 +564,7 @@ class _TensorBearing:
             "snapshot parameters at capture, or bind each member to an immutable "
             "checkpoint -- the ordering is still valid; only the weight claim is refused"
         )
-        raise CheckpointSeriesLiveParamsError(
+        raise ParamEvidenceMissingError(
             f"Members {named} have no immutable capture-time parameter evidence "
             f"for parameter '{param_address}'. {mechanism} "
             f"To read a weight trajectory: {remedy}.",
@@ -691,7 +691,7 @@ class _TensorBearing:
                 if i == j:
                     continue
                 value = (
-                    relative_l1_scalar(left, right)
+                    relative_l1(left, right)
                     if is_scalar_like(left) and is_scalar_like(right)
                     else metric_fn(left, right)
                 )
@@ -728,7 +728,7 @@ class _TensorBearing:
             if idx == ref_idx:
                 continue
             value = (
-                relative_l1_scalar(ref, tensor)
+                relative_l1(ref, tensor)
                 if is_scalar_like(ref) and is_scalar_like(tensor)
                 else metric_fn(ref, tensor)
             )

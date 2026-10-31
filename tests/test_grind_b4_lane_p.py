@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gc
-import warnings
 import weakref
 from pathlib import Path
 from typing import Any
@@ -18,7 +17,7 @@ from torchlens._capture_state_helpers import (
     _facet_recipe_cache_key,
     _snapshot_plain_attr_value,
 )
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.rehydrate import _rehydrate_object
 from torchlens._io.scrub import _scrub_value, _ScrubOptions
 from torchlens._io.state_keys import (
@@ -27,7 +26,7 @@ from torchlens._io.state_keys import (
     static_class_attr,
 )
 from torchlens._trace_selector_helpers import _predicate_cache_key
-from torchlens.utils.display import cleanup_trace_visualizer_dir, ensure_trace_visualizer_dir
+from torchlens._utils.display import cleanup_trace_visualizer_dir, ensure_trace_visualizer_dir
 from torchlens.visualization import auto_collapse
 from torchlens.visualization.auto_collapse import analyze_collapse
 
@@ -165,7 +164,7 @@ def test_capture_cache_lru_and_clear(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     cache_root = tmp_path / "capture"
     assert len(list(cache_root.glob("*.pkl"))) == 2
-    assert user_funcs.clear_capture_cache(tmp_path) == 2
+    assert user_funcs.clear_cache(tmp_path) == 2
     assert list(cache_root.glob("*.pkl")) == []
     assert (cache_root / ".capture_cache_secret").is_file()
 
@@ -191,10 +190,10 @@ def test_scrub_preserves_shared_and_cyclic_mutable_containers() -> None:
 
 
 def test_portable_walks_refuse_excessive_depth_typed() -> None:
-    """Save and load walkers turn hostile depth into TorchLensIOError."""
+    """Save and load walkers turn hostile depth into ArtifactError."""
 
     deep = _deep_list(205)
-    with pytest.raises(TorchLensIOError, match="maximum depth"):
+    with pytest.raises(ArtifactError, match="maximum depth"):
         _scrub_value(
             deep,
             _ScrubOptions(False, False, False, False),
@@ -203,7 +202,7 @@ def test_portable_walks_refuse_excessive_depth_typed() -> None:
             [0],
         )
 
-    with pytest.raises(TorchLensIOError, match="maximum depth"):
+    with pytest.raises(ArtifactError, match="maximum depth"):
         _rehydrate_object(
             deep,
             {},
@@ -267,15 +266,6 @@ def test_visualizer_scratch_is_removed_by_trace_cleanup() -> None:
     assert getattr(trace, "_visualizer_dir", None) is None
 
 
-def test_log_model_metadata_does_not_self_deprecate() -> None:
-    """Canonical metadata helper uses grouped options internally."""
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        tl.io.log_model_metadata(nn.Identity(), torch.ones(1))
-    assert not [warning for warning in caught if warning.category is DeprecationWarning]
-
-
 def test_visualizer_cleanup_helper_is_idempotent() -> None:
     """Scratch cleanup remains safe after the directory is already gone."""
 
@@ -318,8 +308,8 @@ def test_streamed_bundle_lazy_load_keeps_relation_labels_as_strings(tmp_path: Pa
     tl.trace(
         _TwoOpModel(),
         torch.randn(1, 1, 8, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path),
     )
     lazy_log = tl.load(bundle_path, lazy=True)
     for op in lazy_log.ops:
@@ -418,20 +408,20 @@ def test_over_ceiling_entry_is_refused_at_store_not_wiped_at_evict(
     )
 
 
-def test_clear_capture_cache_is_public(tmp_path: Path) -> None:
-    """The round-1-agreed remedy tl.clear_capture_cache() is reachable (r2 F39-3).
+def test_clear_cache_is_public(tmp_path: Path) -> None:
+    """The round-1-agreed remedy tl.clear_cache() is reachable (r2 F39-3).
 
-    user_funcs.clear_capture_cache shipped unexported: not in ``__all__`` and
+    The cache-clearing remedy shipped unexported: not in ``__all__`` and
     absent from the top-level namespace, so a user hitting the entry/byte cap
     or an oversized-entry refusal had no supported way to clear the cache.
     """
 
-    assert "clear_capture_cache" in tl.__all__
+    assert "clear_cache" in tl.__all__
     x = torch.ones(1, 1)
     model = nn.Linear(1, 1, bias=False)
     tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
     assert len(list((tmp_path / "capture").glob("*.pkl"))) == 1
-    assert tl.clear_capture_cache(tmp_path) == 1
+    assert tl.clear_cache(tmp_path) == 1
     assert list((tmp_path / "capture").glob("*.pkl")) == []
 
 
@@ -478,7 +468,7 @@ def test_accessor_caches_invalidate_on_rebind_resize_and_invalidator(tmp_path: P
     explicit invalidator.
     """
 
-    from torchlens.data_classes._trace_accessors import (
+    from torchlens._data_classes._trace_accessors import (
         _invalidate_trace_op_layer_accessor_caches,
     )
 
@@ -528,7 +518,7 @@ def test_ops_memo_hit_is_o1_no_label_reads(tmp_path: Path) -> None:
     exponent ~2.1, 9.6ms -> 138.5ms over 102 -> 402 ops).
     """
 
-    from torchlens.data_classes.op import Op
+    from torchlens._data_classes.op import Op
 
     model = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 2))
     trace = tl.trace(model, torch.ones(1, 2))
@@ -576,7 +566,7 @@ def test_barcode_remap_scrubs_every_registered_barcode(tmp_path: Path) -> None:
     }
     assert raw_barcodes, "expected live param barcodes on a param-bearing capture"
 
-    tl.save(trace, str(tmp_path / "t.tlspec"))
+    trace.save(str(tmp_path / "t.tlspec"))
     loaded = tl.load(str(tmp_path / "t.tlspec"))
 
     leaked: list[str] = []

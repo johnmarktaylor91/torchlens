@@ -83,7 +83,7 @@ def test_contract_of_record_matches_live_tree() -> None:
         f"record ({GOLDEN_PATH.name}). If this change is intentional, it is a "
         "schema-territory change (P05/C07 fence): regenerate the golden in the "
         f"same PR with {UPDATE_FLAG}=1 and, for any REMOVED persisted field, "
-        "add an alias rule (PORTABLE_STATE_ALIASES on the owning class) so "
+        "add an alias rule (_PORTABLE_STATE_ALIASES on the owning class) so "
         "governed artifacts keep loading."
     )
 
@@ -111,7 +111,7 @@ def test_removed_persisted_fields_require_aliases() -> None:
     assert not failures, (
         "Reader regression (MEMO 3.3 alias-or-fail): a field a governed writer "
         "persisted no longer loads and carries no alias. Add "
-        "PORTABLE_STATE_ALIASES coverage on the owning class or restore the "
+        "_PORTABLE_STATE_ALIASES coverage on the owning class or restore the "
         f"field. Details: {failures}"
     )
 
@@ -156,7 +156,10 @@ def test_tier_partition_moves_no_fields() -> None:
 def test_registry_mirrors_the_lockstep_catalogs() -> None:
     """RECORD_CONTRACT_CLASSES covers exactly the FIELD_ORDER catalog owners."""
 
-    from tests.test_schema_lockstep import CATALOGS
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "checks"))
+    from schema_lockstep import CATALOGS  # noqa: E402
 
     lockstep_owners = {catalog.owner.__name__ for catalog in CATALOGS if catalog.owner is not None}
     registry_owners = {class_name for _, class_name in RECORD_CONTRACT_CLASSES.values()}
@@ -164,7 +167,7 @@ def test_registry_mirrors_the_lockstep_catalogs() -> None:
 
 
 def test_component_spec_module_list_is_complete() -> None:
-    """Every file declaring a PORTABLE_STATE_SPEC is known to the registry."""
+    """Every file declaring a _PORTABLE_STATE_SPEC is known to the registry."""
 
     from torchlens._io.field_registry import COMPONENT_SPEC_MODULES
 
@@ -172,7 +175,7 @@ def test_component_spec_module_list_is_complete() -> None:
     declaring: set[str] = set()
     for path in package_root.rglob("*.py"):
         text = path.read_text(encoding="utf-8")
-        if "PORTABLE_STATE_SPEC: ClassVar" in text or "PORTABLE_STATE_SPEC: dict" in text:
+        if "_PORTABLE_STATE_SPEC: ClassVar" in text or "_PORTABLE_STATE_SPEC: dict" in text:
             rel = path.relative_to(package_root.parent).with_suffix("")
             declaring.add(".".join(rel.parts))
     known = set(COMPONENT_SPEC_MODULES) | {
@@ -180,7 +183,7 @@ def test_component_spec_module_list_is_complete() -> None:
     }
     missing = declaring - known
     assert not missing, (
-        "New PORTABLE_STATE_SPEC-declaring module(s) unknown to the field "
+        "New _PORTABLE_STATE_SPEC-declaring module(s) unknown to the field "
         f"registry: {sorted(missing)}. Add them to COMPONENT_SPEC_MODULES in "
         "torchlens/_io/field_registry.py (P05/C07 schema fence) and regenerate "
         "the writer contract golden."

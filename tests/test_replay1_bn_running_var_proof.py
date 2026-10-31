@@ -38,9 +38,7 @@ STRATEGIES = [
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:
     torch.manual_seed(0)
-    return tl.trace(
-        model, x, capture=CaptureOptions(layers_to_save="all", save_arg_values=True, random_seed=0)
-    )
+    return tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0))
 
 
 def _bn_op(trace: Any) -> Any:
@@ -73,7 +71,7 @@ def test_eval_bn_with_input_at_running_mean_validates(make, shape) -> None:
     x = torch.zeros(shape)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        assert validate_forward_pass(model, x, random_seed=0) is True
+        assert validate_forward_pass(model, x, seed=0) is True
 
 
 @pytest.mark.parametrize(("make", "shape"), CASES)

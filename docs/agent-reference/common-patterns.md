@@ -25,9 +25,9 @@ stages = tl.extract(backbone, torch.randn(1, 4), ["layer1", "layer2"])
 stage_log = tl.trace(backbone, torch.randn(1, 4), save=["layer1", "layer2"])  # list form
 stage_log["layer2"].out
 # Appliances hang off one door: trace.using(name), registered with
-# torchlens.accessors.register_appliance(name, factory) (spellings DOCUMENTED-UNSTABLE).
+# torchlens.appliances.register(name, factory) (spellings DOCUMENTED-UNSTABLE).
 print(log.summary())
-print(tl.report.explain(log))
+print(log.explain())
 log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unrolled graphs
 log.draw(collapse="auto", show_containers=False)  # readability-targeted module overview
 print(log.module_collapse_order[:10])
@@ -39,7 +39,7 @@ tl.release_model(model)  # restore whole-model pickle / torch.save serializabili
 direction = torch.randn(4)               # one entry per channel of encoder's output
 steered = tl.trace(model, x, save=tl.module("encoder"),
                    intervene=tl.when(tl.module("encoder"),
-                                     tl.steer(direction, magnitude=4, feature_axis=1)))
+                                     tl.steer(direction, strength=4, dim=1)))
 steered.run(model, torch.randn(1, 3, 20, 20))  # larger input, same graph structure
 steered.last_run["engine"]              # "guarded_fast", or "rerun" after a fallback
 steered.last_run["fast_refused"]        # None, or "<code>:<stage>" naming the guard
@@ -95,7 +95,7 @@ ablated = tl.trace(
     intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
 )
 # Reruns re-arm the capture predicate and apply the edit exactly once; the
-# staged spec never grows. tl.save keeps the ablated values but not the recipe:
+# staged spec never grows. Trace.save keeps the ablated values but not the recipe:
 # a loaded copy refuses run(model, x) with
 # run_intervention_spec_not_persisted, so save the recipe with save_intervention.
 ablated.run(model, x)
@@ -114,7 +114,7 @@ fork.do(inter, tl.zero_ablate())           # edit-then-scatter: only masked elem
 fork2 = log.fork()
 fork2.do(tl.units("relu_1_2", [(0, 0, 1, 1)]).resolve(fork2), tl.patch_from(log))
 fork3 = log.fork()
-fork3.do(tl.params("head.weight"), tl.scale(0.5))  # "as if" the weight changed, replay-only:
+fork3.do(tl.param("head.weight"), tl.scale(0.5))  # "as if" the weight changed, replay-only:
 # every consumption is substituted; the live nn.Parameter is NEVER written.
 print(fork.intervention_audit[-1])         # query repr + resolve digest + relations
 ```
@@ -140,8 +140,7 @@ prompts), pick the path by what you need back. Build the spec once; every path t
 
 - Steering only: `spec.bind(model)`. A capture-free executor that runs at about the cost of
   a plain forward hook. Call it like the model, or call `.generate(...)` on it (KV cache on or
-  off); `.last_report` counts the firings. `torchlens.intervention.steer_generate` is one-call
-  sugar for `spec.bind(model).generate(...)`. A binding selects ops structurally
+  off); `.last_report` counts the firings. A binding selects ops structurally
   (`tl.func("relu") & tl.in_module("1")`, `tl.module("1")`); it refuses final or short labels such
   as `tl.label("relu_1_2")` when bound, because labels are assigned after a capture.
 - Steering plus activations as evidence: `tl.record(model, x, save=..., intervene=spec,
@@ -181,13 +180,13 @@ lm = transformers.LlamaForCausalLM(  # a tiny random decoder stands in for your 
 ids = torch.tensor([[1, 5, 9, 2]])
 direction = torch.randn(32)
 site = tl.module("model.layers.1.mlp")
-spec = tl.when(site, tl.steer(direction, magnitude=4.0, feature_axis=-1))
+spec = tl.when(site, tl.steer(direction, strength=4.0, dim=-1))
 
 # Steering only: bind once, then call or generate as often as needed.
 steered = spec.bind(lm)
 logits = steered(ids).logits
 tokens = steered.generate(ids, max_new_tokens=5, do_sample=False, use_cache=True)
-assert steered.last_report.fire_count == 5  # one firing per generated token
+assert steered.last_report.num_fires == 5  # one firing per generated token
 
 # Steering plus evidence: one tl.record per forward returns the output and the recording.
 out, rec = tl.record(lm, ids, save=site, intervene=spec, return_output=True)
@@ -202,12 +201,12 @@ assert torch.equal(oracle.find_sites(site).first().out, steered_mlp)
 
 ### Per-head attention from a Hugging Face model without a trace
 
-`tl.bridge.hf.register_attention(model)` makes TorchLens the model's attention backend
+`tl.bridge.transformers.register_attention(model)` makes TorchLens the model's attention backend
 (the `"torchlens"` attention function plus its matching mask function, so causal and padding
-masks always arrive); `tl.bridge.hf.record_attention(model)` then records every call's per-head
+masks always arrive); `tl.bridge.transformers.record_attention(model)` then records every call's per-head
 probabilities by module name. It materializes the full `(batch, heads, q, kv)` matrix per call
 (32 GiB per 4096-token sequence for a Llama-2-7B shape in bfloat16). Glossary:
-"tl.bridge.hf.register_attention".
+"tl.bridge.transformers.register_attention".
 
 ```python
 import torch
@@ -221,8 +220,8 @@ lm = transformers.LlamaForCausalLM(
 ).eval()
 batch = {"input_ids": torch.tensor([[1, 5, 9, 2], [7, 3, 0, 0]]),
          "attention_mask": torch.tensor([[1, 1, 1, 1], [1, 1, 0, 0]])}
-tl.bridge.hf.register_attention(lm)
-with torch.no_grad(), tl.bridge.hf.record_attention(lm, check_sdpa=True) as attn:
+tl.bridge.transformers.register_attention(lm)
+with torch.no_grad(), tl.bridge.transformers.record_attention(lm, check_sdpa=True) as attn:
     lm(**batch)
 probs = attn["model.layers.0.self_attn"]  # (batch, heads, q, kv), the tensor the model used
 assert probs.shape == (2, 4, 4, 4)
@@ -237,14 +236,14 @@ comments name the exports that need one.
 
 ```python
 # trace.using(name) appliances, with a one-line summary each.
-appliances = tl.accessors.registered_appliances()  # {name: summary}, sorted by name
+appliances = tl.appliances.names()  # {name: summary}, sorted by name
 # Subspace and position edits are plain tl.Edit objects; apply them with do() or fork.do().
 basis = torch.eye(4)[:1]  # [k, d]: one direction over a 4-wide feature axis
-ablate = tl.intervention.subspace_ablate(basis, feature_axis=1)  # x - P x on the span
+ablate = tl.intervention.subspace_ablate(basis, dim=1)  # x - P x on the span
 assert isinstance(ablate, tl.Edit)
 # tl.intervention.subspace_interchange(basis, source_trace) writes the source trace's
 # in-span component over the target's instead.
-first_token = tl.intervention.at_positions(tl.scale(0.0), [0])  # token axis 1 by default
+first_token = tl.positions(tl.scale(0.0), [0])  # token axis 1 by default
 assert isinstance(first_token, tl.Edit)
 # Namespaces are imported, not root attributes: import torchlens.mechinterp first.
 import torchlens.mechinterp
@@ -271,16 +270,16 @@ except tl.errors.OutputStyleUnknownError as error:
     assert error.fields["code"] == "output_style_unknown"
 else:
     raise AssertionError("output_style_unknown did not refuse")
-# Also exported: tl.debug.DebugReport (base class of report-shaped tl.debug results),
+# Also exported: tl.report.Report (base class of report-shaped tl.debug results),
 # tl.report.PrunedParamFacts (prune state in the FactCore parameter facts),
 # torchlens.trackers.MLflowSink and torchlens.trackers.CometSink (forward-watch sinks over a run or
-# experiment the user owns) and torchlens.tviz.render_logit_lens_heatmap(result, path)
+# experiment the user owns) and torchlens.viz.logit_lens(result, path)
 # (the layers-by-positions logit-lens figure).
 ```
 
 ### Attribution graphs
 
-`tl.attribution.build_graph(trace, transcoders, embedding=..., frozen=...)` builds an
+`tl.attribution.build_graph(trace, transcoders, embedding_module=..., frozen=...)` builds an
 attribution graph from one prompt's capture: `transcoders=` maps each MLP module name to a
 transcoder (`encode`, `W_enc`, `b_enc`, `W_dec`, `b_dec`; mappings for `W_dec` and `b_dec`
 give a cross-layer transcoder), and `frozen=` names the attention-pattern and norm-scale
@@ -298,9 +297,9 @@ the key must run before them. `frozen=` also takes facet selectors:
 attention pattern and every `Gemma2RMSNorm` scale, where `inv_rms` is the norm's
 `rsqrt` output, the factor that multiplies its input. DOCUMENTED-UNSTABLE.
 
-`graph.to_neuronpedia(slug="my-graph", scan="gemma-2-2b", tokenizer=tokenizer, path="g.json")`
-returns the graph, pruned by circuit-tracer's rule (`node_threshold=0.8`,
-`edge_threshold=0.98`), in Neuronpedia's published attribution-graph schema, and writes it
+`graph.to_neuronpedia(slug="my-graph", model_id="gemma-2-2b", tokenizer=tokenizer, path="g.json")`
+returns the graph, pruned by circuit-tracer's rule (`node_influence_coverage=0.8`,
+`edge_influence_coverage=0.98`), in Neuronpedia's published attribution-graph schema, and writes it
 to `path`; the file opens in Neuronpedia's graph viewer. DOCUMENTED-UNSTABLE.
 
 `tl.attribution.overlay(trace, graph)` paints the graph onto its trace for
@@ -308,6 +307,6 @@ to `path`; the file opens in Neuronpedia's graph viewer. DOCUMENTED-UNSTABLE.
 of its nodes (`graph_value="activation"` paints feature activations instead).
 `tl.attribution.graph.upload_to_neuronpedia("g.json", api_key=os.environ["NEURONPEDIA_API_KEY"])` publishes the exported
 file on neuronpedia.org under the key's account and returns its URL;
-`direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], scan="gemma-2-2b", vector_label="honesty")`
+`direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], model_id="gemma-2-2b", name="honesty")`
 publishes a `Direction` the same way. Both check every field before the first request and
 never write the key into a message. DOCUMENTED-UNSTABLE.

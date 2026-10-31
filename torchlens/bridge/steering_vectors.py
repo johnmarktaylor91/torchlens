@@ -1,7 +1,7 @@
 """steering-vectors converter.
 
 Turns a TorchLens :class:`~torchlens.intervention.Direction` (built by
-``torchlens.intervention.direction_from_pairs``) into a real
+``torchlens.intervention.fit_direction``) into a real
 ``steering_vectors.SteeringVector``. Nothing is recomputed here: the vector is
 the direction's own, keyed by the decoder layer the library patches, so
 ``SteeringVector.apply(model, multiplier=m)`` adds ``m * direction.vector`` to

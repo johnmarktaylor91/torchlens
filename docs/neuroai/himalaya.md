@@ -16,7 +16,7 @@ pip install torchlens himalaya==0.4.11
 
 The model below has three parallel branches, so its three sites carry
 largely separate information, as distinct layers or modalities often do.
-`tl.extract_dataset` returns one `(n_stimuli, n_features)` tensor per site;
+`tl.extract_dataset` returns one `(num_stimuli, num_features)` tensor per site;
 stacking them side by side gives the feature bank, and the column ranges name
 the bands.
 
@@ -121,6 +121,6 @@ RESULT = (
 - For many targets (voxels, electrodes), use himalaya's GPU backends
   (`set_backend("torch_cuda")`) and its batching options; the numpy backend
   here is for small examples.
-- For large stimulus sets, write the extraction to disk (`output_dir=`,
+- For large stimulus sets, write the extraction to disk (`path=`,
   `stimulus_ids=`) and build the bank from the stored artifact, so the rows
   stay tied to stimulus ids.

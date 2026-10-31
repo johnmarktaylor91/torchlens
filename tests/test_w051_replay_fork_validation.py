@@ -1,6 +1,6 @@
 """Full validation of NON-identity edited forks (AUD-CODE 2.9).
 
-``validate_forward_pass`` on ANY pushed fork with ``save_arg_values=True``
+``validate_forward_pass`` on ANY pushed fork with ``save_args=True``
 false-FAILED at the first downstream op (``argument_logging: parent not
 logged as an argument``) because the argument-logging check compared the
 child's capture-time ``saved_args`` snapshot against the PUSHED
@@ -49,7 +49,7 @@ def two():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
     try:
         yield model, x, trace
@@ -70,7 +70,7 @@ def _edge(trace: tl.Trace, position: int):
     add = _add_op(trace)
     return next(
         e
-        for e in trace.edges
+        for e in trace.graph.edges
         if e.child_label in (add.label, add.layer_label) and e.arg_path == (position,)
     )
 
@@ -83,7 +83,7 @@ def _validate(fork: tl.Trace, ground_truth: torch.Tensor):
 
 def _last_failure(fork: tl.Trace):
     failure = getattr(fork, "_last_validation_failure", None)
-    return None if failure is None else (failure.check, failure.op_label)
+    return None if failure is None else (failure.check_name, failure.op_label)
 
 
 def test_act_fork_validates_against_hand_truth(two) -> None:
@@ -115,7 +115,7 @@ def test_non_identity_edge_fork_validates_and_reaches_boundary(two) -> None:
 def test_param_fork_validates_against_hand_truth(two) -> None:
     model, x, trace = two
     fork = trace.fork()
-    fork.do(tl.params("fc2.bias"), tl.zero_ablate())
+    fork.do(tl.param("fc2.bias"), tl.zero_ablate())
     with torch.no_grad():
         expected = 2.0 * (torch.relu(model.fc1(x)) + torch.tanh(x @ model.fc2.weight.T))
     assert _validate(fork, expected) is True

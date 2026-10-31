@@ -9,7 +9,7 @@ from torch import nn
 from .._input_coerce import _coerce_input_args
 from ._recorder import Recorder
 from .options import PredicateFn
-from .types import RecordingTrace
+from .types import DryRun
 
 
 def dry_run(
@@ -20,8 +20,8 @@ def dry_run(
     save: PredicateFn | None = None,
     history_size: int = 8,
     include_source_events: bool = False,
-    random_seed: int | None = None,
-) -> RecordingTrace:
+    seed: int | None = None,
+) -> DryRun:
     """Run predicates over one forward pass without retaining tensor payloads.
 
     Parameters
@@ -32,7 +32,7 @@ def dry_run(
         Tensor, list, or tuple of positional model inputs.
     input_kwargs:
         Optional keyword arguments for the model call.
-    save, history_size, include_source_events, random_seed:
+    save, history_size, include_source_events, seed:
         Fastlog dry-run options. Predicate exceptions propagate immediately.
 
     Returns
@@ -48,7 +48,7 @@ def dry_run(
         "include_source_events": include_source_events,
         "on_predicate_error": "fail-fast",
         "streaming": None,
-        "random_seed": random_seed,
+        "seed": seed,
     }
     recorder_cm = Recorder(
         model,
@@ -61,11 +61,11 @@ def dry_run(
         if recorder._capture_events is None:  # noqa: SLF001
             raise RuntimeError("Recorder capture events were not initialized")
         recorder._state.no_tensor_capture = True  # noqa: SLF001
-        recorder.log(input_args, input_kwargs)
+        recorder(input_args, input_kwargs)
         contexts = tuple(recorder._state.all_contexts)  # noqa: SLF001
         decisions = tuple(
             bool(getattr(event, "predicate_matched", False))
             for event in recorder._capture_events.op_events  # noqa: SLF001
         )
         failures = tuple(recorder._state.predicate_failures)  # noqa: SLF001
-    return RecordingTrace(contexts=contexts, decisions=decisions, predicate_failures=failures)
+    return DryRun(contexts=contexts, decisions=decisions, predicate_failures=failures)

@@ -17,8 +17,8 @@ from hashlib import sha256
 from typing import Any
 
 from ._fast_live_plans import _FastOutputPlan
+from ._runnable import RunnableErrorCode, RunTruncation
 from .errors import RunCapabilityUnavailableError
-from .runnable import RunnableErrorCode, RunTruncation
 
 __all__ = [
     "FastUntilReached",

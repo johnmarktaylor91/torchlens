@@ -8,10 +8,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
 from torchlens.backends.torch.ops import _get_autograd_saved_stats_for_tensor
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
 
@@ -59,7 +59,7 @@ def _log_sequential(requires_grad: bool = True) -> Trace:
     torch.manual_seed(0)
     model = TinySequentialModel()
     x = torch.randn(4, 10, requires_grad=requires_grad)
-    return tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", random_seed=0))
+    return tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", seed=0))
 
 
 def _non_source_ops(trace: Trace) -> list[Op]:
@@ -127,9 +127,7 @@ def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
     x = torch.randn(4, 10, requires_grad=True)
 
     with torch.no_grad():
-        trace = tl.trace(
-            model, x, capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0)
-        )
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all", seed=0))
 
     assert all(layer.autograd_memory is None for layer in trace.layer_list)
     assert all(layer.num_autograd_tensors is None for layer in trace.layer_list)
@@ -148,7 +146,7 @@ def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=0, backward_ready=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0, backward_ready=True),
     )
 
     assert all(layer.autograd_memory is None for layer in _non_source_ops(trace))
@@ -191,7 +189,7 @@ def test_autograd_saved_fields_roundtrip_through_bundle_save_load(tmp_path: Path
     trace = _log_sequential(requires_grad=True)
     bundle_path = tmp_path / "autograd_memory.tl"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = tl.load(bundle_path)
 
     assert loaded.total_autograd_memory == trace.total_autograd_memory

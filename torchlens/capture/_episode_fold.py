@@ -4,7 +4,7 @@
 ledger geometry) into an `EpisodeFoldResult` -- a DERIVATION, never a settled
 `CaptureOutcome` (the R06 discipline; Bundle has no outcome authority). Split
 from `_episode_ledger.py` at the C07X amendment (R43 size discipline); the
-ledger module re-exports both names, and `Bundle.derive_episode_status` is
+ledger module re-exports both names, and `Bundle.episode_status` is
 the public consumer.
 """
 
@@ -87,11 +87,11 @@ def _fold_terminal_tail(
 ) -> EpisodeFoldResult | None:
     """Fold arms 3/5/6: the single trailing non-complete member's verdict."""
 
-    if status == "HALTED":
+    if status == "STOPPED":
         return EpisodeFoldResult(
             status="episode_halted_at_step",
             at_step=at_step,
-            member_status="HALTED",
+            member_status="STOPPED",
             provenance_tier=episode_tier,
         )
     if status == "ABORTED_NONFINITE":

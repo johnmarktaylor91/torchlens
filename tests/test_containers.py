@@ -11,8 +11,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.container import HFKey, NamedField, TupleIndex
-from torchlens.utils.collections import assign_into_container_by_path
+from torchlens._ir.container import HFKey, NamedField, TupleIndex
+from torchlens._utils.collections import assign_into_container_by_path
+from torchlens.intervention.selectors import output_at
 
 
 class DemoModelOutput(dict):
@@ -233,7 +234,7 @@ class TupleModel(nn.Module):
 def _register_pair_box() -> None:
     """Register the PairBox fixture type."""
 
-    tl.register_container(
+    tl.types.register_container(
         PairBox,
         lambda value: ([value.left, value.right], None),
         lambda _aux, children: PairBox(children[0], children[1]),
@@ -255,7 +256,7 @@ def test_hf_model_output_container_reconstructs_round_trip() -> None:
     assert torch.equal(rebuilt["past_key_values"][0][1], torch.tensor([4.0]))
 
     output_container = trace.ops[trace.output_layers[0]].container
-    assert isinstance(output_container, tl.Container)
+    assert isinstance(output_container, tl.types.Container)
     assert output_container.reconstructable is True
     assert output_container["past_key_values"][0][1].layer_label in trace.output_layers
 
@@ -270,7 +271,7 @@ def test_container_repr_summary_uses_output_cross_references() -> None:
     )
     output_container = trace.ops[trace.output_layers[0]].container
 
-    assert isinstance(output_container, tl.Container)
+    assert isinstance(output_container, tl.types.Container)
     tree = repr(output_container)
     assert "logits: -> output_1" in tree
     assert "past_key_values: tuple" in tree
@@ -322,11 +323,11 @@ def test_capture_container_structure_default_off_preserves_output_shape_metadata
 
     model = HFLikeModel()
     x = torch.tensor([1.0])
-    default_trace = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=0))
+    default_trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=0))
     explicit_false_trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(random_seed=0, capture_container_structure=False),
+        capture=tl.options.CaptureOptions(seed=0, capture_container_structure=False),
     )
 
     assert default_trace.graph_shape_hash == explicit_false_trace.graph_shape_hash
@@ -403,7 +404,7 @@ def test_output_at_selects_nested_container_path() -> None:
         torch.tensor([1.0]),
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
-    site = trace.resolve_sites(tl.output_at(("past_key_values", 0, 1))).first()
+    site = trace.resolve_sites(output_at(("past_key_values", 0, 1))).first()
 
     assert site.layer_label in trace.output_layers
     assert torch.equal(site.out, torch.tensor([4.0]))
@@ -440,14 +441,14 @@ def test_path_only_container_view_degrades_without_reconstruction() -> None:
     # what a final-output op exposes when no registry record backs it (a legacy
     # artifact), so detach the registry to reach that degraded view.
     trace.__dict__.pop("_containers", None)
-    op = trace.ops[trace.output_layers[0]].copy()
+    op = trace.ops[trace.output_layers[0]]._copy_with_shallow_fields(frozenset())
     op.source_trace = trace
     op.container_spec = None
     op.container_path = (TupleIndex(0),)
 
     container = op.container
 
-    assert isinstance(container, tl.Container)
+    assert isinstance(container, tl.types.Container)
     assert container.reconstructable is False
     with pytest.raises(ValueError, match="Path-only"):
         container.reconstruct()
@@ -467,7 +468,7 @@ def test_paths_only_backend_registry_view_does_not_fake_reconstruct() -> None:
     stack_op = next(op for op in trace.ops if op.func_name == "stack")
     input_container = stack_op.input_containers[0]
 
-    assert isinstance(container, tl.Container)
+    assert isinstance(container, tl.types.Container)
     assert container.kind is None
     assert container.reconstructable is False
     assert input_container.kind is None
@@ -517,15 +518,14 @@ def test_trace_container_capability_fails_closed_on_unknown_backend() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.backends import get_backend_spec
-    from torchlens.data_classes.container import Role, _trace_container_capability
+    from torchlens._data_classes.container import Role, _trace_container_capability
 
     unknown = SimpleNamespace(backend="no_such_backend_zzz")
     assert _trace_container_capability(unknown, Role.CALL_OUTPUT) == "none"
     assert _trace_container_capability(unknown, Role.MODEL_INPUT) == "none"
 
     legacy = SimpleNamespace()  # no backend attribute at all
-    torch_caps = get_backend_spec("torch").capabilities
+    torch_caps = tl.backends.spec("torch").capabilities
     assert _trace_container_capability(legacy, Role.CALL_OUTPUT) == str(
         torch_caps.output_container_structure
     )

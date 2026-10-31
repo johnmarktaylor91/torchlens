@@ -8,10 +8,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
 from torchlens._trace_state import TraceState
-from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
 from torchlens.intervention.types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
     MODEL_LOG_FIELD_FORK_POLICY,
@@ -78,7 +78,7 @@ def test_field_lifecycle_matrix_modellog() -> None:
     """Assert every Trace ordered field has lifecycle policy coverage."""
 
     ordered_fields = set(MODEL_LOG_FIELD_ORDER)
-    assert ordered_fields <= set(Trace.PORTABLE_STATE_SPEC)
+    assert ordered_fields <= set(Trace._PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(MODEL_LOG_FIELD_FORK_POLICY)
     assert ordered_fields <= set(Trace.DEFAULT_FILL_STATE)
 
@@ -87,7 +87,7 @@ def test_field_lifecycle_matrix_op_log() -> None:
     """Assert every Op ordered field has lifecycle policy coverage."""
 
     ordered_fields = set(LAYER_PASS_LOG_FIELD_ORDER)
-    assert ordered_fields <= set(Op.PORTABLE_STATE_SPEC)
+    assert ordered_fields <= set(Op._PORTABLE_STATE_SPEC)
     assert ordered_fields <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
     assert ordered_fields <= set(Op.DEFAULT_FILL_STATE)
 

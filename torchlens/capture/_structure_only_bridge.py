@@ -70,7 +70,7 @@ def declared_slot_geometry_digest(value: Any) -> str:
 
     The digest is computed under the meta domain tag (``b"tensor\\0meta\\0"``
     framing) by routing a meta twin of ``value`` through the one content
-    digest authority (:func:`torchlens.hash.content`) — zero framing
+    digest authority (:func:`torchlens.fingerprint.content`) — zero framing
     duplication, byte-identical to the in-tree meta digest, and identical for
     a real tensor and its meta twin because only dtype/shape/layout enter the
     digest. It can never equal a byte digest of the same tensor (G2 domain
@@ -91,7 +91,7 @@ def declared_slot_geometry_digest(value: Any) -> str:
 
     import torch
 
-    from .. import hash as tl_hash
+    from .. import fingerprint as tl_hash
 
     try:
         twin = value if value.device.type == "meta" else torch.empty_like(value, device="meta")
@@ -104,7 +104,7 @@ def compute_bound_state_digests(values: Mapping[str, Any]) -> dict[str, str]:
     """Compute the MANDATORY bind-time byte digests for bound state values.
 
     Every entry receives a real SHA-256 byte digest through the one content
-    digest authority (:func:`torchlens.hash.content`), so a late-bound run is
+    digest authority (:func:`torchlens.fingerprint.content`), so a late-bound run is
     attestable against what was ACTUALLY bound. There is no skip path: a
     value with no byte content (meta/storageless — digesting its geometry
     would cross the G2 domain boundary and let a valueless slot masquerade as
@@ -129,9 +129,9 @@ def compute_bound_state_digests(values: Mapping[str, Any]) -> dict[str, str]:
         its byte digest cannot be computed.
     """
 
-    from .. import hash as tl_hash
+    from .. import fingerprint as tl_hash
+    from .._runnable import RunnableErrorCode
     from ..errors.runnable import StateBindingError
-    from ..runnable import RunnableErrorCode
 
     digests: dict[str, str] = {}
     for name, value in values.items():

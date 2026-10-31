@@ -11,7 +11,7 @@ from support.rf_isolation import preserved_rf_registry
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.op import Op
+from torchlens._data_classes.op import Op
 from torchlens.receptive_field import _rules
 from torchlens.receptive_field._rules import ReceptiveFieldRuleContext, _RuleResult
 from torchlens.receptive_field._types import (
@@ -111,7 +111,7 @@ def test_tainted_geometry_is_gracefully_indeterminate(taint: str) -> None:
     result = cross_validate(trace, ops=[_op(trace, "softmax")])[0]
 
     assert result.status is ReceptiveFieldValidationStatus.INDETERMINATE
-    assert result.n_violations == 0
+    assert result.num_violations == 0
 
 
 def test_unavailable_gradient_is_indeterminate() -> None:
@@ -121,7 +121,7 @@ def test_unavailable_gradient_is_indeterminate() -> None:
     result = cross_validate(trace, ops=[_op(trace, "conv2d")])[0]
 
     assert result.status is ReceptiveFieldValidationStatus.INDETERMINATE
-    assert result.n_violations == 0
+    assert result.num_violations == 0
 
 
 def test_plural_endpoint_keys_cover_multiple_inputs_and_outputs() -> None:
@@ -174,8 +174,8 @@ def test_deliberately_undersized_rule_fails_in_both_directions() -> None:
 
     assert receptive.status is ReceptiveFieldValidationStatus.FAIL
     assert projective.status is ReceptiveFieldValidationStatus.FAIL
-    assert receptive.n_violations > 0
-    assert projective.n_violations > 0
+    assert receptive.num_violations > 0
+    assert projective.num_violations > 0
 
 
 def test_metadata_contract_is_always_registered_and_runs_without_autograd() -> None:

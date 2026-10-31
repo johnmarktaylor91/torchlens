@@ -17,15 +17,11 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
 from torchlens._extraction.ragged import RaggedBatch
 from torchlens._extraction.token_store import shard_token_rows
-from torchlens.dataset_extraction import (
-    TokenRows,
-    extract_dataset,
-    open_extraction,
-    shuffled_batches,
-)
+from torchlens.dataset_extraction import TokenRows, open_extraction
 
 
 class _TokenModel(nn.Module):
@@ -85,7 +81,7 @@ def _extract(path: Path, *, collate=_collate, **kwargs) -> None:
         list(_TEXTS),
         {"h": "proj"},
         batch_size=2,
-        output_dir=path,
+        path=path,
         collate=collate,
         ragged="trim",
         store_input_ids=True,
@@ -102,7 +98,7 @@ def test_token_rows_read_back_equal_per_token(tmp_path: Path) -> None:
     tokens = reader.token_rows()
     assert isinstance(tokens, TokenRows)
     true_ids = [int(word) for text in _TEXTS for word in text.split()]
-    assert tokens.n_tokens == len(true_ids)
+    assert tokens.num_tokens == len(true_ids)
     assert tokens.values["input_ids"].tolist() == true_ids
     model = _TokenModel().eval()
     for index, text in enumerate(_TEXTS):
@@ -156,8 +152,8 @@ def test_mixing_buffer_yields_the_token_multiset_across_shards(tmp_path: Path) -
     reader = open_extraction(tmp_path)
     tokens = reader.token_rows()
     expected = _row_counter([tokens.values])
-    within = list(shuffled_batches(reader, 3, seed=3, tokens=True))
-    mixed = list(shuffled_batches(reader, 3, seed=3, tokens=True, buffer_shards=4))
+    within = list(reader.shuffled_batches(3, seed=3, tokens=True))
+    mixed = list(reader.shuffled_batches(3, seed=3, tokens=True, buffer_shards=4))
     assert _row_counter(within) == expected
     assert _row_counter(mixed) == expected
     assert all(len({_shard_of(i) for i in batch["input_ids"].tolist()}) == 1 for batch in within)
@@ -207,11 +203,11 @@ def test_default_shuffle_is_unchanged(tmp_path: Path) -> None:
         torch.randn(11, 4, generator=torch.Generator().manual_seed(5)),
         {"y": "fc"},
         batch_size=3,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
     reader = open_extraction(tmp_path)
-    got = list(shuffled_batches(reader, 2, seed=9))
+    got = list(reader.shuffled_batches(2, seed=9))
     want = list(_reference_shuffled(reader, 2, seed=9))
     assert len(got) == len(want)
     for left, right in zip(got, want, strict=True):
@@ -228,7 +224,7 @@ def test_dense_padded_and_pooled_keys_refuse_token_rows(tmp_path: Path) -> None:
         texts,
         {"h": "proj", "pooled": "proj"},
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         collate=lambda items: {
             key: torch.nn.functional.pad(value, (0, 3 - value.shape[1]))
             for key, value in _collate(items).items()
@@ -283,7 +279,7 @@ def test_store_input_ids_refusals(tmp_path: Path) -> None:
     reader_dir = tmp_path / "artifact"
     _extract(reader_dir)
     with pytest.raises(InvalidArgumentError) as excinfo:
-        list(shuffled_batches(open_extraction(reader_dir), 2, buffer_shards=0))
+        list(open_extraction(reader_dir).shuffled_batches(2, buffer_shards=0))
     assert excinfo.value.fields["code"] == "extraction_reader_buffer_shards_invalid"
 
 
@@ -292,7 +288,8 @@ def test_resume_compares_the_stored_ids_flag(tmp_path: Path) -> None:
 
     import json
 
-    from torchlens.dataset_extraction import MANIFEST_FILENAME, DatasetExtractionResumeError
+    from torchlens._extraction.resume import MANIFEST_FILENAME
+    from torchlens.errors import DatasetExtractionResumeError
 
     _extract(tmp_path)
     full = open_extraction(tmp_path).token_rows()
@@ -311,7 +308,7 @@ def test_resume_compares_the_stored_ids_flag(tmp_path: Path) -> None:
             list(_TEXTS),
             {"h": "proj"},
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             collate=_collate,
             ragged="trim",
             progress=False,

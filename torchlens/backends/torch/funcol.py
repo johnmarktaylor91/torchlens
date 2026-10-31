@@ -219,7 +219,7 @@ def _act_type() -> type[Any] | None:
     absence flips ``HAS_ASYNC_COLLECTIVE_TENSOR`` there.
     """
 
-    from ...utils._torch_compat import get_async_collective_tensor_type
+    from ..._utils._torch_compat import get_async_collective_tensor_type
 
     return get_async_collective_tensor_type()
 
@@ -425,7 +425,7 @@ class _FuncolCaptureSession:
         completion disclosure.
         """
 
-        from ...utils._torch_compat import get_funcol_wait_redispatch
+        from ..._utils._torch_compat import get_funcol_wait_redispatch
 
         redispatch = get_funcol_wait_redispatch()
         if redispatch is None:
@@ -629,7 +629,7 @@ def _resolve_funcol_process_group(group: Any, tag: str) -> Any | None:
         (missing capability, unknown name, malformed spelling).
     """
 
-    from ...utils._torch_compat import get_funcol_group_resolvers
+    from ..._utils._torch_compat import get_funcol_group_resolvers
 
     resolvers = get_funcol_group_resolvers()
     if resolvers is None:
@@ -890,7 +890,7 @@ def _make_funcol_wrap(site: FuncolSite, original: Callable[..., Any]) -> Callabl
         contributions = _contribution_tensors(bound.get(site.tensor_arg))
         witness_policy = str(getattr(trace, "distributed_witness", "none") or "none")
 
-        from ...utils.rng import log_current_autocast_state, log_current_rng_states
+        from ..._utils.rng import log_current_autocast_state, log_current_rng_states
 
         save_rng = getattr(trace, "save_rng_states", False)
         rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
@@ -972,7 +972,7 @@ def install_funcol_wraps(originals: dict[tuple[Any, str], Any]) -> None:
 
     if not torch.distributed.is_available():
         return
-    from ...utils._torch_compat import get_funcol_module
+    from ..._utils._torch_compat import get_funcol_module
 
     funcol_module = get_funcol_module()
     if funcol_module is None:
@@ -996,7 +996,7 @@ def remove_funcol_wraps(originals: dict[tuple[Any, str], Any]) -> None:
 
     from torchlens.distributed._lifecycle import restore_wrapped_attr
 
-    from ...utils._torch_compat import get_funcol_module
+    from ..._utils._torch_compat import get_funcol_module
 
     funcol_module = get_funcol_module()
     if funcol_module is None:

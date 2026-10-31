@@ -7,25 +7,25 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from torchlens._runnable import ContractCheck, RunnableDiagnostic
+
 from . import _state
-from ._runnable_state import (
-    RunResourceCeiling,
-    _guarded_defensive_materialize,
-)
-from .errors import (
-    PathDivergenceError,
-)
-from .runnable import (
-    ContractCheck,
+from ._runnable import (
     PathFaithfulness,
-    RunnableDiagnostic,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from .utils._torch_compat import tensor_has_named_dims
-from .utils.alias_footprint import touched_bytes_relation
+from ._runnable_state import (
+    RunResourceCeiling,
+    _guarded_defensive_materialize,
+)
+from ._utils._torch_compat import tensor_has_named_dims
+from ._utils.alias_footprint import touched_bytes_relation
+from .errors import (
+    PathDivergenceError,
+)
 
 if TYPE_CHECKING:
     from ._runnable_execution import (
@@ -478,7 +478,7 @@ def _bind_runtime_inputs(
                     current_runtime=str(torch.__version__),
                     detection_stage="run_honesty_contract",
                     resolver_provenance=None,
-                    analysis_load_available=True,
+                    is_analysis_load_available=True,
                     details=(),
                 ),
             )
@@ -585,7 +585,7 @@ def _model_input_storage_closure(descriptor: SparseRunDescriptor) -> set[str]:
 
 
 def _touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> str:
-    """Shared-engine adapter (see :func:`torchlens.utils.alias_footprint.touched_bytes_relation`)."""
+    """Shared-engine adapter (see :func:`torchlens._utils.alias_footprint.touched_bytes_relation`)."""
 
     with _state.pause_logging():
         return touched_bytes_relation(left, right)

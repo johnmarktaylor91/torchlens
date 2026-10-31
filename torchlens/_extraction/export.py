@@ -260,7 +260,7 @@ class _ExportJob:
 
 
 def export_extraction(
-    output_dir: str | Path,
+    path: str | Path,
     dest: str | Path,
     *,
     format: str = "npy",
@@ -271,7 +271,7 @@ def export_extraction(
 
     Parameters
     ----------
-    output_dir:
+    path:
         Source artifact directory.
     dest:
         Destination directory (created; published atomically by rename).
@@ -311,7 +311,7 @@ def export_extraction(
     # Complete-only by construction: open_extraction refuses non-complete
     # artifacts typed unless explicitly opened in_progress (which this
     # exporter never does).
-    reader = open_extraction(output_dir)
+    reader = open_extraction(path)
     selected = keys if keys is not None else reader.keys
     for key in selected:
         reader.logical_shape(key)

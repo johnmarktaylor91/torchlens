@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import ResolvedPostprocessing, ResolvedPreprocessing
+from torchlens._data_classes.trace import ResolvedPostprocessing, ResolvedPreprocessing
 
 
 class TinyClassifier(nn.Module):
@@ -70,7 +70,7 @@ def text_to_tensor(text: str) -> torch.Tensor:
 def register_custom_decoder() -> None:
     """Register a demo output detector with a custom label bank."""
 
-    @tl.autoroute.output.register(name="demo_custom_labels", priority=5)
+    @tl._autoroute.output.register(name="demo_custom_labels", priority=5)
     def demo_custom_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
         """Resolve the demo-only ``output_style='demo_custom_labels'`` style."""
 
@@ -104,7 +104,7 @@ def print_table(title: str, trace: tl.Trace, *, top_n: int = 2) -> None:
     """
 
     print(f"\n## {title}")
-    print(trace.output_table(top_n=top_n).to_string(index=False))
+    print(trace.output_table(k=top_n).to_string(index=False))
 
 
 def main() -> None:
@@ -123,8 +123,8 @@ def main() -> None:
     print_table("auto-detected output labels", auto_trace)
     print("\n## output table")
     print(auto_trace.output_table())
-    print("\n## decode_output(top_n=1)")
-    print(auto_trace.decode_output(top_n=1))
+    print("\n## decode_output(k=1)")
+    print(auto_trace.decode_output(k=1))
     output_rows = auto_trace.to_pandas(include_decoded_output_summary=True)
     output_preview = output_rows.loc[output_rows["is_output"], ["label", "decoded_output_summary"]]
     print("\n## output-node pandas summary")
@@ -144,12 +144,14 @@ def main() -> None:
         print_table("custom decoder: output_style='demo_custom_labels'", custom_trace, top_n=1)
         print(f"custom postprocessor: {custom_trace.output_postprocessor.description}")
     finally:
-        tl.autoroute.output.unregister("demo_custom_labels")
+        tl._autoroute.output.unregister("demo_custom_labels")
 
     text_trace = tl.trace(
         model,
         "0.1,0.2,2.0,1.0",
-        capture=tl.options.CaptureOptions(transform=text_to_tensor, output_style="classification"),
+        capture=tl.options.CaptureOptions(
+            input_transform=text_to_tensor, output_style="classification"
+        ),
     )
     text_trace.input_preprocessor = ResolvedPreprocessing(
         source="example.transform",
@@ -164,9 +166,9 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="torchlens_semantic_io_") as tmpdir:
         outpath = Path(tmpdir) / "semantic_io_input"
         text_trace.draw(
-            vis_outpath=str(outpath),
+            path=str(outpath),
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             show_input_transform_summary=True,
         )
         print(f"input display SVG: {outpath}.svg")

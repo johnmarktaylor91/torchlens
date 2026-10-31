@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import torch
 
-from ...utils._torch_compat import tensor_version_or_none
+from ..._utils._torch_compat import tensor_version_or_none
 from ._completeness_origins import internal_scalar_read
 
 

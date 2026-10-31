@@ -142,13 +142,13 @@ def _planted_edge_drop_trace():
 
     # The model rides on the trace on purpose: capture releases the direct
     # param references and rehydrates them through the source-model weakref,
-    # so validation raises PostTraceParamUnavailable whenever a gc cycle
+    # so validation raises ParamReleasedError whenever a gc cycle
     # collection happens to run before the value-rooted replay reads params.
     model = _TwoStage()
     log = trace_fn(
         model,
         torch.randn(2, 6),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     log._tl_test_model_keepalive = model
     outputs = [log.layer_dict_all_keys[label].out for label in log.output_layers]
@@ -325,7 +325,7 @@ def test_symmetric_edge_drop_is_caught_by_value_rooted_replay():
         # sweep disabled this chain plant still fails, but only later, through
         # BFS completeness (the dropped producer's ancestors become unreached),
         # which would leave the value-rooted half silently unpinned (r18 V04).
-        assert failure.check == CHECK_ARG_LOGGING, failure
+        assert failure.check_name == CHECK_ARG_LOGGING, failure
         assert "unattributed tensor arg" in failure.message, failure
     finally:
         log.cleanup()
@@ -355,7 +355,7 @@ def _loaded_edge_drop_trace(tmp_path):
     log = trace_fn(
         _TwoStage(),
         torch.randn(2, 6),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     outputs = [log.layer_dict_all_keys[label].out for label in log.output_layers]
     path = tmp_path / "edge_drop_plant.tlspec"
@@ -374,15 +374,15 @@ def test_loaded_artifact_replay_validation_refuses_typed(tmp_path) -> None:
     b9-sol R75-2 reality check: ``Op.func`` is ``FieldPolicy.DROP`` at every
     save level, so a loaded torch artifact cannot run the value-rooted replay
     sweeps at all. The honest floor pinned here is that the refusal is LOUD —
-    a ``TorchLensIOError`` naming the unresolved computational functions — so
+    a ``ArtifactError`` naming the unresolved computational functions — so
     a planted loaded corruption can never validate clean through a path that
     silently skipped the work.
     """
 
-    from torchlens._io import TorchLensIOError
+    from torchlens._io import ArtifactError
 
     loaded, outputs = _loaded_edge_drop_trace(tmp_path)
-    with pytest.raises(TorchLensIOError, match="unresolved computational functions"):
+    with pytest.raises(ArtifactError, match="unresolved computational functions"):
         loaded.validate_forward_pass(outputs, validate_metadata=False)
 
 
@@ -495,7 +495,7 @@ def test_loaded_sparse_control_run_is_verified_and_attested(tmp_path) -> None:
     """Positive control for the two wrapper-defect plants below."""
 
     import torchlens as tl
-    from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
+    from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 
     path, x = _save_runnable_tanh(tmp_path)
     result = tl.load(path).run(inputs=x)

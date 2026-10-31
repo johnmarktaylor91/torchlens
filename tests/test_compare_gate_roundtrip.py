@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.bundle._compare_gate import _MODEL_AXIS_RANK
-from torchlens.intervention.errors import BundleRelationshipError
+from torchlens.intervention.errors import BundleComparisonError
 from torchlens.intervention.types import Relationship
 
 _OPTS = tl.options.CaptureOptions(intervention_ready=True)
@@ -87,7 +87,7 @@ def _round_trip(trace: tl.Trace, path: Path) -> tl.Trace:
         Loaded trace.
     """
 
-    tl.save(trace, str(path))
+    trace.save(str(path))
     return tl.load(str(path))
 
 
@@ -103,13 +103,13 @@ def test_leg1_refusal_survives_save_load(tmp_path: Path) -> None:
     left = _capture(model, torch.randn(2, 4))
     right = _capture(model, torch.randn(2, 4))
 
-    loaded = tl.bundle(
+    loaded = tl.Bundle(
         {
             "a": _round_trip(left, tmp_path / "a.tlspec"),
             "b": _round_trip(right, tmp_path / "b.tlspec"),
         }
     )
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         loaded.compare_at(tl.func("relu"))
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
 
@@ -122,7 +122,7 @@ def test_leg4_success_survives_save_load(tmp_path: Path) -> None:
     torch.manual_seed(1)
     x = torch.randn(2, 4)
 
-    loaded = tl.bundle(
+    loaded = tl.Bundle(
         {
             "a": _round_trip(_capture(model_a, x), tmp_path / "a.tlspec"),
             "b": _round_trip(_capture(model_b, x), tmp_path / "b.tlspec"),
@@ -149,15 +149,15 @@ def test_unproven_after_payload_free_round_trip(tmp_path: Path) -> None:
     left = _capture(model, x)
     right = _capture(model, x)
 
-    tl.save(left, str(tmp_path / "a.tlspec"), level="runnable")
-    tl.save(right, str(tmp_path / "b.tlspec"), level="runnable")
-    loaded = tl.bundle(
+    left.save(str(tmp_path / "a.tlspec"), level="runnable")
+    right.save(str(tmp_path / "b.tlspec"), level="runnable")
+    loaded = tl.Bundle(
         {
             "a": tl.load(str(tmp_path / "a.tlspec")),
             "b": tl.load(str(tmp_path / "b.tlspec")),
         }
     )
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         loaded.compare_at(tl.func("relu"))
     assert excinfo.value.fields["code"] == "bundle_gate_input_identity_unproven"
     assert excinfo.value.fields["unproven_members"] == ["a", "b"]
@@ -186,8 +186,8 @@ def test_rank_upgrade_audit_across_save_load(tmp_path: Path) -> None:
         "m2x1": _capture(other, x1),
         "m2x2": _capture(other, x2),
     }
-    live = tl.bundle(dict(captures))
-    loaded = tl.bundle(
+    live = tl.Bundle(dict(captures))
+    loaded = tl.Bundle(
         {name: _round_trip(trace, tmp_path / f"{name}.tlspec") for name, trace in captures.items()}
     )
 
@@ -199,8 +199,8 @@ def test_rank_upgrade_audit_across_save_load(tmp_path: Path) -> None:
     names = list(captures)
     for index, left_name in enumerate(names):
         for right_name in names[index + 1 :]:
-            live_rel = live.relationship(left_name, right_name)
-            loaded_rel = loaded.relationship(left_name, right_name)
+            live_rel = live.comparability(left_name, right_name)
+            loaded_rel = loaded.comparability(left_name, right_name)
             assert _MODEL_AXIS_RANK[loaded_rel] <= _MODEL_AXIS_RANK[live_rel], (
                 f"{left_name}/{right_name}: loaded {loaded_rel.value!r} outranks "
                 f"live {live_rel.value!r}"
@@ -213,8 +213,8 @@ def test_rank_upgrade_audit_across_save_load(tmp_path: Path) -> None:
     # The definitive shape: same live model object was same_object in
     # session; after loading, the pair settles to the graph evidence that
     # actually round-trips.
-    assert live.relationship("m1x1", "m1x2") is Relationship.SAME_OBJECT
-    assert loaded.relationship("m1x1", "m1x2") is Relationship.SHARED_GRAPH_SAME_INPUT
+    assert live.comparability("m1x1", "m1x2") is Relationship.SAME_OBJECT
+    assert loaded.comparability("m1x1", "m1x2") is Relationship.SHARED_GRAPH_SAME_INPUT
 
 
 def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
@@ -227,10 +227,10 @@ def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
     model = _TwoLayer()
     torch.manual_seed(4)
     x = torch.randn(2, 4)
-    bundle = tl.bundle({"turn1": _capture(model, x), "turn2": _capture(model, x)})
+    bundle = tl.Bundle({"turn1": _capture(model, x), "turn2": _capture(model, x)})
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
 
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.diff_pair("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
@@ -238,7 +238,7 @@ def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
     bundle.save(str(path))
     loaded = tl.load(str(path))
 
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         loaded.diff_pair("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]
@@ -251,7 +251,7 @@ def test_scoped_pair_read_works_after_bundle_round_trip(tmp_path: Path) -> None:
     model = _TwoLayer()
     torch.manual_seed(5)
     x = torch.randn(2, 4)
-    bundle = tl.bundle(
+    bundle = tl.Bundle(
         {
             "a": _capture(model, x),
             "b": _capture(model, x),
@@ -266,6 +266,6 @@ def test_scoped_pair_read_works_after_bundle_round_trip(tmp_path: Path) -> None:
 
     rows = loaded.diff_pair("a", "b")
     assert isinstance(rows, list)
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         loaded.diff_pair("b", "next")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"

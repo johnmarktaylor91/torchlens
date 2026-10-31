@@ -26,7 +26,7 @@ from ..errors.episode import BundleRelationError
 from ._fed_by import member_binding, retained_ids
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from . import Bundle
 
 

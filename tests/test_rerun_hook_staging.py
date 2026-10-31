@@ -50,7 +50,7 @@ def _steer() -> Any:
     """Return a deterministic steer helper for the site."""
 
     direction = torch.linspace(-1.0, 1.0, 8)
-    return tl.steer(direction, magnitude=3.0, feature_axis=-1)
+    return tl.steer(direction, strength=3.0, dim=-1)
 
 
 def _spec() -> Any:

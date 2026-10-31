@@ -12,7 +12,7 @@ capture once with `tl.trace(model, x)`, then call `trace.draw(...)` as often as 
 | `roll=True` | `trace.draw(vis_mode="rolled")` | Repeated passes through one module are drawn once. |
 | `graph_dir="LR"` / `"TB"` | `trace.draw(direction="leftright")` / `"topdown"` | `"bottomup"` is the default. |
 | `hide_inner_tensors=True` (the default) | `trace.draw(collapse="auto")` | TorchLens draws every executed op by default; `collapse=` folds modules into boxes for an overview (`"none"`, `"auto"`, `"max"` or a level from 0 to 1). |
-| `save_graph=True, filename=..., directory=...` | `trace.draw(vis_outpath="dir/name", vis_fileformat="png", vis_save_only=True)` | Without `vis_save_only=True` the file also opens. |
+| `save_graph=True, filename=..., directory=...` | `trace.draw(path="dir/name", file_format="png", vis_save_only=True)` | Without `vis_save_only=True` the file also opens. |
 | `graph.visual_graph` (a `graphviz.Digraph`) | `trace.draw(..., return_graph=True)` | By default `draw` returns the DOT source as a string. |
 | `mode="eval"`, `device=...`, `dtypes=...` | Set them on your model and input before tracing | |
 
@@ -45,7 +45,7 @@ torch.manual_seed(0)
 model = nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU(), nn.Flatten(), nn.Linear(8 * 14 * 14, 10)).eval()
 trace = tl.trace(model, torch.randn(1, 3, 16, 16))
 outpath = os.path.join(tempfile.mkdtemp(), "model")
-dot_source = trace.draw(depth=2, vis_outpath=outpath, vis_fileformat="svg", vis_save_only=True)
+dot_source = trace.draw(depth=2, path=outpath, file_format="svg", vis_save_only=True)
 RESULT = ("conv2d" in dot_source, os.path.exists(outpath + ".svg"))
 ```
 
@@ -77,6 +77,6 @@ module_calls = len(trace.modules)
 executed_ops = len(trace.layers)
 print(f"{module_calls} module calls, {executed_ops} executed ops")
 outpath = os.path.join(tempfile.mkdtemp(), "gpt2")
-overview = trace.draw(collapse="auto", vis_outpath=outpath, vis_fileformat="svg", vis_save_only=True)
+overview = trace.draw(collapse="auto", path=outpath, file_format="svg", vis_save_only=True)
 RESULT = (executed_ops > module_calls, os.path.exists(outpath + ".svg"))
 ```

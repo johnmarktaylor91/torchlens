@@ -35,15 +35,15 @@ from torchlens._input_walk import (
     snapshot_input_boundary,
 )
 from torchlens._io import runnable_load
+from torchlens._ir.container import register_container
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import (
     PathDivergenceError,
     RunCapabilityUnavailableError,
     RunnablePreflightError,
     RunPreconditionError,
 )
-from torchlens.ir.container import register_container
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -260,7 +260,7 @@ def _registered_test_containers():
     ``test_no_module_level_registry_mutation_in_tests`` lints for).
     """
 
-    from torchlens.ir.container import _CONTAINER_REGISTRY
+    from torchlens._ir.container import _CONTAINER_REGISTRY
 
     register_container(
         _RegBox,
@@ -382,7 +382,7 @@ def test_r67_structure_facts_are_required_and_parse_validated(tmp_path: Path) ->
         # zero facts is legal only for zero sites; forge an inconsistent count instead
         raise runnable_load.ContextFieldInvalidError("control_witnesses.input_structure", "x")
     from torchlens._io.runnable import _encode_literal
-    from torchlens.runnable import ControlWitness, ControlWitnessKind
+    from torchlens._runnable import ControlWitness, ControlWitnessKind
 
     def _forged(fact) -> ControlWitness:
         return ControlWitness(
@@ -1024,7 +1024,7 @@ def test_r71c_no_live_dict_getattr_in_normative_module() -> None:
 import json as _json  # noqa: E402
 import os as _os  # noqa: E402
 
-from torchlens.runnable import (  # noqa: E402
+from torchlens._runnable import (  # noqa: E402
     WITNESS_FAMILY_REGISTRY,
     WITNESS_FAMILY_REGISTRY_VERSION,
     ReadinessStatus,

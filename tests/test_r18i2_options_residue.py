@@ -51,7 +51,7 @@ def test_l2_merge_default_when_none_unchanged() -> None:
 
     merged = options.merge_capture_options(capture=None)
     assert merged.verbose is False
-    assert merged.save_arg_values is False
+    assert merged.save_args is False
 
 
 def test_l2_merge_grouped_flat_conflict_still_raises() -> None:
@@ -71,4 +71,4 @@ def test_l2_all_merge_entrypoints_round_trip_defaults() -> None:
         options.merge_intervention_options(intervention=None),
         options.InterventionOptions,
     )
-    assert isinstance(options.merge_streaming_options(streaming=None), options.StreamingOptions)
+    assert isinstance(options.merge_streaming_options(streaming=None), options.StorageOptions)

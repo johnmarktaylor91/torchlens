@@ -56,7 +56,7 @@
       "id": "baukit-runningstats-missing",
       "doc": "docs/migration/baukit.md",
       "kind": "missing-row",
-      "receipt": "No runningstats row while tl.stats / tl.aggregate ship.",
+      "receipt": "No runningstats row while tl.stats / tl.stats.aggregate ship.",
       "status": "open",
       "verified_at": "2026-08-26 (mega/A12 checkout; zero 'runningstats' hits)",
       "owner_next": "D01 (prose truth sweep)"

@@ -25,14 +25,14 @@ from support.fp8_guard import permit_cpu_float8_allocation
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes._nonfinite import nonfinite_layers, uncheckable_payload_count
-from torchlens.errors import CaptureError
-from torchlens.utils._torch_compat import get_fp8_dtypes, get_torch_capability_snapshot
-from torchlens.utils.tensor_utils import (
+from torchlens._data_classes._nonfinite import nonfinite_layers, uncheckable_payload_count
+from torchlens._utils._torch_compat import get_fp8_dtypes, get_torch_capability_snapshot
+from torchlens._utils.tensor_utils import (
     fp8_safe_comparison_pair,
     fp8_widen_for_numeric_ops,
     tensor_nanequal,
 )
+from torchlens.errors import CaptureError
 
 
 @pytest.fixture(autouse=True)
@@ -424,8 +424,8 @@ def test_compat_report_flags_fp8_state() -> None:
 
             return self.fc(x)
 
-    row = tl.compat.report(Fp8Buffer(), torch.randn(2, 4)).row("fp8_dtype")
-    assert row.detected is True
+    row = tl.compat.report(Fp8Buffer(), torch.randn(2, 4)).check("fp8_dtype")
+    assert row.is_detected is True
     assert row.status == "scope"
     assert "float32" in row.details
     assert ".tlspec" in row.details
@@ -434,8 +434,8 @@ def test_compat_report_flags_fp8_state() -> None:
 def test_compat_report_fp8_row_is_quiet_and_honest_when_clean() -> None:
     """No fp8 state reports pass -- while disclosing what it could not see."""
 
-    row = tl.compat.report(nn.Linear(4, 4), torch.randn(2, 4)).row("fp8_dtype")
-    assert row.detected is False
+    row = tl.compat.report(nn.Linear(4, 4), torch.randn(2, 4)).check("fp8_dtype")
+    assert row.is_detected is False
     assert row.status == "pass"
     assert "inside the forward" in row.details
 
@@ -444,8 +444,8 @@ def test_compat_report_flags_an_fp8_input() -> None:
     """An fp8 model input is detected too."""
 
     fp8_input = torch.randn(2, 4).to(torch.float8_e4m3fn)
-    row = tl.compat.report(nn.Linear(4, 4), fp8_input).row("fp8_dtype")
-    assert row.detected is True
+    row = tl.compat.report(nn.Linear(4, 4), fp8_input).check("fp8_dtype")
+    assert row.is_detected is True
     assert "inputs" in row.details
 
 
@@ -464,11 +464,11 @@ def test_saving_an_fp8_activation_refuses_typed(tmp_path) -> None:
         pytest temporary directory.
     """
 
-    from torchlens.errors import TorchLensIOError
+    from torchlens.errors import ArtifactError
 
     trace = tl.trace(_Fp8CastModel(torch.float8_e4m3fn), torch.randn(2, 4))
-    with pytest.raises(TorchLensIOError) as excinfo:
-        tl.save(trace, str(tmp_path / "fp8.tlspec"))
+    with pytest.raises(ArtifactError) as excinfo:
+        trace.save(str(tmp_path / "fp8.tlspec"))
     assert "float8_e4m3fn" in str(excinfo.value)
 
 
@@ -644,7 +644,7 @@ def test_a_dtype_with_no_finiteness_kernel_is_disclosed_not_called_finite() -> N
     # ``report.explain``'s anomaly bullet publishes the same verdict standalone.
     anomaly = [
         line
-        for line in tl.report.explain(trace).splitlines()
+        for line in trace.explain().splitlines()
         if "NaN or Inf" in line or "no runnable finiteness check" in line
     ]
     assert anomaly, "the report must still carry an anomaly verdict"

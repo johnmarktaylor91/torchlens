@@ -538,4 +538,4 @@ def test_deliberately_wrong_window_fails_tripwire() -> None:
     result = convolution.receptive_field.check((0, 0, 2, 2))  # type: ignore[union-attr]
 
     assert result.status is ReceptiveFieldValidationStatus.FAIL
-    assert result.n_violations == 8
+    assert result.num_violations == 8

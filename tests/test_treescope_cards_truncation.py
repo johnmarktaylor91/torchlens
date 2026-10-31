@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 import torch
 
-from torchlens.notebook._truncation import (
+from torchlens._notebook._truncation import (
     CELL_BUDGET_DEFAULT,
     EDGE_ITEMS_DEFAULT,
     PER_AXIS_BUDGET_DEFAULT,

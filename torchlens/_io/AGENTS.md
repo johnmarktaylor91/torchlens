@@ -4,11 +4,13 @@ This package is the untrusted-artifact save/load surface: a loaded `.tlspec` bun
 hostile input, and every load path here is fail-closed.
 
 ## bundle.py
-- `save()` and `load()` (typed overloads) are the main entry points behind `tl.save()`/`tl.load()`.
+- `save()` and `load()` (typed overloads) are the main entry points behind `trace.save()`/`tl.load()`.
 - `_RenameAwareUnpickler` reads `metadata.pkl` through the default-deny `SafeBundleUnpickler`
   allowlist while preserving the locked `_RENAMED_PICKLE_GLOBALS` class/module remap; each
   remapped target is still gated through the allowlist.
 - `cleanup_tmp()` removes stale partial-save temp directories.
+- `_root_manifest.load_by_root_manifest()` routes merged, fastlog and extraction directories by
+  their root manifest (after the earlier-major refusal) before `load()` parses a trace manifest.
 
 ## _safe_unpickle.py
 - `SafeBundleUnpickler` is the restricted default-deny unpickler (class allowlist, mirrors
@@ -19,6 +21,8 @@ hostile input, and every load path here is fail-closed.
   `allowed_custom_callable_modules` allowlist, which stays enforced even alongside broad trust.
 - Trust keys on the resolved object's REAL module, never the pickled path; known-dangerous
   modules (`os`, `sys`, `subprocess`, `builtins`, `importlib`, ...) are hard-denied.
+- `_pre3_module_paths.refuse_pre_3_module_path()` (called from `find_class`) refuses a pickled
+  module path only torchlens 2.x wrote, with `ArtifactTooOldError`.
 
 ## manifest.py / tlspec.py
 - `Manifest`, `TensorEntry`, `Provenance`; `enforce_version_policy()` gates artifact versions;
@@ -51,7 +55,7 @@ hostile input, and every load path here is fail-closed.
   streams blobs to disk.
 
 ## Small support modules
-- `__init__.py`: `TorchLensIOError`, `ArtifactVersionBelowFloorError` (rehydration floor),
+- `__init__.py`: `ArtifactError`, `ArtifactTooOldError` (rehydration floor),
   `FieldPolicy`, `read_tlspec_version()`.
 - `_artifact_strings.py`: artifact-string validation incl. the MANDATORY
   device-token gate (see payload_codec above).
@@ -69,7 +73,7 @@ hostile input, and every load path here is fail-closed.
 ## Local invariants
 - Fail-closed everywhere: unknown pickle globals raise, oversized/deep JSON refuses,
   symlinked bundle members are rejected.
-- Artifacts older than tlspec v6 refuse with `ArtifactVersionBelowFloorError`
+- Artifacts older than tlspec v6 refuse with `ArtifactTooOldError`
   (drop-not-resurrect; no field-alias ladders).
 - The sparse runnable core must stay tensor-value-free:
   `assert_sparse_core_has_no_tensor_payload()` enforces it at descriptor build.

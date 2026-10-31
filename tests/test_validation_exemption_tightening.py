@@ -69,7 +69,7 @@ def _capture(model: nn.Module, x: torch.Tensor, seed: int = 0):
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=True, random_seed=seed),
+        capture=CaptureOptions(layers_to_save="all", save_args=True, seed=seed),
     )
 
 
@@ -334,7 +334,7 @@ def test_embedding_index_validates_true_end_to_end() -> None:
     x = torch.randint(0, 7, (3, 5))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        assert bool(validate_forward_pass(model, x, random_seed=1))
+        assert bool(validate_forward_pass(model, x, seed=1))
 
 
 def test_degenerate_embedding_domain_is_exempt_not_failed() -> None:

@@ -20,7 +20,7 @@ from .intervention.resolver import _selector_resolution_direction
 from .intervention.types import InterventionDecision, InterventionSpec, TargetSpec
 
 if TYPE_CHECKING:
-    from .data_classes.trace import Trace
+    from ._data_classes.trace import Trace
 
 
 def _backward_intervention_spec_from_predicate(
@@ -41,7 +41,7 @@ def _backward_intervention_spec_from_predicate(
 
     if intervene_predicate is None:
         return None
-    from .intervention.spec import InterventionSpec as PublicInterventionSpec
+    from .intervention.spec import Recipe as PublicInterventionSpec
 
     if isinstance(intervene_predicate, PublicInterventionSpec):
         # C03 spec door: EVERY backward rule of a multi-clause spec builds its
@@ -49,7 +49,7 @@ def _backward_intervention_spec_from_predicate(
         # silently dropped all but a lone clause (the exact silent-drop class
         # the spec noun exists to kill).
         rule_pairs: list[tuple[Any, Any]] = [
-            (rule.where, rule.decision) for rule in intervene_predicate.rules
+            (rule.target, rule.decision) for rule in intervene_predicate.rules
         ]
     else:
         rule_pairs = [
@@ -66,8 +66,8 @@ def _backward_intervention_spec_from_predicate(
         if selector_direction == "backward" and decision.direction not in {"backward", "both"}:
             warnings.warn(
                 "Forward intervention helper attached to a backward-only selector will not "
-                "fire. Use a gradient helper such as tl.grad_zero(), tl.grad_scale(), or "
-                "tl.bwd_hook().",
+                "fire. Use a gradient helper such as tl.zero_grad(), tl.scale_grad(), or "
+                "tl.hook_grad().",
                 UserWarning,
                 stacklevel=3,
             )
@@ -126,7 +126,7 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         rules_payload,
         site_keys_for_labels,
     )
-    from .intervention.spec import InterventionSpec as PublicInterventionSpec
+    from .intervention.spec import Recipe as PublicInterventionSpec
 
     fired_labels: list[str] = []
     fire_count = 0

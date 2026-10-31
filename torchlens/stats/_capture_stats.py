@@ -1,13 +1,13 @@
 """Reduce-and-discard capture: ``tl.trace(model, x, save="stats")``.
 
-``save="stats"`` folds every site's out into a ``Spine`` as the forward runs
+``save="stats"`` folds every site's out into a ``RunningStats`` as the forward runs
 and keeps no activation payload. It rides the existing summary-transform
 seam (a reducer with the declared ``summary`` role and
 ``save_raw_activations=False``), so the capture makes no raw clone; each op
 retains one fixed 16-slot float64 vector (128 bytes) instead of its out,
 and that vector is all the save budget is charged. ``site_spines(trace)``
-decodes those vectors back into live ``Spine`` accumulators equal to
-``Spine().update(out)`` on the same out (see :func:`lean_spine` for which
+decodes those vectors back into live ``RunningStats`` accumulators equal to
+``RunningStats().update(out)`` on the same out (see :func:`lean_spine` for which
 fields are bit-equal). Reading an op's payload on such a trace refuses
 (``activation_reduced_to_stats``).
 
@@ -22,7 +22,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
-from ..observability._kernels import Spine, _as_reduction_tensor
+from .._observability._kernels import RunningStats, _as_reduction_tensor
 
 __all__ = [
     "STATS_REDUCER_REPR",
@@ -30,7 +30,7 @@ __all__ = [
     "is_stats_capture",
     "lean_spine",
     "refuse_reduced_payload_read",
-    "site_spines",
+    "site_stats",
     "stats_save_options",
 ]
 
@@ -41,7 +41,7 @@ STATS_SAVE_LEVEL = "stats"
 #: survives save and load, so a reloaded stats trace is still recognised.
 STATS_REDUCER_REPR = "tl.stats save='stats' spine reducer"
 
-#: Packed vector slots, in ``Spine`` attribute order, then the dtype code.
+#: Packed vector slots, in ``RunningStats`` attribute order, then the dtype code.
 _FIELDS = (
     "_count_total",
     "_count_finite",
@@ -63,15 +63,15 @@ _INT_FIELDS = frozenset(_FIELDS[:7])
 _OPTIONAL_FIELDS = frozenset({"_finite_min", "_finite_max", "_finite_absmax"})
 _DTYPE_CODES = {None: 0.0, "float32": 1.0, "float64": 2.0}
 _DTYPE_NAMES = {code: name for name, code in _DTYPE_CODES.items()}
-#: Packed width: the Spine fields plus one dtype code.
+#: Packed width: the RunningStats fields plus one dtype code.
 PACKED_SLOTS = len(_FIELDS) + 1
 
 
 class _StatsReducer:
-    """Summary-role reducer: one op out to its packed ``Spine`` state.
+    """Summary-role reducer: one op out to its packed ``RunningStats`` state.
 
     The declared ``summary`` role makes the capture skip the raw clone; the
-    reducer folds with :func:`lean_spine`, which reproduces ``Spine.update``
+    reducer folds with :func:`lean_spine`, which reproduces ``RunningStats.update``
     without its full-size float64 working copies. Total by design: an out
     the kernel refuses (a complex tensor) packs to the empty vector and
     ``site_spines`` leaves that site out.
@@ -81,7 +81,7 @@ class _StatsReducer:
     _tl_stats_reducer = True
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        """Fold one detached out into a fresh ``Spine`` and pack its state."""
+        """Fold one detached out into a fresh ``RunningStats`` and pack its state."""
 
         try:
             spine = lean_spine(tensor)
@@ -100,24 +100,24 @@ class _StatsReducer:
 _CHUNK = 1 << 16
 
 
-def lean_spine(value: Any) -> Spine:
-    """Fold one tensor into a fresh ``Spine`` with bounded working memory.
+def lean_spine(value: Any) -> RunningStats:
+    """Fold one tensor into a fresh ``RunningStats`` with bounded working memory.
 
-    Produces the state ``Spine().update(value)`` produces. ``Spine.update``
+    Produces the state ``RunningStats().update(value)`` produces. ``RunningStats.update``
     holds full-size boolean masks and several full-size float64 copies at
     once, which would make a reduce-and-discard capture peak above a full
     one; here every count, extremum and moment is folded over chunks of
     ``_CHUNK`` values, so no working tensor is larger than one chunk. Counts
     and extrema are exact. The sum is one whole-tensor reduction, as in
-    ``Spine.update``, so for a float64 out the sum and the mean are
+    ``RunningStats.update``, so for a float64 out the sum and the mean are
     bit-equal (a float32 out's sum accumulates in float64 without a
     converted copy and can differ in the last bits). The sum of squares, the
     sum of absolute values and M2 are bit-equal for outs up to one chunk and
     otherwise equal within float64 reduction-order rounding.
     """
 
-    tensor, dtype_tag = _as_reduction_tensor("Spine", value)
-    spine = Spine()
+    tensor, dtype_tag = _as_reduction_tensor("RunningStats", value)
+    spine = RunningStats()
     spine._reduction_dtype = dtype_tag
     n = int(tensor.numel())
     if n == 0:
@@ -138,7 +138,7 @@ def lean_spine(value: Any) -> Spine:
     return spine
 
 
-def _fold_finite(spine: Spine, finite: torch.Tensor) -> None:
+def _fold_finite(spine: RunningStats, finite: torch.Tensor) -> None:
     """Fill a fresh spine's finite-value fields from a flat all-finite tensor."""
 
     n_finite = int(finite.numel())
@@ -180,7 +180,7 @@ def stats_save_options() -> Any:
 def refuse_reduced_payload_read(slot: Any, source_trace: Any) -> None:
     """Refuse an op payload read on a ``save="stats"`` trace (reduce and discard).
 
-    Such a trace folded every out into a ``Spine`` and kept no payload, so a
+    Such a trace folded every out into a ``RunningStats`` and kept no payload, so a
     silent ``None`` would read as "this op produced nothing".
     """
 
@@ -188,28 +188,28 @@ def refuse_reduced_payload_read(slot: Any, source_trace: Any) -> None:
         return
     label = slot("label") or slot("layer_label") or slot("_label_raw")
     raise PayloadUnavailableError(
-        f"op {label} was captured with save='stats': its out was folded into a Spine "
+        f"op {label} was captured with save='stats': its out was folded into a RunningStats "
         "and no payload was kept",
         code="activation_reduced_to_stats",
-        remedy="read the statistics with tl.stats.site_spines(trace)[label], or capture "
+        remedy="read the statistics with tl.stats.site_stats(trace)[label], or capture "
         "again keeping payloads with tl.trace(model, x, save='all')",
         label=str(label),
     )
 
 
-def pack_spine(spine: Spine) -> torch.Tensor:
-    """Pack a ``Spine``'s state into one float64 vector (counts exact to 2^53)."""
+def pack_spine(spine: RunningStats) -> torch.Tensor:
+    """Pack a ``RunningStats``'s state into one float64 vector (counts exact to 2^53)."""
 
     cells = [math.nan if getattr(spine, f) is None else float(getattr(spine, f)) for f in _FIELDS]
     cells.append(_DTYPE_CODES.get(spine._reduction_dtype, 0.0))
     return torch.tensor(cells, dtype=torch.float64)
 
 
-def unpack_spine(vector: torch.Tensor, *, name: str | None = None) -> Spine:
-    """Rebuild a live ``Spine`` from a packed vector (exact round trip)."""
+def unpack_spine(vector: torch.Tensor, *, name: str | None = None) -> RunningStats:
+    """Rebuild a live ``RunningStats`` from a packed vector (exact round trip)."""
 
     cells = vector.detach().to("cpu", torch.float64).tolist()
-    spine = Spine(name=name)
+    spine = RunningStats(name=name)
     for field, cell in zip(_FIELDS, cells, strict=False):
         if field in _INT_FIELDS:
             setattr(spine, field, int(cell))
@@ -232,8 +232,8 @@ def is_stats_capture(trace: Any) -> bool:
     return trace._activation_transform_repr == STATS_REDUCER_REPR  # noqa: SLF001 -- declared Trace field
 
 
-def site_spines(trace: Any) -> dict[str, Spine]:
-    """Return ``{op label: Spine}`` for a ``save="stats"`` trace, in capture order.
+def site_stats(trace: Any) -> dict[str, RunningStats]:
+    """Return ``{op label: RunningStats}`` for a ``save="stats"`` trace, in capture order.
 
     Parameters
     ----------
@@ -242,7 +242,7 @@ def site_spines(trace: Any) -> dict[str, Spine]:
 
     Returns
     -------
-    dict[str, Spine]
+    dict[str, RunningStats]
         One live accumulator per op site (pass-qualified labels for repeated
         layers). Each keeps folding with ``update``/``merge`` and saves with
         ``tl.stats.save_fitted``. Sites whose out the kernel refused (complex
@@ -251,14 +251,14 @@ def site_spines(trace: Any) -> dict[str, Spine]:
 
     if not is_stats_capture(trace):
         raise InvalidArgumentError(
-            "tl.stats.site_spines(trace) reads the per-site statistics of a reduce-and-discard "
+            "tl.stats.site_stats(trace) reads the per-site statistics of a reduce-and-discard "
             "capture, but this trace was not captured with save='stats'",
             code="stats_capture_not_reduced",
             remedy="capture with tl.trace(model, x, save='stats'), then call "
-            "tl.stats.site_spines(trace)",
+            "tl.stats.site_stats(trace)",
             argument="trace",
         )
-    spines: dict[str, Spine] = {}
+    spines: dict[str, RunningStats] = {}
     for op in trace.ops:
         vector = op.transformed_out
         if not isinstance(vector, torch.Tensor) or vector.numel() != PACKED_SLOTS:

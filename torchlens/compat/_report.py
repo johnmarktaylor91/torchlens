@@ -17,7 +17,7 @@ from torch import nn
 
 from torchlens._distributed import DistributedFinding, detect_distributed_state
 from torchlens._robustness import _iter_tensors
-from torchlens.utils._torch_compat import (
+from torchlens._utils._torch_compat import (
     get_dynamo_optimized_module_type,
     get_fp8_dtypes,
     get_fx_graph_module_type,
@@ -42,7 +42,7 @@ class CompatRow:
         Compatibility status for this model/input pair.
     severity:
         User-facing severity for the row.
-    detected:
+    is_detected:
         Whether the row's condition was detected in the supplied model/input.
     details:
         Explanation of the finding.
@@ -54,7 +54,7 @@ class CompatRow:
     label: str
     status: Status
     severity: Severity
-    detected: bool
+    is_detected: bool
     details: str
     suggestion: str = ""
 
@@ -69,15 +69,15 @@ class CompatReport:
         Qualified type name for the inspected model.
     torch_version:
         PyTorch version used for the inspection.
-    rows:
+    checks:
         Truth-table rows for the inspected model/input pair.
     """
 
     model_type: str
     torch_version: str
-    rows: tuple[CompatRow, ...]
+    checks: tuple[CompatRow, ...]
 
-    def row(self, key: str) -> CompatRow:
+    def check(self, key: str) -> CompatRow:
         """Return one report row by stable key.
 
         Parameters
@@ -96,7 +96,7 @@ class CompatReport:
             If ``key`` is not present in this report.
         """
 
-        for report_row in self.rows:
+        for report_row in self.checks:
             if report_row.key == key:
                 return report_row
         raise KeyError(key)
@@ -114,12 +114,12 @@ class CompatReport:
             f"### TorchLens compatibility report for `{self.model_type}`",
             "",
             f"- PyTorch: `{self.torch_version}`",
-            f"- Rows: {len(self.rows)}",
+            f"- Rows: {len(self.checks)}",
             "",
             "| Row | Status | Severity | Detected | Details | Suggestion |",
             "| --- | --- | --- | --- | --- | --- |",
         ]
-        for row in self.rows:
+        for row in self.checks:
             lines.append(
                 "| "
                 + " | ".join(
@@ -127,7 +127,7 @@ class CompatReport:
                         _escape_markdown(row.label),
                         f"`{row.status}`",
                         f"`{row.severity}`",
-                        "yes" if row.detected else "no",
+                        "yes" if row.is_detected else "no",
                         _escape_markdown(row.details),
                         _escape_markdown(row.suggestion),
                     ]
@@ -155,11 +155,11 @@ class CompatReport:
                 row.label,
                 row.status,
                 row.severity,
-                "yes" if row.detected else "no",
+                "yes" if row.is_detected else "no",
                 row.details,
                 row.suggestion,
             )
-            for row in self.rows
+            for row in self.checks
         ]
         widths = tuple(
             min(width, _SHOW_CELL_WIDTH_CAP) for width in _column_widths([headers, *body])
@@ -187,14 +187,14 @@ class CompatReport:
 
         severity_rank = {"error": 0, "warning": 1, "info": 2, "ok": 3}
         findings = sorted(
-            (row for row in self.rows if row.detected or row.severity != "ok"),
+            (row for row in self.checks if row.is_detected or row.severity != "ok"),
             key=lambda row: severity_rank.get(row.severity, 3),
         )
-        clean = [row for row in self.rows if not (row.detected or row.severity != "ok")]
+        clean = [row for row in self.checks if not (row.is_detected or row.severity != "ok")]
         lines = [
             f"TorchLens compatibility report for {self.model_type}",
             (
-                f"PyTorch {self.torch_version}; {len(self.rows)} rows: "
+                f"PyTorch {self.torch_version}; {len(self.checks)} rows: "
                 f"{len(findings)} finding(s), {len(clean)} clean"
             ),
         ]
@@ -286,7 +286,7 @@ def report(model: nn.Module, input: Any) -> CompatReport:  # noqa: A002
     return CompatReport(
         model_type=_qualified_type_name(model),
         torch_version=str(torch.__version__),
-        rows=rows,
+        checks=rows,
     )
 
 
@@ -757,7 +757,7 @@ def _cuda_graphs_row(model: nn.Module) -> CompatRow:
         Report row.
     """
 
-    from ..utils import _torch_compat
+    from .._utils import _torch_compat
 
     graphed = any(
         getattr(getattr(module, "__dict__", {}).get("forward"), "__qualname__", "")
@@ -1240,7 +1240,7 @@ def _torch_compile_row(model: nn.Module) -> CompatRow:
     """
 
     from .._capture_state_helpers import compiled_plain_callable_sites
-    from ..utils import _torch_compat
+    from .._utils import _torch_compat
 
     optimized_module_type = get_dynamo_optimized_module_type()
     optimized_detected = optimized_module_type is not None and isinstance(
@@ -1666,7 +1666,7 @@ def _torch_capabilities_row() -> CompatRow:
         Report row summarizing private runtime capability probes.
     """
 
-    from ..utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
+    from .._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
 
     snapshot = _runtime_capability_snapshot()
     absent = [name for name, available in snapshot.items() if not available]
@@ -1680,7 +1680,7 @@ def _torch_capabilities_row() -> CompatRow:
     # Grouped absences-first summary (ONE shared renderer with doctor); the
     # full name=value dump lives on report.capability_snapshot(), so a ~1,900
     # character data cell no longer inflates every renderer's line width.
-    from ..utils import format_capability_summary
+    from .._utils import format_capability_summary
 
     details = "Runtime capabilities: " + format_capability_summary(snapshot)
     if missing:
@@ -1689,7 +1689,7 @@ def _torch_capabilities_row() -> CompatRow:
         details += "; optional_absent=" + ", ".join(optional_absent)
     details += "; full dump: report.capability_snapshot()"
     suggestion = (
-        "Run torchlens.utils.doctor() for the same snapshot; missing flags indicate graceful "
+        "Run torchlens.report.doctor() for the same snapshot; missing flags indicate graceful "
         "degradation of private runtime integration points."
         if missing
         else ""
@@ -1772,7 +1772,7 @@ def _mechanical_belt_row() -> CompatRow:
         True,
         details,
         "Avoid holding pre-wrap references to the named functions; "
-        "see torchlens.utils.doctor() for per-failure exception details.",
+        "see torchlens.report.doctor() for per-failure exception details.",
     )
 
 

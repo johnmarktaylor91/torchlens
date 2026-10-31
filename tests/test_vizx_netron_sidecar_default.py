@@ -124,7 +124,7 @@ def test_open_with_path_also_writes_the_sidecar(
     monkeypatch.setattr(
         _netron, "_serve", lambda name, payload, *, browse: served.append(name) or ("", 0)
     )
-    path = tl.export.netron(log, tmp_path / "m.json", open=True)
+    path = tl.export.netron(log, tmp_path / "m.json", serve=True)
     assert served == ["m.json"]
     assert _companion(path).exists()
 
@@ -139,7 +139,7 @@ def test_memory_serve_skips_the_sidecar_by_default(
         _netron, "_serve", lambda name, payload, *, browse: served.append(name) or ("", 0)
     )
     monkeypatch.chdir(tmp_path)
-    assert tl.export.netron(log, None, open=True) is None
+    assert tl.export.netron(log, None, serve=True) is None
     assert len(served) == 1
     assert list(tmp_path.iterdir()) == []
 
@@ -148,5 +148,5 @@ def test_memory_serve_with_explicit_true_still_refuses(log: tl.Trace) -> None:
     """An explicit ``attachment=True`` without a path keeps its typed refusal."""
 
     with pytest.raises(tl.errors.ConfigurationError) as excinfo:
-        tl.export.netron(log, None, attachment=True, open=True)
+        tl.export.netron(log, None, attachment=True, serve=True)
     assert excinfo.value.fields["code"] == "netron_attachment_invalid"

@@ -7,12 +7,12 @@ import re
 import torch
 from torch import nn
 
-from torchlens.report import cost_report
+from torchlens.report import overhead
 from torchlens.report._cost_perf import COST_REPORT_TIERS
 
 
 def test_bind_row_is_words_only() -> None:
-    result = cost_report(nn.Linear(4, 2), torch.randn(2, 4), repeats=1)
+    result = overhead(nn.Linear(4, 2), torch.randn(2, 4), repeats=1)
     lines = str(result).splitlines()
 
     bind_rows = [line for line in lines if line.strip().startswith("bind ")]

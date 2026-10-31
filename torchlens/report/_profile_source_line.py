@@ -8,7 +8,7 @@ rows exactly (boundary rows fold into one ``boundary`` row), so every
 additive column of the grouped view sums to the ungrouped op view.
 
 The line of an op is its source-location witness
-(:func:`torchlens.data_classes._site_key.operation_witness`): the deepest
+(:func:`torchlens._data_classes._site_key.operation_witness`): the deepest
 operation frame of its recorded ``code_context``, the same selector the
 site-key join uses. Spelling DOCUMENTED-UNSTABLE.
 """
@@ -45,7 +45,7 @@ def source_line_key(row: dict[str, Any], op: Any) -> str:
         ``"<file>:<line>"``, or one of the two sentinel group names.
     """
 
-    from ..data_classes._site_key import operation_witness
+    from .._data_classes._site_key import operation_witness
 
     if row.get("kind") == "boundary":
         return BOUNDARY_GROUP_NAME

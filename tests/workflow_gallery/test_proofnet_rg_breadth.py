@@ -60,7 +60,7 @@ def test_rg06_attribution_patching_finite_with_zero_negative_control(
             code = getattr(exc, "fields", {}).get("code") if hasattr(exc, "fields") else None
             typed = type(exc).__name__ in {
                 "SiteResolutionError",
-                "SiteAmbiguityError",
+                "AmbiguousSiteError",
                 "PatchApplicationError",
                 "MissingFacetError",
             } or bool(code)

@@ -10,7 +10,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-import torchlens.tviz as tviz
+import torchlens.errors
+import torchlens.transformer as tviz
 
 
 def _view(n_heads: int = 2, n_dst: int = 4, n_src: int = 4, **kwargs) -> tviz.AttentionView:
@@ -67,7 +68,7 @@ class TestAttentionView:
     def test_probability_domain_violation_refuses(self) -> None:
         """Values outside [0, 1] cannot claim the probability domain."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _view(pattern=torch.randn(2, 4, 4) * 10)
         assert _code(excinfo) == "tv_record_invalid"
 
@@ -82,21 +83,21 @@ class TestAttentionView:
 
         pattern = torch.softmax(torch.randn(2, 4, 4), dim=-1)
         pattern[0, 0, 0] = float("nan")
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _view(pattern=pattern)
         assert _code(excinfo) == "tv_record_invalid"
 
     def test_axis_misalignment_refuses(self) -> None:
         """Token axes must match the pattern dims exactly."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _view(query_tokens=tviz.TokenAxis(role="query", tokens=("just-one",)))
         assert _code(excinfo) == "tv_record_invalid"
 
     def test_query_key_roles_enforced(self) -> None:
         """Separate query/key axis records even for self-attention."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _view(key_tokens=tviz.TokenAxis(role="query", tokens=tuple("abcd")))
         assert _code(excinfo) == "tv_record_invalid"
 
@@ -115,7 +116,7 @@ class TestAttentionView:
 
         view = _view(provenance="user_supplied")
         assert view.provenance_wording == "user supplied; unvalidated"
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _view(provenance="totally_verified")
         assert _code(excinfo) == "tv_record_invalid"
 
@@ -139,7 +140,7 @@ class TestCrop:
     def test_empty_crop_refuses(self) -> None:
         """An empty crop is a caller error."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _view().crop_to(slice(0, 0), slice(0, 2))
         assert _code(excinfo) == "tv_record_invalid"
 
@@ -150,7 +151,7 @@ class TestMaskInfo:
     def test_zeros_inference_has_no_source_token(self) -> None:
         """The banned zeros method cannot be spelled."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.MaskInfo(mask=torch.zeros(4, 4, dtype=torch.bool), source="inferred_from_zeros")
         assert _code(excinfo) == "tv_record_invalid"
 
@@ -169,9 +170,9 @@ class TestGqa:
     def test_group_header_wording(self) -> None:
         """Shared-heads wording names the group and its query-head span."""
 
-        gqa = tviz.GqaInfo(n_query_heads=14, n_kv_heads=2)
-        assert gqa.group_of(0) == 0
-        assert gqa.group_of(7) == 1
+        gqa = tviz.GqaInfo(num_query_heads=14, n_kv_heads=2)
+        assert gqa.group(0) == 0
+        assert gqa.group(7) == 1
         header = gqa.header(3)
         assert "kv group 1 of 2" in header
         assert "query heads 0-6" in header
@@ -179,8 +180,8 @@ class TestGqa:
     def test_uneven_grouping_refuses(self) -> None:
         """Non-dividing grouping is a config error."""
 
-        with pytest.raises(tviz.TvizError):
-            tviz.GqaInfo(n_query_heads=14, n_kv_heads=4)
+        with pytest.raises(torchlens.errors.RenderError):
+            tviz.GqaInfo(num_query_heads=14, n_kv_heads=4)
 
 
 class TestAnnotationKinds:
@@ -189,14 +190,14 @@ class TestAnnotationKinds:
     def test_kinds_are_closed(self) -> None:
         """An unknown kind refuses with the closed-set message."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.Annotation(kind="head_importance", heads=(0,), values=(1.0,), source="s")
         assert _code(excinfo) == "tv_annotation_invalid"
 
     def test_intervention_effect_requires_receipt(self) -> None:
         """Only a valid CausalReceipt can mint intervention_effect."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.Annotation(
                 kind="intervention_effect", heads=(0,), values=(1.0,), source="painted number"
             )
@@ -224,28 +225,28 @@ class TestCausalReceipt:
     def test_zero_fires_refuses(self) -> None:
         """Zero fires is a typed error, never a zero effect."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _receipt(fires=0)
         assert _code(excinfo) == "tv_receipt_invalid"
 
     def test_moved_negative_control_refuses(self) -> None:
         """A self-patch that moves the metric fails the machinery."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _receipt(negative_control=0.5)
         assert _code(excinfo) == "tv_receipt_invalid"
 
     def test_unmoved_positive_control_refuses(self) -> None:
         """The positive control is the check that catches silent no-fire."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _receipt(positive_control=0.0)
         assert _code(excinfo) == "tv_receipt_invalid"
 
     def test_nonfinite_effect_refuses(self) -> None:
         """A non-finite effect is a failed measurement."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             _receipt(effects=(float("inf"), 1.0))
         assert _code(excinfo) == "tv_receipt_invalid"
 
@@ -253,7 +254,7 @@ class TestCausalReceipt:
         """A genuine measured zero is a value, not a refusal."""
 
         receipt = _receipt(effects=(0.0, None))
-        assert receipt.measured_n == 1
+        assert receipt.num_measured_heads == 1
         assert receipt.cell_sum == 0.0
 
 
@@ -285,7 +286,7 @@ class TestScoreDecomposition:
 
         q = torch.randn(8)
         k = torch.randn(8)
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.ScoreDecomposition(
                 layer="blk.0.attn",
                 head=0,
@@ -306,7 +307,7 @@ class TestTokenScores:
     def test_row_alignment_enforced(self) -> None:
         """Every row aligns to the shared token axis."""
 
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.TokenScores(
                 tokens=("a", "b"),
                 rows=(tviz.TokenScoreRow(label="x", scores=(1.0,)),),
@@ -342,7 +343,7 @@ class TestEpisodeCoordinates:
     def test_role_vocabulary_closed(self) -> None:
         """Unknown roles refuse."""
 
-        with pytest.raises(tviz.TvizError):
+        with pytest.raises(torchlens.errors.RenderError):
             tviz.EpisodeCoordinates(step=0, role="speculate")
 
 
@@ -367,10 +368,10 @@ class TestExtractionRefusals:
         from types import SimpleNamespace
 
         trace = SimpleNamespace(modules=_Modules(m=SimpleNamespace(address="m", facets=None)))
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.attention_view(trace, "m")
         assert _code(excinfo) == "tv_facet_missing"
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.attention_views(trace)
         assert _code(excinfo) == "tv_facet_missing"
 
@@ -384,6 +385,6 @@ class TestExtractionRefusals:
             address="m", facets={"q": SimpleNamespace(value="payload was not captured")}
         )
         trace = SimpleNamespace(modules=_Modules(m=module))
-        with pytest.raises(tviz.TvizError) as excinfo:
+        with pytest.raises(torchlens.errors.RenderError) as excinfo:
             tviz.score_decomposition(trace, "m", head=0, destination=0, source=0)
         assert _code(excinfo) == "tv_payload_missing"

@@ -14,7 +14,7 @@ from typing import Any
 
 import torch
 
-from ..data_classes.op import Op
+from .._data_classes.op import Op
 
 # ---------------------------------------------------------------------------
 # Index-domain perturbation standard (F2 tightening).

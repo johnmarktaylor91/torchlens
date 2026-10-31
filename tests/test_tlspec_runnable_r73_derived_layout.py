@@ -38,9 +38,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.errors import PathDivergenceError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 
 def _save(model: nn.Module, x: torch.Tensor, path: Path) -> Path:
@@ -144,7 +144,7 @@ def test_r73_intermediate_layout_branch_ceilings_on_changed_layout(tmp_path: Pat
 
     result = tl.load(path).run(inputs=x.clone().to(memory_format=torch.channels_last))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
@@ -159,7 +159,7 @@ def test_r73_deep_intermediate_layout_read_ceilings(tmp_path: Path) -> None:
     twin = x.clone().permute(0, 1, 3, 2).contiguous().permute(0, 1, 3, 2)
     result = tl.load(path).run(inputs=twin)
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.poisoned
+    assert result.report.is_poisoned
 
 
 def test_r73_same_layout_run_stays_verified(tmp_path: Path) -> None:
@@ -170,7 +170,7 @@ def test_r73_same_layout_run_stays_verified(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r73_honest_channels_last_model_stays_verified(tmp_path: Path) -> None:
@@ -182,7 +182,7 @@ def test_r73_honest_channels_last_model_stays_verified(tmp_path: Path) -> None:
     run_input = _nchw().clone().to(memory_format=torch.channels_last)
     result = tl.load(path).run(inputs=run_input)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r73_layout_oblivious_model_never_triggers(tmp_path: Path) -> None:
@@ -199,7 +199,7 @@ def test_r73_layout_oblivious_model_never_triggers(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=x.clone().to(memory_format=torch.channels_last))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r73_state_rooted_read_does_not_couple_to_input_layout(tmp_path: Path) -> None:
@@ -216,7 +216,7 @@ def test_r73_state_rooted_read_does_not_couple_to_input_layout(tmp_path: Path) -
 
     result = tl.load(path).run(inputs=x.clone().to(memory_format=torch.channels_last))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r73_direct_leaf_read_still_diverges(tmp_path: Path) -> None:
@@ -280,7 +280,7 @@ def test_r73_fact_scopes_to_the_rooting_input_only(tmp_path: Path) -> None:
 
     rooting = tl.load(path).run(inputs=(a.clone().to(memory_format=torch.channels_last), b.clone()))
     assert rooting.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert rooting.report.poisoned
+    assert rooting.report.is_poisoned
 
 
 def test_r73_derived_fact_rides_the_metadata_envelope(tmp_path: Path) -> None:

@@ -23,8 +23,8 @@ from .._capture_honesty import capture_honesty_facts
 from .._errors import ArgumentTypeError
 from .._literals import BufferVisibilityLiteral
 from .._options_validation import _validate_buffer_visibility
+from .._utils.display import atomic_write_text
 from ..errors import ConfigurationError, TorchLensWarning
-from ..utils.display import atomic_write_text
 from ._common import _require_trace
 from ._netron_attachment import write_attachment
 from ._netron_diff import NetronBaselineDiff, apply_node_facts, build_baseline_diff, sidecar_rows
@@ -187,7 +187,7 @@ def _metadata_props(
 
     rows: list[tuple[str, str]] = [
         ("torchlens.lossy_export", "true"),
-        ("torchlens.runnable", "false"),
+        ("torchlens._runnable", "false"),
         ("torchlens.netron_schema", NETRON_SCHEMA_VERSION),
         ("torchlens.capture_honesty", _json.dumps(capture_honesty_facts(log))),
     ]
@@ -223,7 +223,7 @@ def _baseline_slot(
     """Resolve ``baseline=`` into the slot text and the per-node diff.
 
     A ``Trace`` is diffed against the exported trace through
-    ``torchlens.differential.diff_report`` and its per-node facts are
+    ``torchlens.report.diff`` and its per-node facts are
     attached to the projection's nodes; a string is recorded verbatim as a
     baseline identifier with no per-node facts.
     """
@@ -232,7 +232,7 @@ def _baseline_slot(
         return None, None
     if isinstance(baseline, str):
         return baseline, None
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
     if not isinstance(baseline, Trace):
         raise ArgumentTypeError(
@@ -290,14 +290,14 @@ def _maybe_widget(netron_package: Any, address: tuple[str, int]) -> None:
 
 
 def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-20)
-    log: Any,
+    trace: Any,
     path: str | Path | None = None,
     *,
     granularity: str = "module",
     depth: int = 1,
     show_buffers: BufferVisibilityLiteral = "meaningful",
     attachment: bool | None = None,
-    open: bool = False,  # noqa: A002 - the memo-ruled one-liner spelling
+    serve: bool = False,  # noqa: A002 - the memo-ruled one-liner spelling
     baseline: Any = None,
 ) -> Path | None:
     """Export a lossy ONNX ``ModelProto`` JSON graph that netron opens.
@@ -313,7 +313,7 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     path:
         Destination JSON path; must end ``.json`` for netron's sniffer.
@@ -338,13 +338,13 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         the memory-only serve, which has no file for it to sit beside;
         ``True`` demands it (and refuses ``path=None``); ``False`` opts
         out.
-    open:
+    serve:
         Serve through the installed netron package (loopback, ephemeral
         port) and open a browser tab / notebook widget.
     baseline:
         Optional reference for the ``torchlens.baseline`` diff slot
-        (netron #1544). A ``Trace`` is diffed against ``log``
-        through ``torchlens.differential.diff_report`` (``log - baseline``):
+        (netron #1544). A ``Trace`` is diffed against ``trace``
+        through ``torchlens.report.diff`` (``log - baseline``):
         each exported node carries its ``torchlens.diff.*`` facts (status,
         largest value delta, reference label, join verdict; row counts for
         module-call and rolled nodes) in its ``metadataProps`` and in the
@@ -357,9 +357,9 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         The written JSON path, or ``None`` for the memory-only serve mode.
     """
 
-    _require_trace(log, exporter="tl.export.netron")
+    _require_trace(trace, exporter="tl.export.netron")
     _validate_options(granularity, depth, show_buffers)
-    if path is None and not open:
+    if path is None and not serve:
         raise ConfigurationError(
             "Netron export got path=None without open=True, leaving it "
             "nothing to do. Remedy: pass a destination path, or open=True "
@@ -373,15 +373,15 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
             "path= together with attachment=True.",
             code="netron_attachment_invalid",
         )
-    projection = _build_projection(log, granularity, depth, show_buffers)
+    projection = _build_projection(trace, granularity, depth, show_buffers)
     _warn_extent(projection)
-    baseline_text, diff = _baseline_slot(log, baseline, projection)
-    graph_name = str(getattr(log, "model_class_name", "TorchLens graph"))
+    baseline_text, diff = _baseline_slot(trace, baseline, projection)
+    graph_name = str(getattr(trace, "model_class_name", "TorchLens graph"))
     text = emit_model_json(
         projection,
         graph_name=graph_name,
         disclaimer=NETRON_DISCLAIMER,
-        metadata_props=_metadata_props(log, projection, show_buffers, baseline_text),
+        metadata_props=_metadata_props(trace, projection, show_buffers, baseline_text),
     )
     if path is None:
         _serve(f"{graph_name or 'torchlens'}.json", text.encode(), browse=True)
@@ -395,6 +395,6 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
             destination,
             extra_metadata=sidecar_rows(diff) if diff is not None else None,
         )
-    if open:
+    if serve:
         _serve(destination.name, text.encode(), browse=True)
     return destination

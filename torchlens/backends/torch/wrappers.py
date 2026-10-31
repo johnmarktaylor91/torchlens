@@ -31,11 +31,10 @@ from torch.overrides import handle_torch_function, has_torch_function_unary  # n
 
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
-from ..._errors import CaptureContextError
-from ...capture.arg_positions import _ensure_schema_tensor_position_corrections
-from ...constants import _get_torchvision_funcs, get_orig_torch_funcs
-from ...data_classes.internal_types import FuncExecutionContext
-from ...utils._torch_compat import (
+from ..._constants import _get_torchvision_funcs, get_orig_torch_funcs
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._errors import CaptureNotActiveError
+from ..._utils._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     dynamo_is_compiling,
     fix_tensor_sequence_slot,
@@ -49,11 +48,11 @@ from ...utils._torch_compat import (
     get_torch_function_mode_stack_length,
     mark_torch_capability_missing,
 )
-from ...utils.display import identity
-from ...utils.hashing import make_random_barcode
-from ...utils.introspection import get_vars_of_type_from_obj
-from ...utils.rng import log_current_autocast_state, log_current_rng_states
-from ...utils.tensor_utils import (
+from ..._utils.display import identity
+from ..._utils.hashing import make_random_barcode
+from ..._utils.introspection import get_vars_of_type_from_obj
+from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ..._utils.tensor_utils import (
     _DEFER_ENABLED as _COW_ENABLED,
     _DEFER_PENDING as _COW_PENDING,
     arm_deferred_payload_window,
@@ -62,9 +61,10 @@ from ...utils.tensor_utils import (
     print_override,
     safe_copy,
 )
+from ...capture.arg_positions import _ensure_schema_tensor_position_corrections
 from ._callable_location import _callable_source_location
 from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
-from ._modes import SubclassConstructionUnderDispatchModeError, pause_own_dispatch_modes
+from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
 from ._storage_overlap import (
@@ -985,7 +985,7 @@ def _untyped_storage_key(t: torch.Tensor) -> tuple[int, int, str] | None:
 
 # Per-trace cache for the clone-on-write eligibility decision. Keyed weakly:
 # a Trace attribute would trip the portable-state completeness scrub
-# (PORTABLE_STATE_SPEC), and the decision is wrapper-internal state anyway.
+# (_PORTABLE_STATE_SPEC), and the decision is wrapper-internal state anyway.
 _COW_STATE_PTRS_CACHE: "weakref.WeakKeyDictionary[Any, Any]" = weakref.WeakKeyDictionary()
 _COW_UNSET = object()
 
@@ -1322,7 +1322,7 @@ def _setattr_ignoring_advisories(namespace: Any, name: str, value: Any) -> None:
 # (non-reentrant) construction call was tried and reverted after it
 # corrupted interpreter state when exercised across several capture paths in
 # one process (segfault on torch 2.1.2) -- see
-# ``SubclassConstructionUnderDispatchModeError``.
+# ``TensorSubclassUnsupportedError``.
 _SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
     "__new__": 0,
     "_make_subclass": 0,
@@ -1537,7 +1537,7 @@ def torch_func_decorator(
                     out = func(*args, **kwargs)
                 except RuntimeError as exc:
                     if "already associated to a python object" in str(exc):
-                        raise SubclassConstructionUnderDispatchModeError(
+                        raise TensorSubclassUnsupportedError(
                             f"torchlens cannot construct the Tensor subclass "
                             f"{args[_fast_path_subclass_cls_index]!r} via {func_name!r} "
                             "while a TorchLens dispatch mode is active on this torch "
@@ -1864,7 +1864,7 @@ def torch_func_decorator(
         device_memory_before = None
         if getattr(trace, "track_device_memory", False):
             # Observe item 15 (deferred import per the spine layer lint).
-            from ...observe._device_memory import read_before as _dm_read_before
+            from ..._observe._device_memory import read_before as _dm_read_before
 
             device_memory_before = _dm_read_before(trace)
         mode_pause = pause_own_dispatch_modes() if pauses_owned_modes else nullcontext(())
@@ -1901,7 +1901,7 @@ def torch_func_decorator(
             # Observe item 15: the OOM raised BEFORE this op committed -- name
             # the ATTEMPTED call, never the last committed op.
             if getattr(trace, "track_device_memory", False):
-                from ...observe._device_memory import settle_op_bracket
+                from ..._observe._device_memory import settle_op_bracket
 
                 settle_op_bracket(trace, func_name, func_call_id, device_memory_before, oom=True)
             raise
@@ -1919,7 +1919,7 @@ def torch_func_decorator(
                 and not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
                 and "already associated to a python object" in str(exc)
             ):
-                raise SubclassConstructionUnderDispatchModeError(
+                raise TensorSubclassUnsupportedError(
                     f"torchlens could not construct the Tensor subclass via "
                     f"{func_name!r} even after pausing its own dispatch mode on this "
                     f"torch build (original torch error: {exc}). "
@@ -1940,7 +1940,7 @@ def torch_func_decorator(
                 _record_mode_paused_interior(trace, owner_func_call_id=func_call_id)
         func_exec_duration = time.time() - func_exec_start
         if device_memory_before is not None or getattr(trace, "track_device_memory", False):
-            from ...observe._device_memory import settle_op_bracket
+            from ..._observe._device_memory import settle_op_bracket
 
             settle_op_bracket(trace, func_name, func_call_id, device_memory_before)
         if _echo is not None:
@@ -2889,7 +2889,7 @@ def unwrap_torch() -> None:
 
     Raises
     ------
-    CaptureContextError
+    CaptureNotActiveError
         If a capture is currently active. Removing the wrappers mid-forward
         leaves the rest of that forward unlogged and returns a silently
         truncated Trace, so the call is refused instead (code
@@ -2920,7 +2920,7 @@ def _refuse_unwrap_during_active_capture() -> None:
 
     Raises
     ------
-    CaptureContextError
+    CaptureNotActiveError
         If ``_active_trace`` is set or logging is enabled.
     """
 
@@ -2928,7 +2928,7 @@ def _refuse_unwrap_during_active_capture() -> None:
         return
     trace = _state._active_trace
     model_label = getattr(trace, "model_label", None) or getattr(trace, "model_class_name", None)
-    raise CaptureContextError(
+    raise CaptureNotActiveError(
         "unwrap_torch() was called while a TorchLens capture is still active"
         + (f" for model {model_label!r}" if model_label else ""),
         code="unwrap_during_active_capture",

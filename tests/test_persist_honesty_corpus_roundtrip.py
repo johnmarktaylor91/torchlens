@@ -22,9 +22,10 @@ from pathlib import Path
 
 import pytest
 from _oracle_env import expect_bundle_minor_version_mismatch
+from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
-from torchlens._io import ArtifactVersionBelowFloorError
+from torchlens._io import ArtifactTooOldError
 from torchlens.capture.outcome import CaptureStatus
 
 _CORPUS_SHA256 = (  # content digest, not a credential
@@ -67,16 +68,15 @@ def corpus_dir(tmp_path_factory):
 
 
 @pytest.mark.parametrize("artifact", _IN_WINDOW)
-def test_in_window_artifacts_load(corpus_dir, artifact):
-    with expect_bundle_minor_version_mismatch():
-        loaded = tl.load(corpus_dir / artifact)
-    assert loaded.layer_list, artifact
-    assert loaded.outcome.status in (CaptureStatus.COMPLETE, CaptureStatus.UNATTESTED)
+def test_in_window_artifacts_refuse_as_2x(corpus_dir, artifact):
+    """In-window 2.x artifacts refuse typed: 3.0 reads no file a 2.x release saved."""
+
+    assert_refuses_as_2x(corpus_dir / artifact)
 
 
 @pytest.mark.parametrize("artifact", _BELOW_FLOOR)
 def test_below_floor_artifacts_keep_their_governed_refusal(corpus_dir, artifact):
-    with pytest.raises(ArtifactVersionBelowFloorError):
+    with pytest.raises(ArtifactTooOldError):
         tl.load(corpus_dir / artifact)
 
 
@@ -84,15 +84,15 @@ def test_below_floor_artifacts_keep_their_governed_refusal(corpus_dir, artifact)
 def test_window_edge_artifacts_load_or_refuse_governed(corpus_dir, artifact):
     from torchlens._io import (
         ArtifactRuntimeIncompatibleError,
-        ArtifactVersionAboveRuntimeError,
+        ArtifactTooNewError,
     )
 
     try:
         with expect_bundle_minor_version_mismatch():
             loaded = tl.load(corpus_dir / artifact)
     except (
-        ArtifactVersionBelowFloorError,
-        ArtifactVersionAboveRuntimeError,
+        ArtifactTooOldError,
+        ArtifactTooNewError,
         ArtifactRuntimeIncompatibleError,
     ):
         return

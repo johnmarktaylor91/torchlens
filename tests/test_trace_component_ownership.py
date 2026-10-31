@@ -10,12 +10,12 @@ from __future__ import annotations
 
 from collections import Counter
 
-from torchlens import constants as tl_constants
-from torchlens.data_classes._trace_components import (
+from torchlens import _constants as tl_constants
+from torchlens._data_classes._trace_components import (
     TRACE_COMPONENT_VOCABULARY,
     TRACE_FIELD_OWNERSHIP,
 )
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
 
 
 def test_ownership_covers_exactly_the_declared_policy() -> None:

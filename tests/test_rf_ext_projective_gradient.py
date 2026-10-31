@@ -207,7 +207,7 @@ def test_empirical_vjp_row_equals_double_vjp_column() -> None:
     row = gradient_for_unit(
         target,
         target_unit,
-        input=source,
+        input_op=source,
         retain_graph=True,
     )
     column = projective_gradient_for_unit(source, source_unit, target=target)

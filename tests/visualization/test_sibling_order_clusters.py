@@ -108,9 +108,9 @@ def _draw(model: torch.nn.Module, inputs: object, tmp_path: Path, name: str, **k
     try:
         return str(
             log.draw(
-                vis_outpath=str(tmp_path / name),
+                path=str(tmp_path / name),
                 vis_save_only=True,
-                vis_fileformat="pdf",
+                file_format="pdf",
                 **kwargs,
             )
         )
@@ -407,9 +407,7 @@ def test_root_level_chain_moves_into_the_branches_parent_cluster(tmp_path: Path)
     log = tl.trace(_InceptionToy(), torch.randn(2, 4))
     try:
         dot_source = str(
-            log.draw(
-                vis_outpath=str(tmp_path / "inception"), vis_save_only=True, vis_fileformat="pdf"
-            )
+            log.draw(path=str(tmp_path / "inception"), vis_save_only=True, file_format="pdf")
         )
         decision = log._last_sibling_ordering_decision
     finally:

@@ -399,7 +399,7 @@ def pca_apply(fitted: Any) -> TransformSpec:
     params = _project_normalize(
         {
             "basis_digest": digest,
-            "in_extent": int(fitted.n_features),
+            "in_extent": int(fitted.num_features),
             "out_extent": int(fitted.components.shape[0]),
             "centered": True,
             "fit_scope": fitted.fit_scope,

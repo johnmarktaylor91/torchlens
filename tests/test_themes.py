@@ -21,9 +21,9 @@ def test_theme_preset_renders(tmp_path: Path, theme: str) -> None:
 
     dot = log.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / theme),
-        vis_theme=theme,
+        file_format="svg",
+        path=str(tmp_path / theme),
+        theme=theme,
         show_legend=True,
     )
 

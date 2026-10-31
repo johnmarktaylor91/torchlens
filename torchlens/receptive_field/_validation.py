@@ -19,7 +19,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 
-from ..backends import BackendUnsupportedError
+from torchlens.backends.registry import BackendUnsupportedError
+
 from . import _engine
 from ._engine_forward import solve_projective
 from ._errors import (
@@ -33,7 +34,7 @@ from ._gradient_forward import _select_targets, projective_gradient_for_unit
 from ._path import resolve_graph_point
 from ._query import _shared_query_scope, _windowed_axes_in_unit_order, box_for_unit
 from ._types import (
-    GradientReceptiveField,
+    GradReceptiveField,
     ReceptiveField,
     ReceptiveFieldAlignment,
     ReceptiveFieldBox,
@@ -47,8 +48,8 @@ from ._types import (
 from ._view import ReceptiveFieldView
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 _TAINTED_STATUSES = {
@@ -69,7 +70,7 @@ def _refuse_poisoned_rf_verification(trace: Trace) -> None:
         a receptive-field validation verdict.
     """
 
-    from ..runnable import refuse_poisoned_trace
+    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(trace, "receptive field verification")
 
@@ -176,7 +177,7 @@ def _box_for_descriptor(
                 cast(Any, solution),
                 owner,
                 windowed,
-                input=None if endpoint is not None else descriptor.io_role,
+                input_op=None if endpoint is not None else descriptor.io_role,
                 source=endpoint,
                 clip=True,
                 complete_unit=complete_unit,
@@ -265,7 +266,7 @@ def _allowed_bounds(
 
 
 def _role_violations(
-    gradient: GradientReceptiveField,
+    gradient: GradReceptiveField,
     descriptor: ReceptiveField,
     box: ReceptiveFieldBox,
     complete_unit: tuple[int, ...],
@@ -567,7 +568,7 @@ def _exact_box_adjoint_violations(
                     cast(Any, reverse_solution),
                     far,
                     corner,
-                    input=owner,
+                    input_op=owner,
                     clip=True,
                     complete_unit=far_unit,
                 )
@@ -631,7 +632,7 @@ def _validation_result(
     unit: tuple[int, ...],
     descriptors: Mapping[str, ReceptiveField],
     geometric: dict[str, ReceptiveFieldBox],
-    gradients: Mapping[str, GradientReceptiveField],
+    gradients: Mapping[str, GradReceptiveField],
     gradient_error: str | None,
     direction: ReceptiveFieldDirection,
     adjoint_violations: tuple[ReceptiveFieldViolation, ...] = (),
@@ -752,9 +753,9 @@ def _validation_result(
         op_label=target.label,
         unit=unit,
         geometric=MappingProxyType(geometric),
-        gradient=MappingProxyType(dict(gradients)),
+        grad=MappingProxyType(dict(gradients)),
         violations=tuple(listed),
-        n_violations=n_violations,
+        num_violations=n_violations,
         per_axis_excess=per_axis_excess,
         slack_per_axis=slack_per_axis,
         cross_batch=cross_batch,
@@ -769,7 +770,7 @@ def _check_for_unit(
     target: Op,
     unit: Sequence[int],
     *,
-    input: Op | str | None,
+    input_op: Op | str | None,
     source: object | None,
     direction: ReceptiveFieldDirection | str,
     result_target: object | None,
@@ -790,20 +791,20 @@ def _check_for_unit(
     if normalized_direction is ReceptiveFieldDirection.RECEPTIVE and result_target is not None:
         raise TypeError("target= is only valid with direction='projective'.")
     if normalized_direction is ReceptiveFieldDirection.PROJECTIVE and (
-        input is not None or source is not None
+        input_op is not None or source is not None
     ):
-        raise TypeError("input= and source= are only valid with direction='receptive'.")
+        raise TypeError("input_op= and source= are only valid with direction='receptive'.")
     complete_unit = _normalize_complete_unit(target, unit)
     endpoint: Op | None = None
     solution: Any
     try:
         if normalized_direction is ReceptiveFieldDirection.RECEPTIVE:
-            if input is not None and source is not None:
-                raise TypeError("input= and source= cannot be used together.")
+            if input_op is not None and source is not None:
+                raise TypeError("input_op= and source= cannot be used together.")
             if source is None:
                 solution = _engine.solve(target.source_trace)
                 view = ReceptiveFieldView(target, solution)
-                descriptors = _selected_descriptors(view, input)
+                descriptors = _selected_descriptors(view, input_op)
             else:
                 endpoint = resolve_graph_point(target.source_trace, source)
                 solution = _engine.solve_from(target.source_trace, endpoint)
@@ -861,13 +862,13 @@ def _check_for_unit(
                 )
             )
     gradient_error: str | None = None
-    gradients: Mapping[str, GradientReceptiveField]
+    gradients: Mapping[str, GradReceptiveField]
     try:
         if normalized_direction is ReceptiveFieldDirection.RECEPTIVE:
             probed = gradient_for_unit(
                 target,
                 complete_unit,
-                input=input,
+                input_op=input_op,
                 source=source,
                 atol=0.0,
                 rtol=0.0,
@@ -882,7 +883,7 @@ def _check_for_unit(
                 rtol=0.0,
                 retain_graph=retain_graph,
             )
-        if isinstance(probed, GradientReceptiveField):
+        if isinstance(probed, GradReceptiveField):
             gradients = MappingProxyType({probed.io_role: probed})
         else:
             gradients = probed
@@ -905,7 +906,7 @@ def check_for_unit(
     owner: Op,
     unit: Sequence[int],
     *,
-    input: Op | str | None = None,
+    input_op: Op | str | None = None,
     source: object | None = None,
     direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
     target: object | None = None,
@@ -919,7 +920,7 @@ def check_for_unit(
     ----------
     owner, unit:
         Seed-owner operation and complete output-element index.
-    input:
+    input_op:
         Optional model-input operation or exact IO role.
     source:
         Optional receptive-direction ancestor graph point.
@@ -948,7 +949,7 @@ def check_for_unit(
     return _check_for_unit(
         owner,
         unit,
-        input=input,
+        input_op=input_op,
         source=source,
         direction=direction,
         result_target=target,
@@ -962,7 +963,7 @@ def check(
     view: ReceptiveFieldView,
     unit: Sequence[int],
     *,
-    input: Op | str | None = None,
+    input_op: Op | str | None = None,
     source: object | None = None,
     direction: ReceptiveFieldDirection | str = ReceptiveFieldDirection.RECEPTIVE,
     target: object | None = None,
@@ -976,7 +977,7 @@ def check(
     ----------
     view, unit:
         Receptive-field view and complete output-element index.
-    input:
+    input_op:
         Optional model-input operation or exact IO role.
     source:
         Optional receptive-direction ancestor graph point.
@@ -1000,7 +1001,7 @@ def check(
     return check_for_unit(
         view._op,
         unit,
-        input=input,
+        input_op=input_op,
         source=source,
         direction=direction,
         target=target,
@@ -1311,7 +1312,7 @@ def validate_receptive_field_trace(
                 result = _check_for_unit(
                     owner,
                     unit,
-                    input=cast("Op | str | None", selected_input),
+                    input_op=cast("Op | str | None", selected_input),
                     source=selected_source,
                     direction=normalized_direction,
                     result_target=(

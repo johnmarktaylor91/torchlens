@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from typing import Any
 
-from ...utils._torch_compat import TorchCapabilityWarning
+from ..._utils._torch_compat import TorchCapabilityWarning
 from ..registry import BackendUnsupportedError
 
 TFCapabilitySnapshot = dict[str, bool]

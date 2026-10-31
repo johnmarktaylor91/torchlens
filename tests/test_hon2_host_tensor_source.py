@@ -147,6 +147,6 @@ def test_advisory_renders_in_the_preamble_and_explain() -> None:
     preamble = "\n".join(honesty_preamble_lines(trace))
     assert "host_tensor_source" in preamble
     assert "capture verification not checked" in preamble
-    explained = tl.report.explain(trace)
+    explained = trace.explain()
     assert "host_tensor_source" in explained
     assert "Capture verification: not checked" in explained

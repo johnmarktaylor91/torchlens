@@ -17,13 +17,13 @@ from .registry import (
 TRACE_OPTION_CAPABILITY_GATES: dict[str, str] = {
     "intervene": "interventions",
     "halt": "interventions",
-    "recipes": "interventions",
-    "storage": "streaming",
-    "streaming": "streaming",
+    "facets": "interventions",
+    "storage": "has_streaming",
+    "streaming": "has_streaming",
     "save_grads": "backward_capture",
     "backward_ready": "backward_capture",
-    "save_rng_states": "rng_replay",
-    "random_seed": "rng_replay",
+    "save_rng": "rng_replay",
+    "seed": "rng_replay",
     "structure_only": "structure_only_capture",
 }
 """Public trace options whose support is owned by a ``BackendCapabilities`` flag.
@@ -198,7 +198,7 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         {
             "halt",
             "intervene",
-            "recipes",
+            "facets",
             "save",
             "stop_after",
             "storage",
@@ -245,7 +245,7 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_option_names=frozenset(),
     runtime_message=(
         "paddle backend preview does not support these options: {names}. "
-        "Live trace(intervene=...), trace(halt=...), recipes=, and static-label "
+        "Live trace(intervene=...), trace(halt=...), facets=, and static-label "
         "save= selectors are supported on the eager Paddle preview; streaming, "
         "storage=, and the remaining torch-only runtime options are not. Use "
         "the PyTorch backend for streaming and stop-early capture shaping."
@@ -271,7 +271,7 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 )
 """Extra public-kwarg rejection policy for the Paddle preview backend.
 
-``intervene``, ``halt``, and ``recipes`` are absent because the Paddle
+``intervene``, ``halt``, and ``facets`` are absent because the Paddle
 capture path pops and dispatches them before extra-kwarg rejection runs; the
 ``interventions`` capability flag owns all three.
 """
@@ -301,7 +301,7 @@ MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "stop_after": None,
         "raise_on_nan": False,
         "profile": False,
-        "recipes": None,
+        "facets": None,
         "payload_policy": None,
         "save_preview": None,
         "chunk_size": None,
@@ -340,7 +340,7 @@ TF_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 )
 """Extra public-kwarg rejection policy for the TensorFlow preview backend.
 
-``intervene``/``halt``/``recipes`` left this table when tf lifted the
+``intervene``/``halt``/``facets`` left this table when tf lifted the
 ``interventions`` capability: ``intervene=`` dispatches for real, and the two
 unimplemented spellings refuse typed inside the tf capture path (a declarative
 rejection here would classify the True flag as a self-contradictory
@@ -367,12 +367,12 @@ JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "JAX backend preview does not support save_grads; full-save forward capture only. "
             "Use tl.backends.jax.GradOptions for derived gradients."
         ),
-        "save_arg_values": (
-            "JAX backend preview does not support save_arg_values; full-save forward capture "
+        "save_args": (
+            "JAX backend preview does not support save_args; full-save forward capture "
             "only. Use full-save JAX trace capture or the PyTorch backend."
         ),
-        "save_code_context": (
-            "JAX backend preview does not support save_code_context; full-save forward capture "
+        "save_source_context": (
+            "JAX backend preview does not support save_source_context; full-save forward capture "
             "only. Use full-save JAX trace capture or the PyTorch backend."
         ),
         "backward_ready": (
@@ -417,9 +417,9 @@ TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "activation_transform",
             "detach_saved_activations",
             "save_grads",
-            "save_arg_values",
-            "save_code_context",
-            "save_rng_states",
+            "save_args",
+            "save_source_context",
+            "save_rng",
             "backward_ready",
             "module_filter",
             "transform",
@@ -448,9 +448,9 @@ PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "activation_transform",
             "detach_saved_activations",
             "save_grads",
-            "save_arg_values",
-            "save_code_context",
-            "save_rng_states",
+            "save_args",
+            "save_source_context",
+            "save_rng",
             "backward_ready",
             "module_filter",
             "transform",
@@ -480,9 +480,9 @@ MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
         for name in (
             "activation_transform",
             "detach_saved_activations",
-            "save_arg_values",
-            "save_code_context",
-            "save_rng_states",
+            "save_args",
+            "save_source_context",
+            "save_rng",
             "backward_ready",
             "module_filter",
             "transform",
@@ -510,9 +510,9 @@ TF_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "activation_transform",
             "detach_saved_activations",
             "save_grads",
-            "save_arg_values",
-            "save_code_context",
-            "save_rng_states",
+            "save_args",
+            "save_source_context",
+            "save_rng",
             "backward_ready",
             "module_filter",
             "transform",

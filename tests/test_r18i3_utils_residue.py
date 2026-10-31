@@ -1,4 +1,4 @@
-"""Regression tests for r18i3 utils/__init__.py residue findings M12/M13/M14.
+"""Regression tests for r18i3 _utils/__init__.py residue findings M12/M13/M14.
 
 Each finding is a diagnostic/state-hygiene bug that r18i-2 diagnosed but could
 not reach from its options.py lease:
@@ -23,7 +23,7 @@ import pytest
 import torch
 from torch import nn
 
-import torchlens.utils as tl_utils
+import torchlens._utils as tl_utils
 
 
 # --------------------------------------------------------------------------- #
@@ -198,8 +198,8 @@ def test_user_stacklevel_points_at_the_first_non_torchlens_frame() -> None:
 
     import warnings
 
-    from torchlens.utils import display as display_module
-    from torchlens.utils.display import user_stacklevel
+    from torchlens._utils import display as display_module
+    from torchlens._utils.display import user_stacklevel
 
     # Stand in for the pipeline: three nested frames that all report a torchlens
     # filename, warning from the innermost. Compiling with display.py's own path
@@ -233,8 +233,8 @@ def test_user_stacklevel_points_at_the_first_non_torchlens_frame() -> None:
 def test_user_stacklevel_extra_offsets_for_warn_on_behalf_helpers() -> None:
     """``extra`` shifts the level for helpers that warn on someone else's behalf."""
 
-    from torchlens.utils import display as display_module
-    from torchlens.utils.display import user_stacklevel
+    from torchlens._utils import display as display_module
+    from torchlens._utils.display import user_stacklevel
 
     source = (
         "def outer(extra):\n"

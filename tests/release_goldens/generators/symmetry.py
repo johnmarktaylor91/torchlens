@@ -1,6 +1,6 @@
 # ruff: noqa -- harvest-time provenance script, committed as run (lint header added at import)
-from torchlens.data_classes._state_adapter import state_new, state_restore
-from torchlens.data_classes.op import Op
+from torchlens._data_classes._state_adapter import state_new, state_restore
+from torchlens._data_classes.op import Op
 
 print("Op has __dict__?", "__dict__" in dir(Op), "| __slots__ present:", hasattr(Op, "__slots__"))
 o = state_new(Op)

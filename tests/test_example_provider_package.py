@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from torchlens.ecosystem import plugins
+from torchlens._ecosystem import plugins
 
 pytestmark = pytest.mark.slow
 
@@ -42,17 +42,17 @@ _PROBE = textwrap.dedent(
     import torch
 
     import torchlens as tl
-    from torchlens.ecosystem import plugins
-    from torchlens.export import export_target_info, resolve_export_target
+    from torchlens._ecosystem import plugins
+    from torchlens.export import describe_target, resolve_target
 
     rows = [r for r in plugins.discover({_GROUP!r}) if r.distribution == {_DISTRIBUTION!r}]
     imported_by_discovery = {_MODULE!r} in sys.modules
     report = plugins.activate({_DISTRIBUTION!r})
-    info = export_target_info({_TARGET!r})
+    info = describe_target({_TARGET!r})
     trace = tl.trace(
         torch.nn.Sequential(torch.nn.Linear(3, 2), torch.nn.ReLU()), torch.randn(1, 3)
     )
-    summary = resolve_export_target({_TARGET!r})(trace)
+    summary = resolve_target({_TARGET!r})(trace)
     module = sys.modules[{_MODULE!r}]
     print(json.dumps({{
         "rows": [[r.group, r.name, r.value, r.distribution, r.version] for r in rows],

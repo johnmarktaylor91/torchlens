@@ -14,23 +14,22 @@ from pathlib import Path
 import pytest
 import torch
 
-from torchlens.observability import (
+from torchlens._observability import (
     HISTORY_SCHEMA_VERSION,
-    CommittedBlock,
-    HistoryReader,
-    HistoryWriter,
     ObservationRecord,
+    RunningStats,
     RunRecord,
     SiteRecord,
-    Spine,
     StepBlockRecord,
 )
-from torchlens.observability._errors import HistorySchemaError
-from torchlens.observability._op_tier import OpTierCollector
+from torchlens._observability._artifact import CommittedBlock, HistoryWriter
+from torchlens._observability._errors import HistorySchemaError
+from torchlens._observability._op_tier import OpTierCollector
+from torchlens.trackers import HistoryReader
 
 
 def _committed(step: int, trace_ref: str | None) -> CommittedBlock:
-    spine = Spine()
+    spine = RunningStats()
     spine.update(torch.tensor([1.0, -2.0, 0.0]))
     observation = ObservationRecord(
         global_step=step,

@@ -47,7 +47,7 @@ def main() -> None:
     direction[1, :] = 0.5
 
     steered = log.fork("steered")
-    steered.attach_hooks(tl.func("relu"), tl.steer(direction, magnitude=1.0))
+    steered.attach_hooks(tl.func("relu"), tl.steer(direction, strength=1.0))
     steered.push()
 
     delta = (

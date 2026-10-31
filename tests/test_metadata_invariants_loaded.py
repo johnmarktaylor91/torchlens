@@ -27,7 +27,7 @@ def _loaded_round_trip(tmp_path: Path) -> tl.Trace:
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     trace = tl.trace(model, torch.randn(2, 4))
     bundle = tmp_path / "roundtrip"
-    tl.save(trace, bundle, overwrite=True)
+    trace.save(bundle, overwrite=True)
     trace.cleanup()
     return tl.load(bundle)
 

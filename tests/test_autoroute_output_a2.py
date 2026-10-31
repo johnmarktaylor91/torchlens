@@ -13,9 +13,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import autoroute
-from torchlens.autoroute._builtin_output import load_imagenet1k_labels
-from torchlens.data_classes.trace import ResolvedPostprocessing
+from torchlens import _autoroute as autoroute
+from torchlens._autoroute._builtin_output import load_imagenet1k_labels
+from torchlens._data_classes.trace import ResolvedPostprocessing
 from torchlens.user_funcs import semantic_output_cache_key
 
 
@@ -167,7 +167,7 @@ def test_output_style_override_and_output_head_select_named_head() -> None:
 
 
 def test_custom_registered_output_detector_decodes() -> None:
-    """A custom output detector registered via ``tl.autoroute.output.register`` decodes."""
+    """A custom output detector registered via ``tl._autoroute.output.register`` decodes."""
 
     labels = {0: "left", 1: "right"}
     model = _Classifier(torch.tensor([[3.0, 0.0]])).eval()
@@ -307,15 +307,15 @@ def test_decoded_output_roundtrips_tlspec_and_decode_output_is_bounded(tmp_path:
     trace = tl.trace(_Classifier(torch.tensor([[1.0, 2.0, 0.0]]), labels).eval(), torch.ones(1, 2))
     bundle_path = tmp_path / "decoded.tlspec"
 
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     restored = tl.load(bundle_path)
 
     assert restored.decoded_output == trace.decoded_output
-    assert restored.decode_output(top_n=1) == {
+    assert restored.decode_output(k=1) == {
         "kind": "batch_topk",
         "rows": [trace.decoded_output["rows"][0]],
     }
-    assert len(restored.decode_output(top_n=10)["rows"]) == 3
+    assert len(restored.decode_output(k=10)["rows"]) == 3
 
 
 def test_cache_key_changes_when_only_id2label_changes(tmp_path: Path) -> None:
@@ -416,7 +416,7 @@ def test_nested_tensor_output_never_aborts_capture_with_raw_torch_error() -> Non
 def test_detector_exception_degrades_to_disclosed_warning_not_abort() -> None:
     """A raising registered detector is disclosed and skipped, never fatal."""
 
-    from torchlens.autoroute import output as autoroute_output
+    from torchlens._autoroute import output as autoroute_output
     from torchlens.errors import TorchLensWarning
 
     @autoroute_output.register(name="raising_probe_detector", priority=5)

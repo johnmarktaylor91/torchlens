@@ -25,11 +25,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from .._quantities import Flops, Macs
 from ..capture.flops import ZERO_ARITHMETIC_CONSTRUCTIONS, ZERO_FLOPS_OPS
-from ..quantities import Flops, Macs
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 
 @dataclass(frozen=True)
@@ -396,7 +396,7 @@ def _joined_result_or_none(trace: Trace) -> Any | None:
     """Return the trace's session-time join result iff it reached joined."""
 
     try:
-        from ..observability._native_profile import join_result_for
+        from .._observability._native_profile import join_result_for
     except ImportError:  # pragma: no cover - torn install without the substrate
         return None
     result = join_result_for(trace)

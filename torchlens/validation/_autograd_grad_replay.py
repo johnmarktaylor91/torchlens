@@ -27,13 +27,13 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils.rng import execute_with_restored_rng_autocast
 from ..backends.torch._autograd_grad_boundary import grad_signature, is_autograd_grad_recorder
-from ..utils.rng import execute_with_restored_rng_autocast
 from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 _ParamLeaves = dict[int, torch.Tensor]
 """``id(live parameter) -> replay leaf`` for the parameters a replay differentiates."""
@@ -93,7 +93,7 @@ def _tensor_leaf_paths(value: Any, path: tuple[Any, ...]) -> list[tuple[tuple[An
 def _write_path(container: Any, path: tuple[Any, ...], value: Any) -> Any:
     """Return ``container`` with the leaf at ``path`` replaced (tuples rebuilt)."""
 
-    from ..utils.collections import assign_to_sequence_or_dict
+    from .._utils.collections import assign_to_sequence_or_dict
 
     if not path:
         return value
@@ -370,7 +370,7 @@ def _replayed_outputs(
 ) -> Any:
     """Return the ``outputs`` argument with each recorded root replaced by its replay."""
 
-    from ..utils.tensor_utils import tensor_nanequal
+    from .._utils.tensor_utils import tensor_nanequal
 
     for path, root_label in _parent_slots_under(layer, outputs_slot).items():
         label = replay.resolve(root_label).label

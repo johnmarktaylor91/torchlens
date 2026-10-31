@@ -15,6 +15,7 @@ import torch.nn as nn
 
 import torchlens as tl
 import torchlens.checks as tc
+import torchlens.errors
 
 
 class _BnNet(nn.Module):
@@ -97,14 +98,14 @@ def test_liveness_probe_records_statistics_never_verdicts() -> None:
 def test_probe_refusals_are_typed() -> None:
     """Empty/malformed probe configs refuse typed at construction."""
 
-    with pytest.raises(tc.CheckConfigError) as empty_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as empty_exc:
         tc.RangeProbe({})
     assert empty_exc.value.fields["code"] == "check_bounds_invalid"
 
-    with pytest.raises(tc.CheckConfigError) as pair_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as pair_exc:
         tc.RangeProbe({"relu_1": (2.0, 1.0)})
     assert pair_exc.value.fields["code"] == "check_bounds_invalid"
 
-    with pytest.raises(tc.CheckConfigError) as sites_exc:
+    with pytest.raises(torchlens.errors.CheckConfigError) as sites_exc:
         tc.LivenessProbe([])
     assert sites_exc.value.fields["code"] == "check_bounds_invalid"

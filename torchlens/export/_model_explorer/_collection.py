@@ -35,12 +35,12 @@ EXECUTION_GRAPH_ID = "00-execution"
 ROLLED_GRAPH_ID = "01-rolled"
 
 
-def to_model_explorer_dict(log: Any, **options: Any) -> dict[str, Any]:
+def to_model_explorer_dict(trace: Any, **options: Any) -> dict[str, Any]:
     """Build the Model Explorer graph-collection payload for one capture.
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace``.
     **options:
         Flat keyword spellings of :class:`ModelExplorerOptions` (an unknown
@@ -77,7 +77,7 @@ def to_model_explorer_dict(log: Any, **options: Any) -> dict[str, Any]:
         A strict vendor ``GraphCollection`` payload.
     """
 
-    _require_trace(log, exporter="tl.export.model_explorer")
+    _require_trace(trace, exporter="tl.export.model_explorer")
     opts = ModelExplorerOptions(**options)
     if opts.privacy_profile not in PRIVACY_PROFILES:
         raise InvalidArgumentError(
@@ -89,48 +89,48 @@ def to_model_explorer_dict(log: Any, **options: Any) -> dict[str, Any]:
         )
     collection_label = str(
         opts.label
-        or getattr(log, "trace_label", None)
-        or getattr(log, "model_class_name", None)
+        or getattr(trace, "trace_label", None)
+        or getattr(trace, "model_class_name", None)
         or "model"
     )
-    attr_context = _attr_context(log, opts.privacy_profile, opts.include_source)
-    entries = _iter_layers(log)
-    episode_ledger = _episode_ledger(log)
+    attr_context = _attr_context(trace, opts.privacy_profile, opts.include_source)
+    entries = _iter_layers(trace)
+    episode_ledger = _episode_ledger(trace)
     if episode_ledger is not None:
         from ._episode import EpisodeExportContext, build_episode_graphs
 
         graphs = build_episode_graphs(
-            log,
+            trace,
             entries,
             episode_ledger,
             EpisodeExportContext(
                 attr_context=attr_context,
-                root_facts=_base_root_facts(log, opts.privacy_profile),
+                root_facts=_base_root_facts(trace, opts.privacy_profile),
                 options=opts,
             ),
         )
         return {"label": collection_label, "graphs": graphs, "graphSorting": "name_asc"}
     graphs = [
         build_graph(
-            log,
+            trace,
             entries,
             GraphSpec(
                 graph_id=EXECUTION_GRAPH_ID,
                 attr_context=attr_context,
                 strict_namespace=opts.strict_namespace,
-                root_facts={**_base_root_facts(log, opts.privacy_profile), "view": "execution"},
+                root_facts={**_base_root_facts(trace, opts.privacy_profile), "view": "execution"},
             ),
         ).graph
     ]
     if opts.include_rolled is not False and rolling_changes_identity(entries):
         graphs.append(
             build_rolled_graph(
-                log,
+                trace,
                 entries,
                 graph_id=ROLLED_GRAPH_ID,
                 attr_context=attr_context,
                 root_facts={
-                    **_base_root_facts(log, opts.privacy_profile),
+                    **_base_root_facts(trace, opts.privacy_profile),
                     "view": "rolled (disclosed DAG projection)",
                 },
             ).graph

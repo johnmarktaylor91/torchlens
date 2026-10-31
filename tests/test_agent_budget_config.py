@@ -27,7 +27,7 @@ def _saved_trace(tmp_path: Path) -> Path:
         layers += [nn.Linear(4, 4), nn.ReLU(), nn.Tanh()]
     model = nn.Sequential(*layers).eval()
     path = tmp_path / "chain.tlspec"
-    tl.save(tl.trace(model, torch.randn(2, 4), save="all"), str(path))
+    tl.trace(model, torch.randn(2, 4), save="all").save(str(path))
     return path
 
 

@@ -44,7 +44,7 @@ def test_stop_after_module_address_halts_inclusively() -> None:
 
     log = tl.trace(ThreeStep(), torch.randn(2, 4), capture=CaptureOptions(stop_after="fc1"))
     assert log.halted is True
-    assert log.outcome.status.name == "HALTED"
+    assert log.outcome.status.name == "STOPPED"
     labels = _labels(log)
     assert any(label.startswith("linear_1") for label in labels), labels
     # Nothing past the fc1 boundary ran: no relu, no second linear.

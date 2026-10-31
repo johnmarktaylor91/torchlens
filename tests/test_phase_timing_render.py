@@ -51,23 +51,23 @@ def test_graphviz_render_phase_timings_are_recorded(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(save_grads="all"),
     )
     trace.draw(
-        vis_outpath=str(tmp_path / "forward"),
+        path=str(tmp_path / "forward"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
     _assert_render_bucket(trace, "render:graphviz:forward")
 
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     trace.draw_backward(
-        vis_outpath=str(tmp_path / "backward"),
+        path=str(tmp_path / "backward"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
     _assert_render_bucket(trace, "render:graphviz:backward")
 
     trace.draw_combined(
-        vis_outpath=str(tmp_path / "combined"),
+        path=str(tmp_path / "combined"),
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
     )
     _assert_render_bucket(trace, "render:graphviz:combined")

@@ -18,7 +18,7 @@ include README.md
 include pyproject.toml
 recursive-include torchlens *.py
 include torchlens/py.typed
-recursive-include torchlens/autoroute/data *.json *.md
+recursive-include torchlens/_autoroute/data *.json *.md
 recursive-include torchlens/schemas *.json
 recursive-include torchlens/mechinterp *.json
 recursive-include torchlens/visualization/fonts *.ttf OFL.txt

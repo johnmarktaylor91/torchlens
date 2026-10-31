@@ -83,7 +83,7 @@ def dtensor_dual_geometry(value: Any) -> dict[str, Any] | None:
     # (HAS_DTENSOR_SHARD_GEOMETRY), so "the private API moved" flips a named
     # flag visible in doctor/compat instead of collapsing into the same silent
     # None as a legitimately off-mesh rank.
-    from ..utils._torch_compat import get_dtensor_shard_geometry_fn
+    from .._utils._torch_compat import get_dtensor_shard_geometry_fn
 
     compute_local_shape_and_global_offset = get_dtensor_shard_geometry_fn()
     if compute_local_shape_and_global_offset is not None:

@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.constants import OP_LOG_FIELD_ORDER
+from torchlens._constants import OP_LOG_FIELD_ORDER
 from torchlens.report import _cost_perf
 from torchlens.report._cost_perf import ROOFLINE_TRAFFIC_FIELDS, roofline
 

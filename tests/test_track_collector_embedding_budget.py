@@ -16,12 +16,14 @@ import torch
 from torch import nn
 
 import torchlens.trackers as trk
-from torchlens.observability import HistoryArtifactError, HistoryCollector, HistoryReader
-from torchlens.observability._collector import (
+from torchlens._observability import HistoryCollector
+from torchlens._observability._collector import (
     DEFAULT_ARTIFACT_BUDGET_BYTES,
     EMBEDDING_SKETCH_CAP_NUMEL,
     WatchSettings,
 )
+from torchlens.errors import HistoryArtifactError
+from torchlens.trackers import HistoryReader
 
 
 def _tiny_gpt2() -> nn.Module:

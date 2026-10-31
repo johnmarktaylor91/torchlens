@@ -187,7 +187,7 @@ def test_module_intervention_and_sparse_save_keep_the_fingerprint() -> None:
     steered = tl.trace(
         model,
         x,
-        intervene=tl.when(tl.module("fc1"), tl.steer(direction, magnitude=2, feature_axis=-1)),
+        intervene=tl.when(tl.module("fc1"), tl.steer(direction, strength=2, dim=-1)),
     )
     sparse = tl.trace(model, x, save=tl.module("fc1"))
     assert plain == _native(model, x)

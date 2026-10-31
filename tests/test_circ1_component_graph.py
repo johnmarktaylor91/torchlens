@@ -283,7 +283,7 @@ def test_grouped_query_attention_is_refused_typed() -> None:
 
 def test_identity_gate_refuses_a_decomposition_that_does_not_close() -> None:
     value = torch.ones(1, 2, 3, dtype=torch.float64)
-    node = mi.ComponentNode("input", "input", None, None, None, value)
+    node = mi.ComponentSender("input", "input", None, None, None, value)
     receiver = mi.ComponentReceiver(
         "logits", "logits", None, None, "lm_head", "ln_f", "add_1:1", 2 * value, (node,)
     )

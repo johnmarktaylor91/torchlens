@@ -1,4 +1,4 @@
-"""Generate ``torchlens/ir/op_record_manifest.py`` from the source spec.
+"""Generate ``torchlens/_ir/op_record_manifest.py`` from the source spec.
 
 The manifest is the FROZEN ``CellSourceManifest`` v1: one row per op store
 cell naming its step-0 ingest source class. Regenerate-and-diff is CI-gated
@@ -23,7 +23,7 @@ sys.path.insert(0, str(_REPO_ROOT))
 HEADER = '''"""GENERATED FILE — do not edit. CellSourceManifest v{version}.
 
 Regenerate with ``python -m tools.generate_op_record_manifest`` after editing
-the source spec in ``torchlens/ir/op_record_scatter.py``. The joint-freeze
+the source spec in ``torchlens/_ir/op_record_scatter.py``. The joint-freeze
 contract (producer DoR v4 section 5.2 / ppdag v3 section 9) versions this
 table; post-freeze changes bump the version, never mutate v{version}.
 """
@@ -37,7 +37,7 @@ CELL_SOURCE_MANIFEST: dict[str, str] = {{
 
 
 def generate() -> str:
-    from torchlens.ir.op_record_scatter import CELL_SOURCE_MANIFEST_VERSION, CELL_SOURCES
+    from torchlens._ir.op_record_scatter import CELL_SOURCE_MANIFEST_VERSION, CELL_SOURCES
 
     lines = [HEADER.format(version=CELL_SOURCE_MANIFEST_VERSION)]
     for field_name in sorted(CELL_SOURCES):
@@ -49,7 +49,7 @@ def generate() -> str:
 def main() -> int:
     """Generate (or with --check, verify) the manifest module."""
 
-    target = _REPO_ROOT / "torchlens" / "ir" / "op_record_manifest.py"
+    target = _REPO_ROOT / "torchlens" / "_ir" / "op_record_manifest.py"
     rendered = generate()
     if "--check" in sys.argv:
         current = target.read_text() if target.exists() else ""

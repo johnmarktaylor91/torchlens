@@ -32,7 +32,7 @@ from typing import Any
 import torch
 
 from ... import _state
-from ...utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
+from ..._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from ._function_boundary import BoundarySpec, close_boundary_call, open_boundary_call
 
 SCRIPT_FUNCTION_FUNC_NAME = "jitscript"
@@ -46,6 +46,9 @@ SCRIPT_FUNCTION_WRAPPER_NAME = "jit_script:boundary"
 
 SCRIPT_FUNCTION_RECORDER_ATTR = "__tl_script_function_recorder__"
 """Marker set on the boundary op's replay callable."""
+
+SCRIPT_FUNCTION_TARGET_ATTR = "__tl_script_function__"
+"""Attribute of the boundary op's replay callable holding the scripted function it calls."""
 
 SCRIPT_FUNCTION_WARNING_CODE = "torchscript_boundary"
 """``TorchLensWarning`` code of the once-per-function disclosure."""
@@ -69,6 +72,26 @@ def is_script_function_recorder(func: Any) -> bool:
     """
 
     return getattr(func, SCRIPT_FUNCTION_RECORDER_ATTR, False) is True
+
+
+def script_function_of(func: Any) -> Any | None:
+    """Return the scripted function a TorchScript boundary replay callable calls.
+
+    Parameters
+    ----------
+    func:
+        An op's recorded callable.
+
+    Returns
+    -------
+    Any | None
+        The ``torch.jit.ScriptFunction``, or ``None`` when ``func`` is not a boundary
+        replay callable.
+    """
+
+    if not is_script_function_recorder(func):
+        return None
+    return getattr(func, SCRIPT_FUNCTION_TARGET_ATTR, None)
 
 
 def install_script_function_call_wrapper() -> None:
@@ -150,6 +173,7 @@ def _make_replay_callable(function: Any, original_call: Callable[..., Any]) -> C
     source = _python_source(function)
     code = getattr(source, "__code__", None)
     setattr(jitscript, SCRIPT_FUNCTION_RECORDER_ATTR, True)
+    setattr(jitscript, SCRIPT_FUNCTION_TARGET_ATTR, function)
     _set_transform_metadata(
         jitscript,
         transform_kind=SCRIPT_FUNCTION_TRANSFORM_KIND,

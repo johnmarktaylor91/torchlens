@@ -167,7 +167,7 @@ def test_walker_ceiling_locksteps_capture_output_ceiling():
     this test is the lockstep.
     """
 
-    from torchlens.ir.container_registry import OUTPUT_TREE_MAX_DEPTH
+    from torchlens._ir.container_registry import OUTPUT_TREE_MAX_DEPTH
 
     assert _output_walk._MAX_DEPTH >= OUTPUT_TREE_MAX_DEPTH
 

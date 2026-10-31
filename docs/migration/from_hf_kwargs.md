@@ -14,7 +14,7 @@ stream inside a block, any op).
 | `hidden_states[0]` (the embeddings) | The embedding module's output, or the op after the position embeddings are added | Find it with `tl.trace(model, ids).layers`. |
 | `model(ids, output_attentions=True).attentions[i]` with `attn_implementation="eager"` | `trace.modules["transformer.h.<i>.attn"].facets["pattern"]` | Under eager attention the softmax is a captured op. |
 | `output_attentions=True` under the default `sdpa` (or flash) backend | Read the reconstructed facets: `tl.trace(model, ids, reconstruction_ready=True)` | The fused kernel never materializes the probabilities, so transformers has nothing to return there (see below). |
-| Registering your own function in `AttentionInterface` | `tl.bridge.hf.register_attention(model)`, then `with tl.bridge.hf.record_attention(model) as attn:` | Registers the attention function and its matching mask function together. |
+| Registering your own function in `AttentionInterface` | `tl.bridge.transformers.register_attention(model)`, then `with tl.bridge.transformers.record_attention(model) as attn:` | Registers the attention function and its matching mask function together. |
 | Queries, keys, values, per-head outputs | `module.facets["q"]`, `["k"]`, `["v"]`, `["z"]` | No keyword argument returns these. |
 
 Two traps these keyword arguments set:
@@ -26,7 +26,7 @@ Two traps these keyword arguments set:
 - **The mask trap.** A custom function registered in `AttentionInterface` alone gets no
   attention mask, because transformers builds masks only for keys its mask registry
   knows; the model then silently computes non-causal attention and its predictions
-  change. `tl.bridge.hf.register_attention` registers the matching mask function in
+  change. `tl.bridge.transformers.register_attention` registers the matching mask function in
   the same call, so causal and padding masks always arrive. It never registers over a
   built-in key.
 
@@ -74,8 +74,8 @@ batch = {
     "input_ids": torch.tensor([[1, 5, 9, 2], [7, 3, 0, 0]]),
     "attention_mask": torch.tensor([[1, 1, 1, 1], [1, 1, 0, 0]]),
 }
-tl.bridge.hf.register_attention(model)
-with torch.no_grad(), tl.bridge.hf.record_attention(model, check_sdpa=True) as attn:
+tl.bridge.transformers.register_attention(model)
+with torch.no_grad(), tl.bridge.transformers.record_attention(model, check_sdpa=True) as attn:
     model(**batch)
 probs = attn["transformer.h.0.attn"]  # (batch, heads, query, key)
 RESULT = (tuple(probs.shape), torch.count_nonzero(probs[1, :, :2, 2:]).item() == 0)

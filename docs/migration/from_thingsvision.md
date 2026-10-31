@@ -20,7 +20,7 @@ The shape of the migration:
 | bundled matched preprocessing | Resolve YOUR loader's own preprocessing and verify it: `torchlens.preprocessing.resolve(...)` / `.audit(...)`. |
 | `extractor.show_model()` | `torchlens.inventory.list_sites(model, x)` -- structured rows with copy-paste-safe selectors, shapes, and pass indices. |
 | `extract_features(batches, module_names=[...])` | `tl.extract(model, x, [...])` (one batch) or `tl.extract_dataset(...)` (datasets, disk artifacts, resume). |
-| `save_features(features, out_path, file_format=...)` | disk-mode `tl.extract_dataset(..., output_dir=...)` + `tl.load_extraction(...)`; per-site adapters in `torchlens.bridge`. |
+| `save_features(features, out_path, file_format=...)` | disk-mode `tl.extract_dataset(..., output_dir=...)` + `tl.load(...)`; per-site adapters in `torchlens.bridge`. |
 
 Two things to watch when carrying habits over:
 
@@ -34,7 +34,7 @@ Two things to watch when carrying habits over:
   On `tl.extract_dataset`, `transform=` transforms OUTPUTS before storage
   (thingsvision's `apply_transforms` habit). For input preprocessing in
   `extract_dataset`, use `input_transform=` -- carrying the trace habit into
-  `extract_dataset(transform=...)` would silently z-score your FEATURES
+  `extract_dataset(output_transform=...)` would silently z-score your FEATURES
   instead of your PIXELS.
 
 ## thingsvision and TorchLens cannot share one environment
@@ -107,7 +107,7 @@ features = tl.extract_dataset(
     model,
     images,                             # any iterable of PIL images
     ["avgpool"],
-    output_dir="resnet50_features",
+    path="resnet50_features",
     input_transform=pre,                # applied AND recorded, verdict "verified"
     stimulus_ids=image_ids,
 )
@@ -149,7 +149,7 @@ extraction artifact plus per-site adapters -- the artifact's manifest is the
 row-order authority and carries the input-preprocessing provenance block:
 
 ```python
-loaded = tl.load_extraction("resnet50_features")
+loaded = tl.load("resnet50_features")
 print(loaded.input_preprocessing["verdict"])    # "verified" / "mismatch" / "unknown"
 
 from torchlens.bridge import rsatoolbox as tl_rsa

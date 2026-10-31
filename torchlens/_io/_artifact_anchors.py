@@ -20,7 +20,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from . import TorchLensIOError
+from . import ArtifactError
 from .compat_ledger import read_migration_witness
 
 __all__ = ["check_manifest_metadata_anchors"]
@@ -68,7 +68,7 @@ def check_manifest_metadata_anchors(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         ``bundle_manifest_metadata_mismatch`` on a stamp or row-count conflict.
     """
 
@@ -107,7 +107,7 @@ def _migration_explains(bundle_path: Path, root_stamp: int, manifest_stamp: int)
 
     try:
         witness = read_migration_witness(bundle_path)
-    except TorchLensIOError:
+    except ArtifactError:
         return False
     if not isinstance(witness, Mapping):
         return False
@@ -119,7 +119,7 @@ def _migration_explains(bundle_path: Path, root_stamp: int, manifest_stamp: int)
 def _refuse(message: str, *, bundle_path: Path, field: str, reason: str) -> None:
     """Raise the typed manifest/metadata anchor refusal."""
 
-    raise TorchLensIOError(
+    raise ArtifactError(
         f"Bundle {bundle_path} fails its manifest/metadata integrity anchor: {message}. "
         f"Remedy: {_REMEDY}.",
         code="bundle_manifest_metadata_mismatch",

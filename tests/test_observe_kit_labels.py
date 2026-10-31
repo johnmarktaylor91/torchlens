@@ -171,7 +171,7 @@ def test_multipass_offender_gets_pass_qualified_canonical_label() -> None:
 def test_failed_finalization_yields_none_plus_status_never_raw(monkeypatch) -> None:
     """When the prefix postprocess cannot run, labels are None + status."""
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     def _boom(self: object, *args: object, **kwargs: object) -> None:
         raise RuntimeError("forced finalization failure (fixture)")
@@ -182,7 +182,7 @@ def test_failed_finalization_yields_none_plus_status_never_raw(monkeypatch) -> N
     assert exc.fields["layer_status"] == "unavailable"
     assert isinstance(exc.fields["layer_raw"], str)
     _assert_no_raw_spelling(str(exc))
-    outcome = tl.partial.from_failed_capture(exc).trace.outcome
+    outcome = tl._partial.from_failed_capture(exc).trace.outcome
     assert str(outcome.status) == "CaptureStatus.ABORTED_NONFINITE"
     assert outcome.boundary_label is None
 
@@ -203,7 +203,7 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
     """LINT: stripping the raw suffix fabricates public names; new sites refuse.
 
     The raw-to-final ordinal offset is not a constant, so ``.removesuffix``/
-    slice-stripping ``RAW_LABEL_SUFFIX`` into a user-facing spelling is always
+    slice-stripping ``_RAW_LABEL_SUFFIX`` into a user-facing spelling is always
     wrong. The ONLY sanctioned sites are the constant's definition, the
     explicitly raw-named ``Op.raw_label`` identity property, and the resolver
     door module itself (``capture/_nonfinite_prefix.py``, home of both
@@ -213,8 +213,8 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
     """
 
     allowlist = {
-        TORCHLENS_DIR / "constants.py",
-        TORCHLENS_DIR / "data_classes" / "op.py",
+        TORCHLENS_DIR / "_constants.py",
+        TORCHLENS_DIR / "_data_classes" / "op.py",
         TORCHLENS_DIR / "capture" / "_nonfinite_prefix.py",
     }
     offenders: list[str] = []
@@ -222,7 +222,7 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
         if path in allowlist:
             continue
         text = path.read_text(encoding="utf-8")
-        if "RAW_LABEL_SUFFIX" in text:
+        if "_RAW_LABEL_SUFFIX" in text:
             offenders.append(str(path.relative_to(TORCHLENS_DIR)))
     assert not offenders, (
         "raw-label strip/consume sites outside the resolver door "

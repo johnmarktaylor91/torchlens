@@ -16,7 +16,7 @@ tl.export.netron(log, "model.json")                    # module view (default)
 tl.export.netron(log, "model.json", granularity="op")  # every leaf op
 tl.export.netron(log, "model.json", attachment=False)  # no metrics companion
 tl.export.netron(log, "model.json", baseline=ref_log)  # + per-node diff facts
-tl.export.netron(log, open=True)                       # serve + browser tab
+tl.export.netron(log, serve=True)                       # serve + browser tab
 ```
 
 The artifact is valid ONNX protobuf JSON (`irVersion` 10): it strict-parses
@@ -71,7 +71,7 @@ row Netron would silently drop.
 
 `baseline=` takes the reference `Trace` and fills the `torchlens.baseline`
 slot from TorchLens' own guarded differential
-(`torchlens.differential.diff_report(log, baseline)`, `log - baseline`).
+(`torchlens.report.diff(log, baseline)`, `log - baseline`).
 Netron has no diff view, so the facts ride the channels it renders: each
 exported node whose ops settled into a diff row carries `torchlens.diff.*`
 rows in its node metadata and in the companion (`status`, `max_abs_delta`,

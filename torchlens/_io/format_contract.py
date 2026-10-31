@@ -19,9 +19,9 @@ from enum import Enum
 from typing import Any, NamedTuple
 
 from .format_errors import (
-    ArtifactVersionAboveRuntimeError,
-    ArtifactVersionBelowFloorError,
-    TorchLensIOError,
+    ArtifactError,
+    ArtifactTooNewError,
+    ArtifactTooOldError,
 )
 from .prerelease import validate_prerelease_state
 
@@ -128,7 +128,7 @@ RESERVED_STEP_SCORE_CREDIT = (
 # instead of asserting a reader.
 _BELOW_FLOOR_REMEDY = (
     "Re-save the artifact with a torchlens release verified to read it; "
-    "torchlens.ecosystem.compat_window() lists the governed rows and their "
+    "torchlens._ecosystem.compat_window() lists the governed rows and their "
     "verified readers."
 )
 
@@ -140,7 +140,7 @@ def below_floor_error(
     path: str | None = None,
     remedy: str | None = None,
     code: str = "artifact_version_below_floor",
-) -> ArtifactVersionBelowFloorError:
+) -> ArtifactTooOldError:
     """Build the typed rehydration-floor refusal with structured fields.
 
     Every below-floor refusal was hand-copied at its raise site with an empty
@@ -170,7 +170,7 @@ def below_floor_error(
 
     Returns
     -------
-    ArtifactVersionBelowFloorError
+    ArtifactTooOldError
         The typed refusal, ready to raise.
     """
 
@@ -180,7 +180,7 @@ def below_floor_error(
         f"tlspec_version={MIN_TLSPEC_VERSION} (torchlens "
         f"{MIN_TORCHLENS_VERSION_TEXT}). Remedy: {effective_remedy}"
     )
-    return ArtifactVersionBelowFloorError(
+    return ArtifactTooOldError(
         message,
         code=code,
         observed=observed,
@@ -208,7 +208,7 @@ def raise_if_manifest_below_floor(raw_version: Any, path: str) -> None:
 
     Raises
     ------
-    ArtifactVersionBelowFloorError
+    ArtifactTooOldError
         When ``raw_version`` is an int below ``MIN_TLSPEC_VERSION``.
     """
 
@@ -221,6 +221,60 @@ def raise_if_manifest_below_floor(raw_version: Any, path: str) -> None:
         )
 
 
+def _major_version(version: Any) -> int | None:
+    """Return the leading integer of a ``MAJOR.MINOR...`` version string, else ``None``."""
+
+    if not isinstance(version, str):
+        return None
+    head = version.strip().split(".", 1)[0]
+    return int(head) if head.isdigit() else None
+
+
+def raise_if_saved_by_older_major(saved_version: Any, path: str) -> None:
+    """Refuse an artifact that an earlier major release of torchlens saved.
+
+    A major release does not read the files an earlier major release wrote: the
+    saved field names and package paths changed between them, and no compatibility
+    reader is carried. The refusal names the saving release and the two ways out
+    (the earlier major release reads the file, or capture again with this one).
+    Artifacts without a parseable ``torchlens_version`` stamp return untouched;
+    their own typed checks own that case.
+
+    Parameters
+    ----------
+    saved_version:
+        The manifest's raw ``torchlens_version`` value.
+    path:
+        Artifact path for the structured fields.
+
+    Raises
+    ------
+    ArtifactTooOldError
+        When the saving release's major version is below the running one.
+    """
+
+    import torchlens
+
+    running = _major_version(torchlens.__version__)
+    saved = _major_version(saved_version)
+    if running is None or saved is None or saved >= running:
+        return
+    remedy = (
+        f"load it with torchlens {saved}.x (pip install 'torchlens<{running}'), or "
+        f"capture the model again with torchlens {torchlens.__version__} and save that."
+    )
+    raise ArtifactTooOldError(
+        f"This artifact was saved by torchlens {saved_version}; torchlens {running}.x "
+        f"does not read files saved by torchlens {saved}.x. Remedy: {remedy}",
+        code="artifact_version_below_floor",
+        observed=f"torchlens_version={saved_version}",
+        floor_tlspec_version=MIN_TLSPEC_VERSION,
+        floor_torchlens_version=f"{running}.0.0",
+        path=path,
+        remedy=remedy,
+    )
+
+
 _ABOVE_CEILING_REMEDY = "Upgrade torchlens to the release that wrote this artifact (or newer)."
 
 
@@ -230,7 +284,7 @@ def above_ceiling_error(
     subject: str = "Artifact",
     path: str | None = None,
     code: str = "artifact_version_above_runtime",
-) -> ArtifactVersionAboveRuntimeError:
+) -> ArtifactTooNewError:
     """Build the typed above-runtime-ceiling refusal with structured fields.
 
     The single constructor for every "artifact is newer than this runtime"
@@ -254,7 +308,7 @@ def above_ceiling_error(
 
     Returns
     -------
-    ArtifactVersionAboveRuntimeError
+    ArtifactTooNewError
         The typed refusal, ready to raise.
     """
 
@@ -262,7 +316,7 @@ def above_ceiling_error(
         f"{subject} uses tlspec_version={observed}, but this runtime only supports "
         f"up to {TLSPEC_VERSION}. {_ABOVE_CEILING_REMEDY}"
     )
-    return ArtifactVersionAboveRuntimeError(
+    return ArtifactTooNewError(
         message,
         code=code,
         observed=observed,
@@ -390,14 +444,14 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | Non
 
     Raises
     ------
-    ArtifactVersionBelowFloorError
+    ArtifactTooOldError
         If the state predates the ``tlspec_version >= MIN_TLSPEC_VERSION``
         rehydration floor (including unversioned pre-sprint states).
     UnknownPersistedFieldError
         If ``cls`` is provided, a governed artifact load is in progress, and
         the state carries fields outside the class's declared contract
         (fields + defaults + declared aliases).
-    TorchLensIOError
+    ArtifactError
         If the serialized version is newer than this runtime understands or
         is not an integer.
     """
@@ -407,7 +461,7 @@ def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | Non
     if version is None:
         _raise_below_floor(cls_name, "no tlspec_version (predates portable I/O versioning)")
     if not isinstance(version, int):
-        raise TorchLensIOError(f"{cls_name} pickle state has invalid tlspec_version={version!r}.")
+        raise ArtifactError(f"{cls_name} pickle state has invalid tlspec_version={version!r}.")
     if version > TLSPEC_VERSION:
         raise above_ceiling_error(
             observed=version,
@@ -483,7 +537,7 @@ def coerce_container_typed_state(
     crash into silent, undetectable data loss (e.g. a corrupted
     ``layer_dict_main_keys`` quietly coming back as an empty dict instead of
     surfacing the corruption). Such a field is left in its original,
-    detectably-wrong state and this function raises ``TorchLensIOError`` so
+    detectably-wrong state and this function raises ``ArtifactError`` so
     the caller learns about the corruption immediately, instead of shipping a
     Trace that looks valid but silently lost data.
 
@@ -503,7 +557,7 @@ def coerce_container_typed_state(
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If a field is present with a value that cannot be converted to its
         declared container type (e.g. an ``int`` where a ``dict`` is
         declared). This is corruption, not a legacy-format field -- the
@@ -527,7 +581,7 @@ def coerce_container_typed_state(
         try:
             state[field_name] = declared_type(current_value)
         except (TypeError, ValueError) as exc:
-            raise TorchLensIOError(
+            raise ArtifactError(
                 f"State field {field_name!r} is present with value of type "
                 f"{type(current_value).__name__!r} that cannot be converted to the "
                 f"declared container type {declared_type.__name__!r}. This is not a "

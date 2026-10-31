@@ -65,6 +65,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.backends.torch._tl import (
     get_tensor_meta,
     raw_tensor_label,
@@ -73,7 +74,6 @@ from torchlens.backends.torch._tl import (
 )
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -130,7 +130,7 @@ def _assert_not_falsely_verified(result: Any, oracle: torch.Tensor) -> None:
 
     max_diff = (result.output - oracle).abs().max().item()
     if result.report.path_faithfulness is PathFaithfulness.VERIFIED:
-        assert not result.report.poisoned
+        assert not result.report.is_poisoned
         assert max_diff < 1e-6, f"FALSE VERIFIED: replay disagrees with oracle 1 by {max_diff}"
 
 
@@ -485,7 +485,7 @@ def test_moduletype_nested_honest_rebind_consumer_not_overceiled(tmp_path: Path)
 
     result = _run_artifact(model, x, run_input, tmp_path / "sol_honest.tlspec")
     _assert_not_falsely_verified(result, oracle)
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 # --------------------------------------------------------------------------- #
@@ -875,7 +875,7 @@ def test_honest_models_stay_verified(
     x = _nchw()
     result = _run_artifact(model, x, _nchw(), tmp_path / "honest.tlspec")
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_repeat_captures_of_one_instance_stay_verified(tmp_path: Path) -> None:
@@ -889,7 +889,7 @@ def test_repeat_captures_of_one_instance_stay_verified(tmp_path: Path) -> None:
     for index in range(3):
         result = _run_artifact(model, _nchw(), _nchw(), tmp_path / f"repeat{index}.tlspec")
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, f"capture {index}"
-        assert not result.report.poisoned
+        assert not result.report.is_poisoned
 
 
 def test_shared_buffer_object_across_instances_stays_verified(tmp_path: Path) -> None:
@@ -903,7 +903,7 @@ def test_shared_buffer_object_across_instances_stays_verified(tmp_path: Path) ->
         model.b = shared
         result = _run_artifact(model, _nchw(), _nchw(), tmp_path / f"shared{index}.tlspec")
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, f"capture {index}"
-        assert not result.report.poisoned
+        assert not result.report.is_poisoned
 
 
 def test_live_capture_labels_are_anchored_and_readable() -> None:

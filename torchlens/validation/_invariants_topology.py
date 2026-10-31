@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .invariants import (
         _SPECIAL_LIST_FLAG_PAIRS,
         MetadataInvariantError,
@@ -109,10 +109,10 @@ def _check_trace_self_consistency(ml: Trace) -> None:
         )
 
     # Tensor counts
-    if ml.num_tensors < ml.num_saved_ops:
+    if len(ml) < ml.num_saved_ops:
         raise MetadataInvariantError(
             name,
-            f"num_tensors={ml.num_tensors} < num_saved_ops={ml.num_saved_ops}",
+            f"len(trace)={len(ml)} < num_saved_ops={ml.num_saved_ops}",
         )
 
 
@@ -389,8 +389,8 @@ def _check_op_label_resolution(ml: Trace) -> None:
     pass it.
     """
 
+    from .._constants import _is_suffixed_raw_label
     from .._errors import AmbiguousOpLookupError
-    from ..constants import _is_suffixed_raw_label
 
     name = "graph_topology"
     if getattr(type(ml), "ops", None) is None and "ops" not in getattr(ml, "__dict__", {}):
@@ -403,7 +403,7 @@ def _check_op_label_resolution(ml: Trace) -> None:
         record_validation_diagnostic(
             ml,
             ValidationDiagnostic(
-                check="op_label_resolution_unchecked",
+                check_name="op_label_resolution_unchecked",
                 message="Op label resolution not checked: this object has no ops accessor.",
                 extra={"invariant": name},
             ),
@@ -681,7 +681,7 @@ def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any)
     * ``has_siblings``/``has_co_parents`` mirror their lists' emptiness;
     * unresolvable edge labels are skipped (they are ``graph_topology``'s
       bidirectionality finding, and the properties skip them identically);
-    * orphan-registry records resolve through ``ml.orphans``, as the
+    * orphan-registry records resolve through ``ml.graph.orphans``, as the
       properties document.
 
     Cost is bounded by the same parent-children/child-parents walk the
@@ -700,7 +700,7 @@ def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any)
             record = ml[entry_label]
         except (KeyError, ValueError):
             try:
-                record = ml.orphans[entry_label]
+                record = ml.graph.orphans[entry_label]
             except KeyError:
                 record = None
         resolution_cache[entry_label] = record

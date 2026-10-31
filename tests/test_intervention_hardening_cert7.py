@@ -11,7 +11,7 @@ pattern where a fix closed one instance of a class but left siblings open:
   as a ``Edit`` (data corruption). The fix escapes any dict carrying a reserved
   wrapper key (the ``__dunder__`` namespace) through the general ``__dict_items__``
   encoding so a genuine user key can never be mistaken for a wrapper tag.
-* MAJOR -- ``Bundle.most_changed`` (and its sibling ``_distance_value``) reimplemented
+* MAJOR -- ``Bundle.rank_changes`` (and its sibling ``_distance_value``) reimplemented
   the round-6 scalar/vector routing guard asymmetrically (``is_scalar_like(base)``
   only), so a scalar baseline vs a genuine vector member fell into the scalar fallback
   and hard-crashed instead of routing to the intended vector metric. Both sites now use
@@ -133,9 +133,9 @@ def test_distance_value_scalar_vs_vector_routes_to_vector_metric() -> None:
         _distance_value(scalar, vector, "cosine")
     except ValueError as exc:
         # Symmetric guard routed to cosine (the vector metric). The OLD asymmetric
-        # guard would have called ``relative_l1_scalar`` and raised its message.
+        # guard would have called ``relative_l1`` and raised its message.
         assert "cosine_distance" in str(exc)
-        assert "relative_l1_scalar" not in str(exc)
+        assert "relative_l1" not in str(exc)
     else:  # pragma: no cover - failure path
         raise AssertionError("expected a vector-metric ValueError for scalar-vs-vector")
 
@@ -143,7 +143,7 @@ def test_distance_value_scalar_vs_vector_routes_to_vector_metric() -> None:
 def test_distance_value_both_scalar_uses_scalar_fallback() -> None:
     """MAJOR: genuinely scalar-like operands still use the scalar fallback."""
 
-    # 0-d ref vs 1-element vector: both scalar-like -> relative_l1_scalar, no crash,
+    # 0-d ref vs 1-element vector: both scalar-like -> relative_l1, no crash,
     # no truncation. |3 - 5| / |3| == 2/3.
     value = _distance_value(torch.tensor(3.0), torch.tensor([5.0]), "cosine")
     assert isinstance(value, float)
@@ -159,9 +159,9 @@ def test_most_changed_happy_path_unbroken_by_symmetric_guard() -> None:
     model_b = torch.nn.Linear(4, 4)
     log_a = tl.trace(model_a, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     log_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    bundle = tl.bundle({"a": log_a, "b": log_b}, baseline="a")
+    bundle = tl.Bundle({"a": log_a, "b": log_b}, baseline="a")
 
-    rows = bundle.most_changed()
+    rows = bundle.rank_changes()
     assert isinstance(rows, list)
     # Non-empty, sorted descending, finite scores -- no crash, no truncation.
     assert rows

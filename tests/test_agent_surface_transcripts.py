@@ -129,7 +129,7 @@ def test_gpt2_flagship_transcript_is_byte_reproducible(tmp_path: Path) -> None:
     save_predicate = tl.in_module("transformer.h.5.mlp")
     clean_log = tl.trace(model, (), input_kwargs={"input_ids": input_ids}, save=save_predicate)
     clean_path = tmp_path / "gpt2_clean.tlspec"
-    tl.save(clean_log, str(clean_path))
+    clean_log.save(str(clean_path))
     ablated_log = tl.trace(
         model,
         (),
@@ -138,7 +138,7 @@ def test_gpt2_flagship_transcript_is_byte_reproducible(tmp_path: Path) -> None:
         intervene=tl.when(tl.func("tanh") & tl.in_module("transformer.h.5.mlp"), tl.zero_ablate()),
     )
     ablated_path = tmp_path / "gpt2_ablated.tlspec"
-    tl.save(ablated_log, str(ablated_path))
+    ablated_log.save(str(ablated_path))
     del model, clean_log, ablated_log
 
     script = _FLAGSHIP_SCRIPT.format(repo_root=REPO_ROOT, site_func="tanh", unsaved="ln_f.weight")

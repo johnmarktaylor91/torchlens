@@ -17,6 +17,8 @@ from typing import Any, cast
 import numpy as np
 import torch
 
+from torchlens._runnable import ContractCheck, ReadinessReport, RunnableDiagnostic, RunReport
+
 from . import (
     _runnable_attestation as _runnable_attestation,
     _runnable_call_arguments as _runnable_call_arguments,
@@ -34,6 +36,52 @@ from . import (
     _state,
 )
 from ._io._torch_symbols import torch_attr
+from ._ir.container import (
+    CONTAINER_KIND_CAPABILITIES,
+    ContainerReconstructionError,
+    ContainerSpec,
+    _reconstruction_would_substitute_plain,
+    namedtuple_type_can_carry_instance_state,
+    rebuild_container_from_spec,
+    reconstruction_is_lossy_by_type,
+    resolve_container_type,
+)
+from ._runnable import (
+    NONDETERMINISTIC_SOURCE_VOCABULARY,
+    ActivationPayloadLayerDescriptor,
+    ActivationPayloadMember,
+    CallableRegistryEntry,
+    ControlWitness,
+    ControlWitnessKind,
+    DivergencePolicy,
+    InputAttestationFingerprint,
+    LiteralAtom,
+    LiteralAtomKind,
+    LiteralMapping,
+    LiteralSequence,
+    LiteralSequenceKind,
+    LiteralSlice,
+    LiteralTorchSymbol,
+    LiteralTupleKey,
+    NonTensorLiteral,
+    NumericAttestationStatus,
+    PathFaithfulness,
+    ReadinessStatus,
+    RunnableCallDescriptor,
+    RunnableErrorCode,
+    RunProvider,
+    RunResult,
+    SparseRunDescriptor,
+    StateSlotRole,
+    StateSource,
+    TensorSlotDescriptor,
+    TensorSlotRole,
+    WitnessCompleteness,
+    WitnessGapKind,
+    derived_witness_completeness,
+    is_mode_sensitive_qualname,
+    mark_trace_path_status,
+)
 from ._runnable_retention import _check_unretained_extent, _fail_open_unless_admitted
 from ._runnable_state import (
     _INPUT_STRUCTURE_SITE_PREFIX,
@@ -55,68 +103,9 @@ from ._split_rebind import (
     rebind_function as _rebind_function,
     rebind_lru_cache as _rebind_lru_cache,
 )
-from .errors import (
-    NumericAttestationError,
-    PathDivergenceError,
-    ReattachError,
-    RunCapabilityUnavailableError,
-    RunPreconditionError,
-    RuntimeSignatureDriftError,
-)
-from .intervention.replay import _CallConeNode, _walk_call_cone
-from .ir.container import (
-    CONTAINER_KIND_CAPABILITIES,
-    ContainerReconstructionError,
-    ContainerSpec,
-    _reconstruction_would_substitute_plain,
-    namedtuple_type_can_carry_instance_state,
-    rebuild_container_from_spec,
-    reconstruction_is_lossy_by_type,
-    resolve_container_type,
-)
-from .runnable import (
-    NONDETERMINISTIC_SOURCE_VOCABULARY,
-    ActivationPayloadLayerDescriptor,
-    ActivationPayloadMember,
-    CallableRegistryEntry,
-    ContractCheck,
-    ControlWitness,
-    ControlWitnessKind,
-    DivergencePolicy,
-    InputAttestationFingerprint,
-    LiteralAtom,
-    LiteralAtomKind,
-    LiteralMapping,
-    LiteralSequence,
-    LiteralSequenceKind,
-    LiteralSlice,
-    LiteralTorchSymbol,
-    LiteralTupleKey,
-    NonTensorLiteral,
-    NumericAttestationStatus,
-    PathFaithfulness,
-    ReadinessReport,
-    ReadinessStatus,
-    RunnableCallDescriptor,
-    RunnableDiagnostic,
-    RunnableErrorCode,
-    RunProvider,
-    RunReport,
-    RunResult,
-    SparseRunDescriptor,
-    StateSlotRole,
-    StateSource,
-    TensorSlotDescriptor,
-    TensorSlotRole,
-    WitnessCompleteness,
-    WitnessGapKind,
-    derived_witness_completeness,
-    is_mode_sensitive_qualname,
-    mark_trace_path_status,
-)
-from .utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
-from .utils.alias_footprint import touched_bytes_relation
-from .utils.rng import (
+from ._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
+from ._utils.alias_footprint import touched_bytes_relation
+from ._utils.rng import (
     aten_qualname_is_seeded_rng,
     deterministic_fill_governs,
     qualname_is_uninit_growth_resize,
@@ -127,6 +116,15 @@ from .utils.rng import (
     snapshot_host_rng,
     uninit_new_call_is_size_form,
 )
+from .errors import (
+    PathDivergenceError,
+    ReattachError,
+    ReplayValueMismatchError,
+    RunCapabilityUnavailableError,
+    RunPreconditionError,
+    RuntimeSignatureDriftError,
+)
+from .intervention.replay import _CallConeNode, _walk_call_cone
 
 _RUN_FORK_COUNTER = count(1)
 
@@ -401,7 +399,7 @@ _restore_declared_state_or_mark = _rebind_function(
 # These names resolve in THIS module's globals at runtime inside rebound
 # functions (same mechanism as _INPUT_CHECK_UNAVAILABLE).
 _RunUntilPlan = _runnable_transaction._RunUntilPlan
-from .runnable import (  # noqa: E402
+from ._runnable import (  # noqa: E402
     RUN_TRUNCATION_CAUSE_VOCABULARY,
     RUN_TRUNCATION_REGIME_VOCABULARY,
     RunTruncation,

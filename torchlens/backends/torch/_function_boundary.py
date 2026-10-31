@@ -37,8 +37,8 @@ from typing import Any
 import torch
 
 from ... import _state
-from ...data_classes.internal_types import FuncExecutionContext
-from ...utils.rng import log_current_autocast_state, log_current_rng_states
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._utils.rng import log_current_autocast_state, log_current_rng_states
 
 FOREIGN_FUNCTION_FUNC_NAME = "autogradfunction"
 """Op type / func name of the boundary op."""
@@ -236,7 +236,7 @@ def _active_witness_state(trace: Any) -> Any | None:
     carries the state of every armed census, runnable or not.
     """
 
-    from ...utils._torch_compat import get_current_dispatch_mode_stack
+    from ..._utils._torch_compat import get_current_dispatch_mode_stack
     from . import completeness_witness
 
     for mode in reversed(get_current_dispatch_mode_stack() or []):
@@ -392,7 +392,7 @@ def _snapshot_arg_labels(
 ) -> list[tuple[Any, str | None]]:
     """Record each tensor argument's live label before the forward runs."""
 
-    from ...utils.introspection import get_vars_of_type_from_obj
+    from ..._utils.introspection import get_vars_of_type_from_obj
     from ._tl import get_tensor_label
 
     tensors = get_vars_of_type_from_obj(

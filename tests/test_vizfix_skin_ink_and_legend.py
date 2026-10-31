@@ -84,8 +84,8 @@ def _draw(model: nn.Module, x: torch.Tensor, tmp_path: Path, name: str, **kwargs
     return str(
         trace.draw(
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / name),
+            file_format="svg",
+            path=str(tmp_path / name),
             **kwargs,
         )
     )
@@ -141,7 +141,7 @@ def test_dark_skin_edges_and_edge_labels_follow_the_skin(tmp_path: Path) -> None
     """No dark edge or edge label keeps the renderer's black ink."""
 
     dark = THEME_PRESETS["dark"]
-    dot = _draw(_NestedRes(), torch.randn(1, 3), tmp_path, "dark_edges", vis_theme="dark")
+    dot = _draw(_NestedRes(), torch.randn(1, 3), tmp_path, "dark_edges", theme="dark")
     edges = _edge_lines(dot)
     assert edges
     for line in edges:
@@ -154,7 +154,7 @@ def test_dark_skin_module_boxes_follow_the_skin(tmp_path: Path) -> None:
     """Dark module boxes take the page fill and the skin's line and label ink."""
 
     dark = THEME_PRESETS["dark"]
-    dot = _draw(_NestedRes(), torch.randn(1, 3), tmp_path, "dark_boxes", vis_theme="dark")
+    dot = _draw(_NestedRes(), torch.randn(1, 3), tmp_path, "dark_boxes", theme="dark")
     assert "subgraph cluster_" in dot
     assert "fillcolor=white" not in dot
     page = dark.graph["bgcolor"]
@@ -166,7 +166,7 @@ def test_dark_skin_module_boxes_follow_the_skin(tmp_path: Path) -> None:
 def test_white_page_skins_keep_their_edge_and_box_ink(skin: str, tmp_path: Path) -> None:
     """The fix moves only skins that set edge ink: white-page DOT is unchanged."""
 
-    dot = _draw(_NestedRes(), torch.randn(1, 3), tmp_path, f"{skin}_ink", vis_theme=skin)
+    dot = _draw(_NestedRes(), torch.randn(1, 3), tmp_path, f"{skin}_ink", theme=skin)
     edges = _edge_lines(dot)
     assert edges and all(_attr_values(line, "color") == ["black"] for line in edges)
     assert "fillcolor=white" in dot
@@ -176,7 +176,7 @@ def test_white_page_skins_keep_their_edge_and_box_ink(skin: str, tmp_path: Path)
 def test_dark_skin_node_text_is_readable_on_every_fill(tmp_path: Path) -> None:
     """Every filled dark node meets 4.5:1 text contrast (was 1.2:1 on the input fill)."""
 
-    dot = _draw(_Stateful(), torch.randn(1, 3), tmp_path, "dark_text", vis_theme="dark")
+    dot = _draw(_Stateful(), torch.randn(1, 3), tmp_path, "dark_text", theme="dark")
     checked = 0
     for line in _node_lines(dot):
         fills, fonts = _attr_values(line, "fillcolor"), _attr_values(line, "fontcolor")
@@ -218,7 +218,7 @@ def test_legend_buffer_row_appears_with_a_drawn_buffer(tmp_path: Path) -> None:
         tmp_path,
         "buffer_row",
         show_legend=True,
-        show_buffer_layers="always",
+        show_buffers="always",
     )
     rows = _legend_rows(dot)
     assert "buffer" in rows
@@ -237,8 +237,8 @@ def test_legend_intervention_row_only_on_an_intervened_render(tmp_path: Path) ->
     )
     plain = trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "plain"),
+        file_format="svg",
+        path=str(tmp_path / "plain"),
         show_legend=True,
     )
     assert not any(row.startswith("intervention") for row in _legend_rows(str(plain)))
@@ -246,8 +246,8 @@ def test_legend_intervention_row_only_on_an_intervened_render(tmp_path: Path) ->
     fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
     edited = fork.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(tmp_path / "edited"),
+        file_format="svg",
+        path=str(tmp_path / "edited"),
         show_legend=True,
     )
     rows = _legend_rows(str(edited))
@@ -276,8 +276,8 @@ def test_buffer_nodes_are_painted_with_the_legend_buffer_fill(skin: str, tmp_pat
         torch.randn(1, 3),
         tmp_path,
         f"{skin}_buffer",
-        vis_theme=skin,
-        show_buffer_layers="always",
+        theme=skin,
+        show_buffers="always",
     )
     cylinders = [line for line in _node_lines(dot) if "shape=cylinder" in line]
     assert cylinders
@@ -329,9 +329,7 @@ def test_header_advisory_names_no_local_directory(tmp_path: Path) -> None:
         # the advisory under test, not a defect.
         warnings.simplefilter("always")
         trace = tl.trace(_Branch(), torch.ones(1, 3))
-    dot = str(
-        trace.draw(vis_save_only=True, vis_fileformat="svg", vis_outpath=str(tmp_path / "adv"))
-    )
+    dot = str(trace.draw(vis_save_only=True, file_format="svg", path=str(tmp_path / "adv")))
     assert "capture advisory" in dot
     assert str(Path(__file__).resolve().parent) not in dot
     assert f"{Path(__file__).name}:" in dot
@@ -351,8 +349,8 @@ def test_as_node_intervention_keeps_the_site_inside_its_module_boxes(tmp_path: P
     dot = str(
         fork.draw(
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(tmp_path / "as_node"),
+            file_format="svg",
+            path=str(tmp_path / "as_node"),
             vis_intervention_mode="as_node",
         )
     )
@@ -377,7 +375,7 @@ def test_rank_path_page_follows_the_skin(skin: str, tmp_path: Path) -> None:
         torch.randn(1, 3),
         tmp_path,
         f"rank_{skin}",
-        vis_theme=skin,
+        theme=skin,
         vis_node_placement="rank",
     )
     page = THEME_PRESETS[skin].graph["bgcolor"]

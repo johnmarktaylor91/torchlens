@@ -114,7 +114,7 @@ def _capture_for_replay(model: nn.Module, x: torch.Tensor) -> tuple[Any, torch.T
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(save_arg_values=True, save_rng_states=True),
+        capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     return trace, model(x)
 

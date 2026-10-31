@@ -157,7 +157,7 @@ def test_opt_blocks_have_residual_facets(captured, impl: str) -> None:
     all three residual facets -- previously they produced NONE."""
 
     model, trace = captured("opt", impl)
-    menu = _block(trace, "opt", 0).facets.menu()
+    menu = _block(trace, "opt", 0).facets.declared()
     for name in ("resid_pre", "resid_mid", "resid_post"):
         assert menu[name].status == "available_now", (name, menu[name])
 
@@ -189,7 +189,7 @@ def test_opt_train_mode_resid_mid_found_via_branch_grammar(captured) -> None:
     torch.manual_seed(7)
     trace = tl.trace(model, _token_ids())
     block = trace.modules["model.decoder.layers.0"]
-    menu = block.facets.menu()
+    menu = block.facets.declared()
     assert menu["resid_mid"].status == "available_now"
     value = block.facets.resid_mid.value
     assert value.shape == block.facets.resid_pre.value.shape
@@ -224,7 +224,7 @@ def test_gpt2_unembed_bias_is_structurally_absent(captured, impl: str) -> None:
     """GPT-2's unembedding has no bias; the menu says so, typed."""
 
     model, trace = captured("gpt2", impl)
-    menu = trace.modules["self"].facets.menu()
+    menu = trace.modules["self"].facets.declared()
     assert menu["unembed_bias"].status == "structurally_absent"
 
 
@@ -292,7 +292,7 @@ def test_residual_menu_parity_across_attention_impls(captured, family: str) -> N
     statuses = {}
     for impl in IMPLS:
         model, trace = captured(family, impl)
-        menu = _block(trace, family, 0).facets.menu()
+        menu = _block(trace, family, 0).facets.declared()
         statuses[impl] = {
             name: menu[name].status for name in ("resid_pre", "resid_mid", "resid_post")
         }

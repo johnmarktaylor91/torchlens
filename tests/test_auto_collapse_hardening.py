@@ -267,9 +267,9 @@ def test_collapse_surface_survives_multipass_submodule(depth, tmp_path):
     for mode in ("auto", "max"):
         trace.draw(
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             collapse=mode,
-            vis_outpath=str(tmp_path / f"dc{depth}_{mode}"),
+            path=str(tmp_path / f"dc{depth}_{mode}"),
         )
 
 
@@ -299,9 +299,9 @@ def test_segment_collision_render_parity(tmp_path):
     out = tmp_path / "collision"
     trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         collapse="max",
-        vis_outpath=str(out),
+        path=str(out),
     )
     assert _svg_node_group_count(str(out) + ".svg") == plan.total
 
@@ -329,9 +329,9 @@ def test_multipass_op_segments_render_distinct(builder, tmp_path):
     out = tmp_path / "multipass_max"
     trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         collapse="max",
-        vis_outpath=str(out),
+        path=str(out),
     )
     assert _svg_node_group_count(str(out) + ".svg") == plan.total
 
@@ -547,9 +547,9 @@ def test_multipass_pass_occurrence_conservation_and_render_parity(builder, requi
         out = tmp_path / f"multipass_{str(mode).replace('.', '_')}"
         trace.draw(
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             collapse=mode,
-            vis_outpath=str(out),
+            path=str(out),
         )
         rendered = _svg_node_group_count(str(out) + ".svg")
         assert result.plan.total == rendered, (
@@ -899,9 +899,9 @@ def test_op_segment_condensed_auto_max_ladder_surfaces(kind, loops, tmp_path):
         out = tmp_path / f"segauto_{kind}_{loops}_{str(mode).replace('.', '_')}"
         trace.draw(
             vis_save_only=True,
-            vis_fileformat="svg",
+            file_format="svg",
             collapse=mode,
-            vis_outpath=str(out),
+            path=str(out),
         )
         plan = trace.collapse_plan(mode)
         rendered = _svg_node_group_count(str(out) + ".svg")
@@ -1223,9 +1223,9 @@ def test_op_segment_module_call_containment(kind, calls, tmp_path):
     out = tmp_path / f"containment_{kind}_{calls}"
     source = trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         collapse="max",
-        vis_outpath=str(out),
+        path=str(out),
     )
     assert _svg_node_group_count(str(out) + ".svg") == max_result.plan.total
     node_cluster, _ = _dot_node_clusters(source)
@@ -1297,9 +1297,9 @@ def test_op_segment_per_call_containment_pin(builder, address, calls, tmp_path):
     out = tmp_path / f"per_call_{address}"
     source = trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         collapse="max",
-        vis_outpath=str(out),
+        path=str(out),
     )
     node_cluster, members = _dot_node_clusters(source)
     for segment in descriptors.values():
@@ -1345,9 +1345,9 @@ def test_op_segment_sibling_merge_keeps_honest_top_level_lca(tmp_path):
     out = tmp_path / "sibling_merge"
     source = trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         collapse="max",
-        vis_outpath=str(out),
+        path=str(out),
     )
     node_cluster, _ = _dot_node_clusters(source)
     for segment in spanning:
@@ -1628,9 +1628,9 @@ def test_surfaced_exit_op_not_double_represented(tmp_path):
     out = tmp_path / "r25_seal"
     trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
+        file_format="svg",
         collapse="max",
-        vis_outpath=str(out),
+        path=str(out),
     )
     with open(str(out) + ".svg", encoding="utf-8") as handle:
         svg = handle.read()

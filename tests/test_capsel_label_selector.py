@@ -1,7 +1,7 @@
 """Regression tests for capture-time short/friendly label selector matching.
 
 These lock the fix for the class of capture-time ``save=`` selectors that resolve
-through the capture label universe (``tl.label``, ``tl.contains``, ``tl.regex``). At capture
+through the capture label universe (``tl.label``, ``tl.label_contains``, ``tl.label_matches``). At capture
 time the base ``RecordContext`` only carries the RAW label (e.g. ``"conv2d_2_4_raw"``);
 the short/friendly ``"{layer_type}_{type_index}"`` label (e.g. ``"conv2d_2"``) is
 synthesized only by the alias retry in
@@ -81,7 +81,7 @@ def test_anchored_regex_selector_matches_short_label() -> None:
     synthesized short label ``"conv2d_2"``, so this exercises the alias retry directly.
     """
 
-    trace, zero_match = _trace_capturing_warnings(tl.regex(r"^conv2d_2$"))
+    trace, zero_match = _trace_capturing_warnings(tl.label_matches(r"^conv2d_2$"))
 
     assert zero_match == []
     assert trace["conv2d_2"].has_saved_activation is True
@@ -89,9 +89,9 @@ def test_anchored_regex_selector_matches_short_label() -> None:
 
 
 def test_contains_selector_matches_short_label() -> None:
-    """``tl.contains("conv2d_2")`` selects the second conv without a zero-match warning."""
+    """``tl.label_contains("conv2d_2")`` selects the second conv without a zero-match warning."""
 
-    trace, zero_match = _trace_capturing_warnings(tl.contains("conv2d_2"))
+    trace, zero_match = _trace_capturing_warnings(tl.label_contains("conv2d_2"))
 
     assert zero_match == []
     assert trace["conv2d_2"].has_saved_activation is True
@@ -126,8 +126,8 @@ def test_alias_retry_covers_label_matching_selector_kinds() -> None:
     """
 
     assert _keep_op_needs_alias_retry(tl.label("conv2d_2")) is True
-    assert _keep_op_needs_alias_retry(tl.contains("conv2d")) is True
-    assert _keep_op_needs_alias_retry(tl.regex(r"^conv2d_2$")) is True
+    assert _keep_op_needs_alias_retry(tl.label_contains("conv2d")) is True
+    assert _keep_op_needs_alias_retry(tl.label_matches(r"^conv2d_2$")) is True
     assert _keep_op_needs_alias_retry(tl.where(lambda ctx: True)) is True
 
     assert _keep_op_needs_alias_retry(tl.func("conv2d")) is False

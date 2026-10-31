@@ -5,9 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..._robustness import UnsupportedTensorVariantError
-from ...capture.flops import compute_backward_flops, compute_forward_flops
-from ...data_classes.op import (
+from ..._data_classes.op import (
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
     _dtype_or_none,
@@ -20,15 +18,17 @@ from ...data_classes.op import (
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
-from ...utils._call_site import CALL_SITE_CLASS_MARKER
-from ...utils._torch_compat import (
+from ..._robustness import UnsupportedTensorVariantError
+from ..._utils._call_site import CALL_SITE_CLASS_MARKER
+from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
-from ...utils.tensor_utils import (
+from ..._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     safe_copy,
     safe_to,
 )
+from ...capture.flops import compute_backward_flops, compute_forward_flops
 from ._tl import (
     get_tensor_label,
     mark_detached_saved_activation,
@@ -42,7 +42,7 @@ from .tensor_tracking import (
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 if TYPE_CHECKING:
     from .ops import (
@@ -534,7 +534,7 @@ def _save_activation_fields(
         # run yet). Function-local import: this function is rebound into
         # backends.torch.ops globals (_split_rebind), so a new module-level
         # name would not resolve there.
-        from ...ir.summary_role import is_summary_transform
+        from ..._ir.summary_role import is_summary_transform
 
         reduce_only = not store_raw and is_summary_transform(activation_transform)
         budget_reservation = (
@@ -585,7 +585,7 @@ def _save_activation_fields(
                     # R36: a cpu_async copy of THIS tensor may still be in
                     # flight; a cross-device move would read the pinned host
                     # buffer before its D2H fence. Drain pending fences first.
-                    from ...utils.tensor_utils import synchronize_pending_cpu_async_copies
+                    from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
                     synchronize_pending_cpu_async_copies()
                 raw_out = safe_to(raw_out, fields_dict["output_device"])
@@ -649,7 +649,7 @@ def _save_activation_fields(
                 label=fields_dict.get("_layer_label_raw"),
             )
             if reduce_only:
-                from ...ir.summary_role import ensure_summary_output_owns_storage
+                from ..._ir.summary_role import ensure_summary_output_owns_storage
 
                 transformed_out = ensure_summary_output_owns_storage(transformed_out, t)
             fields_dict["transformed_out"] = transformed_out
@@ -723,7 +723,7 @@ def _stream_activation_fields(trace: "Trace", fields_dict: dict[str, Any]) -> No
     # R36: serializing a cpu_async payload to disk is a host-side byte read;
     # the pinned buffer may still be in flight. No-op unless async fence
     # events are pending.
-    from ...utils.tensor_utils import synchronize_pending_cpu_async_copies
+    from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
     synchronize_pending_cpu_async_copies()
 

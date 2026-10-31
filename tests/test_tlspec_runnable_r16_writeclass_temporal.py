@@ -26,8 +26,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -45,7 +45,7 @@ def _status(
     model: nn.Module, cap_x: torch.Tensor, run_x: torch.Tensor, tmp: Path
 ) -> PathFaithfulness:
     loaded = _save_load(model, cap_x, tmp)
-    result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return_diverged")
+    result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return")
     return result.report.path_faithfulness
 
 
@@ -189,7 +189,7 @@ def test_r16_no_over_trigger_readonly_numpy_then_consume_stays_verified(tmp_path
     x = torch.randn(2, 4)
     model = _ReadonlyNumpyThenConsume().eval()
     loaded = _save_load(model, x, tmp_path)
-    result = loaded.run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    result = loaded.run(inputs=x.clone(), seed=0, on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     with torch.no_grad():
         assert torch.allclose(model(x.clone()), result.output)
@@ -219,7 +219,7 @@ def test_r16_no_over_trigger_plain_model_stays_verified(tmp_path: Path) -> None:
     for run_x in (x, x + 7.0):
         model = _PlainMlp().eval()
         loaded = _save_load(model, x, tmp_path)
-        result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return_diverged")
+        result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return")
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
         with torch.no_grad():
             assert torch.allclose(model(run_x.clone()), result.output)

@@ -46,7 +46,7 @@ import torch
 from ..intervention.errors import BundleMemberError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from . import Bundle
 
 __all__ = [
@@ -277,7 +277,7 @@ def _relationship_repr(bundle: Bundle, member: str, reference: str) -> str | Non
     """Best-effort relationship name for the comparability axis (None on failure)."""
 
     try:
-        relationship = bundle.relationship(member, reference)
+        relationship = bundle.comparability(member, reference)
     except Exception:  # noqa: BLE001 - comparability is disclosure, never a gate here
         return None
     return getattr(relationship, "name", None) or str(relationship)

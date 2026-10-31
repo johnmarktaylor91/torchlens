@@ -27,8 +27,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._ir.selector_eval as selector_eval
 import torchlens.capture.predicates as predicates_mod
-import torchlens.ir.selector_eval as selector_eval
 import torchlens.user_funcs as user_funcs_mod
 
 _WIDTH = 6
@@ -223,7 +223,7 @@ def _recording_fingerprint(recording: Any) -> tuple[Any, ...]:
     ]
     by_address = {key: list(value) for key, value in recording.by_address.items()}
     by_label = {key: list(value) for key, value in recording.by_label.items()}
-    return rows, by_address, by_label, len(recording.records), recording.n_ops
+    return rows, by_address, by_label, len(recording.records), recording.num_ops
 
 
 def _trace_fingerprint(trace: Any) -> tuple[Any, ...]:

@@ -10,8 +10,8 @@ from torchlens._io.runnable_load import (
     ContextFieldInvalidError,
     DescriptorStructuralBoundError,
 )
+from torchlens._runnable import RunnableErrorCode
 from torchlens.errors._base import TorchLensError
-from torchlens.runnable import RunnableErrorCode
 
 
 def test_context_field_invalid_is_torchlens_error_with_code() -> None:

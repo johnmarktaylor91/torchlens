@@ -2,10 +2,10 @@
 
 cert9-f5 fix (round-8-prep peripheral MAJOR): ``first_input``/``first_input_spec``
 (``torchlens/semantic/recipes/_helpers.py``) read ``ModuleCall.forward_args``, which
-finalization ("GC-11", ``torchlens/postprocess/finalization.py``) unconditionally
+finalization ("GC-11", ``torchlens/_postprocess/finalization.py``) unconditionally
 nulls for the default ``torch_module`` module-identity mode -- the mode ordinary
 ``nn.Module`` tracing uses. That made the built-in ``"input"``/``"indices"`` facet
-falsely report "not captured -- re-run with save_arg_values=True" even when the
+falsely report "not captured -- re-run with save_args=True" even when the
 value WAS captured and was trivially readable via the op graph, exactly the
 fallback its sibling ``module_input_op_spec`` already implements.
 
@@ -32,7 +32,7 @@ def test_layer_norm_input_facet_resolves_on_default_backend() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     ln_module = log.modules["1"]
 
@@ -67,11 +67,11 @@ def test_rms_norm_input_facet_resolves_on_default_backend() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     norm_module = log.modules["1"]
 
-    assert norm_module.facets.recipe_source == "rms_norm"
+    assert norm_module.facets.function_source == "rms_norm"
     assert norm_module.facets.has("input")
     facet_value = norm_module.facets.input.value
     linear_out = log["linear_1_1"].out
@@ -86,7 +86,7 @@ def test_embedding_indices_facet_resolves_on_default_backend() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     embedding_module = log.modules["self"]
 
@@ -111,7 +111,7 @@ def test_first_input_spec_falls_back_when_forward_args_absent() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     ln_module = log.modules["1"]
 

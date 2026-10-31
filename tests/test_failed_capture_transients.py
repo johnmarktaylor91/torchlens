@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
 
 # Facade plumbing that legitimately owns no declared field (mirrors the
 # lockstep gate's allowance; kept local so this file stays self-contained).
@@ -61,7 +61,7 @@ class _BoomBase(nn.Module):
         raise _Interrupt("interrupted")
 
 
-def _failed_partial() -> tl.partial.PartialTrace:
+def _failed_partial() -> tl.types.PartialTrace:
     with pytest.raises(RuntimeError) as excinfo:
         tl.trace(_Boom().eval(), torch.ones(1, 3))
     partial = getattr(excinfo.value, "partial_log", None)
@@ -142,7 +142,7 @@ def test_partial_diagnostics_survive_the_scrub() -> None:
 def test_partial_trace_declares_a_field_policy() -> None:
     """R11: ``PartialTrace`` has a FIELD_POLICY so the lockstep gate can see it."""
 
-    from torchlens.partial import PartialTrace
+    from torchlens.types import PartialTrace
 
     policy = getattr(PartialTrace, "FIELD_POLICY", None)
     assert policy is not None, "PartialTrace must declare FIELD_POLICY"

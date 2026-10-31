@@ -21,12 +21,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import get_meta_item_guard_support
 from torchlens.capture.structure_only import (
     MetaKernelUnavailableError,
     ValueDependentBranchError,
 )
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import get_meta_item_guard_support
 
 STRUCTURE = CaptureOptions(structure_only=True)
 

@@ -9,18 +9,27 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ..._state import pause_logging
-from ..._validation_argument_references import active_argument_references
-from ...capture.predicates import (
-    build_op_record_context,
-)
-from ...data_classes.op import (
+from ..._data_classes.op import (
     _dtype_or_none,
     _memory_or_none,
     _shape_or_none,
     apply_transform,
     train_mode_tripwire_armed,
     validate_train_mode_transform_output,
+)
+from ..._ir.op_record import amend_lookback_retention
+from ..._ir.predicate import RetroactiveCaptureDecision
+from ..._ir.refs import TensorRef
+from ..._state import pause_logging
+from ..._utils.arg_handling import copy_arg_tree
+from ..._utils.tensor_utils import (
+    get_memory_amount_from_metadata,
+    safe_copy,
+    safe_to,
+)
+from ..._validation_argument_references import active_argument_references
+from ...capture.predicates import (
+    build_op_record_context,
 )
 from ...fastlog._storage_resolver import _resolve_storage
 from ...fastlog.exceptions import PredicateError
@@ -33,21 +42,12 @@ from ...fastlog.types import (
 from ...intervention.selectors import (
     BaseSelector,
 )
-from ...ir.op_record import amend_lookback_retention
-from ...ir.predicate import RetroactiveCaptureDecision
-from ...ir.refs import TensorRef
-from ...utils.arg_handling import copy_arg_tree
-from ...utils.tensor_utils import (
-    get_memory_amount_from_metadata,
-    safe_copy,
-    safe_to,
-)
 from ._tl import (
     mark_detached_saved_activation,
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 from .ops import (
     _RetainedLookbackPayload,
@@ -160,7 +160,7 @@ def _copy_saved_arg_tree(arg: Any, retained: bool = False) -> Any:
     """Copy one ``save_arg_values`` argument tree, as the pre-call and saved snapshots do.
 
     Outside forward validation's own capture this is exactly
-    :func:`~torchlens.utils.arg_handling.copy_arg_tree`. Inside it, a plain
+    :func:`~torchlens._utils.arg_handling.copy_arg_tree`. Inside it, a plain
     parameter argument (or a tensor on a parameter's storage), bare or in a
     flat list or tuple, is replaced by an alias of the same storage and version
     counter instead of a copy; see :mod:`torchlens._validation_argument_references`
@@ -587,7 +587,7 @@ def _append_trace_predicate_context(trace: "Trace", ctx: RecordContext) -> None:
 def _trace_followed_by_candidate_selector(trace: "Trace") -> BaseSelector | None:
     """Return the candidate selector for ``candidate & followed_by(successor)``."""
 
-    from ...ir.selector_eval import split_followed_by_conjunction
+    from ..._ir.selector_eval import split_followed_by_conjunction
 
     options = getattr(trace, "_predicate_save_options", None)
     predicate = None if options is None else options.keep_op

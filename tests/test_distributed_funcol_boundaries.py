@@ -23,7 +23,7 @@ from torchlens.backends.torch.funcol import (  # noqa: E402
     FUNCOL_BOUNDARY_SCHEMA,
     active_funcol_session,
 )
-from torchlens.distributed import _lifecycle as lifecycle, has_vetted_snapshot  # noqa: E402
+from torchlens.distributed import _lifecycle as lifecycle, is_vetted_build  # noqa: E402
 from torchlens.errors._base import CompatibilityError  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
@@ -32,16 +32,16 @@ pytestmark = pytest.mark.skipif(
 )
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
-# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# census-vetted torch build exists (torchlens.distributed.is_vetted_build());
 # on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
 # Applied to the classes/tests that call a real arm(); test_unarmed_capture_
 # is_status_quo_for_funcol and test_dead_session_kernel_executes_real_wait_
 # and_skips_bookkeeping deliberately exercise the UNARMED/no-session path and
 # must keep running everywhere.
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 
@@ -302,8 +302,8 @@ class TestFuncolRefusalParity:
     def test_merge_refuses_funcol_bearing_core_typed(self, gloo_world):
         """C1 merge scope: a funcol-bearing rank core refuses MERGE_SCOPE_UNSUPPORTED."""
 
-        from torchlens.merged._errors import MergeInputError
-        from torchlens.merged._evidence import extract_rank_evidence
+        from torchlens._merged._errors import MergeInputError
+        from torchlens._merged._evidence import extract_rank_evidence
 
         lifecycle.arm()
         log = tl.trace(WaitedFuncol(), torch.ones(3))
@@ -326,7 +326,7 @@ class TestFuncolRefusalParity:
         model = WaitedFuncol()  # held alive: the refusal under test is the
         log = tl.trace(model, torch.ones(3))  # boundary one, not GC state
         with pytest.raises(RunnablePreflightError) as excinfo:
-            tl.save(log, str(tmp_path / "funcol.tlspec"), level="runnable")
+            log.save(str(tmp_path / "funcol.tlspec"), level="runnable")
         codes = {diagnostic.code for diagnostic in excinfo.value.fields["diagnostics"]}
         assert "collective_boundary_runnable_unsupported" in codes
 
@@ -365,13 +365,13 @@ class TestFuncolPersistence:
     def test_save_load_round_trips_the_boundary_disclosure(self, gloo_world, tmp_path):
         """The v0 payload survives save/load; refusal parity holds on the load."""
 
-        from torchlens.merged._errors import MergeInputError
-        from torchlens.merged._evidence import extract_rank_evidence
+        from torchlens._merged._errors import MergeInputError
+        from torchlens._merged._evidence import extract_rank_evidence
 
         lifecycle.arm()
         log = tl.trace(WaitedFuncol(), torch.ones(3))
         path = tmp_path / "funcol-core.tlspec"
-        tl.save(log, str(path))
+        log.save(str(path))
         loaded = tl.load(str(path))
         entries = _funcol_boundaries(loaded)
         assert len(entries) == 1
@@ -450,11 +450,11 @@ class TestFuncolSessionLeak:
         dead session's bookkeeping is the honest degradation.
         """
 
+        from torchlens._utils._torch_compat import get_funcol_wait_redispatch
         from torchlens.backends.torch.funcol import (
             _FuncolCaptureSession,
             _make_observed_wait_tensor,
         )
-        from torchlens.utils._torch_compat import get_funcol_wait_redispatch
 
         redispatch = get_funcol_wait_redispatch()
         if redispatch is None:

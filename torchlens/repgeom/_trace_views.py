@@ -64,7 +64,7 @@ def mds_evolution(
     save: Any | None = None,
     *,
     metric: DistanceMetric = "euclidean",
-    min_n: int = 8,
+    min_stimuli: int = 8,
     align: bool = True,
 ) -> MDSEvolution:
     """Compute and annotate per-layer 2D MDS coordinates.
@@ -78,7 +78,7 @@ def mds_evolution(
         process. When omitted, all layers with saved activations are used.
     metric:
         Activation distance metric passed to :func:`activation_distance_matrix`.
-    min_n:
+    min_stimuli:
         Minimum number of stimuli required by :func:`classical_mds`.
     align:
         Whether to Procrustes-align each processed embedding to the previous
@@ -106,7 +106,7 @@ def mds_evolution(
         try:
             distances = activation_distance_matrix(activations, metric=metric)
             coords, _info = classical_mds(
-                distances, n_components=2, min_n=min_n, input_kind="distances"
+                distances, n_components=2, min_stimuli=min_stimuli, input_kind="distances"
             )
         except ValueError as exc:
             raise ValueError(f"mds_evolution failed for site {key!r}: {exc}") from exc
@@ -126,7 +126,7 @@ def rdm_evolution(
     save: Any | None = None,
     *,
     metric: DistanceMetric = "euclidean",
-    min_n: int = 2,
+    min_stimuli: int = 2,
 ) -> RDMEvolution:
     """Compute and annotate per-layer representational dissimilarity matrices.
 
@@ -139,7 +139,7 @@ def rdm_evolution(
         process. When omitted, all layers with saved activations are used.
     metric:
         Activation distance metric passed to :func:`activation_distance_matrix`.
-    min_n:
+    min_stimuli:
         Minimum number of stimuli required for each RDM. Must be at least 2.
 
     Returns
@@ -163,8 +163,8 @@ def rdm_evolution(
         fails metric preconditions.
     """
 
-    if min_n < 2:
-        raise ValueError("min_n must be at least 2 for rdm_evolution.")
+    if min_stimuli < 2:
+        raise ValueError("min_stimuli must be at least 2 for rdm_evolution.")
 
     selected = _selected_activation_sites(trace, save, verb="rdm_evolution", expand_passes=True)
     matrices_by_key: _PayloadBasisDict = _PayloadBasisDict()
@@ -176,10 +176,10 @@ def rdm_evolution(
             matrix = activation_distance_matrix(activations, metric=metric)
         except ValueError as exc:
             raise ValueError(f"rdm_evolution failed for site {key!r}: {exc}") from exc
-        if matrix.shape[0] < min_n:
+        if matrix.shape[0] < min_stimuli:
             raise ValueError(
                 f"rdm_evolution has too few stimuli for {key!r}: "
-                f"got {matrix.shape[0]}, need at least {min_n}."
+                f"got {matrix.shape[0]}, need at least {min_stimuli}."
             )
         staged[f"rdm:{key}"] = torch.from_numpy(matrix.copy())
         matrices_by_key[key] = matrix.copy()
@@ -194,7 +194,7 @@ def scree_evolution(
     save: Any | None = None,
     *,
     metric: DistanceMetric = "euclidean",
-    min_n: int = 3,
+    min_stimuli: int = 3,
     variance_threshold: float = 0.90,
 ) -> ScreeEvolution:
     """Compute and annotate per-layer scree eigenvalue spectra.
@@ -208,7 +208,7 @@ def scree_evolution(
         process. When omitted, all layers with saved activations are used.
     metric:
         Activation distance metric passed to :func:`activation_distance_matrix`.
-    min_n:
+    min_stimuli:
         Minimum number of stimuli required for each scree spectrum.
     variance_threshold:
         Validated threshold for consistency with render-time callouts. The
@@ -235,7 +235,7 @@ def scree_evolution(
     for key, _site, activations, payload_kind in selected:
         eigenvalues_by_key.payload_basis[key] = payload_kind
         try:
-            eigenvalues = scree(activations, metric=metric, min_n=min_n)
+            eigenvalues = scree(activations, metric=metric, min_stimuli=min_stimuli)
         except ValueError as exc:
             raise ValueError(f"scree_evolution failed for site {key!r}: {exc}") from exc
         staged[f"scree:{key}"] = torch.from_numpy(eigenvalues)

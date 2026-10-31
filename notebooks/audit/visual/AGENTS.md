@@ -115,7 +115,7 @@ it is in this pack:
     `trace.set(...)`. Live
     `intervene=` fire records do not style nodes.
   - raw-input thumbnails need `tl.trace(model, raw,
-    capture=CaptureOptions(transform=fn))` (raw input
+    capture=CaptureOptions(input_transform=fn))` (raw input
     is only stored when a transform produced the model-ready tensor).
   - container labels/collapsed need `intervention_ready=True`;
     `show_containers='nodes'` needs `capture_container_structure=True`;

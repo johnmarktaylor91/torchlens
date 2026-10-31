@@ -33,7 +33,13 @@ def test_real_names_and_dir_contract() -> None:
 
     import importlib.util
 
-    expected: list[str] = ["compare"]  # ungated: numpy-only (neuro.1 row 4)
+    expected: list[str] = [
+        "ExtractionPlan",
+        "PlanSite",
+        "compare",
+        "export_npz",
+        "plan_extraction",
+    ]  # ungated: numpy-only
     if importlib.util.find_spec("rsatoolbox") is not None:
         expected += ["datasets", "rdms"]
     if importlib.util.find_spec("brainscore_vision") is not None:
@@ -126,7 +132,7 @@ _REDIRECT_TARGETS: dict[str, str] = {
     "effective_dimensionality": "repgeom.effective_dimensionality",
     "procrustes_align": "repgeom.procrustes_align",
     "extract_dataset": "extract_dataset",
-    "load_extraction": "load_extraction",
+    "load_extraction": "load",
     "brain_score": "bridge.brain_score",
 }
 

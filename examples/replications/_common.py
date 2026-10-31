@@ -15,8 +15,6 @@ from typing import Any
 
 import torch
 
-import torchlens as tl
-
 #: Public GPT-2 small checkpoint and the exact Hub revision every replication uses.
 MODEL_ID = "openai-community/gpt2"
 MODEL_REVISION = "607a30d783dfa663caf39e06633721c8d4cfcd7e"  # pragma: allowlist secret
@@ -151,7 +149,7 @@ def save_trace(trace: Any, out_dir: Path | None, stem: str) -> Path | None:
         return None
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     path = Path(out_dir) / f"{stem}.tlspec"
-    tl.save(trace, path, level="portable", overwrite=True)
+    trace.save(path, level="portable", overwrite=True)
     return path
 
 

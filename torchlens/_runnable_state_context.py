@@ -10,16 +10,10 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from torchlens._runnable import ContractCheck
+
 from ._io._torch_symbols import torch_attr
-from ._runnable_state import (
-    _OUTPUT_COUNT_FLOOR,
-    state_metadata_full_violations,
-)
-from .errors import (
-    RunPreconditionError,
-)
-from .runnable import (
-    ContractCheck,
+from ._runnable import (
     RunnableCallDescriptor,
     RunnableErrorCode,
     SparseRunDescriptor,
@@ -27,7 +21,14 @@ from .runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from .utils._torch_compat import tensor_version_or_none
+from ._runnable_state import (
+    _OUTPUT_COUNT_FLOOR,
+    state_metadata_full_violations,
+)
+from ._utils._torch_compat import tensor_version_or_none
+from .errors import (
+    RunPreconditionError,
+)
 
 if TYPE_CHECKING:
     from ._runnable_execution import (
@@ -309,7 +310,7 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
     -- never a silent ambient passthrough.
     """
 
-    from .utils._torch_compat import (
+    from ._utils._torch_compat import (
         apply_ambient_execution_context,
         restore_fp32_precision_controls,
         snapshot_ambient_execution_context,
@@ -354,7 +355,7 @@ def _ambient_execution_context_restored(ambient: Any) -> Any:
             device_scope = torch.device(str(ambient.default_device))
         except (RuntimeError, TypeError, ValueError) as exc:
             raise _context_unavailable_error("default_device", str(exc)) from exc
-    from .utils._torch_compat import get_current_function_mode_stack
+    from ._utils._torch_compat import get_current_function_mode_stack
 
     stack_before = get_current_function_mode_stack()
     depth_before = len(list(stack_before)) if stack_before is not None else None
@@ -430,7 +431,7 @@ def _call_execution_context_entered(context: Any) -> Any:
     un-enterable recorded context is a typed refusal, never a raw torch error.
     """
 
-    from .utils._torch_compat import autocast_is_enabled
+    from ._utils._torch_compat import autocast_is_enabled
 
     stack: list[Any] = []
     try:
@@ -528,7 +529,7 @@ def _fake_tensor_mode_class() -> type[Any] | None:
     silently vanishing.
     """
 
-    from .utils._torch_compat import get_fake_tensor_mode_class
+    from ._utils._torch_compat import get_fake_tensor_mode_class
 
     return get_fake_tensor_mode_class()
 

@@ -8,7 +8,7 @@ re-execution acceptance (verdict ``edge_intervention_boundary``, never
 "exempted"), the skip-shaped-acceptance meta-test, the v7 persistence
 boundary (level-exhaustive refusal, two-conjunct key, precedence over
 ``artifact_save_level_unsupported``, switch-on round-trip with the
-pre-release marker), ``trace.edges``, EDGE algebra rows, and the OBSERVE
+pre-release marker), ``trace.graph.edges``, EDGE algebra rows, and the OBSERVE
 masked-read kwarg.
 """
 
@@ -24,7 +24,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.selection import SelectionError, edge_address_of
+from torchlens._selection import edge_address_of
+from torchlens.errors import SelectionError
 from torchlens.validation.core import _check_edge_intervention_boundary
 
 
@@ -45,7 +46,7 @@ def _capture():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
     return model, x, trace
 
@@ -60,20 +61,20 @@ def capture():
 
 
 def _edge(trace, parent="relu_1_2"):
-    return next(e for e in trace.edges if e.parent_label == parent)
+    return next(e for e in trace.graph.edges if e.parent_label == parent)
 
 
 def test_trace_edges_family_and_provenance_gate(capture):
     model, x, trace = capture
-    labels = [(e.parent_label, e.child_label) for e in trace.edges]
+    labels = [(e.parent_label, e.child_label) for e in trace.graph.edges]
     assert ("relu_1_2", "conv2d_2_3") in labels
     # identity-stable rows: same record objects across reads
-    assert trace.edges[0] is trace.edges[0]
+    assert trace.graph.edges[0] is trace.graph.edges[0]
 
     torch.manual_seed(0)
     plain = tl.trace(_Net(), torch.randn(1, 1, 12, 12))
     with pytest.raises(SelectionError) as excinfo:
-        _ = plain.edges
+        _ = plain.graph.edges
     assert excinfo.value.fields["code"] == "edge_provenance_unavailable"
 
 
@@ -85,7 +86,7 @@ def test_edge_algebra_rows(capture):
     assert union.kind == "EDGE" and len(union) == 2
     # complement within the trace's dataflow edge family (well-defined universe)
     complement = ~union
-    assert len(complement) == len(trace.edges) - 2
+    assert len(complement) == len(trace.graph.edges) - 2
     # ACT x EDGE refuses via the closed matrix
     with pytest.raises(SelectionError) as excinfo:
         a | tl.units("relu_1_2", [(0, 0, 0, 0)])
@@ -99,8 +100,8 @@ def _selection_for_kind_state(trace: tl.Trace, kind: str, state: str) -> Any:
         first = tl.units("relu_1_2", [(0, 0, 0, 0)])
         second = trace["conv2d_1_1"].__selection__()
     elif kind == "PARAM":
-        first = tl.params("c1.weight")
-        second = tl.params("c2.weight")
+        first = tl.param("c1.weight")
+        second = tl.param("c2.weight")
     else:
         first = _edge(trace).__selection__()
         second = _edge(trace, parent="conv2d_2_3").__selection__()
@@ -116,7 +117,7 @@ def _selection_for_kind_state(trace: tl.Trace, kind: str, state: str) -> Any:
 def _selection_family(selection: Any) -> frozenset[Any]:
     """Return the touched-site family of one resolved selection."""
 
-    return frozenset(entry.site_key for entry in selection)
+    return frozenset(entry.key for entry in selection)
 
 
 @pytest.mark.parametrize("operator", ["or", "and", "sub"])
@@ -354,8 +355,8 @@ def test_edge_save_refusal_refires_if_schema_regresses(capture, tmp_path, monkey
 
     from dataclasses import replace
 
+    from torchlens._data_classes.op import Op
     from torchlens._io import FieldPolicy
-    from torchlens.data_classes.op import Op
 
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
@@ -365,12 +366,12 @@ def test_edge_save_refusal_refires_if_schema_regresses(capture, tmp_path, monkey
     )
     for index, level in enumerate(("audit", "executable_with_callables", "portable", "runnable")):
         with pytest.raises(Exception) as excinfo:
-            tl.save(fork, tmp_path / f"edge_{index}.tlspec", level=level)
+            fork.save(tmp_path / f"edge_{index}.tlspec", level=level)
         assert getattr(excinfo.value, "fields", {}).get("code") == (
             "edge_intervention_save_unsupported"
         ), level
     # non-edge saves are untouched even under the regressed schema
-    tl.save(trace, tmp_path / "clean.tlspec", level="audit")
+    trace.save(tmp_path / "clean.tlspec", level="audit")
 
 
 def test_edge_carriers_persist_on_plain_v8_round_trip(capture, tmp_path):
@@ -383,7 +384,7 @@ def test_edge_carriers_persist_on_plain_v8_round_trip(capture, tmp_path):
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
     path = tmp_path / "edge_plain.tlspec"
-    tl.save(fork, path, level="portable")
+    fork.save(path, level="portable")
     loaded = tl.load(path)
     child = loaded["conv2d_2_3"].ops[0]
     assert child.edge_substitutions and child.edge_replacement_stamps
@@ -409,8 +410,8 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
 
     from dataclasses import replace
 
+    from torchlens._data_classes.op import Op
     from torchlens._io import FieldPolicy
-    from torchlens.data_classes.op import Op
 
     model, x, trace = capture
     fork = trace.fork()
@@ -423,12 +424,12 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
             field_name,
             replace(Op.FIELD_POLICY[field_name], portable_policy=FieldPolicy.DROP),
         )
-    monkeypatch.setitem(Op.PORTABLE_STATE_SPEC, "edge_substitutions", FieldPolicy.DROP)
-    monkeypatch.setitem(Op.PORTABLE_STATE_SPEC, "edge_replacement_stamps", FieldPolicy.DROP)
+    monkeypatch.setitem(Op._PORTABLE_STATE_SPEC, "edge_substitutions", FieldPolicy.DROP)
+    monkeypatch.setitem(Op._PORTABLE_STATE_SPEC, "edge_replacement_stamps", FieldPolicy.DROP)
     path = tmp_path / "forced_edge.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        tl.save(fork, path, level="executable_with_callables")
+        fork.save(path, level="executable_with_callables")
     loaded = tl.load(path)
     loaded_child = loaded["conv2d_2_3"].ops[0]
     assert not loaded_child.edge_substitutions
@@ -447,7 +448,7 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
 def test_tap_masked_values(capture):
     model, x, trace = capture
     selection = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)]).resolve(trace)
-    observer = tl.tap(selection)
+    observer = tl.observers.tap(selection)
     fork = trace.fork()
     fork.attach_hooks("relu_1_2", observer, confirm_mutation=True)
     fork.push()

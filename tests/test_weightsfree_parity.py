@@ -107,7 +107,7 @@ def test_capture_twice_identical_digests() -> None:
     x = torch.empty(3, 2, device="meta")
     tr_one = weightsfree_trace(meta, x)
     tr_two = weightsfree_trace(meta, x)
-    assert tl.hash.trace(tr_one) == tl.hash.trace(tr_two)
+    assert tl.fingerprint.trace(tr_one) == tl.fingerprint.trace(tr_two)
 
 
 def test_meta_capture_is_complete_and_value_free() -> None:

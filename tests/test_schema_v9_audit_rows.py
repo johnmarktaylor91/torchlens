@@ -6,7 +6,7 @@ Three families land in the ONE closed ``intervention_audit`` row grammar:
    selection-door writer already emits (A04 dense-subspace point-of-use
    stamp). Pre-v9 the validator refused it, so a saved selection-intervened
    artifact refused ITS OWN load (C03 measured defect).
-2. PARAM rows (param-substitution ``do(tl.params(...), edit)``) are admitted
+2. PARAM rows (param-substitution ``do(tl.param(...), edit)``) are admitted
    with their shipped ``params[]``/``disclosure`` payload. Same defect class.
 3. EVENT rows -- the ``intervention_event_v2`` transaction envelope as a
    first-class audit row kind, with the OPTIONAL hash-chain extension
@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.forgery_validation import _validate_audit_row
 
 _DIGEST = hashlib.sha256(b"schema-v9-audit").hexdigest()
@@ -72,7 +72,7 @@ def test_selection_intervened_artifact_loads_its_own_save(log, tmp_path):
         "fixture must exercise the shipped per-site source disclosure"
     )
     path = tmp_path / "selection_intervened.tlspec"
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
     loaded_rows = [row for row in loaded.intervention_audit if row.get("kind") == "ACT"]
     assert any("source" in site for row in loaded_rows for site in row.get("sites", ()))
@@ -83,10 +83,10 @@ def test_param_intervened_artifact_loads_its_own_save(log, tmp_path):
     """PARAM rows (parameter substitution) round-trip through load."""
 
     fork = log.fork()
-    fork.do(tl.params("c1.weight"), tl.scale(0.5))
+    fork.do(tl.param("c1.weight"), tl.scale(0.5))
     assert any(row.get("kind") == "PARAM" for row in fork.intervention_audit)
     path = tmp_path / "param_intervened.tlspec"
-    tl.save(fork, path)
+    fork.save(path)
     loaded = tl.load(path)
     loaded_rows = [row for row in loaded.intervention_audit if row.get("kind") == "PARAM"]
     assert loaded_rows, "PARAM audit row must survive the round trip"
@@ -164,9 +164,9 @@ def _event_row(**overrides):
 def test_act_site_source_is_optional_and_string_typed():
     assert _validate_audit_row(0, _act_row()) is not None
     assert _validate_audit_row(0, _act_row(source="subspace basis sha256:ab")) is not None
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _validate_audit_row(0, _act_row(source=7))
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _validate_audit_row(0, _act_row(unexpected="x"))
 
 
@@ -175,19 +175,19 @@ def test_param_row_grammar_is_closed():
     digest, edit, targets = _validate_audit_row(0, _param_row())
     assert digest == _DIGEST and edit == "scale"
     assert ("PARAM", "c1.weight") in targets
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _validate_audit_row(0, _param_row(disclosure=None))
     bad = _param_row()
     bad["params"][0]["param_address"] = ""
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _validate_audit_row(0, bad)
     bad = _param_row()
     bad["params"][0]["occurrences"][0]["value_digest"] = "nope"
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _validate_audit_row(0, bad)
     bad = _param_row()
     bad["params"][0]["extra"] = 1
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         _validate_audit_row(0, bad)
 
 
@@ -213,7 +213,7 @@ def test_event_row_grammar_and_chain_extension():
         {"prev_event_digest": "short"},
         {"surprise": "field"},
     ):
-        with pytest.raises(TorchLensIOError):
+        with pytest.raises(ArtifactError):
             _validate_audit_row(0, _event_row(**mutation))
 
 
@@ -240,11 +240,11 @@ def test_param_selection_recipe_form_is_admitted_and_closed():
         {"note": 3},
         {"edge_address": "not a tuple"},
     ):
-        with pytest.raises(TorchLensIOError):
+        with pytest.raises(ArtifactError):
             _validate_selection_recipe(0, {**recipe, **mutation})
 
 
 def test_unknown_kind_still_refuses_typed():
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         _validate_audit_row(0, {"kind": "MYSTERY"})
     assert "'ACT', 'EDGE', 'PARAM', or 'EVENT'" in str(excinfo.value)

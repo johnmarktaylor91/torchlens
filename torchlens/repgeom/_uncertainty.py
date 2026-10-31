@@ -47,7 +47,7 @@ class ScoreInterval:
         Percentile interval bounds over the resampled scores.
     confidence:
         Nominal coverage of ``[low, high]`` (for example ``0.95``).
-    n_resamples:
+    num_resamples:
         Resamples drawn.
     n_valid:
         Resamples whose score was finite; the interval uses only these.
@@ -66,8 +66,8 @@ class ScoreInterval:
     low: float
     high: float
     confidence: float
-    n_resamples: int
-    n_valid: int
+    num_resamples: int
+    num_valid_resamples: int
     seed: int
     basis: str = STIMULUS_BOOTSTRAP_BASIS
     similarity_repository_id: str | None = None
@@ -93,8 +93,8 @@ class ScoreInterval:
             "high": self.high,
             "width": self.width,
             "confidence": self.confidence,
-            "n_resamples": self.n_resamples,
-            "n_valid": self.n_valid,
+            "num_resamples": self.num_resamples,
+            "n_valid": self.num_valid_resamples,
             "seed": self.seed,
             "basis": self.basis,
             "similarity_repository_id": self.similarity_repository_id,
@@ -107,7 +107,7 @@ class BootstrapSettings:
 
     Attributes
     ----------
-    n_resamples:
+    num_resamples:
         Resamples to draw (at least 2).
     seed:
         Seed for ``numpy.random.default_rng``.
@@ -120,16 +120,20 @@ class BootstrapSettings:
         On an invalid setting.
     """
 
-    n_resamples: int = 1000
+    num_resamples: int = 1000
     seed: int = 0
     confidence: float = 0.95
 
     def __post_init__(self) -> None:
         """Validate the settings."""
 
-        n_resamples, seed = self.n_resamples, self.seed
-        if isinstance(n_resamples, bool) or not isinstance(n_resamples, int) or n_resamples < 2:
-            raise ValueError(f"n_resamples must be an integer >= 2; got {n_resamples!r}.")
+        num_resamples, seed = self.num_resamples, self.seed
+        if (
+            isinstance(num_resamples, bool)
+            or not isinstance(num_resamples, int)
+            or num_resamples < 2
+        ):
+            raise ValueError(f"num_resamples must be an integer >= 2; got {num_resamples!r}.")
         if not 0.0 < float(self.confidence) < 1.0:
             raise ValueError(
                 f"confidence must lie strictly between 0 and 1; got {self.confidence!r}."
@@ -170,13 +174,13 @@ def bootstrap_interval(
     """
 
     rng = np.random.default_rng(int(settings.seed))
-    indices = rng.integers(0, n_stimuli, size=(settings.n_resamples, n_stimuli))
+    indices = rng.integers(0, n_stimuli, size=(settings.num_resamples, n_stimuli))
     values = np.array([statistic(row) for row in indices], dtype=np.float64)
     finite = values[np.isfinite(values)]
     tail = (1.0 - float(settings.confidence)) / 2.0
     # A resample with fewer than two distinct stimuli is constant; its
     # statistic is NaN and it is counted out of n_valid.
-    if finite.size * 2 < settings.n_resamples:
+    if finite.size * 2 < settings.num_resamples:
         low = high = math.nan
     else:
         low, high = (float(v) for v in np.quantile(finite, [tail, 1.0 - tail]))
@@ -185,8 +189,8 @@ def bootstrap_interval(
         low=low,
         high=high,
         confidence=float(settings.confidence),
-        n_resamples=int(settings.n_resamples),
-        n_valid=int(finite.size),
+        num_resamples=int(settings.num_resamples),
+        num_valid_resamples=int(finite.size),
         seed=int(settings.seed),
         similarity_repository_id=similarity_repository_id,
     )
@@ -293,19 +297,19 @@ def _square_rdm(value: Any, name: str) -> np.ndarray:
     return array
 
 
-def rdm_compare_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, the rdm_compare method, and the three bootstrap knobs, documented one-to-one
+def compare_rdms_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, the rdm_compare method, and the three bootstrap knobs, documented one-to-one
     rdm_a: Any,
     rdm_b: Any,
     method: str = "spearman",
     *,
-    n_resamples: int = 1000,
+    num_resamples: int = 1000,
     seed: int = 0,
     confidence: float = 0.95,
 ) -> ScoreInterval:
     """Return :func:`rdm_compare` with a stimulus-bootstrap interval beside it.
 
     DOCUMENTED-UNSTABLE. The point ``score`` is exactly
-    ``tl.repgeom.rdm_compare(rdm_a, rdm_b, method)``. Each resample draws
+    ``tl.repgeom.compare_rdms(rdm_a, rdm_b, method)``. Each resample draws
     stimuli with replacement, takes the strict upper triangle of both
     resampled RDMs, drops the entries that pair a stimulus with a copy of
     itself, and recomputes the comparison. The interval describes the
@@ -323,7 +327,7 @@ def rdm_compare_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, t
         copies of one stimulus pair that a resample repeats are never
         compared with each other (they are one observation); every other
         comparison is weighted by the copies' multiplicities.
-    n_resamples:
+    num_resamples:
         Bootstrap resamples (at least 2).
     seed:
         Seed for ``numpy.random.default_rng``; the same seed gives the same
@@ -343,9 +347,9 @@ def rdm_compare_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, t
         method, or invalid bootstrap settings.
     """
 
-    from ._geometry import rdm_compare
+    from ._geometry import compare_rdms
 
-    settings = BootstrapSettings(n_resamples=n_resamples, seed=seed, confidence=confidence)
+    settings = BootstrapSettings(num_resamples=num_resamples, seed=seed, confidence=confidence)
     square_a = _square_rdm(rdm_a, "rdm_a")
     square_b = _square_rdm(rdm_b, "rdm_b")
     if square_a.shape != square_b.shape:
@@ -358,7 +362,7 @@ def rdm_compare_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, t
             f"Unknown rdm_compare_interval method: {method!r} (use 'pearson', 'spearman', "
             "or 'kendall')."
         )
-    score = rdm_compare(square_a, square_b, method=method)
+    score = compare_rdms(square_a, square_b, method=method)
     n = square_a.shape[0]
     rows, cols = np.triu_indices(n, k=1)
 
@@ -416,7 +420,7 @@ def cka_interval(
     a: Any,
     b: Any,
     *,
-    n_resamples: int = 1000,
+    num_resamples: int = 1000,
     seed: int = 0,
     confidence: float = 0.95,
 ) -> ScoreInterval:
@@ -438,7 +442,7 @@ def cka_interval(
     a, b:
         Representations with the same first (stimulus) axis; trailing axes
         are flattened.
-    n_resamples, seed, confidence:
+    num_resamples, seed, confidence:
         Bootstrap settings (see :func:`rdm_compare_interval`).
 
     Returns
@@ -453,7 +457,7 @@ def cka_interval(
         input, or invalid bootstrap settings.
     """
 
-    settings = BootstrapSettings(n_resamples=n_resamples, seed=seed, confidence=confidence)
+    settings = BootstrapSettings(num_resamples=num_resamples, seed=seed, confidence=confidence)
     matrix_a = _as_matrix(a, "a")
     matrix_b = _as_matrix(b, "b")
     if matrix_a.shape[0] != matrix_b.shape[0]:

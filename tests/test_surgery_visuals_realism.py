@@ -21,7 +21,7 @@ from torchlens.visualization.surgery_visuals import surgery_census
 
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True)
+_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
 
 _REPLAY_WORDING = "exit values were substituted; the interior was not replayed"
 _LIVE_WORDING = "the original op ran; edited values replaced its output after execution"
@@ -53,8 +53,8 @@ def _render_with_sidecar(trace, tmp_path: Path, stem: str) -> tuple[str, str]:
     outpath = str(tmp_path / stem)
     render_surgery(
         trace,
-        vis_outpath=outpath,
-        vis_fileformat="svg",
+        path=outpath,
+        file_format="svg",
         vis_save_only=True,
     )
     svg = (tmp_path / f"{stem}.svg").read_text()
@@ -132,7 +132,7 @@ def test_resnet50_block_splice_box_and_marks(tmp_path) -> None:
         x,
         intervene=tl.when(
             tl.in_module("layer1.0") & tl.func("relu"),
-            tl.splice_module(torch.nn.ReLU(), input="out"),
+            tl.splice_module(torch.nn.ReLU(), input_route="out"),
         ),
         capture=tl.options.CaptureOptions(intervention_ready=True, log_injections=True),
     )

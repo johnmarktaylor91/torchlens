@@ -16,9 +16,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import EngineDispatchError
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 _DIM = 8
 
@@ -52,7 +52,7 @@ def _x(seed: int) -> torch.Tensor:
 
 
 def _steered(model: nn.Module, direction: torch.Tensor) -> tl.Trace:
-    spec = tl.when(tl.module("block"), tl.steer(direction, magnitude=3.0, feature_axis=-1))
+    spec = tl.when(tl.module("block"), tl.steer(direction, strength=3.0, dim=-1))
     return tl.trace(model, _x(0), save=tl.module("block") | tl.module("head"), intervene=spec)
 
 
@@ -60,7 +60,7 @@ def _report_card(report: object) -> tuple[object, ...]:
     return (
         report.path_faithfulness,  # type: ignore[attr-defined]
         report.first_mismatch,  # type: ignore[attr-defined]
-        report.poisoned,  # type: ignore[attr-defined]
+        report.is_poisoned,  # type: ignore[attr-defined]
         report.contract_checks,  # type: ignore[attr-defined]
         report.numeric_attestation,  # type: ignore[attr-defined]
     )
@@ -75,7 +75,7 @@ def test_hooked_fast_run_reports_unverifiable_not_pristine() -> None:
     report = result.report
     assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert report.path_faithfulness is not PathFaithfulness.VERIFIED
-    assert report.poisoned is True
+    assert report.is_poisoned is True
     mismatch = report.first_mismatch
     assert mismatch is not None
     assert mismatch.code is RunnableErrorCode.USER_INTERVENTION_NOT_REPLAYABLE
@@ -109,5 +109,5 @@ def test_plain_run_verdict_is_unchanged(fast: bool) -> None:
     for result in (first, second):
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
         assert result.report.first_mismatch is None
-        assert result.report.poisoned is False
+        assert result.report.is_poisoned is False
     assert _report_card(first.report) == _report_card(second.report)

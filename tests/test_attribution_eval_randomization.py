@@ -59,18 +59,20 @@ def test_saliency_similarity_falls_as_layers_randomize(randomization: str) -> No
         model, x, target=1, method=attribution.saliency, randomization=randomization
     )
 
-    assert result.layers == ("head", "conv2", "conv1")
-    assert [step.layer for step in result.steps] == ["head", "conv2", "conv1"]
+    assert result.module_addresses == ("head", "conv2", "conv1")
+    assert [step.module_address for step in result.steps] == ["head", "conv2", "conv1"]
     spearman = result.similarity("spearman")
     assert all(value is not None and value < 0.9 for value in spearman)
     if randomization == "cascading":
-        assert result.steps[-1].randomized == ("head", "conv2", "conv1")
+        assert result.steps[-1].randomized_module_addresses == ("head", "conv2", "conv1")
         assert spearman[-1] < 0.5
         ssim = result.similarity("ssim")
         assert all(value is not None for value in ssim)
         assert ssim[-1] < ssim[0] or ssim[0] < 0.9
     else:
-        assert all(step.randomized == (step.layer,) for step in result.steps)
+        assert all(
+            step.randomized_module_addresses == (step.module_address,) for step in result.steps
+        )
     assert result.steps[0].values is not None
     assert result.steps[0].values.shape == x.shape
 
@@ -82,7 +84,7 @@ def test_parameter_ignoring_method_shows_no_fall() -> None:
     model = SmallCnn()
     x = torch.randn(1, 3, 12, 12)
     result = attribution.randomization_test(model, x, target=0, method=_input_itself)
-    assert result.layers == ("head", "conv2", "conv1")
+    assert result.module_addresses == ("head", "conv2", "conv1")
     assert len(result.steps) == 3
     for measure in ("spearman", "spearman_abs", "ssim"):
         values = result.similarity(measure)
@@ -99,7 +101,7 @@ def test_caller_model_and_random_state_untouched() -> None:
     before = {name: value.clone() for name, value in model.state_dict().items()}
     rng_before = torch.get_rng_state()
     result = attribution.randomization_test(
-        model, x, target=0, method=attribution.saliency, seed=3, keep_maps=False
+        model, x, target=0, method=attribution.saliency, seed=3, keep_values=False
     )
     assert torch.equal(torch.get_rng_state(), rng_before)
     after = model.state_dict()
@@ -108,7 +110,7 @@ def test_caller_model_and_random_state_untouched() -> None:
     assert all(parameter.grad is None for parameter in model.parameters())
     assert all(step.values is None for step in result.steps)
     again = attribution.randomization_test(
-        model, x, target=0, method=attribution.saliency, seed=3, keep_maps=False
+        model, x, target=0, method=attribution.saliency, seed=3, keep_values=False
     )
     assert again.similarity("spearman") == result.similarity("spearman")
 
@@ -154,7 +156,7 @@ def test_randomization_accepts_grad_cam_results(family: str) -> None:
         layers=layers,
     )
     assert result.original_attribution.shape == (1, 1, *x.shape[-2:])
-    assert len(result.steps) == len(result.layers) >= 3
+    assert len(result.steps) == len(result.module_addresses) >= 3
     assert all(value is not None for value in result.similarity("ssim"))
     assert all(value is not None for value in result.similarity("spearman_abs"))
 
@@ -262,11 +264,11 @@ def test_randomization_refuses_bad_settings_and_remedies_run(
     model = SmallCnn()
     x = torch.randn(1, 3, 12, 12)
     call: dict[str, Any] = {"target": 0, "method": attribution.saliency, **kwargs}
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.randomization_test(model, x, **call)
     assert excinfo.value.fields.get("code") == code
     fixed = eval(_remedy(str(excinfo.value)), {"tl": tl, "model": model, "x": x})  # noqa: S307
-    assert isinstance(fixed, attribution.RandomizationResult)
+    assert isinstance(fixed, attribution.RandomizationTest)
 
 
 def test_randomization_refuses_a_map_that_changes_shape() -> None:
@@ -287,7 +289,7 @@ def test_randomization_refuses_a_map_that_changes_shape() -> None:
         untouched = torch.equal(model.head.weight, head_weight)
         return inputs if untouched else inputs[..., 1:]
 
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.randomization_test(model, x, target=0, method=_shifting_layout)
     assert excinfo.value.fields.get("code") == "attribution_randomization_map_changed"
     message = str(excinfo.value)
@@ -313,7 +315,7 @@ def test_kept_maps_past_the_size_guard_warn_once_and_name_keep_maps_false(
     assert "keep_maps=False" in str(coded[0].message)
     assert all(step.values is not None for step in result.steps)
     lean = attribution.randomization_test(
-        model, x, target=0, method=attribution.saliency, keep_maps=False
+        model, x, target=0, method=attribution.saliency, keep_values=False
     )
     assert lean.similarity("spearman") == result.similarity("spearman")
 
@@ -331,10 +333,10 @@ def test_randomization_refuses_when_no_parameterized_module_runs_and_the_remedy_
         del model, input_kwargs, target
         return inputs.detach().clone()
 
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.randomization_test(model, x, target=0, method=method)
     assert excinfo.value.fields.get("code") == "attribution_randomization_layer_invalid"
     assert "layers=" in str(excinfo.value)
     scope = {"tl": tl, "model": model, "x": x, "method": method}
     fixed = eval(_remedy(str(excinfo.value)), scope)  # noqa: S307
-    assert isinstance(fixed, attribution.RandomizationResult) and len(fixed.steps) == 1
+    assert isinstance(fixed, attribution.RandomizationTest) and len(fixed.steps) == 1

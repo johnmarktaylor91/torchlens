@@ -26,10 +26,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import TorchCapabilityWarning
 from torchlens.errors._base import TorchLensWarning
-from torchlens.semantic import FacetSpec
+from torchlens.facets import FacetSpec
 from torchlens.semantic.patching import PatchApplicationError
-from torchlens.utils._torch_compat import TorchCapabilityWarning
 
 
 class ParamHeads(nn.Module):
@@ -86,8 +86,8 @@ def param_attention_recipe(module: Any) -> dict[str, Any]:
     result_op = trace.ops[result_module.calls[0].output_ops[0]]
     output_op = trace.ops[module.calls[0].output_ops[0]]
     return {
-        "result": FacetSpec.from_home(result_op, recipe_id="param_attention"),
-        "attn_out": FacetSpec.from_home(output_op, recipe_id="param_attention"),
+        "result": FacetSpec.from_home(result_op, function_id="param_attention"),
+        "attn_out": FacetSpec.from_home(output_op, function_id="param_attention"),
         "n_heads": 2,
         "head": module.facets.head,
     }
@@ -324,7 +324,7 @@ def test_user_capture_composes_required_fields() -> None:
         clean,
         corrupted,
         _metric,
-        trace_kwargs={"capture": tl.options.CaptureOptions(save_code_context=True)},
+        trace_kwargs={"capture": tl.options.CaptureOptions(save_source_context=True)},
     )
     assert table.shape == (1,)
 
@@ -349,8 +349,6 @@ def test_explicit_matching_capture_passes() -> None:
         clean,
         corrupted,
         _metric,
-        trace_kwargs={
-            "capture": tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
-        },
+        trace_kwargs={"capture": tl.options.CaptureOptions(layers_to_save="all", save_args=True)},
     )
     assert table.shape == (1,)

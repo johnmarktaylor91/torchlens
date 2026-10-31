@@ -149,7 +149,7 @@ def _validate(model: nn.Module, *, grad: bool = True) -> bool:
         param.requires_grad_(grad)
     torch.manual_seed(0)
     return _validate_forward_pass_torch(
-        model.eval(), [torch.randn(3, 4)], {}, random_seed=0, validate_metadata=True
+        model.eval(), [torch.randn(3, 4)], {}, seed=0, validate_metadata=True
     )
 
 

@@ -33,8 +33,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...data_classes.layer import Layer
-    from ...data_classes.trace import Trace
+    from ..._data_classes.layer import Layer
+    from ..._data_classes.trace import Trace
 
 
 # A fingerprint is (module, func_name).  Both fields normalize to

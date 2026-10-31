@@ -21,7 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.utils._torch_compat import TorchCapabilityWarning
+from torchlens._utils._torch_compat import TorchCapabilityWarning
 
 
 class _Holder:

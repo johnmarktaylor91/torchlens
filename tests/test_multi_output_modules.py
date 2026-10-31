@@ -279,7 +279,7 @@ def test_mha_attention_outputs_are_selectable() -> None:
         "attn_output",
         "attn_output_weights",
     ]
-    sites = trace.find_sites(tl.module("mha") & tl.output("attn_output_weights"))
+    sites = trace.find_sites(tl.module("mha") & tl.model_output("attn_output_weights"))
     assert [site.layer_label for site in sites] == [outputs[1].layer_label]
 
 
@@ -300,9 +300,9 @@ def test_output_selectors_match_index_and_role() -> None:
 
     trace = _lstm_trace()
     h_n = trace.ops[trace.modules["lstm"].ops[0].output_ops[1]]
-    assert [site.layer_label for site in trace.find_sites(tl.module("lstm") & tl.output(1))] == [
-        h_n.layer_label
-    ]
+    assert [
+        site.layer_label for site in trace.find_sites(tl.module("lstm") & tl.model_output(1))
+    ] == [h_n.layer_label]
     assert [site.layer_label for site in trace.find_sites(tl.func("lstm", output="h_n"))] == [
         h_n.layer_label
     ]

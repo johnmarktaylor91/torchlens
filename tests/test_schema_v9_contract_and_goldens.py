@@ -13,12 +13,11 @@ from __future__ import annotations
 
 import json
 import tarfile
-import warnings
 from pathlib import Path
 
 import pytest
+from _refuses_as_2x import assert_refuses_as_2x
 
-import torchlens as tl
 from torchlens._io import TLSPEC_VERSION
 
 _HERE = Path(__file__).parent
@@ -79,17 +78,16 @@ def test_contract_versions_and_digests_are_ledger_distinct() -> None:
 
 
 @pytest.mark.heavy
-def test_v8_golden_loads_at_its_recorded_schema_under_v9(tmp_path: Path) -> None:
-    """The harvested tlspec-8 main golden loads green under the v9 runtime."""
+def test_v8_golden_refuses_as_2x(tmp_path: Path) -> None:
+    """The harvested tlspec-8 main golden refuses typed: 2.x wrote it.
+
+    This release reads no file a 2.x release wrote; the golden stays as a
+    refusal input, and its manifest still records stamp 8.
+    """
 
     with tarfile.open(CORPUS, "r:gz") as tar:
         tar.extractall(tmp_path)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace = tl.load(tmp_path / "art_main_portable")
-    assert trace.tlspec_version == 8, "a loaded artifact keeps its recorded schema"
-    assert trace.outcome.status.name == "COMPLETE"
-    # The v9 entry-dark slots default-fill tolerantly on the older artifact.
-    assert trace.structure_evidence is None
-    assert trace.source_snapshots == []
-    assert all(op.injection_provenance is None for op in trace.ops)
+    artifact = tmp_path / "art_main_portable"
+    manifest = json.loads((artifact / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["tlspec_version"] == 8, "the golden keeps its recorded schema"
+    assert_refuses_as_2x(artifact)

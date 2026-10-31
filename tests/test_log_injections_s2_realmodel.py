@@ -44,7 +44,7 @@ def test_gpt2_mlp_sae_injection_persists_and_attests(tmp_path) -> None:
     host_sites = {record.provenance.host_site_key for record in records}
     assert all(isinstance(key, str) and key.startswith("s1|") for key in host_sites)
     path = str(tmp_path / "gpt2_sae.tlspec")
-    tl.save(logged, path)
+    logged.save(path)
     loaded = tl.load(path)
     restored = loaded.injected_ops
     assert len(restored) == len(records)
@@ -79,7 +79,7 @@ def test_torchvision_block_splice_injection_persists_and_attests(tmp_path) -> No
     func_names = {record.func_name for record in records}
     assert {"mean", "tanh", "add"} & func_names
     path = str(tmp_path / "resnet_splice.tlspec")
-    tl.save(logged, path)
+    logged.save(path)
     loaded = tl.load(path)
     assert len(loaded.injected_ops) == len(records)
     report = attest_injected_ops(loaded)

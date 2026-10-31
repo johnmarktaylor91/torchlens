@@ -66,9 +66,9 @@ from ._render_common import strict_collapse_checks_enabled
 from .collapse_plan import RenderContext, collapse_plan_for_trace, count
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .collapse_optimizer import OptimizerResult
 
 
@@ -1275,7 +1275,7 @@ def _iter_collapsible_runs(
             str(getattr(module, "class_name", "")),
             run_stem or _indexed_parent_stem(address),
         )
-        num_layers = int(getattr(module, "num_layers", 0) or 0)
+        num_layers = len(getattr(module, "layer_labels", ()) or ())
         descendant_only_depth_matches = (
             directly_selected
             or current_has_direct_selection
@@ -1539,7 +1539,7 @@ def _make_run_fold(trace: Trace, addresses: tuple[str, ...]) -> ModuleRepeatFold
         representative=addresses[0],
         addresses=addresses,
         class_name=str(getattr(modules[0], "class_name", "") or "blocks"),
-        num_layers=sum(int(getattr(module, "num_layers", 0) or 0) for module in modules),
+        num_layers=sum(len(getattr(module, "layer_labels", ()) or ()) for module in modules),
         num_params=sum(int(getattr(module, "num_params", 0) or 0) for module in modules),
         num_params_trainable=sum(
             int(getattr(module, "num_params_trainable", 0) or 0) for module in modules
@@ -1842,7 +1842,7 @@ def _gate_module(
 
     if module.address in {"", "self"}:
         return False
-    if int(getattr(module, "num_layers", 0) or 0) <= 1:
+    if len(getattr(module, "layer_labels", ()) or ()) <= 1:
         return False
     return wrapper_hidden_ops != hidden_ops
 

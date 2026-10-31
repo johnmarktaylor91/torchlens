@@ -24,7 +24,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.errors import CheckpointSeriesLiveParamsError
+from torchlens.errors import ParamEvidenceMissingError
 
 _CODE = "checkpoint_series_live_params"
 
@@ -59,16 +59,16 @@ def test_resnet18_real_checkpoint_series_refuses_typed() -> None:
     assert trace_ck0.params["fc.weight"].value is trace_ck64.params["fc.weight"].value
     assert trace_ck0.params["fc.weight"].value_basis.basis == "live_ref"
 
-    bundle = tl.bundle({"ck0": trace_ck0, "ck64": trace_ck64})
+    bundle = tl.Bundle({"ck0": trace_ck0, "ck64": trace_ck64})
     view = bundle.params["fc.weight"]
     for read in (
         lambda: view.weight_norm_diff,
-        lambda: view.diff_pair(),
+        lambda: view.compare(),
         lambda: view.aggregate("std"),
         lambda: view.out,
         lambda: view.grad,
     ):
-        with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+        with pytest.raises(ParamEvidenceMissingError) as excinfo:
             read()
         exc = excinfo.value
         assert exc.fields["code"] == _CODE
@@ -121,9 +121,9 @@ def test_pythia_70m_published_revision_pair_refuses_typed() -> None:
     model.load_state_dict(state_step64)
     trace_step64 = tl.trace(model, token_ids)
 
-    bundle = tl.bundle({"step0": trace_step0, "step64": trace_step64})
+    bundle = tl.Bundle({"step0": trace_step0, "step64": trace_step64})
     view = bundle.params[probe_address]
-    with pytest.raises(CheckpointSeriesLiveParamsError) as excinfo:
+    with pytest.raises(ParamEvidenceMissingError) as excinfo:
         _ = view.weight_norm_diff
     exc = excinfo.value
     assert exc.fields["code"] == _CODE

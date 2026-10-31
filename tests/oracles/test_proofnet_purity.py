@@ -163,7 +163,7 @@ EXTRA_TEMPLATE_DOORS: tuple[tuple[str, Any], ...] = (
     (
         "torchlens.sweep",
         lambda tl, model, x: tl.sweep(
-            model, x, at=tl.func("relu"), values=[0.0], include_baseline=True
+            model, x, site=tl.func("relu"), values=[0.0], include_baseline=True
         ),
     ),
     (

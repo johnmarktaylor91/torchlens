@@ -29,7 +29,7 @@ _MODULE = "transformer.h.5.attn"
 
 def test_head_ablation_flagship_on_pretrained_gpt2(r1_loader, tmp_path: Path) -> None:
     import torchlens as tl
-    from torchlens.experiment import head_ablation_candidates, ledger, site_sweep
+    from torchlens.experiment import head_ablation_candidates, ledger, sweep_sites
 
     loaded = r1_loader("r1-gpt2")
     model, tokenizer = loaded["model"], loaded["tokenizer"]
@@ -52,7 +52,7 @@ def test_head_ablation_flagship_on_pretrained_gpt2(r1_loader, tmp_path: Path) ->
     try:
         baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
         candidates = head_ablation_candidates(baseline, _MODULE, heads=n_heads)
-        bundle = site_sweep(
+        bundle = sweep_sites(
             baseline,
             candidates=candidates,
             edit=tl.zero_ablate(),
@@ -67,7 +67,7 @@ def test_head_ablation_flagship_on_pretrained_gpt2(r1_loader, tmp_path: Path) ->
         assert set(rows) == set(candidates)
         assert all(row.resolved_site_count == 1 for row in rows.values())
         assert all(row.status == "completed" for row in rows.values())
-        top_candidate, top_delta = view.most_changed(top_n=1)[0]
+        top_candidate, top_delta = view.rank_changes(k=1)[0]
         report = bundle.why(top_candidate)
         assert report.lineage_status == "exact"
         assert report.member_suffix and report.member_suffix[0].fire_count >= 1

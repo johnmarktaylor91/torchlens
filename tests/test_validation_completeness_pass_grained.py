@@ -45,7 +45,7 @@ def _looped_trace() -> tuple[tl.Trace, list[torch.Tensor]]:
     log = tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     log._tl_test_model_keepalive = model
     outputs = [log.layer_dict_all_keys[label].out for label in log.output_layers]
@@ -81,5 +81,5 @@ def test_phantom_extra_pass_fails_the_bfs_census_alone() -> None:
     )
     failure = getattr(log, TRACE_FAILURE_ATTR, None)
     assert failure is not None, "validation failed without recording a failure"
-    assert failure.check == CHECK_COMPLETENESS
+    assert failure.check_name == CHECK_COMPLETENESS
     assert phantom_label in failure.message, failure.message

@@ -24,9 +24,9 @@ from _fresh_plant import PLANT_BYTES, touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
+from torchlens._observe._peaks import pass_peak_facts
 from torchlens.capture.peak_memory import CPU_PEAK_NOT_REQUESTED_REASON
-from torchlens.observe import pass_peak_facts
 from torchlens.options import CaptureOptions
 
 MARGIN = 2**20
@@ -110,7 +110,7 @@ def test_default_capture_leaves_the_process_high_water_mark_untouched() -> None:
         assert trace.backward_peak_memory is None
         assert trace.backward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
         assert "measure_host_peak_memory=True" in CPU_PEAK_NOT_REQUESTED_REASON
-        pair = trace.forward_peak_memory_pair
+        pair = trace.cost.forward_peak_memory_pair
         assert pair is not None
         assert (pair["resident"], pair["resident_basis"]) == (None, "not_requested")
         for which in ("forward", "backward"):
@@ -157,7 +157,7 @@ def test_opt_in_measures_the_planted_buffer_as_before() -> None:
         assert trace.forward_peak_memory_reason is None
         assert int(trace.backward_peak_memory) >= PLANT_BYTES - MARGIN
         assert trace.backward_peak_memory_reason is None
-        assert trace.forward_peak_memory_pair["resident_basis"] == "per_capture"
+        assert trace.cost.forward_peak_memory_pair["resident_basis"] == "per_capture"
     finally:
         trace.cleanup()
 
@@ -167,7 +167,7 @@ def test_backward_reason_round_trips_and_the_knob_does_not(tmp_path: Path) -> No
     trace.backward_peak_memory = None
     trace.backward_peak_memory_reason = CPU_PEAK_NOT_REQUESTED_REASON
     path = tmp_path / "backward_none.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     assert loaded.backward_peak_memory is None
     assert loaded.backward_peak_memory_reason == CPU_PEAK_NOT_REQUESTED_REASON
@@ -189,7 +189,7 @@ def test_state_without_the_backward_reason_restores_none() -> None:
 
 @pytest.mark.parametrize(
     ("peak", "reason", "why"),
-    [(None, 5, "not_a_string"), (tl.Bytes(4096), "forged", "reason_beside_a_value")],
+    [(None, 5, "not_a_string"), (tl.types.Bytes(4096), "forged", "reason_beside_a_value")],
 )
 def test_malformed_backward_reason_refuses_at_load(
     tmp_path: Path, peak: Any, reason: Any, why: str
@@ -198,9 +198,9 @@ def test_malformed_backward_reason_refuses_at_load(
     trace.backward_peak_memory = peak
     trace.backward_peak_memory_reason = reason
     path = tmp_path / f"forged_{why}.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == "artifact_backward_peak_memory_invalid"
     assert excinfo.value.fields["reason"] == why

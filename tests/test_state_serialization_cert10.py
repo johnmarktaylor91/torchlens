@@ -33,13 +33,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import Trace, trace as trace_fn
-from torchlens._io import TorchLensIOError
-from torchlens.data_classes.backward_pass import BackwardPass
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.param import Param
+from torchlens._data_classes.backward_pass import BackwardPass
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.param import Param
+from torchlens._io import ArtifactError
 from torchlens.options import CaptureOptions
 
 
@@ -121,11 +121,11 @@ def test_gradfn_weakref_pickle_roundtrip_with_real_backward_pass() -> None:
     assert restored.num_backward_passes == live_trace.num_backward_passes
     assert len(restored.grad_fn_logs) == len(live_trace.grad_fn_logs)
     # `Trace.__setstate__` deliberately reconnects each GradFn's
-    # `source_trace` back-reference to the newly-restored (live) Trace, so
+    # `trace` back-reference to the newly-restored (live) Trace, so
     # the weakref should point at `restored`, not at a stale intermediate
     # object from the pickle stream.
     for grad_fn_handle in restored.grad_fn_logs.values():
-        assert grad_fn_handle.source_trace is restored
+        assert grad_fn_handle.trace is restored
 
 
 def test_gradfn_standalone_pickle_does_not_crash() -> None:
@@ -327,7 +327,7 @@ def test_backward_pass_setstate_present_but_wrong_typed_grad_fn_calls_is_coerced
     """
 
     live_trace = _build_backward_trace()
-    backward_pass_log = live_trace.backward_passes[0]
+    backward_pass_log = live_trace.autograd.backward_passes[0]
     state = backward_pass_log.__getstate__()
     state["grad_fn_calls"] = tuple(state["grad_fn_calls"])
 
@@ -365,7 +365,7 @@ def test_coerce_container_typed_state_raises_on_incompatible_corruption() -> Non
     state["layer_dict_main_keys"] = 12345
 
     restored = Trace.__new__(Trace)
-    with pytest.raises(TorchLensIOError):
+    with pytest.raises(ArtifactError):
         restored.__setstate__(state)
 
 

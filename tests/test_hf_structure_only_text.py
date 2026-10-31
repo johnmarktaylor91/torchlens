@@ -20,7 +20,7 @@ import tokenizers  # noqa: E402  (a hard dependency of transformers)
 
 from tests.real_model.r0.families import FAMILY_BY_NAME  # noqa: E402
 from torchlens._errors import InvalidArgumentError  # noqa: E402
-from torchlens.bridge import hf as tl_hf  # noqa: E402
+from torchlens.bridge import transformers as tl_hf  # noqa: E402
 from torchlens.capture.structure_only import ValueDependentBranchError  # noqa: E402
 from torchlens.options import CaptureOptions  # noqa: E402
 

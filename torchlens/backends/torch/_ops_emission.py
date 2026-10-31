@@ -7,7 +7,7 @@ import torch
 
 from ... import _state as _st
 from ..._capture_state_helpers import _is_uninitialized_param
-from ...data_classes.internal_types import FuncExecutionContext
+from ..._data_classes.internal_types import FuncExecutionContext
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -18,7 +18,7 @@ from ._tl import (
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 from .ops import (
     CaptureProducerPolicy,

@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING
 from .collapse_plan import RenderContext, SegmentDescriptor
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .auto_collapse import CollapseAnalysis
 
 
@@ -56,7 +56,7 @@ def _make_child_segment_descriptor(
             num_buffers = sum(bool(entry.is_buffer) for entry in covered_entries)
     else:
         num_layers = sum(
-            int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in addresses
+            len(getattr(trace.modules[address], "layer_labels", ()) or ()) for address in addresses
         )
         buffer_labels = {
             label

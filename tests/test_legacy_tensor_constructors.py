@@ -181,7 +181,7 @@ def test_dtype_class_data_form_captures_and_validates(class_name: str) -> None:
 def test_sylvester_reparam_idiom_captures_validates_and_matches_modern_spelling() -> None:
     """``self.FloatTensor(size).normal_()`` + ``Variable`` validates and draws RNG as eager does.
 
-    With the capture seeded (``random_seed=7``) the legacy spelling's captured
+    With the capture seeded (``seed=7``) the legacy spelling's captured
     output equals its eager output under ``torch.manual_seed(7)``, and both equal
     the modern ``torch.empty(size).normal_()`` spelling: the legacy op consumes
     the RNG exactly as its modern equivalent.
@@ -197,7 +197,7 @@ def test_sylvester_reparam_idiom_captures_validates_and_matches_modern_spelling(
 
     outputs = []
     for candidate in (model, modern):
-        trace = tl.trace(candidate, x, capture=tl.options.CaptureOptions(random_seed=7))
+        trace = tl.trace(candidate, x, capture=tl.options.CaptureOptions(seed=7))
         (out_label,) = trace.output_layers
         outputs.append(trace[out_label].out)
     torch.manual_seed(7)
@@ -320,9 +320,9 @@ def test_variable_on_non_tensor_raises_inside_capture() -> None:
 def test_unwrap_restores_legacy_classes_exactly_and_rewrap_reinstalls() -> None:
     """``unwrap_torch`` restores ``__new__``, ``tp_new`` and immutability; rewrap patches again."""
 
+    from torchlens._utils._type_new_slot import _type_view
     from torchlens.backends.torch import legacy_ctors
     from torchlens.backends.torch.wrappers import unwrap_torch
-    from torchlens.utils._type_new_slot import _type_view
 
     tl.trace(Plain(), torch.randn(2, 4))
     installed = legacy_ctors.installed_legacy_constructor_classes()
@@ -366,8 +366,8 @@ def test_legacy_constructor_ops_never_become_runnable(tmp_path) -> None:
         build_sparse_run_descriptor,
         preflight_sparse_run_descriptor,
     )
+    from torchlens._runnable import ResolverStatus
     from torchlens.errors import ReattachError
-    from torchlens.runnable import ResolverStatus
 
     x = torch.randn(2, 4)
     trace = tl.trace(
@@ -387,7 +387,7 @@ def test_legacy_constructor_ops_never_become_runnable(tmp_path) -> None:
     assert statuses["FloatTensor"] == (ResolverStatus.UNAVAILABLE, "nonforward_callable_denied")
     assert statuses["Variable"][0] is ResolverStatus.UNAVAILABLE
     path = tmp_path / "legacy.tlspec"
-    tl.save(trace, path, level="runnable", include_weights=True)
+    trace.save(path, level="runnable", include_weights=True)
     with pytest.raises(ReattachError):
         tl.load(path).run(inputs=x, seed=0)
 
@@ -401,8 +401,8 @@ def _installed_records(legacy_ctors):
 def test_legacy_constructor_roster_rows_resolve_to_live_classes() -> None:
     """Every roster row names a live class on this torch (no row goes dead silently)."""
 
-    from torchlens.constants import LEGACY_TENSOR_CONSTRUCTOR_SITES
-    from torchlens.utils._torch_compat import get_optional_torch_namespace
+    from torchlens._constants import LEGACY_TENSOR_CONSTRUCTOR_SITES
+    from torchlens._utils._torch_compat import get_optional_torch_namespace
 
     for namespace_name, class_name in LEGACY_TENSOR_CONSTRUCTOR_SITES:
         namespace = get_optional_torch_namespace(namespace_name)
@@ -426,7 +426,7 @@ def _set_tp_new(cls: type, address: int) -> None:
 
     import ctypes
 
-    from torchlens.utils._type_new_slot import _type_view
+    from torchlens._utils._type_new_slot import _type_view
 
     _type_view(cls).tp_new = address
     ctypes.pythonapi.PyType_Modified(ctypes.py_object(cls))
@@ -441,9 +441,9 @@ def test_foreign_python_new_on_variable_is_skipped_not_recursed() -> None:
     """
 
     from torchlens._errors import TorchLensWarning
+    from torchlens._utils._type_new_slot import _type_view
     from torchlens.backends.torch import legacy_ctors
     from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-    from torchlens.utils._type_new_slot import _type_view
 
     base_new = torch._C._LegacyVariableBase.__new__
     foreign_calls: list[int] = []
@@ -493,8 +493,8 @@ def test_foreign_python_new_on_variable_is_skipped_not_recursed() -> None:
 def test_unwrap_restores_c_constructor_on_user_variable_subclasses() -> None:
     """A user ``Variable`` subclass leaves the ``slot_tp_new`` trampoline again on unwrap."""
 
+    from torchlens._utils._type_new_slot import _type_view
     from torchlens.backends.torch.wrappers import unwrap_torch
-    from torchlens.utils._type_new_slot import _type_view
 
     unwrap_torch()
     try:
@@ -530,7 +530,7 @@ def _drifted_mirror(insert_before: str):
 
     import ctypes
 
-    from torchlens.utils._type_new_slot import _PyTypeObjectToNew
+    from torchlens._utils._type_new_slot import _PyTypeObjectToNew
 
     fields = list(_PyTypeObjectToNew._fields_)
     index = [name for name, _ctype in fields].index(insert_before)
@@ -542,7 +542,7 @@ def _drifted_mirror(insert_before: str):
 def test_layout_probe_rejects_drift_before_tp_new(monkeypatch, insert_before: str) -> None:
     """The probe catches a struct drift between ``tp_doc`` and ``tp_new``, or at ``tp_new`` itself."""
 
-    from torchlens.utils import _type_new_slot
+    from torchlens._utils import _type_new_slot
 
     roster = [torch.FloatTensor, torch.LongTensor, torch.cuda.FloatTensor, Variable]
     assert all(_type_new_slot.probe_type_new_slot_patch(cls) for cls in roster)
@@ -556,10 +556,10 @@ def test_failed_layout_probe_leaves_everything_unwrapped_and_flag_false(monkeypa
 
     import types
 
+    from torchlens._utils import _torch_compat, _type_new_slot
+    from torchlens._utils._torch_compat import TorchCapabilityWarning
     from torchlens.backends.torch import legacy_ctors
     from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-    from torchlens.utils import _torch_compat, _type_new_slot
-    from torchlens.utils._torch_compat import TorchCapabilityWarning
 
     real_view = _type_new_slot._type_view
     unwrap_torch()
@@ -598,9 +598,9 @@ def test_foreign_new_set_after_wrap_then_removed_is_repatched_and_captured() -> 
     """
 
     from torchlens._errors import TorchLensWarning
+    from torchlens._utils._type_new_slot import _type_view
     from torchlens.backends.torch import legacy_ctors
     from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-    from torchlens.utils._type_new_slot import _type_view
 
     unwrap_torch()
     c_tp_new = _type_view(Variable).tp_new
@@ -665,9 +665,9 @@ def test_foreign_new_removed_before_unwrap_leaves_no_stale_trampoline() -> None:
     effect at unwrap is left untouched and keeps its record.
     """
 
+    from torchlens._utils._type_new_slot import _type_view
     from torchlens.backends.torch import legacy_ctors
     from torchlens.backends.torch.wrappers import unwrap_torch
-    from torchlens.utils._type_new_slot import _type_view
 
     unwrap_torch()
     c_tp_new = _type_view(Variable).tp_new
@@ -713,9 +713,9 @@ def test_python_new_set_and_removed_before_wrap_is_captured_not_skipped() -> Non
     """
 
     from torchlens._errors import TorchLensWarning
+    from torchlens._utils._type_new_slot import _type_view, recover_c_new_from_bases
     from torchlens.backends.torch import legacy_ctors
     from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-    from torchlens.utils._type_new_slot import _type_view, recover_c_new_from_bases
 
     unwrap_torch()
     c_tp_new = _type_view(Variable).tp_new
@@ -755,7 +755,7 @@ def test_python_new_set_and_removed_before_wrap_is_captured_not_skipped() -> Non
 def test_c_constructor_recovery_refuses_what_it_cannot_prove() -> None:
     """``recover_c_new_from_bases`` returns ``None`` unless a base's C builtin is in effect."""
 
-    from torchlens.utils._type_new_slot import (
+    from torchlens._utils._type_new_slot import (
         effective_new_entry,
         is_c_new_entry,
         recover_c_new_from_bases,

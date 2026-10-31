@@ -42,7 +42,7 @@ def test_buffer_source_and_sink_accessor_counts() -> None:
     trace = tl.trace(
         BufferWriteModel(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
     buffer_sources = [
         op.label for op in trace.layer_list if op.is_buffer and op.buffer_write_kind is None
@@ -51,8 +51,8 @@ def test_buffer_source_and_sink_accessor_counts() -> None:
         op.label for op in trace.layer_list if op.is_buffer and op.buffer_write_kind is not None
     ]
 
-    assert trace.num_buffer_source_ops == len(buffer_sources)
-    assert trace.num_buffer_sink_ops == len(buffer_sinks)
+    assert len(trace.buffer_read_ops) == len(buffer_sources)
+    assert len(trace.buffer_write_ops) == len(buffer_sinks)
     assert buffer_sources
     assert buffer_sinks
     assert any(op.buffer_source_ops for op in trace.compute_ops)

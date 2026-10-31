@@ -48,8 +48,8 @@ from torchlens.validation.core import (
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
 x = torch.randn(2, 4)
-print("FORWARD_VERDICT", tl.validate(model, x, scope="forward", random_seed=0))
-print("BACKWARD_VERDICT", tl.validate(model, x, scope="backward", random_seed=0))
+print("FORWARD_VERDICT", tl.validate(model, x, scope="forward", seed=0))
+print("BACKWARD_VERDICT", tl.validate(model, x, scope="backward", seed=0))
 
 
 class Gate(nn.Module):
@@ -60,7 +60,7 @@ class Gate(nn.Module):
 trace = tl.trace(
     Gate(),
     torch.randn(3, 4),
-    capture=CaptureOptions(layers_to_save="all", save_arg_values=True, random_seed=0),
+    capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
 )
 op = [o for o in trace.layer_list if o.func_name == "__gt__"][0]
 saved = op.out.detach().clone()

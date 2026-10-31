@@ -118,7 +118,7 @@ def _invoke_extract() -> Any:
 
 
 def _invoke_aggregate() -> Any:
-    """Template body: one ``tl.aggregate`` streaming-stats run.
+    """Template body: one ``tl.stats.aggregate`` streaming-stats run.
 
     This is the call-time probe that settles the panel's fact-2 residual:
     the door either warns (deprecated) or does not (undeclared convenience).
@@ -127,7 +127,7 @@ def _invoke_aggregate() -> Any:
     import torchlens
     from torchlens import stats
 
-    return torchlens.aggregate(
+    return torchlens.stats.aggregate(
         _fixture_model(),
         [_fixture_input()],
         metrics={"relu_1_2": stats.Mean()},
@@ -183,6 +183,10 @@ SEED_TEMPLATES: tuple[InvocationTemplate, ...] = (
         "TPL-004", "torchlens.extract", _invoke_extract, _control_extract_product, "UNSET"
     ),
     InvocationTemplate(
-        "TPL-005", "torchlens.aggregate", _invoke_aggregate, _control_aggregate_product, "UNSET"
+        "TPL-005",
+        "torchlens.stats.aggregate",
+        _invoke_aggregate,
+        _control_aggregate_product,
+        "UNSET",
     ),
 )

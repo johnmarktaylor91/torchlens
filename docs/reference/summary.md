@@ -154,7 +154,7 @@ print(report)
 ```
 
 With NO input at all, `tl.summary(model)` infers a verified input via
-`infer_input_shape`, reuses its verification trace (no second capture),
+`guess_input_shape`, reuses its verification trace (no second capture),
 and discloses the synthesis.
 
 ## The string contract

@@ -13,8 +13,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import build_sparse_run_descriptor
+from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _MUTATING: dict[str, tuple[Callable[[torch.Tensor], torch.Tensor], str]] = {
     "leaky_relu": (lambda h: F.leaky_relu(h, 0.1, inplace=True), "leaky_relu"),
@@ -111,7 +111,7 @@ def test_loaded_run_of_inplace_functional_is_verified(case: str, tmp_path: Path)
     model = _ReusesReceiver(fn).eval()
     inputs = torch.randn(2, 4)
     path = tmp_path / "model.tlspec"
-    tl.save(_runnable_trace(model, inputs), path, level="runnable", include_weights=True)
+    _runnable_trace(model, inputs).save(path, level="runnable", include_weights=True)
     result = tl.load(path).run(inputs=inputs, seed=0)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     torch.testing.assert_close(result.output, model(inputs))

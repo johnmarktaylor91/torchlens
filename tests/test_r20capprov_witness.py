@@ -3,7 +3,7 @@
 Context
 -------
 The postprocess "no graph/source provenance" witness
-(``torchlens.postprocess._warn_unattributed_tensor_args``, fed by
+(``torchlens._postprocess._warn_unattributed_tensor_args``, fed by
 ``torchlens.backends.torch.ops._unattributed_tensor_arg_positions``) exists to
 catch capture gaps: tensors that flow into an op with no traced provenance. Its
 branch (2) additionally flags a *provenanced* tensor whose producer label is not

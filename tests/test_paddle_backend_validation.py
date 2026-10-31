@@ -9,7 +9,6 @@ import pytest
 paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
 from torchlens.backends.paddle import (  # noqa: E402
     PaddleBackend,
     wrappers as paddle_wrappers,
@@ -19,8 +18,9 @@ from torchlens.backends.paddle._param_writes import (  # noqa: E402
     ParameterWriteGuard,
 )
 from torchlens.backends.paddle.validation import _coverage_oracle  # noqa: E402
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 from torchlens.validation.invariants import check_metadata_invariants  # noqa: E402
-from torchlens.validation.status import ValidationReplayStatus  # noqa: E402
+from torchlens.validation.status import ValidationStatus  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 
@@ -91,7 +91,7 @@ def test_paddle_validation_healthy_two_layer_mlp_passes() -> None:
     assert backend.validate_trace(trace) is True
     status = trace.validation_replay_status
     assert status.state == "passed"
-    assert status.replayed_node_count >= 1
+    assert status.num_replayed_ops >= 1
     assert PaddleBackend().validate_entry(_functional_mlp, _inputs()) is True
 
 
@@ -161,7 +161,7 @@ def test_paddle_validation_loaded_payload_stripped_trace_is_unavailable() -> Non
 
     result = PaddleBackend().validate_trace(trace)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unavailable"
     assert result.reason == "loaded_trace_runtime_capture_stripped"
     assert result.passed is False
@@ -239,7 +239,7 @@ def test_paddle_validation_layer_parameters_are_known_sources() -> None:
 
     assert trace.module_identity_mode == "object_module"
     assert PaddleBackend().validate_trace(trace) is True
-    assert trace.validation_replay_status.replayed_node_count == 2
+    assert trace.validation_replay_status.num_replayed_ops == 2
     linear = next(c for c in trace._paddle_op_captures if c.op_name == "functional.linear")
     assert sorted(leaf.param_address for leaf in linear.tensor_inputs if leaf.label is None) == [
         "linear.bias",

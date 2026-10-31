@@ -141,13 +141,13 @@ class ReadRow:
     retention: str | None
     capture_status: str | None
     resolution: str
-    frozen_requested: bool
-    frozen_resolved: bool
+    is_frozen_requested: bool
+    is_frozen_resolved: bool
     frozen_reached: bool | None
     policy_digest: str | None
-    detached: bool
+    is_detached: bool
     sample_id: str | None
-    rescorable: bool
+    is_rescorable: bool
 
     def __post_init__(self) -> None:
         """Validate closed vocabularies at construction."""
@@ -377,7 +377,7 @@ class ReadTable(Mapping):
         return self._trace_token
 
     @property
-    def rescorable(self) -> bool:
+    def is_rescorable(self) -> bool:
         """Whether the table can be re-scored against its live trace."""
 
         return self._provenance.rescorable and self.trace is not None
@@ -406,7 +406,7 @@ class ReadTable(Mapping):
             counts[row.status] = counts.get(row.status, 0) + 1
         return counts
 
-    def for_target(self, target_id: str) -> ReadTable:
+    def target(self, target_id: str) -> ReadTable:
         """Return the single-target slice, provenance preserved.
 
         Parameters
@@ -722,13 +722,13 @@ def edge_read_table(  # noqa: PLR0913 -- one keyword per provenance field an EDG
             retention="saved",
             capture_status=None,
             resolution="exact",
-            frozen_requested=False,
-            frozen_resolved=False,
+            is_frozen_requested=False,
+            is_frozen_resolved=False,
             frozen_reached=None,
             policy_digest=None,
-            detached=True,
+            is_detached=True,
             sample_id=None,
-            rescorable=False,
+            is_rescorable=False,
         )
         built[row.key] = row
     provenance = TableProvenance(
@@ -823,7 +823,7 @@ def load_read_table(path: str | Path) -> ReadTable:
         shape = filtered.get("shape")
         filtered["shape"] = tuple(shape) if shape is not None else None
         filtered["value"] = None
-        filtered["rescorable"] = False
+        filtered["is_rescorable"] = False
         try:
             row = ReadRow(**filtered)
         except (TypeError, ReadError) as exc:

@@ -2,7 +2,7 @@
 
 The taught-spelling lint: every code span the surface teaches (guide
 snippets, api_map rows, breadcrumbs, error remedies) resolves in a fresh
-subprocess. Plus the facade repairs (tl.utils/tl.agent cold-resolve, the
+subprocess. Plus the facade repairs (tl._utils/tl.agent cold-resolve, the
 did-you-mean step-5 message) and the typed HF entry recovery.
 """
 
@@ -44,15 +44,15 @@ def test_breadcrumb_spellings_resolve_cold() -> None:
     assert "to_agent_json" in docstring
     assert "torchlens.agent.guide()" in docstring
     assert "python -m torchlens" in docstring
-    for spelling in ("tl.Trace.to_agent_json", "tl.report.explain", "tl.agent.guide"):
+    for spelling in ("tl.Trace.to_agent_json", "tl.Trace.explain", "tl.agent.guide"):
         _resolves_cold(spelling)
 
 
 @pytest.mark.heavy
 def test_docs_taught_facade_names_resolve_cold() -> None:
-    """tl.utils / tl.bridge / tl.backends / tl.callbacks / tl.agent cold-resolve."""
+    """tl._utils / tl.bridge / tl.backends / tl.callbacks / tl.agent cold-resolve."""
 
-    for spelling in ("tl.utils.doctor", "tl.bridge", "tl.backends", "tl.callbacks", "tl.agent"):
+    for spelling in ("tl.report.doctor", "tl.bridge", "tl.backends", "tl.callbacks", "tl.agent"):
         _resolves_cold(spelling)
 
 
@@ -126,7 +126,7 @@ def test_guide_snippets_run_verbatim(tmp_path: Path) -> None:
         code = "\n".join(line[4:] for line in snippet.splitlines())
         if "tl.trace" in code and "model" in code and "import torchlens" not in code:
             continue  # phase-1 fragments need a live model; composed below
-        if "tl.save" in code:
+        if ".save(" in code:
             # A saving snippet writes its OWN artifact (never onto the fixture).
             code = code.replace("run.tlspec", str(tmp_path / f"snippet_{index}.tlspec"))
         else:

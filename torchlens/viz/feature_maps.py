@@ -11,9 +11,9 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
+from .._utils._multipass_access import get_multipass_attr
+from .._utils.display import ensure_trace_visualizer_dir
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
-from ..utils._multipass_access import get_multipass_attr
-from ..utils.display import ensure_trace_visualizer_dir
 from .node_plots import _apply_colormap, _normalize_finite
 
 FeatureMapEvolution: TypeAlias = "OrderedDict[str, torch.Tensor]"
@@ -28,17 +28,17 @@ _REDUCE_MAX = 1
 _TEXT_COLOR = (25, 28, 34)
 _LABEL_FILL = (255, 255, 255)
 _LABEL_OUTLINE = (95, 103, 117)
-#: Non-finite pixel color; matches node_plots.render_heatmap's nan_color default.
+#: Non-finite pixel color; matches node_plots.heatmap's nan_color default.
 _NONFINITE_COLOR = (235, 235, 235)
 
 
-def feature_map_evolution(
+def feature_maps(
     trace: Any,
     save: Any | None = None,
     *,
     stimuli: int | Sequence[int] | None = None,
     channels: FeatureMapChannels = None,
-    top_k: int = 4,
+    k: int = 4,
     reduce: FeatureMapReduce = "mean",
     max_stimuli: int = 4,
     max_channels: int = 4,
@@ -59,7 +59,7 @@ def feature_map_evolution(
         Channel selection. ``None`` stores one channel-aggregate map per
         stimulus, a sequence stores explicit channels, and ``"top"`` stores
         per-stimulus top channels by mean absolute activation.
-    top_k:
+    k:
         Number of top channels to consider for ``channels="top"`` before the
         ``max_channels`` display cap is applied.
     reduce:
@@ -83,7 +83,7 @@ def feature_map_evolution(
     """
 
     _validate_feature_map_options(
-        top_k=top_k,
+        top_k=k,
         reduce=reduce,
         max_stimuli=max_stimuli,
         max_channels=max_channels,
@@ -108,7 +108,7 @@ def feature_map_evolution(
                 "covering the MDS layers before calling mds_evolution",
                 "covering the feature-map layers before calling feature_map_evolution",
             )
-            .replace("mds_evolution", "feature_map_evolution")
+            .replace("mds_evolution", "feature_maps")
         )
         if recast != str(exc):
             raise ValueError(recast) from exc
@@ -127,7 +127,7 @@ def feature_map_evolution(
             tensor,
             stimulus_indices=stimulus_indices,
             channels=channels,
-            top_k=top_k,
+            top_k=k,
             reduce=reduce,
             max_channels=max_channels,
         )
@@ -846,7 +846,7 @@ def _map_to_heatmap_image(map_tensor: torch.Tensor, *, cmap: str, cell_size: int
         RGB heatmap image.
     """
 
-    # Same non-finite contract as node_plots.render_heatmap: the scale is
+    # Same non-finite contract as node_plots.heatmap: the scale is
     # computed over FINITE values only (one Inf must not floor everything
     # else) and non-finite pixels get the dedicated nan color instead of
     # being laundered into real values.
@@ -1031,4 +1031,4 @@ def _write_feature_map_image(trace: Any, key: str, image: Image.Image) -> Path:
     return image_path
 
 
-__all__ = ["feature_map_evolution", "feature_map_node_spec"]
+__all__ = ["feature_maps", "feature_map_node_spec"]

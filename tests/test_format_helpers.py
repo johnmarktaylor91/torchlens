@@ -8,7 +8,7 @@ import pytest
 from torch import nn
 
 import torchlens as tl
-from torchlens.utils import format_flops, format_size
+from torchlens._utils import format_flops, format_size
 from torchlens.visualization._label_format import (
     format_module_kwargs,
     format_module_path,
@@ -59,9 +59,9 @@ def test_display_formatters_delegate_to_quantity_canonical_outputs() -> None:
     """Display helpers match ``Bytes`` and ``Flops`` across representative magnitudes."""
 
     for value in (0, 999, 1024, 1_234_567, 1024**4):
-        assert format_size(value) == str(tl.Bytes(value))
+        assert format_size(value) == str(tl.types.Bytes(value))
     for value in (0, 999, 1_000, 1_234_000_000, 1_000_000_000_000):
-        assert format_flops(value) == str(tl.Flops(value))
+        assert format_flops(value) == str(tl.types.Flops(value))
 
 
 def test_visualization_format_shape_uses_python_tuple_notation() -> None:

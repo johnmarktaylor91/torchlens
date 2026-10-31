@@ -4,7 +4,7 @@ Round-78 (free) found a save/load door asymmetry: ``self._parameters[""] =
 nn.Parameter(...)`` bypasses ``register_parameter``'s empty-name validation,
 captures fine, and SAVED a runnable artifact whose weight tensor entry carried
 label ``""`` -- which ``tl.load`` categorically refuses wholesale
-(``TorchLensIOError: Runnable weight tensor entry 0 requires a canonical
+(``ArtifactError: Runnable weight tensor entry 0 requires a canonical
 label``). Fail-closed and typed at load, no verdict risk, but the save door
 accepted what the load door refuses: a stillborn artifact.
 
@@ -29,9 +29,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -130,7 +130,7 @@ def test_r79_named_param_still_saves_and_loads(tmp_path: Path) -> None:
 
     result = tl.load(path).run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_r79_weightless_empty_name_lane_unchanged(tmp_path: Path) -> None:

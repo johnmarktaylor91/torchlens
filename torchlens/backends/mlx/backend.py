@@ -13,27 +13,19 @@ from typing import Any, cast
 
 import numpy as np
 
+from torchlens.backends.registry import BackendUnsupportedError
+
 from ... import _state
-from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import (
-    BackendName,
-    BackendUnsupportedError,
-    get_backend_spec,
-    require_capability_implementation,
-)
-from ...capture.outcome import StopRequest, stamp_backend_finalized
-from ...data_classes.derived_grad import (
+from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
 )
-from ...data_classes.param import Param, ParamAccessor
-from ...data_classes.trace import Trace
-from ...fastlog._halt import HaltSignal
-from ...fastlog.types import CaptureSpec
-from ...ir.capture_events import CaptureEvents
-from ...ir.events import (
+from ..._data_classes.param import Param, ParamAccessor
+from ..._data_classes.trace import Trace
+from ..._ir.capture_events import CaptureEvents
+from ..._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
     ModuleFrame,
@@ -41,14 +33,23 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ...ir.intervention import FireResult, FunctionEventInput
-from ...ir.predicate import _DEFERRED_VALUE, RecordContext
-from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...ir.workspaces import RawGraphWorkspace
-from ...postprocess._materialize import materialize_from_events
-from ...quantities import Duration
-from ...validation.status import ValidationReplaySource, ValidationReplayStatus  # noqa: TC001
+from ..._ir.intervention import FireResult, FunctionEventInput
+from ..._ir.predicate import _DEFERRED_VALUE, RecordContext
+from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._ir.workspaces import RawGraphWorkspace
+from ..._postprocess._materialize import materialize_from_events
+from ..._quantities import Duration
+from ..._trace_core.relation_views import freeze_trace_relation_views
+from ...backends.registry import (
+    BackendName,
+    get_backend_spec,
+    require_capability_implementation,
+)
+from ...capture.outcome import StopRequest, stamp_backend_finalized
+from ...fastlog._halt import StopSignal
+from ...fastlog.types import CaptureSpec
+from ...validation.status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -760,7 +761,7 @@ class MLXBackend:
 
         cleanup_model_session(session, prepared_model)
 
-    def cleanup_halted_forward_session(self, session: object, prepared_model: object) -> None:
+    def cleanup_stopped_forward_session(self, session: object, prepared_model: object) -> None:
         """Clean up MLX state after a halted forward capture."""
 
         self.cleanup_model_session(session, prepared_model)
@@ -1096,11 +1097,11 @@ class MLXBackend:
         save_raw_activations: bool = True,
         detach_saved_activations: bool = False,
         save_grads: bool | str | list[Any] | object | None = None,
-        random_seed: int | None = None,
+        seed: int | None = None,
         num_context_lines: int = 7,
-        save_arg_values: bool = False,
-        save_code_context: bool = False,
-        save_rng_states: bool = False,
+        save_args: bool = False,
+        save_source_context: bool = False,
+        save_rng: bool = False,
         recurrence_detection: bool = True,
         compute_input_output_distances: bool = True,
         verbose: bool = False,
@@ -1112,7 +1113,7 @@ class MLXBackend:
         save_raw_input: str | bool = "small",
         batch_render: str = "auto",
         output_transform: object | None = None,
-        save_raw_output: str | bool = "small",
+        save_transformed_output: str | bool = "small",
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool = False,
         module_identity_mode: str | None = None,
@@ -1127,10 +1128,10 @@ class MLXBackend:
                 "layers_to_save": layers_to_save,
                 "activation_transform": activation_transform,
                 "detach_saved_activations": detach_saved_activations,
-                "save_arg_values": save_arg_values,
+                "save_args": save_args,
                 "save_grads": save_grads,
-                "save_code_context": save_code_context,
-                "save_rng_states": save_rng_states,
+                "save_source_context": save_source_context,
+                "save_rng": save_rng,
                 "backward_ready": backward_ready,
                 "module_filter": module_filter,
                 "transform": transform,
@@ -1141,7 +1142,7 @@ class MLXBackend:
             MLX_PREVIEW_TRACE_OPTION_POLICY,
             spec=get_backend_spec("mlx"),
         )
-        if random_seed is not None:
+        if seed is not None:
             raise BackendUnsupportedError(
                 "MLX backend preview does not support random_seed; pass explicit MLX RNG "
                 "state through the model/input surface instead."
@@ -1186,27 +1187,27 @@ class MLXBackend:
             activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
             grad_transform=None,
             save_raw_activations=save_raw_activations,
-            save_raw_gradients=True,
+            save_raw_grads=True,
             keep_orphans=keep_orphans,
-            save_arg_values=save_arg_values,
+            save_args=save_args,
             save_grads=None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=compute_input_output_distances,
             num_context_lines=num_context_lines,
             optimizer=None,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_source_context=save_source_context,
+            save_rng=save_rng,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
-            transform=cast("Callable[[Any], Any] | None", transform),
+            input_transform=cast("Callable[[Any], Any] | None", transform),
             raw_input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
@@ -1245,7 +1246,7 @@ class MLXBackend:
         setattr(
             trace,
             "random_seed",
-            cast(int, random_seed) if random_seed is not None else random.randint(1, 4294967294),
+            cast(int, seed) if seed is not None else random.randint(1, 4294967294),
         )
         self.tensor_store.clear()
         # R07: the try owns the wrap call itself -- a raise anywhere between
@@ -1260,11 +1261,11 @@ class MLXBackend:
             kwargs = {} if input_kwargs is None else dict(input_kwargs)
             self._label_source_arrays(trace, args, kwargs)
             trace.capture_start_time = time.time()
-            halt_signal: HaltSignal | None = None
+            halt_signal: StopSignal | None = None
             try:
                 with self.active_logging(trace):
                     output = cast(Any, model)(*args, **kwargs)
-            except HaltSignal as signal:
+            except StopSignal as signal:
                 # Save-then-halt ordering: the frontier op's events were
                 # appended before the signal, so the partial graph ends at it.
                 halt_signal = signal
@@ -1274,7 +1275,7 @@ class MLXBackend:
                 trace.halt_frontier = signal.reason
             # Forward-time-only state: the emit path reads these during the
             # model call; leaving them on the trace breaks the portable-state
-            # scrub (they are not in PORTABLE_STATE_SPEC by design).
+            # scrub (they are not in _PORTABLE_STATE_SPEC by design).
             del trace._mlx_intervention_plan
             del trace._mlx_halt_selector
             # Zero-match disclosure (preview half of the torch-side fix): a
@@ -1518,13 +1519,20 @@ class MLXBackend:
                     )
                 )
             if grad_options.intermediate_grads and tap_observer is not None:
-                trace.intermediate_derived_grads = self._records_for_intermediate_mlx_grads(
-                    trace=trace,
-                    candidates=tap_observer.candidates,
-                    value_args=value_args,
-                    kwargs=kwargs,
-                    value_fn=value_fn,
-                    grad_options=grad_options,
+                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+
+                set_intermediate_derived_grads(
+                    trace,
+                    (
+                        self._records_for_intermediate_mlx_grads(
+                            trace=trace,
+                            candidates=tap_observer.candidates,
+                            value_args=value_args,
+                            kwargs=kwargs,
+                            value_fn=value_fn,
+                            grad_options=grad_options,
+                        )
+                    ),
                 )
         finally:
             if has_params:
@@ -1652,7 +1660,7 @@ class MLXBackend:
         validate_metadata = bool(kwargs.pop("validate_metadata", True))
         trace = self.capture_trace(*args, **kwargs)
         result = self.validate_trace(trace, validate_metadata=validate_metadata)
-        if isinstance(result, ValidationReplayStatus):
+        if isinstance(result, ValidationStatus):
             return result.passed
         return result
 
@@ -1661,7 +1669,7 @@ class MLXBackend:
         trace: Trace,
         *_args: Any,
         **kwargs: Any,
-    ) -> bool | ValidationReplayStatus:
+    ) -> bool | ValidationStatus:
         """Validate an MLX trace with per-op replay and perturbation.
 
         Parameters
@@ -1676,15 +1684,15 @@ class MLXBackend:
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             True for a verified live pass, False for a verified live failure,
             or an explicit unavailable status for loaded payload-stripped
             traces.
         """
 
         status = trace.validation_replay_status
-        if not status.available or _mlx_loaded_replay_unavailable(trace):
-            status_result = ValidationReplayStatus.unavailable_loaded_runtime_stripped(
+        if not status.is_available or _mlx_loaded_replay_unavailable(trace):
+            status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=self.name,
                 payload_load_status=getattr(trace, "payload_load_status", None),
             )
@@ -1715,23 +1723,23 @@ class MLXBackend:
                     reason_counts = {
                         "mlx_perturbation_no_perturbable_input": len(perturbation_gaps)
                     }
-            status_result = ValidationReplayStatus.from_replay_counts(
+            status_result = ValidationStatus.from_replay_counts(
                 backend=self.name,
                 source=_mlx_validation_source(trace),
-                replayed_node_count=replayed_count,
-                unverified_node_count=unverified_count,
-                failed_node_count=failed_count,
+                num_replayed_ops=replayed_count,
+                num_unverified_ops=unverified_count,
+                num_failed_ops=failed_count,
                 payload_load_status=getattr(trace, "payload_load_status", None),
                 unverified_reason_counts=reason_counts,
             )
         except Exception:
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend=self.name,
                 source=_mlx_validation_source(trace),
                 payload_load_status=getattr(trace, "payload_load_status", None),
-                replayed_node_count=replayed_count,
-                failed_node_count=max(1, failed_count),
+                num_replayed_ops=replayed_count,
+                num_failed_ops=max(1, failed_count),
             )
         setattr(trace, "_validation_replay_status", status_result)
         return status_result if status_result.state == "unverified" else status_result.passed
@@ -1920,7 +1928,7 @@ class MLXBackend:
                 reason=halt_label,
                 boundary_label=halt_label,
             )
-            raise HaltSignal(halt_label, frontier_output=output)
+            raise StopSignal(halt_label, frontier_output=output)
         return output
 
     def _apply_mlx_intervention(self, plan: Any, leaf: Any) -> Any:
@@ -2412,7 +2420,7 @@ def mlx_param_logs(tree: MLXModuleTree, trace: Trace) -> dict[str, Param]:
         param.backend_address = f"object:{existing_address}"
         param.resolver_status = "resolved"
         param._param_ref = cast(Any, candidate.value)
-        param.source_trace = trace
+        param.trace = trace
         param.all_module_addresses = list(
             tree.metadata.get(candidate.owner, {}).get("all_addresses", [candidate.owner])
         )

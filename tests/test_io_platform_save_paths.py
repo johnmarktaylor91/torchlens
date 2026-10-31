@@ -7,7 +7,7 @@ a write-capable handle, so fsyncing a read-only descriptor fails with
 ``windows_fsync_semantics`` fixture reproduces both on POSIX so the
 durability helpers' Windows branch runs on the Linux suite.
 
-macOS: payloads living on MPS must round-trip through ``tl.save``/``tl.load``
+macOS: payloads living on MPS must round-trip through ``Trace.save``/``tl.load``
 (the canary's HARD Apple-silicon assertion); that test runs only where MPS is
 available. macOS also has no ``/proc/meminfo`` and no ``SC_AVPHYS_PAGES``, so
 the default ``save_budget="auto"`` must measure host memory through ``psutil``.
@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError, _durability
+from torchlens._io import ArtifactError, _durability
 
 fcntl = pytest.importorskip("fcntl")
 
@@ -73,18 +73,18 @@ def test_windows_emulation_reproduces_bad_fd_on_read_only_flush(
 
     trace = _trace()
     monkeypatch.setattr(_durability, "_fsync_open_flags", lambda _os_name: _POSIX_FLAGS)
-    with pytest.raises(TorchLensIOError, match="Bad file descriptor"):
-        tl.save(trace, tmp_path / "canary.tlspec")
+    with pytest.raises(ArtifactError, match="Bad file descriptor"):
+        trace.save(tmp_path / "canary.tlspec")
 
 
 def test_bundle_save_round_trips_under_windows_fsync_semantics(
     tmp_path: Path, windows_fsync_semantics: None
 ) -> None:
-    """``tl.save`` fsyncs through write-capable handles where flushing needs them."""
+    """``Trace.save`` fsyncs through write-capable handles where flushing needs them."""
 
     trace = _trace()
     path = tmp_path / "canary.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     assert loaded.layer_labels == trace.layer_labels
 
@@ -96,8 +96,8 @@ def test_bundle_overwrite_under_windows_fsync_semantics(
 
     trace = _trace()
     path = tmp_path / "canary.tlspec"
-    tl.save(trace, path)
-    tl.save(trace, path, overwrite=True)
+    trace.save(path)
+    trace.save(path, overwrite=True)
     assert tl.load(path).layer_labels == trace.layer_labels
 
 
@@ -157,7 +157,7 @@ def test_mps_trace_save_load_round_trip(tmp_path: Path) -> None:
     relu_out = trace["relu_1_2"].out
     assert relu_out.device.type == "mps"
     path = tmp_path / "canary-mps.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     assert loaded.layer_labels == trace.layer_labels
     loaded_out = loaded["relu_1_2"].out

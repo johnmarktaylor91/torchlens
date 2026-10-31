@@ -49,7 +49,7 @@ def _graph(trace: tl.Trace, readers: list[fx.CrossLayerTranscoder]):
     return tl.attribution.build_graph(
         trace,
         fx.keyed(trace, readers),
-        embedding="model.embed_tokens",
+        embedding_module="model.embed_tokens",
         target=fx.TARGETS,
         logits_at=tl.attribution.SiteTarget("lm_head"),
         frozen=list(FROZEN),
@@ -65,12 +65,12 @@ def _identities(trace: tl.Trace, nodes) -> list[tuple]:
 
 def _identity(layers: dict[str, int], node) -> tuple:
     if node.kind == "feature":
-        return ("feature", layers[node.site], node.position, node.feature)
+        return ("feature", layers[node.site], node.position, node.feature_index)
     if node.kind == "error":
         return ("error", int(node.site.split(".")[2]), node.position)
     if node.kind == "token":
         return ("token", node.position)
-    return ("logit", node.token)
+    return ("logit", node.token_id)
 
 
 class _Key:
@@ -254,26 +254,28 @@ class TestCrossLayerGemma2:
     def test_active_subset_builds_the_same_graph(self, f4) -> None:
         _model, readers, trace, graph, _key = f4
         idx = [
-            torch.unique(graph.active_features[graph.active_features[:, 0] == layer, 2])
+            torch.unique(
+                graph.active_feature_indices[graph.active_feature_indices[:, 0] == layer, 2]
+            )
             for layer in range(fx.N_LAYERS)
         ]
         assert sum(len(i) for i in idx) < fx.N_LAYERS * fx.N_FEATURES
         small = _graph(trace, [fx.subset(r, i) for r, i in zip(readers, idx, strict=True)])
-        remapped = small.active_features.clone()
+        remapped = small.active_feature_indices.clone()
         remapped[:, 2] = torch.stack(
-            [idx[int(r)][int(f)] for r, _p, f in small.active_features.tolist()]
+            [idx[int(r)][int(f)] for r, _p, f in small.active_feature_indices.tolist()]
         )
-        assert torch.equal(remapped, graph.active_features)
+        assert torch.equal(remapped, graph.active_feature_indices)
         layers = {fx.read_label(trace, layer): layer for layer in range(fx.N_LAYERS)}
         assert [
-            (n.kind, n.site, n.position, n.token)
-            if n.feature is None
-            else (n.kind, n.site, n.position, int(idx[layers[n.site]][n.feature]), n.token)
+            (n.kind, n.site, n.position, n.token_id)
+            if n.feature_index is None
+            else (n.kind, n.site, n.position, int(idx[layers[n.site]][n.feature_index]), n.token_id)
             for n in small.nodes
         ] == [
-            (n.kind, n.site, n.position, n.token)
-            if n.feature is None
-            else (n.kind, n.site, n.position, n.feature, n.token)
+            (n.kind, n.site, n.position, n.token_id)
+            if n.feature_index is None
+            else (n.kind, n.site, n.position, n.feature_index, n.token_id)
             for n in graph.nodes
         ]
         assert torch.equal(small.adjacency_matrix, graph.adjacency_matrix)
@@ -281,7 +283,7 @@ class TestCrossLayerGemma2:
         assert set(small.constants) == set(graph.constants)
         for name, value in graph.constants.items():
             assert _equal_nan(small.constants[name], value), name
-        assert torch.equal(small.activation_values, graph.activation_values)
+        assert torch.equal(small.feature_activations, graph.feature_activations)
         assert torch.equal(small.error_vectors, graph.error_vectors)
 
     def test_error_nodes_are_the_unexplained_mlp_output(self, f4) -> None:

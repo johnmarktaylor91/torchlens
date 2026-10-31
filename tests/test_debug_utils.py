@@ -95,7 +95,7 @@ def test_find_nan_live_reports_op_module_and_test_location() -> None:
     assert result.bad_tensors == ("output",)
     assert result.source_line is not None
     assert __file__ in result.source_line
-    assert "FindNanResult(found=True" in repr(result)
+    assert "FindNanReport(found=True" in repr(result)
 
 
 def test_find_nan_live_reports_nearest_user_function_location() -> None:

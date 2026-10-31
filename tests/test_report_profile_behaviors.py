@@ -11,7 +11,7 @@ from torch import nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
-from torchlens.report import build_profile  # noqa: E402
+from torchlens.report import profile  # noqa: E402
 
 
 class _TwoBlockModel(nn.Module):
@@ -42,20 +42,20 @@ def test_build_profile_validates_level_sort_and_top_k(profiled_trace) -> None:
     """Invalid level/sort_by/top_k values are refused with clear errors."""
 
     with pytest.raises(ValueError, match="level must be"):
-        build_profile(profiled_trace, level="layerwise")
+        profile(profiled_trace, level="layerwise")
     with pytest.raises(ValueError, match="sort_by must be"):
-        build_profile(profiled_trace, sort_by="speed")
+        profile(profiled_trace, sort_by="speed")
     with pytest.raises(ValueError, match="top_k"):
-        build_profile(profiled_trace, top_k=-1)
+        profile(profiled_trace, k=-1)
     with pytest.raises(ValueError, match="top_k"):
-        build_profile(profiled_trace, top_k=True)
+        profile(profiled_trace, k=True)
 
 
 def test_profile_repr_formats_durations_human_readably(profiled_trace) -> None:
     """__repr__ renders the time column in s/ms/us units."""
 
-    profile = build_profile(profiled_trace, level="op")
-    text = repr(profile)
+    prof = profile(profiled_trace, level="op")
+    text = repr(prof)
     assert any(unit in text for unit in (" s", " ms", " us"))
     assert "time" in text
 
@@ -63,9 +63,9 @@ def test_profile_repr_formats_durations_human_readably(profiled_trace) -> None:
 def test_profile_honesty_labels_align_with_rows_and_vocabulary(profiled_trace) -> None:
     """honesty() returns per-row provenance labels from the closed vocabulary."""
 
-    profile = build_profile(profiled_trace, level="op", top_k=3)
-    honesty = profile.honesty()
-    assert list(honesty["name"]) == list(profile.frame["name"])
+    prof = profile(profiled_trace, level="op", k=3)
+    honesty = prof.evidence_labels()
+    assert list(honesty["name"]) == list(prof.frame["name"])
     # F09 (costreport D2/D9): per-cell evidence with mandatory qualifiers --
     # host time is never bare "measured", parameter counts are a declared
     # inventory (formula_exact), FLOPs carry their compute-record evidence.
@@ -75,14 +75,14 @@ def test_profile_honesty_labels_align_with_rows_and_vocabulary(profiled_trace) -
         assert set(honesty[column]) <= set(HONESTY_LABELS)
     assert "measured" not in set(honesty["time"])
     # Cached honesty frames are returned as copies, not aliases.
-    assert honesty is not profile.honesty()
+    assert honesty is not prof.evidence_labels()
 
 
 def test_profile_top_k_and_sort_order(profiled_trace) -> None:
     """top_k truncates after a stable descending sort on the requested column."""
 
-    full = build_profile(profiled_trace, level="op", sort_by="param_count")
-    top = build_profile(profiled_trace, level="op", sort_by="param_count", top_k=2)
+    full = profile(profiled_trace, level="op", sort_by="param_count")
+    top = profile(profiled_trace, level="op", sort_by="param_count", k=2)
     assert len(top.frame) == 2
     assert list(top.frame["name"]) == list(full.frame["name"][:2])
     counts = [c for c in full.frame["param_count"] if c == c]
@@ -92,11 +92,11 @@ def test_profile_top_k_and_sort_order(profiled_trace) -> None:
 def test_profile_module_and_call_levels_and_tree(profiled_trace) -> None:
     """module/call granularities include block rows and the call tree renders."""
 
-    module_profile = build_profile(profiled_trace, level="module")
+    module_profile = profile(profiled_trace, level="module")
     names = set(module_profile.frame["name"])
     assert any("encoder" in str(name) for name in names)
 
-    call_profile = build_profile(profiled_trace, level="call")
+    call_profile = profile(profiled_trace, level="call")
     assert len(call_profile.frame) >= len(module_profile.frame)
     tree = call_profile.tree()
     assert "encoder" in tree
@@ -118,7 +118,7 @@ def test_multipass_module_profile_covers_every_pass() -> None:
 
     torch.manual_seed(8)
     log = tl.trace(_Recurrent(), torch.randn(2, 3))
-    module_profile = build_profile(log, level="module")
+    module_profile = profile(log, level="module")
     row = module_profile.frame[module_profile.frame["name"].astype(str) == "linear"]
     assert len(row) == 1
     assert int(row["op_count"].iloc[0]) >= 2

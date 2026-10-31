@@ -5,20 +5,15 @@
 # Union also keeps both rows when two branches change one row or neighbouring rows,
 # so every file listed here has a check in tests/test_union_merge_integrity.py that
 # refuses a repeated key; that test keeps this list equal to the checked set.
-# Generated artifacts (producer-parity static_scan.json, PROVENANCE) and prose
-# (glossary, AGENTS.md, CLAUDE.md) are deliberately NOT union: a concurrent edit
-# there must conflict (regenerate the JSON; keep both PROVENANCE entries whole).
+# Generated artifacts (producer-parity static_scan.json, PROVENANCE), prose
+# (glossary, AGENTS.md, CLAUDE.md, the docs/reference contract tables) and Python
+# files (the ratchet-ceiling dicts in tests/test_file_size_ratchet.py and
+# tests/test_ruff_ratchet_governance.py) are deliberately NOT union: a concurrent
+# edit there must conflict (regenerate the JSON; keep both PROVENANCE entries
+# whole; keep one ceiling row and set its value deliberately).
 tests/composition_expectations/data/diagnostic_ratchets.tsv merge=union
 tests/composition_expectations/data/refusal_site_classification.tsv merge=union
 tests/composition_expectations/data/universe_cardinalities.tsv merge=union
 tests/oracles/data/numeral_baseline.tsv merge=union
-docs/reference/error_refusal_contract.md merge=union
-docs/reference/warning_contract.md merge=union
 tests/composition_expectations/data/harvest_counts.tsv merge=union
 tests/oracles/data/surface_module_classification.tsv merge=union
-
-# Ratchet-ceiling dicts: union-merge both lanes' ceiling edits. A same-key or
-# neighbouring-key edit leaves a repeated key, which the integrity test refuses;
-# keep one row and set its value deliberately (shrink-only doctrine).
-tests/test_file_size_ratchet.py merge=union
-tests/test_ruff_ratchet_governance.py merge=union

@@ -56,7 +56,7 @@ def test_extract_dataset_preserves_stimulus_order_in_memory_and_on_disk(
         stimuli,
         {"rows": "identity"},
         batch_size=3,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
     )
 

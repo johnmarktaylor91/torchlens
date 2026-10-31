@@ -74,12 +74,11 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
     explicit facet DIFF, not both-run)."""
 
     import torchlens as tl
-    import torchlens.semantic as sem
 
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
     trace = tl.trace(lm["model"], (), dict(encoded))
     try:
-        coverage = sem.facet_coverage(trace)
+        coverage = tl.facets.coverage(trace)
         assert not coverage.unresolved, f"unresolved facet rows: {coverage.unresolved}"
         by_class: dict[str, list[Any]] = {}
         for row in coverage.rows:
@@ -125,10 +124,10 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
         eager_model,
         (),
         dict(encoded),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
     try:
-        eager_coverage = sem.facet_coverage(eager_trace)
+        eager_coverage = tl.facets.coverage(eager_trace)
         eager_attention = [row for row in eager_coverage.rows if row.class_name == "GPT2Attention"]
         assert eager_attention and all("pattern" in row.available for row in eager_attention), (
             "eager arm: the attention pattern facet is still unavailable --"
@@ -151,7 +150,7 @@ def test_rg04_logit_lens_final_layer_matches_native_logits(lm: dict[str, Any]) -
     trace = tl.trace(lm["model"], (), dict(encoded))
     try:
         lens = sem.logit_lens(trace)
-        assert lens.validated, "logit_lens self-validation did not run/pass"
+        assert lens.is_validated, "logit_lens self-validation did not run/pass"
         final = lens.final_logits
         assert torch.allclose(final, native, atol=1e-4), (
             "lens-at-final-layer != the model's own logits (the flagship"
@@ -198,7 +197,7 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
             lambda: patching.activation_patch_residual_stream(
                 model, clean, corrupted, metric, facet_name="resid_post", patch_positions=False
             ),
-            "pass",  # SiteAmbiguityError teaches pass-qualified spellings
+            "pass",  # AmbiguousSiteError teaches pass-qualified spellings
         ),
         "mlp_output": (
             lambda: patching.activation_patch_mlp_output(model, clean, corrupted, metric),
@@ -221,7 +220,7 @@ def test_rg05_patching_helpers_settle_typed_never_silent_on_this_venue(
                 invoke()
         exc = excinfo.value
         assert type(exc).__name__ in {
-            "SiteAmbiguityError",
+            "AmbiguousSiteError",
             "PatchApplicationError",
             "SiteResolutionError",
         }, (
@@ -303,8 +302,8 @@ def test_rg08_episode_captured_generation_matches_direct_generate(
         model.generate,
         (ids,),
         {"max_new_tokens": 4, "do_sample": False},
-        episode=tl.options.EpisodeSpec(
-            n_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
+        episode=tl.options.EpisodeOptions(
+            num_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
         ),
     )
     try:
@@ -341,8 +340,8 @@ def test_rg18_steered_generation_fires_each_step_with_negative_control(
         baseline = model.generate(ids, max_new_tokens=4, do_sample=False)
 
     def episode_spec() -> Any:
-        return tl.options.EpisodeSpec(
-            n_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
+        return tl.options.EpisodeOptions(
+            num_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
         )
 
     steered = tl.trace(
@@ -422,7 +421,7 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
 
         fork = trace.fork()
         try:
-            fork.do(target, tl.mean_ablate(over="self"))
+            fork.do(target, tl.mean_ablate(dim="self"))
             edited = None
             for op in fork.output_ops:
                 if getattr(op.out, "dim", lambda: 0)() == 3:
@@ -436,7 +435,7 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
 
         for bad_token in ("position", "positon", "batch"):
             with pytest.raises(Exception) as excinfo:
-                tl.mean_ablate(over=bad_token)
+                tl.mean_ablate(dim=bad_token)
             message = str(excinfo.value)
             assert "over" in message and "self" in message, (
                 f"over={bad_token!r} refused without teaching the closed"

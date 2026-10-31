@@ -10,11 +10,12 @@ import torch
 
 import torchlens as tl
 from torchlens.intervention.errors import (
+    AmbiguousSiteError,
     MultiMatchWarning,
-    SiteAmbiguityError,
     SiteResolutionError,
 )
 from torchlens.intervention.resolver import SiteTable
+from torchlens.intervention.selectors import output_at
 from torchlens.validation import resolve_sites
 
 
@@ -98,9 +99,9 @@ def test_selector_factories_are_immutable_hashable_and_repr_friendly() -> None:
     assert repr(selector) == "tl.label('relu_1_2')"
     assert repr(tl.func("relu")) == "tl.func('relu')"
     assert repr(tl.module("block")) == "tl.module('block')"
-    assert repr(tl.contains("relu")) == "tl.contains('relu')"
+    assert repr(tl.label_contains("relu")) == "tl.label_contains('relu')"
     assert repr(tl.in_module("block")) == "tl.in_module('block')"
-    assert repr(tl.output_at("logits")) == "tl.output_at(('logits',))"
+    assert repr(output_at("logits")) == "tl.intervention.output_at(('logits',))"
     assert repr(tl.without_op()) == "tl.without_op()"
 
 
@@ -117,7 +118,7 @@ def test_resolve_sites_supports_all_phase2_match_types(phase2_log: tl.Trace) -> 
     assert phase2_log.resolve_sites(tl.label(f"{first_relu_label}:1")).labels() == (
         first_relu_label,
     )
-    assert phase2_log.resolve_sites(tl.contains("linear")).labels() == ("linear_1_1",)
+    assert phase2_log.resolve_sites(tl.label_contains("linear")).labels() == ("linear_1_1",)
     assert phase2_log.resolve_sites(tl.module("block.linear")).labels() == ("linear_1_1",)
     assert phase2_log.resolve_sites(tl.module("block")).labels() == ("relu_1_2",)
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
@@ -158,7 +159,7 @@ def test_resolution_errors_strict_mode_and_warnings(phase2_log: tl.Trace) -> Non
     with pytest.raises(SiteResolutionError, match="max_fanout=None"):
         resolve_sites(phase2_log, tl.func("relu"), max_fanout=None)  # type: ignore[arg-type]
 
-    with pytest.raises(SiteAmbiguityError, match="exceeding max_fanout=1"):
+    with pytest.raises(AmbiguousSiteError, match="exceeding max_fanout=1"):
         phase2_log.resolve_sites(tl.func("relu"), max_fanout=1)
 
     with warnings.catch_warnings(record=True) as caught:

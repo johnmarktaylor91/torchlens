@@ -73,9 +73,9 @@ class UniverseDescriptor:
 
 
 def _backends() -> tuple[str, ...]:
-    from torchlens.backends.registry import registered_backend_specs
+    from torchlens.backends.registry import registered_backend_specs as specs
 
-    return tuple(sorted(spec.name for spec in registered_backend_specs()))
+    return tuple(sorted(spec.name for spec in specs()))
 
 
 def _public_operations() -> tuple[str, ...]:
@@ -214,7 +214,7 @@ UNIVERSES: tuple[UniverseDescriptor, ...] = (
         universe_id="U-SAVE-LEVELS",
         owner="compo",
         derivation="torchlens._io.tlspec.TLSPEC_VALID_SAVE_LEVELS (closed vocabulary)",
-        public_boundary="tl.save level= values; storage kinds cross at wave A (save x storage matrix)",
+        public_boundary="Trace.save level= values; storage kinds cross at wave A (save x storage matrix)",
         filters="none",
         independent_census="single_derivation",
         adequacy_status="single_derivation",

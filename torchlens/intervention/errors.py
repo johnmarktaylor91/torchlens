@@ -3,6 +3,7 @@
 from typing import Literal
 
 from .._errors import KeywordConflictError
+from .._selection import SelectionError
 from ..errors._base import (
     CaptureError,
     CompatibilityError,
@@ -11,7 +12,6 @@ from ..errors._base import (
     TorchLensWarning,
     ValidationError,
 )
-from ..selection import SelectionError
 
 Severity = Literal["recoverable", "informational", "fatal"]
 """Public severity tag values for the intervention error catalog."""
@@ -70,7 +70,7 @@ class TorchLensInterventionError(InterventionError, RuntimeError):
             super().__init__()
 
 
-class TorchLensInterventionWarning(TorchLensWarning):
+class InterventionWarning(TorchLensWarning):
     """Base class for TorchLens intervention warnings."""
 
     severity: Severity = "informational"
@@ -107,27 +107,27 @@ class InterventionReadyConflictError(ConfigurationError, ValueError):
     """Raised when intervention-ready capture is requested with unsupported options."""
 
 
-class DirectActivationWriteWarning(TorchLensInterventionWarning):
+class DirectActivationWriteWarning(InterventionWarning):
     """User directly wrote a Op out field."""
 
 
-class MutateInPlaceWarning(TorchLensInterventionWarning):
+class TraceMutationWarning(InterventionWarning):
     """First root-log mutation; Trace mutators operate in place."""
 
 
-class DirectWriteIgnoredWarning(TorchLensInterventionWarning):
+class DirectWriteIgnoredWarning(InterventionWarning):
     """Warning for propagation engines that ignore direct out writes."""
 
 
-class InterventionAuditWarning(TorchLensInterventionWarning):
+class InterventionAuditWarning(InterventionWarning):
     """Warning for non-canonical intervention state in audit contexts."""
 
 
-class MultiMatchWarning(TorchLensInterventionWarning):
+class MultiMatchWarning(InterventionWarning):
     """Informational warning for selector queries that resolve multiple sites."""
 
 
-class PendingValueEditsWarning(TorchLensInterventionWarning):
+class PendingValueEditsWarning(InterventionWarning):
     """A new-input run was requested on a trace carrying value-edits.
 
     ``do()``-style edits rewrite SAVED values and push them downstream on the
@@ -139,7 +139,7 @@ class PendingValueEditsWarning(TorchLensInterventionWarning):
     """
 
 
-class BufferThreadGapWarning(TorchLensInterventionWarning):
+class BufferThreadGapWarning(InterventionWarning):
     """A replayed buffer version could not be threaded from its writing op.
 
     Emitted when a buffer record inside a replay cone keeps its CAPTURED value
@@ -186,15 +186,15 @@ class UntrustedCallableError(ReplayPreconditionError):
         super().__init__(*args, **fields)
 
 
-class OpaqueCallableInExecutableSaveError(ConfigurationError, ValueError):
+class OpaqueCallableError(ConfigurationError, ValueError):
     """Raised when an executable intervention save would require opaque code."""
 
 
-SpecPortabilityError = OpaqueCallableInExecutableSaveError
+SpecPortabilityError = OpaqueCallableError
 """Alias for v5.2 portability failures in intervention spec persistence."""
 
 
-class DirectWriteInExecutableSaveError(ConfigurationError, ValueError):
+class DirectWriteSaveError(ConfigurationError, ValueError):
     """Raised when executable spec save sees direct out writes."""
 
 
@@ -227,7 +227,7 @@ class GraphShapeMismatchError(ValidationError, ValueError):
     severity = "fatal"
 
 
-class ControlFlowDivergenceWarning(TorchLensInterventionWarning):
+class ControlFlowDivergenceWarning(InterventionWarning):
     """Warning for replay-detected control-flow or saved-edge divergence."""
 
 
@@ -251,7 +251,7 @@ class AppendMismatchError(ValidationError, ValueError):
     """Raised when a chunked append candidate is incompatible with the base log."""
 
 
-class AppendStreamingNotSupportedError(ValidationError, ValueError):
+class AppendStreamingUnsupportedError(ValidationError, ValueError):
     """Raised when append rerun would need to mutate active streamed activation blobs."""
 
 
@@ -266,7 +266,7 @@ class AppendBatchDependenceError(ValidationError, ValueError):
     """
 
 
-class BatchChunkInputAmbiguityError(ConfigurationError, ValueError):
+class AmbiguousBatchInputError(ConfigurationError, ValueError):
     """Raised when ``chunk_size`` cannot infer which input leaf is batched."""
 
 
@@ -274,7 +274,7 @@ class ChunkedForwardConfigError(ConfigurationError, ValueError):
     """Raised when chunked forward capture is requested with unsupported options."""
 
 
-class AppendStateValidationWarning(TorchLensInterventionWarning):
+class AppendStateValidationWarning(InterventionWarning):
     """Warning for validators that skip fresh checks on stacked appended traces."""
 
 
@@ -282,7 +282,7 @@ class MultiOutputModuleError(ValidationError, ValueError):
     """Raised for ambiguous single-output access on multi-output module calls."""
 
 
-class BatchNormTrainModeWarning(TorchLensInterventionWarning):
+class BatchNormTrainModeWarning(InterventionWarning):
     """Warning for append reruns through batch-sensitive train-mode modules."""
 
 
@@ -334,7 +334,7 @@ class SelectorCapabilityError(SiteResolutionError):
 
     The one typed refusal for unsupported ``(kind, lifecycle)`` pairs: for
     example ``tl.followed_by(...)`` in post-hoc ``find_sites`` (no retroactive
-    window exists on a finished trace) or ``tl.input_at(...)`` as a live hook
+    window exists on a finished trace) or ``tl.model_input(...)`` as a live hook
     application site.
     """
 
@@ -343,7 +343,7 @@ class UnclassifiedSelectorError(SiteResolutionError):
     """Raised when a selector is missing an explicit direction taxonomy bucket."""
 
 
-class SiteAmbiguityError(SiteResolutionError):
+class AmbiguousSiteError(SiteResolutionError):
     """Raised when a site query resolves too many sites for the surface."""
 
 
@@ -353,7 +353,7 @@ class RecursiveTracingError(CaptureError, RuntimeError):
     severity = "fatal"
 
 
-class AxisAmbiguityError(ConfigurationError, ValueError):
+class AmbiguousAxisError(ConfigurationError, ValueError):
     """Raised when a helper cannot infer a feature axis safely."""
 
 
@@ -395,7 +395,7 @@ class BundleMemberError(ConfigurationError, ValueError):
     """Raised when a bundle operation cannot resolve against one or more members."""
 
 
-class BundleRelationshipError(ValidationError, ValueError):
+class BundleComparisonError(ValidationError, ValueError):
     """Raised when bundle members fail a gated operation's comparison gate.
 
     ``fields["code"]`` carries ``bundle_gate_ordering_topology``,
@@ -421,20 +421,20 @@ class DeadParentError(ConfigurationError, ValueError):
 __all__ = [
     "AppendBatchDependenceError",
     "AppendMismatchError",
-    "AxisAmbiguityError",
+    "AmbiguousAxisError",
     "BaselineUndeterminedError",
-    "BatchChunkInputAmbiguityError",
+    "AmbiguousBatchInputError",
     "BatchNormTrainModeWarning",
     "BindingPreflightError",
     "BindingRuntimeError",
     "BundleMemberError",
-    "BundleRelationshipError",
+    "BundleComparisonError",
     "ChunkedForwardConfigError",
     "ControlFlowDivergenceError",
     "ControlFlowDivergenceWarning",
     "DeadParentError",
     "DirectActivationWriteWarning",
-    "DirectWriteInExecutableSaveError",
+    "DirectWriteSaveError",
     "DirectWriteIgnoredWarning",
     "EngineDispatchError",
     "GraphShapeMismatchError",
@@ -447,16 +447,16 @@ __all__ = [
     "LiveModeLabelError",
     "ModelMismatchError",
     "MultiMatchWarning",
-    "MutateInPlaceWarning",
+    "TraceMutationWarning",
     "NoParentError",
     "NonExecutableSpecError",
-    "OpaqueCallableInExecutableSaveError",
+    "OpaqueCallableError",
     "UnserializableDictKeyError",
     "UntrustedCallableError",
     "RecursiveTracingError",
     "ReplayPreconditionError",
     "Severity",
-    "SiteAmbiguityError",
+    "AmbiguousSiteError",
     "SelectionError",
     "RegionError",
     "SiteResolutionError",
@@ -467,6 +467,6 @@ __all__ = [
     "SpliceModuleDeviceError",
     "SpliceModuleDtypeError",
     "TorchLensInterventionError",
-    "TorchLensInterventionWarning",
+    "InterventionWarning",
     "UnclassifiedSelectorError",
 ]

@@ -47,7 +47,7 @@ from packaging.version import InvalidVersion, Version
 
 from ._json import read_bounded
 from .format_contract import MIN_TLSPEC_VERSION, TLSPEC_VERSION, below_floor_error
-from .format_errors import TorchLensIOError
+from .format_errors import ArtifactError
 
 __tl_layer__ = "L1"
 
@@ -445,7 +445,7 @@ def read_migration_witness(bundle_path: Path) -> dict[str, Any] | None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         With ``code="migration_witness_invalid"`` when a sidecar is present
         but unparseable, mis-schemed, or structurally incoherent. A broken
         witness is never a silent gap: the artifact claims a migrated
@@ -459,7 +459,7 @@ def read_migration_witness(bundle_path: Path) -> dict[str, Any] | None:
     try:
         witness = read_bounded(witness_path)
     except Exception as exc:  # json/OS errors carry no artifact context
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration witness at {witness_path} failed to parse: {exc}. "
             "Remedy: re-run tl.migrate on the original (backup) artifact, or "
             "delete the sidecar if the artifact was never migrated.",
@@ -469,7 +469,7 @@ def read_migration_witness(bundle_path: Path) -> dict[str, Any] | None:
         ) from exc
     problems = _witness_structure_problems(witness)
     if problems:
-        raise TorchLensIOError(
+        raise ArtifactError(
             f"Migration witness at {witness_path} is structurally invalid: "
             f"{'; '.join(problems)}. Remedy: re-run tl.migrate on the original "
             "(backup) artifact; witnesses are append-only tool output, never "
@@ -606,7 +606,7 @@ def ungoverned_pair_error(
     *,
     subject: str = "Bundle",
     code: str = "artifact_producer_pair_ungoverned",
-) -> TorchLensIOError:
+) -> ArtifactError:
     """Build the typed producer pair-consistency refusal (gate G5).
 
     Parameters
@@ -624,7 +624,7 @@ def ungoverned_pair_error(
 
     Returns
     -------
-    TorchLensIOError
+    ArtifactError
         Typed refusal with ``code="artifact_producer_pair_ungoverned"`` and
         a ledger-derived remedy.
     """
@@ -636,10 +636,10 @@ def ungoverned_pair_error(
         detail = "no governed ledger window covers that writer"
     remedy = (
         "verify the artifact's provenance; a lawful pair appears in "
-        "torchlens.ecosystem.compat_window(), and a migrated artifact must "
+        "torchlens._ecosystem.compat_window(), and a migrated artifact must "
         "carry its tl_migration_provenance.json witness"
     )
-    return TorchLensIOError(
+    return ArtifactError(
         f"{subject} claims torchlens_version={writer_release} with "
         f"tlspec_version={tlspec_version}, but {detail}. No governed ledger row "
         f"says that writer emitted that stamp; the pair is inconsistent "
@@ -674,7 +674,7 @@ def raise_if_modellog_portable(tlspec_format: str, subject: str, path: str) -> N
 
     Raises
     ------
-    ArtifactVersionBelowFloorError
+    ArtifactTooOldError
         When ``tlspec_format`` is the genuine v2.16 portable ModelLog format.
     """
 
@@ -732,7 +732,7 @@ def bridge_reader_remedy(artifact_kind: str, *, writer_release: str | None = Non
     return (
         "no verified bridge reader is recorded in the compatibility ledger for "
         "this format era; re-save with the release that wrote it. See "
-        "torchlens.ecosystem.compat_window() for the governed rows"
+        "torchlens._ecosystem.compat_window() for the governed rows"
     )
 
 

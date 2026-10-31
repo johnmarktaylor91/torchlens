@@ -10,8 +10,7 @@ from typing import Any, Literal, TypeAlias, cast
 
 import torch
 
-from .._state import pause_logging
-from ..ir.selector_eval import (
+from .._ir.selector_eval import (
     _UPFRONT_UNSUPPORTED_KINDS,
     _capability_error,
     _grad_fn_forward_op,
@@ -20,6 +19,7 @@ from ..ir.selector_eval import (
     looks_like_finalized_label,
     normalize_selector_like,
 )
+from .._state import pause_logging
 from .errors import (
     HelperMountError,
     HookSignatureError,
@@ -104,7 +104,7 @@ class HookContext:
     name: str
     timing: HookTiming
     direction: HookDirection
-    layer_log: Mapping[str, Any]
+    op: Mapping[str, Any]
     ctx: dict[str, Any]
     run_ctx: dict[str, Any]
     step_index: int
@@ -128,9 +128,9 @@ def make_hook_context(
     name: str,
     timing: HookTiming = "post",
     direction: HookDirection = "forward",
-    layer_log: Any | None = None,
+    op: Any | None = None,
     ctx: dict[str, Any] | None = None,
-    run_ctx: dict[str, Any] | None = None,
+    run_context: dict[str, Any] | None = None,
     step_index: int = 0,
     trace_name: str = "",
     args: Sequence[Any] = (),
@@ -146,11 +146,11 @@ def make_hook_context(
         Hook timing.
     direction:
         Hook direction.
-    layer_log:
+    op:
         Optional Op-like object or mapping to snapshot.
     ctx:
         Per-hook scratch dictionary. A new dictionary is created when omitted.
-    run_ctx:
+    run_context:
         Shared run dictionary. A new dictionary is created when omitted.
     step_index:
         Trace index.
@@ -171,9 +171,9 @@ def make_hook_context(
         name=name,
         timing=timing,
         direction=direction,
-        layer_log=MappingProxyType(_snapshot_layer_log(layer_log)),
+        op=MappingProxyType(_snapshot_layer_log(op)),
         ctx={} if ctx is None else ctx,
-        run_ctx={} if run_ctx is None else run_ctx,
+        run_ctx={} if run_context is None else run_context,
         step_index=step_index,
         trace_name=trace_name,
         args=tuple(args),
@@ -239,12 +239,12 @@ def normalize_hook_plan(
     for order, (raw_site_target, hook_like) in enumerate(pairs):
         site_target = lower_record_site_target(raw_site_target)
         helper_spec = hook_like if isinstance(hook_like, Edit) else None
-        # The escape hatch is requested by the helper's own force_shape_change
-        # kwarg (e.g. tl.replace_with(t, force_shape_change=True)); it rides
+        # The escape hatch is requested by the helper's own allow_shape_change
+        # kwarg (e.g. tl.replace_with(t, allow_shape_change=True)); it rides
         # entry metadata so a helper-requested shape change reaches
         # validate_hook_output, mirroring the append-safety check in rerun.py.
         entry_force_shape_change = helper_spec is not None and bool(
-            dict(helper_spec.kwargs).get("force_shape_change", False)
+            dict(helper_spec.kwargs).get("allow_shape_change", False)
         )
         _validate_live_site_target(
             site_target,
@@ -269,7 +269,7 @@ def normalize_hook_plan(
                         {
                             "attach_order": order,
                             "composition": "left_to_right",
-                            "force_shape_change": entry_force_shape_change,
+                            "allow_shape_change": entry_force_shape_change,
                             "direction": concrete_direction,
                             "timing": "post",
                         }
@@ -555,8 +555,8 @@ def _adapt_tensor_backward_hook(
             context = make_hook_context(
                 name=helper_name,
                 direction="backward",
-                layer_log=_backward_context_op(grad_fn_handle),
-                run_ctx=run_ctx,
+                op=_backward_context_op(grad_fn_handle),
+                run_context=run_ctx,
                 args=(grad,),
                 kwargs={
                     "grad_output": grad_output,
@@ -857,7 +857,7 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
         metadata = {
             "attach_order": order,
             "composition": "left_to_right",
-            "force_shape_change": False,
+            "allow_shape_change": False,
             "direction": "forward",
             "timing": "post",
             **value_spec.metadata,
@@ -1144,7 +1144,7 @@ def _live_backward_context_matches(
         values = grad_input if selector.grad_kind == "grad_input" else grad_output
         return any(isinstance(value, torch.Tensor) for value in values or ())
     if isinstance(selector, BackwardPassSelector):
-        trace = getattr(grad_fn_handle, "source_trace", None)
+        trace = getattr(grad_fn_handle, "trace", None)
         return getattr(trace, "_active_backward_pass_index", None) == selector.pass_index
     return True
 
@@ -1544,7 +1544,7 @@ def _facet_scatter_hook(
 
         from .runtime import validate_hook_output
 
-        facet_slice = spec.apply(out)
+        facet_slice = spec.apply_transforms(out)
         edited_slice = user_hook(facet_slice, hook=hook)
         checked_slice = validate_hook_output(edited_slice, facet_slice, hook_context=hook)
         return spec.scatter_update(out, checked_slice, mode="replace")

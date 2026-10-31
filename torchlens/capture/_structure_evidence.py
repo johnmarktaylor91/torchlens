@@ -131,7 +131,7 @@ def _input_plan_facts(trace: Any) -> dict[str, Any]:
     # Provenance enrichment, never authority: a resolver absent from this
     # build (or a payload it cannot parse) leaves the gold-rung defaults.
     with contextlib.suppress(Exception):
-        from ..quickstart import trace_input_provenance
+        from .._quickstart import trace_input_provenance
 
         provenance = trace_input_provenance(trace)
         if provenance is not None:

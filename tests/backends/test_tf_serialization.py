@@ -15,7 +15,7 @@ tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 del keras
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import (  # noqa: E402
+from torchlens.errors import (  # noqa: E402
     BackendPayloadUnsupportedError,
     BackendRuntimeCompatibilityError,
 )

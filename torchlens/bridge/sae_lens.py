@@ -7,12 +7,12 @@ from typing import Any
 from ._utils import out_at
 
 
-def encode(log: Any, site: Any, sae: Any) -> Any:
+def encode(trace: Any, site: Any, sae: Any) -> Any:
     """Encode a TorchLens out with an SAE Lens-compatible SAE.
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` containing saved outs.
     site:
         Layer label, selector, or layer object to encode.
@@ -39,7 +39,7 @@ def encode(log: Any, site: Any, sae: Any) -> Any:
             "SAE Lens bridge requires the `sae` extra: install torchlens[sae]."
         ) from exc
 
-    out = out_at(log, site)
+    out = out_at(trace, site)
     if hasattr(sae, "encode"):
         return sae.encode(out)
     if callable(sae):
@@ -47,7 +47,7 @@ def encode(log: Any, site: Any, sae: Any) -> Any:
     raise TypeError("SAE Lens bridge expected an SAE with encode(...) or a callable SAE.")
 
 
-def reconstruct(log: Any, site: Any, sae: Any) -> Any:
+def reconstruct(trace: Any, site: Any, sae: Any) -> Any:
     """Return an SAE Lens-compatible SAE's reconstruction of a TorchLens out.
 
     The site's activation is encoded, then the latents are decoded:
@@ -59,7 +59,7 @@ def reconstruct(log: Any, site: Any, sae: Any) -> Any:
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` containing saved outs.
     site:
         Layer label, selector, or layer object to reconstruct.
@@ -86,7 +86,7 @@ def reconstruct(log: Any, site: Any, sae: Any) -> Any:
             "SAE Lens bridge requires the `sae` extra: install torchlens[sae]."
         ) from exc
 
-    out = out_at(log, site)
+    out = out_at(trace, site)
     if callable(getattr(sae, "encode", None)) and callable(getattr(sae, "decode", None)):
         return sae.decode(sae.encode(out))
     if callable(sae):

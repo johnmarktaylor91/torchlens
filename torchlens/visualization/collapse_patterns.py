@@ -52,15 +52,15 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
 from .._errors import InvalidArgumentError
+from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
-from ..utils.display import user_stacklevel
 from ._condensed_flow import JUNCTION_FUNC_NAMES
 from ._segment_descriptors import _make_op_segment_descriptor
 from .collapse_plan import SegmentDescriptor
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .collapse_plan import RenderContext
 
 _ATOM_PATTERN = re.compile(r"^([A-Za-z_][A-Za-z0-9_.]*)(?:\{(\d+)\})?$")

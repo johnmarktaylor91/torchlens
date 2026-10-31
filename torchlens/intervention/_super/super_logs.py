@@ -7,15 +7,15 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ._accessor_base import SuperAccessor
+from ._accessor_base import SharedNamesMixin, SuperAccessor
 from ._base import _TENSOR_FIELD_LITERAL, Super, _TensorBearing
 
 if TYPE_CHECKING:
-    from ...data_classes.buffer import Buffer
-    from ...data_classes.grad_fn import GradFn
-    from ...data_classes.grad_fn_call import GradFnCall
-    from ...data_classes.module import Module, ModuleCall
-    from ...data_classes.param import Param
+    from ..._data_classes.buffer import Buffer
+    from ..._data_classes.grad_fn import GradFn
+    from ..._data_classes.grad_fn_call import GradFnCall
+    from ..._data_classes.module import Module, ModuleCall
+    from ..._data_classes.param import Param
 
 
 class SuperModule(Super["Module"]):
@@ -177,8 +177,10 @@ class SuperGradFnCall(Super["GradFnCall"]):
     """Aligned view of a grad_fn_handle call label across bundle members."""
 
 
-class SuperModuleAccessor(SuperAccessor["Module", SuperModule]):
+class SuperModuleAccessor(SharedNamesMixin, SuperAccessor["Module", SuperModule]):
     """Dict-like Bundle accessor returning SuperModule objects."""
+
+    _names_kind = "modules"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize a module accessor for ``bundle``.
@@ -230,8 +232,10 @@ class SuperModuleAccessor(SuperAccessor["Module", SuperModule]):
         return [str(label) for label in trace.modules.keys()]
 
 
-class SuperBufferAccessor(SuperAccessor["Buffer", SuperBuffer]):
+class SuperBufferAccessor(SharedNamesMixin, SuperAccessor["Buffer", SuperBuffer]):
     """Dict-like Bundle accessor returning SuperBuffer objects."""
+
+    _names_kind = "buffers"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize a buffer accessor for ``bundle``.
@@ -282,8 +286,10 @@ class SuperBufferAccessor(SuperAccessor["Buffer", SuperBuffer]):
         return [str(label) for label in trace.buffers.keys()]
 
 
-class SuperParamAccessor(SuperAccessor["Param", SuperParam]):
+class SuperParamAccessor(SharedNamesMixin, SuperAccessor["Param", SuperParam]):
     """Dict-like Bundle accessor returning SuperParam objects."""
+
+    _names_kind = "params"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize a parameter accessor for ``bundle``.
@@ -334,8 +340,10 @@ class SuperParamAccessor(SuperAccessor["Param", SuperParam]):
         return [str(label) for label in trace.params.keys()]
 
 
-class SuperGradFnAccessor(SuperAccessor["GradFn", SuperGradFn]):
+class SuperGradFnAccessor(SharedNamesMixin, SuperAccessor["GradFn", SuperGradFn]):
     """Dict-like Bundle accessor returning SuperGradFn objects."""
+
+    _names_kind = "grad_fns"
 
     def __init__(self, bundle: Any) -> None:
         """Initialize a grad_fn_handle accessor for ``bundle``.
@@ -365,7 +373,7 @@ class SuperGradFnAccessor(SuperAccessor["GradFn", SuperGradFn]):
         """
 
         try:
-            resolved = trace.grad_fns[label]
+            resolved = trace.autograd.grad_fns[label]
         except (KeyError, ValueError):
             return None
         return cast("GradFn", resolved) if type(resolved).__name__ == "GradFn" else None
@@ -384,7 +392,7 @@ class SuperGradFnAccessor(SuperAccessor["GradFn", SuperGradFn]):
             Grad-fn labels.
         """
 
-        return [str(label) for label in trace.grad_fns.keys()]
+        return [str(label) for label in trace.autograd.grad_fns.keys()]
 
 
 class SuperModuleCallAccessor(SuperAccessor["ModuleCall", SuperModuleCall]):
@@ -475,7 +483,7 @@ class SuperGradFnCallAccessor(SuperAccessor["GradFnCall", SuperGradFnCall]):
         """
 
         try:
-            resolved = trace.grad_fn_calls[label]
+            resolved = trace.autograd.grad_fn_calls[label]
         except (KeyError, ValueError):
             return None
         return cast("GradFnCall", resolved) if type(resolved).__name__ == "GradFnCall" else None
@@ -496,7 +504,7 @@ class SuperGradFnCallAccessor(SuperAccessor["GradFnCall", SuperGradFnCall]):
 
         return [
             str(call_label)
-            for grad_fn_handle in trace.grad_fns
+            for grad_fn_handle in trace.autograd.grad_fns
             for call_label in getattr(grad_fn_handle, "call_labels", [])
         ]
 

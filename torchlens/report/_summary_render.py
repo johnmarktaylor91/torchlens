@@ -68,7 +68,7 @@ class SummaryFacts:
     coverage_unknown: int
     unknown_op_names: tuple[str, ...]
     # Pass-level peak facts arrive pre-gated through the ONE publication gate
-    # (torchlens.observe._peaks.pass_peak_facts); the basis is always named
+    # (torchlens._observe._peaks.pass_peak_facts); the basis is always named
     # and a CUDA 0 reads as a high-water fact, never "used 0 bytes".
     peak_value_bytes: int | None
     peak_meaning: str

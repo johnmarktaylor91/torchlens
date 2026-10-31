@@ -26,8 +26,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.postprocess import _call_site_contract as contract, loop_detection
-from torchlens.validation import MetadataInvariantError, check_metadata_invariants
+from torchlens._postprocess import _call_site_contract as contract, loop_detection
+from torchlens.errors import MetadataInvariantError
+from torchlens.validation import check_metadata_invariants
 from torchlens.validation.diagnostics import get_validation_diagnostics
 
 
@@ -202,7 +203,9 @@ def test_contract_and_narrowed_invariants_hold_on_rule_rows(model_cls: type[nn.M
     assert contract.call_site_classes_for(trace) is not None
     assert check_metadata_invariants(trace) is True
     assert not [
-        d for d in get_validation_diagnostics(trace) if d.check == "call_site_contract_unchecked"
+        d
+        for d in get_validation_diagnostics(trace)
+        if d.check_name == "call_site_contract_unchecked"
     ]
 
 
@@ -253,13 +256,15 @@ def test_loaded_trace_reports_the_contract_unchecked(tmp_path: Path) -> None:
     torch.manual_seed(0)
     trace = tl.trace(_TanhLoop(), _x())
     spec = tmp_path / "loop.tlspec"
-    tl.save(trace, str(spec))
+    trace.save(str(spec))
     loaded = tl.load(str(spec))
     assert loaded.grouping_policy["detector"] == "callsite_v1"
     assert contract.call_site_classes_for(loaded) is None
     check_metadata_invariants(loaded)
     unchecked = [
-        d for d in get_validation_diagnostics(loaded) if d.check == "call_site_contract_unchecked"
+        d
+        for d in get_validation_diagnostics(loaded)
+        if d.check_name == "call_site_contract_unchecked"
     ]
     assert len(unchecked) == 1
     assert "not checked" in unchecked[0].message

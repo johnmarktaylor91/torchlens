@@ -34,7 +34,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
+from torchlens._data_classes.layer import Layer
 from torchlens.visualization import _render_leaf
 
 os.environ.setdefault("MPLBACKEND", "Agg")
@@ -170,7 +170,7 @@ def _counted_draw(
         if hasattr(module, "_collapsed_module_rolling_suffix"):
             monkeypatch.setattr(module, "_collapsed_module_rolling_suffix", counting_suffix)
 
-    trace.draw(vis_save_only=True, vis_outpath=str(outpath), **draw_kwargs)
+    trace.draw(vis_save_only=True, path=str(outpath), **draw_kwargs)
     return counts
 
 

@@ -1,6 +1,6 @@
 """``affine_source``: under a subspace, the new coordinates are ``weight @ x + bias``.
 
-``fork.do(tl.subspace(site, R.T, origin=...), tl.intervention.affine_source(W, bias=b))``
+``fork.do(tl.subspace(site, R.T, origin=...), tl.intervention.set_affine_coordinates(W, bias=b))``
 is LoReFT, ``h + R (W h + b - R^T h)``. These tests check it against that hand formula in
 float64 (rank 1 and 4, every position and one position), check that a saved spec applies
 bit-identically, and check the refusals (outside a subspace, malformed arguments), each
@@ -64,7 +64,7 @@ def _target(rank: int, one_position: bool) -> Any:
 
 
 def _edit(rank: int) -> Any:
-    return tl.intervention.affine_source(_W[:rank], bias=_B[:rank])
+    return tl.intervention.set_affine_coordinates(_W[:rank], bias=_B[:rank])
 
 
 def _hand(rank: int, one_position: bool) -> torch.Tensor:
@@ -109,7 +109,7 @@ def test_saved_affine_source_applies_bit_identically(tmp_path: Path, rank: int) 
     helper = loaded.hook_specs[0].helper
     assert helper.helper_name == "subspace_edit" and helper.portability == "builtin"
     inner = helper.args[0]
-    assert inner.helper_name == "affine_source"
+    assert inner.helper_name == "set_affine_coordinates"
     assert torch.equal(inner.args[0], _W[:rank]) and torch.equal(
         dict(inner.kwargs)["bias"], _B[:rank]
     )
@@ -119,7 +119,7 @@ def test_saved_affine_source_applies_bit_identically(tmp_path: Path, rank: int) 
 def test_bias_absent_default_fills_and_applies_without_a_bias() -> None:
     """An older payload with no ``bias`` keyword rebuilds with ``bias=None``."""
 
-    rebuilt = rebuild_builtin_helper("affine_source", (_W[:2],), {})
+    rebuilt = rebuild_builtin_helper("set_affine_coordinates", (_W[:2],), {})
     assert dict(rebuilt.kwargs)["bias"] is None
     fork = _ready().fork()
     fork.do(tl.subspace(_SITE, _R[:, :2].T, origin=_ORIGIN), rebuilt)
@@ -144,12 +144,12 @@ def _remedy_runs(error: Any) -> None:
 
     remedy = error.fields["remedy"]
     assert "tl.subspace(site, rotation.T, origin=...)" in remedy
-    assert "tl.intervention.affine_source(weight, bias=bias)" in remedy
+    assert "tl.intervention.set_affine_coordinates(weight, bias=bias)" in remedy
     rotation, weight, bias = _R[:, :2], _W[:2], _B[:2]
     fork = _ready().fork()
     fork.do(
         tl.subspace(_SITE, rotation.T, origin=_ORIGIN),
-        tl.intervention.affine_source(weight, bias=bias),
+        tl.intervention.set_affine_coordinates(weight, bias=bias),
     )
     assert not torch.equal(fork.push()[_SITE].out, _ready()[_SITE].out)
 
@@ -188,11 +188,11 @@ _MALFORMED = {
 def test_malformed_argument_refuses_at_construction_and_at_load(case: str) -> None:
     argument, args, kwargs = _MALFORMED[case]
     with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.intervention.affine_source(*args(), **kwargs)
+        tl.intervention.set_affine_coordinates(*args(), **kwargs)
     assert excinfo.value.fields["code"] == "affine_source_invalid"
     assert excinfo.value.fields["argument"] == argument
     with pytest.raises(InvalidArgumentError) as loaded:
-        rebuild_builtin_helper("affine_source", args(), kwargs)
+        rebuild_builtin_helper("set_affine_coordinates", args(), kwargs)
     assert loaded.value.fields["code"] == "affine_source_invalid"
     _remedy_runs(excinfo.value)
 
@@ -201,7 +201,8 @@ def test_weight_shaped_unlike_the_basis_refuses() -> None:
     fork = _ready().fork()
     with pytest.raises(InvalidArgumentError) as excinfo:
         fork.do(
-            tl.subspace(_SITE, _R[:, :2].T, origin=_ORIGIN), tl.intervention.affine_source(_W[:3])
+            tl.subspace(_SITE, _R[:, :2].T, origin=_ORIGIN),
+            tl.intervention.set_affine_coordinates(_W[:3]),
         )
     assert excinfo.value.fields["code"] == "affine_source_invalid"
     assert excinfo.value.fields["argument"] == "weight"

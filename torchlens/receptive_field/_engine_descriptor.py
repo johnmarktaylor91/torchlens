@@ -21,7 +21,7 @@ from ._types import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
+    from .._data_classes.op import Op
 
 
 def _descriptor(op: Op, state: _InputState) -> ReceptiveField:

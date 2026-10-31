@@ -61,8 +61,8 @@ def _dot(trace: tl.Trace, **kwargs: object) -> str:
     out = tempfile.mkdtemp()
     return trace.draw(
         vis_save_only=True,
-        vis_fileformat="dot",
-        vis_outpath=f"{out}/g",
+        file_format="dot",
+        path=f"{out}/g",
         **kwargs,
     )
 

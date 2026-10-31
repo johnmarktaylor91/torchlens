@@ -37,13 +37,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._robustness import UnsupportedTensorVariantError, _tracing_tensor_kind
-from torchlens.backends.torch import wrappers as torch_wrappers
-from torchlens.utils import _torch_compat
-from torchlens.utils._torch_compat import (
+from torchlens._utils import _torch_compat
+from torchlens._utils._torch_compat import (
     dynamo_is_compiling,
     get_torch_capability_snapshot,
     get_tracing_tensor_types,
 )
+from torchlens.backends.torch import wrappers as torch_wrappers
 
 
 @pytest.fixture()
@@ -143,7 +143,7 @@ def test_exact_torch_functional_tensor_is_classified_and_refused() -> None:
     with pytest.raises(UnsupportedTensorVariantError, match="FunctionalTensor in input"):
         tl.trace(nn.Identity(), functional)
 
-    compat_row = tl.compat.report(nn.Identity(), torch.randn(2, 4)).row("vmap_functorch")
+    compat_row = tl.compat.report(nn.Identity(), torch.randn(2, 4)).check("vmap_functorch")
     assert "created inside forward" in compat_row.details
 
 
@@ -413,15 +413,15 @@ def test_compile_compat_row_reports_direct_attribute_and_free_function_residual(
 ) -> None:
     """Compatibility reporting matches the preflight inventory and its residual."""
 
-    compiled_row = tl.compat.report(_CompiledAttributeModel(), torch.randn(2, 4)).row(
+    compiled_row = tl.compat.report(_CompiledAttributeModel(), torch.randn(2, 4)).check(
         "torch_compile"
     )
-    assert compiled_row.detected is True
+    assert compiled_row.is_detected is True
     assert "plain module attribute" in compiled_row.details
     assert "warm-cache" in compiled_row.details
 
-    clear_row = tl.compat.report(nn.Identity(), torch.randn(2, 4)).row("torch_compile")
-    assert clear_row.detected is False
+    clear_row = tl.compat.report(nn.Identity(), torch.randn(2, 4)).check("torch_compile")
+    assert clear_row.is_detected is False
     assert "globals/free-function references" in clear_row.details
 
 

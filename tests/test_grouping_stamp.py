@@ -14,19 +14,17 @@ import warnings
 import pytest
 import torch
 import torch.nn as nn
-from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens._io import ArtifactSchemaAgeWarning
 from torchlens._io.prerelease import activate_prerelease_fields
-from torchlens.errors._base import TorchLensWarning
-from torchlens.postprocess._grouping_stamp import (
+from torchlens._postprocess._grouping_stamp import (
     GROUPING_POLICY_SCHEMA,
     build_grouping_policy_stamp,
     degraded_grouping_policy_stamp,
     validate_grouping_policy_stamp,
 )
+from torchlens.errors._base import TorchLensWarning
 
 
 def _tiny_trace(**kwargs) -> tl.Trace:
@@ -176,7 +174,7 @@ def test_g1_stamp_roundtrip_under_switch(tmp_path) -> None:
     trace = _tiny_trace()
     path = tmp_path / "stamp.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         with warnings.catch_warnings():
             warnings.simplefilter("error", TorchLensWarning)
             loaded = tl.load(str(path))
@@ -193,11 +191,11 @@ def _tampered_reload(tmp_path, mutate, name: str) -> tl.Trace:
     trace = _tiny_trace()
     path = tmp_path / f"{name}.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, str(path))
+        trace.save(str(path))
         loaded = tl.load(str(path))
         mutate(loaded)
         repath = tmp_path / f"{name}_tampered.tlspec"
-        tl.save(loaded, str(repath))
+        loaded.save(str(repath))
         with pytest.warns(TorchLensWarning, match="grouping_policy stamp is invalid"):
             return tl.load(str(repath))
 
@@ -237,7 +235,7 @@ def test_g3_degraded_settlement_roundtrips_byte_stable(tmp_path) -> None:
     # warning and stays degraded (verdicts only worsen, never heal).
     path = tmp_path / "settled_again.tlspec"
     with activate_prerelease_fields():
-        tl.save(settled, str(path))
+        settled.save(str(path))
         with warnings.catch_warnings():
             warnings.simplefilter("error", TorchLensWarning)
             resettled = tl.load(str(path))
@@ -245,33 +243,24 @@ def test_g3_degraded_settlement_roundtrips_byte_stable(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# G5: legacy artifacts settle silently to the legacy settlement
+# G5: the legacy v7 artifact was written by torchlens 2.x, which this
+# release does not read: it refuses typed instead of settling
 # ---------------------------------------------------------------------------
 
 
-def test_g5_legacy_v7_artifact_settles_silently() -> None:
+def test_g5_legacy_v7_artifact_refuses_as_2x() -> None:
     from pathlib import Path
 
+    from _refuses_as_2x import assert_refuses_as_2x
+
     fixture = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
-    with warnings.catch_warnings():
-        # Silent wrt TorchLensWarning; the version-age advisory is expected.
-        warnings.simplefilter("error", TorchLensWarning)
-        warnings.simplefilter("default", ArtifactSchemaAgeWarning)
-        # This fixture was recorded on a torch 2.13 CUDA build (R6): the
-        # minor-mismatch advisory is also expected on any other torch minor,
-        # narrowly, same as the age advisory above.
-        with expect_bundle_minor_version_mismatch():
-            loaded = tl.load(str(fixture))  # real v7 write: the stamp was DROPped
-    assert loaded.grouping_policy == degraded_grouping_policy_stamp("legacy")
-    assert loaded.grouping_policy["settlement_note"] == "grouping_stamp_legacy"
-    # The mirror field restores its default.
-    assert loaded.grouping == "structural"
+    assert_refuses_as_2x(fixture)
 
 
 def test_healthy_stamp_persists_on_plain_v8_round_trip(tmp_path) -> None:
     trace = _tiny_trace()
     path = tmp_path / "fresh.tlspec"
-    tl.save(trace, str(path))  # tlspec v8: the stamp persists plainly
+    trace.save(str(path))  # tlspec v8: the stamp persists plainly
     with warnings.catch_warnings():
         warnings.simplefilter("error", TorchLensWarning)
         loaded = tl.load(str(path))

@@ -68,7 +68,7 @@ RESULT = (len(lens), len(blocks))
 ## Plug it into `logit_lens`
 
 `TunedLens.forward(h, idx)` takes the hidden state and the layer index, so the
-mapping binds each block address to its index. `validate=False` skips the
+mapping binds each block address to its index. `verify=False` skips the
 model-identity check that `logit_lens` runs on user lenses; the check below
 does the same comparison by hand: with zero translators, the last block's row
 must equal the model's own logits.
@@ -78,7 +78,7 @@ must equal the model's own logits.
 lens_by_block = {
     address: (lambda h, i=i: lens(h, idx=i)) for i, address in enumerate(blocks)
 }
-result = logit_lens(trace, lens=lens_by_block, validate=False)
+result = logit_lens(trace, lens=lens_by_block, verify=False)
 
 with torch.no_grad():
     model_logits = model(input_ids).logits
@@ -104,7 +104,7 @@ with torch.no_grad():
         translator.weight.copy_(0.05 * torch.randn(translator.weight.shape, generator=generator))
         translator.bias.zero_()
 
-tuned = logit_lens(trace, lens=lens_by_block, validate=False)
+tuned = logit_lens(trace, lens=lens_by_block, verify=False)
 RESULT = (
     len(tuned.entries),
     all(not torch.allclose(row.logits, plain) for row, plain in zip(tuned.entries, plain_rows)),
@@ -121,7 +121,7 @@ RESULT = (
   final norm and unembedding.
 - With `validate=False`, nothing checks that the lens belongs to the traced
   model. A lens may carry a `model_identity` record; see the `lens=` entry of
-  `logit_lens` for how `validate=True` uses it.
+  `logit_lens` for how `verify=True` uses it.
 - `logit_lens` keeps every per-layer projection in memory; for long sequences
   and large vocabularies use `logit_lens_predictions`, which takes the same
   `lens=`.

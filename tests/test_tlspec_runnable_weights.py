@@ -13,19 +13,19 @@ from safetensors.torch import load_file
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens._io.runnable import (
     assert_sparse_core_has_no_tensor_payload,
     build_sparse_run_descriptor,
 )
-from torchlens._runnable_state import runnable_tensor_byte_digest
-from torchlens.errors import StateBindingError
-from torchlens.options import CaptureOptions
-from torchlens.runnable import (
+from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     StateSource,
 )
+from torchlens._runnable_state import runnable_tensor_byte_digest
+from torchlens.errors import StateBindingError
+from torchlens.options import CaptureOptions
 
 
 def _fresh_warning() -> bool:
@@ -120,10 +120,10 @@ def test_runnable_save_rejects_tensor_in_slotted_keep_field(
     op = next(op for op in trace.layer_list if not op.is_input)
     object.__setattr__(op, field_name, {"hidden_tensor": torch.tensor([1.0])})
 
-    with pytest.raises((AssertionError, TorchLensIOError)) as caught:
+    with pytest.raises((AssertionError, ArtifactError)) as caught:
         trace.save(tmp_path / f"{field_name}.tlspec", level="runnable")
 
-    if isinstance(caught.value, TorchLensIOError):
+    if isinstance(caught.value, ArtifactError):
         assert isinstance(caught.value.__cause__, AssertionError)
 
 
@@ -445,7 +445,6 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
     import copy
 
     from torchlens.errors import PoisonedRunError
-    from torchlens.runnable import DivergencePolicy
 
     class _M(nn.Module):
         def __init__(self) -> None:
@@ -476,9 +475,7 @@ def test_loaded_runnable_embedded_state_trace_pickles_and_deepcopies(tmp_path: P
     assert copy.deepcopy(ok_fork) is not None
 
     # A DIVERGED fork must round-trip its poison flag through pickle and deepcopy and stay refused.
-    diverged = loaded.run(
-        inputs=torch.ones(5, 3), on_divergence=DivergencePolicy.RETURN_DIVERGED
-    ).trace
+    diverged = loaded.run(inputs=torch.ones(5, 3), on_divergence="return").trace
     for revived in (pickle.loads(pickle.dumps(diverged)), copy.deepcopy(diverged)):
         assert revived._runnable.poisoned is True
         with pytest.raises(PoisonedRunError):

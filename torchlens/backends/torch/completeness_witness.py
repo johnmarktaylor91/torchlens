@@ -58,19 +58,19 @@ import torch._ops as _torch_ops  # r47 hon2_1: enumerate the ``torch.ops.*`` __c
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ..._errors import TorchLensCaptureGapWarning
+from ..._errors import CaptureGapWarning
 from ..._split_rebind import (
     rebind_contextmanager as _rebind_contextmanager,
     rebind_function as _rebind_function,
 )
-from ...errors import ScalarEscapeWarning
-from ...utils import _exception_notes, _torch_compat
-from ...utils._callable_safety import private_c_forward_op_module_names
-from ...utils._torch_compat import (
+from ..._utils import _exception_notes, _torch_compat
+from ..._utils._callable_safety import private_c_forward_op_module_names
+from ..._utils._torch_compat import (
     get_tensorbase_class,
     tensor_version_or_none,
 )
-from ...utils._torch_symbols import torch_attr
+from ..._utils._torch_symbols import torch_attr
+from ...errors import ScalarEscapeWarning
 from . import (
     _completeness_boundaries as _completeness_boundaries,
     _completeness_cross_thread as _completeness_cross_thread,

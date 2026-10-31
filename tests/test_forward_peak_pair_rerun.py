@@ -64,7 +64,7 @@ def test_zero_then_positive_rerun_drops_the_reason(
 
     assert int(log.forward_peak_memory) == 4096
     assert log.forward_peak_memory_reason is None
-    tl.save(log, tmp_path / "bundle")
+    log.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
     assert int(loaded.forward_peak_memory) == 4096
     assert loaded.forward_peak_memory_reason is None
@@ -77,7 +77,7 @@ def test_positive_then_zero_rerun_carries_the_reason(
 
     assert log.forward_peak_memory is None
     assert log.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
-    tl.save(log, tmp_path / "bundle")
+    log.save(tmp_path / "bundle")
     loaded = tl.load(tmp_path / "bundle")
     assert loaded.forward_peak_memory is None
     assert loaded.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
@@ -90,7 +90,7 @@ def test_append_rerun_after_a_cpu_zero_round_trips(
     log.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
     assert log.forward_peak_memory_reason is None
-    tl.save(log, tmp_path / "append_bundle")
+    log.save(tmp_path / "append_bundle")
     loaded = tl.load(tmp_path / "append_bundle")
     assert loaded.is_appended is True
     assert int(loaded.forward_peak_memory) == int(log.forward_peak_memory)

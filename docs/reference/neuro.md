@@ -19,8 +19,8 @@ accessing an unadvertised name teaches the exact install command.
 ## The map (mirrors `help(torchlens.neuro)`)
 
 1. **Extract** (needs no extra): `tl.trace(model, x, save=...)`,
-   `tl.extract_dataset(..., output_dir=..., stimulus_ids=...)`,
-   `tl.load_extraction(path)`.
+   `tl.extract_dataset(..., path=..., stimulus_ids=...)`,
+   `tl.load(path)`.
 2. **Geometry** (needs no extra): `tl.repgeom.rdm` / `classical_mds` /
    `scree` / `effective_dimensionality` / `procrustes_align`,
    `tl.stats.cka`. Nothing is re-exported into neuro.
@@ -32,7 +32,7 @@ accessing an unadvertised name teaches the exact install command.
    ridge and linear CKA on one extraction (below).
 6. **Refusals**: noise ceilings, crossnobis/mahalanobis, searchlight,
    inferential bootstrap/permutation/model fitting (descriptive intervals on
-   TorchLens's own scores are `tl.repgeom.rdm_compare_interval` /
+   TorchLens's own scores are `tl.repgeom.compare_rdms_interval` /
    `cka_interval`), encoding-model inference, CCA/SVCCA/PWCCA,
    non-metric MDS, model zoos, brain data. Each attempted name raises a
    teaching refusal naming the owner, the missing ingredient, and the
@@ -109,7 +109,7 @@ convention at both versions -- no scipy dependency):
 The modes reject mixed arguments. `rdm_descriptors` additionally carry
 `measure_convention` -- the formula in words -- because rsatoolbox's
 `"euclidean"` equals torchlens's euclidean SQUARED and divided by
-`n_features` (a Pearson-visible discrepancy produced by nothing but a
+`num_features` (a Pearson-visible discrepancy produced by nothing but a
 convention), and rsatoolbox has NO cosine RDM method (ours is real and
 tested; their `calc_rdm(method="cosine")` raises `NotImplementedError`, and
 a pinned test fails loudly if that ever changes). Source mode also records
@@ -161,22 +161,22 @@ trace = tl.trace(model, images, save=...)
 result = tl.neuro.compare(trace, brain, analyses=("rsa", "ridge", "cka"))
 print(result.table())                  # one row per site, one column per analysis
 print(result.disagreement().table())   # where the analyses rank sites differently
-result = tl.neuro.compare(trace, brain, analyses=("rsa", "ridge", "cka"), n_resamples=1000)
+result = tl.neuro.compare(trace, brain, analyses=("rsa", "ridge", "cka"), num_resamples=1000)
 ```
 
 `neuro.compare` needs no extra (it is numpy-only). It reads each site's
 activations once from what the source already holds -- a Trace with saved
 activations, a `LoadedExtraction` or extraction directory, or a
-`{site: [n_stimuli, ...]}` mapping -- and never re-runs the model. `brain`
-is any `[n_stimuli, ...]` target for the same stimuli in the same order
+`{site: [num_stimuli, ...]}` mapping -- and never re-runs the model. `brain`
+is any `[num_stimuli, ...]` target for the same stimuli in the same order
 (recordings, or another model's features). Every score is a descriptive
 similarity on these stimuli:
 
-- `"rsa"`: `tl.repgeom.rdm_compare(rdm(site, rdm_metric), rdm(target,
+- `"rsa"`: `tl.repgeom.compare_rdms(rdm(site, rdm_metric), rdm(target,
   rdm_metric), rsa_method)`; defaults `rdm_metric="correlation"`,
   `rsa_method="spearman"`.
 - `"ridge"`: a cross-validated ridge score. The stimuli are split into
-  `n_folds` folds (default 5) by a permutation seeded with `seed`. On each
+  `num_folds` folds (default 5) by a permutation seeded with `seed`. On each
   training fold, features and target are centred by the training means and
   one penalty for all target columns is chosen from `ridge_alphas` (absolute,
   on unscaled features; default 1e-2 to 1e8) by the exact leave-one-out
@@ -187,7 +187,7 @@ similarity on these stimuli:
 - `"cka"`: linear CKA with the biased Gretton HSIC, the variant
   `tl.stats.cka` computes.
 
-With `n_resamples=`, each score gets a stimulus-bootstrap `ScoreInterval`
+With `num_resamples=`, each score gets a stimulus-bootstrap `ScoreInterval`
 (the ridge interval resamples the evaluation of the out-of-fold predictions
 and does not refit). `result.similarity_repository_ids` names the catalogued
 variant of each analysis (ridge has none). Inference, voxel maps, variance
@@ -200,11 +200,11 @@ feature bank).
 
 ## Uncertainty on TorchLens's own scores
 
-`tl.repgeom.rdm_compare_interval(rdm_a, rdm_b, method, n_resamples=1000,
+`tl.repgeom.compare_rdms_interval(rdm_a, rdm_b, method, num_resamples=1000,
 seed=0, confidence=0.95)` and `tl.repgeom.cka_interval(a, b, ...)` return a
-`ScoreInterval`: the unchanged point score (exactly `rdm_compare`; linear CKA
+`ScoreInterval`: the unchanged point score (exactly `compare_rdms`; linear CKA
 as `tl.stats.cka` computes it) with a percentile bootstrap interval over
-stimuli beside it, plus the settings that made it (`n_resamples`, `n_valid`,
+stimuli beside it, plus the settings that made it (`num_resamples`, `num_valid_resamples`,
 `seed`, `confidence`, `basis`). RDM resamples drop the entries that pair a
 stimulus with a copy of itself; CKA resamples reindex the stimulus Gram
 matrices, so each resample costs O(n^2) whatever the feature count. The same
@@ -253,7 +253,7 @@ print(report.table())
 
 | Function | Estimator | Precision | Inputs | Degenerate case |
 |---|---|---|---|---|
-| `tl.stats.cka(a, b)` | Linear CKA, BIASED estimator (Kornblith et al. 2019 gram-matrix form; no unbiased-HSIC correction) | CPU `float64` | matched `[n_obs x n_features]` pairs (rows are observations; mismatched row counts refuse; NaN/Inf input refuses `cka_input_nonfinite`, as `tl.repgeom.rdm` does) | zero-variance input returns `NaN` with a `cka_zero_variance` warning |
+| `tl.stats.cka(a, b)` | Linear CKA, BIASED estimator (Kornblith et al. 2019 gram-matrix form; no unbiased-HSIC correction) | CPU `float64` | matched `[n_obs x num_features]` pairs (rows are observations; mismatched row counts refuse; NaN/Inf input refuses `cka_input_nonfinite`, as `tl.repgeom.rdm` does) | zero-variance input returns `NaN` with a `cka_zero_variance` warning |
 
 Reference values are pinned in `tests/test_neuro_pkg_geometry.py`; an
 estimator change fails the literals. RBF/debiased estimators are

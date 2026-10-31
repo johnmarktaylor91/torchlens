@@ -184,9 +184,9 @@ def main() -> None:
         try:
             for collapse in ("none", "auto", "max"):
                 trace.draw(
-                    vis_outpath=str(OUT_DIR / f"{name}_{collapse}"),
+                    path=str(OUT_DIR / f"{name}_{collapse}"),
                     vis_save_only=True,
-                    vis_fileformat="svg",
+                    file_format="svg",
                     collapse=collapse,
                     show_containers=False,
                 )

@@ -162,7 +162,7 @@ def stage_a(model: Any, inputs: dict[str, Any]) -> dict[str, Any]:
             "traced_equals_direct": equal,
             "max_abs_diff_vs_direct": max_abs,
             "num_ops": int(trace.num_ops),
-            "num_layers": int(trace.num_layers),
+            "num_layers": int(len(trace.layers)),
             "num_modules": int(trace.num_modules),
             "saved_activation_memory_bytes": int(trace.saved_activation_memory),
             "trace_seconds": round(seconds, 1),

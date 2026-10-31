@@ -138,9 +138,9 @@ def _input() -> torch.Tensor:
 def test_structural_hash_is_deterministic_across_initializations_and_processes() -> None:
     """Public model hashes ignore random parameter initialization across processes."""
 
-    first = tl.hash.model(_ResidualModel(), _input())
+    first = tl.fingerprint.model(_ResidualModel(), _input())
     torch.manual_seed(100)
-    second = tl.hash.model(_ResidualModel(), _input())
+    second = tl.fingerprint.model(_ResidualModel(), _input())
     script = textwrap.dedent(
         """
         import torch
@@ -157,7 +157,7 @@ def test_structural_hash_is_deterministic_across_initializations_and_processes()
                 return self.right(torch.relu(self.left(value))) + value
 
         torch.manual_seed(999)
-        print(tl.hash.model(Model(), torch.ones(2, 4)))
+        print(tl.fingerprint.model(Model(), torch.ones(2, 4)))
         """
     )
     third = subprocess.check_output([sys.executable, "-c", script], text=True).strip()
@@ -168,9 +168,9 @@ def test_structural_hash_is_deterministic_across_initializations_and_processes()
 def test_structural_hash_changes_with_graph_topology() -> None:
     """Adding a layer or dropping a structural edge changes the public hash."""
 
-    residual_hash = tl.hash.model(_ResidualModel(), _input())
-    sequential_hash = tl.hash.model(_SequentialModel(), _input())
-    expanded_hash = tl.hash.model(_ExpandedModel(), _input())
+    residual_hash = tl.fingerprint.model(_ResidualModel(), _input())
+    sequential_hash = tl.fingerprint.model(_SequentialModel(), _input())
+    expanded_hash = tl.fingerprint.model(_ExpandedModel(), _input())
 
     assert residual_hash != sequential_hash
     assert sequential_hash != expanded_hash
@@ -185,11 +185,15 @@ def test_structural_hash_is_capture_option_invariant_for_metadata_options() -> N
     code_context = tl.trace(
         model,
         _input(),
-        capture=CaptureOptions(layers_to_save=None, save_code_context=True),
+        capture=CaptureOptions(layers_to_save=None, save_source_context=True),
     )
 
-    assert tl.hash.trace(all_layers) == tl.hash.trace(metadata_only) == tl.hash.trace(code_context)
-    assert tl.hash.model(model, _input()) == tl.hash.trace(metadata_only)
+    assert (
+        tl.fingerprint.trace(all_layers)
+        == tl.fingerprint.trace(metadata_only)
+        == tl.fingerprint.trace(code_context)
+    )
+    assert tl.fingerprint.model(model, _input()) == tl.fingerprint.trace(metadata_only)
 
 
 def test_assert_unchanged_returns_hash_and_bootstraps() -> None:
@@ -202,11 +206,11 @@ def test_assert_unchanged_returns_hash_and_bootstraps() -> None:
 
     from torchlens.errors import TorchLensWarning
 
-    expected = tl.hash.model(_ResidualModel(), _input())
-    assert tl.assert_unchanged(_ResidualModel(), _input(), expected) == expected
+    expected = tl.fingerprint.model(_ResidualModel(), _input())
+    assert tl.fingerprint.assert_unchanged(_ResidualModel(), _input(), expected) == expected
 
     with pytest.warns(TorchLensWarning, match="TorchLens structural hash") as record:
-        bootstrapped = tl.assert_unchanged(_ResidualModel(), _input(), None)
+        bootstrapped = tl.fingerprint.assert_unchanged(_ResidualModel(), _input(), None)
     assert bootstrapped == expected
     assert any(bootstrapped in str(warning.message) for warning in record)
 
@@ -214,11 +218,11 @@ def test_assert_unchanged_returns_hash_and_bootstraps() -> None:
 def test_assert_unchanged_reports_both_hashes_on_mismatch() -> None:
     """Mismatch errors name both the pin and the actual structural hash."""
 
-    expected = tl.hash.model(_ResidualModel(), _input())
-    actual = tl.hash.model(_SequentialModel(), _input())
+    expected = tl.fingerprint.model(_ResidualModel(), _input())
+    actual = tl.fingerprint.model(_SequentialModel(), _input())
 
-    with pytest.raises(tl.hash.StructuralHashMismatchError) as error:
-        tl.assert_unchanged(_SequentialModel(), _input(), expected)
+    with pytest.raises(tl.errors.StructuralHashMismatchError) as error:
+        tl.fingerprint.assert_unchanged(_SequentialModel(), _input(), expected)
 
     assert expected in str(error.value)
     assert actual in str(error.value)
@@ -233,13 +237,13 @@ def test_structural_hash_mismatch_error_joins_the_taxonomy() -> None:
 
     from torchlens import errors
 
-    assert errors.StructuralHashMismatchError is tl.hash.StructuralHashMismatchError
-    assert issubclass(tl.hash.StructuralHashMismatchError, errors.ValidationError)
-    assert issubclass(tl.hash.StructuralHashMismatchError, AssertionError)
+    assert errors.StructuralHashMismatchError is tl.errors.StructuralHashMismatchError
+    assert issubclass(tl.errors.StructuralHashMismatchError, errors.ValidationError)
+    assert issubclass(tl.errors.StructuralHashMismatchError, AssertionError)
 
-    expected = tl.hash.model(_ResidualModel(), _input())
+    expected = tl.fingerprint.model(_ResidualModel(), _input())
     with pytest.raises(AssertionError):
-        tl.assert_unchanged(_SequentialModel(), _input(), expected)
+        tl.fingerprint.assert_unchanged(_SequentialModel(), _input(), expected)
 
 
 def test_assert_unchanged_expected_type_door_is_typed() -> None:
@@ -248,7 +252,7 @@ def test_assert_unchanged_expected_type_door_is_typed() -> None:
     from torchlens import errors
 
     with pytest.raises(errors.ArgumentTypeError) as exc_info:
-        tl.assert_unchanged(_ResidualModel(), _input(), 123)  # type: ignore[arg-type]
+        tl.fingerprint.assert_unchanged(_ResidualModel(), _input(), 123)  # type: ignore[arg-type]
 
     assert isinstance(exc_info.value, TypeError)
     assert exc_info.value.fields["code"] == "hash_expected_type_invalid"
@@ -266,7 +270,7 @@ def test_content_hash_type_door_is_typed() -> None:
         __slots__ = ("value",)
 
     with pytest.raises(errors.ArgumentTypeError) as exc_info:
-        tl.hash.content(_Slotted())
+        tl.fingerprint.content(_Slotted())
 
     assert isinstance(exc_info.value, TypeError)
     assert exc_info.value.fields["code"] == "hash_content_type_unsupported"

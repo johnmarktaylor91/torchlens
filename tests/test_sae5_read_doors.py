@@ -37,9 +37,9 @@ from tests.test_sae4_latent_facets import (
 )
 from tests.test_sae4_multi_call_modules import MultiHeadSelfAttention
 from torchlens.intervention.errors import (
+    AmbiguousSiteError,
     MultiMatchWarning,
     SelectorCapabilityError,
-    SiteAmbiguityError,
     SiteResolutionError,
 )
 from torchlens.semantic.facets import Facet
@@ -138,7 +138,7 @@ def test_trace_getitem_refuses_a_broadcast_head_selector(attn) -> None:
 
     model, x = attn
     trace = tl.trace(model, x, capture=_READY)
-    with pytest.raises(SiteAmbiguityError), warnings.catch_warnings():
+    with pytest.raises(AmbiguousSiteError), warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace[tl.head(0)]
 

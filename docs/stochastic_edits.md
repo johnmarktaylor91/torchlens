@@ -3,25 +3,26 @@
 Causal scrubbing, resampling ablation and mean ablation replace an activation with values drawn
 from, or averaged over, other inputs. TorchLens builds them from one population noun and one
 sampling plan, records every draw, and makes each draw reproducible from its seed. Every name on
-this page lives in `torchlens.intervention` (not at the `tl.` root) and is DOCUMENTED-UNSTABLE:
-the spellings may change without a deprecation shim.
+this page lives in `torchlens.intervention` (not at the `tl.` root), except `mean_from`, `mean_fill`
+and `sampling_records`, which import from `torchlens.intervention.stochastic`. All are
+DOCUMENTED-UNSTABLE: the spellings may change without a deprecation shim.
 
 ## The pieces
 
 | Name | What it does |
 | --- | --- |
-| `reference(source, origin=...)` | The population: a tensor whose axis-0 slices are the members, a list of same-shape tensors, or a list of captured traces. `origin=` is a required note of where the population came from. |
+| `population(source, origin=...)` | The population: a tensor whose axis-0 slices are the members, a list of same-shape tensors, or a list of captured traces. `origin=` is a required note of where the population came from. |
 | `sample_from(population, seed=...)` | The one stochastic primitive: an immutable plan that draws one whole donor per firing. Apply it with `tl.patch_from(plan)`. |
 | `resample_rows_from(population, seed=..., axis=...)` | Resampling ablation: each batch row is replaced by one whole donor row, drawn with replacement, independently per row. |
 | `permute_batch(seed=..., axis=...)` | Exchanges rows within the current batch (a draw without replacement). |
 | `mean_from(population)` | Fills with the elementwise mean over the population. A mean is a reduction, never a draw, so it takes no seed. |
-| `mean_fill(over=...)` | The axis-aware mean fill: `over=` names the axes to average (`"all"` for the global mean). It averages the site's own value unless a population is passed first. |
-| `set_direction_mean(direction, population, feature_axis=...)` | Replaces the component along `direction` with the population's mean coefficient and keeps the orthogonal part. |
+| `mean_fill(dim=...)` | The axis-aware mean fill: `dim=` names the axes to average (`"all"` for the global mean). It averages the site's own value unless a population is passed first. |
+| `set_direction_mean(direction, population, dim=...)` | Replaces the component along `direction` with the population's mean coefficient and keeps the orthogonal part. |
 | `scramble_elements(...)` | An elementwise random scramble. It is not a resampling ablation: each element moves on its own, so rows are no longer coherent inputs. |
 | `at_step(*steps)` | A selector qualifier for episode captures: `tl.when(site & at_step(2), edit)` edits only decoding step 2. |
 | `sampling_records(trace)` | The recorded draws of every stochastic edit on a trace: seeds, donor ids, permutations. |
 
-Two spellings are false friends. `tl.mean_ablate` is the older global mean; `mean_fill(over=...)`
+Two spellings are false friends. `tl.mean_ablate` is the older global mean; `mean_fill(dim=...)`
 says which axes it averages. The removed `resample_ablate` was renamed `scramble_elements`
 because it never resampled whole inputs; resampling ablation is `resample_rows_from`.
 
@@ -35,7 +36,7 @@ purpose, pass `share_draw="per_rule"` or `"per_group"` to `sample_from`; the def
 `"per_firing"`.
 
 Axes are never guessed from a tensor's rank: `resample_rows_from` and `permute_batch` take an
-explicit `axis=`, and `set_direction_mean` an explicit `feature_axis=`.
+explicit `axis=`, and `set_direction_mean` an explicit `dim=`.
 
 ## Resampling ablation
 
@@ -47,7 +48,8 @@ result:
 import torch
 from torch import nn
 import torchlens as tl
-from torchlens.intervention import reference, resample_rows_from, sampling_records
+from torchlens.intervention import population, resample_rows_from
+from torchlens.intervention.stochastic import sampling_records
 
 
 class Toy(nn.Module):
@@ -64,7 +66,7 @@ trace = tl.trace(
     Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
 )
 site = tl.label("relu_1_2")
-donors = reference(torch.randn(3, 4), origin="three donor rows from another dataset")
+donors = population(torch.randn(3, 4), origin="three donor rows from another dataset")
 
 resampled = trace.fork("resampled")
 resampled.do(site, resample_rows_from(donors, seed=2, axis=0))
@@ -90,7 +92,8 @@ with a warning, and refused under `strict=True`.
 import torch
 from torch import nn
 import torchlens as tl
-from torchlens.intervention import mean_from, reference, set_direction_mean
+from torchlens.intervention import population, set_direction_mean
+from torchlens.intervention.stochastic import mean_from
 
 
 class Toy(nn.Module):
@@ -108,7 +111,7 @@ trace = tl.trace(
 )
 site = tl.label("relu_1_2")
 clean = trace["relu_1_2"].out
-evidence = reference(torch.stack([clean, clean + 2.0]), origin="two evidence runs")
+evidence = population(torch.stack([clean, clean + 2.0]), origin="two evidence runs")
 
 # mean_from: the elementwise mean over the population.
 meaned = trace.fork("meaned")
@@ -118,7 +121,7 @@ meaned.do(site, mean_from(evidence))
 direction = torch.tensor([1.0, -1.0, 0.0, 0.5])
 unit = direction / direction.norm()
 directed = trace.fork("directed")
-directed.do(site, set_direction_mean(direction, evidence, feature_axis=1))
+directed.do(site, set_direction_mean(direction, evidence, dim=1))
 mean_coefficient = (torch.stack(evidence.members) @ unit).mean()
 oracle = clean - (clean @ unit)[:, None] * unit + mean_coefficient * unit
 
@@ -129,10 +132,10 @@ RESULT = [
 ```
 
 `set_direction_mean` is the edit to reach for when you mean "the component along a direction".
-Under a `tl.subspace(...)` selection, `mean_from(ref)` sets the component in the basis span to the
+Under a `tl.subspace(...)` selection, `mean_from(reference)` sets the component in the basis span to the
 population mean's component (see
 [Subspace edits](intervention_explainers.md#subspace-edits-the-component-along-a-basis)).
-`tl.project_off` and `tl.project_onto` are the projection helpers without a population.
+`tl.project_out` and `tl.project_onto` are the projection helpers without a population.
 
 ## Whole-event donors
 
@@ -144,7 +147,7 @@ it:
 import torch
 from torch import nn
 import torchlens as tl
-from torchlens.intervention import reference, sample_from
+from torchlens.intervention import population, sample_from
 
 
 class Toy(nn.Module):
@@ -160,13 +163,13 @@ torch.manual_seed(0)
 trace = tl.trace(
     Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
 )
-donors = reference(torch.randn(6, 5, 4), origin="six recorded activations of this site")
+donors = population(torch.randn(6, 5, 4), origin="six recorded activations of this site")
 patched = trace.fork("patched")
 patched.do(tl.label("relu_1_2"), tl.patch_from(sample_from(donors, seed=13)))
 RESULT = any(torch.equal(patched["relu_1_2"].out, member) for member in donors.members)
 ```
 
-A population of captured traces (`reference([trace_a, trace_b], origin=...)`) resolves each
+A population of captured traces (`population([trace_a, trace_b], origin=...)`) resolves each
 donor value at fire time from the matching site of the drawn trace.
 
 ## Where these edits run

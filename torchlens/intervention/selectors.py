@@ -45,6 +45,18 @@ SelectorKind: TypeAlias = Literal[
 ]
 
 
+#: Public ``tl.*`` spelling of each selector kind whose stored value predates its rename
+#: (the stored ``selector_kind`` stays, so persisted specs keep loading).
+_KIND_SPELLINGS: dict[str, str] = {
+    "contains": "label_contains",
+    "input_at": "model_input",
+    "output": "model_output",
+    "regex": "label_matches",
+    "grad_fn_label": "intervention.grad_fn_label",
+    "output_at": "intervention.output_at",
+}
+
+
 @dataclass(frozen=True)
 class BaseSelector:
     """Base class for typed TorchLens site selectors."""
@@ -91,7 +103,7 @@ class BaseSelector:
 
         if not isinstance(other, BaseSelector) and hasattr(other, "__selection__"):
             return NotImplemented
-        from ..ir.selector_eval import contains_followed_by
+        from .._ir.selector_eval import contains_followed_by
 
         if contains_followed_by(self) or contains_followed_by(other):
             from .errors import SelectorCompositionError
@@ -112,7 +124,7 @@ class BaseSelector:
             Negated selector.
         """
 
-        from ..ir.selector_eval import contains_followed_by
+        from .._ir.selector_eval import contains_followed_by
 
         if contains_followed_by(self):
             from .errors import SelectorCompositionError
@@ -170,7 +182,7 @@ class BaseSelector:
         BEFORE lifting (``~lift(s) != lift(~s)``, pinned non-law).
         """
 
-        from ..selection import _selection_from_selector
+        from .._selection import _selection_from_selector
 
         return _selection_from_selector(self)
 
@@ -220,7 +232,8 @@ class BaseSelector:
             Repr containing the selector kind and payload.
         """
 
-        return f"tl.{self.selector_kind}({self.selector_value!r})"
+        spelling = _KIND_SPELLINGS.get(self.selector_kind, self.selector_kind)
+        return f"tl.{spelling}({self.selector_value!r})"
 
     def __call__(self, ctx: Any) -> bool:
         """Return whether this selector matches a predicate record context.
@@ -236,7 +249,7 @@ class BaseSelector:
             Whether ``ctx`` matches this selector.
         """
 
-        from ..ir.selector_eval import evaluate
+        from .._ir.selector_eval import evaluate
 
         return evaluate(self, ctx, lifecycle="capture")
 
@@ -593,7 +606,7 @@ class SiteSelector(BaseSelector):
                 "component (module_path=, op_type=, slot=, ordinal=)",
                 code="site_selector_empty",
                 remedy="pass op.site_key, or components such as "
-                "tl.site(module_path='encoder.0', op_type='linear')",
+                "tl.site(module_path='encoder.0', func='linear')",
                 argument="key",
             )
         if key is not None:
@@ -610,7 +623,7 @@ class SiteSelector(BaseSelector):
                     remedy="pass either the rendered key or components, not both",
                     argument="key",
                 )
-            from ..postprocess._site_key import parse_site_key
+            from .._postprocess._site_key import parse_site_key
 
             try:
                 parse_site_key(key)
@@ -650,7 +663,7 @@ class SiteSelector(BaseSelector):
             return False
         if self.key is not None:
             return rendered_key == self.key
-        from ..postprocess._site_key import parse_site_key
+        from .._postprocess._site_key import parse_site_key
 
         try:
             module_site, layer_type, output_slot, call_ordinal = parse_site_key(rendered_key)
@@ -687,7 +700,7 @@ def site(
     key: str | None = None,
     *,
     module_path: str | None = None,
-    op_type: str | None = None,
+    func: str | None = None,
     slot: int | None = None,
     ordinal: int | None = None,
 ) -> SiteSelector:
@@ -700,7 +713,7 @@ def site(
     module_path:
         Module-site match: the full ``/``-joined site axis or any one
         module address on it.
-    op_type:
+    func:
         TorchLens layer type (``"linear"``, ``"relu"``, ...).
     slot:
         Multi-output slot index (``None`` = single-output ops).
@@ -717,7 +730,7 @@ def site(
     return SiteSelector(
         key,
         module_path=module_path,
-        op_type=op_type,
+        op_type=func,
         slot=slot,
         ordinal=ordinal,
     )
@@ -1339,12 +1352,12 @@ def func_transform(kind: str | None = None) -> FuncTransformSelector:
     return FuncTransformSelector(kind)
 
 
-def followed_by(inner: SelectorLike) -> FollowedBySelector:
+def followed_by(selector: SelectorLike, /) -> FollowedBySelector:
     """Create a retroactive successor selector.
 
     Parameters
     ----------
-    inner:
+    selector:
         Predicate that must match a later successor op.
 
     Returns
@@ -1353,15 +1366,15 @@ def followed_by(inner: SelectorLike) -> FollowedBySelector:
         Selector interpreted by capture-time save predicates.
     """
 
-    return FollowedBySelector(inner)
+    return FollowedBySelector(selector)
 
 
-def preceded_by(inner: SelectorLike) -> PrecededBySelector:
+def preceded_by(selector: SelectorLike, /) -> PrecededBySelector:
     """Create a lookback predecessor selector.
 
     Parameters
     ----------
-    inner:
+    selector:
         Predicate that must match a retained predecessor op.
 
     Returns
@@ -1370,10 +1383,10 @@ def preceded_by(inner: SelectorLike) -> PrecededBySelector:
         Selector matching current ops with a retained predecessor.
     """
 
-    return PrecededBySelector(inner)
+    return PrecededBySelector(selector)
 
 
-def output(target: int | str) -> OutputSelector:
+def model_output(target: int | str) -> OutputSelector:
     """Create an output selector.
 
     Parameters
@@ -1408,7 +1421,7 @@ def output_at(path: Any) -> OutputPathSelector:
     return OutputPathSelector(normalized)
 
 
-def input_at(*path: Any) -> InputPathSelector:
+def model_input(*path: Any) -> InputPathSelector:
     """Create a nested model-input path selector.
 
     Parameters
@@ -1442,7 +1455,7 @@ def module(address: str) -> ModuleSelector:
     return ModuleSelector(address)
 
 
-def contains(substring: str) -> ContainsSelector:
+def label_contains(substring: str) -> ContainsSelector:
     """Create a label-substring selector.
 
     Parameters
@@ -1459,7 +1472,7 @@ def contains(substring: str) -> ContainsSelector:
     return ContainsSelector(substring)
 
 
-def regex(pattern: str) -> RegexSelector:
+def label_matches(pattern: str) -> RegexSelector:
     """Create a label regex-pattern selector.
 
     Parameters
@@ -1502,7 +1515,7 @@ def where(predicate: Callable[[Any], bool], *, name_hint: str | None = None) -> 
 
 
 def grad_fn(
-    type: str | type[Any] | None = None,
+    name: str | type[Any] | None = None,
     *,
     label: str | None = None,
     is_custom: bool | None = None,
@@ -1511,7 +1524,7 @@ def grad_fn(
 
     Parameters
     ----------
-    type:
+    name:
         Autograd class name or normalized grad_fn type to match.
     label:
         Substring to match against the grad_fn label.
@@ -1524,7 +1537,7 @@ def grad_fn(
         Immutable selector.
     """
 
-    return GradFnSelector(type, label=label, is_custom=is_custom)
+    return GradFnSelector(name, label=label, is_custom=is_custom)
 
 
 def without_op() -> InterveningSelector:
@@ -1716,7 +1729,7 @@ def in_module(address_or_layer: Any, address: str | None = None) -> InModuleSele
     if address is None:
         return InModuleSelector(str(address_or_layer))
 
-    from ..ir.selector_eval import module_address_matches
+    from .._ir.selector_eval import module_address_matches
 
     if getattr(address_or_layer, "is_output", False):
         # The synthetic output alias carries its producer's module stamp for
@@ -1860,7 +1873,7 @@ def _check_composition(a: SelectorLike, b: SelectorLike) -> None:
         Raises when composition is invalid.
     """
 
-    from ..ir.selector_eval import contains_followed_by, flatten_and_conjuncts
+    from .._ir.selector_eval import contains_followed_by, flatten_and_conjuncts
     from .errors import SelectorCompositionError
 
     a_dir = _classify_selector_direction(a)
@@ -1914,7 +1927,7 @@ __all__ = [
     "SiteSelector",
     "WhereSelector",
     "at_step",
-    "contains",
+    "label_contains",
     "facet",
     "func",
     "func_transform",
@@ -1928,12 +1941,12 @@ __all__ = [
     "grad_fn_label",
     "head",
     "module",
-    "output",
+    "model_output",
     "output_at",
-    "input_at",
+    "model_input",
     "site",
     "preceded_by",
-    "regex",
+    "label_matches",
     "where",
     "without_op",
 ]

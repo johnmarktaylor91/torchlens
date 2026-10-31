@@ -1,4 +1,4 @@
-"""Transcoder support: ``tl.splice_module(transcoder, input="in")`` on an MLP module.
+"""Transcoder support: ``tl.splice_module(transcoder, input_route="in")`` on an MLP module.
 
 A transcoder maps an MLP's input to its output. Spliced with ``input="in"`` at
 the MLP module, it runs on the arguments the MLP was called with and its result
@@ -62,7 +62,7 @@ def test_transcoder_spliced_with_input_in_equals_a_hand_forward(setup) -> None:
         x,
         capture=tl.options.CaptureOptions(
             intervention_ready=True,
-            hooks={tl.module("mlp"): tl.splice_module(transcoder, input="in")},
+            hooks={tl.module("mlp"): tl.splice_module(transcoder, input_route="in")},
         ),
     )
     mlp_out, out = _hand(model, x, transcoder)
@@ -79,7 +79,7 @@ def test_transcoder_reads_the_mlp_input_not_its_output(setup) -> None:
         x,
         capture=tl.options.CaptureOptions(
             intervention_ready=True,
-            hooks={tl.module("mlp"): tl.splice_module(transcoder, input="out")},
+            hooks={tl.module("mlp"): tl.splice_module(transcoder, input_route="out")},
         ),
     )
     with torch.no_grad():

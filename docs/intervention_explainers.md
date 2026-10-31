@@ -10,7 +10,7 @@ questions, so pick by what you need back, not by habit.
 | See every op of one edited run, with a record of where the edit fired | `tl.trace(model, x, intervene=spec)` | yes, once | a `Trace` of the edited run |
 | Ask "what if this saved value had been different" on an input you already traced | `trace.fork().do(site, action)` | no: the edit is pushed down the recorded graph from saved values | the fork, with its saved values updated |
 | The same question when the edit may change control flow, randomness or module state | `trace.fork().do(site, action, model=model, x=x)`, or `trace.run(model, x)` | yes | the fork, re-executed under the edit |
-| Apply one edit to many forwards or to HF `generate()`, with no trace | `spec.bind(model)`, or `torchlens.intervention.steer_generate` | yes, every call | the model's own outputs, plus `last_report` fire counts |
+| Apply one edit to many forwards or to HF `generate()`, with no trace | `spec.bind(model)`, and `spec.bind(model).generate(...)` for HF `generate()` | yes, every call | the model's own outputs, plus `last_report` fire counts |
 | Apply an edit and keep a few activations on every forward | `tl.record(model, x, save=..., intervene=spec, return_output=True)` | yes, every call | the output and a sparse `Recording` |
 
 `do()` picks its engine from its arguments: with neither `model=` nor `x=` it pushes over the saved
@@ -123,26 +123,26 @@ rows, the edit acts on the coordinates `c = Q x` (one per row) and the site gets
 `x + Q^T (edit(c) - c)`. This is the addressing distributed alignment search uses.
 
 - Coordinate verbs act on `c`: `tl.zero_ablate()`, `tl.scale(...)`, `tl.clamp(...)`,
-  `tl.noise(...)`, `tl.mean_ablate()`, `mean_fill(over=...)` without `ref=`,
+  `tl.add_noise(...)`, `tl.mean_ablate()`, `mean_fill(dim=...)` without `reference=`,
   `scramble_elements(seed=...)` without `source=`, `tl.add(scalar)`,
-  `splice_module(module, input="out")`, and any hook callable `fn(c, *, hook)`, which receives
+  `splice_module(module, input_route="out")`, and any hook callable `fn(c, *, hook)`, which receives
   the coordinates with the bound axis resized to `k`.
 - Value verbs compute a value in activation space and write its component: `tl.patch_from(source)`
   is the interchange (the component becomes the source run's), and likewise `swap_with`,
   `replace_with`, `tl.add(tensor)`, `steer`, `permute_batch`, `resample_rows_from`, `mean_from` and
-  `mean_fill(ref, ...)`.
-- A source verb maps the whole site value to new coordinates: `tl.intervention.affine_source(W,
+  `mean_fill(reference, ...)`.
+- A source verb maps the whole site value to new coordinates: `tl.intervention.set_affine_coordinates(W,
   bias=b)` sets them to `W x + b` (LoReFT; see "A learned affine source" below).
 - Every other verb refuses `subspace_edit_unsupported` and names the spelling that works: the
-  projection edits themselves (`project_off`, `project_onto`, `set_direction_mean`,
+  projection edits themselves (`project_out`, `project_onto`, `set_direction_mean`,
   `subspace_ablate`, `subspace_interchange`), `compose` (apply the edits one at a time),
   `at_positions` (restrict positions through `within=`), a `source=` that is an activation value,
-  `splice_module(input="in")` and the backward verbs.
+  `splice_module(input_route="in")` and the backward verbs.
 
 An orthonormal basis is used exactly as given, so the coordinates are yours. Any other full-rank
 basis is orthonormalised by Gram-Schmidt in row order with each row's sign kept, so one direction
 `v` edits the component along `v / |v|`; the audit record says when that happened. A
-rank-deficient basis refuses `subspace_basis_invalid`. Weights at or below `tol=` are dropped
+rank-deficient basis refuses `subspace_basis_invalid`. Weights at or below `atol=` are dropped
 first.
 
 `resolve()` still answers a set question: the basis's support set, the elements a nonzero weight
@@ -182,8 +182,8 @@ RESULT = [
 ]
 ```
 
-For a fixed direction without a selection, `tl.project_off(direction, feature_axis=...)` removes
-the component and `tl.project_onto(direction, feature_axis=...)` keeps only it:
+For a fixed direction without a selection, `tl.project_out(direction, dim=...)` removes
+the component and `tl.project_onto(direction, dim=...)` keeps only it:
 
 ```python
 # docs-test: expected=[True, True]
@@ -200,10 +200,10 @@ site = tl.module("0")
 
 clean = tl.trace(model, x, save=site).find_sites(site).first().out
 off = tl.trace(
-    model, x, save=site, intervene=tl.when(site, tl.project_off(direction, feature_axis=-1))
+    model, x, save=site, intervene=tl.when(site, tl.project_out(direction, dim=-1))
 ).find_sites(site).first().out
 
-# project_off leaves no component along the direction and keeps the rest.
+# project_out leaves no component along the direction and keeps the rest.
 RESULT = [
     torch.allclose(off @ unit, torch.zeros(2), atol=1e-6),
     torch.allclose(off, clean - (clean @ unit)[:, None] * unit, atol=1e-6),
@@ -269,7 +269,7 @@ RESULT = [
 LoReFT (pyreft) learns a rotation `R` (`[d, k]`, orthonormal columns) and an affine map `W h + b`
 (`W` is `[k, d]`), and writes `h + R (W h + b - R^T h)`: the coordinates along `R` become an affine
 function of the whole site value `h`. That is a source verb:
-`tl.intervention.affine_source(W, bias=b)` under `tl.subspace(site, R.T, origin=...)`. The
+`tl.intervention.set_affine_coordinates(W, bias=b)` under `tl.subspace(site, R.T, origin=...)`. The
 projection hands it the site value and it returns the new `k` coordinates, so the site gets
 `x + Q^T (W x + b - Q x)` with `Q = R^T`. The basis rows and `W` must have the same shape `[k, d]`
 (else `affine_source_invalid`, as for a non-finite or non-float argument). Outside a subspace a
@@ -293,14 +293,14 @@ base = tl.trace(model, x, capture=options)
 fork = base.fork()
 fork.do(
     tl.subspace(site, rotation.T, origin="LoReFT trained elsewhere", method="loreft"),
-    tl.intervention.affine_source(weight, bias=bias),
+    tl.intervention.set_affine_coordinates(weight, bias=bias),
 )
 h = base[site].out
 loreft = h + (h @ weight.T + bias - h @ rotation) @ rotation.T
 
 RESULT = [
     torch.allclose(fork.push()[site].out, loreft, rtol=0.0, atol=1e-12),  # LoReFT, by hand
-    fork.intervention_audit[-1]["edit"] == "affine_source",
+    fork.intervention_audit[-1]["edit"] == "set_affine_coordinates",
 ]
 ```
 
@@ -337,7 +337,7 @@ base = tl.trace(model, tokens, capture=options)
 fork = base.fork()
 fork.do(
     tl.subspace(tl.units(site, last), rotation.T, origin="LoReFT trained elsewhere"),
-    tl.intervention.affine_source(weight, bias=bias),
+    tl.intervention.set_affine_coordinates(weight, bias=bias),
 )
 edited = fork.push()
 path = Path(tempfile.mkdtemp()) / "loreft.tlspec"
@@ -372,7 +372,7 @@ The population-based edits, `set_direction_mean` among them, are on the
 | `portable` | Share built-in-helper recipes and tensor sidecars with no opaque local callable dependency. | Yes for supported built-ins. |
 
 Portable saves reject opaque local callables. Use built-in helpers such as `zero_ablate`,
-`steer`, `scale` or `project_off` for reproducible publication.
+`steer`, `scale` or `project_out` for reproducible publication.
 
 ## `.tlspec/` Directory
 
@@ -385,7 +385,7 @@ A `.tlspec/` directory contains:
 - `README.md`: a generated human-readable summary.
 
 Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture with
-`torchlens.validation.check_spec_compat(spec, new_trace)`.
+`torchlens.intervention.check_spec_compat(spec, new_trace)`.
 
 ## Append Constraints
 
@@ -403,7 +403,7 @@ cross-batch statistics can make chunked evaluation semantically different from o
 
 ## Tier-1 Backward Hook
 
-Backward helpers (`bwd_hook`, `grad_zero`, `grad_scale`) are live/run-only in this release. They
+Backward helpers (`hook_grad`, `zero_grad`, `scale_grad`) are live/run-only in this release. They
 are not portable `.tlspec/` publication units and are not pushed post hoc over a saved forward
 graph. Use them when the experiment explicitly re-executes the model and backward pass.
 
@@ -415,7 +415,7 @@ attribution-patching row and formula helpers are not shipped; keep those formula
 and record the exact selectors and metric definitions next to saved specs.
 
 Two sign conventions are in use. The TransformerLens presentation is the first-order estimate
-`grad * (clean - corrupt)`, with `grad` taken on the corrupted run. The
+`grad * (clean - corrupted_graph)`, with `grad` taken on the corrupted run. The
 [intervention API reference](intervention_api.md#attribution-patching) examples use
-`(corrupt - clean) * patched`. Both are valid; name the convention next to the metric so higher
+`(corrupted_graph - clean) * patched`. Both are valid; name the convention next to the metric so higher
 and lower scores stay clear.

@@ -1,7 +1,7 @@
 """Regression tests for RF view/table surface honesty.
 
 Covers r19f findings W2A3-08 (projective ``.at('center')``), W2A3-09
-(projective table ``input=`` filter), W2A3-10 (table accepts trace input
+(projective table ``input_op=`` filter), W2A3-10 (table accepts trace input
 accessor handles), W2A3-14/16/18 (docstring + diagnostic honesty), and
 W2A3-15b (``.at()`` negative-index reject contract).
 """
@@ -90,8 +90,8 @@ def test_table_accepts_input_ops_accessor_handle() -> None:
     log = _trace()
     handle = log.input_ops[0]
     canonical = next(op for op in log.layer_list if getattr(op, "is_input", False))
-    via_handle = log.receptive_fields(level="op", input=handle)
-    via_canonical = log.receptive_fields(level="op", input=canonical)
+    via_handle = log.receptive_fields(level="op", input_op=handle)
+    via_canonical = log.receptive_fields(level="op", input_op=canonical)
     assert len(via_handle.frame) > 0
     assert len(via_handle.frame) == len(via_canonical.frame)
 
@@ -100,7 +100,7 @@ def test_table_receptive_input_filter_works() -> None:
     pytest.importorskip("pandas")
     log = _trace()
     unfiltered = log.receptive_fields(level="op")
-    filtered = log.receptive_fields(level="op", input=log.input_ops[0])
+    filtered = log.receptive_fields(level="op", input_op=log.input_ops[0])
     assert 0 < len(filtered.frame) <= len(unfiltered.frame)
 
 
@@ -109,24 +109,24 @@ def test_table_rejects_foreign_input_handle() -> None:
     log_a = _trace()
     log_b = _trace()
     with pytest.raises(ValueError):
-        log_a.receptive_fields(level="op", input=log_b.input_ops[0])
+        log_a.receptive_fields(level="op", input_op=log_b.input_ops[0])
 
 
 def test_table_rejects_non_input_op() -> None:
     pytest.importorskip("pandas")
     log = _trace()
     with pytest.raises(ValueError):
-        log.receptive_fields(level="op", input=log["conv2d_1_1:1"])
+        log.receptive_fields(level="op", input_op=log["conv2d_1_1:1"])
 
 
 def test_table_rejects_string_input_with_typeerror() -> None:
     pytest.importorskip("pandas")
     log = _trace()
     with pytest.raises(TypeError):
-        log.receptive_fields(level="op", input="input_1:1")
+        log.receptive_fields(level="op", input_op="input_1:1")
 
 
-# --- W2A3-09: projective table input= filter -------------------------------
+# --- W2A3-09: projective table input_op= filter -------------------------------
 
 
 def test_projective_input_filter_raises_not_silent_empty() -> None:
@@ -134,7 +134,7 @@ def test_projective_input_filter_raises_not_silent_empty() -> None:
     log = _trace()
     assert len(log.projective_fields(level="op").frame) > 0
     with pytest.raises(ValueError, match="direction='receptive'"):
-        log.projective_fields(level="op", input=log.input_ops[0])
+        log.projective_fields(level="op", input_op=log.input_ops[0])
 
 
 def test_projective_unfiltered_still_returns_rows() -> None:

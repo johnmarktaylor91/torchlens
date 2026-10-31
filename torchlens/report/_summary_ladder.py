@@ -41,7 +41,7 @@ from ._summary_columns import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: The derived default body-row budget (memo 3.4): hybrid(vgg19) exactly.
 DEFAULT_ROW_BUDGET = 48

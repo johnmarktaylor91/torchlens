@@ -5,9 +5,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
 # ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ class TestAggregateFields:
             assert layer_log.dtype == fp.dtype
             assert layer_log.is_input == fp.is_input
             assert layer_log.is_output == fp.is_output
-            assert layer_log.uses_params == fp.uses_params
+            assert layer_log.has_params == fp.has_params
 
     def test_layer_label_is_no_pass(self, simple_log):
         for layer_log in simple_log.layer_logs.values():
@@ -338,7 +338,7 @@ class TestConvenienceAliases:
 
     def test_params_accessor(self, recurrent_log):
         for layer_log in recurrent_log.layer_logs.values():
-            if layer_log.uses_params:
+            if layer_log.has_params:
                 params = layer_log.params
                 assert params is not None
                 break

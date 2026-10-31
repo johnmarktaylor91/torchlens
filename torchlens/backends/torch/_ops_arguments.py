@@ -5,7 +5,13 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ..._ir.container import (
+    OutputPathComponent,
+)
 from ..._state import pause_logging
+from ..._utils.tensor_utils import (
+    safe_copy,
+)
 from ...intervention.types import (
     ArgComponent,
     CapturedArgTemplate,
@@ -15,12 +21,6 @@ from ...intervention.types import (
     LiteralValue,
     ParentRef,
     Unsupported,
-)
-from ...ir.container import (
-    OutputPathComponent,
-)
-from ...utils.tensor_utils import (
-    safe_copy,
 )
 from ._param_fingerprint import param_fingerprint
 from ._tl import (
@@ -35,7 +35,7 @@ from ._tl import (
 from .buffer_writes import session_validated_buffer_address
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 if TYPE_CHECKING:
     from .ops import (

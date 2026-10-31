@@ -1,8 +1,8 @@
 """The sink-neutral emission view over the C06 history records (memo 3.1-3.5).
 
 One conversion layer turns explorer-owned completed records
-(:class:`~torchlens.observability.StepBlockRecord` +
-:class:`~torchlens.observability.ObservationRecord`) into immutable,
+(:class:`~torchlens._observability.StepBlockRecord` +
+:class:`~torchlens._observability.ObservationRecord`) into immutable,
 tensor-free emission points every sink serializes from. Nothing here touches
 a live tensor, rescans a payload, or invents a second step axis.
 
@@ -32,14 +32,14 @@ import json
 import math
 from dataclasses import dataclass, field
 
-from ..observability import (
+from .._observability import (
     HISTORY_SCHEMA_VERSION,
-    CommittedBlock,
     HistogramResult,
+    RunningStatsResult,
     RunRecord,
     SiteRecord,
-    SpineResult,
 )
+from .._observability._artifact import CommittedBlock
 from ._errors import TagGrammarError
 
 __tl_layer__ = "L8"
@@ -245,7 +245,7 @@ class TagGrammar:
         return assert_tag_safe(f"{self._root('torchlens')}/check/{check_name}", site=check_name)
 
 
-def spine_scalars(spine: SpineResult) -> dict[str, float]:
+def running_stats_scalars(running_stats: RunningStatsResult) -> dict[str, float]:
     """Derive the portable scalar statistics from one spine record.
 
     ``std`` comes from the stable Chan moments (``m2 / count_finite``);
@@ -253,24 +253,24 @@ def spine_scalars(spine: SpineResult) -> dict[str, float]:
     finite population) are simply omitted -- missing is never zero (D6).
     """
 
-    out: dict[str, float] = {"count": float(spine.count_finite)}
-    if spine.count_finite > 0:
-        total = float(spine.count_total)
-        out["zero_fraction"] = spine.count_zero / total if total else 0.0
-        if spine.mean is not None:
-            out["mean"] = spine.mean
-        if spine.m2 is not None and spine.count_finite > 1:
-            out["std"] = math.sqrt(max(spine.m2, 0.0) / spine.count_finite)
-        if spine.sum_squares is not None:
-            out["norm"] = math.sqrt(max(spine.sum_squares, 0.0))
-        if spine.finite_min is not None:
-            out["min"] = spine.finite_min
-        if spine.finite_max is not None:
-            out["max"] = spine.finite_max
+    out: dict[str, float] = {"count": float(running_stats.count_finite)}
+    if running_stats.count_finite > 0:
+        total = float(running_stats.count_total)
+        out["zero_fraction"] = running_stats.count_zero / total if total else 0.0
+        if running_stats.mean is not None:
+            out["mean"] = running_stats.mean
+        if running_stats.m2 is not None and running_stats.count_finite > 1:
+            out["std"] = math.sqrt(max(running_stats.m2, 0.0) / running_stats.count_finite)
+        if running_stats.sum_squares is not None:
+            out["norm"] = math.sqrt(max(running_stats.sum_squares, 0.0))
+        if running_stats.finite_min is not None:
+            out["min"] = running_stats.finite_min
+        if running_stats.finite_max is not None:
+            out["max"] = running_stats.finite_max
     return out
 
 
-def nonfinite_scalars(spine: SpineResult) -> dict[str, float]:
+def nonfinite_scalars(spine: RunningStatsResult) -> dict[str, float]:
     """The nonfinite-family series: NaN / +-inf counts, exact integers."""
 
     return {
@@ -305,7 +305,7 @@ def histogram_points(sketch: HistogramResult) -> tuple[tuple[int, ...], tuple[fl
     return (counts, edges)
 
 
-def _histogram_summary(spine: SpineResult) -> dict[str, float]:
+def _histogram_summary(spine: RunningStatsResult) -> dict[str, float]:
     """The TB histogram-proto summary fields, from the paired spine."""
 
     summary: dict[str, float] = {"num": float(spine.count_finite)}
@@ -343,7 +343,7 @@ def emission_from_block(
         site = sites.get(observation.site_id)
         leaf = site.display_label if site is not None else observation.site_id
         family = STREAM_FAMILIES[observation.stream]
-        for statistic, value in spine_scalars(observation.spine).items():
+        for statistic, value in running_stats_scalars(observation.spine).items():
             scalars.append(ScalarPoint(grammar.data(family, statistic, leaf), step, value))
         nonfinite = nonfinite_scalars(observation.spine)
         if any(nonfinite.values()):
@@ -388,7 +388,7 @@ def architecture_fingerprint(sites: dict[str, SiteRecord]) -> str:
 
 
 def build_manifest(
-    run: RunRecord,
+    to: RunRecord,
     sites: dict[str, SiteRecord],
     grammar: TagGrammar,
     *,
@@ -404,13 +404,13 @@ def build_manifest(
     emission schema version.
     """
 
-    descriptor = run.descriptor
+    descriptor = to.descriptor
     payload: dict[str, object] = {
         "kind": "torchlens.trackers.manifest",
         "version": EMISSION_SCHEMA_VERSION,
         "history_schema_version": HISTORY_SCHEMA_VERSION,
-        "run_id": run.run_id,
-        "segment_id": run.segment_id,
+        "run_id": to.run_id,
+        "segment_id": to.segment_id,
         "architecture_fingerprint": architecture_fingerprint(sites),
         "edge_policy": {
             "base": descriptor.base,
@@ -460,5 +460,5 @@ __all__ = [
     "emission_from_block",
     "histogram_points",
     "nonfinite_scalars",
-    "spine_scalars",
+    "running_stats_scalars",
 ]

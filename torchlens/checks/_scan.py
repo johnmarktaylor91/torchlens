@@ -1,7 +1,7 @@
 """The ONE shared batched tensor-scan kernel (checks memo item 1 / 4.4).
 
-One kernel, two spellings: ``tl.debug.audit_params`` shapes rows into a
-:class:`~torchlens.checks.ParamAudit`, and the registry's scheduled scan
+One kernel, two spellings: ``tl.debug.param_health`` shapes rows into a
+:class:`~torchlens.debug.ParamHealthReport`, and the registry's scheduled scan
 consumes the same rows with report shaping skipped. Engineering contract
 (memo 4.4): batched per ``(device, dtype)`` group with ~1 host sync per
 group, integer counts exact, extrema carried as float64 SCALARS only --
@@ -22,7 +22,7 @@ from typing import Any
 import torch
 
 from .. import _state
-from ..utils.tensor_utils import fp8_widen_for_numeric_ops
+from .._utils.tensor_utils import fp8_widen_for_numeric_ops
 from ._errors import CheckConfigError
 
 __tl_layer__ = "L5"
@@ -37,7 +37,7 @@ class ScanRow:
 
     ``name`` is the canonical qualified name; ``aliases`` preserves every
     other name bound to the SAME tensor object (tied weights, double-
-    registered buffers) -- deduped by identity, no alias lost. ``audited``
+    registered buffers) -- deduped by identity, no alias lost. ``is_audited``
     is False exactly when ``skip_reason`` says why.
     """
 
@@ -48,11 +48,11 @@ class ScanRow:
     dtype: str
     device: str
     numel: int
-    n_nan: int
-    n_posinf: int
-    n_neginf: int
+    num_nan: int
+    num_posinf: int
+    num_neginf: int
     zero_fraction: float | None
-    all_same: bool | None
+    is_constant: bool | None
     finite_min: float | None
     finite_max: float | None
     abs_max: float | None
@@ -60,14 +60,14 @@ class ScanRow:
     subnormal_fraction: float | None
     bounds_below: int | None
     bounds_above: int | None
-    audited: bool
+    is_audited: bool
     skip_reason: str | None
 
     @property
-    def n_nonfinite(self) -> int:
+    def num_nonfinite(self) -> int:
         """Total nonfinite elements (NaN + signed infinities)."""
 
-        return self.n_nan + self.n_posinf + self.n_neginf
+        return self.num_nan + self.num_posinf + self.num_neginf
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-serializable payload for this row."""
@@ -80,11 +80,11 @@ class ScanRow:
             "dtype": self.dtype,
             "device": self.device,
             "numel": self.numel,
-            "n_nan": self.n_nan,
-            "n_posinf": self.n_posinf,
-            "n_neginf": self.n_neginf,
+            "n_nan": self.num_nan,
+            "n_posinf": self.num_posinf,
+            "n_neginf": self.num_neginf,
             "zero_fraction": self.zero_fraction,
-            "all_same": self.all_same,
+            "all_same": self.is_constant,
             "finite_min": self.finite_min,
             "finite_max": self.finite_max,
             "abs_max": self.abs_max,
@@ -92,7 +92,7 @@ class ScanRow:
             "subnormal_fraction": self.subnormal_fraction,
             "bounds_below": self.bounds_below,
             "bounds_above": self.bounds_above,
-            "audited": self.audited,
+            "audited": self.is_audited,
             "skip_reason": self.skip_reason,
         }
 
@@ -131,11 +131,11 @@ def _skipped_row(
         dtype=dtype,
         device=device,
         numel=numel,
-        n_nan=0,
-        n_posinf=0,
-        n_neginf=0,
+        num_nan=0,
+        num_posinf=0,
+        num_neginf=0,
         zero_fraction=None,
-        all_same=None,
+        is_constant=None,
         finite_min=None,
         finite_max=None,
         abs_max=None,
@@ -143,7 +143,7 @@ def _skipped_row(
         subnormal_fraction=None,
         bounds_below=None,
         bounds_above=None,
-        audited=False,
+        is_audited=False,
         skip_reason=reason,
     )
 
@@ -251,7 +251,7 @@ def scan_named_tensors(
     bounds:
         Optional exact-name bounds mapping ``name -> (low, high)`` with
         either side ``None`` for one-sided bounds. Unknown names REFUSE
-        (memo 4.4) at the caller (:func:`torchlens.checks.audit_params`),
+        (memo 4.4) at the caller (:func:`torchlens.debug.param_health`),
         which validates against the full inventory before dedup.
 
     Returns
@@ -346,11 +346,11 @@ def _row_from_stats(  # noqa: PLR0913 -- one row's identity + measured stats; th
         dtype=str(tensor.dtype).removeprefix("torch."),
         device=str(tensor.device),
         numel=numel,
-        n_nan=int(n_nan),
-        n_posinf=int(n_posinf),
-        n_neginf=int(n_neginf),
+        num_nan=int(n_nan),
+        num_posinf=int(n_posinf),
+        num_neginf=int(n_neginf),
         zero_fraction=(int(n_zero) / numel) if numel else None,
-        all_same=bool(all_same) if numel else None,
+        is_constant=bool(all_same) if numel else None,
         finite_min=finite_min if numel and finite_count else None,
         finite_max=finite_max if numel and finite_count else None,
         abs_max=abs_max if numel and finite_count else None,
@@ -358,7 +358,7 @@ def _row_from_stats(  # noqa: PLR0913 -- one row's identity + measured stats; th
         subnormal_fraction=(int(n_subnormal) / numel) if numel and is_floating else None,
         bounds_below=int(n_below) if had_bounds else None,
         bounds_above=int(n_above) if had_bounds else None,
-        audited=True,
+        is_audited=True,
         skip_reason=None,
     )
 
@@ -407,7 +407,7 @@ def named_entries_from_target(
     if isinstance(target, Mapping):
         return [(str(name), "mapping", value) for name, value in target.items()]
     raise CheckConfigError(
-        f"audit_params target must be an nn.Module or a name->tensor Mapping, "
+        f"param_health target must be an nn.Module or a name->tensor Mapping, "
         f"got {type(target).__name__}. state_dicts, flattened optimizer "
         "state, EMA shadows, and loaded checkpoints all enter through the "
         "Mapping door.",

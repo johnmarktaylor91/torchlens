@@ -22,11 +22,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io.lazy import LazyActivationRef
-from torchlens.data_classes._nonfinite import (
+from torchlens._data_classes._nonfinite import (
     first_nonfinite_layer,
     unexamined_payload_count,
 )
+from torchlens._io.lazy import LazyActivationRef
 from torchlens.options import CaptureOptions
 
 
@@ -94,7 +94,7 @@ def test_explain_works_on_a_predicate_sparse_capture() -> None:
     """``report.explain`` asks the trace the same question."""
 
     trace = tl.trace(_plain_model(), torch.randn(2, 4), save=tl.func("relu"))
-    assert isinstance(tl.report.explain(trace), str)
+    assert isinstance(trace.explain(), str)
 
 
 def test_disk_backed_reports_do_not_materialize_payloads(
@@ -151,8 +151,8 @@ def test_disk_backed_reports_do_not_materialize_payloads(
     # skip disk-backed payloads without materializing (the monkeypatched
     # materialize would raise).
     assert trace.nonfinite_ops == ()
-    tl.report.health_facts(trace)
-    report = tl.report.explain(trace)
+    assert trace.health_facts is not None
+    report = trace.explain()
     assert isinstance(text, str)
     assert "disk-backed" in html
     assert "disk-backed" in report
@@ -168,7 +168,7 @@ def test_explain_and_html_clean_answers_disclose_sparse_coverage(
 
     # D14 (F09): explain serves the basis in hand; arm it explicitly.
     assert trace.nonfinite_ops == ()
-    report = tl.report.explain(trace)
+    report = trace.explain()
     assert "could not be examined" in report
     assert "could not be examined" in trace._repr_html_()
 
@@ -350,6 +350,6 @@ def test_recurrence_detection_off_matches_its_documented_tradeoff() -> None:
     assert unrolled["relu_1_2"].num_passes == 1
     assert "relu_6_7" in unrolled.layer_labels
 
-    assert unrolled.is_recurrent is True
-    assert unrolled.max_layer_op_count == rolled.max_layer_op_count
+    assert unrolled.graph.is_recurrent is True
+    assert unrolled.graph.max_ops_per_layer == rolled.graph.max_ops_per_layer
     assert int(unrolled.total_activation_memory) == int(rolled.total_activation_memory)

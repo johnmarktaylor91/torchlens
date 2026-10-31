@@ -1,4 +1,4 @@
-"""Logit-lens trajectory statistics in one call (``tl.stats.measure_trajectory``).
+"""Logit-lens trajectory statistics in one call (``tl.mechinterp.measure_trajectory``).
 
 A trajectory is the logit-lens prediction path through depth: each block's
 hidden state projected through the model's own head (or a user ``lens=``),
@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
-from ..observability._kernels import Spine, SpineResult
+from .._observability._kernels import RunningStats, RunningStatsResult
 
 __all__ = ["TRAJECTORY_STATISTICS", "TrajectoryStats", "measure_trajectory"]
 
@@ -72,37 +72,37 @@ class TrajectoryStats:
         How ``target_rank`` breaks ties.
     """
 
-    layers: tuple[str, ...]
+    module_addresses: tuple[str, ...]
     statistics: tuple[str, ...]
     position_means: Mapping[str, torch.Tensor]
-    spines: Mapping[str, Mapping[str, Spine]]
-    examples: int
-    positions: int
+    running_stats: Mapping[str, Mapping[str, RunningStats]]
+    num_examples: int
+    num_positions: int
     facet: str
     lens_source: str
     validated: bool
-    mask_input: bool
+    is_input_masked: bool
     tie_convention: str = _TIE_CONVENTION
 
-    def summary(self, statistic: str) -> dict[str, SpineResult]:
+    def compute_stats(self, statistic: str) -> dict[str, RunningStatsResult]:
         """Return ``{layer: SpineResult}`` for one statistic (count, min, max, mean, ...)."""
 
-        if statistic not in self.spines:
+        if statistic not in self.running_stats:
             raise InvalidArgumentError(
-                f"TrajectoryStats.summary({statistic!r}) names a statistic this result "
+                f"TrajectoryStats.compute_stats({statistic!r}) names a statistic this result "
                 f"did not measure; it holds {list(self.statistics)}",
                 code="stats_trajectory_statistic_unknown",
-                remedy=f"use one of them, for example result.summary({self.statistics[0]!r})",
+                remedy=f"use one of them, for example result.compute_stats({self.statistics[0]!r})",
                 statistic=statistic,
             )
-        return {layer: spine.result() for layer, spine in self.spines[statistic].items()}
+        return {layer: spine.result() for layer, spine in self.running_stats[statistic].items()}
 
     def __repr__(self) -> str:
         """Bounded identity card: never dump the tensors."""
 
         return (
-            f"TrajectoryStats({len(self.layers)} layers x {self.positions} positions, "
-            f"{self.examples} examples, statistics={list(self.statistics)}, "
+            f"TrajectoryStats({len(self.module_addresses)} layers x {self.num_positions} positions, "
+            f"{self.num_examples} examples, statistics={list(self.statistics)}, "
             f"lens_source={self.lens_source!r})"
         )
 
@@ -116,7 +116,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
     layers: Sequence[str] | None = None,
     lens: Any = None,
     mask_input: bool = False,
-    validate: bool = True,
+    verify: bool = True,
 ) -> TrajectoryStats:
     """Trace each batch and fold its logit-lens trajectory statistics.
 
@@ -126,7 +126,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
         Model whose blocks expose ``facet`` and whose head the lens is
         built from (the same facet recipes ``logit_lens`` reads).
     data:
-        Iterable of batches, as for ``tl.aggregate``: a batch is the model
+        Iterable of batches, as for ``tl.stats.aggregate``: a batch is the model
         input, or a tuple ``(model_input, targets)`` whose ``targets`` is an
         integer tensor ``[batch, positions]`` of the token each position
         should predict. A bare tensor is one batch.
@@ -144,7 +144,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
     mask_input:
         ``True`` bans each row's own input token ids (the model input must be
         an integer tensor) before every reduction, final output included.
-    validate:
+    verify:
         As in ``logit_lens``; the lens is checked on the first batch.
 
     Returns
@@ -154,18 +154,18 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
         and layer.
     """
 
-    _check_flags(mask_input=mask_input, validate=validate)
+    _check_flags(mask_input=mask_input, validate=verify)
     batches = [data] if isinstance(data, torch.Tensor) else data
     if not isinstance(batches, Iterable):
         raise ArgumentTypeError(
-            f"tl.stats.measure_trajectory(model, data) got data of type {type(data).__name__}",
+            f"tl.mechinterp.measure_trajectory(model, data) got data of type {type(data).__name__}",
             code="stats_trajectory_data_type",
-            remedy="pass an iterable of batches, e.g. tl.stats.measure_trajectory(model, [ids])",
+            remedy="pass an iterable of batches, e.g. tl.mechinterp.measure_trajectory(model, [ids])",
             argument="data",
         )
     from ..semantic.logit_lens import _LensRequest
 
-    request = _LensRequest(facet=facet, layers=layers, lens=lens, validate=validate)
+    request = _LensRequest(facet=facet, layers=layers, lens=lens, validate=verify)
     folder = _TrajectoryFolder(statistics)
     for batch in batches:
         folder.fold_batch(model, _split_batch(batch), request, mask_input)
@@ -178,9 +178,9 @@ def _check_flags(*, mask_input: Any, validate: Any) -> None:
     for name, value in (("mask_input", mask_input), ("validate", validate)):
         if not isinstance(value, bool):
             raise ArgumentTypeError(
-                f"tl.stats.measure_trajectory({name}={value!r}) needs True or False",
+                f"tl.mechinterp.measure_trajectory({name}={value!r}) needs True or False",
                 code="stats_trajectory_flag_type",
-                remedy=f"spell it tl.stats.measure_trajectory(model, data, {name}=True)",
+                remedy=f"spell it tl.mechinterp.measure_trajectory(model, data, {name}=True)",
                 argument=name,
             )
 
@@ -192,7 +192,7 @@ def _split_batch(batch: Any) -> tuple[Any, torch.Tensor | None]:
         targets = batch[1]
         if not isinstance(targets, torch.Tensor) or targets.is_floating_point():
             raise ArgumentTypeError(
-                "tl.stats.measure_trajectory got a (model_input, targets) batch whose targets "
+                "tl.mechinterp.measure_trajectory got a (model_input, targets) batch whose targets "
                 f"are {type(targets).__name__}, not an integer token-id tensor",
                 code="stats_trajectory_targets_type",
                 remedy="yield (input_ids, target_ids) with target_ids a [batch, positions] "
@@ -214,7 +214,7 @@ class _TrajectoryFolder:
             unknown = [name for name in names if name not in TRAJECTORY_STATISTICS]
             if unknown or not names or isinstance(statistics, str):
                 raise InvalidArgumentError(
-                    f"tl.stats.measure_trajectory(statistics={statistics!r}) names "
+                    f"tl.mechinterp.measure_trajectory(statistics={statistics!r}) names "
                     f"{unknown or 'no statistic'}; known: {list(TRAJECTORY_STATISTICS)}",
                     code="stats_trajectory_statistic_unknown",
                     remedy="pass a list of known names, e.g. statistics=['entropy', 'kl_to_final']",
@@ -224,11 +224,11 @@ class _TrajectoryFolder:
         else:
             self.requested = None
         self.names: tuple[str, ...] | None = None
-        self.layers: tuple[str, ...] | None = None
-        self.positions: int | None = None
-        self.examples = 0
+        self.module_addresses: tuple[str, ...] | None = None
+        self.num_positions: int | None = None
+        self.num_examples = 0
         self.sums: dict[str, torch.Tensor] = {}
-        self.spines: dict[str, dict[str, Spine]] = {}
+        self.running_stats: dict[str, dict[str, RunningStats]] = {}
         self.lens_source = ""
         self.validated = False
         self.checked = False
@@ -243,7 +243,7 @@ class _TrajectoryFolder:
                 self.names = self.requested
         if not has_targets and any(name in _TARGETED for name in self.names):
             raise InvalidArgumentError(
-                "tl.stats.measure_trajectory measures cross_entropy/target_rank, but a batch "
+                "tl.mechinterp.measure_trajectory measures cross_entropy/target_rank, but a batch "
                 "carries no targets",
                 code="stats_trajectory_targets_missing",
                 remedy="yield (input_ids, target_ids) batches, or pass "
@@ -271,7 +271,7 @@ class _TrajectoryFolder:
         log = trace(
             model,
             model_input,
-            capture=CaptureOptions(layers_to_save="all", save_arg_values=True),
+            capture=CaptureOptions(layers_to_save="all", save_args=True),
         )
         try:
             # The lens is checked once, on the first batch.
@@ -287,20 +287,20 @@ class _TrajectoryFolder:
                 values = trajectory_values(work, final, targets, names)
                 del work, logits
                 self._fold_layer(address, values)
-            self.examples += int(next(iter(values.values())).shape[0]) if setup.addresses else 0
+            self.num_examples += int(next(iter(values.values())).shape[0]) if setup.addresses else 0
         finally:
             log.cleanup()
 
     def _start(self, addresses: tuple[str, ...], lens_source: str, validated: bool) -> None:
         """Record the layer list on the first batch; refuse a different one later."""
 
-        if self.layers is None:
-            self.layers = addresses
+        if self.module_addresses is None:
+            self.module_addresses = addresses
             self.lens_source, self.validated = lens_source, validated
-        elif self.layers != addresses:
+        elif self.module_addresses != addresses:
             raise InvalidArgumentError(
-                "tl.stats.measure_trajectory: a later batch exposes different layers "
-                f"({list(addresses)}) than the first ({list(self.layers)})",
+                "tl.mechinterp.measure_trajectory: a later batch exposes different layers "
+                f"({list(addresses)}) than the first ({list(self.module_addresses)})",
                 code="stats_trajectory_layers_changed",
                 remedy="pass layers= explicitly so every batch projects the same blocks",
                 layers=list(addresses),
@@ -309,15 +309,15 @@ class _TrajectoryFolder:
     def _fold_layer(self, address: str, values: dict[str, torch.Tensor]) -> None:
         """Fold one layer's ``{statistic: [batch, positions]}`` values."""
 
-        row = (self.layers or ()).index(address)
+        row = (self.module_addresses or ()).index(address)
         for name, value in values.items():
             positions = int(value.shape[-1])
-            if self.positions is None:
-                self.positions = positions
-            elif positions != self.positions:
+            if self.num_positions is None:
+                self.num_positions = positions
+            elif positions != self.num_positions:
                 raise InvalidArgumentError(
-                    f"tl.stats.measure_trajectory: a batch has {positions} positions after "
-                    f"batches of {self.positions}",
+                    f"tl.mechinterp.measure_trajectory: a batch has {positions} positions after "
+                    f"batches of {self.num_positions}",
                     code="stats_trajectory_positions_changed",
                     remedy="pad or truncate every batch to one sequence length",
                     positions=positions,
@@ -325,34 +325,36 @@ class _TrajectoryFolder:
             column_sum = value.to(torch.float64).sum(dim=0)
             if name not in self.sums:
                 self.sums[name] = torch.zeros(
-                    len(self.layers or ()), positions, dtype=torch.float64
+                    len(self.module_addresses or ()), positions, dtype=torch.float64
                 )
             self.sums[name][row] += column_sum.cpu()
-            spine = self.spines.setdefault(name, {}).setdefault(address, Spine(name=name))
+            spine = self.running_stats.setdefault(name, {}).setdefault(
+                address, RunningStats(name=name)
+            )
             spine.update(value)
 
     def result(self, *, facet: str, mask_input: bool) -> TrajectoryStats:
         """Freeze the folded state into a ``TrajectoryStats``."""
 
-        if self.layers is None or self.names is None or self.examples == 0:
+        if self.module_addresses is None or self.names is None or self.num_examples == 0:
             raise InvalidArgumentError(
-                "tl.stats.measure_trajectory folded no examples (empty data or no layers)",
+                "tl.mechinterp.measure_trajectory folded no examples (empty data or no layers)",
                 code="stats_trajectory_empty",
-                remedy="pass at least one batch, e.g. tl.stats.measure_trajectory(model, [ids])",
-                examples=self.examples,
+                remedy="pass at least one batch, e.g. tl.mechinterp.measure_trajectory(model, [ids])",
+                examples=self.num_examples,
             )
-        means = {name: self.sums[name] / self.examples for name in self.names}
+        means = {name: self.sums[name] / self.num_examples for name in self.names}
         return TrajectoryStats(
-            layers=self.layers,
+            module_addresses=self.module_addresses,
             statistics=self.names,
             position_means=means,
-            spines={name: dict(self.spines[name]) for name in self.names},
-            examples=self.examples,
-            positions=int(self.positions or 0),
+            running_stats={name: dict(self.running_stats[name]) for name in self.names},
+            num_examples=self.num_examples,
+            num_positions=int(self.num_positions or 0),
             facet=facet,
             lens_source=self.lens_source,
             validated=self.validated,
-            mask_input=mask_input,
+            is_input_masked=mask_input,
         )
 
 
@@ -361,12 +363,12 @@ def _input_ids(model_input: Any) -> torch.Tensor:
 
     if not isinstance(model_input, torch.Tensor) or model_input.is_floating_point():
         raise InvalidArgumentError(
-            "tl.stats.measure_trajectory(mask_input=True) bans the input's own token ids, "
+            "tl.mechinterp.measure_trajectory(mask_input=True) bans the input's own token ids, "
             f"but the model input is {type(model_input).__name__}"
             + (" of floats" if isinstance(model_input, torch.Tensor) else "")
             + ", not an integer token-id tensor",
             code="stats_trajectory_mask_input_unavailable",
-            remedy="feed token ids, e.g. tl.stats.measure_trajectory(model, [input_ids], "
+            remedy="feed token ids, e.g. tl.mechinterp.measure_trajectory(model, [input_ids], "
             "mask_input=True), or drop mask_input=True",
             argument="mask_input",
         )
@@ -384,7 +386,7 @@ def _as_bpv(logits: torch.Tensor) -> torch.Tensor:
         work = work.reshape(-1, work.shape[-2], work.shape[-1])
     if work.ndim != 3:
         raise InvalidArgumentError(
-            f"tl.stats.measure_trajectory: projected logits have shape {tuple(logits.shape)}",
+            f"tl.mechinterp.measure_trajectory: projected logits have shape {tuple(logits.shape)}",
             code="stats_trajectory_projection_rank",
             remedy="use a lens= that returns [batch, positions, vocab] logits",
             shape=tuple(logits.shape),
@@ -404,7 +406,7 @@ def _final_log_probs(
         return None
     if final_logits is None:
         raise InvalidArgumentError(
-            "tl.stats.measure_trajectory measures kl_to_final, but the trace has no readable "
+            "tl.mechinterp.measure_trajectory measures kl_to_final, but the trace has no readable "
             "captured output logits to compare against",
             code="stats_trajectory_final_unavailable",
             remedy="drop it: statistics=['entropy', 'max_prob'], or register the head's "
@@ -459,7 +461,7 @@ def _align_final(final_log_probs: torch.Tensor, work: torch.Tensor) -> torch.Ten
 
     if tuple(final_log_probs.shape) != tuple(work.shape):
         raise InvalidArgumentError(
-            "tl.stats.measure_trajectory measures kl_to_final, but the captured output logits "
+            "tl.mechinterp.measure_trajectory measures kl_to_final, but the captured output logits "
             f"{tuple(final_log_probs.shape)} do not cover every projected position "
             f"{tuple(work.shape)} (a logits_to_keep-sliced head)",
             code="stats_trajectory_final_unavailable",
@@ -479,7 +481,7 @@ def _target_index(targets: torch.Tensor, work: torch.Tensor) -> torch.Tensor:
     vocab = int(work.shape[-1])
     if tuple(ids.shape) != tuple(work.shape[:-1]) or bool(((ids < 0) | (ids >= vocab)).any()):
         raise InvalidArgumentError(
-            f"tl.stats.measure_trajectory: targets {tuple(ids.shape)} must be token ids in "
+            f"tl.mechinterp.measure_trajectory: targets {tuple(ids.shape)} must be token ids in "
             f"[0, {vocab}) shaped like the projections {tuple(work.shape[:-1])}",
             code="stats_trajectory_targets_type",
             remedy="yield (input_ids, target_ids) with one target id per batch row and position",

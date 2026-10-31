@@ -12,22 +12,22 @@ from typing import Any, cast
 import pytest
 
 import torchlens as tl
-from torchlens.backends import BackendUnsupportedError
+from torchlens._data_classes._compaction import _COMPACTED_TRACES
+from torchlens._postprocess.graph_traversal import _remove_orphan_nodes
 from torchlens.backends.jax.backend import (
     _control_parent_labels,
     _data_parent_arg_positions,
     _data_parent_labels,
 )
-from torchlens.data_classes._compaction import _COMPACTED_TRACES
+from torchlens.errors import BackendUnsupportedError
 from torchlens.intervention.types import EdgeUseRecord
-from torchlens.postprocess.graph_traversal import _remove_orphan_nodes
 from torchlens.validation.invariants import MetadataInvariantError
 from torchlens.validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
-    ValidationReplayStatus,
+    ValidationStatus,
 )
 
 jax = pytest.importorskip("jax")
@@ -663,7 +663,7 @@ def test_jax_function_root_attributes_params_to_consuming_ops() -> None:
     # the bias broadcast (b1).
     assert trace.num_layers_with_params == 3
 
-    param_using_ops = {op.label: op for op in trace.layer_list if op.uses_params}
+    param_using_ops = {op.label: op for op in trace.layer_list if op.has_params}
     assert param_using_ops
     # No bare input-echo op should be reported as "using" a param -- params
     # are consumed downstream, not at the point they enter the trace.
@@ -978,7 +978,7 @@ def test_synthetic_control_parent_is_retained_by_orphan_pruning() -> None:
                 The raw graph fields are populated in place.
             """
 
-            from torchlens.ir.workspaces import (
+            from torchlens._ir.workspaces import (
                 ModuleCaptureWorkspace,
                 RawGraphWorkspace,
                 WrapperRuntimeWorkspace,
@@ -1057,11 +1057,11 @@ def test_jax_validation_reports_synthetic_importer_region_as_unverified() -> Non
 
     result = trace.validate_forward_pass([], validate_metadata=False)
 
-    assert isinstance(result, ValidationReplayStatus)
+    assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
-    assert result.available is True
-    assert result.replayed_node_count > 0
-    assert result.unverified_node_count == 1
+    assert result.is_available is True
+    assert result.num_replayed_ops > 0
+    assert result.num_unverified_ops == 1
     with pytest.raises(TypeError, match="not a boolean"):
         bool(result)
 
@@ -1091,7 +1091,7 @@ def test_jax_scan_over_cap_imports_unverified_region() -> None:
     assert boundary_ops[0].annotations[REGION_REPLAY_CLASS_KEY] == REGION_REPLAY_CLASS
     assert boundary_ops[0].annotations["jax_region_reason"] == "scan_length_exceeds_unroll_cap"
     assert trace.validate_forward_pass([]).state == "unverified"
-    assert trace.validation_replay_status.unverified_node_count == 1
+    assert trace.validation_replay_status.num_unverified_ops == 1
 
 
 def test_jax_dynamic_while_over_cap_imports_unverified_region() -> None:
@@ -1261,9 +1261,9 @@ def test_jax_region_summary_pandas_and_draw_work(tmp_path: Path) -> None:
     assert "jax_region" in trace.summary(level="op")
     assert len(trace.to_pandas()) == len(trace.layer_list)
     dot = trace.draw(
-        vis_outpath=str(tmp_path / "jax_region_graph"),
+        path=str(tmp_path / "jax_region_graph"),
         vis_save_only=True,
-        vis_fileformat="dot",
+        file_format="dot",
     )
     assert "jax_region" in dot
 

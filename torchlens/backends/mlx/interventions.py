@@ -20,11 +20,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
+from ..._ir.selector_eval import first_selector_kind_outside, selector_contains_kind
+from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ...intervention.hooks import make_hook_context, normalize_hook
 from ...intervention.selectors import BaseSelector
 from ...intervention.types import Edit, InterventionDecision
-from ...ir.selector_eval import first_selector_kind_outside, selector_contains_kind
-from ...postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ..registry import BackendUnsupportedError
 
 MLX_STATIC_INTERVENTION_SELECTOR_KINDS = _STATIC_INTERVENTION_SELECTOR_KINDS
@@ -162,7 +162,7 @@ def resolve_mlx_intervention_plan(
         if not isinstance(halt, BaseSelector):
             raise BackendUnsupportedError(
                 "MLX backend supports trace(halt=...) only for static-label "
-                "selectors (tl.func, tl.label, tl.contains, tl.in_module and "
+                "selectors (tl.func, tl.label, tl.label_contains, tl.in_module and "
                 "boolean composites). Value-dependent halt predicates need "
                 "concrete values at predicate time; use the PyTorch backend."
             )
@@ -189,7 +189,7 @@ def _reject_non_static_selector(selector: BaseSelector, *, surface: str) -> None
         return
     raise BackendUnsupportedError(
         f"MLX backend supports trace({surface}=...) only for static-label "
-        "selectors tl.func, tl.label, tl.contains, tl.module, tl.in_module and "
+        "selectors tl.func, tl.label, tl.label_contains, tl.module, tl.in_module and "
         f"boolean composites (&, |, ~) of those; unsupported selector kind "
         f"{unsupported!r}. Value-dependent predicates need concrete activation "
         "values at predicate time, which MLX lazy evaluation does not expose "
@@ -279,12 +279,12 @@ def _resolve_helper_applier(spec: Edit, mx: Any) -> MLXHookApplier:
             )
         return MLXHookApplier(identity, lambda out: out + delta)
     if name == "clamp":
-        low = kwargs.get("min")
-        high = kwargs.get("max")
+        low = kwargs.get("low")
+        high = kwargs.get("high")
         return MLXHookApplier(identity, lambda out: mx.clip(out, low, high))
     if name == "mean_ablate":
         source = spec.args[0] if spec.args else None
-        if source is not None or kwargs.get("over", "self") != "self":
+        if source is not None or kwargs.get("dim", "self") != "self":
             raise BackendUnsupportedError(
                 "MLX backend tl.mean_ablate(...) interventions support the "
                 "over='self' form only; tensor sources are torch-side semantics."

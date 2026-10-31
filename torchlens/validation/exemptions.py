@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..data_classes.op import Op
+from .._data_classes.op import Op
 from ._destination_coverage import (
     _get_scatter_destination_dim_index,
     _index_positions_cover_destination_exactly,
@@ -67,7 +67,7 @@ from ._value_predicates import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 
 # ---------------------------------------------------------------------------
@@ -1523,7 +1523,7 @@ def _bool_comparison_straddle_probe(layer: Op, layers_to_perturb: list[str]) -> 
                 one = torch.ones_like(base)
                 below = base - one
                 above = base + one
-            from ..utils.tensor_utils import tensor_nanequal
+            from .._utils.tensor_utils import tensor_nanequal
 
             for substitute in (base, below, above):
                 probe_args = list(args)
@@ -1628,7 +1628,7 @@ def _bool_predicate_influence_probe(layer: Op, layers_to_perturb: list[str]) -> 
         return None
     try:
         with torch.no_grad(), replay_warnings_ignored():
-            from ..utils.tensor_utils import tensor_nanequal
+            from .._utils.tensor_utils import tensor_nanequal
 
             for substitute in _bool_probe_battery(parent_saved):
                 # CLONE every retained operand per battery run (r8 R08, fable

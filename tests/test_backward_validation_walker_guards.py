@@ -113,7 +113,7 @@ class TestSumTensors:
     def test_over_deep_output_refuses_typed(self):
         """Nesting past the output ceiling refuses typed, never raw."""
 
-        from torchlens.ir.container_registry import OUTPUT_TREE_MAX_DEPTH
+        from torchlens._ir.container_registry import OUTPUT_TREE_MAX_DEPTH
 
         deep = _deep_list(OUTPUT_TREE_MAX_DEPTH + 5, torch.ones(1))
         with pytest.raises(InvalidArgumentError) as excinfo:

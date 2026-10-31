@@ -18,14 +18,14 @@ from typing import Any, TypeAlias
 
 import torch
 
-from .errors import RunCapabilityUnavailableError
-from .runnable import (
+from ._runnable import (
     LiteralTorchSymbol,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
+from .errors import RunCapabilityUnavailableError
 
 _VIEW_LOGICAL_ELEMENT_CEILING = 1 << 32
 """Largest logical extent the admitted pure-view slots of one run may have, summed.
@@ -146,7 +146,7 @@ def _resolved_forms(
     """Resolve ``(namespace, name)`` keys to unwrapped callables, keeping their forms."""
 
     from ._io.runnable_load import _unwrap_decorated
-    from .utils._torch_symbols import torch_attr
+    from ._utils._torch_symbols import torch_attr
 
     resolved: dict[Any, frozenset[_LiteralPosition]] = {}
     for (namespace, name), forms in entries.items():

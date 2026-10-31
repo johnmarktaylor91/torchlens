@@ -52,9 +52,9 @@ from typing import Any, Final
 import torch
 
 from ... import _state
+from ..._utils._exception_notes import annotate_guarded
+from ..._utils._torch_symbols import torch_attr
 from ...errors._base import TorchLensError
-from ...utils._exception_notes import annotate_guarded
-from ...utils._torch_symbols import torch_attr
 from ._tl import DescriptorCompatProperty, get_tensor_label
 from .completeness_witness import (
     _TORCHLENS_ROOT,
@@ -160,7 +160,7 @@ def _classify_consumer_kind(filename: str, line: int) -> str:
     """
 
     try:
-        from ...postprocess.ast_branches import classify_bool
+        from ..._postprocess.ast_branches import classify_bool
 
         kind = classify_bool(filename, line).kind
     except Exception:  # noqa: BLE001 — classification must never mask the refusal

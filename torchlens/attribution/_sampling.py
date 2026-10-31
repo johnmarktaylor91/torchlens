@@ -28,7 +28,7 @@ from torchlens.attribution._core import (
     _PreparedInputs,
     _substitute_inputs,
 )
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 
 
 def _resolve_stdevs(
@@ -333,8 +333,8 @@ def _validate_tree_invariance(
 
 
 def _validate_result_invariance(
-    reference: AttributionResult,
-    observed: AttributionResult,
+    reference: Attribution,
+    observed: Attribution,
     sample_index: int,
 ) -> None:
     """Require child method / target / layer metadata invariance across samples.
@@ -399,7 +399,7 @@ class _SampleRun:
         when any child does not disclose one.
     """
 
-    results: list[AttributionResult]
+    results: list[Attribution]
     planned_logical_calls: int
     completed_logical_calls: int
     child_physical_forward_calls: int | None
@@ -407,7 +407,7 @@ class _SampleRun:
 
 def _run_serial_samples(
     n_samples: int,
-    call_sample: Callable[[int], AttributionResult],
+    call_sample: Callable[[int], Attribution],
 ) -> _SampleRun:
     """Run ``call_sample`` serially for every sample with failure naming.
 
@@ -430,7 +430,7 @@ def _run_serial_samples(
         partial result is returned (memo D4).
     """
 
-    results: list[AttributionResult] = []
+    results: list[Attribution] = []
     for sample_index in range(n_samples):
         try:
             result = call_sample(sample_index)
@@ -540,7 +540,7 @@ def _scalar_distribution(values: list[float]) -> dict[str, float]:
     }
 
 
-def _completeness_distributions(results: list[AttributionResult]) -> dict[str, Any]:
+def _completeness_distributions(results: list[Attribution]) -> dict[str, Any]:
     """Build the D4 per-sample completeness distributions when disclosed.
 
     Parameters

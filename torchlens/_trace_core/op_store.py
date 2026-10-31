@@ -3,7 +3,7 @@
 One ``OpRowStore`` per captured trace holds every stored ``Op`` field cell;
 ``Op`` itself is a two-word ``(_core, _row)`` facade whose generated data
 descriptors read and write cells here. ``DetachedOpStore`` is the single-row
-twin used by ``Op.copy()``, pickle restoration, fork shells, and preview
+twin used by ``Op._copy_with_shallow_fields()``, pickle restoration, fork shells, and preview
 backends that construct ops outside the event-materialize ingress.
 
 Storage phases:
@@ -1060,7 +1060,7 @@ _AUDIT_COLLECTORS: dict[int, set[int]] = {}
 _AUDIT_READS: dict[int, set[int]] = {}
 
 #: Reads made inside a ``row_clone_scope`` — the mechanical row-clone access
-#: kind (design-ppdag-v3 §2.4d). ``Op.copy()`` reads every schema column via
+#: kind (design-ppdag-v3 §2.4d). ``Op._copy_with_shallow_fields()`` reads every schema column via
 #: ``getattr``; recorded naively those would drown the findings report in
 #: phantom per-column dependencies. Clone reads are legal iff the step's
 #: ``row_effects`` contains ``"creates"`` and generate NO per-column edges
@@ -1336,7 +1336,7 @@ class _CombinedAuditOpRowStore(OpRowStore):
 def row_clone_scope(store: Any) -> Iterator[None]:
     """Tag reads inside the scope as row-clone reads (category d).
 
-    Free when unarmed (review note N7): ``Op.copy()`` also runs on pickle,
+    Free when unarmed (review note N7): ``Op._copy_with_shallow_fields()`` also runs on pickle,
     fork-fallback, and preview paths where no audit exists — the fast path
     is one dict lookup. Detached stores and fork views are never audited,
     so their ids simply miss.

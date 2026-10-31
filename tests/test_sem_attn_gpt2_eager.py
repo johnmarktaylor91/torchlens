@@ -46,7 +46,7 @@ def test_full_per_head_surface_is_available(eager_capture):
     view = _view(trace)
     for facet in ("q", "k", "v", "attn_out", "scores", "pattern", "z", "result"):
         assert view.has(facet), f"facet {facet!r} not available on eager GPT-2"
-    menu = view.menu()
+    menu = view.declared()
     for facet in ("scores", "pattern", "z", "result"):
         assert menu[facet].status == "available_now"
 
@@ -161,7 +161,7 @@ def test_unsaved_anchor_reports_needs_capture():
     trace = tl.trace(model, (), spec.input_kwargs(), save=tl.func("softmax"))
     try:
         view = trace.modules[ATTN_ADDRESS].facets
-        menu = view.menu()
+        menu = view.declared()
         assert menu["pattern"].status == "available_now"
         assert menu["z"].status == "needs_capture"
         assert menu["z"].save_hint

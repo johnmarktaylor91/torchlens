@@ -19,7 +19,7 @@ def _mlp() -> nn.Module:
 def test_enrich_module_path_strings_populates_metadata() -> None:
     """Module path enrichment adds expected metadata fields."""
 
-    recording = tl.fastlog.record(_mlp(), torch.randn(1, 4), default_op=True)
+    recording = tl.record(_mlp(), torch.randn(1, 4), default_op=True)
     enriched = recording.enrich(["module_path_strings"])
     assert enriched is not recording
     assert enriched.records
@@ -30,7 +30,7 @@ def test_enrich_module_path_strings_populates_metadata() -> None:
 def test_enrich_param_addresses_requires_capture_time_field() -> None:
     """Param address enrichment raises clearly when capture data is absent."""
 
-    recording = tl.fastlog.record(_mlp(), torch.randn(1, 4), default_op=True)
+    recording = tl.record(_mlp(), torch.randn(1, 4), default_op=True)
     with pytest.raises(RecordingConfigError, match="parent_param_addresses"):
         recording.enrich(["param_addresses"])
 
@@ -38,7 +38,7 @@ def test_enrich_param_addresses_requires_capture_time_field() -> None:
 def test_enrich_all_feasible_matches_available_enrichments() -> None:
     """All-feasible applies all enrichments currently computable."""
 
-    recording = tl.fastlog.record(_mlp(), torch.randn(1, 4), default_op=True)
+    recording = tl.record(_mlp(), torch.randn(1, 4), default_op=True)
     by_name = recording.enrich(["module_path_strings"])
     by_preset = recording.enrich("all-feasible")
     assert [record.metadata for record in by_preset.records] == [

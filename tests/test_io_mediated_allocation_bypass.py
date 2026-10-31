@@ -85,8 +85,8 @@ from torchlens._io._safe_unpickle import (
     _is_alloc_constructor_type,
 )
 from torchlens._io.bundle import _RenameAwareUnpickler
+from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
 # torch renamed ``torch._C._TensorBase`` -> ``torch._C.TensorBase`` (the new name on
 # torch>=2.4; the old spelling remains on the 2.1 floor). Feature-detect so the tensor-base

@@ -8,7 +8,7 @@ Covers the round-18 A1 findings in the introspect/hash group:
   produced deterministic pre-hash collisions.
 * M7/F8 -- ``compute_graph_shape_hash`` / ``compute_raw_event_shape_hash``
   sorted parent indices, making the shape hash blind to operand/edge order
-  (feeds public ``torchlens.hash.trace()`` and the re-trace reproducibility
+  (feeds public ``torchlens.fingerprint.trace()`` and the re-trace reproducibility
   tripwire). Fixed consistent with the operand-order-sensitive refresh graph
   signature (commit 74898ada).
 * M8 -- ``"grad" in name`` substring filter suppressed unrelated attributes such
@@ -26,8 +26,8 @@ from typing import Any
 import torch
 from torch import nn
 
-import torchlens.utils.hashing as hashing
-import torchlens.utils.introspection as introspection
+import torchlens._utils.hashing as hashing
+import torchlens._utils.introspection as introspection
 from torchlens import _state
 
 # ---------------------------------------------------------------------------

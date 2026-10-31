@@ -10,22 +10,17 @@ from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
 from ... import _state
-from ..._deprecations import MISSING, MissingType
-from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendName, BackendUnsupportedError, get_backend_spec
-from ...capture.outcome import StopRequest, stamp_backend_finalized
-from ...data_classes.derived_grad import (
+from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
 )
-from ...data_classes.param import Param, ParamAccessor
-from ...data_classes.trace import Trace
-from ...fastlog._halt import HaltSignal
-from ...fastlog.types import CaptureSpec
-from ...ir.capture_events import CaptureEvents
-from ...ir.events import (
+from ..._data_classes.param import Param, ParamAccessor
+from ..._data_classes.trace import Trace
+from ..._deprecations import MISSING, MissingType
+from ..._ir.capture_events import CaptureEvents
+from ..._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
     InterventionAppliedEvent,
@@ -34,18 +29,23 @@ from ...ir.events import (
     OutputRef,
     ParentEdge,
 )
-from ...ir.intervention import FireResult, FunctionEventInput
-from ...ir.predicate import RecordContext
-from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...options import CaptureOptions, merge_capture_options
-from ...postprocess._materialize import materialize_from_events
-from ...postprocess._selective_save import (
+from ..._ir.intervention import FireResult, FunctionEventInput
+from ..._ir.predicate import RecordContext
+from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._postprocess._materialize import materialize_from_events
+from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
     pop_static_label_save_predicate,
 )
-from ...quantities import Duration
-from ...validation.status import ValidationReplaySource, ValidationReplayStatus
+from ..._quantities import Duration
+from ..._trace_core.relation_views import freeze_trace_relation_views
+from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
+from ...capture.outcome import StopRequest, stamp_backend_finalized
+from ...fastlog._halt import StopSignal
+from ...fastlog.types import CaptureSpec
+from ...options import CaptureOptions, merge_capture_options
+from ...validation.status import ValidationReplaySource, ValidationStatus
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -339,35 +339,35 @@ class PaddleBackend:
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             compute_input_output_distances=compute_input_output_distances,
             verbose=verbose,
             backward_ready=backward_ready,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             save_visualizations=save_visualizations,
         )
         layers_to_save = capture_options.layers_to_save
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
-        save_arg_values = capture_options.save_arg_values
-        save_code_context = capture_options.save_code_context
-        save_rng_states = capture_options.save_rng_states
+        save_arg_values = capture_options.save_args
+        save_code_context = capture_options.save_source_context
+        save_rng_states = capture_options.save_rng
         recurrence_detection = capture_options.recurrence_detection
         compute_input_output_distances = capture_options.compute_input_output_distances
         verbose = capture_options.verbose
         backward_ready = capture_options.backward_ready
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_raw_output
+        save_raw_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
-        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
         name = _resolve_optional_capture_field(capture, "name", name)
         module_filter = _resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = _resolve_optional_capture_field(capture, "transform", transform)
@@ -409,7 +409,7 @@ class PaddleBackend:
         save_predicate = pop_static_label_save_predicate(extra_kwargs, backend_name="paddle")
         intervene = _default_if_missing(extra_kwargs.pop("intervene", None), None)
         halt = _default_if_missing(extra_kwargs.pop("halt", None), None)
-        facet_recipes = _default_if_missing(extra_kwargs.pop("recipes", None), None)
+        facet_recipes = _default_if_missing(extra_kwargs.pop("facets", None), None)
         if grad_options is not None and (intervene is not None or halt is not None):
             raise BackendUnsupportedError(
                 "paddle backend preview cannot combine grad_options with "
@@ -436,9 +436,9 @@ class PaddleBackend:
                 "output_device": output_device,
                 "activation_transform": activation_transform,
                 "detach_saved_activations": detach_saved_activations,
-                "save_arg_values": save_arg_values,
-                "save_code_context": save_code_context,
-                "save_rng_states": save_rng_states,
+                "save_args": save_arg_values,
+                "save_source_context": save_code_context,
+                "save_rng": save_rng_states,
                 "backward_ready": backward_ready,
                 "module_filter": module_filter,
                 "transform": transform,
@@ -459,27 +459,27 @@ class PaddleBackend:
             activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
             grad_transform=None,
             save_raw_activations=save_raw_activations,
-            save_raw_gradients=True,
+            save_raw_grads=True,
             keep_orphans=keep_orphans,
-            save_arg_values=save_arg_values,
+            save_args=save_arg_values,
             save_grads=None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=cast(bool, compute_input_output_distances),
             num_context_lines=num_context_lines,
             optimizer=None,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
-            transform=cast("Callable[[Any], Any] | None", transform),
+            input_transform=cast("Callable[[Any], Any] | None", transform),
             raw_input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
@@ -508,11 +508,11 @@ class PaddleBackend:
                 recipe_tuple = tuple(facet_recipes)
             except TypeError as exc:
                 raise BackendUnsupportedError(
-                    "paddle backend trace(recipes=...) requires an iterable of recipe callables."
+                    "paddle backend trace(facets=...) requires an iterable of recipe callables."
                 ) from exc
             if not all(callable(recipe) for recipe in recipe_tuple):
                 raise BackendUnsupportedError(
-                    "paddle backend trace(recipes=...) requires recipe callables."
+                    "paddle backend trace(facets=...) requires recipe callables."
                 )
             from ...semantic import facets as facets_mod
 
@@ -549,11 +549,11 @@ class PaddleBackend:
             wrap_paddle(self)
             self._label_source_tensors(trace, args, kwargs)
             trace.capture_start_time = time.time()
-            halt_signal: HaltSignal | None = None
+            halt_signal: StopSignal | None = None
             try:
                 with _state.active_logging(trace):
                     output = cast(Any, prepared_model)(*args, **kwargs)
-            except HaltSignal as exc:
+            except StopSignal as exc:
                 halt_signal = exc
                 output = exc.frontier_output
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
@@ -640,7 +640,7 @@ class PaddleBackend:
         validate_metadata = bool(kwargs.pop("validate_metadata", True))
         trace = self.capture_trace(*args, **kwargs)
         result = self.validate_trace(trace, validate_metadata=validate_metadata)
-        if isinstance(result, ValidationReplayStatus):
+        if isinstance(result, ValidationStatus):
             return result.passed
         return result
 
@@ -678,7 +678,7 @@ class PaddleBackend:
         -------
         None
             ``trace.derived_grads`` and optionally
-            ``trace.intermediate_derived_grads`` are populated.
+            ``trace.autograd.intermediate_derived_grads`` are populated.
         """
 
         input_argnums = _normalize_paddle_input_grad_argnums(
@@ -775,7 +775,9 @@ class PaddleBackend:
                 module_tree.forward_args_by_call.update(previous_forward_args)
         trace.derived_grads = DerivedGradAccessor(records)
         if grad_options.intermediate_grads:
-            trace.intermediate_derived_grads = intermediate_accessor
+            from ..._data_classes._trace_stats import set_intermediate_derived_grads
+
+            set_intermediate_derived_grads(trace, intermediate_accessor)
         mirror_param_derived_grads(trace, records)
 
     def _records_for_intermediate_paddle_grads(
@@ -889,7 +891,7 @@ class PaddleBackend:
         trace: Trace,
         *_args: Any,
         **kwargs: Any,
-    ) -> bool | ValidationReplayStatus:
+    ) -> bool | ValidationStatus:
         """Validate a Paddle trace with coverage oracle, replay, and perturbation.
 
         Parameters
@@ -904,14 +906,14 @@ class PaddleBackend:
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             True for a verified live pass, False for a verified live failure,
             or an explicit unavailable status for loaded payload-stripped traces.
         """
 
         status = trace.validation_replay_status
-        if not status.available or _paddle_loaded_replay_unavailable(trace):
-            status_result = ValidationReplayStatus.unavailable_loaded_runtime_stripped(
+        if not status.is_available or _paddle_loaded_replay_unavailable(trace):
+            status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=self.name,
                 payload_load_status=getattr(trace, "payload_load_status", None),
             )
@@ -934,24 +936,24 @@ class PaddleBackend:
                 replayed_count, failed_count = self._validate_paddle_captures(trace)
             if failed_count == 0 and replayed_count < 1:
                 failed_count = 1
-            status_result = ValidationReplayStatus.from_replay_counts(
+            status_result = ValidationStatus.from_replay_counts(
                 backend=self.name,
                 source=_validation_source(trace),
-                replayed_node_count=replayed_count,
-                unverified_node_count=(
+                num_replayed_ops=replayed_count,
+                num_unverified_ops=(
                     count_importer_region_annotations(trace) if failed_count == 0 else 0
                 ),
-                failed_node_count=failed_count,
+                num_failed_ops=failed_count,
                 payload_load_status=getattr(trace, "payload_load_status", None),
             )
         except Exception:
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend=self.name,
                 source=_validation_source(trace),
                 payload_load_status=getattr(trace, "payload_load_status", None),
-                replayed_node_count=replayed_count,
-                failed_node_count=max(1, failed_count),
+                num_replayed_ops=replayed_count,
+                num_failed_ops=max(1, failed_count),
             )
         setattr(trace, "_validation_replay_status", status_result)
         return status_result if status_result.state == "unverified" else status_result.passed
@@ -1191,7 +1193,7 @@ class PaddleBackend:
                         boundary_kind=getattr(ctx, "kind", None),
                         boundary_label=site.label_raw,
                     )
-                    raise HaltSignal(site.label_raw, frontier_output=final_output)
+                    raise StopSignal(site.label_raw, frontier_output=final_output)
         return final_output
 
     def build_record_context(
@@ -1839,7 +1841,7 @@ def paddle_param_logs(tree: PaddleModuleTree, trace: Trace) -> dict[str, Param]:
         param.backend_address = f"object:{existing_address}"
         param.resolver_status = "resolved"
         param._param_ref = cast(Any, value)
-        param.source_trace = trace
+        param.trace = trace
         param.all_module_addresses = list(
             tree.metadata.get(owner, {}).get("all_addresses", [owner])
         )

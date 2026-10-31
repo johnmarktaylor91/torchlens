@@ -137,7 +137,7 @@ def _resid_pre_spec(module: Any) -> FacetSpec | AbsenceReason:
             f"residual input op {getattr(op, 'label', '<unknown>')!r} was not saved",
             f"save=... including {getattr(op, 'label', 'the residual input')!r}",
         )
-    return FacetSpec.from_home(op, home_kind="op", recipe_id="transformer_residuals")
+    return FacetSpec.from_home(op, home_kind="op", function_id="transformer_residuals")
 
 
 def _block_shape_anchor(
@@ -354,7 +354,7 @@ def _resid_mid_spec(module: Any) -> FacetSpec | AbsenceReason | None:
                 f"residual midpoint op {getattr(op, 'label', '<unknown>')!r} was not saved",
                 f"save=... including {getattr(op, 'label', 'the residual midpoint')!r}",
             )
-        return FacetSpec.from_home(op, home_kind="op", recipe_id="transformer_residuals")
+        return FacetSpec.from_home(op, home_kind="op", function_id="transformer_residuals")
     return None
 
 

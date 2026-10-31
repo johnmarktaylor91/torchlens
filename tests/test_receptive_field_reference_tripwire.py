@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes import op as op_module
+from torchlens._data_classes import op as op_module
 from torchlens.options import CaptureOptions
 
 _X = torch.tensor([[1.0, -2.0, 0.5, 0.25], [0.5, 1.5, -1.0, 2.0], [-0.5, 0.0, 1.0, -1.5]])

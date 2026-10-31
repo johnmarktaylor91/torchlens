@@ -98,7 +98,7 @@ def test_real_model_matrix_covers_receptive_projective_and_layer_to_layer(
     source = trace.input_ops[0]  # type: ignore[union-attr]
     first_conv, target = _ops(trace, "conv2d")
 
-    receptive = target.receptive_field.at("center", input=source)  # type: ignore[union-attr]
+    receptive = target.receptive_field.at("center", input_op=source)  # type: ignore[union-attr]
     layer_to_layer = target.receptive_field.at(  # type: ignore[union-attr]
         "center", source=first_conv
     )
@@ -247,7 +247,7 @@ def test_basic_block_geometric_adjoint_battery_is_exact() -> None:
         assert forward.status is ReceptiveFieldStatus.EXACT
         forward_bounds = _window_bounds(forward)
         for target_unit in target_units:
-            backward = target.receptive_field.at(target_unit, input=source)  # type: ignore[union-attr]
+            backward = target.receptive_field.at(target_unit, input_op=source)  # type: ignore[union-attr]
             assert backward.status is ReceptiveFieldStatus.EXACT
             backward_bounds = _window_bounds(backward)
             source_in_backward = all(
@@ -339,7 +339,7 @@ def test_folded_validate_tripwire_catches_injected_inconsistency() -> None:
         ReceptiveFieldDirection.RECEPTIVE,
         ReceptiveFieldDirection.PROJECTIVE,
     }
-    assert all(failure.n_violations > 0 for failure in failures)
+    assert all(failure.num_violations > 0 for failure in failures)
 
 
 class _AddZero(nn.Module):
@@ -397,7 +397,7 @@ def test_source_target_caches_reuse_and_drop_across_portable_round_trip(
     first_target_solution = target_cache[target_key][2]
     source.projective_field.at((3, 3), target=target)  # type: ignore[union-attr]
     assert target_cache[target_key][2] is first_target_solution
-    assert type(trace).PORTABLE_STATE_SPEC["_rf_directional_solutions"] is FieldPolicy.DROP
+    assert type(trace)._PORTABLE_STATE_SPEC["_rf_directional_solutions"] is FieldPolicy.DROP
 
     path = tmp_path / "rf-endpoint-caches.tlspec"
     trace.save(path)
@@ -439,7 +439,7 @@ def test_non_torch_backend_keeps_geometry_and_gates_both_gradients() -> None:
     assert projective.status is ReceptiveFieldStatus.EXACT
     assert receptive.layout.axis_kinds == ("pointwise",)
     assert projective.layout.axis_kinds == ("pointwise",)
-    with pytest.raises(tl.receptive_field.BackendUnsupportedError, match="tinygrad"):
+    with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
         target.receptive_field.gradient((0,))
-    with pytest.raises(tl.receptive_field.BackendUnsupportedError, match="tinygrad"):
+    with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
         source.projective_field.gradient((0,), target=target)

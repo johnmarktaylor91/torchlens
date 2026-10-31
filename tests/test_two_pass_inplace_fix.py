@@ -5,11 +5,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._ir.intervention import FunctionEventInput
+from torchlens._utils import _call_site
 from torchlens.backends.torch.aliasing import detect_torch_alias_contract
 from torchlens.errors import TorchLensWarning
-from torchlens.ir.intervention import FunctionEventInput
 from torchlens.options import CaptureOptions
-from torchlens.utils import _call_site
 
 
 def _assert_layer_present(trace: tl.Trace, layer_label: str) -> None:

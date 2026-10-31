@@ -1,4 +1,4 @@
-"""``tl.aggregate(..., cache=True)``: a rerun of the same run skips the loop.
+"""``tl.stats.aggregate(..., cache=True)``: a rerun of the same run skips the loop.
 
 Forward passes are counted through a module-level counter (an attribute on
 the model would itself change the model's key). Every cached result is
@@ -90,10 +90,10 @@ def _state(metrics: dict[str, Any]) -> str:
 def _run(
     model: nn.Module, data: Any, metrics: dict[str, Any], cache_dir: Path | None, **kwargs: Any
 ) -> tuple[dict[str, Any], int]:
-    """Run ``tl.aggregate`` and return its results and the forward passes it made."""
+    """Run ``tl.stats.aggregate`` and return its results and the forward passes it made."""
 
     before = FORWARDS["count"]
-    results = tl.aggregate(
+    results = tl.stats.aggregate(
         model, data, metrics, cache=cache_dir is not None, cache_dir=cache_dir, **kwargs
     )
     return results, FORWARDS["count"] - before
@@ -195,7 +195,7 @@ def test_cache_unkeyable_refuses(case: str, model: nn.Module, tmp_path: Path) ->
         metrics = {label: tl.stats.TopK(3, unit_axis=-1, encoder=_CallableObject())}
     before = FORWARDS["count"]
     with pytest.raises(tl.errors.TorchLensError) as info:
-        tl.aggregate(model, data, metrics, cache=True, cache_dir=tmp_path)
+        tl.stats.aggregate(model, data, metrics, cache=True, cache_dir=tmp_path)
     assert info.value.fields["code"] == "stats_aggregate_cache_unkeyable"
     assert "drop cache=" in info.value.fields["remedy"]
     assert FORWARDS["count"] == before
@@ -287,8 +287,8 @@ def test_cache_unstable_loader_warns_and_stores_nothing(model: nn.Module, tmp_pa
 @pytest.mark.parametrize(
     "call",
     [
-        lambda m, d, s, p: tl.aggregate(m, d, s, cache="yes"),
-        lambda m, d, s, p: tl.aggregate(m, d, s, cache=True, cache_dir=3),
+        lambda m, d, s, p: tl.stats.aggregate(m, d, s, cache="yes"),
+        lambda m, d, s, p: tl.stats.aggregate(m, d, s, cache=True, cache_dir=3),
     ],
     ids=["cache_not_bool", "cache_dir_not_path"],
 )

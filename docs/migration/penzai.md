@@ -10,10 +10,10 @@ since August 2026. Existing penzai code keeps working; new work needs another ho
 | Functional model surgery | Capture with `capture=tl.options.CaptureOptions(intervention_ready=True)`; `trace.fork()`, then `.set(site, value)` or `.attach_hooks(site, helper)`, then `.push()` (replay the recorded graph) or `.run()` (run the model again) | TorchLens edits a recorded run, not the model definition. |
 | Inspect intermediate values | `trace.find_sites(selector).first().out`, or `trace[label].out` | Equivalent for captured tensors. |
 | Patch or replace a value | `.set(site, tensor)` or `.attach_hooks(site, helper)` on a forked trace | Equivalent for visible activations. |
-| Declarative named axes | Explicit tensor shapes, plus `feature_axis=` where a helper needs it | No named-axis system. |
+| Declarative named axes | Explicit tensor shapes, plus `dim=` where a helper needs it | No named-axis system. |
 | Transformer-specific layer abstractions | `torchlens.mechinterp` (TransformerLens-style names through `resolve_alias`) and attention facets | Different vocabulary; no penzai layer classes. |
 | Save a modified computation | `trace.save_intervention(path, level="portable")` writes a `.tlspec/` recipe | TorchLens saves recipes, not rewritten model trees. |
-| Compare several variants | `tl.bundle({...})` | Equivalent comparison container. |
+| Compare several variants | `tl.Bundle({...})` | Equivalent comparison container. |
 | Intervene on fused kernel internals | Attention facets and `torchlens.mechinterp.lowered_counterfactual` for heads on fused attention; manual unfused code otherwise | Raw fused-kernel intermediates are not captured ops. |
 | Pure JAX workflows | `tl.trace(fn, (params, x), backend="jax")`: a preview backend that captures a functional call `fn(params, *inputs)` from its jaxpr; Equinox and Flax NNX modules are supported roots | Preview: `jax.jit`, `lax.cond`, `lax.scan`, `lax.while_loop` and custom-VJP regions refuse in strict mode; gradients are derived, not captured backward passes (see `docs/backends.md`). |
 | Pretty-print model trees and arrays (treescope) | The `torchlens.bridge.treescope` bridge (`docs/guides/treescope_cards.md`), or the bounded `repr`/`str` cards on every trace object | |

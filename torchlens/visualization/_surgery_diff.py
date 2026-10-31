@@ -40,7 +40,7 @@ from .surgery_visuals import SurgeryFacts, surgery_facts
 from .themes import resolve_theme, theme_graph_attrs, theme_node_attrs
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 __all__ = [
     "DIFF_JOIN_KINDS",

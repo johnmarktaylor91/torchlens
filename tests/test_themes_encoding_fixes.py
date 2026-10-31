@@ -155,8 +155,8 @@ def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> 
         log.draw(
             color_by="pass_index",
             vis_mode="rolled",
-            vis_outpath=str(tmp_path / "rolled"),
-            vis_fileformat="svg",
+            path=str(tmp_path / "rolled"),
+            file_format="svg",
             vis_save_only=True,
         )
         state = log._last_encoding_state if hasattr(log, "_last_encoding_state") else None
@@ -167,8 +167,8 @@ def test_per_pass_field_on_rolled_unencodes_with_its_own_note(tmp_path: Any) -> 
         graph = log.draw(
             color_by="pass_index",
             vis_mode="rolled",
-            vis_outpath=str(tmp_path / "rolled2"),
-            vis_fileformat="svg",
+            path=str(tmp_path / "rolled2"),
+            file_format="svg",
             vis_save_only=True,
             return_graph=True,
         )

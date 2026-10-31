@@ -155,8 +155,8 @@ def test_debug_render_carries_motifs_end_to_end(nonfinite_log: Any, tmp_path: An
     resolution = lenses.resolve_lens(nonfinite_log, "debug")
     graph = nonfinite_log.draw(
         **resolution.draw_kwargs,
-        vis_outpath=str(tmp_path / "nf"),
-        vis_fileformat="svg",
+        path=str(tmp_path / "nf"),
+        file_format="svg",
         vis_save_only=True,
         return_graph=True,
     )
@@ -216,8 +216,8 @@ def test_unrolled_passes_carry_their_own_motif(tmp_path: Any) -> None:
     resolution = lenses.resolve_lens(log, "debug")
     source = log.draw(
         **{**resolution.draw_kwargs, "vis_mode": "unrolled"},
-        vis_outpath=str(tmp_path / "nf_passes"),
-        vis_fileformat="svg",
+        path=str(tmp_path / "nf_passes"),
+        file_format="svg",
         vis_save_only=True,
     )
     inf_border = _MOTIFS["pos_inf"][1]

@@ -13,8 +13,8 @@ from torch import nn
 
 pytest.importorskip("lightning")
 
+from torchlens._data_classes.trace import Trace
 from torchlens.callbacks.lightning import LayerProfilerCallback
-from torchlens.data_classes.trace import Trace
 
 
 class _TinyModel(nn.Module):

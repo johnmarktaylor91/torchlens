@@ -160,12 +160,12 @@ def test_receptive_field_table_filters_by_input_op_handle_only() -> None:
 
     trace = _trace_residual()
     input_op = next(op for op in trace.layer_list if op.is_input)  # type: ignore[union-attr]
-    filtered = trace.receptive_fields(input=input_op).to_pandas()  # type: ignore[union-attr]
+    filtered = trace.receptive_fields(input_op=input_op).to_pandas()  # type: ignore[union-attr]
 
     assert not filtered.empty
     assert set(filtered["input_op"]) == {input_op.label}
     with pytest.raises(TypeError, match="Op handle"):
-        trace.receptive_fields(input=input_op.layer_label)  # type: ignore[union-attr]
+        trace.receptive_fields(input_op=input_op.layer_label)  # type: ignore[union-attr]
 
 
 def test_receptive_field_profile_to_pandas_returns_a_copy() -> None:

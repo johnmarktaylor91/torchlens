@@ -13,9 +13,9 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import ConditionalEvent, Trace
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import ConditionalEvent, Trace
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
 
@@ -558,7 +558,7 @@ def test_invariant_15_branch_depth_must_match_stack() -> None:
 def test_invariant_15_body_role_requires_branch_stack() -> None:
     """Invariant 15 fails when a body role appears on an op with no stack."""
 
-    from torchlens.data_classes.trace import ConditionalRoleRef
+    from torchlens._data_classes.trace import ConditionalRoleRef
 
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:
@@ -583,7 +583,7 @@ def test_invariant_15_body_role_requires_branch_stack() -> None:
 def test_invariant_15_body_role_must_match_branch_stack_entry() -> None:
     """Invariant 15 fails when a body role names the wrong conditional arm."""
 
-    from torchlens.data_classes.trace import ConditionalRoleRef
+    from torchlens._data_classes.trace import ConditionalRoleRef
 
     trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
     try:

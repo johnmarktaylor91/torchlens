@@ -96,7 +96,7 @@ def _dataset_topk(model, sae, tokens, k):
     label = next(op.layer_label for op in trace.layer_list if op.layer_type == "relu")
     stat = tl.stats.TopK(k=k, unit_axis=-1, encoder=sae.encode, name="latents")
     batches = [tokens[0:3], tokens[3:6], tokens[6:8]]
-    return tl.aggregate(model, batches, metrics={label: tl.stats.Aggregator(stat)})[label][
+    return tl.stats.aggregate(model, batches, metrics={label: tl.stats.Aggregator(stat)})[label][
         "latents"
     ]
 

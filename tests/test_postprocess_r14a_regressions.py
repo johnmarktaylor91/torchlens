@@ -12,8 +12,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import ConditionalAccessor, ConditionalEvent, Trace
-from torchlens.postprocess.finalization import _build_conditional_records
+from torchlens._data_classes.trace import ConditionalAccessor, ConditionalEvent, Trace
+from torchlens._postprocess.finalization import _build_conditional_records
 from torchlens.validation.invariants import MetadataInvariantError
 
 
@@ -376,7 +376,7 @@ def test_internal_sink_logging_never_rescans_the_sink_ledgers() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.postprocess.graph_traversal import _log_internally_terminated_tensor
+    from torchlens._postprocess.graph_traversal import _log_internally_terminated_tensor
 
     class _CountingList(list):
         """List that counts membership scans."""

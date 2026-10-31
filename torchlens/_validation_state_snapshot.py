@@ -10,6 +10,15 @@ back to the device it came from, so the restore writes exactly the bytes a
 device clone would have held, through the same restore function, and only when
 the live state actually changed.
 
+The snapshot also records each parameter's and buffer's storage binding (its
+storage, offset, size and stride). A forward that rebinds one with
+``Tensor.set_`` (emptying it, growing it, or pointing it into another
+tensor's storage) leaves a tensor ``load_state_dict`` cannot write back: it
+refuses the new shape, or its in-place copy writes through the alias into the
+other tensor's bytes. The restore therefore rebinds every such tensor to its
+recorded storage first, keeping the tensor object, and only then compares and
+loads values.
+
 The copy-failure helpers name the exception a failed ``copy.deepcopy`` raised
 (for example a CUDA out-of-memory error), so a later refusal is never reported
 only as a missing-capability message about unrelated plain attributes.
@@ -27,6 +36,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from ._storage_bindings import rebind_if_moved, record_storage_binding
 from .errors._base import TorchLensWarning
 
 _HOST_DEVICE = torch.device("cpu")
@@ -59,11 +69,16 @@ class StateSnapshot:
         The device each entry was read from, which is where a restore puts it.
     metadata:
         The ``state_dict``'s private ``_metadata`` (module versions), or None.
+    bindings:
+        Each rebindable parameter or buffer object of the snapshotted model,
+        paired with a detached alias that holds its storage, offset, size and
+        stride at snapshot time (see :func:`storage_bindings`).
     """
 
     tensors: OrderedDict[str, torch.Tensor]
     source_devices: dict[str, torch.device]
     metadata: Any
+    bindings: tuple[tuple[torch.Tensor, torch.Tensor], ...] = ()
 
 
 def _holds_on_host(tensor: torch.Tensor) -> bool:
@@ -75,6 +90,83 @@ def _holds_on_host(tensor: torch.Tensor) -> bool:
         and tensor.device.type not in ("cpu", "meta")
         and not tensor.is_quantized
     )
+
+
+def storage_bindings(model: nn.Module) -> tuple[tuple[torch.Tensor, torch.Tensor], ...]:
+    """Record the storage binding of every parameter and buffer in ``model``'s state.
+
+    Parameters
+    ----------
+    model:
+        Module whose registered state tensors are recorded.
+
+    Returns
+    -------
+    tuple[tuple[torch.Tensor, torch.Tensor], ...]
+        One ``(tensor, binding)`` pair per distinct plain dense tensor object
+        (a tied weight appears once). ``binding`` is a detached alias: it keeps
+        the original storage alive and remembers its offset, size and stride
+        even after the forward rebinds ``tensor`` elsewhere.
+    """
+
+    seen: set[int] = set()
+    bindings: list[tuple[torch.Tensor, torch.Tensor]] = []
+    for value in model.state_dict(keep_vars=True).values():
+        if isinstance(value, torch.Tensor) and id(value) not in seen:
+            seen.add(id(value))
+            binding = record_storage_binding(value)
+            if binding is not None:
+                bindings.append((value, binding))
+    return tuple(bindings)
+
+
+def with_storage_bindings_of(snapshot: StateSnapshot, model: nn.Module) -> StateSnapshot:
+    """Return ``snapshot`` with the storage bindings of ``model``.
+
+    Validation reuses the live model's snapshot for its deep copy when the
+    values match; the bindings must still name the copy's own tensors, or a
+    restore of the copy would rebind nothing (or the live model's tensors).
+
+    Parameters
+    ----------
+    snapshot:
+        Value snapshot whose bytes ``model`` holds.
+    model:
+        Module the returned snapshot restores.
+
+    Returns
+    -------
+    StateSnapshot
+        The same value entries, with ``model``'s storage bindings.
+    """
+
+    return dataclasses.replace(snapshot, bindings=storage_bindings(model))
+
+
+def restore_storage_bindings(model: nn.Module, snapshot: StateSnapshot) -> None:
+    """Rebind each of ``model``'s state tensors that a forward moved off its storage.
+
+    A tensor is rebound only when it is still registered on ``model`` and its
+    storage, offset, size or stride differ from the recorded binding
+    (``Tensor.is_set_to``); the tensor object itself is kept, so references the
+    caller holds (an optimizer's parameter list) stay valid (see
+    :mod:`torchlens._storage_bindings`). Values are not written here; the value
+    restore that follows compares and loads them.
+
+    Parameters
+    ----------
+    model:
+        Live model to rebind.
+    snapshot:
+        Snapshot of ``model`` taken before the run.
+    """
+
+    if not snapshot.bindings:
+        return
+    registered = {id(value) for value in model.state_dict(keep_vars=True).values()}
+    for tensor, binding in snapshot.bindings:
+        if id(tensor) in registered:
+            rebind_if_moved(tensor, binding)
 
 
 def snapshot_state_for_restore(model: nn.Module) -> StateSnapshot:
@@ -103,7 +195,12 @@ def snapshot_state_for_restore(model: nn.Module) -> StateSnapshot:
         else:
             tensors[name] = detached.clone()
     metadata = copy.deepcopy(getattr(original_state, "_metadata", None))
-    return StateSnapshot(tensors=tensors, source_devices=source_devices, metadata=metadata)
+    return StateSnapshot(
+        tensors=tensors,
+        source_devices=source_devices,
+        metadata=metadata,
+        bindings=storage_bindings(model),
+    )
 
 
 def _on_source_device(snapshot: StateSnapshot, name: str) -> torch.Tensor:
@@ -179,7 +276,7 @@ def restore_snapshot_if_changed(
     snapshot: StateSnapshot,
     restore: Callable[[nn.Module, Any], Any],
 ) -> None:
-    """Run ``restore(model, entries)`` only when the live state differs.
+    """Rebind moved state tensors, then run ``restore(model, entries)`` if values differ.
 
     Parameters
     ----------
@@ -192,6 +289,7 @@ def restore_snapshot_if_changed(
         receives every key on its source device, as with a device clone.
     """
 
+    restore_storage_bindings(model, snapshot)
     if state_matches_snapshot(model, snapshot):
         return
     restore(model, _restore_entries(model, snapshot))

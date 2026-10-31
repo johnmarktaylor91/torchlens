@@ -19,7 +19,7 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load, load_file
 
-from . import PayloadLoadHints, TorchLensIOError
+from . import ArtifactError, PayloadLoadHints
 from .manifest import sha256_of_file
 from .paths import resolve_bundle_blob_path
 from .payload_codec import materialize_transport_tensor
@@ -156,7 +156,7 @@ class LazyActivationRef:
 
         Raises
         ------
-        TorchLensIOError
+        ArtifactError
             If the referenced blob is missing, corrupt, or checksum-drifted.
         """
 
@@ -165,9 +165,9 @@ class LazyActivationRef:
         try:
             blob_size = blob_path.stat().st_size
         except FileNotFoundError as exc:
-            raise TorchLensIOError(f"Tensor blob not found at {blob_path}.") from exc
+            raise ArtifactError(f"Tensor blob not found at {blob_path}.") from exc
         except OSError as exc:
-            raise TorchLensIOError(f"Failed to access blob at {blob_path}.") from exc
+            raise ArtifactError(f"Failed to access blob at {blob_path}.") from exc
 
         if blob_size <= _INLINE_LOAD_MAX_BYTES:
             try:
@@ -180,15 +180,15 @@ class LazyActivationRef:
                 with blob_path.open("rb") as handle:
                     blob_bytes = handle.read(blob_size + 1)
             except FileNotFoundError as exc:
-                raise TorchLensIOError(f"Tensor blob not found at {blob_path}.") from exc
+                raise ArtifactError(f"Tensor blob not found at {blob_path}.") from exc
             except OSError as exc:
-                raise TorchLensIOError(f"Failed to materialize blob at {blob_path}.") from exc
+                raise ArtifactError(f"Failed to materialize blob at {blob_path}.") from exc
             if len(blob_bytes) > blob_size:
-                raise TorchLensIOError(f"blob at {blob_path} grew between its size check and read.")
+                raise ArtifactError(f"blob at {blob_path} grew between its size check and read.")
 
             observed_sha256 = sha256(blob_bytes).hexdigest()
             if observed_sha256 != self.expected_sha256:
-                raise TorchLensIOError(
+                raise ArtifactError(
                     f"blob at {blob_path} sha256 mismatch; expected {self.expected_sha256} "
                     f"got {observed_sha256}"
                 )
@@ -196,11 +196,11 @@ class LazyActivationRef:
             try:
                 tensor_map = load(blob_bytes)
             except ImportError as exc:
-                raise TorchLensIOError(
+                raise ArtifactError(
                     "Portable bundle load requires the safetensors backend. Install safetensors>=0.4."
                 ) from exc
             except (OSError, SafetensorError, ValueError) as exc:
-                raise TorchLensIOError(f"Failed to materialize blob at {blob_path}.") from exc
+                raise ArtifactError(f"Failed to materialize blob at {blob_path}.") from exc
         else:
             # Large blobs are stream-hashed and memory-mapped for load to keep
             # peak memory bounded (IO-S9), which unavoidably means two reads of
@@ -213,11 +213,11 @@ class LazyActivationRef:
             try:
                 pre_hash_identity = _file_identity(blob_path.stat())
             except OSError as exc:
-                raise TorchLensIOError(f"Failed to access blob at {blob_path}.") from exc
+                raise ArtifactError(f"Failed to access blob at {blob_path}.") from exc
 
             observed_sha256 = sha256_of_file(blob_path)
             if observed_sha256 != self.expected_sha256:
-                raise TorchLensIOError(
+                raise ArtifactError(
                     f"blob at {blob_path} sha256 mismatch; expected {self.expected_sha256} "
                     f"got {observed_sha256}"
                 )
@@ -225,9 +225,9 @@ class LazyActivationRef:
             try:
                 pre_load_identity = _file_identity(blob_path.stat())
             except OSError as exc:
-                raise TorchLensIOError(f"Failed to access blob at {blob_path}.") from exc
+                raise ArtifactError(f"Failed to access blob at {blob_path}.") from exc
             if pre_load_identity != pre_hash_identity:
-                raise TorchLensIOError(
+                raise ArtifactError(
                     f"blob at {blob_path} changed between integrity check and load."
                 )
 
@@ -235,14 +235,14 @@ class LazyActivationRef:
                 device = str(map_location) if self.logical_backend == _TORCH_BACKEND_NAME else "cpu"
                 tensor_map = load_file(blob_path, device=device)
             except ImportError as exc:
-                raise TorchLensIOError(
+                raise ArtifactError(
                     "Portable bundle load requires the safetensors backend. Install safetensors>=0.4."
                 ) from exc
             except (OSError, SafetensorError, ValueError) as exc:
-                raise TorchLensIOError(f"Failed to materialize blob at {blob_path}.") from exc
+                raise ArtifactError(f"Failed to materialize blob at {blob_path}.") from exc
 
         if len(tensor_map) != 1:
-            raise TorchLensIOError(f"Expected a single tensor in blob file {blob_path}.")
+            raise ArtifactError(f"Expected a single tensor in blob file {blob_path}.")
         tensor = next(iter(tensor_map.values()))
         effective_hints = self.payload_hints if payload_hints is None else payload_hints
         payload = materialize_transport_tensor(

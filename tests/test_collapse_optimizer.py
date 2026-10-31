@@ -19,7 +19,7 @@ import torchlens as tl
 import torchlens.visualization.auto_collapse as auto_collapse
 import torchlens.visualization.collapse_optimizer as collapse_optimizer
 import torchlens.visualization.source_graph as source_graph_module
-from torchlens.data_classes._trace_accessors import TraceOpAccessor
+from torchlens._data_classes._trace_accessors import TraceOpAccessor
 from torchlens.visualization._render_common import format_collapsed_module_contents
 from torchlens.visualization.auto_collapse import (
     _condensed_owner_for_op,
@@ -1518,9 +1518,9 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         result = select_collapse_plan(trace, RenderContext(), mode="max")
         source = str(
             trace.draw(
-                vis_outpath=str(tmp_path / "max_floor_rep_stats"),
+                path=str(tmp_path / "max_floor_rep_stats"),
                 vis_save_only=True,
-                vis_fileformat="svg",
+                file_format="svg",
                 vis_node_placement="dot",
                 collapse="max",
             )
@@ -1529,13 +1529,13 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         fold = result.repeat_folds[run_fold.rep.call.rsplit(":", 1)[0]]
         representative = trace.modules[fold.representative]
         aggregate_layers = sum(
-            int(getattr(trace.modules[address], "num_layers", 0) or 0) for address in fold.addresses
+            len(trace.modules[address].layer_labels) for address in fold.addresses
         )
         aggregate_params = sum(
             int(getattr(trace.modules[address], "num_params", 0) or 0) for address in fold.addresses
         )
         representative_label = format_collapsed_module_contents(
-            representative.num_layers,
+            len(representative.layer_labels),
             sum(trace[label].is_buffer for label in representative.layer_labels),
         )
         aggregate_label = format_collapsed_module_contents(
@@ -1547,7 +1547,7 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
             ),
         )
 
-        assert aggregate_layers != representative.num_layers
+        assert aggregate_layers != len(representative.layer_labels)
         assert aggregate_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
         assert representative_label in source
@@ -1718,7 +1718,7 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
         dot = fresh.draw(
             collapse="max",
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             order_siblings=False,
         )
     assert dot  # uncollapsed render still ships
@@ -1764,7 +1764,7 @@ def test_collapse_ceiling_warning_category_and_attribution(
         fresh.draw(
             collapse="max",
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             order_siblings=False,
         )
     declines = [w for w in caught if "skipping smart collapse" in str(w.message)]
@@ -1826,7 +1826,7 @@ def test_repeat_fold_discovery_scans_module_table_once(
 
     from torch import nn
 
-    from torchlens.data_classes._accessor_base import Accessor
+    from torchlens._data_classes._accessor_base import Accessor
 
     model = nn.Sequential(*[nn.Sequential(nn.Linear(4, 4), nn.ReLU()) for _ in range(6)])
     trace = tl.trace(model, torch.randn(2, 4))

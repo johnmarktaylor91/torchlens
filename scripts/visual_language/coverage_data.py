@@ -470,7 +470,7 @@ ROWS: Mapping[str, Row] = {
         "output.all_draw_parameters",
         "cheat-sheet",
         C,
-        "torchlens.data_classes._trace_viz:TraceVisualizationMixin.draw",
+        "torchlens._data_classes._trace_viz:TraceVisualizationMixin.draw",
     ),
     # Side pictures
     "VS01": _R("side.bundle_graph", "other-pictures", C, "_bundle_graph:_add_bundle_forward_nodes"),
@@ -502,10 +502,10 @@ ROWS: Mapping[str, Row] = {
 VIS_OPTION_ALIASES: Mapping[str, str] = {
     "view": "vis_mode",
     "depth": "vis_call_depth",
-    "container_path": "vis_outpath",
+    "container_path": "path",
     "save_only": "vis_save_only",
-    "file_format": "vis_fileformat",
-    "show_buffers": "show_buffer_layers",
+    "file_format": "file_format",
+    "show_buffers": "show_buffers",
     "direction": "direction",
     "graph_overrides": "vis_graph_overrides",
     "node_style": "node_mode",
@@ -520,7 +520,7 @@ VIS_OPTION_ALIASES: Mapping[str, str] = {
     "module_overrides": "vis_module_overrides",
     "layout": "vis_node_placement",
     "renderer": "vis_renderer",
-    "theme": "vis_theme",
+    "theme": "theme",
     "intervention_mode": "vis_intervention_mode",
     "show_cone": "vis_show_cone",
     "node_overlay": "node_overlay",
@@ -528,7 +528,7 @@ VIS_OPTION_ALIASES: Mapping[str, str] = {
     "show_legend": "show_legend",
     "color_by": "color_by",
     "size_by": "size_by",
-    "scale": "scale",
+    "size_scale": "scale",
     "stack_by": "stack_by",
     "show_redundant_args": "show_redundant_args",
     "font_size": "font_size",
@@ -542,7 +542,7 @@ VIS_OPTION_ALIASES: Mapping[str, str] = {
 #: ``slides.CHEAT_GROUPS``): the parameters no panel passes explicitly.
 ENTRY_CHEATS: Mapping[str, tuple[str, ...]] = {
     "Trace.draw_backward": (
-        "vis_outpath",
+        "path",
         "node_spec_fn",
         "collapsed_node_spec_fn",
         "vis_node_mode",
@@ -555,14 +555,14 @@ ENTRY_CHEATS: Mapping[str, tuple[str, ...]] = {
         "theme",
     ),
     "Trace.draw_combined": (
-        "vis_outpath",
+        "path",
         "node_spec_fn",
         "backward_node_spec_fn",
         "vis_edge_overrides",
         "vis_direction",
         "vis_mode",
         "intervening_cluster",
-        "show_buffer_layers",
+        "show_buffers",
         "bwd",
     ),
 }

@@ -13,20 +13,21 @@ import torch
 import torch.nn.modules.module as torch_module
 from torch import nn
 
+from torchlens._ir.events import PreHookProvenanceEvent
+
 from ... import _state
-from ...data_classes.func_call_location import FuncCallLocation
-from ...data_classes.module import HookInfo
-from ...data_classes.prehook import (
+from ..._data_classes.func_call_location import FuncCallLocation
+from ..._data_classes.module import HookInfo
+from ..._data_classes.prehook import (
     ModuleInputSnapshot,
     PreHookEffect,
     TensorInputObservation,
     TypedInputPath,
 )
-from ...ir import PreHookProvenanceEvent
 from ._tl import get_tensor_label
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 _INCOMPLETE_VERSION = "tensor_version_unavailable"
 _INCOMPLETE_BYPASS = "registration_interposition_bypassed"

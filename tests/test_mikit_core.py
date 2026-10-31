@@ -17,7 +17,7 @@ import torch
 import torchlens as tl
 import torchlens.mechinterp as mi
 from torchlens.mechinterp._errors import MechInterpError
-from torchlens.tviz import receipt_from_patch_grid
+from torchlens.transformer import receipt_from_patch_grid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "real_model" / "r0"))
 
@@ -187,7 +187,7 @@ def test_head_weight_views_verified(gpt2_trace, llama_trace):
 
     views = mi.head_weight_views(gpt2_trace, "transformer.h.0.attn")
     assert views.sources["q"].orientation == "in_out"  # Conv1D law (F5)
-    assert views.sources["q"].fused_qkv
+    assert views.sources["q"].has_fused_qkv
     assert views.sources["q"].slice_cols == (0, 64)
     assert views.sources["v"].slice_cols == (128, 192)
     assert views.sources["q"].verification == "payload_verified"
@@ -195,7 +195,7 @@ def test_head_weight_views_verified(gpt2_trace, llama_trace):
 
     gqa = mi.head_weight_views(llama_trace, "model.layers.0.self_attn")
     assert gqa.sources["q"].orientation == "out_in"  # Linear law
-    assert (gqa.n_q_heads, gqa.n_kv_heads) == (4, 2)
+    assert (gqa.num_q_heads, gqa.num_kv_heads) == (4, 2)
     assert tuple(gqa.w_k.shape)[0] == 2  # KV-group count, never repeated
 
 
@@ -304,10 +304,10 @@ def test_grid_refusals_are_typed(r0_models):
 
     clean = torch.randint(0, 500, (1, 6))
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(r0_models["gpt2"], clean, clean, lambda t: None, engine="replay")
+        mi.patch_grid(r0_models["gpt2"], clean, clean, lambda t: None, engine="replay")
     assert excinfo.value.fields["code"] == "mi_grid_engine_unsupported"
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(r0_models["gpt2"], clean, clean, lambda t: None, axes=("position",))
+        mi.patch_grid(r0_models["gpt2"], clean, clean, lambda t: None, axes=("position",))
     assert excinfo.value.fields["code"] == "mi_grid_axes_invalid"
 
 
@@ -354,17 +354,19 @@ def test_grid_budget_length_and_flatness(r0_models):
         return anchor_module.facets["logits"].value[0, -1, 42]
 
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(model, clean, clean, metric, sites="z", axes=("layer", "head"), budget=1)
+        mi.patch_grid(model, clean, clean, metric, sites="z", axes=("layer", "head"), budget=1)
     assert excinfo.value.fields["code"] == "mi_grid_budget_exceeded"
 
     with pytest.raises(MechInterpError) as excinfo:
-        mi.grid(model, clean, torch.randint(0, 500, (1, 9)), metric, sites="z", axes=("layer",))
+        mi.patch_grid(
+            model, clean, torch.randint(0, 500, (1, 9)), metric, sites="z", axes=("layer",)
+        )
     assert excinfo.value.fields["code"] == "mi_grid_length_mismatch"
 
     # Self-patch: every fire replaces an identical value and every metric is
     # flat -- the campaign AND grid disclosures both warn (mikit D21).
     with pytest.warns(UserWarning) as caught:
-        flat = mi.grid(model, clean, clean.clone(), metric, sites="z", axes=("layer", "head"))
+        flat = mi.patch_grid(model, clean, clean.clone(), metric, sites="z", axes=("layer", "head"))
     assert bool((flat.values == flat.values.reshape(-1)[0]).all())
     codes = {getattr(w.message, "fields", {}).get("code") for w in caught}
     assert "mi_grid_all_identical" in codes  # D21: flatness DISCLOSES, never refuses

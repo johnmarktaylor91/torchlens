@@ -36,7 +36,7 @@ def permit_cpu_float8_allocation() -> Iterator[None]:
     the running torch covers it.
     """
 
-    from torchlens.utils._torch_compat import get_cpu_float8_deterministic_fill_support
+    from torchlens._utils._torch_compat import get_cpu_float8_deterministic_fill_support
 
     if get_cpu_float8_deterministic_fill_support(force_probe=True):
         yield

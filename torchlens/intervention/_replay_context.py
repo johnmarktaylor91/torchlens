@@ -20,8 +20,8 @@ import torch
 from .edge_substitution import tensor_content_digest
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 def _replay_site_key(site: Op) -> str:

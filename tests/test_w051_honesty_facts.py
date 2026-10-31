@@ -72,7 +72,7 @@ def test_capture_time_intervene_is_disclosed_on_every_surface(model_and_x) -> No
     assert "interven" in json.dumps(dump["guide"]).lower()
     preamble = "\n".join(honesty_preamble_lines(trace))
     assert "INTERVENED capture" in preamble and "relu_1_2" in preamble
-    explained = tl.report.explain(trace)
+    explained = trace.explain()
     assert "INTERVENED capture" in explained and "counterfactual" in explained
     attrs = trace.to_pandas().attrs["torchlens_capture_honesty"]
     assert attrs["interventions"]["replaced_ops"] == ["relu_1_2"]
@@ -81,7 +81,7 @@ def test_capture_time_intervene_is_disclosed_on_every_surface(model_and_x) -> No
 def test_intervention_block_survives_save_load(model_and_x, tmp_path) -> None:
     model, x = model_and_x
     trace = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
-    tl.save(trace, tmp_path / "iv.tlspec")
+    trace.save(tmp_path / "iv.tlspec")
     loaded = tl.load(tmp_path / "iv.tlspec")
     block = capture_honesty_facts(loaded)["interventions"]
     assert block["replaced_ops"] == ["relu_1_2"]
@@ -100,7 +100,7 @@ def test_fork_do_edits_are_disclosed(model_and_x) -> None:
     assert block["replaced_ops"] == ["relu_1_2"]
     assert "ACT" in block["audit_kinds"]
     param_fork = trace.fork()
-    param_fork.do(tl.params("b.weight"), tl.scale(0.5))
+    param_fork.do(tl.param("b.weight"), tl.scale(0.5))
     param_block = intervention_facts(param_fork)
     assert param_block is not None
     assert param_block["audit_kinds"] == ["PARAM"]
@@ -114,7 +114,7 @@ def test_default_capture_verification_reads_not_checked(model_and_x) -> None:
     model, x = model_and_x
     trace = tl.trace(model, x)
     assert trace.capture_verified is None
-    explained = tl.report.explain(trace)
+    explained = trace.explain()
     assert "no ceiling recorded" not in explained
     assert "Capture verification: not checked" in explained
     assert "Capture verification: not recorded" not in explained

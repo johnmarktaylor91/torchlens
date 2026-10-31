@@ -34,13 +34,13 @@ from _oracle_env import (
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import FieldPolicy
-from torchlens.constants import (
+from torchlens._constants import (
     LAYER_PASS_LOG_FIELD_ORDER,
     MODEL_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
+from torchlens._io import FieldPolicy
 from torchlens.options import CaptureOptions
 
 pytestmark = pytest.mark.backend_parity
@@ -169,8 +169,8 @@ def _default_trace() -> Trace:
         x,
         capture=CaptureOptions(
             layers_to_save="all",
-            random_seed=1701,
-            save_arg_values=True,
+            seed=1701,
+            save_args=True,
         ),
     )
 
@@ -186,7 +186,7 @@ def _selective_trace() -> Trace:
 
     _guard_update_generation()
     model, x = _seeded_branchy_input()
-    return tl.trace(model, x, save=tl.func("tanh"), capture=CaptureOptions(random_seed=1702))
+    return tl.trace(model, x, save=tl.func("tanh"), capture=CaptureOptions(seed=1702))
 
 
 def _backward_ready_trace() -> Trace:
@@ -207,7 +207,7 @@ def _backward_ready_trace() -> Trace:
             layers_to_save="all",
             save_grads="all",
             backward_ready=True,
-            random_seed=1701,
+            seed=1701,
         ),
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
@@ -436,7 +436,7 @@ def _trace_projection(trace: Trace) -> dict[str, Any]:
             "saved_ops": list(trace.saved_ops.keys()),
             "params": list(trace.params.keys()),
             "modules": list(trace.modules.keys()),
-            "grad_fns": list(trace.grad_fns.keys()),
+            "grad_fns": list(trace.autograd.grad_fns.keys()),
         },
     }
 
@@ -484,7 +484,7 @@ def _portable_surviving_fields(spec: dict[str, FieldPolicy]) -> list[str]:
     Parameters
     ----------
     spec:
-        ``PORTABLE_STATE_SPEC`` policy mapping for one record class.
+        ``_PORTABLE_STATE_SPEC`` policy mapping for one record class.
 
     Returns
     -------
@@ -532,8 +532,8 @@ def _dataframe_projection(trace: Trace) -> dict[str, Any]:
     return {
         "model_field_order": list(MODEL_LOG_FIELD_ORDER),
         "op_field_order": list(LAYER_PASS_LOG_FIELD_ORDER),
-        "trace_portable_fields": sorted(_portable_surviving_fields(Trace.PORTABLE_STATE_SPEC)),
-        "op_portable_fields": sorted(_portable_surviving_fields(Op.PORTABLE_STATE_SPEC)),
+        "trace_portable_fields": sorted(_portable_surviving_fields(Trace._PORTABLE_STATE_SPEC)),
+        "op_portable_fields": sorted(_portable_surviving_fields(Op._PORTABLE_STATE_SPEC)),
         "dataframe_columns": [column for column in frame.columns if column != "output_role"],
         "stable_rows": rows,
     }
@@ -616,7 +616,7 @@ def test_tlspec_roundtrip_and_manifest_goldens(tmp_path: Path) -> None:
 
     trace = _default_trace()
     bundle_path = tmp_path / "default_trace.tlspec"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     loaded = cast(Trace, tl.load(bundle_path))
 
     regenerated = _assert_projection_matches_golden(
@@ -700,7 +700,7 @@ def test_serialization_mutation_fails_gate(tmp_path: Path) -> None:
     _skip_during_golden_update()
     trace = _default_trace()
     bundle_path = tmp_path / "serialization_mutation.tlspec"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     projection = _manifest_projection(bundle_path)
     projection["schema_version"] = 999
     with pytest.raises(AssertionError):
@@ -713,7 +713,7 @@ def test_saved_payload_deletion_fails_gate(tmp_path: Path) -> None:
     _skip_during_golden_update()
     trace = _default_trace()
     bundle_path = tmp_path / "payload_deletion.tlspec"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     blob_dir = bundle_path / "blobs"
     first_blob = next(blob_dir.iterdir())
     first_blob.unlink()
@@ -739,7 +739,7 @@ def test_bundle_copy_preserves_manifest_gate(tmp_path: Path) -> None:
     trace = _default_trace()
     source_path = tmp_path / "source.tlspec"
     copied_path = tmp_path / "copied.tlspec"
-    tl.save(trace, source_path)
+    trace.save(source_path)
     shutil.copytree(source_path, copied_path)
     _skip_regenerated(
         _assert_projection_matches_golden(

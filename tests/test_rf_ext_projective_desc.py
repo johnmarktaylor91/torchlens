@@ -270,7 +270,7 @@ def test_projective_target_set_cache_is_canonical_lru_and_epoch_guarded() -> Non
     cache = trace.__dict__["_rf_directional_solutions"]["target"]
     assert len(cache) == 8
     assert (targets[0].label, targets[1].label) not in cache
-    assert type(trace).PORTABLE_STATE_SPEC["_rf_directional_solutions"] is FieldPolicy.DROP
+    assert type(trace)._PORTABLE_STATE_SPEC["_rf_directional_solutions"] is FieldPolicy.DROP
 
     latest = solve_projective(trace, [targets[-1]])
 

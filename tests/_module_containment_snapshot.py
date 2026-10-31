@@ -320,7 +320,7 @@ def build_snapshot(trace: Any, fixture_name: str) -> dict[str, Any]:
         "modules": [_module_dict(module) for module in trace.modules],
         "ops": [_op_dict(op) for op in trace.layer_list],
         "trace_summary": {
-            "total_flops_forward": trace.total_flops_forward,
+            "total_flops_forward": trace.cost.total_flops_forward,
             "uncalled_modules": sorted(str(value) for value in trace.uncalled_modules),
         },
     }

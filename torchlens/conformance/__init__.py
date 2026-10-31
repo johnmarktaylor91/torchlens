@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..errors import ConfigurationError
-from ._adapters import FAKE_PLANTS, RosterModel, default_roster, resolve_adapter
+from ._adapters import RosterModel, default_roster, resolve_adapter
 from ._cases import CaseResult, run_c0_cases, run_c1_cases, run_c2_cases
 from ._preview_adapters import PREVIEW_BACKENDS
 from ._scorecard import PreviewScorecard, ScorecardCell, preview_scorecard
@@ -41,7 +41,6 @@ from ._scorecard import PreviewScorecard, ScorecardCell, preview_scorecard
 __tl_layer__ = "L9"
 
 __all__ = [
-    "FAKE_PLANTS",
     "PREVIEW_BACKENDS",
     "CaseResult",
     "ConformanceReport",
@@ -84,7 +83,7 @@ class ConformanceReport:
         Families executed per realism class.
     earned_tier:
         Highest tier every executed case passed, or ``""`` when none.
-    claim_eligible:
+    is_claim_eligible:
         ``True`` only when the pretrained-family floor is met; toys earn
         nothing regardless of pass rate.
     environment:
@@ -100,11 +99,11 @@ class ConformanceReport:
     funnel: dict[str, int]
     realism: dict[str, list[str]]
     earned_tier: str
-    claim_eligible: bool
+    is_claim_eligible: bool
     environment: dict[str, str]
     attestation_sha256: str
 
-    def to_canonical_json(self) -> str:
+    def to_json(self) -> str:
         """Render the attested canonical byte form (sorted keys, no cwd)."""
 
         return _canonical_report_json(self, include_attestation=True)
@@ -131,7 +130,7 @@ def _canonical_report_json(report: ConformanceReport, *, include_attestation: bo
         "funnel": dict(sorted(report.funnel.items())),
         "realism": {key: sorted(value) for key, value in sorted(report.realism.items())},
         "earned_tier": report.earned_tier,
-        "claim_eligible": report.claim_eligible,
+        "claim_eligible": report.is_claim_eligible,
         "environment": dict(sorted(report.environment.items())),
     }
     if include_attestation:
@@ -280,7 +279,7 @@ def run_conformance(
         funnel=funnel,
         realism=realism,
         earned_tier=earned,
-        claim_eligible=claim_eligible,
+        is_claim_eligible=claim_eligible,
         environment=_environment_receipt(),
         attestation_sha256="",
     )
@@ -295,7 +294,7 @@ def run_conformance(
         funnel=report.funnel,
         realism=report.realism,
         earned_tier=report.earned_tier,
-        claim_eligible=report.claim_eligible,
+        is_claim_eligible=report.is_claim_eligible,
         environment=report.environment,
         attestation_sha256=digest,
     )
@@ -328,13 +327,13 @@ def claim_string(report: ConformanceReport) -> str:
         provider).
     """
 
-    if not report.claim_eligible or not report.earned_tier:
+    if not report.is_claim_eligible or not report.earned_tier:
         pretrained = len(report.realism.get("pretrained", []))
         raise ConfigurationError(
             f"Report for backend {report.backend!r} earned no claim: earned_tier="
             f"{report.earned_tier!r}, pretrained families={pretrained} (floor "
             f"{CLAIM_MIN_PRETRAINED_FAMILIES} for C1+), claim_eligible="
-            f"{report.claim_eligible}. Toy/hermetic models are the smoke pack "
+            f"{report.is_claim_eligible}. Toy/hermetic models are the smoke pack "
             "and mutation substrate only; they emit no claim. Remedy: run the "
             "real pretrained packs (pinned revisions) and pass every cell.",
             code="conformance_claim_unearned",

@@ -7,7 +7,7 @@ artifact through TWO authorities, in this order (``scrub.py:612``)::
         continue                      # authority 1: the hand-kept allowance
     ...
     policy = _effective_policy(value, field_name, spec[field_name], options)
-                                      # authority 2: Trace.PORTABLE_STATE_SPEC
+                                      # authority 2: Trace._PORTABLE_STATE_SPEC
 
 Because the allowance is consulted FIRST, any name in BOTH authorities has a
 DEAD declared policy row: flipping that row to ``KEEP`` would change nothing
@@ -27,11 +27,11 @@ the seed shrinks as they land.
 
 from __future__ import annotations
 
+from torchlens._data_classes.trace import Trace
 from torchlens._io import FieldPolicy
 from torchlens._io.scrub import _is_runtime_only_trace_field
-from torchlens.data_classes.trace import Trace
 
-#: Names in BOTH the runtime-only allowance and ``Trace.PORTABLE_STATE_SPEC``,
+#: Names in BOTH the runtime-only allowance and ``Trace._PORTABLE_STATE_SPEC``,
 #: seeded from the tree at b5 fixplan time (2026-08-14). Every one is ``DROP``
 #: today, so the duplication is currently harmless -- and every one is a
 #: declared row that the allowance makes unreachable. SHRINK-ONLY: the fix is
@@ -54,7 +54,7 @@ def _overlap() -> frozenset[str]:
     """Declared Trace fields that the runtime-only allowance shadows."""
 
     return frozenset(
-        name for name in Trace.PORTABLE_STATE_SPEC if _is_runtime_only_trace_field(name)
+        name for name in Trace._PORTABLE_STATE_SPEC if _is_runtime_only_trace_field(name)
     )
 
 
@@ -64,7 +64,7 @@ def test_allowance_and_portable_spec_overlap_only_where_ledgered() -> None:
     new = sorted(_overlap() - _KNOWN_DUAL_AUTHORITY_FIELDS)
     assert not new, (
         f"Field(s) in both the scrub runtime-only allowance and "
-        f"Trace.PORTABLE_STATE_SPEC: {new}. The allowance is consulted FIRST "
+        f"Trace._PORTABLE_STATE_SPEC: {new}. The allowance is consulted FIRST "
         "(scrub.py:612), so the declared policy row is dead code -- pick ONE "
         "authority: either declare the field with FieldPolicy.DROP and delete "
         "its allowance entry, or leave it undeclared."
@@ -78,7 +78,7 @@ def test_dual_authority_ledger_is_shrink_only() -> None:
     assert not stale, (
         f"Dual-authority ledger row(s) no longer overlap: {stale}. The migration "
         "landed -- delete these names here (the ledger is shrink-only). Target "
-        "state is an EMPTY ledger: allowance and PORTABLE_STATE_SPEC disjoint."
+        "state is an EMPTY ledger: allowance and _PORTABLE_STATE_SPEC disjoint."
     )
 
 
@@ -91,9 +91,9 @@ def test_every_dual_authority_field_is_declared_drop() -> None:
     """
 
     disagreeing = {
-        name: Trace.PORTABLE_STATE_SPEC[name].value
+        name: Trace._PORTABLE_STATE_SPEC[name].value
         for name in sorted(_overlap())
-        if Trace.PORTABLE_STATE_SPEC[name] is not FieldPolicy.DROP
+        if Trace._PORTABLE_STATE_SPEC[name] is not FieldPolicy.DROP
     }
     assert not disagreeing, (
         f"Shadowed field(s) declared with a non-DROP policy: {disagreeing}. The "
@@ -112,11 +112,11 @@ def test_probe_is_not_vacuous() -> None:
 
     # Allowance-only name (in the allowance, deliberately NOT declared).
     assert _is_runtime_only_trace_field("_had_unattributed_tensor_args")
-    assert "_had_unattributed_tensor_args" not in Trace.PORTABLE_STATE_SPEC
+    assert "_had_unattributed_tensor_args" not in Trace._PORTABLE_STATE_SPEC
     # A declared, genuinely portable field is never in the allowance.
-    assert Trace.PORTABLE_STATE_SPEC["layer_labels"] is FieldPolicy.KEEP
+    assert Trace._PORTABLE_STATE_SPEC["layer_labels"] is FieldPolicy.KEEP
     assert not _is_runtime_only_trace_field("layer_labels")
     assert not _is_runtime_only_trace_field("_no_such_trace_field")
     # The seeded overlap is real in both directions.
-    assert set(Trace.PORTABLE_STATE_SPEC) >= _KNOWN_DUAL_AUTHORITY_FIELDS
+    assert set(Trace._PORTABLE_STATE_SPEC) >= _KNOWN_DUAL_AUTHORITY_FIELDS
     assert all(_is_runtime_only_trace_field(name) for name in _KNOWN_DUAL_AUTHORITY_FIELDS)

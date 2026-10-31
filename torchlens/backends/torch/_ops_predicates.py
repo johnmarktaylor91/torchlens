@@ -6,14 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ...capture.projections import (
-    get_active_recording_state,
-)
-from ...fastlog.types import (
-    ActivationRecord,
-    CaptureSpec,
-)
-from ...ir.container import (
+from ..._ir.container import (
     DataclassField,
     DictKey,
     HFKey,
@@ -21,13 +14,20 @@ from ...ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
-from ...ir.events import (
+from ..._ir.events import (
     FunctionCallRef,
 )
-from ...ir.intervention import FunctionEventInput
-from ...ir.semantics import BackendSemantics
-from ...utils.tensor_utils import (
+from ..._ir.intervention import FunctionEventInput
+from ..._ir.semantics import BackendSemantics
+from ..._utils.tensor_utils import (
     safe_copy,
+)
+from ...capture.projections import (
+    get_active_recording_state,
+)
+from ...fastlog.types import (
+    ActivationRecord,
+    CaptureSpec,
 )
 from .aliasing import (
     detect_torch_alias_contract,
@@ -36,7 +36,7 @@ from .aliasing import (
 from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 if TYPE_CHECKING:
     from .ops import (
@@ -180,7 +180,7 @@ def _is_default_ram_payload(state: Any, spec: CaptureSpec) -> bool:
         and state.storage_intent.in_ram
         and not state.storage_intent.on_disk
         and state.options.activation_transform is None
-        and not spec.keep_grad
+        and not spec.save_grad
         and spec.device is None
         and spec.dtype is None
         and spec.save_mode == "copy"

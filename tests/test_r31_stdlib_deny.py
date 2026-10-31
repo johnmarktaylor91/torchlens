@@ -33,10 +33,10 @@ import pytest
 import torch
 
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
+from torchlens._utils._callable_safety import is_denied_stdlib_or_builtin_module
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_function_registry_key, resolve_import_ref
 from torchlens.intervention.types import FunctionRegistryKey
-from torchlens.utils._callable_safety import is_denied_stdlib_or_builtin_module
 
 # The stdlib/builtin refs the r30 (and prior) audits proved resolvable under trust.
 # Every one must be DENIED on the default path, under broad trust, AND under an
@@ -177,7 +177,7 @@ def test_torch_ops_still_resolve(import_path: str) -> None:
 def test_first_party_inert_callable_still_resolves() -> None:
     """A vetted-inert first-party callable (``identity``) resolves without trust."""
 
-    resolved = resolve_import_ref("torchlens.utils.display:identity")
+    resolved = resolve_import_ref("torchlens._utils.display:identity")
     assert callable(resolved)
     assert resolved(7) == 7
 

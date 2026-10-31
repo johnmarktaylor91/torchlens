@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from torchlens.data_classes._preprocessing_provenance import (
+from torchlens._data_classes._preprocessing_provenance import (
     STATUS_AUTHORITATIVE as STATUS_AUTHORITATIVE,
     STATUS_UNKNOWN as STATUS_UNKNOWN,
     STATUS_UNVERIFIED_FALLBACK as STATUS_UNVERIFIED_FALLBACK,
@@ -28,7 +28,7 @@ from torchlens.data_classes._preprocessing_provenance import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from torchlens.data_classes.trace import ResolvedPreprocessing
+    from torchlens._data_classes.trace import ResolvedPreprocessing
 
 __tl_layer__ = "L5"
 
@@ -147,8 +147,8 @@ class Resolution:
 
     Attributes
     ----------
-    record:
-        The persisted-friendly :class:`~torchlens.data_classes.trace.\
+    preprocessing:
+        The persisted-friendly :class:`~torchlens._data_classes.trace.\
 ResolvedPreprocessing` provenance record (source, identifier, verified,
         config, description).
     declared:
@@ -160,7 +160,7 @@ ResolvedPreprocessing` provenance record (source, identifier, verified,
         authorities (explicit dicts) and unknown resolutions.
     """
 
-    record: ResolvedPreprocessing
+    preprocessing: ResolvedPreprocessing
     declared: DeclaredPreprocessing | None
     transform: Callable[[Any], Any] | None
 
@@ -174,7 +174,7 @@ ResolvedPreprocessing` provenance record (source, identifier, verified,
             ``"authoritative"`` / ``"unverified_fallback"`` / ``"unknown"``.
         """
 
-        return status_of(self.record)
+        return status_of(self.preprocessing)
 
 
 def unknown_resolution(reason: str, *, fetch: dict[str, Any] | None = None) -> Resolution:
@@ -198,13 +198,13 @@ def unknown_resolution(reason: str, *, fetch: dict[str, Any] | None = None) -> R
         transform.
     """
 
-    from torchlens.data_classes.trace import ResolvedPreprocessing
+    from torchlens._data_classes.trace import ResolvedPreprocessing
 
     config: dict[str, Any] = {"reason": reason, "resolution_method": "none"}
     if fetch is not None:
         config["fetch"] = dict(fetch)
     return Resolution(
-        record=ResolvedPreprocessing(
+        preprocessing=ResolvedPreprocessing(
             source="unknown",
             identifier="unknown",
             verified=False,

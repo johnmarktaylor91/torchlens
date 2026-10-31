@@ -52,7 +52,7 @@ from .collapse_plan import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .collapse_plan import RenderContext
     from .source_graph import SourceGraph
 

@@ -1,6 +1,6 @@
 """Forward validation keeps its own saved-argument copies on ``output_device``.
 
-Validation captures with ``save_arg_values=True``. With an ``output_device``
+Validation captures with ``save_args=True``. With an ``output_device``
 other than ``"same"``, its own capture now keeps the retained copy of every
 non-parameter tensor argument on that device, tagged with the device the op
 consumed it on, and replay holds one layer's tagged arguments back on those
@@ -104,9 +104,7 @@ class _DeviceHop(nn.Module):
 def _validate(model: nn.Module, x: torch.Tensor, output_device: str = "same") -> bool:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return bool(
-            tl.validate(model, x, scope="forward", random_seed=0, output_device=output_device)
-        )
+        return bool(tl.validate(model, x, scope="forward", seed=0, output_device=output_device))
 
 
 def _validation_capture(
@@ -119,17 +117,17 @@ def _validation_capture(
 
     def runner(*args: Any, **kwargs: Any) -> Any:
         trace = real_runner(*args, **kwargs)
-        if kwargs["save_arg_values"]:
+        if kwargs["save_args"]:
             inspect(trace, kwargs["model"])
         return trace
 
     def observe(trace: Any) -> None:
         failure = get_validation_failure(trace) if trace is not None else None
-        failures.append(None if failure is None else failure.check)
+        failures.append(None if failure is None else failure.check_name)
         failures.extend(
-            item.check
+            item.check_name
             for item in get_validation_diagnostics(trace) or ()
-            if item.check == arg_references.FALLBACK_CHECK
+            if item.check_name == arg_references.FALLBACK_CHECK
         )
 
     with (
@@ -139,7 +137,7 @@ def _validation_capture(
         warnings.simplefilter("ignore")
         try:
             verdict = _user_public_impls._validate_forward_pass_torch(
-                model, x, random_seed=0, output_device=output_device, _trace_observer=observe
+                model, x, seed=0, output_device=output_device, _trace_observer=observe
             )
         except Exception as exc:  # a raised validation failure is compared by its type
             return False, [*failures, f"raised {type(exc).__name__}"]
@@ -443,7 +441,7 @@ def test_a_user_trace_keeps_saved_arguments_on_each_ops_device() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=True, output_device="cpu"),
+        capture=CaptureOptions(layers_to_save="all", save_args=True, output_device="cpu"),
     )
     saved = _saved_arg_tensors(trace)
     assert saved and {t.device.type for t in saved} == {_ACCEL}
@@ -604,6 +602,6 @@ def test_parameter_aliases_alone_do_not_trip_the_validation_budget() -> None:
         warnings.simplefilter("ignore")
         assert tl.validate(model, x, scope="forward", output_device="cpu", save_budget=budget)
         assert tl.validate(model, x, scope="forward", output_device="same", save_budget=budget)
-        capture = CaptureOptions(layers_to_save="all", save_arg_values=True, save_budget=budget)
+        capture = CaptureOptions(layers_to_save="all", save_args=True, save_budget=budget)
         with pytest.raises(SaveBudgetExceededError):
             tl.trace(model, x, capture=capture)

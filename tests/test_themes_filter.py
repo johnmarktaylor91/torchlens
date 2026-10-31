@@ -115,8 +115,8 @@ def test_bridged_edges_are_dashed_with_midpoint_labels(glue_log: Any, tmp_path: 
     )
     graph = glue_log.draw(
         **resolution.draw_kwargs,
-        vis_outpath=str(tmp_path / "filtered"),
-        vis_fileformat="svg",
+        path=str(tmp_path / "filtered"),
+        file_format="svg",
         vis_save_only=True,
         return_graph=True,
     )
@@ -136,7 +136,7 @@ def test_predicate_boundary_raise_teaches(glue_log: Any, tmp_path: Any) -> None:
     with pytest.raises(Exception) as excinfo:
         glue_log.draw(
             skip_fn=lambda layer: True,
-            vis_outpath=str(tmp_path / "boundary"),
+            path=str(tmp_path / "boundary"),
             vis_save_only=True,
         )
     message = str(excinfo.value)

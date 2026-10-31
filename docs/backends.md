@@ -11,11 +11,11 @@ preview, explicit `backend="tinygrad"` enables the tinygrad preview, and explici
 | Backend | Capture | Validation | Payloads | Modules | Gradients |
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
-| `mlx` | Technical preview; static-label `intervene=`/`halt=` | Live per-op replay and parent perturbation over the captured (whitelisted) op set | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
-| `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
-| `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
-| `paddle` | Preview dygraph/eager capture with live forward `intervene=`/`halt=` | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` |
-| `tf` | Preview eager op-callback capture; implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.derived_grads`; opt-in `trace.intermediate_derived_grads` (eager entries only) |
+| `mlx` | Technical preview; static-label `intervene=`/`halt=` | Live per-op replay and parent perturbation over the captured (whitelisted) op set | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `jax` | Preview jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `tinygrad` | Preview UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `paddle` | Preview dygraph/eager capture with live forward `intervene=`/`halt=` | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `tf` | Preview eager op-callback capture; implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` (eager entries only) |
 
 Two cross-backend honesty notes apply to every preview row above:
 
@@ -25,7 +25,7 @@ Two cross-backend honesty notes apply to every preview row above:
   capture, peak memory is unchanged. Value-dependent predicates, `followed_by`/`preceded_by`,
   lookback windows, and save shaping reject typed.
 - **Preview `tl.validate(...)` may return a status object, not a plain bool.** Partial-coverage
-  results return a `ValidationReplayStatus` whose `bool()` raises `TypeError` for non-final
+  results return a `ValidationStatus` whose `bool()` raises `TypeError` for non-final
   (`unverified`/`unavailable`) states instead of guessing; branch on `.state`/`.passed`.
 - **Auto-routing applies to every preview, not just MLX.** Each registered preview declares a
   `can_handle` detector, so `backend=None` routes a genuine framework model (framework installed,
@@ -114,7 +114,7 @@ section). TensorFlow supports static-label `intervene=` for eager entries throug
 wrap layer with fail-closed site reachability; TF `halt=` keeps its typed refusal (capture-path
 scope). Value-dependent predicates stay rejected on all three — predicate-time values would
 require eager materialization that poisons their execution models. MLX supports static-label
-`save=` for `tl.func`, `tl.label`, `tl.module`, `tl.in_module`, `tl.contains`, and boolean
+`save=` for `tl.func`, `tl.label`, `tl.module`, `tl.in_module`, `tl.label_contains`, and boolean
 composites of those.
 
 ## TensorFlow Preview
@@ -177,7 +177,7 @@ divergence error, and one `tape.gradient` call produces leaf gradients for float
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to additionally
 `tape.watch` every float op output live at callback time and attach exact op-level records. Only
 unambiguous `status == "exact"` matches (keyed on stream position, op type, parents, and module
-stack) reach `trace.intermediate_derived_grads` and read-only `op.derived_grad`;
+stack) reach `trace.autograd.intermediate_derived_grads` and read-only `op.derived_grad`;
 `has_backward_pass` remains `False`, and true-backward surfaces still raise. `grad_options`
 requires an eager live-capture entry: graph-only FuncGraph captures (compiled `Model.call`,
 `tf.function` roots, SavedModel signatures) refuse it typed because the derived-gradient replay
@@ -192,7 +192,7 @@ ablated = tl.trace(model, x, backend="tf",
 ```
 
 `tl.module(...)`/`tl.in_module(...)` conditions substitute Keras/`tf.Module` call outputs at the
-module boundary (object-module attribution required); `tl.func`/`tl.label`/`tl.contains`
+module boundary (object-module attribution required); `tl.func`/`tl.label`/`tl.label_contains`
 conditions substitute returns of a curated registry of python entry points (`tf.nn`/`tf.math`
 core) that Keras-3 eager execution flows through. Replacement values are produced by real ops the
 callback records, so the trace stays honest by construction: downstream records consume the
@@ -219,7 +219,7 @@ modules are attributed at addresses such as `layers.0`; TorchLens does not inven
 container modules for non-module list objects.
 
 MLX supports static-label `save=` for `tl.func(...)`, `tl.label(...)`, `tl.module(...)`,
-`tl.in_module(...)`, `tl.contains(...)`, and safe boolean composites with `&`, `|`, and `~`.
+`tl.in_module(...)`, `tl.label_contains(...)`, and safe boolean composites with `&`, `|`, and `~`.
 Selective save is applied after full graph finalization: unsaved ops keep graph metadata but drop
 public activation payloads, while saved payloads remain live MLX arrays in memory and round-trip
 through portable `.tlspec` saves with `payload_policy="array_payloads"`.
@@ -247,7 +247,7 @@ capture logging remains off, so module call counts are not incremented by the AD
 uses grouped structural signatures rather than a capture-index map, and duplicate or ambiguous
 groups are skipped. Each public record must pass an independent replacement-gradient and
 perturbation oracle, and only records with `status == "exact"` reach
-`trace.intermediate_derived_grads` and read-only `op.derived_grad`.
+`trace.autograd.intermediate_derived_grads` and read-only `op.derived_grad`.
 
 These derived gradients are not true backward capture, and `op.grads` /
 `trace.saved_grad_ops` stay true-backward-only.
@@ -255,9 +255,9 @@ These derived gradients are not true backward capture, and `op.grads` /
 MLX supports static-label live interventions and halt. `trace(intervene=tl.when(static_selector,
 action))` substitutes matched output arrays at the wrapper boundary — the replacement genuinely
 flows into downstream ops — and `trace(halt=static_selector)` finalizes an honest partial trace at
-the matched frontier (`trace.halted`, `trace.halt_reason`; parameter accounting is restricted to
+the matched frontier (`trace.halted`, `trace.stop_reason`; parameter accounting is restricted to
 the captured ops). Static selectors are `tl.func`, `tl.label`, `tl.module`, `tl.in_module`,
-`tl.contains`, and boolean composites. Supported actions are `tl.zero_ablate()`, `tl.scale(...)`,
+`tl.label_contains`, and boolean composites. Supported actions are `tl.zero_ablate()`, `tl.scale(...)`,
 `tl.add(scalar | mx.array)`, `tl.clamp(...)`, `tl.mean_ablate()` (self form), `tl.replace_with(...)`,
 and callable transforms written against `mx.array`; other helpers build torch-only hooks and refuse
 by name. Hooks must preserve shape and dtype; violations refuse typed at fire time. Replay
@@ -267,7 +267,7 @@ declaration fails coverage against the emit-time inventory fingerprint. `mx.comp
 `mx.vmap` traced-transform wrappers refuse at capture entry, and a compiled attribute on the model
 ceilings the capture with `capture_verified=False` (`mlx_compiled_attribute_not_logged`).
 
-MLX rejects `tl.output(...)`, `tl.where(...)`,
+MLX rejects `tl.model_output(...)`, `tl.where(...)`,
 `tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `recipes=`,
 backward-direction interventions, streaming, `save_grads=`, `backward_ready=True`, and
 `tl.record(backend="mlx")`. Portable MLX saves
@@ -321,7 +321,7 @@ outside capture logging (they do not appear as graph ops). Decisions are forward
 (`direction="backward"` refuses), intervention predicates and `halt=` may be value-dependent
 callables (the eager `RecordContext` carries real `tensor_requires_grad` / `is_scalar_bool` /
 `bool_value`), `halt=` finalizes an honest partial trace at the matched frontier without executing
-past it, and `recipes=` attaches per-trace facet recipes. `grad_options` cannot combine with
+past it, and `facets=` attaches per-trace facet recipes. `grad_options` cannot combine with
 `intervene=`/`halt=` because the derived-gradient replay re-runs the forward without
 interventions.
 
@@ -346,7 +346,7 @@ trace.derived_grads["inputs.0"]
 
 Set `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to request exact saved-op
 intermediate derived gradients from a second guarded Paddle AD replay. Only unambiguous
-`status == "exact"` records reach `trace.intermediate_derived_grads` and read-only
+`status == "exact"` records reach `trace.autograd.intermediate_derived_grads` and read-only
 `op.derived_grad`; `has_backward_pass` remains `False`, and true-backward surfaces still raise.
 
 Paddle `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
@@ -399,7 +399,7 @@ Set `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` to run JA
 zero-tap AD replay for saved op boundaries. The producer uses one all-tap `jax.grad` pass, then an
 O(k) oracle checks each attached boundary with an independent boundary-replacement VJP and finite
 difference. The hard cap fails explicit requests above `max_intermediate_grads`. Only records whose
-provenance has `status == "exact"` are exposed through `trace.intermediate_derived_grads` and
+provenance has `status == "exact"` are exposed through `trace.autograd.intermediate_derived_grads` and
 read-only `op.derived_grad`; oracle failures and non-float/control outputs are skipped. If the
 producer cannot run on the installed JAX runtime, leaf `trace.derived_grads` remains intact and the
 intermediate accessor is empty.
@@ -409,7 +409,7 @@ capture from inside those transforms, unsupported nested-jaxpr primitives, callb
 closed-over array constants for raw function-root callables, value-dependent `save=` predicates,
 `followed_by`/`preceded_by` window selectors, `intervene=`, `halt=`, streaming, `save_grads=`, and
 `tl.record(backend="jax")`. Static-label `save=` selectors such as `tl.func(...)`,
-`tl.label(...)`, `tl.contains(...)`, and module selectors are applied after full graph
+`tl.label(...)`, `tl.label_contains(...)`, and module selectors are applied after full graph
 finalization: unsaved ops keep metadata but drop public activation payloads. `lax.scan`,
 `lax.cond`, and capped `lax.while_loop` are unrolled by default with
 `jax_control_flow="unroll"` and guarded by `jax_max_control_flow_unroll`. Over-cap
@@ -437,7 +437,7 @@ single-device `str | torch.device` load target and does not accept JAX shardings
 Multi-host or otherwise unaddressable sharded arrays fail closed during save.
 `trace.payload_load_status` records load-time materialization state. Runtime-only
 `jax_equation_captures` are stripped from portable artifacts, so loaded JAX traces expose
-`ValidationReplayStatus` at `trace.validation_replay_status.state == "unavailable"` with reason
+`ValidationStatus` at `trace.validation_replay_status.state == "unavailable"` with reason
 `"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
 Live JAX traces, including static-label selectively saved traces, still run real replay validation
 using runtime-only replay payloads that are separate from the public saved-activation surface.
@@ -501,7 +501,7 @@ trace.derived_grads["inputs.0"]
 
 Set `GradOptions(intermediate_grads=True)` to run tinygrad's separate no-realize
 intermediate-gradient pass. It calls `loss.backward()` before realizing any copied outputs, then
-attaches exact unambiguous records to `trace.intermediate_derived_grads`; each owning `Op` exposes
+attaches exact unambiguous records to `trace.autograd.intermediate_derived_grads`; each owning `Op` exposes
 the payload through read-only `op.derived_grad`. Ambiguous signature matches are skipped instead of
 attached, and `op.grads` / `trace.saved_grad_ops` remain true-backward-only.
 
@@ -509,7 +509,7 @@ The tinygrad backend rejects mid-capture `Tensor.realize()`, `Tensor.assign()`,
 `Tensor.replace()`, setitem input mutation, TinyJit execution, value-dependent `save=`
 predicates, `followed_by`/`preceded_by` window selectors, `intervene=`, `halt=`, streaming,
 `save_grads=`, `backward_ready=True`, and `tl.record(backend="tinygrad")`. Static-label `save=`
-selectors such as `tl.func(...)`, `tl.label(...)`, `tl.contains(...)`, and module selectors are
+selectors such as `tl.func(...)`, `tl.label(...)`, `tl.label_contains(...)`, and module selectors are
 applied after full graph finalization: unsaved ops keep metadata but drop public activation
 payloads. Workarounds are to return a pure lazy tinygrad expression from a raw callable and use
 `tl.trace(..., backend="tinygrad")`, or use the PyTorch backend for value-dependent predicate
@@ -519,7 +519,7 @@ tinygrad `.tlspec` support uses `payload_policy="array_payloads"`: default porta
 forward and derived array payloads and load them back as tinygrad `Tensor` values.
 `trace.payload_load_status` records load-time materialization state. Runtime-only
 `tinygrad_uop_captures` are stripped from portable artifacts, so loaded tinygrad traces expose
-`ValidationReplayStatus` at `trace.validation_replay_status.state == "unavailable"` with reason
+`ValidationStatus` at `trace.validation_replay_status.state == "unavailable"` with reason
 `"loaded_trace_runtime_capture_stripped"` instead of reporting a false validation pass or failure.
 Live tinygrad traces, including static-label selectively saved traces, still run real replay
 validation using runtime-only replay payloads that are separate from the public saved-activation

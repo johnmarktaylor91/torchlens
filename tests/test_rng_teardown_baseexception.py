@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from torchlens.utils.rng import host_nondeterminism_monitor
+from torchlens._utils.rng import host_nondeterminism_monitor
 
 
 def _fresh_monitor() -> host_nondeterminism_monitor:

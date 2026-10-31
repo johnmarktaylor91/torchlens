@@ -44,7 +44,7 @@ def gate_metric(real_trace, meta_trace) -> tuple[bool, object]:
     ``digest_equal`` is True AND ``discharge.verdict`` is CORROBORATED.
     """
 
-    digest_equal = tl.hash.trace(real_trace) == tl.hash.trace(meta_trace)
+    digest_equal = tl.fingerprint.trace(real_trace) == tl.fingerprint.trace(meta_trace)
     discharge = meta_trace.discharge_against(real_trace)
     return digest_equal, discharge
 
@@ -55,7 +55,7 @@ def assert_gate(real_trace, meta_trace, name: str) -> object:
     digest_equal, discharge = gate_metric(real_trace, meta_trace)
     assert digest_equal, (
         f"[{name}] address-free graph-shape digests differ: "
-        f"real={tl.hash.trace(real_trace)} meta={tl.hash.trace(meta_trace)}"
+        f"real={tl.fingerprint.trace(real_trace)} meta={tl.fingerprint.trace(meta_trace)}"
     )
     assert discharge.verdict.value == "corroborated", (
         f"[{name}] discharge verdict {discharge.verdict.value!r}; "

@@ -96,7 +96,7 @@ def refuse_unpersisted_intervention_rerun(trace: Any, provider: Any) -> None:
         return
     raise EngineDispatchError(
         "This trace was loaded from an artifact whose recorded values were "
-        "intervened, but tl.save() does not persist the intervention spec, so "
+        "intervened, but trace.save() does not persist the intervention spec, so "
         "run(model, x) would re-execute without that intervention (anything "
         "staged after loading would run alone) and return numbers that do not "
         "match this trace. Remedy: re-capture with tl.trace(model, x, "

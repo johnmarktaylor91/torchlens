@@ -2,9 +2,9 @@
 # families H5's parsers must read BACK. door must resolve (gated); parser
 # status flips in Wave 2 (build item 13).
 leaf	door	parser_status
-text-summary	torchlens.data_classes.trace.Trace.summary	deferred
-text-explain	torchlens.report.explain	deferred
-graphviz-dot	torchlens.data_classes.trace.Trace.draw	deferred
-agent-json	torchlens.data_classes.trace.Trace.to_agent_json	deferred
-dataframe	torchlens.data_classes.trace.Trace.to_pandas	deferred
+text-summary	torchlens._data_classes.trace.Trace.summary	deferred
+text-explain	torchlens._data_classes.trace.Trace.explain	deferred
+graphviz-dot	torchlens._data_classes.trace.Trace.draw	deferred
+agent-json	torchlens._data_classes.trace.Trace.to_agent_json	deferred
+dataframe	torchlens._data_classes.trace.Trace.to_pandas	deferred
 tlspec-manifest	torchlens._io.bundle.save	deferred

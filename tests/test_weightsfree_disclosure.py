@@ -128,7 +128,7 @@ def _channel_agent_json(trace, tmp_path):
 
 
 def _channel_explain(trace, tmp_path):
-    return tl.report.explain(trace)
+    return trace.explain()
 
 
 def _channel_csv(trace, tmp_path):
@@ -182,7 +182,7 @@ def test_dot_render_carries_banner(tmp_path) -> None:
     """The rendered graph caption carries the banner (memo L7's named hole)."""
 
     trace = _meta_capture()
-    trace.draw(vis_outpath=str(tmp_path / "graph"), vis_save_only=True, vis_fileformat="dot")
+    trace.draw(path=str(tmp_path / "graph"), vis_save_only=True, file_format="dot")
     candidates = list(tmp_path.glob("graph*"))
     assert candidates, "draw produced no graph artifact"
     text = "".join(path.read_text(encoding="utf-8", errors="ignore") for path in candidates).lower()

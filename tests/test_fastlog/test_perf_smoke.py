@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.utils.introspection as introspection
+import torchlens._utils.introspection as introspection
 
 
 class TenLayerMlp(nn.Module):

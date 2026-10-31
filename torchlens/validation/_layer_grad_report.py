@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 
-from ..utils.tensor_utils import layer_grad_tolerances_for_dtype
+from .._utils.tensor_utils import layer_grad_tolerances_for_dtype
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ._stock_layer_grads import ModuleOutputGradKey
 else:
     ModuleOutputGradKey = tuple[str, int, int]
@@ -105,9 +105,9 @@ def _compare_module_output_grads(
     atol:
         Absolute allclose tolerance. ``None`` (default) derives per stock
         gradient dtype via
-        :func:`~torchlens.utils.tensor_utils.layer_grad_tolerances_for_dtype`
+        :func:`~torchlens._utils.tensor_utils.layer_grad_tolerances_for_dtype`
         (the fp32 row is the shared elementwise layer-grad pair; see the
-        error model on the constants in ``torchlens.utils.tensor_utils``).
+        error model on the constants in ``torchlens._utils.tensor_utils``).
         An explicit float applies to every dtype unchanged.
     rtol:
         Relative allclose tolerance. ``None`` derives per dtype likewise.

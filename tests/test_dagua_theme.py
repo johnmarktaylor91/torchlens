@@ -28,7 +28,7 @@ class M(nn.Module):
 log = tl.trace(M(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save=None))
 try:
     try:
-        log.draw(vis_renderer="dagua", vis_save_only=True, vis_fileformat="svg")
+        log.draw(vis_renderer="dagua", vis_save_only=True, file_format="svg")
     except RuntimeError as exc:
         message = "opt in via `from torchlens.experimental import dagua` first"
         raise SystemExit(0 if message in str(exc) else 2)
@@ -73,12 +73,12 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
     try:
         log.draw(
             vis_renderer="dagua",
-            vis_theme="torchlens",
+            theme="torchlens",
             vis_mode="unrolled",
             direction="leftright",
             vis_save_only=True,
-            vis_fileformat="svg",
-            vis_outpath=str(out),
+            file_format="svg",
+            path=str(out),
         )
         assert out.exists()
         assert "svg" in out.read_text().lower()

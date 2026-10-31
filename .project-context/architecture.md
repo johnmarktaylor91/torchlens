@@ -18,7 +18,7 @@ authenticated capture cache, and admin helpers (`list_logs()`, `reset_naming_cou
 Orchestrates the two-pass strategy for selective saves via
 `_run_model_and_save_specified_outs()`.
 
-### `torchlens/constants.py`
+### `torchlens/_constants.py`
 `*_FIELD_ORDER` tuples (canonical field sets for the portable schema) and torch function
 discovery sets.
 
@@ -43,7 +43,7 @@ setup/cleanup), `projections.py` (sparse predicate recording and `OpEvent` emiss
 capture outcomes), `arg_positions.py` (tensor extraction via static table → dynamic cache
 → BFS fallback), `salient_args.py`, `flops.py`.
 
-### `torchlens/postprocess/`
+### `torchlens/_postprocess/`
 Steps 0-20 with DERIVED order: `_contracts.py` holds each step's declared read/write
 contract plus the direction authorities, and `_executor.py` derives the edges and runs
 rank-keyed Kahn (import refuses if the derived order and registry disagree). Step bodies:
@@ -52,7 +52,7 @@ rank-keyed Kahn (import refuses if the derived order and registry disagree). Ste
 `loop_grouping_adapter.py` (step-7 recurrence grouping through the shared backend-neutral
 grouper), `labeling.py`, `finalization.py`.
 
-### `torchlens/data_classes/`
+### `torchlens/_data_classes/`
 The product types: `Trace` (`trace.py`, with its behavior split across `_trace_*.py`
 modules), `Op`, `Layer`, `Module`/`ModuleCall`, `Param`, `Buffer`, accessor classes,
 lookup (`interface.py`, `_lookup_keys.py`), and teardown (`cleanup.py`).
@@ -69,7 +69,7 @@ across `_render_*.py`), smart collapse v2 (`auto_collapse.py`, `collapse_plan.py
 `collapse_optimizer.py`), `renderers/` (graphviz backend), and the dagua bridge — the
 dagua renderer itself is explicit opt-in via `torchlens.experimental.dagua`.
 
-### `torchlens/utils/`
+### `torchlens/_utils/`
 Focused stateless helpers: `_torch_compat.py` (the ONLY home for fragile torch-private
 probes and cross-version signatures), `rng.py`, `hashing.py`, tensor ops, argument
 handling, introspection, collections, display.

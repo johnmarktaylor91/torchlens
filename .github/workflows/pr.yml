@@ -1,0 +1,384 @@
+name: PR
+
+# The pull-request gate: each tier runs once. Lint (ruff, pre-commit, gitleaks,
+# actionlint), mypy, the smoke tier on the one pinned environment where the
+# byte goldens enforce, the repository checks, and the packaging tripwires.
+# The supported-version matrix, the not-slow tier and the integration legs run
+# in nightly.yml; slow, rare, mutation and large graphs in weekly.yml.
+on:
+  workflow_call:
+  pull_request:
+    branches: [main]
+  # Work branches named ci/** run the full workflow on push (and any branch
+  # on manual dispatch) so GitHub's own runners test a branch before main.
+  push:
+    branches: ["ci/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.head_ref || github.ref }}-pr"
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (ruff, pre-commit, actionlint)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      # Exact pin: must equal the ruff-pre-commit `# vX.Y.Z` trailer and the
+      # dev extra (tests/test_packaging_diet.py checks the three sites).
+      - run: uv pip install --system ruff==0.15.4 "pre-commit==4.6.2"
+
+      # CHECK-ONLY: CI never rewrites, commits or pushes.
+      - name: Ruff format check
+        run: ruff format --check torchlens tests scripts tools benchmarks examples notebooks
+
+      - name: Ruff check
+        run: ruff check torchlens tests scripts tools benchmarks examples notebooks
+
+      - name: Verify the ruff hook SHA matches its claimed version tag
+        run: |
+          rev="$(grep -A20 'astral-sh/ruff-pre-commit' .pre-commit-config.yaml | grep -oEm1 'rev: [0-9a-f]{40}' | cut -d' ' -f2)"
+          version="$(grep -A20 'astral-sh/ruff-pre-commit' .pre-commit-config.yaml | grep -oEm1 'rev: [0-9a-f]{40} *# *v[0-9]+\.[0-9]+\.[0-9]+' | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')"
+          { test -n "$rev" && test -n "$version"; } || { echo "could not parse ruff hook rev/trailer"; exit 1; }
+          resolved="$(git ls-remote --tags https://github.com/astral-sh/ruff-pre-commit "refs/tags/${version}^{}" | cut -f1)"
+          if [ -z "$resolved" ]; then
+            resolved="$(git ls-remote --tags https://github.com/astral-sh/ruff-pre-commit "refs/tags/${version}" | cut -f1)"
+          fi
+          test -n "$resolved" || { echo "tag ${version} not found on ruff-pre-commit"; exit 1; }
+          if [ "$resolved" != "$rev" ]; then
+            echo "ruff hook rev ${rev} does not match tag ${version} (${resolved}): the trailer is lying"
+            exit 1
+          fi
+          echo "ruff hook rev verified: ${version} -> ${rev}"
+
+      - name: Run every pre-commit hook over the full tree
+        run: pre-commit run --all-files --show-diff-on-failure
+
+      - name: Full-tree gitleaks scan
+        run: pre-commit run gitleaks-full-tree --hook-stage manual --all-files --show-diff-on-failure
+
+      - name: Install actionlint 1.7.12 (checksum-pinned)
+        run: |
+          curl -sSLo actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz" | sha256sum -c
+          tar -xzf actionlint.tar.gz actionlint
+
+      - name: Run actionlint on all workflow files
+        run: ./actionlint -color
+
+  type-check:
+    name: Type check (mypy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install dependencies
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev]" \
+            "torch==2.13.0+cpu"
+          uv pip check
+          python -c 'import torch; assert torch.__version__ == "2.13.0+cpu"; print(torch.__version__)'
+
+      - name: Run mypy
+        run: mypy torchlens/
+
+  smoke:
+    # NO event-name guard here (grind r5, b10 R82-1): inside a reusable
+    # workflow `github.event_name` is the CALLER's event, so a former
+    # `if: pull_request || push` condition meant that adding
+    # `workflow_dispatch:`/`schedule:` to release.yml would SKIP every test
+    # row while the called workflow still reported SUCCESS to
+    # `needs: [tests]` — a release with zero tests executed. Duplicate runs
+    # are already handled by the concurrency group above.
+    name: ${{ matrix.track }} (torch ${{ matrix.torch }}, py ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # The one smoke row on pull requests: the pinned environment the
+        # byte goldens were recorded in (python 3.10, torch 2.13.0; it matches
+        # tests/*/goldens/ENV), so the oracle families enforce here and a
+        # skip is a failure. The other supported-version rows run nightly.
+        include:
+          - track: newest-admitted
+            python: "3.10"
+            torch: "2.13.0+cpu"
+            torchvision: "0.28.0+cpu"
+            transformers: "5.18.0"
+            numpy: numpy
+            scope: smoke
+            oracle_enforce: "1"
+            render_byte_oracle: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install exact CPU test environment
+        env:
+          TORCH_VERSION: ${{ matrix.torch }}
+          TORCHVISION_VERSION: ${{ matrix.torchvision }}
+          NUMPY_SPEC: ${{ matrix.numpy }}
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          # The viz extra (matplotlib, torchshow, lovely-tensors) is installed
+          # because tviz is shipped surface with smoke-marked render tests.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,tabular,viz]" \
+            "torch==${TORCH_VERSION}" \
+            "torchvision==${TORCHVISION_VERSION}" \
+            "${NUMPY_SPEC}" \
+            "pydot==4.0.1" \
+            "graphviz==0.21"
+
+      - name: Install transformers for the R0 real-model sweep
+        # Testing MEMO A4/A6 (lane P04): the R0 deep sweep (config-built real
+        # upstream classes, zero network) is BLOCKING on every row whose torch
+        # admits the pinned transformers (5.x floor is torch>=2.4). The three
+        # torch<2.4 floor rows run without it -- gate R0_TRANSFORMERS_RUNTIME
+        # in tests/real_model/r0/conftest.py names this split -- until the
+        # HF_FLOOR version leg (B2) lands per-version expectations.
+        if: matrix.transformers != ''
+        run: uv pip install --system "transformers==${{ matrix.transformers }}"
+
+      - name: Validate installed environment
+        env:
+          TORCH_VERSION: ${{ matrix.torch }}
+          TORCHVISION_VERSION: ${{ matrix.torchvision }}
+        run: |
+          uv pip check
+          python - <<'PY'
+          import os
+
+          import torch
+          import torchvision
+          from torchvision.ops import nms
+
+          assert torch.__version__ == os.environ["TORCH_VERSION"]
+          assert torchvision.__version__ == os.environ["TORCHVISION_VERSION"]
+          boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0]])
+          scores = torch.tensor([1.0])
+          assert nms(boxes, scores, 0.5).tolist() == [0]
+          print(torch.__version__, torchvision.__version__)
+          PY
+
+      - name: Run smoke tests and compatibility coverage
+        if: matrix.scope == 'smoke'
+        env:
+          TORCHLENS_ORACLE_ENFORCE: ${{ matrix.oracle_enforce }}
+          # One torch thread per xdist worker: intra-op threads on top of
+          # four workers oversubscribe the runner and inflate the duration
+          # tripwire's measurements (lane L15). The tripwire aggregates
+          # across workers, so it stays armed under -n.
+          OMP_NUM_THREADS: "1"
+        run: |
+          pytest tests/ -m smoke -n 4 --tb=short -q \
+            --junitxml="${{ runner.temp }}/junit/smoke.junit.xml"
+          # `serial` tests are load- or memory-sensitive: run them without
+          # xdist so parallel workers never starve them (marker contract).
+          # Only files carrying the marker are collected: a whole-suite
+          # single-process collection costs ~95 s.
+          mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
+          pytest "${serial_files[@]}" -m "serial and not slow and not rare and not heavy" --tb=short -q
+          pytest tests/test_torch_compat.py --tb=short -q
+
+      - name: Declare the executed-test floor (smoke suite)
+        if: matrix.scope == 'smoke'
+        # Executed-floor attestation on EVERY smoke row (previously only the
+        # nightly preview-backend legs had one): a row where collection drift,
+        # a conftest guard, or mass importorskip/oracle skipping hollows out
+        # the suite must go red, not green. The smoke tier selects ~1,420
+        # tests (re-trued 2026-10-02 to 710 from 1,421 collected, when the tier
+        # was cut from ~9,900 to a coverage-chosen subset; 2026-09-01 it was
+        # 4609 from 9218, AUD-CODE 0.3:
+        # the 2,830 literal sat at 30.7% of the live tier; before that,
+        # 2026-08-26, megaplan D13: the 2,500 floor had lagged
+        # the tier again, tolerating a silent 56% hollow-out against a comment
+        # intending ~50% -- the same drift class as r7 R41's "~3900"/1900
+        # pair); the floor is roughly half so normal churn and per-torch-
+        # version skips never trip it, the 15% skip-fraction bound scales
+        # with the selection, and tests/test_gate_infra_floor_drift.py now
+        # RE-DERIVES the floor from the live selection count so this class
+        # of drift goes red instead of waiting for the next audit.
+        run: |
+          echo "smoke.junit.xml 710 0.15" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: R0 real-model gate (blocking; PASSED-count attested)
+        if: matrix.transformers != ''
+        # Testing MEMO section 10 PR row: the 14-family R0 deep sweep --
+        # structure, attn-impl facet diff, absence-claim adjudication, kwargs
+        # identity, payload identity, pass-qualification pin, config
+        # fingerprints -- at ZERO network bytes. The smoke selection above
+        # already runs these (they are smoke-marked); this dedicated run is
+        # the gate-shaped attestation: exact PASSED floor, so a skip cascade
+        # or a fail-tolerant future refactor cannot hollow it out.
+        # TORCHLENS_REQUIRE_R0 flips gate R0_TRANSFORMERS_RUNTIME fail-closed:
+        # a broken transformers install on a CLAIMING row is red, never a skip.
+        env:
+          TORCHLENS_REQUIRE_R0: "1"
+        run: |
+          pytest tests/real_model/r0 -p no:randomly --tb=short -q \
+            --junitxml="${{ runner.temp }}/junit/r0.junit.xml"
+          echo "r0.junit.xml 0 --min-passed 71" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Enforce the render byte oracle
+        if: matrix.render_byte_oracle == '1'
+        # The byte half of the render-identity oracle is heavy-marked, so the
+        # smoke selection never executes it — the historical row-level env
+        # flag was dead config and DOT-byte identity ran on NO CI leg (T13.2).
+        # Run the consumer test explicitly on the recording-environment row
+        # (measured ~6s) and attest that it EXECUTED rather than skipped.
+        env:
+          TORCHLENS_RENDER_BYTE_ORACLE: "1"
+        run: |
+          pytest tests/test_viz_render_identity_oracle.py -m heavy --tb=short -q \
+            --junitxml="${{ runner.temp }}/junit/render-byte-oracle.junit.xml"
+          echo "render-byte-oracle.junit.xml 1" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Enforce the surface byte oracle
+        if: matrix.oracle_enforce == '1'
+        # The surface-oracle BYTE family (6 per-axis byte tests + the
+        # two-subprocess determinism control) is heavy-marked, so this row's
+        # smoke selection collects only the 2 fact pins (probe: 2/9), and
+        # every scheduled leg that selects heavy runs on a non-canonical
+        # environment where require_env_golden legitimately skips — byte
+        # identity was enforced on NO CI leg (the T13.2 class recurring one
+        # family over, b10 R78 round-4). Run the family explicitly on the ONE
+        # enforcing row and attest the byte tests EXECUTED (floor 6 = the six
+        # model-axis byte tests; the determinism control also collects).
+        env:
+          TORCHLENS_ORACLE_ENFORCE: "1"
+        run: |
+          pytest tests/surface_oracle/ -m heavy --tb=short -q \
+            --junitxml="${{ runner.temp }}/junit/surface-byte-oracle.junit.xml"
+          echo "surface-byte-oracle.junit.xml 6" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Check every leg's executed-test floor
+        if: ${{ !cancelled() }}
+        run: python scripts/check_ci_executed_tests.py --legs "${{ runner.temp }}/junit"
+
+
+  checks:
+    name: Repository checks
+    # One entry point for the repository checks (layering, file caps, id lint).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev]" \
+            "torch==2.13.0+cpu"
+          uv pip check
+
+      - name: Run the repository checks
+        run: python scripts/checks/run_all.py
+
+  packaging:
+    name: Packaging manifest tripwires
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # PR-BLOCKING copy of the wheel-diet + sdist-governance gates (grind r3,
+    # R82): they previously ran only in the nightly wheel job, so a revert of
+    # the MANIFEST.in / exclude-package-data wiring merged green and shipped
+    # for up to a day before the scheduled leg went red. Both tests build the
+    # real artifacts (~2 min), well inside the PR budget.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install dependencies
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,tabular]" \
+            "torch==2.13.0+cpu"
+          uv pip check
+
+      - name: Run the packaging manifest tripwires
+        run: |
+          pytest \
+            "tests/test_packaging_diet.py::test_built_wheel_manifest_is_diet" \
+            "tests/test_ci_packaging_gates.py::test_built_sdist_manifest_is_governed" \
+            --tb=short -q

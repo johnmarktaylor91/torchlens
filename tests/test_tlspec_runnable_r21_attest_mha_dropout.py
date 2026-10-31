@@ -3,7 +3,7 @@
 Two fail-closed attestation defects on very common eval-mode layers:
 
 * F1 (HIGH): a plain eval ``nn.MultiheadAttention`` + ``include_activations``
-  raised ``NumericAttestationError`` on a faithful replay. Capture records the
+  raised ``ReplayValueMismatchError`` on a faithful replay. Capture records the
   in-proj ``F.linear`` under autograd (a grad-specialized BLAS reduction order);
   the pre-r37 run path recomputed it with DETACHED state clones, so the two
   reduction orders differed by ~1 dtype ULP and a ``not_applicable`` carve-out
@@ -31,9 +31,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors.runnable import NumericAttestationError
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
+from torchlens.errors.runnable import ReplayValueMismatchError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
@@ -83,7 +83,7 @@ def _run(path: Path, x: torch.Tensor) -> tl.RunResult:
         Sparse replay result.
     """
 
-    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 class DropNet(nn.Module):
@@ -324,8 +324,8 @@ def test_tampered_activation_archive_still_raises(tmp_path: Path) -> None:
     record = archive[key]
     archive[key] = dataclasses.replace(record, value=record.value + 1.0)
 
-    with pytest.raises(NumericAttestationError):
-        loaded.run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    with pytest.raises(ReplayValueMismatchError):
+        loaded.run(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 def test_large_blas_slot_corruption_is_not_masked_by_fallback(tmp_path: Path) -> None:
@@ -352,5 +352,5 @@ def test_large_blas_slot_corruption_is_not_masked_by_fallback(tmp_path: Path) ->
     record = archive[linear_keys[0]]
     archive[linear_keys[0]] = dataclasses.replace(record, value=record.value + 0.5)
 
-    with pytest.raises(NumericAttestationError):
-        loaded.run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    with pytest.raises(ReplayValueMismatchError):
+        loaded.run(inputs=x.clone(), seed=0, on_divergence="return")

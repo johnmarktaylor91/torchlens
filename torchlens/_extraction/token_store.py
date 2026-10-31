@@ -66,7 +66,7 @@ class TokenRows:
     position: torch.Tensor
 
     @property
-    def n_tokens(self) -> int:
+    def num_tokens(self) -> int:
         """Return the number of token rows.
 
         Returns

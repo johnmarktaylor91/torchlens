@@ -10,9 +10,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from ...data_classes.param import Param
-from ...ir.events import ModuleFrame
-from ...ir.refs import DeviceRef, DtypeRef
+from ..._data_classes.param import Param
+from ..._ir.events import ModuleFrame
+from ..._ir.refs import DeviceRef, DtypeRef
 from .._finalize import numel_from_shape as _numel, value_nbytes as _nbytes
 
 
@@ -205,7 +205,7 @@ def tf_param_logs(tree: TFModuleTree, trace: Any) -> dict[str, Param]:
         param.backend_address = f"object:{address}"
         param.resolver_status = "resolved"
         param._param_ref = variable
-        param.source_trace = trace
+        param.trace = trace
         param.all_module_addresses = list(
             tree.metadata.get(owner, {}).get("all_addresses", [owner])
         )

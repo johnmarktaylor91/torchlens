@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.semantic import facet_coverage
+from torchlens.facets import coverage
 
 
 class Block(nn.Module):
@@ -61,7 +61,7 @@ def test_facet_coverage_classifies_and_inventories_unclassified() -> None:
     log = tl.trace(
         model, torch.randn(2, 3, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
     )
-    report = facet_coverage(log)
+    report = coverage(log)
 
     by_address = {row.address: row for row in report.rows}
     assert "transformer_residuals" in by_address["block"].recipes
@@ -120,7 +120,7 @@ def test_facet_coverage_reports_typed_absences() -> None:
     log = tl.trace(
         model, torch.randn(2, 3, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
     )
-    report = facet_coverage(log)
+    report = coverage(log)
 
     nopre_row = next(row for row in report.rows if row.address == "nopre")
     missing = {facet: status for facet, status, _detail in nopre_row.missing}
@@ -154,7 +154,7 @@ def test_facet_coverage_discloses_multi_call_modules() -> None:
     log = tl.trace(
         model, torch.randn(2, 3, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
     )
-    report = facet_coverage(log)
+    report = coverage(log)
 
     norm_row = next(row for row in report.rows if row.address == "norm")
     assert norm_row.note != ""
@@ -171,7 +171,7 @@ def test_facet_coverage_markdown_lists_candidates() -> None:
     log = tl.trace(
         model, torch.randn(2, 3, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
     )
-    text = facet_coverage(log).to_markdown()
+    text = coverage(log).to_markdown()
 
     assert "classified:" in text
     assert "| block | Block | transformer_residuals |" in text

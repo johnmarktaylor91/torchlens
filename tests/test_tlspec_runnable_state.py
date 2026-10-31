@@ -13,10 +13,10 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import RunnableErrorCode, StateSlotRole, StateSource, TensorSlotRole
 from torchlens._runnable_state import prepare_runnable_state
 from torchlens.errors import StateBindingError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import RunnableErrorCode, StateSlotRole, StateSource, TensorSlotRole
 
 
 class StatefulRunnableModel(nn.Module):
@@ -75,7 +75,7 @@ def _with_rebuilt_state_metadata_witnesses(descriptor: Any) -> Any:
     """
 
     from torchlens._io.runnable import STATE_METADATA_FACT_SITE_PREFIX, _encode_literal
-    from torchlens.runnable import ControlWitness, ControlWitnessKind
+    from torchlens._runnable import ControlWitness, ControlWitnessKind
 
     witnesses = [
         witness

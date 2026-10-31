@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 
 def collect_pre_forward_tensor_ids(

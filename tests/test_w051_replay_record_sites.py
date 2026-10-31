@@ -90,7 +90,7 @@ def test_do_layer_record_is_the_all_passes_spelling(loop) -> None:
     model, x, trace = loop
     fork = trace.fork()
     # The all-passes spelling fans out to every pass; the fan-out is
-    # DISCLOSED (MultiMatchWarning), exactly like ``tl.contains("relu_1")``.
+    # DISCLOSED (MultiMatchWarning), exactly like ``tl.label_contains("relu_1")``.
     with pytest.warns(MultiMatchWarning):
         fork.do(fork["relu_1_2"], tl.zero_ablate())
     _assert_matches(fork, _truth(model, x, {1, 2, 3}))

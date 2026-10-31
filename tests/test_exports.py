@@ -103,7 +103,7 @@ def _assert_netron_structure(payload: dict[str, Any]) -> None:
     honesty_value = props["torchlens.capture_honesty"]
     assert json.loads(honesty_value)["schema"] == "torchlens.capture_honesty.v1"
     assert props["torchlens.lossy_export"] == "true"
-    assert props["torchlens.runnable"] == "false"
+    assert props["torchlens._runnable"] == "false"
     assert props["torchlens.netron_schema"] == "2"
     assert props["torchlens.granularity"] in {"op", "module", "rolled"}
     graph = payload["graph"]
@@ -258,14 +258,14 @@ def _normalize_export_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def test_hash_namespace_is_available_through_all_public_import_patterns() -> None:
     """The structural-hash namespace should preserve lazy facade import patterns."""
 
-    import torchlens.hash as hash_module
-    from torchlens import hash as imported_namespace
-    from torchlens.hash import model as model_hash
+    import torchlens.fingerprint as hash_module
+    from torchlens import fingerprint as imported_namespace
+    from torchlens.fingerprint import model as model_hash
 
-    assert tl.hash is hash_module
+    assert tl.fingerprint is hash_module
     assert imported_namespace is hash_module
     assert model_hash is hash_module.model
-    assert tl.assert_unchanged is hash_module.assert_unchanged
+    assert tl.fingerprint.assert_unchanged is hash_module.assert_unchanged
 
 
 class _Tracker:
@@ -454,7 +454,7 @@ def test_tracker_exports_accept_existing_objects(export_log: Any, tmp_path: Path
     assert tracker.metrics
 
     aim_tracker = _Tracker()
-    assert tl.export.aim(export_log, run=aim_tracker, prefix="tl")["num_layers"] > 0
+    assert tl.export.aim(export_log, to=aim_tracker, prefix="tl")["num_layers"] > 0
     assert aim_tracker.metrics
 
     pytest.importorskip("wandb")
@@ -531,7 +531,7 @@ def test_tracker_exports_reject_paths_with_clear_type_errors(
     with pytest.raises(TypeError, match="mlflow expects an existing tracker object"):
         tl.export.mlflow(export_log, client=tmp_path / "mlruns")
     with pytest.raises(TypeError, match="aim expects an existing tracker object"):
-        tl.export.aim(export_log, run=tmp_path / "aim")
+        tl.export.aim(export_log, to=tmp_path / "aim")
 
 
 def test_emit_nvtx_capture_option_does_not_change_capture(
@@ -608,7 +608,7 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
         "netron.json", _normalize_export_payload(netron_payload)
     )
 
-    result = tl.bridge.huggingface.push_to_hub(
+    result = tl.bridge.huggingface_hub.push_to_hub(
         export_log,
         "example/repo",
         dry_run=True,
@@ -617,7 +617,7 @@ def test_static_graph_adapters_and_hub_dry_run(export_log: Any, tmp_path: Path) 
     assert result["dry_run"] is True
 
     api = _FakeHubApi()
-    uploaded = tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
+    uploaded = tl.bridge.huggingface_hub.push_to_hub(export_log, "example/repo", api=api)
     assert uploaded["upload_result"].startswith("https://huggingface.co/")
     assert api.created
     assert api.uploaded
@@ -703,7 +703,7 @@ def test_hub_push_uploads_real_bundle_not_metadata_stub(export_log: Any) -> None
     """
 
     api = _FakeHubApi()
-    uploaded = tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
+    uploaded = tl.bridge.huggingface_hub.push_to_hub(export_log, "example/repo", api=api)
     assert uploaded["dry_run"] is False
     assert api.uploaded, "expected an upload_file call"
 
@@ -731,7 +731,7 @@ def test_hub_push_scrubs_local_paths_from_uploaded_trace(export_log: Any) -> Non
     """
 
     api = _FakeHubApi()
-    tl.bridge.huggingface.push_to_hub(export_log, "example/repo", api=api)
+    tl.bridge.huggingface_hub.push_to_hub(export_log, "example/repo", api=api)
     payload = api.uploaded_bytes[-1]
 
     # Decompress the gzip-tar and scan the actual member bytes: a compressed

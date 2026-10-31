@@ -9,7 +9,8 @@ from torch import nn
 import torchlens as tl
 import torchlens._state as torchlens_state
 import torchlens.capture.projections as fastlog_state
-from torchlens.fastlog import PredicateError, RecordContext
+from torchlens.errors import PredicateError
+from torchlens.fastlog import RecordContext
 
 
 class RootLinear(nn.Linear):
@@ -58,7 +59,7 @@ class RaisingModel(nn.Module):
 def test_root_only_linear_emits_root_enter_exit() -> None:
     """A single root nn.Linear still emits root enter and exit events."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         RootLinear(3, 2),
         torch.ones(1, 3),
         default_module=True,
@@ -70,7 +71,7 @@ def test_root_only_linear_emits_root_enter_exit() -> None:
 def test_shared_module_pass_counter_increments_for_two_calls() -> None:
     """Shared module pass counters increment for repeated calls in one forward."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         SharedModule(),
         torch.ones(1, 3),
         default_module=True,
@@ -89,7 +90,7 @@ def test_shared_module_pass_counter_increments_for_two_calls() -> None:
 def test_identity_sequence_pass_through_tensor_is_visible() -> None:
     """Identity modules emit events and pass-through tensors remain visible."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         IdentitySequence(),
         torch.ones(1, 3),
         default_module=True,
@@ -103,7 +104,7 @@ def test_forward_exception_cleans_recording_stack() -> None:
     """Forward exceptions clean global TorchLens and fastlog state."""
 
     with pytest.raises(RuntimeError, match="forward exploded"):
-        tl.fastlog.record(RaisingModel(), torch.ones(1), default_module=True)
+        tl.record(RaisingModel(), torch.ones(1), default_module=True)
 
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None
@@ -119,7 +120,7 @@ def test_predicate_exception_cleans_stack_and_respects_fail_fast() -> None:
         raise PredicateError("predicate exploded", ctx=ctx)
 
     with pytest.raises(PredicateError, match="predicate exploded"):
-        tl.fastlog.record(
+        tl.record(
             SharedModule(),
             torch.ones(1, 3),
             save=keep_op,

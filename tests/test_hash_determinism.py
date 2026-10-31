@@ -13,8 +13,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.hashing import compute_graph_shape_hash
 from torchlens.options import CaptureOptions
-from torchlens.utils.hashing import compute_graph_shape_hash
 
 HashPair = tuple[str, str]
 ModelCase = tuple[str, Callable[[], tuple[nn.Module, Any]]]
@@ -572,7 +572,7 @@ def test_graph_shape_hash_matches_across_fresh_python_process() -> None:
 
         import torchlens as tl
         from torchlens.options import CaptureOptions
-        from torchlens.utils.hashing import compute_graph_shape_hash
+        from torchlens._utils.hashing import compute_graph_shape_hash
 
 
         class TinyMlp(nn.Module):

@@ -1,4 +1,4 @@
-"""The one-call paper number: ``flops_report`` (F09; costreport D10-D13).
+"""The one-call paper number: ``flops`` (F09; costreport D10-D13).
 
 Both doors -- the model door (one safe capture under the summary
 execution contract: eval mode, ``no_grad``, module flags and RNG restored
@@ -40,7 +40,7 @@ from ._factcore import factcore
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,7 @@ class SixNDFacts:
     quantity unless the hypothetical backward door was invoked.
     """
 
-    n_params: int
+    num_params: int
     d_numel: int
     two_nd: int
     six_nd: int
@@ -70,7 +70,7 @@ class SixNDFacts:
             else f"{100.0 * self.forward_delta_fraction:+.3f}%"
         )
         return [
-            f"6ND comparator (HF-as-implemented): N={self.n_params} params, "
+            f"6ND comparator (HF-as-implemented): N={self.num_params} params, "
             f"D={self.d_numel} main-input elements (pads counted)",
             f"  2ND forward-body heuristic = {self.two_nd} "
             f"(analytic forward vs 2ND: {delta}, heuristic-vs-exact)",
@@ -260,7 +260,7 @@ def _build_report(
     if d_numel is not None and core.params.total is not None:
         two_nd = 2 * core.params.total * d_numel
         six_nd = SixNDFacts(
-            n_params=core.params.total,
+            num_params=core.params.total,
             d_numel=d_numel,
             two_nd=two_nd,
             six_nd=6 * core.params.total * d_numel,
@@ -269,7 +269,7 @@ def _build_report(
     status = backward_status(trace)
     breakdown: tuple[str, ...] = ()
     if breakdown_top_k:
-        tree = build_cost_tree(trace, top_k=breakdown_top_k, max_depth=1, aggregation=agg)
+        tree = build_cost_tree(trace, k=breakdown_top_k, max_depth=1, aggregation=agg)
         # Depth-1 rows carry their INCLUSIVE mass: a call row's subtree
         # (its own ops plus everything nested below the depth cutoff), the
         # root-direct remainder, and the top-k remainder. Together they
@@ -311,20 +311,20 @@ def _build_report(
     )
 
 
-def flops_report(
+def flops(
     subject: Any,
     input_args: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     main_input_numel: int | None = None,
-    breakdown_top_k: int = 5,
+    breakdown_k: int = 5,
 ) -> FlopsReport:
     """Build the one-call cost report from a trace OR a model (D10).
 
     Parameters
     ----------
     subject:
-        A finished :class:`~torchlens.data_classes.trace.Trace` (the
+        A finished :class:`~torchlens._data_classes.trace.Trace` (the
         retroactive door), or an ``nn.Module`` (the model door -- runs
         ONE capture under the summary execution contract: eval mode,
         ``torch.no_grad()``, module training flags and RNG state restored
@@ -335,7 +335,7 @@ def flops_report(
         Explicit 6ND ``D`` for the trace door (the comparator's HF
         applicability cannot be established from a trace alone; the line
         is OMITTED without it, never guessed).
-    breakdown_top_k:
+    breakdown_k:
         Depth-1 module rows in the optional breakdown block (0 disables).
     """
 
@@ -346,7 +346,7 @@ def flops_report(
             raise InvalidArgumentError(
                 "the model door needs example inputs to run its one capture.",
                 code="flops_report_inputs_required",
-                remedy="Call tl.report.flops_report(model, example_inputs).",
+                remedy="Call tl.report.flops(model, example_inputs).",
             )
         trace = _capture_for_report(subject, input_args, input_kwargs)
         try:
@@ -354,7 +354,7 @@ def flops_report(
                 trace,
                 model=subject,
                 main_input_numel=main_input_numel,
-                breakdown_top_k=breakdown_top_k,
+                breakdown_top_k=breakdown_k,
             )
         finally:
             trace.cleanup()
@@ -363,7 +363,7 @@ def flops_report(
             "input_args/input_kwargs are model-door arguments; the trace door takes none.",
             code="flops_report_trace_door_inputs",
             remedy=(
-                "Call tl.report.flops_report(trace) on a finished trace, or pass the model "
+                "Call tl.report.flops(trace) on a finished trace, or pass the model "
                 "itself as the first argument to run the one-capture model door."
             ),
         )
@@ -371,7 +371,7 @@ def flops_report(
         subject,
         model=None,
         main_input_numel=main_input_numel,
-        breakdown_top_k=breakdown_top_k,
+        breakdown_top_k=breakdown_k,
     )
 
 
@@ -380,7 +380,7 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
 
     The fused ``nn.MultiheadAttention`` / ``nn.TransformerEncoderLayer`` fast
     path is held OFF for the capture through
-    :func:`torchlens.utils._torch_compat.force_mha_slow_path`. Under eval +
+    :func:`torchlens._utils._torch_compat.force_mha_slow_path`. Under eval +
     ``no_grad`` those modules otherwise dispatch to
     ``_native_multi_head_attention`` / ``_transformer_encoder_layer_fwd``:
     ONE opaque op each with no cost rule, so the report read 0 FLOPs
@@ -396,9 +396,9 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
 
     import torch
 
+    from .._utils._torch_compat import force_mha_slow_path
+    from .._utils.rng import log_current_rng_states, set_rng_from_saved_states
     from ..user_funcs import trace as _trace
-    from ..utils._torch_compat import force_mha_slow_path
-    from ..utils.rng import log_current_rng_states, set_rng_from_saved_states
 
     saved_training_flags = [(module, module.training) for module in model.modules()]
     rng_snapshot = log_current_rng_states()

@@ -7,10 +7,10 @@ from typing import Any
 import torch
 
 import torchlens as tl
+from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
 from torchlens._trace_state import TraceState
-from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
 from torchlens.intervention.types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
     MODEL_LOG_FIELD_FORK_POLICY,
@@ -54,10 +54,10 @@ def _capture_tiny_log() -> Trace:
 def test_ordered_fields_have_phase1_lifecycle_policies() -> None:
     """Every ordered field has portable, fork, and default-fill policy coverage."""
 
-    assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace.PORTABLE_STATE_SPEC)
+    assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace._PORTABLE_STATE_SPEC)
     assert set(MODEL_LOG_FIELD_ORDER) <= set(MODEL_LOG_FIELD_FORK_POLICY)
     assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace.DEFAULT_FILL_STATE)
-    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op.PORTABLE_STATE_SPEC)
+    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op._PORTABLE_STATE_SPEC)
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op.DEFAULT_FILL_STATE)
 

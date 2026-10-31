@@ -49,7 +49,7 @@ def loop():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
     try:
         yield model, x, trace
@@ -75,7 +75,7 @@ def _hand_truth(model: _Loop, x: torch.Tensor, edits: dict[int, str]) -> dict[st
 
 
 def _edge_into(trace: tl.Trace, pass_index: int):
-    return next(e for e in trace.edges if e.child_label == f"relu_1_2:{pass_index}")
+    return next(e for e in trace.graph.edges if e.child_label == f"relu_1_2:{pass_index}")
 
 
 @pytest.mark.parametrize("pass_index", [1, 2])

@@ -300,13 +300,11 @@ def test_real_package_inventory_covers_field_tables_and_shims() -> None:
     """The walk over the real package reaches the names the dry run found missing."""
 
     rows = {row["id"]: row for row in build_inventory()["rows"]}
-    durations = rows["member:torchlens.data_classes.trace:Trace.backward_durations"]
-    assert "torchlens.constants:MODEL_LOG_FIELD_ORDER" in durations["field_tables"]
+    durations = rows["member:torchlens._data_classes.trace:Trace.backward_durations"]
+    assert "torchlens._constants:MODEL_LOG_FIELD_ORDER" in durations["field_tables"]
     assert {
         "member:torchlens._vocab.trace_state:TraceState.APPENDED",
-        "export:tl.constants.MODEL_LOG_FIELD_ORDER",
         "export:tl.bundle.Bundle",
         "export:tl.experimental.dagua.NodeSpec",
-        "param:_depth",
     } <= set(rows)
     assert rows["export:tl.io.TraceState"]["module"] == "torchlens._vocab.trace_state"

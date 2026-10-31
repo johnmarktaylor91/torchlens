@@ -99,7 +99,7 @@ def test_partial_recovery_survives_the_release() -> None:
     model = MidForwardBoom()
     with pytest.raises(RuntimeError) as excinfo:
         tl.trace(model, torch.randn(2, 4))
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    partial = tl._partial.from_failed_capture(excinfo.value)
     assert partial is not None
     func_names = [getattr(op, "func_name", "") for op in partial.raw_layers]
     assert any(name == "linear" for name in func_names), func_names

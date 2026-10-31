@@ -12,9 +12,48 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import Any, Final, cast
 
+from ..._data_classes._compaction import compact_op_metadata
+from ..._data_classes.derived_grad import (
+    DerivedGradAccessor,
+    DerivedGradRecord,
+    IntermediateDerivedGradAccessor,
+    IntermediateDerivedGradRecord,
+)
+from ..._data_classes.layer import Layer
+from ..._data_classes.param import Param, ParamAccessor
+from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
+from ..._ir.capture_events import CaptureEvents
+from ..._ir.container import ContainerSpec, DictKey, OutputPathComponent, TupleIndex
+from ..._ir.events import (
+    ArgTemplateRef,
+    FunctionCallRef,
+    ModuleFrame,
+    OpEvent,
+    OutputRef,
+    ParentEdge,
+    is_control_edge_use,
+)
+from ..._ir.op_record import amend_preview_output_parent_rebind
+from ..._ir.predicate import RecordContext
+from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._ir.workspaces import _init_module_hierarchy_data
+from ..._postprocess._grouping_stamp import build_grouping_policy_stamp
+from ..._postprocess._materialize import materialize_from_events
+from ..._postprocess._selective_save import (
+    apply_static_label_save_policy,
+    pop_static_label_save_predicate,
+)
+from ..._postprocess.finalization import _build_module_logs
+from ..._postprocess.loop_grouping_adapter import (
+    RecurrenceAssignment,
+    RecurrenceGroupingGraph,
+    RecurrenceNode,
+    group_recurrent_nodes,
+)
+from ..._quantities import Bytes, Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendName, BackendUnsupportedError, get_backend_spec
 from ...backends._finalize import (
     attach_function_root_module,
     mirror_param_derived_grads,
@@ -25,57 +64,18 @@ from ...backends._finalize import (
     stamp_preview_graph_shape_hash,
     value_nbytes as _nbytes,
 )
+from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...capture._nonfinite_prefix import strip_raw_label_suffix
 from ...capture.outcome import stamp_backend_finalized
-from ...data_classes._compaction import compact_op_metadata
-from ...data_classes.derived_grad import (
-    DerivedGradAccessor,
-    DerivedGradRecord,
-    IntermediateDerivedGradAccessor,
-    IntermediateDerivedGradRecord,
-)
-from ...data_classes.layer import Layer
-from ...data_classes.param import Param, ParamAccessor
-from ...data_classes.trace import Trace
 from ...fastlog.types import CaptureSpec
-from ...ir.capture_events import CaptureEvents
-from ...ir.container import ContainerSpec, DictKey, OutputPathComponent, TupleIndex
-from ...ir.events import (
-    ArgTemplateRef,
-    FunctionCallRef,
-    ModuleFrame,
-    OpEvent,
-    OutputRef,
-    ParentEdge,
-    is_control_edge_use,
-)
-from ...ir.op_record import amend_preview_output_parent_rebind
-from ...ir.predicate import RecordContext
-from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...ir.workspaces import _init_module_hierarchy_data
 from ...options import CaptureOptions, merge_capture_options
-from ...postprocess._grouping_stamp import build_grouping_policy_stamp
-from ...postprocess._materialize import materialize_from_events
-from ...postprocess._selective_save import (
-    apply_static_label_save_policy,
-    pop_static_label_save_predicate,
-)
-from ...postprocess.finalization import _build_module_logs
-from ...postprocess.loop_grouping_adapter import (
-    RecurrenceAssignment,
-    RecurrenceGroupingGraph,
-    RecurrenceNode,
-    group_recurrent_nodes,
-)
-from ...quantities import Bytes, Duration
 from ...validation.status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
     ValidationReplaySource,
-    ValidationReplayStatus,
+    ValidationStatus,
     count_importer_region_annotations,
 )
 from .._options import (
@@ -417,9 +417,9 @@ class JAXBackend:
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             compute_input_output_distances=compute_input_output_distances,
             verbose=verbose,
@@ -427,7 +427,7 @@ class JAXBackend:
             name=name,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             save_visualizations=save_visualizations,
             jax_control_flow=jax_control_flow,
             jax_max_control_flow_unroll=jax_max_control_flow_unroll,
@@ -437,9 +437,9 @@ class JAXBackend:
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
-        save_arg_values = capture_options.save_arg_values
-        save_code_context = capture_options.save_code_context
-        save_rng_states = capture_options.save_rng_states
+        save_arg_values = capture_options.save_args
+        save_code_context = capture_options.save_source_context
+        save_rng_states = capture_options.save_rng
         recurrence_detection = capture_options.recurrence_detection
         compute_input_output_distances = capture_options.compute_input_output_distances
         verbose = capture_options.verbose
@@ -447,7 +447,7 @@ class JAXBackend:
         name = capture_options.name
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_raw_output
+        save_raw_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         jax_control_flow = capture_options.jax_control_flow
         jax_max_control_flow_unroll = capture_options.jax_max_control_flow_unroll
@@ -461,7 +461,7 @@ class JAXBackend:
         layer_visualizers = _resolve_optional_capture_field(
             capture, "layer_visualizers", layer_visualizers
         )
-        random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
+        random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
         layers_to_save = _default_if_missing(layers_to_save, "all")
         keep_orphans = _default_if_missing(keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")
@@ -523,9 +523,9 @@ class JAXBackend:
             save_raw_activations=save_raw_activations,
             detach_saved_activations=detach_saved_activations,
             save_grads=save_grads,
-            save_arg_values=save_arg_values,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             backward_ready=backward_ready,
             module_filter=module_filter,
             transform=transform,
@@ -546,7 +546,7 @@ class JAXBackend:
             save_raw_input=cast(str | bool, save_raw_input),
             batch_render=cast(str, batch_render),
             output_transform=output_transform,
-            save_raw_output=cast(str | bool, save_raw_output),
+            save_transformed_output=cast(str | bool, save_raw_output),
         )
         trace.capture_events = CaptureEvents()
         trace.capture_start_time = time.time()
@@ -630,7 +630,7 @@ class JAXBackend:
         trace: Trace,
         *_args: Any,
         **kwargs: Any,
-    ) -> bool | ValidationReplayStatus:
+    ) -> bool | ValidationStatus:
         """Validate a JAX trace with replay, perturbation, and invariants.
 
         Parameters
@@ -645,14 +645,14 @@ class JAXBackend:
 
         Returns
         -------
-        bool or ValidationReplayStatus
+        bool or ValidationStatus
             True when saved graph payloads replay and parent edges perturb.
             Loaded traces whose runtime capture was stripped return an explicit
             unavailable status.
         """
 
         status = trace.validation_replay_status
-        if not status.available:
+        if not status.is_available:
             setattr(trace, "_validation_replay_status", status)
             return status
         try:
@@ -664,12 +664,12 @@ class JAXBackend:
             status_result = self._validation_status_from_counts(trace, passed=passed)
         except Exception:
             passed = False
-            status_result = ValidationReplayStatus.result(
+            status_result = ValidationStatus.result(
                 passed=False,
                 backend="jax",
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
                 payload_load_status=getattr(trace, "payload_load_status", None),
-                failed_node_count=1,
+                num_failed_ops=1,
             )
         setattr(
             trace,
@@ -683,7 +683,7 @@ class JAXBackend:
         trace: Trace,
         *,
         passed: bool,
-    ) -> ValidationReplayStatus:
+    ) -> ValidationStatus:
         """Build aggregate replay status from JAX replay and region counts.
 
         Parameters
@@ -695,7 +695,7 @@ class JAXBackend:
 
         Returns
         -------
-        ValidationReplayStatus
+        ValidationStatus
             Failed status when replay failed, unverified status when all
             replayed ops passed but importer-owned regions are present, and
             passed status otherwise.
@@ -707,12 +707,12 @@ class JAXBackend:
         payload_load_status = getattr(trace, "payload_load_status", None)
         replayed_node_count = len(_jax_equation_ops(trace)) if passed else 0
         unverified_node_count = count_importer_region_annotations(trace) if passed else 0
-        return ValidationReplayStatus.from_replay_counts(
+        return ValidationStatus.from_replay_counts(
             backend="jax",
             source=source,
-            replayed_node_count=replayed_node_count,
-            unverified_node_count=unverified_node_count,
-            failed_node_count=0 if passed else 1,
+            num_replayed_ops=replayed_node_count,
+            num_unverified_ops=unverified_node_count,
+            num_failed_ops=0 if passed else 1,
             payload_load_status=payload_load_status,
         )
 
@@ -906,7 +906,7 @@ class JAXBackend:
         save_raw_input: str | bool,
         batch_render: str,
         output_transform: object | None,
-        save_raw_output: str | bool,
+        save_transformed_output: str | bool,
         compute_input_output_distances: bool = True,
     ) -> Trace:
         """Construct an empty trace shell via the shared preview constructor."""
@@ -923,7 +923,7 @@ class JAXBackend:
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             param_source="pytree-derived",
             compute_input_output_distances=compute_input_output_distances,
         )
@@ -1532,7 +1532,7 @@ class JAXBackend:
             param.backend_address = f"pytree:{address}"
             param.resolver_status = "metadata_only"
             param._param_ref = None
-            param.source_trace = trace
+            param.trace = trace
             param_logs[address] = param
         trace.param_logs = ParamAccessor(param_logs)
         trace.num_param_tensors = len(param_logs)
@@ -1718,21 +1718,30 @@ class JAXBackend:
         mirror_param_derived_grads(trace, records)
         if grad_options.intermediate_grads:
             try:
-                trace.intermediate_derived_grads = self._derive_intermediate_grads_zero_tap(
-                    trace=trace,
-                    closed_jaxpr=closed_jaxpr,
-                    args=args,
-                    static_argnums=static_argnums,
-                    captured_output=captured_output,
-                    grad_options=grad_options,
-                    fingerprint=fingerprint,
-                    jax_control_flow=jax_control_flow,
-                    jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+
+                set_intermediate_derived_grads(
+                    trace,
+                    (
+                        self._derive_intermediate_grads_zero_tap(
+                            trace=trace,
+                            closed_jaxpr=closed_jaxpr,
+                            args=args,
+                            static_argnums=static_argnums,
+                            captured_output=captured_output,
+                            grad_options=grad_options,
+                            fingerprint=fingerprint,
+                            jax_control_flow=jax_control_flow,
+                            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+                        )
+                    ),
                 )
             except BackendUnsupportedError:
                 raise
             except Exception as exc:
-                trace.intermediate_derived_grads = IntermediateDerivedGradAccessor()
+                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+
+                set_intermediate_derived_grads(trace, IntermediateDerivedGradAccessor())
                 trace.jax_intermediate_derived_grad_status = {
                     "status": "degraded",
                     "reason": f"producer_error:{type(exc).__name__}",
@@ -2077,7 +2086,7 @@ class JAXBackend:
             # takes the param as an operand). Matching on it directly (as
             # the old code did) attaches params to the input-echo op
             # instead of the op that genuinely uses them, so
-            # ``uses_params``/``used_by_ops``/``num_layers_with_params``
+            # ``has_params``/``used_by_ops``/``num_layers_with_params``
             # never reflect real param usage. Mirror
             # ``_attach_pytree_op_params`` above (and the equivalent
             # ``torch``/``mlx``/``paddle`` param attribution): resolve each
@@ -2145,7 +2154,7 @@ class JAXBackend:
             # ``trace_self_consistency`` check (which independently
             # recomputes the same dedup-by-layer sum from ``layer_list``).
             trace.num_layers_with_params = len(
-                {op.layer_label for op in trace.layer_list if op.uses_params}
+                {op.layer_label for op in trace.layer_list if op.has_params}
             )
             # Parameter-identity basis, not a per-layer-label dedup sum: a
             # param reused across more than one op/layer (a tied weight, or a
@@ -2273,7 +2282,7 @@ class JAXBackend:
             # O(m^2) for a param consumed by m ops).
             _attach_param_usage(trace, op_log, usage_membership)
         trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.uses_params}
+            {op.layer_label for op in trace.layer_list if op.has_params}
         )
         # Parameter-identity basis (see the identical note in
         # ``_jax_recurrence_assignments``'s sibling counter block above):
@@ -2506,7 +2515,7 @@ class JAXBackend:
                 data_children=tuple(data_children_by_label[label]),
                 layer_label=op_log._layer_label_raw,
                 recurrent_labels=(label,),
-                uses_params=bool(op_log.uses_params),
+                uses_params=bool(op_log.has_params),
                 func_name=op_log.func_name,
                 param_barcodes=tuple(op_log._param_barcodes),
                 retain=retain,
@@ -2775,7 +2784,7 @@ class JAXBackend:
             Returns when all options are supported.
         """
 
-        if options["save_rng_states"]:
+        if options["save_rng"]:
             raise BackendUnsupportedError(
                 "JAX backend preview requires explicit PRNG keys as params/input leaves; "
                 "save_rng_states and torch-style RNG replay are unsupported."

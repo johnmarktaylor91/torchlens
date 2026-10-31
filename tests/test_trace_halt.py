@@ -100,7 +100,7 @@ def test_halted_trace_validation_skips_full_model_output_only() -> None:
         model,
         torch.ones(1, 3),
         halt=_halt_on_relu,
-        capture=CaptureOptions(save_arg_values=True),
+        capture=CaptureOptions(save_args=True),
     )
 
     assert trace.validate_forward_pass([torch.full((1, 3), 123.0)]) is True

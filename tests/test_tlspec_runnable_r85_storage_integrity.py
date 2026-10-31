@@ -59,9 +59,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -85,7 +85,7 @@ def _assert_not_falsely_verified(result: Any, oracle: torch.Tensor) -> None:
 
     max_diff = (result.output - oracle).abs().max().item()
     if result.report.path_faithfulness is PathFaithfulness.VERIFIED:
-        assert not result.report.poisoned
+        assert not result.report.is_poisoned
         assert max_diff < 1e-6, f"FALSE VERIFIED: replay disagrees with oracle 1 by {max_diff}"
 
 
@@ -298,7 +298,7 @@ def test_inplace_own_storage_writes_stay_verified(
         model.eval()
     result = _verified(model, capture_input, tmp_path)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 def test_convbn_eval_running_stats_stay_verified(tmp_path: Path) -> None:
@@ -311,7 +311,7 @@ def test_convbn_eval_running_stats_stay_verified(tmp_path: Path) -> None:
     model.eval()
     result = _verified(model, torch.randn(2, 3, 8, 8), tmp_path)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
 
 
 # --------------------------------------------------------------------------- #
@@ -492,7 +492,7 @@ def test_pointer_preserving_siblings_stay_verified(
     result = _verified(model, capture_input, tmp_path)
     oracle = factory()(capture_input.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.poisoned
+    assert not result.report.is_poisoned
     assert (result.output - oracle).abs().max().item() < 1e-6
 
 
@@ -533,7 +533,7 @@ def test_v6_same_storage_input_strided_rebind_ceils(tmp_path: Path) -> None:
 
     control = loaded.run(inputs=capture_input.clone())
     assert control.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not control.report.poisoned
+    assert not control.report.is_poisoned
 
     twin = capture_input.clone().to(memory_format=torch.channels_last)
     with pytest.raises(PathDivergenceError):

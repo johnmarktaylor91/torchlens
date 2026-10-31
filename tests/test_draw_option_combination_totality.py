@@ -104,9 +104,9 @@ def _unit_overlay(layer_log: Any) -> float:
 #: option -> (classification, probe value or reason string)
 DECLARED: dict[str, tuple[str, Any]] = {
     # -- harness plumbing (supplied on every draw below) --------------------
-    "vis_outpath": (HARNESS, "output sink; a fresh tmp path every draw"),
+    "path": (HARNESS, "output sink; a fresh tmp path every draw"),
     "vis_save_only": (HARNESS, "True everywhere: no display side effects"),
-    "vis_fileformat": (HARNESS, '"dot" everywhere: no graphviz binary cost'),
+    "file_format": (HARNESS, '"dot" everywhere: no graphviz binary cost'),
     # -- alias sentinels (dedicated deprecation suites own the hop) ---------
     "view": (ALIAS, "vis_mode"),
     "depth": (ALIAS, "vis_call_depth"),
@@ -133,10 +133,10 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "vis_edge_overrides": (PAIRED, {"color": "black"}),
     "vis_grad_edge_overrides": (PAIRED, {"color": "black"}),
     "vis_module_overrides": (PAIRED, {"penwidth": "2"}),
-    "show_buffer_layers": (PAIRED, "always"),
+    "show_buffers": (PAIRED, "always"),
     "direction": (PAIRED, "topdown"),
     "vis_node_placement": (PAIRED, "rank"),
-    "vis_theme": (PAIRED, "paper"),
+    "theme": (PAIRED, "paper"),
     "vis_intervention_mode": (PAIRED, "as_node"),
     "vis_show_cone": (PAIRED, True),
     "code_panel": (PAIRED, True),
@@ -273,8 +273,8 @@ def _draw(trace: Any, tmp_path: Path, kwargs: dict[str, Any]) -> None:
         warnings.simplefilter("always")
         trace.draw(
             vis_save_only=True,
-            vis_fileformat="dot",
-            vis_outpath=str(tmp_path / "graph"),
+            file_format="dot",
+            path=str(tmp_path / "graph"),
             **kwargs,
         )
 

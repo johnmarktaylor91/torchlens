@@ -16,23 +16,13 @@ from typing import Any, cast
 import numpy as np
 import torch
 
+from torchlens._runnable import RunnableCompatibility, RunnableDiagnostic
+
 from .. import __version__ as TORCHLENS_VERSION
-from .._runnable_state import runnable_tensor_byte_digest
-from ..backends.registry import BackendRegistryError, get_backend_spec
-from ..data_classes._state_adapter import state_items
-from ..errors import RunnablePreflightError
-from ..errors.runnable import SparseCorePayloadError
-from ..intervention.types import (
-    CapturedArgTemplate,
-    FunctionRegistryKey,
-    LiteralTensor,
-    LiteralValue,
-    ParentRef,
-    Unsupported,
-)
-from ..ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
-from ..ir.container_registry import ModelSite, Role
-from ..runnable import (
+from .._data_classes._state_adapter import state_items
+from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._ir.container_registry import ModelSite, Role
+from .._runnable import (
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
     RUNNABLE_CALL_RECIPE_VERSION,
     RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
@@ -72,8 +62,6 @@ from ..runnable import (
     RequiredWitnessFamily,
     RequiredWitnessInventory,
     RunnableCallDescriptor,
-    RunnableCompatibility,
-    RunnableDiagnostic,
     RunnableErrorCode,
     RunnableRngProfile,
     SlotByteDigest,
@@ -92,8 +80,20 @@ from ..runnable import (
     derived_witness_completeness,
     encode_input_site_position,
 )
-from ..utils._callable_safety import _STORAGE_UNSAFE_NAMES
-from . import TorchLensIOError
+from .._runnable_state import runnable_tensor_byte_digest
+from .._utils._callable_safety import _STORAGE_UNSAFE_NAMES
+from ..backends.registry import BackendRegistryError, get_backend_spec
+from ..errors import RunnablePreflightError
+from ..errors.runnable import SparseCorePayloadError
+from ..intervention.types import (
+    CapturedArgTemplate,
+    FunctionRegistryKey,
+    LiteralTensor,
+    LiteralValue,
+    ParentRef,
+    Unsupported,
+)
+from . import ArtifactError
 
 
 @dataclass(slots=True)
@@ -191,7 +191,7 @@ def _call_execution_context(representative: Any) -> CallExecutionContext | None:
 # marking (H_B_RESOLUTION R1): a capture running one of these on a CUDA device
 # WITHOUT ``use_deterministic_algorithms(True)`` cannot promise byte-reproducible
 # activations, so its descriptor is marked ineligible at capture (``not_applicable``
-# at run, never a false ATTESTED and never a spurious NumericAttestationError).
+# at run, never a false ATTESTED and never a spurious ReplayValueMismatchError).
 _CUDA_NONDETERMINISTIC_QUALNAME_TAILS: frozenset[str] = frozenset(
     {
         "conv_transpose1d",
@@ -342,7 +342,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             )
         )
 
-    from ..runnable import collective_boundaries_of
+    from .._runnable import collective_boundaries_of
 
     collective_boundaries = collective_boundaries_of(trace)
     if collective_boundaries:
@@ -593,7 +593,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # re-executing, so it fails closed here. The single completeness downgrade
         # drives BOTH honesty layers together -- ``_path_faithfulness`` reports
         # UNVERIFIABLE and ``_numeric_attestation_check`` reports NOT_APPLICABLE (never
-        # a false VERIFIED, and never a contradicting NumericAttestationError). An
+        # a false VERIFIED, and never a contradicting ReplayValueMismatchError). An
         # observe-only or backward/grad intervention leaves the forward output
         # reproducible byte-for-byte and is NOT flagged here, so it still VERIFIES.
         _gap(WitnessGapKind.FORWARD_VALUE_OVERRIDE, "capture")
@@ -682,7 +682,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     # degenerate totality means every legal empty shape initializes without
     # sampling, so no advertised descriptor can reach a raw math error.
     ambient_context = _ambient_execution_context(trace, calls, registry_entries, slot_drafts)
-    from ..utils._torch_compat import AMBIENT_FP32_UNREPRESENTABLE_KEY
+    from .._utils._torch_compat import AMBIENT_FP32_UNREPRESENTABLE_KEY
 
     capture_ambient = trace._runnable.capture_ambient
     unrepresentable_fp32: tuple[str, ...] = (
@@ -1090,11 +1090,11 @@ def detach_sparse_core_nested_trace_backrefs(value: Any) -> None:
     A conditional arm records a private ``_trace`` back-reference to its owning
     ``Trace`` (bound in postprocess finalization to serve the ``evaluation_ops`` /
     ``execution_ops`` convenience accessors). ``ConditionalAccessor`` has no
-    ``PORTABLE_STATE_SPEC``, so the bundle scrub returns it verbatim and the arm's
+    ``_PORTABLE_STATE_SPEC``, so the bundle scrub returns it verbatim and the arm's
     ``_trace`` still points at the LIVE trace -- dragging that trace's
     ``_runnable_capture_state`` (and every other live tensor field) into the value-free
     sparse core through ``conditionals._list.<i>.arms.<j>._trace``. The top-level
-    capture-state is dropped by ``Trace.PORTABLE_STATE_SPEC`` (``FieldPolicy.DROP``) and
+    capture-state is dropped by ``Trace._PORTABLE_STATE_SPEC`` (``FieldPolicy.DROP``) and
     routed to the separate ``state_dict_v1`` blob; the arm back-reference must get the
     SAME treatment. Arm replay is driven entirely by the descriptor's recorded
     ``conditional_arm_entry_edges`` control witnesses and top-level state, never by this
@@ -1486,7 +1486,7 @@ def _add_persistent_buffer_slot_drafts(
                 name for name in buffer_names if not isinstance(snapshot[name], torch.Tensor)
             )
             if non_tensor_names:
-                raise TorchLensIOError(
+                raise ArtifactError(
                     "Runnable save found non-tensor persistent-buffer state entries "
                     f"in the capture-time snapshot: {', '.join(non_tensor_names)}. "
                     "The embedded state snapshot admits tensors only; refusing to "
@@ -1518,7 +1518,7 @@ def _add_persistent_buffer_slot_drafts(
                 # weights): the universe is UNKNOWN. Refuse loudly and typed --
                 # mirroring the include_weights=True lane -- never silently
                 # under-declare.
-                raise TorchLensIOError(
+                raise ArtifactError(
                     "Runnable save requires the persistent-buffer state universe, "
                     "but no source is available: the source model is not alive, "
                     "no capture-time state records exist, and the trace carries "
@@ -2783,7 +2783,7 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
     original op recipe, never the value substitution. Such an artifact cannot
     faithfully re-run the intervention-captured forward, so the producer downgrades
     witness completeness to keep the run honestly UNVERIFIABLE + NOT_APPLICABLE
-    rather than falsely VERIFIED (with a contradicting NumericAttestationError when
+    rather than falsely VERIFIED (with a contradicting ReplayValueMismatchError when
     activations are archived).
 
     Only forward-direction, value-replacing interventions are flagged. An
@@ -4397,7 +4397,7 @@ def _parameter_role(param: Any) -> StateSlotRole:
 
     name = str(getattr(param, "name", ""))
     module_address = str(getattr(param, "module_address", ""))
-    trace = getattr(param, "source_trace", None)
+    trace = getattr(param, "trace", None)
     modules = getattr(trace, "modules", {}) if trace is not None else {}
     module = modules.get(module_address) if isinstance(modules, Mapping) else None
     class_name = str(getattr(module, "class_name", module_address)).lower()
@@ -4853,7 +4853,7 @@ def _diagnostic(
         current_runtime=str(torch.__version__),
         detection_stage=detection_stage,
         resolver_provenance=None,
-        analysis_load_available=True,
+        is_analysis_load_available=True,
         details=details,
     )
 

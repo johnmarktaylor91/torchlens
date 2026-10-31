@@ -1,6 +1,6 @@
 """Parameter arguments that forward validation's own capture keeps by reference.
 
-Forward validation captures with ``save_arg_values=True``, so every tensor
+Forward validation captures with ``save_args=True``, so every tensor
 argument of every op used to be copied, parameters included: the first
 validation trace held a full extra copy of the weights on the model's device
 until validation ended. Validation runs that capture on a deep copy of the
@@ -19,7 +19,7 @@ replay copy's pre-capture snapshot, before that copy is restored (the restore
 rewrites every parameter whenever any state changed) and before the replay
 reads anything. On any change the whole validation reruns with every argument
 copied, exactly as before, and the rerun's trace carries a diagnostic saying
-so. A user's own ``save_arg_values=True`` trace never sees any of this: outside
+so. A user's own ``save_args=True`` trace never sees any of this: outside
 the validation capture the copy path is unchanged.
 
 When validation runs with an ``output_device`` other than ``"same"``, the same
@@ -199,7 +199,7 @@ class ParameterArgumentReferences:
         target = self.retention_device(tensor)
         if target is None:
             return None
-        from .utils.tensor_utils import _clone_tensor_payload
+        from ._utils.tensor_utils import _clone_tensor_payload
 
         moved = cast(
             torch.Tensor,
@@ -289,7 +289,7 @@ def _record_fallback(trace: Any, reason: str) -> None:
     record_validation_diagnostic(
         trace,
         ValidationDiagnostic(
-            check=FALLBACK_CHECK,
+            check_name=FALLBACK_CHECK,
             message=(
                 "TorchLens validation reran with every argument copied because a "
                 f"parameter changed during the forward: {reason}. The verdict "

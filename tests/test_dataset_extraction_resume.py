@@ -22,12 +22,12 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_substrate import ExtractionArtifactError, read_trusted_rows
+from torchlens._data_substrate.artifact import MANIFEST_SCHEMA_V2
+from torchlens._extraction.resume import MANIFEST_FILENAME
 from torchlens.dataset_extraction import (
-    MANIFEST_FILENAME,
-    MANIFEST_SCHEMA_V2,
-    DatasetExtractionResumeError,
     load_extraction,
 )
+from torchlens.errors import DatasetExtractionResumeError
 
 
 def _interrupt_after(tmp_path: Path, n_shards: int) -> None:
@@ -146,7 +146,7 @@ def test_resume_refuses_unmanifested_shard_dir(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -157,16 +157,14 @@ def test_resume_refuses_mismatched_signature(tmp_path: Path) -> None:
     """A resume whose run parameters differ from the artifact's refuses typed."""
 
     model = _CountingModel().eval()
-    tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False)
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
         tl.extract_dataset(
             model,
             _stimuli(),
             _LAYERS,
             batch_size=5,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -179,7 +177,7 @@ def test_resume_refuses_mismatched_signature(tmp_path: Path) -> None:
             _stimuli() + 1.0,
             _LAYERS,
             batch_size=4,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -192,7 +190,7 @@ def test_resume_of_complete_artifact_never_runs_the_model(tmp_path: Path) -> Non
 
     model = _CountingModel().eval()
     first = tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
+        model, _stimuli(), _LAYERS, batch_size=4, path=tmp_path, progress=False
     )
     calls_after_first = model.n_forward_calls
     again = tl.extract_dataset(
@@ -200,7 +198,7 @@ def test_resume_of_complete_artifact_never_runs_the_model(tmp_path: Path) -> Non
         _stimuli(),
         _LAYERS,
         batch_size=4,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
     )
@@ -212,9 +210,7 @@ def test_resume_recomputes_only_missing_shards(tmp_path: Path) -> None:
     """An interrupted run resumes from its ledger, recomputing only the tail."""
 
     model = _CountingModel().eval()
-    tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=2, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=2, path=tmp_path, progress=False)
     # Reconstruct the mid-run state: 2 of 5 shards ledgered, in progress.
     _interrupt_after(tmp_path, 2)
 
@@ -224,7 +220,7 @@ def test_resume_recomputes_only_missing_shards(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
     )
@@ -246,9 +242,7 @@ def test_deleted_ledgered_shard_refuses_typed(tmp_path: Path) -> None:
     """
 
     model = _CountingModel().eval()
-    tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=2, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=2, path=tmp_path, progress=False)
     (tmp_path / "batch_00003.safetensors").unlink()
     with pytest.raises(ExtractionArtifactError) as excinfo:
         tl.extract_dataset(
@@ -256,7 +250,7 @@ def test_deleted_ledgered_shard_refuses_typed(tmp_path: Path) -> None:
             _stimuli(),
             _LAYERS,
             batch_size=2,
-            output_dir=tmp_path,
+            path=tmp_path,
             progress=False,
             resume=True,
         )
@@ -270,9 +264,7 @@ def test_torn_final_ledger_line_is_dropped_not_fatal(tmp_path: Path) -> None:
     """Crash debris — a torn final ledger line — is never trusted, never fatal."""
 
     model = _CountingModel().eval()
-    tl.extract_dataset(
-        model, _stimuli(), _LAYERS, batch_size=2, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(), _LAYERS, batch_size=2, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 2)
     ledger_path = tmp_path / "ledger.jsonl"
     ledger_path.write_text(
@@ -286,7 +278,7 @@ def test_torn_final_ledger_line_is_dropped_not_fatal(tmp_path: Path) -> None:
         _stimuli(),
         _LAYERS,
         batch_size=2,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
         resume=True,
     )
@@ -299,12 +291,12 @@ def test_resume_with_iterable_stimuli_skips_consumed_prefix(tmp_path: Path) -> N
 
     model = _CountingModel().eval()
     rows = list(_stimuli(7))
-    tl.extract_dataset(model, rows, _LAYERS, batch_size=3, output_dir=tmp_path, progress=False)
+    tl.extract_dataset(model, rows, _LAYERS, batch_size=3, path=tmp_path, progress=False)
     _interrupt_after(tmp_path, 1)
 
     calls_before = model.n_forward_calls
     tl.extract_dataset(
-        model, rows, _LAYERS, batch_size=3, output_dir=tmp_path, progress=False, resume=True
+        model, rows, _LAYERS, batch_size=3, path=tmp_path, progress=False, resume=True
     )
     assert model.n_forward_calls == calls_before + 2
     loaded = load_extraction(tmp_path)
@@ -318,7 +310,7 @@ def test_resume_with_iterable_stimuli_skips_consumed_prefix(tmp_path: Path) -> N
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(DatasetExtractionResumeError) as excinfo:
         tl.extract_dataset(
-            model, rows[:2], _LAYERS, batch_size=3, output_dir=tmp_path, progress=False, resume=True
+            model, rows[:2], _LAYERS, batch_size=3, path=tmp_path, progress=False, resume=True
         )
     assert excinfo.value.fields["code"] == "extraction_resume_signature_mismatch"
 
@@ -360,7 +352,7 @@ def test_hard_process_death_mid_shard_write_then_resume(tmp_path: Path) -> None:
             stimuli,
             {"relu": "relu", "logits": "output_1"},
             batch_size=2,
-            output_dir=out_dir,
+            path=out_dir,
             progress=False,
             shard_format="pt",
         )
@@ -391,7 +383,7 @@ def test_hard_process_death_mid_shard_write_then_resume(tmp_path: Path) -> None:
     stimuli = torch.arange(30, dtype=torch.float32).reshape(10, 3)
     layers = {"relu": "relu", "logits": "output_1"}
     tl.extract_dataset(
-        model, stimuli, layers, batch_size=2, output_dir=tmp_path, progress=False, resume=True
+        model, stimuli, layers, batch_size=2, path=tmp_path, progress=False, resume=True
     )
     assert not list(tmp_path.glob("*.tmp")), "resume sweeps orphan temp files"
     loaded = load_extraction(tmp_path)
@@ -411,9 +403,9 @@ def test_manifest_is_self_describing(tmp_path: Path) -> None:
         _stimuli(7),
         _LAYERS,
         batch_size=3,
-        output_dir=tmp_path,
+        path=tmp_path,
         progress=False,
-        transform=lambda tensor: tensor.mean(dim=1),
+        output_transform=lambda tensor: tensor.mean(dim=1),
         stimulus_ids=ids,
     )
     manifest = json.loads((tmp_path / MANIFEST_FILENAME).read_text(encoding="utf-8"))
@@ -483,9 +475,7 @@ def test_load_extraction_subset_and_refusals(tmp_path: Path) -> None:
     """The loader selects layers, and refuses incomplete or unknown requests."""
 
     model = _CountingModel().eval()
-    tl.extract_dataset(
-        model, _stimuli(6), _LAYERS, batch_size=4, output_dir=tmp_path, progress=False
-    )
+    tl.extract_dataset(model, _stimuli(6), _LAYERS, batch_size=4, path=tmp_path, progress=False)
     subset = load_extraction(tmp_path, layers=["relu"])
     assert set(subset.activations) == {"relu"}
     assert subset.activations["relu"].shape == (6, 4)

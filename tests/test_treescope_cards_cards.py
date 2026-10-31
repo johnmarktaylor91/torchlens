@@ -14,11 +14,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.notebook._access import CopyRoot, resolve_copy_root
-from torchlens.notebook._axis_labels import axis_labels, decode_token_labels, sdpa_attention_hint
-from torchlens.notebook._grid import array_grid_html
-from torchlens.notebook._motifs import classify_value, resolve_signed_bounds
-from torchlens.notebook.cardtree import Card, CardText, render_card_html
+from torchlens._notebook._access import CopyRoot, resolve_copy_root
+from torchlens._notebook._axis_labels import axis_labels, decode_token_labels, sdpa_attention_hint
+from torchlens._notebook._grid import array_grid_html
+from torchlens._notebook._motifs import classify_value, resolve_signed_bounds
+from torchlens._notebook.cardtree import Card, CardText, render_card_html
 
 
 class _Recurrent(nn.Module):
@@ -122,7 +122,7 @@ def test_partial_trace_card_failure_first() -> None:
     try:
         tl.trace(Dies(), torch.randn(2, 4))
     except RuntimeError as error:
-        partial = tl.partial.from_failed_capture(error)
+        partial = tl._partial.from_failed_capture(error)
     assert partial is not None
     html = partial._repr_html_()
     assert "FAILED CAPTURE" in html
@@ -169,7 +169,7 @@ def test_partial_trace_card_renders_under_inference_mode() -> None:
         try:
             tl.trace(DiesInInference(), torch.randn(2, 4))
         except RuntimeError as error:
-            partial = tl.partial.from_failed_capture(error)
+            partial = tl._partial.from_failed_capture(error)
         assert partial is not None
         html = partial._repr_html_()
     assert "card unavailable" not in html and "Traceback" not in html

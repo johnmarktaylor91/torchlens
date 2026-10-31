@@ -19,13 +19,12 @@ import torch
 
 from torchlens.conformance import (
     CLAIM_MIN_PRETRAINED_FAMILIES,
-    FAKE_PLANTS,
     ConformanceReport,
     RosterModel,
     claim_string,
     run_conformance,
 )
-from torchlens.conformance._adapters import resolve_adapter
+from torchlens.conformance._adapters import FAKE_PLANTS, resolve_adapter
 from torchlens.errors import ConfigurationError
 
 
@@ -44,7 +43,10 @@ def _tiny_roster(realism: str = "config_built", families: int = 1) -> tuple[Rost
     evidence = "pinned-rev-deadbeef" if realism == "pretrained" else ""
     return tuple(
         RosterModel(
-            family=f"tiny{index}", realism=realism, build=_build_tiny, checkpoint_evidence=evidence
+            family=f"tiny{index}",
+            realism=realism,
+            builder=_build_tiny,
+            checkpoint_evidence=evidence,
         )
         for index in range(families)
     )
@@ -70,7 +72,7 @@ def test_torch_reference_passes_the_full_ladder(tmp_path: Path) -> None:
     assert report.funnel["failed"] == 0
     assert report.funnel["skipped"] == 0
     assert report.earned_tier == "C2"
-    assert report.claim_eligible is False  # toys earn nothing
+    assert report.is_claim_eligible is False  # toys earn nothing
     with pytest.raises(ConfigurationError) as excinfo:
         claim_string(report)
     assert excinfo.value.fields["code"] == "conformance_claim_unearned"
@@ -84,7 +86,7 @@ def test_wellbehaved_fake_passes_before_plants_are_trusted(tmp_path: Path) -> No
     )
     assert report.funnel["failed"] == 0
     assert report.earned_tier == "C2"
-    assert report.claim_eligible is False  # the fake provider never claims
+    assert report.is_claim_eligible is False  # the fake provider never claims
     with pytest.raises(ConfigurationError):
         claim_string(report)
 
@@ -155,7 +157,7 @@ def test_unknown_backend_refuses_typed() -> None:
     with pytest.raises(ConfigurationError) as excinfo:
         run_conformance("mystery-provider")
     assert excinfo.value.fields["code"] == "conformance_backend_unknown"
-    assert "torchlens.ecosystem.plugins" in str(excinfo.value)
+    assert "torchlens._ecosystem.plugins" in str(excinfo.value)
 
 
 def test_executed_floor_zero_green_never_reads_green() -> None:
@@ -180,7 +182,7 @@ def test_c0_claim_never_says_conformant() -> None:
 
     report = run_conformance("torch", tiers=("C0",))
     assert report.earned_tier == "C0"
-    assert report.claim_eligible is True
+    assert report.is_claim_eligible is True
     claim = claim_string(report)
     assert claim == "TorchLens provider API compatible, C0"
     assert "conformant" not in claim
@@ -196,11 +198,11 @@ def test_pretrained_family_floor_gates_c1_claims(tmp_path: Path) -> None:
 
     assert CLAIM_MIN_PRETRAINED_FAMILIES == 2
     one = run_conformance("torch", tiers=("C0", "C1"), roster=_tiny_roster("pretrained", 1))
-    assert one.earned_tier == "C1" and one.claim_eligible is False
+    assert one.earned_tier == "C1" and one.is_claim_eligible is False
     with pytest.raises(ConfigurationError):
         claim_string(one)
     two = run_conformance("torch", tiers=("C0", "C1"), roster=_tiny_roster("pretrained", 2))
-    assert two.claim_eligible is True
+    assert two.is_claim_eligible is True
     claim = claim_string(two)
     assert claim == "TorchLens-conformant capture, C1 (scope: tiny0,tiny1)"
 
@@ -232,11 +234,11 @@ def test_attestation_digest_recomputes_over_canonical_bytes() -> None:
         _canonical_report_json(report, include_attestation=False).encode("utf-8")
     ).hexdigest()
     assert report.attestation_sha256 == recomputed
-    payload = json.loads(report.to_canonical_json())
+    payload = json.loads(report.to_json())
     assert payload["attestation_sha256"] == recomputed
     assert payload["environment"]["torchlens_version"]
     # Canonical bytes are cwd-independent.
-    assert str(Path.cwd()) not in report.to_canonical_json()
+    assert str(Path.cwd()) not in report.to_json()
 
 
 def test_report_funnel_discloses_every_requested_case() -> None:

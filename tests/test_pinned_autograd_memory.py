@@ -75,7 +75,7 @@ def test_pinned_bytes_do_not_survive_save_and_load(tmp_path: Path) -> None:
 
     trace = tl.trace(_mlp(), torch.randn(2, 4))
     path = tmp_path / "pinned"
-    tl.save(trace, path)
+    trace.save(path)
 
     assert tl.load(path).pinned_autograd_memory is None
 

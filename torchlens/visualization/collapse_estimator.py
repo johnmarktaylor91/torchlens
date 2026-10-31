@@ -113,7 +113,7 @@ def watchdog_enabled() -> bool:
     does ``TORCHLENS_COLLAPSE_WATCHDOG=0``.
     """
 
-    from ..utils.env_flags import closed_bool_env
+    from .._utils.env_flags import closed_bool_env
 
     if os.environ.get("CI"):
         return False

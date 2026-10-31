@@ -232,13 +232,13 @@ class TestParamAccessorMH:
 class TestParamAccessorTLE:
     def test_access_by_address(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         pl = entry.params[entry._param_logs[0].address]
         assert isinstance(pl, Param)
 
     def test_access_by_short_name(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         w = entry.params["weight"]
         b = entry.params["bias"]
         assert "weight" in w.name
@@ -246,17 +246,17 @@ class TestParamAccessorTLE:
 
     def test_access_by_index(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         assert isinstance(entry.params[0], Param)
 
     def test_len(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         assert len(entry.params) == 2  # weight + bias
 
     def test_iterable(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.uses_params][0]
+        entry = [e for e in mh if e.has_params][0]
         params = list(entry.params)
         assert len(params) == 2
 
@@ -338,7 +338,7 @@ class TestTrainableFrozenTallies:
     def test_tle_tallies(self):
         mh = trace_fn(_make_frozen_first_layer(), _simple_input())
         for entry in mh:
-            if entry.uses_params:
+            if entry.has_params:
                 assert entry.num_params == entry.num_params_trainable + entry.num_params_frozen
         # First linear is frozen
         linear1 = [e for e in mh if "linear_1" in e.layer_label][0]
@@ -516,7 +516,7 @@ class TestGradientTracking:
 
         # TLEs with param layers should have saved grads
         for entry in mh:
-            if entry.uses_params:
+            if entry.has_params:
                 assert entry.has_grad is True
                 assert entry.grad is not None
                 assert entry.grad_shape is not None
@@ -590,7 +590,7 @@ class TestVisualizationParams:
         mh = trace_fn(model, x)
         dot_source = mh.draw(
             vis_mode=vis_mode,
-            vis_outpath=outpath,
+            path=outpath,
             vis_save_only=True,
             vis_call_depth=vis_call_depth,
         )
@@ -868,7 +868,7 @@ class TestDerivedGradRecordPathFieldOrder:
     def test_derived_grad_record_path_in_field_order(self) -> None:
         """The field must be a real member of PARAM_LOG_FIELD_ORDER."""
 
-        from torchlens.constants import PARAM_LOG_FIELD_ORDER
+        from torchlens._constants import PARAM_LOG_FIELD_ORDER
 
         assert "_derived_grad_record_path" in PARAM_LOG_FIELD_ORDER
 

@@ -39,7 +39,7 @@ from ._nonfinite import NonfiniteChannel, derive_nonfinite_channel, nonfinite_sp
 from ._roster import LENS_SUBJECTS, PERF_FAMILIES
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 __all__ = [
     "LENS_DETAIL_CEILING",
@@ -63,7 +63,6 @@ LEGEND_DEPENDENT_LENSES: set[str] = set()
 
 #: Request-field name -> Trace.draw kwarg name, where they differ.
 _DRAW_KWARG_SPELLINGS = {
-    "theme": "vis_theme",
     "graph_overrides": "vis_graph_overrides",
     "edge_overrides": "vis_edge_overrides",
     "grad_edge_overrides": "vis_grad_edge_overrides",
@@ -71,6 +70,7 @@ _DRAW_KWARG_SPELLINGS = {
     "engine": "vis_node_placement",
     "intervention_mode": "vis_intervention_mode",
     "show_cone": "vis_show_cone",
+    "show_buffer_layers": "show_buffers",
 }
 
 #: Attention role rows: module-address suffix -> per-layer fact wording.

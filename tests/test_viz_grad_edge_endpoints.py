@@ -217,9 +217,9 @@ def test_grad_edges_attach_to_forward_nodes_unrolled_and_rolled(tmp_path: Path) 
     try:
         for view in ("unrolled", "rolled"):
             dot = trace.draw(
-                vis_outpath=str(tmp_path / view),
+                path=str(tmp_path / view),
                 vis_save_only=True,
-                vis_fileformat="dot",
+                file_format="dot",
                 vis_mode=view,
             )
             _assert_edges_attach(dot, expect_gradient_edges=True)
@@ -237,9 +237,9 @@ def test_grad_edges_attach_in_every_forward_view(
     trace = _traced_with_grads(_MODELS[model_name]())
     try:
         dot = trace.draw(
-            vis_outpath=str(tmp_path / f"{model_name}_{view_name}"),
+            path=str(tmp_path / f"{model_name}_{view_name}"),
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             **_FORWARD_VIEWS[view_name],
         )
         _assert_edges_attach(dot, expect_gradient_edges=True)
@@ -254,9 +254,9 @@ def test_grad_edges_attach_with_repeat_folding(tmp_path: Path, model_name: str) 
     trace = _traced_with_grads(_MODELS[model_name]())
     try:
         dot = trace.draw(
-            vis_outpath=str(tmp_path / f"{model_name}_folded"),
+            path=str(tmp_path / f"{model_name}_folded"),
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             fold_repeats=True,
         )
         _assert_edges_attach(dot, expect_gradient_edges=False)
@@ -275,9 +275,9 @@ def test_combined_ties_attach_to_forward_nodes(tmp_path: Path, model_name: str) 
     trace = _traced_with_grads(_MODELS[model_name]())
     try:
         dot = trace.draw_combined(
-            vis_outpath=str(tmp_path / f"{model_name}_combined"),
+            path=str(tmp_path / f"{model_name}_combined"),
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
         )
         _assert_edges_attach(dot, expect_gradient_edges=True)
         declared, edges = _dot_nodes_and_edges(dot)
@@ -296,9 +296,9 @@ def test_backward_graph_edges_attach(tmp_path: Path, model_name: str, view: str)
     trace = _traced_with_grads(_MODELS[model_name]())
     try:
         dot = trace.draw_backward(
-            vis_outpath=str(tmp_path / f"{model_name}_backward_{view}"),
+            path=str(tmp_path / f"{model_name}_backward_{view}"),
             vis_save_only=True,
-            vis_fileformat="dot",
+            file_format="dot",
             vis_mode=view,
         )
         _assert_edges_attach(dot, expect_gradient_edges=False)

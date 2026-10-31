@@ -81,7 +81,7 @@ graph.json True
 graph inputs/outputs, the module hierarchy as drill-down FunctionProtos (the default
 `granularity="module"` view), curated panel facts, a `netron:attachment` metrics
 companion written beside the file by default (`attachment=False` opts out), and, with
-`baseline=<reference Trace>`, per-node diff facts from `torchlens.differential.diff_report`.
+`baseline=<reference Trace>`, per-node diff facts from `torchlens.report.diff`.
 The acceptance contract — strict protobuf-JSON parse into
 `onnx.ModelProto` plus `onnx.checker.check_model(full_check=True)` — is pinned in
 `tests/test_netron_export_contract.py`, and Netron 9.2.2's own parser is executed over the
@@ -144,7 +144,7 @@ from torch import nn
 import torchlens as tl
 
 x = torch.ones(1, 2)
-bundle = tl.bundle({"first": tl.trace(nn.ReLU(), x), "second": tl.trace(nn.ReLU(), x)})
+bundle = tl.Bundle({"first": tl.trace(nn.ReLU(), x), "second": tl.trace(nn.ReLU(), x)})
 path = tl.export.chrome_trace_diff(bundle, Path(globals().get("DOCS_TMPDIR", "/tmp")) / "diff.json")
 print(path.name, path.exists())
 ```

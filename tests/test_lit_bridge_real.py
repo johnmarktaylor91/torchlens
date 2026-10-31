@@ -81,7 +81,7 @@ def stack() -> dict[str, Any]:
         sites="blocks",
         salience=True,
         max_new_tokens=5,
-        top_k=5,
+        k=5,
     )
     return {
         "cls_net": cls_net,

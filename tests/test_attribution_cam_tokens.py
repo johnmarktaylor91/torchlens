@@ -231,7 +231,7 @@ def test_grad_cam_refuses_unprovable_grid_and_its_remedy_runs() -> None:
     model = UnfoldTokens()
     inputs = torch.randn(1, 3, IMAGE, IMAGE)
 
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.grad_cam(model, inputs, target=0, layer="block")
 
     error = excinfo.value
@@ -249,7 +249,7 @@ def test_grad_cam_refuses_reshape_that_returns_no_map() -> None:
     """A caller reshape must return an N,C,H,W tensor."""
 
     model = UnfoldTokens()
-    with pytest.raises(attribution.AttributionError) as excinfo:
+    with pytest.raises(tl.errors.AttributionError) as excinfo:
         attribution.grad_cam(
             model, torch.randn(1, 3, IMAGE, IMAGE), target=0, layer="block", reshape=lambda a: a
         )

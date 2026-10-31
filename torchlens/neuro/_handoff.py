@@ -404,7 +404,7 @@ def _source_kind(source: Any) -> str:
         code="neuro_source_invalid",
         remedy=(
             "capture with tl.trace(...) or extract to disk with "
-            "tl.extract_dataset(..., output_dir=...) and pass the directory"
+            "tl.extract_dataset(..., path=...) and pass the directory"
         ),
         source_type=type(source).__name__,
     )
@@ -704,7 +704,7 @@ def _safe_label(record: Any) -> str | None:
         several passes.
     """
 
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(record, "label", None, multipass=None)
     return str(label) if label is not None else None
@@ -760,7 +760,7 @@ def enumerate_extraction_sites(
 
     Raises
     ------
-    torchlens.features.FeatureShapingError
+    torchlens.errors.FeatureShapingError
         For an explicitly requested key absent from the artifact.
     ValueError
         For an explicitly requested stored output that is not
@@ -810,7 +810,7 @@ def enumerate_extraction_sites(
                 key=key,
                 requested=key,
                 matrix=shaped.matrix,
-                per_stimulus_shape=tuple(shaped.record.input_shape[1:]),
+                per_stimulus_shape=tuple(shaped.shaping.input_shape[1:]),
                 source_dtype=str(shaped.matrix.dtype).removeprefix("torch."),
                 layer_label=key,
                 pass_index=None,

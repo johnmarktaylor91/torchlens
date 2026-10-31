@@ -30,9 +30,9 @@ import torch.nn.functional as F
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._utils import _torch_compat
 from torchlens.backends.torch import _protocol_redispatch
 from torchlens.capture.outcome import FailureOrigin, classify_failure_origin
-from torchlens.utils import _torch_compat
 
 
 def _ensure_wrapped() -> None:

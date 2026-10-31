@@ -56,7 +56,7 @@ no-op. The one lazily-importable site (causal bias) is additionally covered
 by a meta-path import hook, so a module first imported WHILE wrappers are
 installed is shimmed the moment it executes — never left broken until the
 next capture entry. Site availability is feature-detected in
-``torchlens.utils._torch_compat`` (``HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG``,
+``torchlens._utils._torch_compat`` (``HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG``,
 ``HAS_ATTENTION_CAUSAL_BIAS``, ``HAS_EXPANDED_WEIGHTS_CONV_PICKER``) and is
 visible through the doctor/compat capability snapshot.
 """
@@ -77,7 +77,7 @@ from typing import Any
 import torch
 
 from ... import _state
-from ...utils import _torch_compat
+from ..._utils import _torch_compat
 
 __all__ = [
     "identity_shims_installed",

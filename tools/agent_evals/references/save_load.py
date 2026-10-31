@@ -1,8 +1,8 @@
 """Reference solution: save and load.
 
-Docs used: docs/for-ai-agents.md (The agent surface: tl.save(trace, path) then point the tools at
+Docs used: docs/for-ai-agents.md (The agent surface: trace.save(path) then point the tools at
 the artifact), docs/reference/error_refusal_contract.md (agent_artifact_unreadable remedy names
-tl.save(trace, path)), docs/reference/glossary.md (trace.ops counting: trace.num_ops).
+trace.save(path)), docs/reference/glossary.md (trace.ops counting: trace.num_ops).
 """
 
 import json
@@ -12,7 +12,7 @@ from model import build_model, make_input
 import torchlens as tl
 
 trace = tl.trace(build_model(), make_input(), save="all")
-tl.save(trace, "run.tlspec")
+trace.save("run.tlspec")
 loaded = tl.load("run.tlspec")
 first_relu = loaded.find_sites(tl.func("relu")).first()
 

@@ -12,18 +12,18 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import user_funcs
-from torchlens.options import CaptureOptions, SaveOptions, StreamingOptions, VisualizationOptions
+from torchlens.options import CaptureOptions, SaveOptions, StorageOptions, VisualizationOptions
 
 _VISUALIZATION_CASES = [
     ("view", "vis_mode", "rolled", "vis_mode"),
     ("depth", "vis_call_depth", 5, "vis_call_depth"),
-    ("container_path", "vis_outpath", "custom.gv", "vis_outpath"),
+    ("container_path", "vis_outpath", "custom.gv", "path"),
     ("save_only", "vis_save_only", True, "vis_save_only"),
-    ("file_format", "vis_fileformat", "svg", "vis_fileformat"),
+    ("file_format", "vis_fileformat", "svg", "file_format"),
     # Canonical tri-state value on purpose: the legacy bools are themselves a
     # deprecated VALUE now (grind b4, R48-1), and these two cases assert the
     # routing of the NAME, so a bool here would smuggle a second warning in.
-    ("show_buffers", "vis_buffers", "always", "show_buffer_layers"),
+    ("show_buffers", "vis_buffers", "always", "show_buffers"),
     ("direction", "vis_direction", "leftright", "direction"),
     ("graph_overrides", "vis_graph_overrides", {"ranksep": "2.0"}, "vis_graph_overrides"),
     ("edge_overrides", "vis_edge_overrides", {"color": "red"}, "vis_edge_overrides"),
@@ -36,13 +36,13 @@ _VISUALIZATION_CASES = [
     ("module_overrides", "vis_module_overrides", {"color": "blue"}, "vis_module_overrides"),
     ("layout", "vis_node_placement", "dot", "vis_node_placement"),
     ("renderer", "vis_renderer", "dagua", "vis_renderer"),
-    ("theme", "vis_theme", "gallery", "vis_theme"),
+    ("theme", "vis_theme", "gallery", "theme"),
     ("node_style", "vis_node_mode", "profiling", "node_mode"),
 ]
 _STREAMING_CASES = [
     ("bundle_path", "save_outs_to", Path("bundle"), "save_outs_to"),
     ("retain_in_memory", "keep_outs_in_memory", False, "keep_outs_in_memory"),
-    ("out_callback", "out_sink", torch.sigmoid, "out_sink"),
+    ("on_save", "out_sink", torch.sigmoid, "out_sink"),
 ]
 
 
@@ -78,7 +78,7 @@ class _DummyLog:
         self,
         vis_mode: str = "unrolled",
         vis_call_depth: int = 1000,
-        vis_outpath: str = "modelgraph",
+        path: str = "modelgraph",
         vis_graph_overrides: dict[str, Any] | None = None,
         node_mode: str = "default",
         node_spec_fn: Any = None,
@@ -90,12 +90,12 @@ class _DummyLog:
         vis_grad_edge_overrides: dict[str, Any] | None = None,
         vis_module_overrides: dict[str, Any] | None = None,
         vis_save_only: bool = False,
-        vis_fileformat: str = "pdf",
-        show_buffer_layers: bool = False,
+        file_format: str = "pdf",
+        show_buffers: bool = False,
         direction: str = "bottomup",
         vis_node_placement: str = "auto",
         vis_renderer: str = "graphviz",
-        vis_theme: str = "torchlens",
+        theme: str = "torchlens",
         vis_intervention_mode: str = "node_mark",
         vis_show_cone: bool = False,
     ) -> str:
@@ -105,7 +105,7 @@ class _DummyLog:
             {
                 "vis_mode": vis_mode,
                 "vis_call_depth": vis_call_depth,
-                "vis_outpath": vis_outpath,
+                "path": path,
                 "vis_graph_overrides": vis_graph_overrides,
                 "node_mode": node_mode,
                 "node_spec_fn": node_spec_fn,
@@ -116,12 +116,12 @@ class _DummyLog:
                 "vis_grad_edge_overrides": vis_grad_edge_overrides,
                 "vis_module_overrides": vis_module_overrides,
                 "vis_save_only": vis_save_only,
-                "vis_fileformat": vis_fileformat,
-                "show_buffer_layers": show_buffer_layers,
+                "file_format": file_format,
+                "show_buffers": show_buffers,
                 "direction": direction,
                 "vis_node_placement": vis_node_placement,
                 "vis_renderer": vis_renderer,
-                "vis_theme": vis_theme,
+                "theme": theme,
                 "vis_intervention_mode": vis_intervention_mode,
                 "vis_show_cone": vis_show_cone,
             }
@@ -175,27 +175,6 @@ def test_get_model_activations_is_not_advertised_as_a_legacy_api() -> None:
 
     with pytest.raises(AttributeError, match="get_model_activations"):
         getattr(tl, "get_model_activations")
-
-
-def test_log_model_metadata_new_name_has_no_warning(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The namespaced metadata helper should not emit deprecation warnings."""
-
-    sentinel = object()
-
-    def fake_trace(*args: Any, **kwargs: Any) -> object:
-        """Return a stable sentinel without running real logging."""
-
-        del args, kwargs
-        return sentinel
-
-    monkeypatch.setattr(user_funcs, "trace", fake_trace)
-
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
-        result = tl.io.log_model_metadata(_TinyModel(), _tiny_input())
-
-    assert result is sentinel
-    assert _deprecation_messages(records) == []
 
 
 def test_save_options_activation_transform_alias_warns() -> None:
@@ -318,7 +297,7 @@ def test_streaming_options_group_supports_every_field(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
-            streaming=StreamingOptions(**option_kwargs),
+            streaming=StorageOptions(**option_kwargs),
         )
 
     assert captured[captured_key] == value

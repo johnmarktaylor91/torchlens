@@ -17,7 +17,8 @@ import pytest
 import torch
 
 import torchlens as tl
-import torchlens.tviz as tviz
+import torchlens.errors
+import torchlens.transformer as tviz
 
 transformers = pytest.importorskip("transformers")
 
@@ -53,7 +54,7 @@ def gpt2_logs(gpt2_pair):
     tokenizer, eager, sdpa = gpt2_pair
     input_ids = tokenizer(PROMPT, return_tensors="pt").input_ids
     log_eager = tl.trace(eager, input_ids)
-    log_sdpa = tl.trace(sdpa, input_ids, capture=tl.options.CaptureOptions(save_arg_values=True))
+    log_sdpa = tl.trace(sdpa, input_ids, capture=tl.options.CaptureOptions(save_args=True))
     try:
         yield tokenizer, input_ids, log_eager, log_sdpa
     finally:
@@ -78,7 +79,7 @@ def test_gpt2_eager_observed_pattern(gpt2_logs, tmp_path) -> None:
     assert view.mask.source == "eager_additive_mask"
     causal = torch.triu(torch.ones(len(tokens), len(tokens), dtype=torch.bool), diagonal=1)
     assert torch.equal(view.mask.mask, causal)
-    artifact = tviz.render_attention(view, tmp_path / "gpt2-l0.svg")
+    artifact = tl.viz.attention(view, tmp_path / "gpt2-l0.svg")
     assert "<image" not in artifact.paths[0].read_text()
 
 
@@ -131,7 +132,7 @@ def test_gpt2_lens_pictures_and_decomposition(gpt2_logs, tmp_path) -> None:
 
     paris = tokenizer(" Paris").input_ids[0]
     predictions = logit_lens_predictions(log_eager, tokens=[paris])
-    assert predictions.validated
+    assert predictions.is_validated
     trajectory = tviz.prediction_trajectory(predictions, tokenizer=tokenizer, target_token_id=paris)
     assert trajectory.provenance[-1] == "native output"
     assert all(p == "projected through final norm/head" for p in trajectory.provenance[:-1])
@@ -178,7 +179,7 @@ def test_bert_padded_batch_parity(tmp_path) -> None:
     assert padded_view.mask is not None
     assert bool(padded_view.mask.mask[:, n_real:].all())
     assert not bool(padded_view.mask.mask[:, :n_real].any())
-    artifact = tviz.render_attention(padded_view, tmp_path / "bert-padded.svg", heads=(0,))
+    artifact = tl.viz.attention(padded_view, tmp_path / "bert-padded.svg", heads=(0,))
     assert any("mask source" in line for line in artifact.disclosure_lines)
 
 
@@ -207,10 +208,10 @@ def test_t5_rectangular_cross_attention(tmp_path) -> None:
     assert view.pattern.shape[1] == decoder_ids.shape[1]
     assert view.pattern.shape[2] == encoder_ids.shape[1]
     assert view.pattern.shape[1] != view.pattern.shape[2]
-    artifact = tviz.render_attention(view, tmp_path / "t5-cross.pdf", heads=(0, 1))
+    artifact = tl.viz.attention(view, tmp_path / "t5-cross.pdf", heads=(0, 1))
     assert any("rows attend from" in line for line in artifact.disclosure_lines)
     # Self-attention token spelling on a rectangular view refuses.
-    with pytest.raises(tviz.TvizError):
+    with pytest.raises(torchlens.errors.RenderError):
         tviz.attention_view(
             log,
             "decoder.block.0.layer.1.EncDecAttention",
@@ -281,9 +282,9 @@ def test_qwen_gqa_disclosure(tmp_path) -> None:
         == model.model.layers[0].self_attn.v_proj.out_features
     )
     assert view.gqa is not None
-    assert view.gqa.n_query_heads == config.num_attention_heads
+    assert view.gqa.num_query_heads == config.num_attention_heads
     assert view.gqa.n_kv_heads == config.num_key_value_heads
     header = view.gqa.header(0)
     assert "kv group 1 of" in header and "shared by query heads" in header
-    artifact = tviz.render_attention(view, tmp_path / "qwen-l0.png", heads=(0,))
+    artifact = tl.viz.attention(view, tmp_path / "qwen-l0.png", heads=(0,))
     assert any("grouped-query attention" in line for line in artifact.disclosure_lines)

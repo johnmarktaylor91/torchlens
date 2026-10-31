@@ -17,8 +17,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.notebook._grid import array_grid_html
-from torchlens.notebook.cardtree import (
+from torchlens._notebook._grid import array_grid_html
+from torchlens._notebook.cardtree import (
     _CARD_HOVER_SCRIPT,
     Card,
     CardHtml,

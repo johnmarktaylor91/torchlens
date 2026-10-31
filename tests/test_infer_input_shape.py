@@ -1,4 +1,4 @@
-"""Tests for ``tl.debug.infer_input_shape``."""
+"""Tests for ``tl.debug.guess_input_shape``."""
 
 from __future__ import annotations
 
@@ -494,7 +494,7 @@ class NeedsMask(nn.Module):
         return self.fc(x * mask)
 
 
-def _assert_result_runs(model: nn.Module, result: tl.debug.InferInputShapeResult) -> None:
+def _assert_result_runs(model: nn.Module, result: tl.debug.GuessInputShapeReport) -> None:
     """Assert a successful inference result runs through the model."""
 
     assert result.found
@@ -507,7 +507,7 @@ def _assert_result_runs(model: nn.Module, result: tl.debug.InferInputShapeResult
 def test_infer_mlp_static_shape() -> None:
     """Infer a no-probe MLP input shape."""
 
-    result = tl.debug.infer_input_shape(TinyMlp())
+    result = tl.debug.guess_input_shape(TinyMlp())
     assert result.found
     assert result.shape == (1, 20)
     assert result.dtype == torch.float32
@@ -517,7 +517,7 @@ def test_infer_mlp_static_shape() -> None:
 def test_infer_conv_flatten_linear_exact_shape() -> None:
     """Infer the LeNet-style conv-to-linear exact spatial side."""
 
-    result = tl.debug.infer_input_shape(LeNetish())
+    result = tl.debug.guess_input_shape(LeNetish())
     assert result.found
     assert result.shape == (1, 3, 32, 32)
 
@@ -525,7 +525,7 @@ def test_infer_conv_flatten_linear_exact_shape() -> None:
 def test_infer_grayscale_exact_shape_with_channel_hint() -> None:
     """Infer a grayscale exact side with an explicit channel hint."""
 
-    result = tl.debug.infer_input_shape(LeNetish(channels=1, side_features=4), channels=1)
+    result = tl.debug.guess_input_shape(LeNetish(channels=1, side_features=4), channels=1)
     assert result.found
     assert result.shape == (1, 1, 28, 28)
 
@@ -533,7 +533,7 @@ def test_infer_grayscale_exact_shape_with_channel_hint() -> None:
 def test_infer_adaptive_pool_marks_flexible_dims() -> None:
     """Use a sane default and mark adaptive-pool spatial dimensions flexible."""
 
-    result = tl.debug.infer_input_shape(AdaptiveCnn())
+    result = tl.debug.guess_input_shape(AdaptiveCnn())
     assert result.found
     assert result.shape is not None
     assert result.shape[:2] == (1, 3)
@@ -544,7 +544,7 @@ def test_infer_adaptive_pool_marks_flexible_dims() -> None:
 def test_infer_vit_patch_grid_from_position_embedding() -> None:
     """Infer a ViT-style 32x32 image side from patch stride and pos_embed length."""
 
-    result = tl.debug.infer_input_shape(MiniVit())
+    result = tl.debug.guess_input_shape(MiniVit())
     assert result.found
     assert result.shape == (1, 3, 32, 32)
 
@@ -552,7 +552,7 @@ def test_infer_vit_patch_grid_from_position_embedding() -> None:
 def test_infer_transformer_lm_tokens() -> None:
     """Infer integer token inputs within embedding range."""
 
-    result = tl.debug.infer_input_shape(TinyLm())
+    result = tl.debug.guess_input_shape(TinyLm())
     assert result.found
     assert result.shape is not None
     assert result.shape[0] == 1
@@ -564,8 +564,8 @@ def test_infer_transformer_lm_tokens() -> None:
 def test_infer_rnn_batch_first_and_time_first() -> None:
     """Infer RNN layouts for batch-first and time-first modules."""
 
-    batch_first = tl.debug.infer_input_shape(nn.LSTM(input_size=7, hidden_size=3, batch_first=True))
-    time_first = tl.debug.infer_input_shape(nn.GRU(input_size=5, hidden_size=3, batch_first=False))
+    batch_first = tl.debug.guess_input_shape(nn.LSTM(input_size=7, hidden_size=3, batch_first=True))
+    time_first = tl.debug.guess_input_shape(nn.GRU(input_size=5, hidden_size=3, batch_first=False))
     assert batch_first.found
     assert batch_first.shape == (1, 16, 7)
     assert time_first.found
@@ -587,8 +587,8 @@ def test_infer_conv1d_and_conv3d_adaptive_variants() -> None:
         nn.Flatten(),
         nn.Linear(4, 2),
     )
-    audio_result = tl.debug.infer_input_shape(audio)
-    video_result = tl.debug.infer_input_shape(video)
+    audio_result = tl.debug.guess_input_shape(audio)
+    video_result = tl.debug.guess_input_shape(video)
     assert audio_result.found
     assert audio_result.shape is not None
     assert audio_result.shape[:2] == (1, 2)
@@ -602,7 +602,7 @@ def test_infer_conv1d_and_conv3d_adaptive_variants() -> None:
 def test_infer_functional_linear_after_functional_flatten() -> None:
     """Handle functional flatten followed by functional linear."""
 
-    result = tl.debug.infer_input_shape(FunctionalLinearCnn())
+    result = tl.debug.guess_input_shape(FunctionalLinearCnn())
     assert result.found
     assert result.shape == (1, 3, 32, 32)
 
@@ -610,7 +610,7 @@ def test_infer_functional_linear_after_functional_flatten() -> None:
 def test_non_shape_blocker_returns_diagnostic() -> None:
     """Return instead of hanging when a missing kwarg blocks the forward."""
 
-    result = tl.debug.infer_input_shape(NeedsMask())
+    result = tl.debug.guess_input_shape(NeedsMask())
     assert not result.found
     assert result.reason == "non_shape_blocker"
     assert "mask" in result.message
@@ -619,7 +619,7 @@ def test_non_shape_blocker_returns_diagnostic() -> None:
 def test_embedding_wrong_dtype_self_corrects() -> None:
     """Correct an explicitly wrong embedding dtype to integer tokens."""
 
-    result = tl.debug.infer_input_shape(TinyLm(), input_dtype=torch.float32)
+    result = tl.debug.guess_input_shape(TinyLm(), input_dtype=torch.float32)
     assert result.found
     assert result.dtype == torch.long
     assert any("Long" in outcome or "Int" in outcome for _shape, outcome in result.attempts)
@@ -628,8 +628,8 @@ def test_embedding_wrong_dtype_self_corrects() -> None:
 def test_functional_only_mlp_and_matmul_models() -> None:
     """Infer functional-only 2D models from raw parameter and op metadata."""
 
-    mlp_result = tl.debug.infer_input_shape(FuncMlp())
-    matmul_result = tl.debug.infer_input_shape(FuncMatmulMlp())
+    mlp_result = tl.debug.guess_input_shape(FuncMlp())
+    matmul_result = tl.debug.guess_input_shape(FuncMatmulMlp())
     assert mlp_result.shape == (1, 20)
     assert matmul_result.shape == (1, 20)
     _assert_result_runs(FuncMlp(), mlp_result)
@@ -641,8 +641,8 @@ def test_functional_only_conv_linear_and_matmul_models() -> None:
 
     linear_model = FuncConvFlattenLinear()
     matmul_model = FunctionalOnlyRawConvMatmul()
-    linear_result = tl.debug.infer_input_shape(linear_model)
-    matmul_result = tl.debug.infer_input_shape(matmul_model)
+    linear_result = tl.debug.guess_input_shape(linear_model)
+    matmul_result = tl.debug.guess_input_shape(matmul_model)
     assert linear_result.shape == (1, 3, 32, 32)
     assert matmul_result.shape == (1, 3, 32, 32)
     _assert_result_runs(linear_model, linear_result)
@@ -653,7 +653,7 @@ def test_functional_embedding_uses_integer_tokens() -> None:
     """Infer functional embedding inputs as long token IDs."""
 
     model = FuncEmbedding()
-    result = tl.debug.infer_input_shape(model)
+    result = tl.debug.guess_input_shape(model)
     assert result.found
     assert result.shape == (1, 10)
     assert result.dtype == torch.long
@@ -669,10 +669,10 @@ def test_decoys_do_not_determine_input_shape() -> None:
     order_model = DefinitionOrderWrongConv()
     pool_model = DecoyAdaptivePoolUnused()
 
-    linear_result = tl.debug.infer_input_shape(linear_model)
-    conv_result = tl.debug.infer_input_shape(conv_model)
-    order_result = tl.debug.infer_input_shape(order_model)
-    pool_result = tl.debug.infer_input_shape(pool_model)
+    linear_result = tl.debug.guess_input_shape(linear_model)
+    conv_result = tl.debug.guess_input_shape(conv_model)
+    order_result = tl.debug.guess_input_shape(order_model)
+    pool_result = tl.debug.guess_input_shape(pool_model)
 
     assert linear_result.shape == (1, 20)
     assert conv_result.shape == (1, 3, 32, 32)
@@ -691,8 +691,8 @@ def test_conv_exact_side_outside_preferred_sizes() -> None:
 
     side_77 = ConvExactSide(77)
     side_150 = ConvExactSide(150)
-    result_77 = tl.debug.infer_input_shape(side_77)
-    result_150 = tl.debug.infer_input_shape(side_150)
+    result_77 = tl.debug.guess_input_shape(side_77)
+    result_150 = tl.debug.guess_input_shape(side_150)
     assert result_77.shape == (1, 3, 77, 77)
     assert result_150.shape == (1, 3, 150, 150)
     _assert_result_runs(side_77, result_77)
@@ -704,8 +704,8 @@ def test_no_linear_and_groupnorm_channel_cases() -> None:
 
     view_model = ConvViewExactNoLinear()
     norm_model = GroupNormChannelLock()
-    view_result = tl.debug.infer_input_shape(view_model)
-    norm_result = tl.debug.infer_input_shape(norm_model)
+    view_result = tl.debug.guess_input_shape(view_model)
+    norm_result = tl.debug.guess_input_shape(norm_model)
     assert view_result.shape == (1, 3, 32, 32)
     assert norm_result.shape == (1, 6, 32, 32)
     _assert_result_runs(view_model, view_result)
@@ -717,8 +717,8 @@ def test_bool_and_complex_dtype_corrections() -> None:
 
     bool_model = BoolMaskPrimary()
     complex_model = ComplexLinear()
-    bool_result = tl.debug.infer_input_shape(bool_model)
-    complex_result = tl.debug.infer_input_shape(complex_model)
+    bool_result = tl.debug.guess_input_shape(bool_model)
+    complex_result = tl.debug.guess_input_shape(complex_model)
     assert bool_result.shape == (1, 4)
     assert bool_result.dtype == torch.bool
     assert complex_result.shape == (1, 4)
@@ -732,8 +732,8 @@ def test_vit_nonstandard_position_tables() -> None:
 
     odd_model = VitOddPosName()
     two_token_model = VitTwoSpecialTokens()
-    odd_result = tl.debug.infer_input_shape(odd_model)
-    two_token_result = tl.debug.infer_input_shape(two_token_model)
+    odd_result = tl.debug.guess_input_shape(odd_model)
+    two_token_result = tl.debug.guess_input_shape(two_token_model)
     assert odd_result.shape == (1, 3, 32, 32)
     assert two_token_result.shape == (1, 3, 32, 32)
     _assert_result_runs(odd_model, odd_result)
@@ -744,12 +744,12 @@ def test_genuine_limits_return_clean_failures() -> None:
     """Return structured failures for documented unsupported signatures."""
 
     for model in (MultiInputAdd(), DictInputMask(), GnnStyle(), NeedsKwarg()):
-        result = tl.debug.infer_input_shape(model)
+        result = tl.debug.guess_input_shape(model)
         assert not result.found
         assert result.reason == "non_shape_blocker"
         assert result.message
 
-    rectangular = tl.debug.infer_input_shape(NonSquareExact())
+    rectangular = tl.debug.guess_input_shape(NonSquareExact())
     assert not rectangular.found
     assert rectangular.reason == "exact_size_unreachable"
     assert "aspect" in rectangular.message

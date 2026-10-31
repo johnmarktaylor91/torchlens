@@ -51,8 +51,7 @@ def test_gpt2_executable_level_respects_explicit_opt_out(tmp_path, gpt2_and_inpu
     model, input_ids = gpt2_and_inputs
     trace = tl.trace(model, [], {"input_ids": input_ids})
     with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.save(
-            trace,
+        trace.save(
             tmp_path / "bundle",
             level="executable_with_callables",
             include_saved_args=False,
@@ -74,7 +73,7 @@ def test_bert_structure_only_save_round_trips(tmp_path):
         capture=CaptureOptions(structure_only=True),
     )
     path = tmp_path / "bert_structure.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     assert list((path / "blobs").iterdir()) == []
     loaded = tl.load(path)
     assert loaded.structure_only is True

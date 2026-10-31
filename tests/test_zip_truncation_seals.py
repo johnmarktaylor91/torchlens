@@ -16,7 +16,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.bundle._deltas import _output_layer_pairs
 from torchlens.errors import BundleMemberError
-from torchlens.intervention.errors import BundleRelationshipError
+from torchlens.intervention.errors import BundleComparisonError
 
 
 class _OneOutputModel(nn.Module):
@@ -50,11 +50,11 @@ def test_bundle_output_delta_refuses_output_arity_mismatch() -> None:
     x = torch.randn(2, 3)
     two = tl.trace(_TwoOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
     one = tl.trace(_OneOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    bundle = tl.bundle({"baseline": two, "lost_output": one}, baseline="baseline")
+    bundle = tl.Bundle({"baseline": two, "lost_output": one}, baseline="baseline")
 
     # The comparison gate now refuses the pair first (the two graphs are not
     # one model's); the arity guard below it stays the second line of defence.
-    with pytest.raises(BundleRelationshipError) as excinfo:
+    with pytest.raises(BundleComparisonError) as excinfo:
         bundle.output_delta("baseline")
     assert excinfo.value.fields["code"] == "bundle_gate_model_axis_unmet"
     with pytest.raises(BundleMemberError, match="structurally divergent"):
@@ -72,7 +72,7 @@ def test_bundle_output_delta_still_works_on_matching_arity() -> None:
     second = tl.trace(
         _TwoOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
     )
-    bundle = tl.bundle({"baseline": first, "other": second}, baseline="baseline")
+    bundle = tl.Bundle({"baseline": first, "other": second}, baseline="baseline")
 
     delta = bundle.output_delta("baseline")
     assert set(delta) == {"baseline", "other"}
@@ -87,7 +87,7 @@ def test_fast_run_refuses_slot_label_parity_tamper(tmp_path) -> None:
     x = torch.randn(2, 3)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
     bundle = tmp_path / "runnable.tlspec"
-    tl.save(trace, str(bundle), level="runnable", include_weights=True)
+    trace.save(str(bundle), level="runnable", include_weights=True)
     loaded = tl.load(str(bundle))
 
     loaded.run(inputs=x, fast=True)  # first fast run = ordinary verified run

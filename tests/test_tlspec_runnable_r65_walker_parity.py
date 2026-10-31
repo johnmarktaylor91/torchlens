@@ -48,6 +48,10 @@ from torchlens._io.runnable import (
     EMPTY_CONTAINER_PATH_MARKER,
     _UnsupportedLiteralError,
 )
+from torchlens._runnable import (
+    NumericAttestationStatus,
+    PathFaithfulness,
+)
 from torchlens._runnable_execution import (
     _container_kind,
     _container_leaf_paths,
@@ -63,11 +67,6 @@ from torchlens.capture.trace import (
 )
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import (
-    DivergencePolicy,
-    NumericAttestationStatus,
-    PathFaithfulness,
-)
 
 # ======================================================================================
 # Shared fixtures: probe containers spanning the closed container-kind vocabulary
@@ -206,7 +205,7 @@ class _RegisteredProbe:
         self.t = t
 
 
-from torchlens.ir.container import register_container as _register_container  # noqa: E402
+from torchlens._ir.container import register_container as _register_container  # noqa: E402
 
 _register_container(
     _RegisteredProbe,
@@ -440,12 +439,10 @@ def test_r64_dataclass_metadata_read_witnessed_and_layout_twin_diverges(
     twin = _layout_twin(x)
     with pytest.raises(PathDivergenceError):
         tl.load(path).run(inputs=_LayoutBox(twin))
-    diverged = tl.load(path).run(
-        inputs=_LayoutBox(twin), on_divergence=DivergencePolicy.RETURN_DIVERGED
-    )
+    diverged = tl.load(path).run(inputs=_LayoutBox(twin), on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert diverged.report.poisoned
+    assert diverged.report.is_poisoned
     # A fresh model on the twin takes the OTHER arm; the replayed arm is wrong.
     fresh = _DataclassLayoutBranch()(_LayoutBox(twin))
     assert torch.equal(fresh, twin - 10)

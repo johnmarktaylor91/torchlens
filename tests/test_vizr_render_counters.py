@@ -95,7 +95,7 @@ def test_dot_line_scanner_visits_only_state_characters(monkeypatch: Any, tmp_pat
     monkeypatch.setattr(_render_ordering, "_DOT_LINE_SPECIAL", counter)
     trace = tl.trace(_Branchy(), torch.randn(2, 4))
     try:
-        trace.draw(vis_outpath=str(tmp_path / "branchy"), vis_save_only=True, vis_fileformat="svg")
+        trace.draw(path=str(tmp_path / "branchy"), vis_save_only=True, file_format="svg")
     finally:
         trace.cleanup()
     assert counter.scanned_chars > 0, "the sibling-order verifier did not scan the DOT"
@@ -122,9 +122,7 @@ def test_default_draw_reuses_the_verified_layout(monkeypatch: Any, tmp_path: Any
     calls = _count_graphviz_runs(monkeypatch)
     trace = tl.trace(_Branchy(), torch.randn(2, 4))
     try:
-        dot = trace.draw(
-            vis_outpath=str(tmp_path / "reuse"), vis_save_only=True, vis_fileformat="svg"
-        )
+        dot = trace.draw(path=str(tmp_path / "reuse"), vis_save_only=True, file_format="svg")
         decision = trace._last_sibling_ordering_decision
     finally:
         trace.cleanup()
@@ -141,9 +139,7 @@ def test_reused_artifact_equals_a_fresh_render(monkeypatch: Any, tmp_path: Any) 
     """The reused artifact is byte-identical to rendering the final DOT afresh."""
     trace = tl.trace(_Branchy(), torch.randn(2, 4))
     try:
-        dot = trace.draw(
-            vis_outpath=str(tmp_path / "reuse"), vis_save_only=True, vis_fileformat="svg"
-        )
+        dot = trace.draw(path=str(tmp_path / "reuse"), vis_save_only=True, file_format="svg")
     finally:
         trace.cleanup()
     (tmp_path / "final.dot").write_text(dot, encoding="utf-8")

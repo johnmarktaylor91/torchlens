@@ -30,7 +30,7 @@ import torchlens as tl  # noqa: E402 - path bootstrap above, examples idiom
 OUT_DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/tmp/treescope_cards_gallery")
 
 #: Byte-stable reports for the gallery (regeneration-friendly).
-_DETERMINISTIC = tl.export.ReportOptions(deterministic=True)
+_DETERMINISTIC = tl.options.HtmlReportOptions(deterministic=True)
 
 
 class _Recurrent(nn.Module):
@@ -100,14 +100,14 @@ def _config_built_entries(entries: list[tuple[str, str]]) -> None:
     tl.export.html(
         dirty,
         OUT_DIR / "report_share_safe.html",
-        options=tl.export.ReportOptions(share_safe=True, deterministic=True),
+        options=tl.options.HtmlReportOptions(share_safe=True, deterministic=True),
     )
     entries.append(("report_share_safe.html", "report_share_safe.html"))
 
     try:
         tl.trace(_MidwayFailure(), torch.randn(2, 8))
     except Exception as error:  # noqa: BLE001 - the failure IS the fixture
-        partial = tl.partial.from_failed_capture(error)
+        partial = tl._partial.from_failed_capture(error)
         if partial is not None:
             _write("partial_card.html", partial._repr_html_(), entries)
             tl.export.html(partial, OUT_DIR / "report_partial.html", options=_DETERMINISTIC)

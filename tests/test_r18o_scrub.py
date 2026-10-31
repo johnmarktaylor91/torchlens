@@ -9,7 +9,7 @@ Before the fix, a tensor embedded in a mapping KEY was copied verbatim into
   empty yet whose metadata carries a raw tensor payload (silent inventory
   contradiction); and
 * a policy-rejected tensor key (e.g. sparse-COO) -> a bundle that
-  ``validate_tlspec`` accepts but ``tl.load`` refuses (``TorchLensIOError``),
+  ``validate_tlspec`` accepts but ``tl.load`` refuses (``ArtifactError``),
   i.e. validate and load DISAGREE.
 
 The producer-side fix refuses tensor-payload keys at save so that
@@ -27,7 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
 from torchlens.validation import validate_tlspec
 
 
@@ -69,7 +69,7 @@ def test_tensor_payload_key_refused_at_save(tmp_path: Path, key) -> None:
 
     trace = _trace_with_custom_attrs({key: "key-payload"})
     path = tmp_path / "payload_key.tlspec"
-    with pytest.raises(TorchLensIOError, match="as .or inside. a key"):
+    with pytest.raises(ArtifactError, match="as .or inside. a key"):
         _save(trace, path)
     # The asymmetric artifact must never be produced: nothing to validate/load.
     assert not path.exists()

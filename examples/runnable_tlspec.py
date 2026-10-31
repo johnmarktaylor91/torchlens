@@ -48,8 +48,7 @@ def main() -> None:
     )
     with tempfile.TemporaryDirectory() as directory:
         artifact = Path(directory) / "classifier.tlspec"
-        tl.save(
-            trace,
+        trace.save(
             artifact,
             level="runnable",
             include_weights=True,

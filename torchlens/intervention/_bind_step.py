@@ -5,7 +5,7 @@ model's forward once per generation step, so the 0-based root-forward index of
 the armed call is its decode step (step 0 is the prefill forward, the same
 convention as an episode capture's ledger rows). The binding publishes its
 session here while armed so the selector evaluator can answer
-``tl.intervention.at_step(...)`` capture-free; outside an armed binding (and
+``tl.at_step(...)`` capture-free; outside an armed binding (and
 outside an episode capture) a step qualifier still refuses typed.
 """
 

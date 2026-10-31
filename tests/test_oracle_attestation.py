@@ -62,7 +62,6 @@ _CANONICAL_GOLDENS: dict[str, tuple[Path, ...]] = {
     "godobject_legacy": (
         _TESTS_DIR / "godobject_oracle" / "goldens" / "legacy_baseline_cnn.tlspec",
         _TESTS_DIR / "godobject_oracle" / "goldens" / "legacy_baseline_cnn_runnable.tlspec",
-        _TESTS_DIR / "godobject_oracle" / "goldens" / "legacy_baseline_cnn_loaded.json",
     ),
     "state_keysets": (_TESTS_DIR / "godobject_oracle" / "goldens" / "state_keysets.json",),
     "selector_matrix": (_TESTS_DIR / "golden" / "selector_semantics_matrix.json",),

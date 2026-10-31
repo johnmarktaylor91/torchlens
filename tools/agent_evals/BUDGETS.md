@@ -14,7 +14,7 @@ For each entry it builds the model and input with the corpus loader, captures wi
   response size in estimated tokens (the surface's own estimator, characters / 4, rounded up):
   `torchlens_overview` (folded and manifest), `torchlens_dump` (`overview`, `graph`, `full`),
   `torchlens_query_sites` (no query: every site), `torchlens_payload_stats` (every saved site);
-- records the plain `tl.report.explain(trace)` size with no token budget;
+- records the plain `trace.explain()` size with no token budget;
 - for the row tools, records the rows returned at the row cap, the uncapped row total, and the
   mean and largest per-row token cost;
 - reads the manifest's declared payload bytes: the largest single payload and the artifact total;

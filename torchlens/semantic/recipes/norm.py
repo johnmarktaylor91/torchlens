@@ -61,7 +61,7 @@ def _inv_rms_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
         return needs_capture(
             f"norm scale op {ops[0].label!r} was not saved", f"save=... including {ops[0].label!r}"
         )
-    return FacetSpec.from_home(ops[0], home_kind="op", recipe_id=recipe_id)
+    return FacetSpec.from_home(ops[0], home_kind="op", function_id=recipe_id)
 
 
 @register(class_name="Gemma2RMSNorm", target_scope="module", facets=("inv_rms",))

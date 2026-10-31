@@ -339,8 +339,8 @@ def weightsfree_forward_scope(trace: Any) -> Iterator[None]:
         return
     import torch as _torch
 
+    from .._utils._torch_compat import warm_lazy_torch_imports
     from ..backends.torch._weightsfree_ctx import factory_device_scope
-    from ..utils._torch_compat import warm_lazy_torch_imports
 
     register_admission(trace, record)
     _META_ACTIVE.add(trace)
@@ -442,11 +442,11 @@ def _absorbed_ambient_device_context() -> Iterator[None]:
     remedy (SOL's fallback rule).
     """
 
-    from ..backends.torch.wrappers import _get_active_device
-    from ..utils._torch_compat import (
+    from .._utils._torch_compat import (
         get_device_context_type,
         get_torch_function_stack_surgery,
     )
+    from ..backends.torch.wrappers import _get_active_device
 
     if _get_active_device() is None:
         yield

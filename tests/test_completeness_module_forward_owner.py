@@ -126,7 +126,7 @@ def _validate(model: nn.Module) -> bool:
     torch.manual_seed(0)
     with pytest.warns(RuntimeWarning, match=_COPY_FALLBACK_DISCLOSURE):
         return _validate_forward_pass_torch(
-            model, [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
+            model, [torch.randn(1, 4, 8)], {}, seed=0, validate_metadata=True
         )
 
 
@@ -155,7 +155,7 @@ def test_equal_allclose_control_flow_still_validates(model_cls: type[nn.Module])
 
     torch.manual_seed(0)
     passed = _validate_forward_pass_torch(
-        model_cls(), [torch.randn(1, 4, 8)], {}, random_seed=0, validate_metadata=True
+        model_cls(), [torch.randn(1, 4, 8)], {}, seed=0, validate_metadata=True
     )
     assert passed, tl.validation.last_validation_failure()
 

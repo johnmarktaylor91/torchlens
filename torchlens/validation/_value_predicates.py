@@ -13,8 +13,8 @@ from typing import Any
 
 import torch
 
-from ..data_classes.op import Op
-from ..utils.tensor_utils import tensor_all_nan
+from .._data_classes.op import Op
+from .._utils.tensor_utils import tensor_all_nan
 
 
 def _tensor_or_number_is_constant(value: Any) -> bool:

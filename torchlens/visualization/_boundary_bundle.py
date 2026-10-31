@@ -24,7 +24,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: Fewest like leaves that form a bundle (memo D3).
 MIN_BUNDLE_LEAVES = 3
@@ -111,7 +111,7 @@ def bundle_groups(trace: Trace, context: Any) -> dict[str, tuple[BundleGroup, ..
     outputs = tuple(getattr(trace, "output_layers", ()) or ())
     if len(outputs) < MIN_BUNDLE_LEAVES or not bundles_enabled(context):
         return {}
-    from ..ir.container import TupleIndex
+    from .._ir.container import TupleIndex
     from ._render_leaf import _container_component_role
 
     grouped: dict[tuple[Any, ...], list[str]] = defaultdict(list)

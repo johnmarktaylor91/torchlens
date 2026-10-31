@@ -22,7 +22,7 @@ the `BackendSpec` in `../default_specs.py` is the only capability truth.
 ## jaxpr.py
 - Closed-jaxpr derivation and interpretation. `SAFE_JIT_NAMES` allowlists
   inlineable jit sub-jaxprs. The DEFAULT control-flow mode is `"unroll"`:
-  `cond`/`scan`/`while_loop` (and forward `custom_vjp_call` regions) are
+  `cond`/`model_id`/`while_loop` (and forward `custom_vjp_call` regions) are
   CAPTURED by mode-gated handlers that run before the refusal backstop —
   only `remat2` reaches the raise on the default path (and today as a bare
   `ValueError`, not the `BackendUnsupportedError` the backends contract

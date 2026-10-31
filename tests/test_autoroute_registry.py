@@ -8,7 +8,7 @@ import pytest
 from torch import nn
 
 import torchlens as tl
-from torchlens.autoroute._registry import Registry
+from torchlens._autoroute._registry import Registry
 
 
 class _NoForwardModel(nn.Module):
@@ -62,9 +62,9 @@ def test_registry_mechanics_register_list_iter_unregister() -> None:
 def test_duplicate_name_registration_raises() -> None:
     """Registering an existing built-in name should fail closed."""
 
-    with tl.autoroute.input.snapshot():
+    with tl._autoroute.input.snapshot():
         with pytest.raises(ValueError, match="detector 'hf_text' is already registered"):
-            tl.autoroute.input.register(name="hf_text", priority=10)(_detector_one)
+            tl._autoroute.input.register(name="hf_text", priority=10)(_detector_one)
 
 
 def test_override_pattern_unregister_then_register_replacement() -> None:
@@ -79,9 +79,9 @@ def test_override_pattern_unregister_then_register_replacement() -> None:
         calls.append((model, payload, kwargs))
         return sentinel
 
-    with tl.autoroute.input.snapshot():
-        tl.autoroute.input.unregister("hf_text")
-        tl.autoroute.input.register(name="hf_text", priority=10)(replacement)
+    with tl._autoroute.input.snapshot():
+        tl._autoroute.input.unregister("hf_text")
+        tl._autoroute.input.register(name="hf_text", priority=10)(replacement)
 
         model = _NoForwardModel()
         result = tl.trace(model, "hello", capture=tl.options.CaptureOptions(layers_to_save="none"))
@@ -95,8 +95,8 @@ def test_override_pattern_unregister_then_register_replacement() -> None:
 def test_list_and_list_glob() -> None:
     """Input registry list supports bare and glob-filtered forms."""
 
-    all_names = [detector.name for detector in tl.autoroute.input.list()]
-    hf_names = [detector.name for detector in tl.autoroute.input.list("hf_*")]
+    all_names = [detector.name for detector in tl._autoroute.input.list()]
+    hf_names = [detector.name for detector in tl._autoroute.input.list("hf_*")]
 
     assert {"hf_text", "hf_multimodal", "hf_image"}.issubset(all_names)
     assert hf_names == ["hf_text", "hf_multimodal", "hf_image"]
@@ -105,12 +105,12 @@ def test_list_and_list_glob() -> None:
 def test_info_returns_detector_metadata() -> None:
     """Input registry info returns user-facing diagnostic metadata."""
 
-    info = tl.autoroute.input.info("hf_text")
+    info = tl._autoroute.input.info("hf_text")
 
     assert info["name"] == "hf_text"
     assert info["priority"] == 10
     assert info["kind"] == "input"
-    assert info["func"] in tl.autoroute.input.iter_by_priority()
+    assert info["func"] in tl._autoroute.input.iter_by_priority()
     assert info["qualname"] == "hf_text"
     assert "trace_text" in info["doc"]
 
@@ -119,7 +119,7 @@ def test_info_missing_raises_keyerror() -> None:
     """Missing detector info raises ``KeyError``."""
 
     with pytest.raises(KeyError, match="no detector named 'missing'"):
-        tl.autoroute.input.info("missing")
+        tl._autoroute.input.info("missing")
 
 
 def test_priority_ordering_is_deterministic() -> None:
@@ -154,7 +154,7 @@ def test_priority_ordering_is_deterministic() -> None:
 def test_output_namespace_lists_registered_detectors() -> None:
     """The output auto-route namespace lists registered detectors."""
 
-    detector_names = [detector.name for detector in tl.autoroute.output.list()]
+    detector_names = [detector.name for detector in tl._autoroute.output.list()]
 
     assert "hf_config_classifier" in detector_names
     assert "imagenet_verified" in detector_names

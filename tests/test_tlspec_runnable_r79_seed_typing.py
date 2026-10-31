@@ -17,7 +17,8 @@ BEFORE any provider work. The same canonical guard (``validate_run_seed``) is
 mirrored at the sibling ``manual_seed`` sites (``_seed_run_generators`` in the
 executor and ``_generator_for_slot`` in random-state initialization) so no path
 reaches raw torch. Rejected calls are transactional: global torch RNG is
-bit-identical afterwards and the same loaded trace still verifies.
+bit-identical afterwards and the same loaded trace still verifies. The door table
+also holds the r77 non-int rows (str, float, tuple, object).
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens._runnable_state import (
     TORCH_MANUAL_SEED_MAX,
     TORCH_MANUAL_SEED_MIN,
@@ -36,7 +38,6 @@ from torchlens._runnable_state import (
 )
 from torchlens.errors import RunPreconditionError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -65,8 +66,31 @@ def _saved(tmp_path: Path, x: torch.Tensor) -> Path:
 
 @pytest.mark.parametrize(
     "bad_seed",
-    [True, False, 2**64, -(2**64) - 1, TORCH_MANUAL_SEED_MAX + 1, TORCH_MANUAL_SEED_MIN - 1],
-    ids=["true", "false", "2p64", "neg_2p64_m1", "max_plus_one", "min_minus_one"],
+    [
+        True,
+        False,
+        2**64,
+        -(2**64) - 1,
+        TORCH_MANUAL_SEED_MAX + 1,
+        TORCH_MANUAL_SEED_MIN - 1,
+        # Non-int junk reached torch.manual_seed raw before the door type-checked seed.
+        "x",
+        1.5,
+        (),
+        object(),
+    ],
+    ids=[
+        "true",
+        "false",
+        "2p64",
+        "neg_2p64_m1",
+        "max_plus_one",
+        "min_minus_one",
+        "str",
+        "float",
+        "tuple",
+        "object",
+    ],
 )
 def test_r79_bool_and_out_of_range_seed_refuse_typed(tmp_path: Path, bad_seed: object) -> None:
     """RED-now-fixed: bool / out-of-range ``seed`` raises typed, not raw torch.

@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.op import Op
+from torchlens._data_classes.op import Op
 from torchlens.intervention.resolver import SiteTable
 
 
@@ -112,7 +112,7 @@ def test_stack_sorts_by_recorded_ordinal_even_if_resolver_order_is_adversarial(
         """Return the real selector result in deliberately reversed order."""
 
         resolved = original_find_sites(self, query, **kwargs)
-        return SiteTable(tuple(reversed(tuple(resolved))), query=query)
+        return SiteTable(tuple(reversed(tuple(resolved))), selector=query)
 
     monkeypatch.setattr(type(trace), "find_sites", reversed_find_sites)
     expected_ops = sorted(

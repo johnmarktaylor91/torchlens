@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .._io import TorchLensIOError
+from .._io import ArtifactError
 from .types import Recording
 
 
@@ -22,7 +22,7 @@ def write_pass_index(path: str | Path, recording: Recording) -> None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the index file cannot be written.
     """
 
@@ -46,7 +46,7 @@ def write_label_index(path: str | Path, recording: Recording) -> None:
 
     Raises
     ------
-    TorchLensIOError
+    ArtifactError
         If the index file cannot be written.
     """
 
@@ -78,4 +78,4 @@ def _write_json(path: Path, data: Any) -> None:
             json.dump(data, handle, indent=2, sort_keys=True)
             handle.write("\n")
     except OSError as exc:
-        raise TorchLensIOError(f"Failed to write fastlog index at {path}.") from exc
+        raise ArtifactError(f"Failed to write fastlog index at {path}.") from exc

@@ -144,7 +144,7 @@ def _prune(graph: AttributionGraph, node_threshold: float, edge_threshold: float
             "No node of the graph influences its logits (every edge into the logits, "
             "or every logit probability, is zero), so no node can be kept by its share "
             "of influence. Remedy: build the graph with targets the prompt reaches, "
-            "tl.attribution.build_graph(trace, transcoders, embedding=..., target=[token_id]).",
+            "tl.attribution.build_graph(trace, transcoders, embedding_module=..., target=[token_id]).",
             code="attribution_graph_export_unsupported",
         )
     node_mask = node_influence >= _threshold(node_influence, node_threshold)
@@ -234,7 +234,7 @@ def _schema_node(
     node = graph.nodes[index]
     position = node.position
     if index < layout.error:
-        layer, _position, feature = (int(v) for v in graph.active_features[index].tolist())
+        layer, _position, feature = (int(v) for v in graph.active_feature_indices[index].tolist())
         return _node(
             f"{layer}_{feature}_{position}",
             _cantor(layer, feature),
@@ -243,7 +243,7 @@ def _schema_node(
             "cross layer transcoder",
             f"{layer}_{feature}-0",
             influence=influence,
-            activation=float(graph.activation_values[index]),
+            activation=float(graph.feature_activations[index]),
         )
     if index < layout.token:
         layer = graph.error_sites.index(node.site)
@@ -258,12 +258,12 @@ def _schema_node(
         )
     if index < layout.logit:
         return _node(
-            f"E_{node.token}_{position}",
+            f"E_{node.token_id}_{position}",
             position,
             "E",
             position,
             "embedding",
-            f"E_{node.token}-{position}",
+            f"E_{node.token_id}-{position}",
             influence=influence,
         )
     return _logit_node(graph, index - layout.logit, layout.logit_layer, tokenizer)
@@ -272,7 +272,7 @@ def _schema_node(
 def _logit_node(graph: AttributionGraph, k: int, layer: str, tokenizer: Any) -> dict:
     """The schema node for the ``k``-th logit target (no influence, as the reference)."""
 
-    vocab = int(graph.logit_tokens[k])
+    vocab = int(graph.logit_token_ids[k])
     position = graph.nodes[-1].position
     probability = float(graph.logit_probabilities[k])
     return _node(
@@ -339,7 +339,7 @@ def _check_arguments(
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
             raise _export_refusal(
                 f"{name}={value!r} is not a share between 0 and 1. "
-                "Remedy: pass node_threshold=0.8, edge_threshold=0.98 (the defaults).",
+                "Remedy: pass node_influence_coverage=0.8, edge_influence_coverage=0.98 (the defaults).",
                 code="attribution_graph_export_argument_invalid",
             )
 
@@ -347,12 +347,12 @@ def _check_arguments(
 def _check_graph(graph: AttributionGraph) -> None:
     """Refuse graphs the schema cannot express."""
 
-    if any(graph.nodes[i].token is None for i in graph.node_indices("token")):
+    if any(graph.nodes[i].token_id is None for i in graph.node_indices("token")):
         raise _export_refusal(
             "The graph's token nodes carry no token ids (the embedding input was not "
             "integer ids), so the schema's prompt tokens and token node ids cannot be "
             "written. Remedy: build the graph from integer token ids, "
-            'tl.attribution.build_graph(tl.trace(model, input_ids), transcoders, embedding="...").',
+            'tl.attribution.build_graph(tl.trace(model, input_ids), transcoders, embedding_module="...").',
             code="attribution_graph_export_unsupported",
         )
     if len(graph.transcoder_sites) != len(graph.error_sites):
@@ -365,7 +365,7 @@ def _check_graph(graph: AttributionGraph) -> None:
             code="attribution_graph_export_unsupported",
         )
     if not bool(torch.isfinite(graph.adjacency_matrix).all()) or not bool(
-        torch.isfinite(graph.activation_values).all()
+        torch.isfinite(graph.feature_activations).all()
     ):
         raise _export_refusal(
             "The graph's adjacency or feature activations hold NaN or infinite values, "
@@ -547,9 +547,9 @@ def graph_to_neuronpedia(  # noqa: PLR0913 -- the method's keywords, passed thro
 
     _check_arguments(slug, scan, tokenizer, node_threshold, edge_threshold)
     _check_graph(graph)
-    prompt_tokens = [_decode(tokenizer, token) for token in graph.input_tokens.tolist()]
+    prompt_tokens = [_decode(tokenizer, token) for token in graph.input_token_ids.tolist()]
     if prompt is None:
-        prompt = str(tokenizer.decode([int(t) for t in graph.input_tokens.tolist()]))
+        prompt = str(tokenizer.decode([int(t) for t in graph.input_token_ids.tolist()]))
     pruned = _prune(graph, float(node_threshold), float(edge_threshold))
     nodes, links = _nodes_and_links(graph, pruned, tokenizer)
     exported = {

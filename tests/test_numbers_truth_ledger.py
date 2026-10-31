@@ -153,6 +153,6 @@ def test_gpt2_reaches_full_coverage_sentence() -> None:
         assert coverage["zero_by_rule"] >= 25
         assert coverage["known"] + coverage["zero_by_rule"] == log.num_ops
         # Reclassification adds ZERO FLOPs: the partition pin is unchanged.
-        assert int(log.total_flops_forward) == 3_974_725_648
+        assert int(log.cost.total_flops_forward) == 3_974_725_648
     finally:
         log.cleanup()

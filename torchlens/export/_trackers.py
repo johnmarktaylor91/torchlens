@@ -26,12 +26,12 @@ from ._common import _require_trace, _scalarize_cell
 __tl_layer__ = "L8"
 
 
-def tensorboard(log: Any, writer: Any, *, step: int, prefix: str = "torchlens") -> Any:
+def tensorboard(trace: Any, writer: Any, *, step: int, prefix: str = "torchlens") -> Any:
     """Write TorchLens scalar/text summaries to an existing TensorBoard writer.
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to summarize.
     writer:
         Existing writer object, for example ``SummaryWriter``.
@@ -49,30 +49,30 @@ def tensorboard(log: Any, writer: Any, *, step: int, prefix: str = "torchlens") 
     """
 
     # a non-Trace input used to write plausible zeros (getattr defaults).
-    _require_trace(log, exporter="tl.export.tensorboard")
+    _require_trace(trace, exporter="tl.export.tensorboard")
     _require_tracker_object(writer, method_name="tensorboard", required_method="add_scalar")
     # One converter for every tracker exporter (F26 unification): the four
     # historical exporters had drifted onto three different summary sets.
-    for key, value in _summary_metrics(log).items():
+    for key, value in _summary_metrics(trace).items():
         writer.add_scalar(f"{prefix}/{key}", value, step)
-    writer.add_text(f"{prefix}/model_class_name", str(getattr(log, "model_class_name", "")), step)
+    writer.add_text(f"{prefix}/model_class_name", str(getattr(trace, "model_class_name", "")), step)
     add_text = getattr(writer, "add_text", None)
     if callable(add_text):
-        add_text(f"{prefix}/capture_honesty", "; ".join(honesty_preamble_lines(log)), step)
+        add_text(f"{prefix}/capture_honesty", "; ".join(honesty_preamble_lines(trace)), step)
     flush = getattr(writer, "flush", None)
     if callable(flush):
         flush()
     return writer
 
 
-def wandb(log: Any, run: Any | None = None, name: str = "torchlens_trace") -> dict[str, Any]:
+def wandb(trace: Any, to: Any | None = None, name: str = "torchlens_trace") -> dict[str, Any]:
     """Create and optionally log a Weights & Biases table for a TorchLens log.
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
-    run:
+    to:
         Optional existing W&B run object. If omitted, ``wandb.run`` is used when
         present, but a new run is not created.
     name:
@@ -96,10 +96,10 @@ def wandb(log: Any, run: Any | None = None, name: str = "torchlens_trace") -> di
             "wandb export requires the `wandb` extra: install torchlens[wandb]."
         ) from exc
 
-    dataframe = _tracker_dataframe(log)
+    dataframe = _tracker_dataframe(trace)
     table = wandb_module.Table(dataframe=dataframe)
-    metrics = _summary_metrics(log)
-    target_run = run if run is not None else getattr(wandb_module, "run", None)
+    metrics = _summary_metrics(trace)
+    target_run = to if to is not None else getattr(wandb_module, "run", None)
     if target_run is not None:
         payload: dict[str, Any] = {name: table}
         payload.update({f"{name}/{key}": value for key, value in metrics.items()})
@@ -108,12 +108,12 @@ def wandb(log: Any, run: Any | None = None, name: str = "torchlens_trace") -> di
         "table": table,
         "artifact": None,
         **metrics,
-        "capture_honesty": capture_honesty_facts(log),
+        "capture_honesty": capture_honesty_facts(trace),
     }
 
 
 def mlflow(
-    log: Any,
+    trace: Any,
     client: Any | None = None,
     prefix: str = "torchlens",
     *,
@@ -150,7 +150,7 @@ def mlflow(
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
     client:
         Optional ``mlflow`` module or ``mlflow.MlflowClient`` (or an object
@@ -177,7 +177,7 @@ def mlflow(
         take it.
     """
 
-    metrics = _summary_metrics(log)
+    metrics = _summary_metrics(trace)
     if client is None and run_id is not None:
         raise KeywordConflictError(
             "torchlens.export.mlflow got run_id= without a client to log through",
@@ -185,7 +185,7 @@ def mlflow(
             remedy="pass client=mlflow.MlflowClient() with run_id=, or drop run_id=",
         )
     writers = _mlflow_writers(client, run_id) if client is not None else None
-    parity = _tracker_parity(log, prefix)
+    parity = _tracker_parity(trace, prefix)
     artifacts: list[str] = []
     if writers is not None:
         for key, value in metrics.items():
@@ -291,7 +291,7 @@ def _mlflow_log_metric(log_metric: Any, run_id: str | None) -> Any:
     )
 
 
-def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str, Any]:
+def aim(trace: Any, to: Any | None = None, prefix: str = "torchlens") -> dict[str, Any]:
     """Track TorchLens summary metrics, a per-layer table, the report and honesty tags on an Aim run.
 
     With a run, the export writes (Aim has no table or artifact type for
@@ -314,9 +314,9 @@ def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str
 
     Parameters
     ----------
-    log:
+    trace:
         TorchLens ``Trace`` to export.
-    run:
+    to:
         Optional object exposing ``track``, ``add_tag`` and item assignment.
     prefix:
         Metric, param and tag name prefix.
@@ -331,22 +331,22 @@ def aim(log: Any, run: Any | None = None, prefix: str = "torchlens") -> dict[str
     Raises
     ------
     TypeError
-        If ``run`` lacks ``track``, ``add_tag`` or item assignment.
+        If ``to`` lacks ``track``, ``add_tag`` or item assignment.
     """
 
-    metrics = _summary_metrics(log)
-    if run is not None:
+    metrics = _summary_metrics(trace)
+    if to is not None:
         for required in ("track", "add_tag", "__setitem__"):
-            _require_tracker_object(run, method_name="aim", required_method=required)
-    parity = _tracker_parity(log, prefix)
-    if run is not None:
+            _require_tracker_object(to, method_name="aim", required_method=required)
+    parity = _tracker_parity(trace, prefix)
+    if to is not None:
         for key, value in metrics.items():
-            run.track(value, name=f"{prefix}.{key}")
-        _aim_write_table(run, parity["table"], prefix)
-        run[f"{prefix}.report"] = parity["report"]
-        run[f"{prefix}.capture_honesty"] = parity["capture_honesty"]
+            to.track(value, name=f"{prefix}.{key}")
+        _aim_write_table(to, parity["table"], prefix)
+        to[f"{prefix}.report"] = parity["report"]
+        to[f"{prefix}.capture_honesty"] = parity["capture_honesty"]
         for key, value in parity["tags"].items():
-            run.add_tag(f"{key}={value}")
+            to.add_tag(f"{key}={value}")
     return {**metrics, **parity}
 
 

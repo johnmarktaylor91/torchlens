@@ -1,51 +1,41 @@
 # .github/ — CI/CD Configuration
 
 The workflow FILES are the authority; this inventory summarizes them. If they
-disagree, the YAML wins — update this doc in the same change.
+disagree, the YAML wins — update this doc in the same change. `test-tiers.json`
+(`ci.workflows`, `ci.budget_minutes_per_job`) lists the same four files.
 
-## Workflows (all eight)
+## Workflows (four)
 
 | File | Trigger | What It Does |
 |------|---------|-------------|
-| `workflows/lint.yml` | PR to main + `workflow_call` | ruff `format --check` + `check` (CHECK-ONLY — see below), full-tree `pre-commit run --all-files` parity job, full-tree gitleaks scan, actionlint + cross-file pin-lockstep gates (torch, pydot, graphviz, jsonschema, pip-audit). |
-| `workflows/tests.yml` | PR to main + `workflow_call` | Smoke matrix over exact CPU torch pins (floor 2.1.2 / canonical 2.8.0 / newest-admitted, py 3.10–3.13; the 3.13 row rides the newest-admitted torch) with executed-floor attestations and the render-byte-oracle row. |
-| `workflows/quality.yml` | PR to main + `workflow_call` | mypy on py3.11 + newest-admitted torch; PR-blocking wheel/sdist manifest tripwires; pip-audit with NO suppressions. |
-| `workflows/release.yml` | Push to main | Calls lint/tests/quality via `workflow_call`, then python-semantic-release (pinned) versions, builds reproducible artifacts, publishes to PyPI via OIDC trusted publishing and to GitHub Releases with a minimal-scope App token. |
-| `workflows/nightly.yml` | Cron + `workflow_dispatch` | Fifteen jobs: perf regression gate, full fast tier, coverage floor (incl. the per-package floor script), capture byte oracle, preview-backend matrix (tf/jax/tinygrad/paddle/mlx), metadata-gates, wheel+sdist double-build reproducibility gate + PEP 561 consumer smoke + forward-load gate (previous PyPI release loads the new goldens), platform-canary, shuffle-stress, HF band legs (hf_floor / hf_4_current / hf_5_candidate constraint legs; the two 4.x legs deselect the R0 rows keyed to the 5.x band until per-band expectations land; the candidate leg runs every R0 row plus the offline R1 + RG gallery against the exact passed-ID floor), LIT bridge on real lit-nlp (+ [lit,hf] and [lit,shap] resolve on every interpreter), Brain-Score seam on real brainscore-vision, TransformerLens oracle canary ([tlens-oracle] extra), netron vendor parser (pinned 9.2.2 + node), Model Explorer vendor contract (pinned 0.1.33 + node, exact executed count, PyPI/npm drift summary). |
-| `workflows/weekly.yml` | Cron + `workflow_dispatch` | Five jobs: slow/rare extended tiers with executed-floor attestations, mutation-margin, hook-pin-staleness, optimized-verdict-identity, netron unpinned-latest drift canary (continue-on-error; the nightly pin is the floor). |
-| `workflows/latest-canary.yml` | Cron + `workflow_dispatch` | Smoke tier against latest released torch/torchvision (ecosystem-drift isolation). |
-| `workflows/mutation.yml` | Cron (Sun) + `workflow_dispatch` | Rotating per-arm mutation-campaign shard (1-of-4 arm shards weekly; any family on dispatch) in the canonical pinned CPU env; fails on any SURVIVOR/ERROR/TIMEOUT; archives per-mutant verdicts. |
+| `workflows/pr.yml` | PR to main, push to `ci/**`, dispatch, `workflow_call` | Each tier once: `lint` (ruff format/check, `pre-commit run --all-files`, full-tree gitleaks, the ruff hook SHA check, actionlint), `type-check` (mypy), `smoke` (the one pinned environment, python 3.10 + torch 2.13.0, where the byte goldens enforce; R0 PASSED floor; render and surface byte oracles), `checks` (`scripts/checks/run_all.py`), `packaging` (wheel and sdist manifest tripwires). |
+| `workflows/nightly.yml` | Cron + dispatch | `smoke-matrix` (every other supported torch/python row: the torch floors, canonical 2.8, newest admitted on 3.11-3.13, the randomized-order row), `tier` (the `not rare and not slow` tier in the 8 single-process pytest-split shards `test-tiers.json` declares), `latest-canary`, coverage floors, capture byte oracle, preview backends, metadata gates, wheel double-build reproducibility and PEP 561 smoke, platform canary, HF band legs, LIT, bridges, peer recipes, Brain-Score, TransformerLens oracle, netron and Model Explorer vendor contracts, pip-audit, then `attest`. |
+| `workflows/weekly.yml` | Weekly cron, monthly cron, dispatch | Slow and rare tiers, mutation margins, the rotating per-arm mutation campaign, hook-pin staleness, optimized-verdict identity, netron latest drift; the large-graph suite only from the monthly cron or dispatch with `large_graphs`; then `attest`. |
+| `workflows/release.yml` | PR to main, push of a `v*` tag, dispatch | Builds the reproducible wheel and sdist on every PR as a dry run. On a tag only: re-runs `pr.yml`, refuses a tag that disagrees with `pyproject.toml` and `torchlens/__init__.py` or is not on main, publishes to PyPI by trusted publishing and creates the GitHub Release. |
+
+Executed-test floors: every leg that runs tests writes its junit and a
+`legs.floor` line (`<junit> <floor> [skip fraction] [--min-passed N]
+[--passed-ids FILE]`) into `$RUNNER_TEMP/junit`. Each workflow checks all of
+them with one `scripts/check_ci_executed_tests.py --legs DIR` call (pr: at the
+end of the smoke job; nightly and weekly: the `attest` job).
 
 ## CI must NEVER auto-commit (locked)
 
-Lint is a pure gate: it checks and fails; it never rewrites files, commits, or
-pushes. An earlier design ran `ruff format` + `ruff check --fix` in CI and
-pushed the fixes to main — that push raced the Release workflow (both trigger
-on push to main) and cascaded release runs (the runaway-release incident
-class). Do not reintroduce any workflow that commits or pushes, except the
-release job's own semantic-release commit, which is guarded by `[skip ci]`
-AND a `chore(release):` head-commit condition.
+No workflow commits, pushes, tags or bumps a version. Lint is a pure gate: it
+checks and fails; it never rewrites files.
 
-## Release Pipeline Details
+## Release Pipeline
 
-- python-semantic-release and its FULL transitive stack (plus the `build`
-  backend) install hash-verified, wheels-only from
-  `.github/workflows/release-requirements.txt` (`--require-hashes
-  --only-binary :all:`) — no package code executes at install while the
-  repo-write App token is on disk; conventional commits.
-- Three never-ship-a-major defense layers: commit-msg hook, pre-push hook,
-  custom parser that refuses `LevelBump.MAJOR` (see pyproject
-  `[tool.semantic_release]` and `scripts/`). Major bumps require explicit
-  owner authorization.
-- PyPI: OIDC trusted publishing (no API tokens). GitHub auth: App token minted
-  with `permission-contents: write` only, installed before checkout persists
-  credentials.
-- Artifacts are bit-reproducible (SOURCE_DATE_EPOCH wheel;
-  `scripts/normalize_sdist.py` sdist); the nightly double-build gate attests
-  both. Reproduce-from-tag recipe: pyproject build_command comment.
-- Release-notes body uses the capped `templates/.release_notes.md.j2`
-  (hard 100K-character budget; the uncapped builtin caused the 422-blocks-PyPI
-  incident).
+- A release is the maintainer's act: set the version in `pyproject.toml` and
+  `torchlens/__init__.py`, merge to main, push the `vX.Y.Z` tag on that commit.
+  Nothing in CI computes or bumps a version.
+- The builder (`build` and the setuptools backend) installs hash-verified,
+  wheels-only from `.github/workflows/release-requirements.txt`
+  (`--require-hashes --only-binary :all:`).
+- Artifacts are bit-reproducible (`SOURCE_DATE_EPOCH` from the tag commit;
+  `scripts/normalize_sdist.py`); the nightly double-build gate attests both.
+- PyPI: OIDC trusted publishing (no API tokens). The publish job holds only
+  `contents: write` and `id-token: write`.
 
 ## Pinning & Permissions
 
@@ -53,19 +43,14 @@ AND a `chore(release):` head-commit condition.
   `ubuntu-latest`: the committed galleries and render goldens are byte-checked against one
   Graphviz release, and 26.04's Graphviz 14.1 also leaves neato out of the `graphviz`
   package. `tests/test_packaging_diet.py` enforces it; each install step probes neato.
-- Third-party actions are SHA-pinned. ONE documented exception:
-  `pypa/gh-action-pypi-publish@release/v1` (PyPA's own guidance; rationale in
-  release.yml).
-- Pre-commit hook repos are SHA-pinned — INCLUDING ruff-pre-commit (its old
-  stay-on-tag exception was reversed: it is the one hook with `--fix` write
-  access, so a mutable tag was the wrong exception; the ruff version is
-  lockstep-parsed by `tests/test_packaging_diet.py`).
-- Every workflow declares `permissions: contents: read`; checkout uses
-  `persist-credentials: false` outside the release job.
+- Third-party actions are SHA-pinned, including `pypa/gh-action-pypi-publish`.
+- Pre-commit hook repos are SHA-pinned, including ruff-pre-commit (the one
+  hook with `--fix` write access); the ruff version is lockstep-parsed by
+  `tests/test_packaging_diet.py`.
+- Every workflow declares `permissions: contents: read`; every checkout uses
+  `persist-credentials: false`.
 
 ## Conventions
 
-- Conventional commits required: `fix(scope):`, `feat(scope):`, `chore(scope):`
-- `fix:` → patch bump, `feat:` → minor bump; major-bump markers (`feat!:`,
-  `BREAKING CHANGE:`) are BLOCKED by the three defense layers above
-- `chore:`, `docs:`, `ci:`, `test:` → no release
+- Conventional commits: `fix(scope):`, `feat(scope):`, `chore(scope):`,
+  `docs:`, `ci:`, `test:`. Commit types do not drive versions.

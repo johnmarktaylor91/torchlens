@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .runnable import (
+from ._runnable import (
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
     ControlWitnessKind,
@@ -16,7 +16,7 @@ from .runnable import (
     TensorSlotRole,
     is_mode_sensitive_qualname,
 )
-from .utils.rng import (
+from ._utils.rng import (
     deterministic_fill_governs,
     qualname_is_uninit_growth_resize,
     qualname_is_uninit_size_gated_alloc,
@@ -546,7 +546,7 @@ def _declared_nondeterministic_sources(
 def _is_mode_sensitive_qualname(qualname: str | None) -> bool:
     """Delegate to the ONE shared mode-sensitivity classifier (r71 A).
 
-    Single-sourced in ``torchlens.runnable.is_mode_sensitive_qualname`` so the
+    Single-sourced in ``torchlens._runnable.is_mode_sensitive_qualname`` so the
     parse-time ``module_training_mode`` domain derivation and this runtime belt can
     never disagree on which ops are train/eval mode-sensitive.
     """

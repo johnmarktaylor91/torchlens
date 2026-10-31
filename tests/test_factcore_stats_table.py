@@ -5,7 +5,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.report import STATS_ROW_STATES, StatsTable
+from torchlens.report import StatsTable
+from torchlens.report._stats_table import STATS_ROW_STATES
 
 
 def _model() -> nn.Module:
@@ -27,7 +28,7 @@ def test_stats_table_rows_carry_kernel_numbers() -> None:
         assert row.row_id == f"op:{row.label}"
     relu_row = next(row for row in table.rows if "relu" in row.label)
     payload = trace[relu_row.label.split(":")[0]].out
-    assert relu_row.stats.zero_count == int((payload == 0).sum())
+    assert relu_row.stats.num_zero == int((payload == 0).sum())
     assert table.basis.startswith("observations of ONE captured batch")
 
 
@@ -71,7 +72,7 @@ def test_full_health_scan_batches_syncs() -> None:
     stop-at-first path keeps it (the first sync IS its point).
     """
 
-    from torchlens.data_classes import _nonfinite
+    from torchlens._data_classes import _nonfinite
 
     x = torch.randn(2, 4)
     x[0, 0] = float("nan")
@@ -98,7 +99,7 @@ def test_full_health_scan_batches_syncs() -> None:
 def test_batched_and_sequential_scans_agree() -> None:
     """The batched verdicts equal the per-op verdicts payload for payload."""
 
-    from torchlens.data_classes._nonfinite import _has_nonfinite
+    from torchlens._data_classes._nonfinite import _has_nonfinite
 
     x = torch.randn(2, 4)
     x[0, 1] = float("inf")
@@ -106,7 +107,7 @@ def test_batched_and_sequential_scans_agree() -> None:
     table_hits = {
         row.label
         for row in trace.stats_table().rows
-        if row.stats is not None and row.stats.nonfinite_count > 0
+        if row.stats is not None and row.stats.num_nonfinite > 0
     }
     scan_hits = set(trace.nonfinite_ops)
     sequential_hits = {

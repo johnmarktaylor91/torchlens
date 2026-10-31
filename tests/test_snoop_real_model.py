@@ -16,7 +16,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.options import EchoOptions
+from torchlens.options import NarrationOptions
 
 transformers = pytest.importorskip("transformers")
 
@@ -41,7 +41,7 @@ def test_gpt2_full_narration_line_count_and_label_resolution() -> None:
         model,
         input_ids,
         save=lambda ctx: ctx.kind == "op",
-        echo=EchoOptions(select=True, sink=sink),
+        narrate=NarrationOptions(select=True, sink=sink),
     )
     lines = [line for line in sink.getvalue().split("\n") if line]
     op_lines = [line for line in lines if line.lstrip().startswith("#")]
@@ -67,7 +67,7 @@ def test_gpt2_scoped_narration_stays_inside_the_block() -> None:
     tl.record(
         model,
         input_ids,
-        echo=EchoOptions(select=tl.in_module("transformer.h.1"), sink=sink),
+        narrate=NarrationOptions(select=tl.in_module("transformer.h.1"), sink=sink),
     )
     lines = [line for line in sink.getvalue().split("\n") if line]
     body = [line for line in lines if not line.startswith("-- echo:")]
@@ -122,7 +122,7 @@ def test_resnet18_scoped_echo_leaves_logits_unchanged() -> None:
     output, recording = tl.record(
         model,
         x,
-        echo=EchoOptions(select=tl.in_module("layer3"), sink=sink),
+        narrate=NarrationOptions(select=tl.in_module("layer3"), sink=sink),
         return_output=True,
     )
     assert torch.equal(raw_logits, output)
@@ -167,14 +167,14 @@ def test_resnet18_incompatible_add_crash_trio() -> None:
                 BadHead(),
                 torch.randn(1, 3, 224, 224),
                 save=tl.func("linear"),
-                echo=EchoOptions(select=True, sink=sink),
+                narrate=NarrationOptions(select=True, sink=sink),
                 on_forward_error="attach_partial",
             )
     transcript = sink.getvalue()
     assert "!! forward failed: RuntimeError" in transcript
     assert "attempted call=" in transcript
     partial = getattr(excinfo.value, "partial_recording", None)
-    assert partial is not None and partial.failed
+    assert partial is not None and partial.is_failed
     tail_labels = [
         line.split()[1]
         for line in transcript.split("\n")
@@ -228,7 +228,7 @@ def test_distilgpt2_real_checkpoint_scoped_narration() -> None:
     tl.record(
         model,
         inputs["input_ids"],
-        echo=EchoOptions(select=tl.in_module("transformer.h.3"), sink=sink),
+        narrate=NarrationOptions(select=tl.in_module("transformer.h.3"), sink=sink),
     )
     lines = [line for line in sink.getvalue().split("\n") if line]
     op_lines = [line for line in lines if line.lstrip().startswith("#")]
@@ -247,7 +247,7 @@ def test_cuda_metadata_echo_is_zero_sync() -> None:
     sink = io.StringIO()
     torch.cuda.set_sync_debug_mode("error")
     try:
-        tl.record(model, x, echo=EchoOptions(select=True, sink=sink, stats="off"))
+        tl.record(model, x, narrate=NarrationOptions(select=True, sink=sink, stats="off"))
     finally:
         torch.cuda.set_sync_debug_mode("default")
     assert "relu" in sink.getvalue()

@@ -248,11 +248,11 @@ def test_cornet_showpiece_uses_the_pinned_checkout_not_torch_hub() -> None:
 def test_token_result_save_line_names_a_real_method() -> None:
     """The attribution reference's save-to-file line calls a method that exists."""
 
-    from torchlens.attribution import TokenAttributionPayload, TokenAttributionResult
+    from torchlens.attribution import TokenAttribution, TokenAttributionPayload
 
     text = (REPO / "docs/reference/attribution.md").read_text("utf-8")
     assert 'open("tokens.html", "w").write(result.payload().to_html())' in text
-    assert callable(TokenAttributionResult.payload)
+    assert callable(TokenAttribution.payload)
     assert callable(TokenAttributionPayload.to_html)
 
 

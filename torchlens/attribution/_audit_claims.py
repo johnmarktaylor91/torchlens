@@ -26,7 +26,7 @@ from torchlens.attribution._core import (
     _target_repr,
     _temporarily_eval,
 )
-from torchlens.attribution._result import AttributionError, AttributionResult
+from torchlens.attribution._result import Attribution, AttributionError
 from torchlens.attribution._site import SiteTarget, _select_unit, _target_spelling
 
 _AUDIT_DOCS_POINTER = "See docs/reference/attribution.md, section Auditing internal attributions."
@@ -96,7 +96,7 @@ class _AuditPlan:
         return None
 
     def unit_scores(self) -> dict[tuple[int, ...], float]:
-        """Score every unit ablated alone, in one ``torchlens.experiment.site_sweep``.
+        """Score every unit ablated alone, in one ``torchlens.experiment.sweep_sites``.
 
         One candidate per unit, ``tl.units(label, mask)``, all with the one
         edit of this site (zero, mean or baseline); a candidate the sweep did
@@ -119,7 +119,7 @@ class _AuditPlan:
     def intervention(self, units: tuple[tuple[int, ...], ...]) -> tuple[tuple[Any, Any], ...]:
         """Return the ``(tl.units(label, mask), edit)`` pair ablating ``units``."""
 
-        from torchlens.selection import units as unit_selection
+        from torchlens._selection import units as unit_selection
 
         return ((unit_selection(self.label, _unit_mask(self.shape, units)), self.edit()),)
 
@@ -175,8 +175,11 @@ def _call_prefix(request: _AuditRequest) -> str:
 
     target = "" if request.target is None else f", {_target_spelling(request.target)}"
     edge_inputs = "".join(
-        f", {name}={name}"
-        for name, value in (("corrupted", request.corrupted), ("metric", request.metric))
+        f", {keyword}={name}"
+        for keyword, name, value in (
+            ("corrupted_input", "corrupted", request.corrupted),
+            ("metric", "metric", request.metric),
+        )
         if value is not None
     )
     return f"tl.attribution.causal_audit(model, x, claim=claim{target}{edge_inputs}"
@@ -196,7 +199,7 @@ def _validate_settings(request: _AuditRequest) -> None:
     if not numeric and ablation not in ("zero", "mean"):
         raise _setting_error(
             f"ablation must be 'zero', 'mean', or a number or tensor baseline; got {ablation!r}",
-            f"{base}, k=1)" if request.metric is not None else f"{base}, ablation='mean')",
+            f"{base}, k=1)" if request.metric is not None else f"{base}, edit='mean')",
             code=code,
         )
     controls = request.controls
@@ -209,7 +212,7 @@ def _validate_settings(request: _AuditRequest) -> None:
     if not _is_count(request.random_draws):
         raise _setting_error(
             f"random_draws must be a positive int; got {request.random_draws!r}",
-            f"{base}, random_draws=10)",
+            f"{base}, num_random_draws=10)",
             code=code,
         )
 
@@ -283,13 +286,11 @@ def _claim_layer(request: _AuditRequest, trace: Any) -> tuple[str, str]:
     """Return the claim's module name and its site's op label, or refuse."""
 
     claim = request.claim
-    layer = (
-        getattr(claim, "extra", {}).get("layer") if isinstance(claim, AttributionResult) else None
-    )
+    layer = getattr(claim, "extra", {}).get("layer") if isinstance(claim, Attribution) else None
     if not isinstance(layer, str) or not isinstance(claim.values, Tensor):
         kind = (
             f"an input-level {claim.method!r} result"
-            if isinstance(claim, AttributionResult)
+            if isinstance(claim, Attribution)
             else f"a {type(claim).__name__}"
         )
         raise _unsupported_claim(request, trace, kind, code="attribution_audit_claim_unsupported")
@@ -309,12 +310,12 @@ def _target_scorer(request: _AuditRequest, trace: Any, layer: str) -> Callable[[
 
     target = request.target
     if isinstance(target, SiteTarget):
-        labels = _output_labels(trace, target.layer) if target.call in (None, 0) else None
+        labels = _output_labels(trace, target.module_address) if target.call in (None, 0) else None
         if labels is None or len(labels) != 1:
             raise _misaligned(
                 request,
                 layer,
-                f"the target site {target.layer!r} is not one module call here",
+                f"the target site {target.module_address!r} is not one module call here",
                 code="attribution_audit_claim_misaligned",
             )
         site = labels[0]
@@ -333,7 +334,7 @@ def _target_scorer(request: _AuditRequest, trace: Any, layer: str) -> Callable[[
 def _edit_factory(request: _AuditRequest, site: Tensor) -> tuple[str, Callable[[], Any]]:
     """Return the ablation's name and a factory of its edit for ``Trace.do``."""
 
-    from torchlens.intervention import zero_ablate
+    from torchlens.intervention.helpers import zero_ablate
     from torchlens.intervention.predicates import replace_with
 
     ablation = request.ablation
@@ -350,7 +351,7 @@ def _edit_factory(request: _AuditRequest, site: Tensor) -> tuple[str, Callable[[
             f"the ablation baseline of shape {tuple(baseline.shape)} does not broadcast to "
             f"the site output of shape {tuple(site.shape)}",
             "tl.attribution.causal_audit(model, x, claim=claim, "
-            f"{_target_spelling(request.target)}, ablation=0.0)",
+            f"{_target_spelling(request.target)}, edit=0.0)",
             code="attribution_eval_setting_invalid",
         ) from exc
     return "baseline", lambda: replace_with(value.clone())

@@ -25,11 +25,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ..utils.display import atomic_write_text
+from .._utils.display import atomic_write_text
 from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS, edit_ink
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .themes import VisualizationTheme
 
 __all__ = [
@@ -145,8 +145,8 @@ def highlighter_supported(fileformat: str) -> bool:
 def _warn_unsupported(reason: str) -> None:
     """Warn that the downstream highlighter was left out, and why."""
 
+    from .._utils.display import user_stacklevel
     from ..errors import TorchLensWarning
-    from ..utils.display import user_stacklevel
 
     warnings.warn(
         TorchLensWarning(

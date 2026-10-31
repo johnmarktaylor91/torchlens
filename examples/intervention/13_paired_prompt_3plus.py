@@ -51,9 +51,9 @@ def main() -> None:
             model, base - 0.2, capture=tl.options.CaptureOptions(intervention_ready=True)
         ),
     }
-    bundle = tl.bundle(logs, baseline="clean")
+    bundle = tl.Bundle(logs, baseline="clean")
 
-    norms = bundle.apply(lambda member: float(member.layer_list[-1].out.norm()))
+    norms = bundle.map(lambda member: float(member.layer_list[-1].out.norm()))
     count = len(bundle)
 
     assert count == 3

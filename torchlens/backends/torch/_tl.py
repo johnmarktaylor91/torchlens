@@ -12,7 +12,7 @@ from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state
-from ...utils._torch_compat import get_async_collective_tensor_type
+from ..._utils._torch_compat import get_async_collective_tensor_type
 
 __all__ = [
     "TorchLensMeta",

@@ -9,6 +9,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
+from torchlens._utils.introspection import get_vars_of_type_from_obj
 from torchlens.backends.torch._tl import (
     TensorMeta,
     get_buffer_address,
@@ -18,11 +20,9 @@ from torchlens.backends.torch._tl import (
     set_tensor_label,
 )
 from torchlens.backends.torch.model_prep import _tag_untagged_buffers
-from torchlens.data_classes.trace import Trace
 from torchlens.intervention.runtime import _copy_tl_replacement_attrs
 from torchlens.options import CaptureOptions, SaveOptions
-from torchlens.partial import PartialTrace
-from torchlens.utils.introspection import get_vars_of_type_from_obj
+from torchlens.types import PartialTrace
 
 
 class _LifecycleModel(nn.Module):
@@ -87,7 +87,7 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(save_arg_values=True),
+        capture=CaptureOptions(save_args=True),
         save=SaveOptions(activation_transform=lambda t: t.float().mean()),
     )
 
@@ -116,7 +116,7 @@ def test_successful_capture_cleans_deeply_nested_saved_args() -> None:
     trace = tl.trace(
         _NestedSavedArgsModel(),
         torch.ones(2),
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=CaptureOptions(layers_to_save="all", save_args=True),
     )
 
     foreach_ops = [op for op in trace.ops if op.func_name == "_foreach_add"]

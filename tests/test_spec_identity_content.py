@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention.spec import InterventionSpec
+from torchlens.intervention.spec import Recipe
 
 _WIDTH = 4000  # above torch's 1000-element print threshold
 
@@ -35,8 +35,8 @@ class _ReluModel(nn.Module):
         return self.block(x) * 2
 
 
-def _steer_spec(vector: torch.Tensor) -> InterventionSpec:
-    return tl.when(tl.func("relu"), tl.steer(vector, feature_axis=-1))
+def _steer_spec(vector: torch.Tensor) -> Recipe:
+    return tl.when(tl.func("relu"), tl.steer(vector, dim=-1))
 
 
 def _one_hot(index: int, value: float = 5.0) -> torch.Tensor:
@@ -52,7 +52,7 @@ def test_large_vectors_differing_in_one_element_get_different_identity() -> None
     second = _steer_spec(_one_hot(_WIDTH // 2))
     assert first.rules[0].rule_id != second.rules[0].rule_id
     assert first.rules[0].action_repr != second.rules[0].action_repr
-    assert first.spec_digest != second.spec_digest
+    assert first.digest != second.digest
 
 
 def test_equal_content_gives_equal_identity_across_objects_and_layouts() -> None:
@@ -64,7 +64,7 @@ def test_equal_content_gives_equal_identity_across_objects_and_layouts() -> None
     assert not strided_view.is_contiguous()
     first = _steer_spec(strided_view)
     second = _steer_spec(contiguous_copy)
-    assert first.spec_digest == second.spec_digest
+    assert first.digest == second.digest
     assert first.rules[0].rule_id == second.rules[0].rule_id
     assert first.rules[0].action_repr == second.rules[0].action_repr
 
@@ -76,9 +76,9 @@ def test_identity_distinguishes_dtype_and_shape_with_equal_bytes() -> None:
     as_int = torch.zeros(_WIDTH, dtype=torch.int32)
     reshaped = torch.zeros(2, _WIDTH // 2, dtype=torch.float32)
     digests = {
-        _steer_spec(flat).spec_digest,
-        _steer_spec(as_int).spec_digest,
-        _steer_spec(reshaped).spec_digest,
+        _steer_spec(flat).digest,
+        _steer_spec(as_int).digest,
+        _steer_spec(reshaped).digest,
     }
     assert len(digests) == 3
 
@@ -88,7 +88,7 @@ def test_identity_is_device_independent() -> None:
     """The same values on CPU and CUDA name the same rule."""
 
     vector = torch.randn(_WIDTH)
-    assert _steer_spec(vector).spec_digest == _steer_spec(vector.cuda()).spec_digest
+    assert _steer_spec(vector).digest == _steer_spec(vector.cuda()).digest
 
 
 def test_identity_strings_carry_no_device_tag() -> None:
@@ -111,20 +111,20 @@ def test_in_place_edit_after_staging_changes_digest_and_action_repr() -> None:
 
     vector = torch.zeros(_WIDTH)
     spec = _steer_spec(vector)
-    staged_digest = spec.spec_digest
+    staged_digest = spec.digest
     staged_action = spec.rules[0].action_repr
     staged_rule_id = spec.rules[0].rule_id
 
     vector.add_(_one_hot(7, value=3.0))
     fresh = _steer_spec(_one_hot(7, value=3.0))
-    assert spec.spec_digest != staged_digest
+    assert spec.digest != staged_digest
     assert spec.rules[0].action_repr != staged_action
     assert spec.rules[0].rule_id != staged_rule_id
-    assert spec.spec_digest == fresh.spec_digest
+    assert spec.digest == fresh.digest
     assert spec.rules[0].action_repr == fresh.rules[0].action_repr
 
     vector.sub_(_one_hot(7, value=3.0))
-    assert spec.spec_digest == staged_digest
+    assert spec.digest == staged_digest
     assert spec.rules[0].rule_id == staged_rule_id
 
 
@@ -133,10 +133,10 @@ def test_untracked_data_edit_changes_spec_digest() -> None:
 
     vector = torch.zeros(_WIDTH)
     spec = _steer_spec(vector)
-    staged_digest = spec.spec_digest
+    staged_digest = spec.digest
     vector.data[123] = 1.0
-    assert spec.spec_digest != staged_digest
-    assert spec.spec_digest == _steer_spec(vector.clone()).spec_digest
+    assert spec.digest != staged_digest
+    assert spec.digest == _steer_spec(vector.clone()).digest
     # The exact read refreshed the cached identity the other reads share.
     assert spec.rules[0].rule_id == _steer_spec(vector.clone()).rules[0].rule_id
 
@@ -144,9 +144,9 @@ def test_untracked_data_edit_changes_spec_digest() -> None:
 def test_merge_of_distinct_large_vectors_no_longer_refuses() -> None:
     """Two different model-width vectors merge into a two-rule spec."""
 
-    first = tl.when(tl.func("relu"), tl.steer(torch.zeros(_WIDTH), feature_axis=-1))
-    second = tl.when(tl.func("sigmoid"), tl.steer(_one_hot(1), feature_axis=-1))
-    third = tl.when(tl.func("relu"), tl.steer(_one_hot(_WIDTH // 2), feature_axis=-1))
+    first = tl.when(tl.func("relu"), tl.steer(torch.zeros(_WIDTH), dim=-1))
+    second = tl.when(tl.func("sigmoid"), tl.steer(_one_hot(1), dim=-1))
+    third = tl.when(tl.func("relu"), tl.steer(_one_hot(_WIDTH // 2), dim=-1))
     merged = first.merge(second)
     assert len(merged.rules) == 2
     # Same WHERE, different large vectors: distinct rules, so no duplicate refusal.
@@ -189,7 +189,7 @@ def test_bind_report_tracks_an_edit_between_calls() -> None:
     assert first_out.tolist() == [4.0]
     assert second_out.tolist() == [22.0]
     assert first_report.spec_digest != second_report.spec_digest
-    assert second_report.spec_digest == _steer_spec(torch.tensor([10.0])).spec_digest
+    assert second_report.spec_digest == _steer_spec(torch.tensor([10.0])).digest
     for report in (first_report, second_report):
         assert set(report.rule_fire_counts) == set(report.resolved_static_targets)
         assert report.zero_fire_rule_ids == ()

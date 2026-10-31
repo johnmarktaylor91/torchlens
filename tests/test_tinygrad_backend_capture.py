@@ -16,12 +16,8 @@ from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._io.tlspec import _TlSpecWriter
-from torchlens.backends import (
-    BackendRuntimeCompatibilityError,
-    BackendUnsupportedError,
-    get_backend_spec,
-)
 from torchlens.backends.tinygrad import GradOptions, TinygradBackend, capabilities
+from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor
@@ -442,9 +438,9 @@ def _first_saved_op(trace: Any) -> Any:
 def test_tinygrad_spec_registered() -> None:
     """Assert the built-in tinygrad spec exposes the G1 capability split."""
 
-    spec = get_backend_spec("tinygrad")
+    spec = tl.backends.spec("tinygrad")
     assert spec.capabilities.backward_capture is False
-    assert spec.capabilities.validation_replay is True
+    assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
     assert spec.capabilities.interventions is False
     assert spec.capabilities.payload_materialization is True
@@ -489,7 +485,7 @@ def test_tinygrad_preview_rejects_random_seed() -> None:
             _tiny_block,
             Tensor([1.0, -2.0, 3.0]),
             backend="tinygrad",
-            capture=tl.options.CaptureOptions(random_seed=123),
+            capture=tl.options.CaptureOptions(seed=123),
         )
 
 
@@ -781,17 +777,19 @@ def test_tinygrad_intermediate_derived_grads_match_retained_backward_oracle() ->
 
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
     assert x.grad is None
-    assert len(trace.intermediate_derived_grads) > 0
+    assert len(trace.autograd.intermediate_derived_grads) > 0
     assert hidden_op.derived_grad.tolist() == pytest.approx(oracle_hidden.grad.tolist())
     assert scaled_op.derived_grad.tolist() == pytest.approx(oracle_scaled.grad.tolist())
-    assert hidden_op.label in trace.intermediate_derived_grads
-    assert trace.intermediate_derived_grads[hidden_op.label].provenance["mechanism"] == (
+    assert hidden_op.label in trace.autograd.intermediate_derived_grads
+    assert trace.autograd.intermediate_derived_grads[hidden_op.label].provenance["mechanism"] == (
         "tinygrad_retained_tensor_backward_no_realize"
     )
-    assert trace.intermediate_derived_grads[hidden_op.label].provenance["status"] == "exact"
-    assert trace.intermediate_derived_grads[hidden_op.label].provenance["save_predicate_id"] == (
-        "trace.saved_ops"
+    assert (
+        trace.autograd.intermediate_derived_grads[hidden_op.label].provenance["status"] == "exact"
     )
+    assert trace.autograd.intermediate_derived_grads[hidden_op.label].provenance[
+        "save_predicate_id"
+    ] == ("trace.saved_ops")
 
 
 def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
@@ -807,7 +805,7 @@ def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
     with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
-        _ = trace.backward_passes
+        _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
         _ = trace.saved_grad_ops
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
@@ -854,12 +852,12 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert list(trace.params.keys()) == []
     assert trace.has_backward_pass is False
     assert trace.num_backward_passes == 0
-    assert trace.num_backward_edges is None
+    assert trace.autograd.num_backward_edges is None
     assert set(trace.derived_grads.keys()) == {"inputs.0"}
     assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
 
     outpath = tmp_path / "tinygrad_graph"
-    dot = trace.draw(vis_outpath=str(outpath), vis_save_only=True, vis_fileformat="dot")
+    dot = trace.draw(path=str(outpath), vis_save_only=True, file_format="dot")
     assert isinstance(dot, str)
 
     audit_path = tmp_path / "tinygrad_audit.tlspec"
@@ -892,7 +890,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     )
     assert loaded_status is loaded_portable.validation_replay_status
     assert loaded_status.state == "unavailable"
-    assert loaded_status.available is False
+    assert loaded_status.is_available is False
     assert loaded_status.reason == "loaded_trace_runtime_capture_stripped"
     assert loaded_status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):
@@ -900,7 +898,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
-        _ = trace.backward_passes
+        _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.derived_grads"):
         _ = trace[0].grads
 

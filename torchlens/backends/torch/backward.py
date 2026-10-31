@@ -23,21 +23,13 @@ from typing import Any, Literal, cast
 import torch
 
 from ... import _state
+from ..._data_classes.backward_pass import BackwardPass
+from ..._data_classes.func_call_location import FuncCallLocation
+from ..._data_classes.grad_fn import GradFn, _paired_pass_op
+from ..._data_classes.grad_fn_call import GradFnCall
+from ..._data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ..._deprecations import MISSING, MissingType
-from ..._state import pause_logging
-from ...capture.peak_memory import (
-    peak_rss_bytes,
-    process_rss_bytes,
-    record_backward_peak,
-    reset_peak_rss,
-)
-from ...data_classes.backward_pass import BackwardPass
-from ...data_classes.func_call_location import FuncCallLocation
-from ...data_classes.grad_fn import GradFn, _paired_pass_op
-from ...data_classes.grad_fn_call import GradFnCall
-from ...data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
-from ...errors import ConfigurationError
-from ...ir.events import (
+from ..._ir.events import (
     BackwardCoverageGap,
     BackwardPassEnd,
     BackwardPassStart,
@@ -47,15 +39,23 @@ from ...ir.events import (
     OpGradObserved,
     ParamGradObserved,
 )
-from ...quantities import Bytes, Duration
-from ...utils._torch_compat import (
+from ..._quantities import Bytes, Duration
+from ..._state import pause_logging
+from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
     get_accumulate_grad_class,
     get_current_autograd_node_fn,
 )
-from ...utils._torch_symbols import torch_attr
-from ...utils.introspection import _get_code_qualname, _get_col_offset
-from ...utils.tensor_utils import synchronize_pending_cpu_async_copies
+from ..._utils._torch_symbols import torch_attr
+from ..._utils.introspection import _get_code_qualname, _get_col_offset
+from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
+from ...capture.peak_memory import (
+    peak_rss_bytes,
+    process_rss_bytes,
+    record_backward_peak,
+    reset_peak_rss,
+)
+from ...errors import ConfigurationError
 from ._backward_dispatch import outside_census
 from ._backward_markers import begin_grad_fn_marker, end_grad_fn_marker, executing_grad_fn_ref
 from ._backward_roots import _autograd_roots_from_call, _root_tensors, _roots_by_trace
@@ -65,6 +65,7 @@ from ._fire_timing import (
     _pop_matching_fire_start,
     _register_fire_timing_prehook,
 )
+from ._grad_fn_source import _grad_fn_is_custom, _grad_fn_source_metadata
 from ._gradfn_markers import (
     _drain_gradfn_markers,
     _enter_internal_gradfn_bracket,
@@ -344,6 +345,40 @@ def _active_forward_op_count_at_trigger() -> int | None:
     return max(0, int(active_state.step_index) - 1)
 
 
+def _register_slot_gradient_prehook(
+    grad_fn_handle: Any,
+    output_nr: int,
+    tensor_hook: Callable[[torch.Tensor | None], None],
+) -> Any:
+    """Register a tensor gradient hook as a node pre-hook on one output slot.
+
+    A tensor hook registered after the tensor was written in place again
+    receives the newer version's gradient; a pre-hook on the node that produced
+    the earlier version receives that version's gradient instead.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        Autograd node that produced the tensor version.
+    output_nr:
+        Output slot of that node the tensor version occupies.
+    tensor_hook:
+        Hook taking the gradient of one tensor (``None`` when none arrived).
+
+    Returns
+    -------
+    Any
+        Removable handle of the registered pre-hook.
+    """
+
+    def prehook(grad_outputs: tuple[torch.Tensor | None, ...]) -> None:
+        """Pass the slot's incoming gradient to the tensor hook, unchanged."""
+
+        tensor_hook(grad_outputs[output_nr] if output_nr < len(grad_outputs) else None)
+
+    return grad_fn_handle.register_prehook(prehook)
+
+
 def _register_forward_grad_fn(trace: Any, grad_fn_handle: Any, _raw_label: str | None) -> None:
     """Register a pinned forward grad-fn object for later autograd triggers.
 
@@ -533,7 +568,7 @@ def _enqueue_implicit_pass_drain_callback(
             return
         _close_implicit_backward_pass_if_open(live_trace, _close_path="engine_drain")
 
-    from ...utils._torch_compat import get_autograd_engine_queue_callback
+    from ..._utils._torch_compat import get_autograd_engine_queue_callback
 
     queue_callback = get_autograd_engine_queue_callback()
     if queue_callback is None:
@@ -686,109 +721,6 @@ def _root_tensor_step_index(trace: Any, root: torch.Tensor) -> int | None:
     if final_match is not None:
         return int(final_match.group(1))
     return None
-
-
-def _grad_fn_is_custom(grad_fn_handle: Any) -> bool:
-    """Return whether a grad_fn_handle appears to come from user/custom autograd code.
-
-    Parameters
-    ----------
-    grad_fn_handle:
-        Autograd function object.
-
-    Returns
-    -------
-    bool
-        True when the type's module path is outside PyTorch's built-in autograd
-        and nn namespaces.
-    """
-    class_module = type(grad_fn_handle).__module__
-    if class_module == "torch.autograd.function":
-        return True
-    builtin_prefixes = ("torch.autograd", "torch.nn", "torch", "builtins")
-    return not class_module.startswith(builtin_prefixes)
-
-
-def _safe_source_file_and_line(obj: Any) -> tuple[str | None, int | None]:
-    """Return source file and first line for an object when introspection works.
-
-    Parameters
-    ----------
-    obj:
-        Object to inspect.
-
-    Returns
-    -------
-    tuple[str | None, int | None]
-        Source file and line, or ``(None, None)`` when unavailable.
-    """
-
-    try:
-        source_file = inspect.getsourcefile(obj) or inspect.getfile(obj)
-        source_line = inspect.getsourcelines(obj)[1]
-    except (OSError, TypeError):
-        return None, None
-    return source_file, source_line
-
-
-def _safe_signature(obj: Any) -> str | None:
-    """Return an inspect signature string when available.
-
-    Parameters
-    ----------
-    obj:
-        Callable object to inspect.
-
-    Returns
-    -------
-    str | None
-        Signature string, or ``None`` when unavailable.
-    """
-
-    try:
-        return str(inspect.signature(obj))
-    except (TypeError, ValueError):
-        return None
-
-
-def _grad_fn_source_metadata(grad_fn_cls: type[Any]) -> dict[str, Any]:
-    """Return best-effort source metadata for a grad-fn class.
-
-    Parameters
-    ----------
-    grad_fn_cls:
-        Runtime class of the autograd grad-fn object.
-
-    Returns
-    -------
-    dict[str, Any]
-        Keyword arguments accepted by ``GradFn`` for source metadata fields.
-    """
-
-    class_source_file, class_source_line = _safe_source_file_and_line(grad_fn_cls)
-    init_method = getattr(grad_fn_cls, "__init__", None)
-    forward_method = getattr(grad_fn_cls, "forward", None)
-    backward_method = getattr(grad_fn_cls, "backward", None)
-    init_source_file, init_source_line = _safe_source_file_and_line(init_method)
-    forward_source_file, forward_source_line = _safe_source_file_and_line(forward_method)
-    backward_source_file, backward_source_line = _safe_source_file_and_line(backward_method)
-    return {
-        "class_source_file": class_source_file,
-        "class_source_line": class_source_line,
-        "class_docstring": grad_fn_cls.__doc__,
-        "init_source_file": init_source_file,
-        "init_source_line": init_source_line,
-        "init_signature": _safe_signature(init_method),
-        "init_docstring": getattr(init_method, "__doc__", None),
-        "forward_source_file": forward_source_file,
-        "forward_source_line": forward_source_line,
-        "forward_signature": _safe_signature(forward_method),
-        "forward_docstring": getattr(forward_method, "__doc__", None),
-        "backward_source_file": backward_source_file,
-        "backward_source_line": backward_source_line,
-        "backward_signature": _safe_signature(backward_method),
-        "backward_docstring": getattr(backward_method, "__doc__", None),
-    }
 
 
 def _iter_next_grad_fns(grad_fn_handle: Any) -> Iterator[Any]:
@@ -1420,7 +1352,7 @@ def _materialize_backward_projections(trace: Any) -> None:
         # revision counter: fall back to the event count as a change signal.
         revision = len(events)
     if getattr(trace, "_backward_projection_revision", None) == revision:
-        from ...postprocess._primitive_profile import _materialize_backward_primitive_profile
+        from ..._postprocess._primitive_profile import _materialize_backward_primitive_profile
 
         _materialize_backward_primitive_profile(trace)
         return
@@ -1451,7 +1383,7 @@ def _materialize_backward_projections(trace: Any) -> None:
         # the retry (sol review finding 2).
         trace._backward_projection_event_count = len(events)
         trace._backward_projection_revision = revision
-        from ...postprocess._primitive_profile import _materialize_backward_primitive_profile
+        from ..._postprocess._primitive_profile import _materialize_backward_primitive_profile
 
         _materialize_backward_primitive_profile(trace)
     except BaseException:
@@ -1655,7 +1587,7 @@ def _materialize_backward_projections_impl(
             next_grad_fn_ids=list(latest_topology.get(object_id, event.topology)),
             **source_fields,
         )
-        grad_fn_record.source_trace = trace
+        grad_fn_record.trace = trace
         prior_record = prior_grad_fn_logs.get(object_id)
         if prior_record is not None:
             # A rediscovered node predating the detach keeps its at-or-below-
@@ -1990,8 +1922,8 @@ def _refresh_backward_pass_counters(trace: Any, state: _BackwardFoldState) -> No
     ]
     trace.num_backward_passes = max(state.built_pass_indices, default=0)
     trace.has_backward_pass = bool(state.built_pass_indices)
-    trace.num_saved_grad_fn_calls = len(trace.saved_grad_fn_calls)
-    trace.num_saved_grad_fns = len(trace.saved_grad_fns)
+    trace.num_saved_grad_fn_calls = len(trace.autograd.saved_grad_fn_calls)
+    trace.num_saved_grad_fns = len(trace.autograd.saved_grad_fns)
 
 
 def _torch_dtype_from_string(dtype_name: str) -> torch.dtype | str:
@@ -2758,12 +2690,12 @@ def _walk_and_hook_backward_graph(
                 next_grad_fn_ids=[id(next_fn) for next_fn in next_grad_fns],
                 **source_metadata,
             )
-            grad_fn_record.source_trace = trace
+            grad_fn_record.trace = trace
             trace.grad_fn_logs[grad_fn_object_id] = grad_fn_record
             trace.grad_fn_order.append(grad_fn_object_id)
         else:
             grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
-            grad_fn_record.source_trace = trace
+            grad_fn_record.trace = trace
         is_accumulate_grad = _is_accumulate_grad(grad_fn_handle)
         if is_accumulate_grad:
             param = getattr(grad_fn_handle, "variable", None)
@@ -2893,9 +2825,9 @@ def _emit_discovered_grad_fn(
 
     ``type_counter`` is rewalk-scoped scratch owned by the caller
     (grind-r6 b5 R45: parking it on ``trace.__dict__`` left an undeclared
-    private field on the Trace that broke ``tl.save`` after two
+    private field on the Trace that broke ``Trace.save`` after two
     differentiable grad passes -- ``_backward_grad_fn_type_counter``
-    missing from ``PORTABLE_STATE_SPEC``).
+    missing from ``_PORTABLE_STATE_SPEC``).
     """
 
     grad_fn_object_id = id(grad_fn_handle)
@@ -2931,12 +2863,12 @@ def _emit_discovered_grad_fn(
             next_grad_fn_ids=[id(next_fn) for next_fn in next_grad_fns],
             **_grad_fn_source_metadata(grad_fn_cls),
         )
-        grad_fn_record.source_trace = trace
+        grad_fn_record.trace = trace
         trace.grad_fn_logs[grad_fn_object_id] = grad_fn_record
         trace.grad_fn_order.append(grad_fn_object_id)
     else:
         grad_fn_record.next_grad_fn_ids = [id(next_fn) for next_fn in next_grad_fns]
-        grad_fn_record.source_trace = trace
+        grad_fn_record.trace = trace
 
     source_fields = {
         key: getattr(grad_fn_record, key)
@@ -2980,7 +2912,7 @@ def _rewalk_higher_order_grad_fns(trace: Any) -> None:
     # so a fresh discovery can never collide with an already-assigned
     # ``type_index`` (same seeding idiom as the projection rebuild path).
     # Holding this on the trace between rewalks left an undeclared private
-    # field that broke tl.save (grind-r6 b5 R45).
+    # field that broke Trace.save (grind-r6 b5 R45).
     type_counter: dict[str, int] = {}
     for existing_record in trace.grad_fn_logs.values():
         type_counter[existing_record.type] = max(
@@ -3012,14 +2944,14 @@ def _is_static_truthy_keep_grad(value: Any) -> bool:
 
     from ...fastlog.types import CaptureSpec
 
-    return value is True or (isinstance(value, CaptureSpec) and value.keep_grad)
+    return value is True or (isinstance(value, CaptureSpec) and value.save_grad)
 
 
 def _selected_fastlog_forward_labels(recording: Any) -> set[str]:
     """Return labels for predicate-selected forward records."""
 
+    from ..._ir.predicate import RetroactiveCaptureDecision
     from ...capture.predicates import _evaluate_keep_op
-    from ...ir.predicate import RetroactiveCaptureDecision
 
     recording._ensure_records()  # noqa: SLF001
     labels: set[str] = set()
@@ -3084,11 +3016,11 @@ def log_recording_backward(
 
     recording_state = getattr(recording, "_recording_state", None)
     if recording_state is None:
-        raise RecorderStateError("Recording.log_backward() requires a live recording state")
+        raise RecorderStateError("Recording.backward() requires a live recording state")
     trace = getattr(recording_state, "runtime_trace", None)
     if trace is None:
         raise RecorderStateError(
-            "Recording.log_backward() requires a live runtime trace from Recorder.log()."
+            "Recording.backward() requires a live runtime trace from Recorder(...)."
         )
     effective_save_grads = (
         save_grads if save_grads is not None else recording_state.options.save_grads
@@ -3102,7 +3034,7 @@ def log_recording_backward(
         and _is_static_truthy_keep_grad(effective_save_grads)
     ):
         raise InvalidStorageError(
-            "save_grads=True with CaptureSpec(keep_grad=True) is incompatible with "
+            "save_grads=True with CaptureSpec(save_grad=True) is incompatible with "
             "disk-only fastlog gradient storage"
         )
     selected_forward_labels = _selected_fastlog_forward_labels(recording)
@@ -3119,7 +3051,7 @@ def log_recording_backward(
                 and _is_static_truthy_keep_grad(decision)
             ):
                 raise InvalidStorageError(
-                    "save_grads returned CaptureSpec(keep_grad=True), which is incompatible "
+                    "save_grads returned CaptureSpec(save_grad=True), which is incompatible "
                     "with disk-only fastlog gradient storage"
                 )
             return decision
@@ -3669,7 +3601,7 @@ def _resolve_checkpoint_hook_cls() -> type | None:
     compat chokepoint; absence flips ``HAS_CHECKPOINT_HOOK_CLASS`` there.
     """
 
-    from ...utils._torch_compat import get_checkpoint_hook_class
+    from ..._utils._torch_compat import get_checkpoint_hook_class
 
     return get_checkpoint_hook_class()
 
@@ -3684,7 +3616,7 @@ def _checkpoint_hook_identity_attrs_in_play() -> bool:
     (torch 2.13 and earlier) means no such state exists to preserve.
     """
 
-    from ...utils._torch_compat import get_checkpoint_internal_hook_class
+    from ..._utils._torch_compat import get_checkpoint_internal_hook_class
 
     return get_checkpoint_internal_hook_class() is not None
 
@@ -4300,7 +4232,7 @@ def _finalize_grad_streaming(trace: Any) -> None:
     if writer is None or not getattr(trace, "_defer_streaming_bundle_finalization", False):
         return
 
-    from ...postprocess.finalization import (
+    from ..._postprocess.finalization import (
         _evict_streamed_grads,
         _evict_streamed_outs,
         _finalize_streamed_bundle,

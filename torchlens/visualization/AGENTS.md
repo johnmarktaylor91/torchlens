@@ -51,13 +51,13 @@ The `_render_dot.py` entry point is split across sibling helper modules; all are
 | `_legend.py` | The one compact HTML-table legend node in a dedicated rank (role legend, channel disclosures, backward key as sections; vizmech D28/D30) |
 | `_geometry_audit.py` | Geometry audit v2 + usability envelopes: widened element classes, grid-indexed pairing, engine-attributed parsing (vizmech wave 3; test-support instrument) |
 | `_edge_multiplicity.py` | Rendered-edge multiplicity disclosure (dedupe registry, honest `xN` edge labels) and the D9 argument-position edge-label builders; at visible fan-in >= `_ARG_LABEL_MIDPOINT_FANIN` argument labels ride reserved-space midpoint labels and same-pair parallel arg edges merge into one row-listing edge (D03-R4) |
-| `_buffer_visibility.py` | Tri-state `show_buffer_layers` visibility predicates (R43 split from `_render_edges.py`) |
+| `_buffer_visibility.py` | Tri-state `show_buffers` visibility predicates (R43 split from `_render_edges.py`) |
 | `_mutated_params.py` | Source nodes for in-place-mutated Parameters: read-only scan of the captured ops, one grey cylinder per mutated Parameter in its owner's cluster, edges to its pre-mutation readers; resolves ops through focus-rewritten entries; percent-encoded node names (injective); returns engine-neutral emissions the rank engine re-emits as overlay nodes; the legend row is gated on a drawn node |
 | `_condensed_flow.py` | Child condensed-flow-graph construction for smart module collapse |
 | `_segment_descriptors.py` | Segment descriptor construction and label derivation for collapse plans |
 | `_collapse_disclosures.py` | Human-facing collapse disclosure warnings (no-silent-floor, memo D4) |
 | `_collapse_frontier.py` | Collapse-optimizer frontier records (`_DecisionPoint` and the decision witnesses), `K_CAP`/`FRONTIER_CAP`, and the pure frontier-merge helpers |
-| `_bundle_graph.py` | Graphviz node/cluster/edge construction helpers behind `tl.show_bundle_graph` |
+| `_bundle_graph.py` | Graphviz node/cluster/edge construction helpers behind `tl.visualization.show_bundle_graph` |
 | `_rank_layout_internal/`, `_summary_internal/` | Rank-layout backend internals and `summary()` internals |
 | `renderers/` | Renderer protocol (`base.py`) and the Graphviz backend (`graphviz.py`) |
 
@@ -147,7 +147,7 @@ pure-Python rank layout above 20,000 cost units.
   plus the D9 argument-position edge-label builders; at visible fan-in >=
   `_ARG_LABEL_MIDPOINT_FANIN` argument labels relocate to reserved-space midpoint
   labels and same-pair parallel arg edges merge into one row-listing edge (D03-R4).
-- `_buffer_visibility.py`: tri-state `show_buffer_layers` predicates (R43 split from
+- `_buffer_visibility.py`: tri-state `show_buffers` predicates (R43 split from
   `_render_edges.py`).
 - `_condensed_flow.py`: child condensed-flow-graph construction for smart collapse.
 - `_segment_descriptors.py`: segment descriptor construction and label derivation for
@@ -156,7 +156,7 @@ pure-Python rank layout above 20,000 cost units.
   collapse memo D4; R43 split from `auto_collapse.py`).
 - `_collapse_frontier.py`: frontier records, `K_CAP`/`FRONTIER_CAP` and the pure
   frontier-merge helpers (R43 split from `collapse_optimizer.py`).
-- `_bundle_graph.py`: Graphviz construction helpers for `tl.show_bundle_graph` (R43 split
+- `_bundle_graph.py`: Graphviz construction helpers for `tl.visualization.show_bundle_graph` (R43 split
   from `_user_public_impls.py`).
 - `request.py`: resolved visualization requests and output targets.
 

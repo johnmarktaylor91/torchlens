@@ -161,14 +161,14 @@ def _profile_model(name, model, input_tensor, description):
     # random_seed routes through capture=CaptureOptions(...); trace() itself
     # has no random_seed kwarg (unrecognized model-input keywords refuse
     # typed -- they are routed to the model's own forward() call instead).
-    log, lfp_time = _time_fn(trace_fn, model, input_tensor, capture=CaptureOptions(random_seed=42))
+    log, lfp_time = _time_fn(trace_fn, model, input_tensor, capture=CaptureOptions(seed=42))
 
     # save_new_outs requires the computational graph to match the
     # original trace exactly.  For some models (e.g. AlexNet) this
     # can fail even with identical inputs due to counter-alignment issues in
     # the fast path.  Gracefully degrade to N/A when that happens.
     try:
-        _, sna_time = _time_fn(log.save_new_outs, model, input_tensor.clone(), random_seed=42)
+        _, sna_time = _time_fn(log.save_new_outs, model, input_tensor.clone(), seed=42)
     except ValueError:
         sna_time = None
 
@@ -181,7 +181,7 @@ def _profile_model(name, model, input_tensor, description):
     old_handler = signal.signal(signal.SIGALRM, _alarm_handler)
     try:
         signal.alarm(60)
-        _, val_time = _time_fn(validate_forward_pass, model, input_tensor, random_seed=42)
+        _, val_time = _time_fn(validate_forward_pass, model, input_tensor, seed=42)
     except (MetadataInvariantError, _ValidationTimeout, Exception):
         val_time = None
     finally:

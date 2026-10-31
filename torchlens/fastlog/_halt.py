@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, NoReturn
 
 
-class HaltSignal(BaseException):
+class StopSignal(BaseException):
     """Signal that the active fastlog recording should stop early.
 
     Parameters
@@ -45,14 +45,14 @@ class HaltSignal(BaseException):
         self.boundary_label = boundary_label
 
 
-def halt(reason: str = "") -> NoReturn:
+def stop(reason: str = "") -> NoReturn:
     """Halt the current fastlog recording at this predicate call site.
 
     Parameters
     ----------
     reason:
-        Optional reason stored on ``Recording.halt_reason`` and
-        ``Recording.halts_by_pass``.
+        Optional reason stored on ``Recording.stop_reason`` and
+        ``Recording.stops_by_pass``.
 
     Raises
     ------
@@ -69,5 +69,5 @@ def halt(reason: str = "") -> NoReturn:
     if active_trace is not None:
         from ..capture.outcome import StopRequest
 
-        active_trace.__dict__["_stop_requested"] = StopRequest(kind="halt", reason=reason)
-    raise HaltSignal(reason)
+        active_trace.__dict__["_stop_requested"] = StopRequest(kind="stop", reason=reason)
+    raise StopSignal(reason)

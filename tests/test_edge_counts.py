@@ -217,12 +217,12 @@ def test_linear_chain_edge_counts() -> None:
     trace = _trace(Chain(num_pairs=2).eval(), torch.randn(1, 4))
 
     assert trace.num_edges == 5
-    assert trace.num_compute_edges == 3
+    assert trace.graph.num_compute_edges == 3
     # mean children per compute op: 4 compute ops each feed exactly one child -> 1.0
-    assert trace.branching_factor == pytest.approx(1.0)
-    assert trace.max_in_degree == 1
-    assert trace.max_out_degree == 1
-    assert trace.num_layer_edges == 5
+    assert trace.graph.branching_factor == pytest.approx(1.0)
+    assert trace.graph.max_in_degree == 1
+    assert trace.graph.max_out_degree == 1
+    assert trace.graph.num_layer_edges == 5
     _assert_edge_invariants(trace)
 
 
@@ -232,9 +232,9 @@ def test_residual_reuse_counts_skip_edge() -> None:
     trace = _trace(ComputeReuse().eval(), torch.randn(1, 4))
 
     assert trace.num_edges == 7
-    assert trace.num_compute_edges == 5
-    assert trace.max_in_degree == 2
-    assert trace.max_out_degree == 2
+    assert trace.graph.num_compute_edges == 5
+    assert trace.graph.max_in_degree == 2
+    assert trace.graph.max_out_degree == 2
     assert ("relu_1_2:1", "mul_1_3:1") in _canonical_child_edges(trace)
     assert ("relu_1_2:1", "add_1_4:1") in _canonical_child_edges(trace)
     _assert_edge_invariants(trace)
@@ -246,9 +246,9 @@ def test_n_way_combine_max_in_degree() -> None:
     trace = _trace(NWayCombine(num_branches=3).eval(), torch.randn(1, 4))
 
     assert trace.num_edges == 8
-    assert trace.num_compute_edges == 4
-    assert trace.max_in_degree == 3
-    assert trace.max_out_degree == 1
+    assert trace.graph.num_compute_edges == 4
+    assert trace.graph.max_in_degree == 3
+    assert trace.graph.max_out_degree == 1
     _assert_edge_invariants(trace)
 
 
@@ -258,8 +258,8 @@ def test_recurrent_reassignment_layer_edges_collapse_pass_edges() -> None:
     trace = _trace(RecurrentCell().eval(), torch.randn(1, 4))
 
     assert trace.num_edges == 7
-    assert trace.num_layer_edges == 4
-    assert trace.num_layer_edges < trace.num_edges
+    assert trace.graph.num_layer_edges == 4
+    assert trace.graph.num_layer_edges < trace.num_edges
     _assert_edge_invariants(trace)
 
 
@@ -293,8 +293,8 @@ def test_buffer_edges_are_counted() -> None:
 
     trace = _trace(BufferModel().train(), torch.randn(3, 4))
 
-    assert trace.num_buffer_edges == 6
-    assert trace.num_buffer_edges > 0
+    assert trace.graph.num_buffer_edges == 6
+    assert trace.graph.num_buffer_edges > 0
     _assert_edge_invariants(trace)
 
 
@@ -302,16 +302,16 @@ def test_backward_edges_gate_on_backward_capture() -> None:
     """Backward edge count is None until backward data has been logged."""
 
     no_backward = _trace(BackwardModel(), torch.randn(2, 4, requires_grad=True))
-    assert no_backward.num_backward_edges is None
+    assert no_backward.autograd.num_backward_edges is None
 
     trace = _trace(
         BackwardModel(),
         torch.randn(2, 4, requires_grad=True),
         capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
     )
-    assert trace.num_backward_edges is None
+    assert trace.autograd.num_backward_edges is None
     loss = trace[trace.output_layers[0]].out
     trace.backward(loss, retain_graph=True)
-    assert trace.num_backward_edges is not None
-    assert trace.num_backward_edges > 0
+    assert trace.autograd.num_backward_edges is not None
+    assert trace.autograd.num_backward_edges > 0
     _assert_edge_invariants(trace)

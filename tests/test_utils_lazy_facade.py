@@ -1,4 +1,4 @@
-"""Compatibility tests for the lazy :mod:`torchlens.utils` facade."""
+"""Compatibility tests for the lazy :mod:`torchlens._utils` facade."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-import torchlens.utils as utils
+import torchlens._utils as utils
 
 _EXPECTED_EXPORTS = (
     "AutocastRestore",
@@ -36,11 +36,9 @@ _EXPECTED_EXPORTS = (
     "human_readable_size",
     "identity",
     "in_notebook",
-    "index_nested",
     "int_list_to_compact_str",
     "is_iterable",
     "iter_accessible_attributes",
-    "find_executable_save_set",
     "flop_count",
     "format_flops",
     "format_size",
@@ -57,7 +55,6 @@ _EXPECTED_EXPORTS = (
     "print_override",
     "peek_graph",
     "progress_bar",
-    "register_op_rule",
     "remove_attributes_with_prefix",
     "remove_entry_from_list",
     "safe_copy",
@@ -104,7 +101,6 @@ def test_every_previous_utils_export_resolves_to_identical_object() -> None:
         "capability_snapshot",
         "doctor",
         "format_capability_summary",
-        "find_executable_save_set",
         "flop_count",
         "list_modules",
         "list_ops",

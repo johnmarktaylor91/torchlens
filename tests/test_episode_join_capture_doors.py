@@ -26,11 +26,7 @@ CAPTURE_DOOR_ALLOWLIST: dict[str, str] = {
         "stitches SAVED rank cores into a MergedTrace presenter; merging, "
         "not live capture (its name merely mentions Trace)"
     ),
-    "push": "product-bound replay over an EXISTING capture; no new capture",
-    "push_from": "product-bound replay over an EXISTING capture; no new capture",
-    "run": "product-bound re-execution of an EXISTING capture's provider",
     "Trace": "the product class itself; constructing one records nothing",
-    "ReentrantTraceError": "an exception class whose name mentions Trace",
 }
 
 

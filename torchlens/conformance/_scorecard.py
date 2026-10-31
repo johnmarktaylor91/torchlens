@@ -119,7 +119,7 @@ class PreviewScorecard:
     highest_tier: str
     sha256: str = ""
 
-    def to_canonical_json(self) -> str:
+    def to_json(self) -> str:
         """Render the canonical byte form (sorted keys, compact, ASCII)."""
 
         return _canonical_json(self, include_digest=True)

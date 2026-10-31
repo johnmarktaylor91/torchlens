@@ -223,7 +223,7 @@ _DIRECTION = torch.randn(16, generator=torch.Generator().manual_seed(7))
 def _steer() -> Any:
     """Return a non-idempotent additive steer on a 16-wide site."""
 
-    return tl.steer(_DIRECTION, magnitude=1.0, feature_axis=-1)
+    return tl.steer(_DIRECTION, strength=1.0, dim=-1)
 
 
 def _steer_edit(k: float) -> Callable[[torch.Tensor], torch.Tensor]:
@@ -592,7 +592,7 @@ def test_func_selector_rerun_refuses_a_partially_detached_recipe() -> None:
         hook_spec.site_target.selector_value for hook_spec in trace._intervention_spec.hook_specs
     )
     assert len(door_labels) == 2
-    trace.detach_hooks(tl.label(door_labels[0]), confirm_mutation=True)
+    trace.clear_edits(tl.label(door_labels[0]), confirm_mutation=True)
     staged = _staged(trace)
     readout = _readout(trace, "fc3").clone()
     with pytest.raises(ControlFlowDivergenceError) as excinfo:
@@ -833,7 +833,7 @@ def _raw_event(
 def test_raw_event_hash_folds_only_value_preserving_replacements() -> None:
     """The fold is narrow: a same-shape replacement folds; a reshaping one or a source does not."""
 
-    from torchlens.utils.hashing import compute_raw_event_shape_hash
+    from torchlens._utils.hashing import compute_raw_event_shape_hash
 
     def digest(*middle: SimpleNamespace, relu_parent: str = "linear") -> str:
         events = [

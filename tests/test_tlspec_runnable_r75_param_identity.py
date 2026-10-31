@@ -38,8 +38,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.runnable import build_sparse_run_descriptor
+from torchlens._runnable import PathFaithfulness, RunnableErrorCode, StateSource
 from torchlens.options import CaptureOptions
-from torchlens.runnable import PathFaithfulness, RunnableErrorCode, StateSource
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 

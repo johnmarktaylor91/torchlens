@@ -11,9 +11,9 @@ from .._errors import InvalidArgumentError
 from .request import RenderContext
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
     from .source_graph import SourceGraph
 
@@ -492,7 +492,7 @@ def export_collapse_plan(trace: Any, mode: str = "auto") -> dict[str, Any]:
     JSON file the caller owns, never the tlspec.
     """
 
-    from ..postprocess._site_join import site_profile
+    from .._postprocess._site_join import site_profile
 
     plan = trace.collapse_plan(mode=mode)
     profile = site_profile(trace)
@@ -536,7 +536,7 @@ def export_collapse_plan(trace: Any, mode: str = "auto") -> dict[str, Any]:
 def _profile_from_payload(payload: dict[str, Any]) -> Any:
     """Rebuild the persisted source SiteProfile, fail-closed."""
 
-    from ..postprocess._site_join import SiteProfile
+    from .._postprocess._site_join import SiteProfile
 
     try:
         profile = payload["profile"]
@@ -586,7 +586,7 @@ def reapply_collapse_plan(
             code="collapse_plan_payload_invalid",
             remedy="pass the dict returned by export_collapse_plan(trace)",
         )
-    from ..postprocess._site_join import join_site_profiles, site_profile
+    from .._postprocess._site_join import join_site_profiles, site_profile
 
     source_profile = _profile_from_payload(payload)
     target_profile = site_profile(trace)

@@ -14,13 +14,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import (
-    bisect_precision,
-    compare_rows,
-    first_divergence,
-    isolated_capture,
-    preserved_rng_state,
-)
+from torchlens.debug import bisect_precision, first_divergence, isolated_capture
+from torchlens.debug._graph import _compare_rows
+from torchlens.debug._rerun import preserved_rng_state
 
 
 class _TanhThenAdd(nn.Module):
@@ -67,7 +63,7 @@ def test_compare_rows_follow_execution_order() -> None:
     trace_a = tl.trace(_TanhThenAdd(0.5), x)
     trace_b = tl.trace(_TanhThenAdd(0.75), x)
     try:
-        rows, attrs = compare_rows(trace_a, trace_b)
+        rows, attrs = _compare_rows(trace_a, trace_b)
         labels = [row["op"] for row in rows]
         tanh_position = next(i for i, label in enumerate(labels) if label.startswith("tanh"))
         add_position = next(i for i, label in enumerate(labels) if label.startswith("add"))

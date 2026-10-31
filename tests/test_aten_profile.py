@@ -12,14 +12,14 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens._io import TorchLensIOError
+from torchlens._constants import PRIMITIVE_OP_FIELD_ORDER
+from torchlens._data_classes.aten_op import AtenOp, OpRef
+from torchlens._io import ArtifactError
 from torchlens._io.prerelease import activate_prerelease_fields
+from torchlens._ir.events import _AtenExecutionContext, _AtenTensorFact
 from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.constants import PRIMITIVE_OP_FIELD_ORDER
-from torchlens.data_classes.aten_op import AtenOp, OpRef
-from torchlens.intervention import SuperAtenOp
-from torchlens.ir.events import _AtenExecutionContext, _AtenTensorFact
+from torchlens.bundle import SuperAtenOp
 from torchlens.validation._invariants_primitive_ops import _check_primitive_op_invariants
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
@@ -40,8 +40,8 @@ _DOCUMENTED_UNSTABLE_ATEN_TOKENS = {
     "op_row_index",
     "op_label",
     "func_call_id",
-    *_AtenTensorFact.PORTABLE_STATE_SPEC,
-    *_AtenExecutionContext.PORTABLE_STATE_SPEC,
+    *_AtenTensorFact._PORTABLE_STATE_SPEC,
+    *_AtenExecutionContext._PORTABLE_STATE_SPEC,
     "comparison_status",
     "has_observation_gap",
     "primitive_op_invariants",
@@ -267,12 +267,12 @@ def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> No
     A modern torch build (``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE``) only needs the
     pause for ``__new__`` -- one crossing. Torch 2.1/2.2 additionally needs it
     for every ``__torch_function__`` return-conversion back into the subclass
-    (``as_subclass``; see ``SubclassConstructionUnderDispatchModeError``), and
+    (``as_subclass``; see ``TensorSubclassUnsupportedError``), and
     this forward's ``scratch.sum() * 0`` then ``x + ...`` chain reconstructs the
     subclass three more times -- four honest crossings there, not a regression.
     """
 
-    from torchlens.utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
+    from torchlens._utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
 
     with _activate_aten_recording_for_tests():
         trace = tl.trace(_SubclassCtorModel(), torch.ones(2, 3))
@@ -417,7 +417,7 @@ def test_plain_v8_round_trip_persists_the_profile(tmp_path: Path) -> None:
 
     trace = _armed_trace()
     default_path = tmp_path / "default.tlspec"
-    tl.save(trace, default_path)
+    trace.save(default_path)
     loaded = tl.load(default_path)
     assert len(loaded._primitive_op_profile.primitive_ops) == len(
         trace._primitive_op_profile.primitive_ops
@@ -457,8 +457,8 @@ def test_prerelease_load_refuses_dangling_and_forged_op_fks(
     row.parent_op_refs = (replacement,)
     path = tmp_path / f"{tamper_kind}.tlspec"
     with activate_prerelease_fields():
-        tl.save(trace, path)
-        with pytest.raises(TorchLensIOError) as exc_info:
+        trace.save(path)
+        with pytest.raises(ArtifactError) as exc_info:
             tl.load(path)
     assert exc_info.value.fields["code"] == "primitive_op_fk_invalid"
 

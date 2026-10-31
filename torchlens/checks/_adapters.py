@@ -32,12 +32,12 @@ _KNOWN_OPTIMIZERS: dict[str, bool] = {
 class OptimizerFacts:
     """Adapter-read facts about one optimizer (memo item 4).
 
-    ``known`` gates every derived band: an unknown optimizer yields
+    ``is_known`` gates every derived band: an unknown optimizer yields
     ``band_reason`` instead of a guessed decay/momentum model.
     """
 
     kind: str
-    known: bool
+    is_known: bool
     decoupled_decay: bool | None
     band_reason: str | None
     param_group_facts: tuple[dict[str, Any], ...] = field(default_factory=tuple)
@@ -80,7 +80,7 @@ def optimizer_facts(optimizer: torch.optim.Optimizer) -> OptimizerFacts:
         groups.append(facts)
     return OptimizerFacts(
         kind=kind,
-        known=known,
+        is_known=known,
         decoupled_decay=_KNOWN_OPTIMIZERS.get(kind),
         band_reason=(
             None

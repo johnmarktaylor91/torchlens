@@ -22,8 +22,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.data_classes._trace_fork as trace_fork
-from torchlens.data_classes._state_adapter import state_items
+import torchlens._data_classes._trace_fork as trace_fork
+from torchlens._data_classes._state_adapter import state_items
 from torchlens.options import CaptureOptions
 
 

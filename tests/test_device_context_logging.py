@@ -130,7 +130,7 @@ def test_meta_device_context_with_save_arg_values() -> None:
     from torchlens.options import CaptureOptions
 
     model = _MetaFactoryConsumerModel()
-    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(save_arg_values=True))
+    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(save_args=True))
     assert stashed(log, "seen_devices") == ["meta", "meta"]
 
 

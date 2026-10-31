@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
 
+from torchlens._ir.capture_events import CaptureEvents
+
 from .._errors import InvalidArgumentError
-from .._trace_state import TraceState
-from ..ir import CaptureEvents
-from ..ir.container import (
+from .._ir.container import (
     DataclassField,
     DictKey,
     HFKey,
@@ -21,10 +21,11 @@ from ..ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
+from .._quantities import Bytes
+from .._trace_state import TraceState
+from .._utils.display import progress_bar
+from .._utils.rng import execute_with_restored_rng_autocast
 from ..options import ReplayOptions, merge_replay_options
-from ..quantities import Bytes
-from ..utils.display import progress_bar
-from ..utils.rng import execute_with_restored_rng_autocast
 from ._param_fingerprint import (
     CHANGED_PARAMS_RUN_KEY,
     changed_param_scope,
@@ -65,8 +66,8 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .selectors import SelectorLike
 
 
@@ -139,7 +140,7 @@ def _walk_call_cone(
 
 
 def push(
-    log: Trace,
+    trace: Trace,
     *,
     replay: ReplayOptions | None = None,
 ) -> Trace:
@@ -147,7 +148,7 @@ def push(
 
     Parameters
     ----------
-    log:
+    trace:
         Model log to mutate in place.
     replay:
         Grouped replay options (``ReplayOptions``: ``strict``, ``hooks``).
@@ -159,23 +160,23 @@ def push(
     """
 
     replay_options = merge_replay_options(replay=replay)
-    _preflight_log(log)
-    _warn_if_direct_writes_will_be_overlaid(log)
-    hook_entries = _normalize_replay_hooks(log, replay_options.hooks)
-    origins = _origin_sites_for_hooks(log, hook_entries, strict=replay_options.strict)
+    _preflight_log(trace)
+    _warn_if_direct_writes_will_be_overlaid(trace)
+    hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
+    origins = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
     if not origins:
         raise ReplayPreconditionError("push requires at least one hook target")
     with changed_param_scope(replay_options.allow_changed_params):
         if replay_options.differentiable:
             return _run_differentiable_replay(
-                log,
+                trace,
                 origins,
                 hook_entries=hook_entries,
                 strict=replay_options.strict,
                 preserve_origins=False,
             )
         return _run_replay(
-            log,
+            trace,
             origins,
             hook_entries=hook_entries,
             strict=replay_options.strict,
@@ -184,7 +185,7 @@ def push(
 
 
 def push_from(
-    log: Trace,
+    trace: Trace,
     site: SelectorLike | str | Op,
     *,
     replay: ReplayOptions | None = None,
@@ -193,7 +194,7 @@ def push_from(
 
     Parameters
     ----------
-    log:
+    trace:
         Model log to mutate in place.
     site:
         Layer pass or selector resolving to the origin site. The origin's
@@ -208,14 +209,14 @@ def push_from(
     """
 
     replay_options = merge_replay_options(replay=replay)
-    _preflight_log(log)
-    _warn_if_direct_writes_will_be_overlaid(log)
-    origin = _resolve_single_origin(log, site, strict=replay_options.strict)
+    _preflight_log(trace)
+    _warn_if_direct_writes_will_be_overlaid(trace)
+    origin = _resolve_single_origin(trace, site, strict=replay_options.strict)
     if not isinstance(origin.out, torch.Tensor):
         raise ReplayPreconditionError(f"origin {origin.layer_label!r} has no tensor out")
     with changed_param_scope(replay_options.allow_changed_params):
         return _run_replay(
-            log, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
+            trace, [origin], hook_entries=[], strict=replay_options.strict, preserve_origins=True
         )
 
 
@@ -1180,8 +1181,8 @@ def _apply_replay_hooks(
             name=_hook_name(entry),
             timing="post",
             direction="forward",
-            layer_log=site,
-            run_ctx=run_ctx,
+            op=site,
+            run_context=run_ctx,
             args=(current,),
             kwargs={},
         )
@@ -1193,7 +1194,7 @@ def _apply_replay_hooks(
             entry.normalized_callable,
             current,
             context,
-            force_shape_change=bool(entry.metadata.get("force_shape_change", False)),
+            allow_shape_change=bool(entry.metadata.get("allow_shape_change", False)),
         )
         records.append(
             _replay_fire_record(
@@ -1363,7 +1364,7 @@ def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:
         Replacement out.
     """
 
-    from ..data_classes.op import _set_saved_out_metadata
+    from .._data_classes.op import _set_saved_out_metadata
 
     site._internal_set("out", tensor)
     site._internal_set("transformed_out", None)
@@ -1379,7 +1380,7 @@ def _preflight_log(log: Trace) -> None:
         Model log to validate.
     """
 
-    from ..runnable import refuse_poisoned_trace
+    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(log, "path-assuming intervention chaining")
     if not getattr(log, "_tracing_finished", False):

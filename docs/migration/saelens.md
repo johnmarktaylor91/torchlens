@@ -6,7 +6,7 @@
 | Ablate / edit SAE features | `splice(..., latents_edit=fn)` -- the per-feature causal knob (a callable over the latent tensor) | Ships as part of the splice experiment. |
 | Manual attach at any site | `tl.splice_module(sae_like_module)` at a discovered site | Equivalent for shape-preserving PyTorch modules. |
 | Train an SAE | Bring your own optimizer over activations from `tl.extract_dataset` / `tl.trace`; the [SAE training hand-off](../sae_training_handoff.md) walks it end to end | TorchLens deliberately ships no trainers; it feeds external training machinery and then measures the trained artifact causally. |
-| Feature steering | `tl.steer(direction, magnitude=...)` or a custom hook | Equivalent for tensor directions. |
+| Feature steering | `tl.steer(direction, strength=...)` or a custom hook | Equivalent for tensor directions. |
 | Read feature activations | `SpliceResult.latents` is the SAE encoder output for the clean site activation, exactly as `sae.encode` returned it, and `SpliceResult.edited_latents` the latents after `latents_edit=` (what the decoder consumed). Both are kept by default; `splice(..., keep_latents=False)` drops them, and a warning fires once per session when they pass 256 MiB | Equivalent for local analysis. |
 | TransformerLens hook-name alignment | `torchlens.mechinterp.resolve_alias(log, name)`, or discover TorchLens labels and save exact labels | TLens spellings resolve against the trace. |
 | SAE dashboards / feature stores | No built-in equivalent | Out of scope by design; use SAELens/Neuronpedia tooling on activations TorchLens extracts. |

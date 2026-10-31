@@ -19,19 +19,19 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import WitnessCompleteness, WitnessGapKind
 from torchlens.backends.torch.buffer_writes import (
     _PARAM_BYTE_WITNESS_NOT_ARMED,
     param_byte_witness_not_armed,
 )
 from torchlens.backends.torch.completeness_witness import host_escape_has_mutable_writeback
 from torchlens.options import CaptureOptions
-from torchlens.runnable import WitnessCompleteness, WitnessGapKind
 
 _RUNNABLE_CAP = {
     "intervention_ready": True,
     "capture_container_structure": True,
     "cache": False,
-    "random_seed": 7,
+    "seed": 7,
 }
 
 

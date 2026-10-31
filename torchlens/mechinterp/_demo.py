@@ -32,7 +32,7 @@ def tlens_agreement_demo() -> dict[str, Any]:
     log = tl.trace(
         model,
         ids,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
 
     dec = mi.residual_decomposition(log)
@@ -44,7 +44,7 @@ def tlens_agreement_demo() -> dict[str, Any]:
     dla = mi.direct_logit_contributions(log, answer=paris, vs=london)
     assert dla.identity_receipt["result"] == "verified"  # noqa: S101 -- the demo IS its own gate
     print("DLA (' Paris' - ' London') top contributors:")
-    for label, score in dla.top(5):
+    for label, score in dla.topk(5):
         print(f"  {label}: {score:+.3f}")
 
     inspection = mi.inspect_prompt(log, answer=paris, tokenizer=tokenizer)
@@ -53,13 +53,13 @@ def tlens_agreement_demo() -> dict[str, Any]:
 
     scores = mi.head_scores(log, kind="induction")
     print("induction heads on the FUSED default-loaded model (no eager reload):")
-    for name, score in scores.top(3):
+    for name, score in scores.topk(3):
         print(f"  {name}: {score:.3f}")
 
     results: dict[str, Any] = {
         "decomposition_rows": len(dec),
-        "dla_top": dla.top(5),
-        "induction_top": scores.top(3),
+        "dla_top": dla.topk(5),
+        "induction_top": scores.topk(3),
     }
 
     try:

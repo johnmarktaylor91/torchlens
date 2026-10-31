@@ -236,7 +236,7 @@ def build_commit(root: Path = _REPO_ROOT) -> dict[str, str]:
 def _table_slide(slide: Slide, height: float, env: dict[str, Any], probe: dict[str, Any]) -> Any:
     import inspect
 
-    from torchlens.data_classes._trace_viz import TraceVisualizationMixin
+    from torchlens._data_classes._trace_viz import TraceVisualizationMixin
 
     params = inspect.signature(TraceVisualizationMixin.draw).parameters
     footer = f"TorchLens {env['torchlens']}, commit {env['commit'][:10]}, built {env['built'][:10]}"

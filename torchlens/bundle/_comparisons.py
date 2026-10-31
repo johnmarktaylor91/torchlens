@@ -17,7 +17,7 @@ import torch
 from .._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from . import Bundle
 
 

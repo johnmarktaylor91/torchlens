@@ -25,8 +25,8 @@ import time
 
 import pytest
 
-from torchlens.observability import join_events
-from torchlens.observability._kineto import NormalizedEvent
+from torchlens._observability import join_events
+from torchlens._observability._kineto import NormalizedEvent
 
 _US = 1_000  # ns per microsecond for readable fixture literals
 
@@ -237,9 +237,9 @@ def test_unavailable_extraction_is_disclosed() -> None:
 def test_explicit_device_time_request_refuses_typed() -> None:
     """Ladder rung 3: an inapplicable column raises typed with remedy."""
 
+    from torchlens._observability import join_events as je
+    from torchlens._observability._join import require_availability
     from torchlens.errors import TorchLensError
-    from torchlens.observability import join_events as je
-    from torchlens.observability._join import require_availability
 
     result = je((), extraction_path="in_memory")
     with pytest.raises(TorchLensError) as excinfo:

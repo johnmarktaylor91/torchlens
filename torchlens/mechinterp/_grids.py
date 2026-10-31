@@ -38,7 +38,7 @@ from ..semantic.patching import (
 from ._errors import refuse
 from ._records import _pandas_frame
 
-__all__ = ["PatchGrid", "grid", "patch_heads_grid", "patch_residual_grid"]
+__all__ = ["PatchGrid", "patch_grid", "patch_heads_grid", "patch_residual_grid"]
 
 #: Head-axis index per facet layout (captured layouts, per the recipe docs).
 _HEAD_AXIS = {"z": 1, "pattern": 1, "scores": 1, "result": 2, "q": 2, "k": 2, "v": 2}
@@ -59,7 +59,7 @@ class PatchGrid:
     unpatched baselines are in ``receipts["clean_metric"]`` and
     ``receipts["corrupted_metric"]``; a cell's effect is its value minus
     ``corrupted_metric`` (the run every cell patches into), which is what
-    :func:`torchlens.tviz.receipt_from_patch_grid` plots.
+    :func:`torchlens.transformer.receipt_from_patch_grid` plots.
     """
 
     axes: tuple[str, ...]
@@ -90,7 +90,7 @@ def _estimate_cost(n_cells: int, baseline_seconds: float) -> str:
     return f"patching grid: {n_cells} cells x ~{baseline_seconds:.2f}s/rerun ~= {total:.0f}s total"
 
 
-def grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
+def patch_grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
     model: Any,
     clean_input: Any,
     corrupted_input: Any,
@@ -162,7 +162,7 @@ def grid(  # noqa: PLR0913 -- the memo-normative driver signature (section 7)
             refuse(
                 code="mi_payload_missing",
                 message=f"No module exposes facet {sites!r} on the clean baseline.",
-                remedy="check tl.facets.facet_coverage(trace) for the vocabulary",
+                remedy="check tl.facets.coverage(trace) for the vocabulary",
                 analysis="patching.grid",
                 missing_sites=[],
             )
@@ -379,7 +379,7 @@ def patch_residual_grid(
 ) -> PatchGrid:
     """Preset: the classic [layer, position] residual-stream grid."""
 
-    return grid(
+    return patch_grid(
         model,
         clean_input,
         corrupted_input,
@@ -395,7 +395,7 @@ def patch_heads_grid(
 ) -> PatchGrid:
     """Preset: the [layer, head] z-patching grid."""
 
-    return grid(
+    return patch_grid(
         model,
         clean_input,
         corrupted_input,

@@ -29,8 +29,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from .._utils.display import atomic_write_text
 from ..errors import ConfigurationError
-from ..utils.display import atomic_write_text
 from ._netron_fields import _quantity, module_path_of
 from ._netron_records import NetronProjection
 

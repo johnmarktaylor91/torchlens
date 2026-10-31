@@ -21,11 +21,10 @@ import numpy as np  # noqa: E402
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends import (  # noqa: E402
-    BackendUnsupportedError,
-    get_backend_spec,
     require_capability_implementation,
 )
 from torchlens.backends.paddle import PaddleBackend  # noqa: E402
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 
@@ -93,7 +92,7 @@ def _ablated_trace() -> Any:
 def test_paddle_capability_lift_is_real() -> None:
     """The lifted flag binds a resolvable implementing surface."""
 
-    spec = get_backend_spec("paddle")
+    spec = tl.backends.spec("paddle")
     assert spec.capabilities.interventions is True
     implementation = require_capability_implementation(spec, "interventions")
     assert implementation is not None
@@ -271,7 +270,7 @@ def test_paddle_unknown_helper_refuses_typed() -> None:
             _mlp,
             _inputs(),
             backend="paddle",
-            intervene=tl.when(tl.func("functional.relu"), tl.noise(0.1)),
+            intervene=tl.when(tl.func("functional.relu"), tl.add_noise(0.1)),
         )
 
 
@@ -370,13 +369,13 @@ def test_paddle_recipes_snapshot_dispatches() -> None:
     def recipe(record: Any) -> dict[str, Any]:
         return {"is_relu": "relu" in str(getattr(record, "label", ""))}
 
-    trace = tl.trace(_mlp, _inputs(), backend="paddle", recipes=[recipe])
+    trace = tl.trace(_mlp, _inputs(), backend="paddle", facets=[recipe])
     snapshot = trace.facet_registry_snapshot
     assert snapshot is not None
-    assert any("recipe" in entry.public.recipe_name for entry in snapshot.recipes)
+    assert any("recipe" in entry.public.name for entry in snapshot.functions)
 
     with pytest.raises(BackendUnsupportedError, match="recipe callables"):
-        tl.trace(_mlp, _inputs(), backend="paddle", recipes=["not-callable"])
+        tl.trace(_mlp, _inputs(), backend="paddle", facets=["not-callable"])
 
 
 def test_paddle_streaming_still_refuses_typed() -> None:
@@ -408,7 +407,7 @@ def test_paddle_intervened_trace_round_trips_metadata(tmp_path: Any) -> None:
 
     trace = _ablated_trace()
     path = tmp_path / "paddle_intervened.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
     loaded = tl.load(path)
     relu = _relu_op(loaded)
     assert relu.intervention_replaced is True

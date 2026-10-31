@@ -14,15 +14,15 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._training_validation import TrainingModeConfigError
-from torchlens.fastlog import CaptureSpec
-from torchlens.ir.summary_role import (
+from torchlens._ir.summary_role import (
     SummaryTransform,
     ensure_summary_output_owns_storage,
     is_summary_transform,
     summary,
     transform_role,
 )
+from torchlens._training_validation import TrainingModeConfigError
+from torchlens.fastlog import CaptureSpec
 
 
 def _histo64(t: torch.Tensor) -> torch.Tensor:
@@ -142,7 +142,7 @@ class TestTraceTrainModeCarveOut:
             model,
             x,
             grad_transform=summary(_histo64),
-            save=tl.options.SaveOptions(save_raw_gradients=False),
+            save=tl.options.SaveOptions(save_raw_grads=False),
             capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
         )
         log.log_backward(log[log.output_layers[0]].out.sum())
@@ -160,7 +160,7 @@ class TestFastlogCarveOut:
         rec = tl.record(
             model,
             x,
-            default_op=CaptureSpec(save_out=True, keep_grad=True),
+            default_op=CaptureSpec(save_out=True, save_grad=True),
             activation_transform=summary(_histo64),
             save_raw_activations=False,
         )
@@ -182,7 +182,7 @@ class TestFastlogCarveOut:
             tl.record(
                 model,
                 x,
-                default_op=CaptureSpec(save_out=True, keep_grad=True),
+                default_op=CaptureSpec(save_out=True, save_grad=True),
                 activation_transform=_histo64,
             )
         assert excinfo.value.fields["code"] == "transform_not_differentiable"
@@ -212,11 +212,11 @@ class TestStreamingTripwireUnchanged:
 
     @pytest.mark.smoke
     def test_summary_non_tensor_output_refuses_under_streaming(self, tmp_path) -> None:
-        from torchlens._io import TorchLensIOError
+        from torchlens._io import ArtifactError
 
         model = _model()
         x = torch.randn(2, 4)
-        with pytest.raises(TorchLensIOError):
+        with pytest.raises(ArtifactError):
             tl.trace(
                 model,
                 x,

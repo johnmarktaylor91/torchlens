@@ -30,7 +30,7 @@ def artifact(tmp_path: Path) -> Path:
     torch.manual_seed(0)
     trace = tl.trace(nn.Sequential(nn.Linear(3, 4), nn.ReLU()), torch.randn(2, 3))
     destination = tmp_path / "trace.tlspec"
-    tl.save(trace, destination)
+    trace.save(destination)
     return destination
 
 
@@ -137,7 +137,7 @@ def test_changed_content_at_same_path_is_not_served_stale(artifact: Path, tmp_pa
     torch.manual_seed(1)
     other = tl.trace(nn.Sequential(nn.Linear(5, 2), nn.Tanh()), torch.randn(2, 5))
     other_path = tmp_path / "other.tlspec"
-    tl.save(other, other_path)
+    other.save(other_path)
     shutil.rmtree(artifact)
     shutil.move(str(other_path), str(artifact))
     trace_b, _, _ = _artifacts.load_trace(str(artifact))

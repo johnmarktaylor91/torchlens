@@ -16,8 +16,8 @@ from collections.abc import Iterator
 from typing import Any, cast
 
 from .._errors import _actionable_message, _ActionableErrorMixin
+from .._utils import _torch_compat
 from ..errors._base import CompatibilityError
-from ..utils import _torch_compat
 
 
 class CompileCountsUnavailableError(_ActionableErrorMixin, CompatibilityError, RuntimeError):

@@ -67,7 +67,7 @@ def test_resid_pre_refuses_on_ambiguous_streams() -> None:
 
     log = tl.trace(Host().eval(), torch.randn(2, 3, 8))
     block = log.modules["block"]
-    item = block.facets.menu()["resid_pre"]
+    item = block.facets.declared()["resid_pre"]
     assert item.status == "structurally_absent"
     assert "ambiguous" in (item.detail or "")
     with pytest.raises((KeyError, AttributeError)):
@@ -97,7 +97,7 @@ def test_resid_pre_refuses_when_no_input_matches_by_shape() -> None:
             return self.block(x)
 
     log = tl.trace(Host().eval(), torch.randn(2, 3, 8))
-    item = log.modules["block"].facets.menu()["resid_pre"]
+    item = log.modules["block"].facets.declared()["resid_pre"]
     assert item.status == "structurally_absent"
     assert "dataflow + shape" in (item.detail or "")
 
@@ -138,7 +138,7 @@ def test_final_norm_walk_refuses_train_mode_dropout() -> None:
 
     model = _NormHead().train()
     log = tl.trace(model, torch.randn(2, 3, 8))
-    menu = log.modules["self"].facets.menu()
+    menu = log.modules["self"].facets.declared()
     assert menu["final_norm_kind"].status == "structurally_absent"
     assert "hop" in (menu["final_norm_kind"].detail or "")
 
@@ -158,7 +158,7 @@ def test_final_norm_walk_refuses_tensor_indexing() -> None:
             return self.lm_head(self.ln(x)[:, keep, :])
 
     log = tl.trace(GatherHead().eval(), torch.randn(2, 3, 8))
-    menu = log.modules["self"].facets.menu()
+    menu = log.modules["self"].facets.declared()
     assert menu["final_norm_kind"].status == "structurally_absent"
 
 
@@ -176,7 +176,7 @@ def test_final_norm_walk_refuses_dimension_dropping_subscript() -> None:
             return self.lm_head(self.ln(x)[:, -1])
 
     log = tl.trace(LastTokenHead().eval(), torch.randn(2, 3, 8))
-    menu = log.modules["self"].facets.menu()
+    menu = log.modules["self"].facets.declared()
     assert menu["final_norm_kind"].status == "structurally_absent"
 
 

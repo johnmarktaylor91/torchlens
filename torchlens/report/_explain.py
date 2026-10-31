@@ -22,17 +22,27 @@ from ._summary_columns import attention_full_square_line, counted_attention_ops
 Audience = Literal["researcher", "practitioner", "auto"]
 
 
+class ExplainReport(str):
+    """The plain-language report ``trace.explain()`` returns (DOCUMENTED-UNSTABLE).
+
+    A ``str``: print it, search it or slice it like the prose it is. The
+    machine-readable projection of the same facts is ``trace.to_agent_json()``.
+    """
+
+    __slots__ = ()
+
+
 def explain(
-    log: Any,
+    trace: Any,
     audience: Audience = "auto",
     *,
     max_tokens: int | None = None,
-) -> str:
-    """Explain a TorchLens log in plain language.
+) -> ExplainReport:
+    """Explain a TorchLens log in plain language (the body of ``trace.explain()``).
 
     Parameters
     ----------
-    log:
+    trace:
         Completed ``Trace``-like object.
     audience:
         Report style. ``"researcher"`` includes graph-pattern detail,
@@ -49,8 +59,8 @@ def explain(
 
     Returns
     -------
-    str
-        Multi-section prose.
+    ExplainReport
+        Multi-section prose (a ``str``).
 
     Raises
     ------
@@ -64,7 +74,7 @@ def explain(
     ``format="json"`` form of this report is removed.
     """
 
-    refuse_presenter_subject(log, "tl.report.explain")
+    refuse_presenter_subject(trace, "trace.explain")
     if audience not in {"researcher", "practitioner", "auto"}:
         raise ValueError("audience must be 'researcher', 'practitioner', or 'auto'.")
     if max_tokens is not None and (
@@ -75,23 +85,25 @@ def explain(
             "text report; omit it for the full report."
         )
 
-    if _is_partial_trace(log):
-        diagnosis = _partial_diagnosis(log)
-        return _budgeted_report(_partial_sections(diagnosis), max_tokens, drop_order=())
+    if _is_partial_trace(trace):
+        diagnosis = _partial_diagnosis(trace)
+        return ExplainReport(
+            _budgeted_report(_partial_sections(diagnosis), max_tokens, drop_order=())
+        )
 
     sections = [
-        ("Capture status", _capture_status_lines(log)),
-        ("Model summary", _model_summary_lines(log)),
-        ("Capture summary", _capture_summary_lines(log)),
-        ("Backward summary", _backward_summary_lines(log)),
-        ("Anomalies", _anomaly_lines(log)),
-        ("Interventions", _intervention_lines(log)),
-        ("Notable patterns", _pattern_lines(log, audience=audience)),
+        ("Capture status", _capture_status_lines(trace)),
+        ("Model summary", _model_summary_lines(trace)),
+        ("Capture summary", _capture_summary_lines(trace)),
+        ("Backward summary", _backward_summary_lines(trace)),
+        ("Anomalies", _anomaly_lines(trace)),
+        ("Interventions", _intervention_lines(trace)),
+        ("Notable patterns", _pattern_lines(trace, audience=audience)),
     ]
-    logged_value_lines = _logged_value_lines(log)
+    logged_value_lines = _logged_value_lines(trace)
     if logged_value_lines:
         sections.append(("Logged values", logged_value_lines))
-    return _budgeted_report(sections, max_tokens, drop_order=_SECTION_DROP_ORDER)
+    return ExplainReport(_budgeted_report(sections, max_tokens, drop_order=_SECTION_DROP_ORDER))
 
 
 #: Low-value-first order in which ``max_tokens`` drops report sections.
@@ -265,7 +277,7 @@ def _is_partial_trace(log: Any) -> bool:
         Whether the object is a failed partial capture wrapper.
     """
 
-    from ..partial import PartialTrace
+    from .._partial import PartialTrace
 
     return isinstance(log, PartialTrace)
 
@@ -647,7 +659,7 @@ def _capture_summary_lines(log: Any) -> list[str]:
             f"{_format_count(core.counts.alias_rows)} boundary/buffer rows)."
         ),
         (
-            f"- Tensors saved at capture: {_format_count(core.memory.at_capture_saved_ops)} "
+            f"- Tensors saved at capture: {_format_count(core.memory.captured_saved_ops)} "
             f"of {_format_count(core.counts.tracked_tensor_rows)}."
         ),
         f"- Maximum observed ops for one layer: {_format_count(max_ops)}.",
@@ -671,8 +683,8 @@ def _backward_summary_lines(log: Any) -> list[str]:
     if not bool(getattr(log, "has_backward_pass", False)):
         return ["- No backward passes are recorded on this log."]
     pass_count = int(getattr(log, "num_backward_passes", 0) or 0)
-    grad_fn_count = int(getattr(log, "num_grad_fns", 0) or 0)
-    grad_fn_call_count = int(getattr(log, "num_grad_fn_calls", 0) or 0)
+    grad_fn_count = len(getattr(getattr(log, "autograd", None), "grad_fns", None) or ())
+    grad_fn_call_count = len(getattr(getattr(log, "autograd", None), "grad_fn_calls", None) or ())
     saved_grad_count = _safe_len(getattr(log, "saved_grad_ops", None))
     total_backward_memory = getattr(log, "total_backward_memory", None)
     memory_line = (
@@ -735,7 +747,7 @@ def _anomaly_lines(log: Any) -> list[str]:
     if verdict == "checked_and_clean":
         return [
             (
-                f"- CHECKED-AND-CLEAN: {facts.checked} op output(s) examined, none "
+                f"- CHECKED-AND-CLEAN: {facts.num_checked_ops} op output(s) examined, none "
                 f"non-finite (basis: {basis})."
             ),
             "- Not audited: judgments (severity, follow-ups) come from tl.audit(trace).",
@@ -744,7 +756,7 @@ def _anomaly_lines(log: Any) -> list[str]:
         # A basis exists but coverage has gaps (disk-backed, inference-mode,
         # uncheckable dtypes, unsaved outputs): disclose the exact gaps
         # through the shared wording -- safe, no new scan runs.
-        from ..data_classes._nonfinite import coverage_gap_note
+        from .._data_classes._nonfinite import coverage_gap_note
 
         return [
             (
@@ -757,11 +769,11 @@ def _anomaly_lines(log: Any) -> list[str]:
     return [
         (
             f"- NOT-CHECKED: non-finite health has not been established on this object "
-            f"({facts.unexamined} saved output(s) unexamined; basis: {basis})."
+            f"({facts.num_unexamined_ops} saved output(s) unexamined; basis: {basis})."
         ),
         (
             "- To scan retained payloads (payload_scan cost): "
-            "tl.report.health_facts(trace) or trace.nonfinite_ops."
+            "trace.health_facts or trace.nonfinite_ops."
         ),
         *_track_nonfinite_hint_lines(log),
     ]
@@ -923,7 +935,7 @@ def _recurrent_loop_line(log: Any) -> str:
         Recurrent-loop summary.
     """
 
-    max_loops = int(getattr(log, "max_layer_op_count", 1) or 1)
+    max_loops = int(getattr(getattr(log, "graph", None), "max_ops_per_layer", 1) or 1)
     if max_loops > 1:
         return f"- Recurrent loops: at least one layer was observed across {max_loops} ops."
     return "- Recurrent loops: no repeated layer ops were detected."
@@ -944,7 +956,7 @@ def _dynamic_control_flow_line(log: Any) -> str:
     """
 
     event_count = _safe_len(getattr(log, "conditional_records", None))
-    has_branching = bool(getattr(log, "has_conditional_branching", False))
+    has_branching = bool(getattr(getattr(log, "graph", None), "has_conditional_branching", False))
     if event_count or has_branching:
         return (
             f"- Dynamic control flow: {_format_count(event_count)} conditional event(s) recorded."

@@ -10,7 +10,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._training_validation import TrainingModeConfigError
-from torchlens.fastlog import CaptureSpec, PredicateError, RecordContext
+from torchlens.errors import PredicateError
+from torchlens.fastlog import CaptureSpec, RecordContext
 
 
 class EncoderBlock(nn.Module):
@@ -36,7 +37,7 @@ def _keep_linear_grad(ctx: RecordContext) -> CaptureSpec | bool:
     """Request graph-connected capture at linear ops."""
 
     if ctx.func_name == "linear":
-        return CaptureSpec(keep_grad=True)
+        return CaptureSpec(save_grad=True)
     return False
 
 
@@ -70,7 +71,7 @@ def test_trace_predicate_save_to_disk_loads_layer_out(tmp_path: Path) -> None:
 def test_trace_predicate_disk_only_rejects_keep_grad(tmp_path: Path) -> None:
     """Disk-only predicate storage rejects graph-connected payload requests."""
 
-    with pytest.raises(PredicateError, match="keep_grad=True.*disk-only"):
+    with pytest.raises(PredicateError, match="save_grad=True.*disk-only"):
         tl.trace(
             EncoderBlock(),
             torch.ones(1, 4),
@@ -116,7 +117,7 @@ def test_trace_disk_streamed_save_load_round_trip(tmp_path: Path) -> None:
     expected = _saved_linear(log).out
     bundle_path = tmp_path / "round_trip.tlspec"
 
-    tl.save(log, bundle_path)
+    log.save(bundle_path)
     loaded = tl.load(bundle_path)
 
     assert isinstance(loaded, tl.Trace)

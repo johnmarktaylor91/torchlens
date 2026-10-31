@@ -45,7 +45,7 @@ from ..._state import pause_logging
 from ._tl import get_param_meta, set_param_meta
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 __all__ = [
     "install_offload_hook_shims",

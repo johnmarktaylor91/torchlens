@@ -13,8 +13,8 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.container import ContainerSpec, DictKey
-from torchlens.ir.container_registry import (
+from torchlens._ir.container import ContainerSpec, DictKey
+from torchlens._ir.container_registry import (
     ContainerLeafOccurrence,
     ContainerRecord,
     ContainerRegistry,
@@ -187,7 +187,7 @@ def test_output_container_views_match_legacy_fields() -> None:
     output_op = trace.ops[trace.output_layers[0]]
 
     container = output_op.container
-    assert isinstance(container, tl.Container)
+    assert isinstance(container, tl.types.Container)
     assert output_op.output_containers == (container,)
     assert container.kind == output_op.container_spec.kind
     assert container.leaves == tuple(trace.ops[label] for label in trace.output_layers)

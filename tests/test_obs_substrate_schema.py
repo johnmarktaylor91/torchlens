@@ -5,23 +5,23 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.observability import (
+from torchlens._observability import (
     PHASES,
     PRESENCE,
     STREAMS,
-    HistorySchemaError,
     ObservationRecord,
+    RunningStats,
     RunRecord,
     SiteRecord,
-    Spine,
     StepBlockRecord,
     merge_observations,
     validate_step_order,
 )
+from torchlens.errors import HistorySchemaError
 
 
 def _observed(step: int = 1, *, stream: str = "activation", **kwargs) -> ObservationRecord:
-    spine = Spine()
+    spine = RunningStats()
     spine.update(torch.tensor([1.0, -2.0, 0.0]))
     defaults: dict = {
         "global_step": step,
@@ -163,7 +163,7 @@ class TestMerges:
             merge_observations(a, b)
 
     def test_mixed_sketch_presence_refuses(self) -> None:
-        from torchlens.observability import Histogram
+        from torchlens._observability import Histogram
 
         h = Histogram()
         h.update(torch.tensor([1.0]))

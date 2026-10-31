@@ -16,7 +16,7 @@ that data and writes it in the files each tool already reads:
 `latents` is either the latents of one batch, such as `SpliceResult.latents`,
 or the per-latent top-k over a whole dataset that
 `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` collects under
-`tl.aggregate`. `tokens` holds the token ids, one row per example. Neither
+`tl.stats.aggregate`. `tokens` holds the token ids, one row per example. Neither
 tool is needed to write the files.
 
 ```text
@@ -93,7 +93,7 @@ Over a dataset, keep only each latent's top examples while the batches go
 by: `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` encodes every batch
 of site activations and keeps, per latent, the `k` largest activations with
 the example and position each came from. The example id is the example's
-index in the order `tl.aggregate` saw the data, so row `i` of `tokens` must be
+index in the order `tl.stats.aggregate` saw the data, so row `i` of `tokens` must be
 example `i`. The top examples equal a hand ranking of every activation (value
 first, then the lowest example, then the lowest position):
 
@@ -104,7 +104,7 @@ from safetensors.numpy import load_file
 relu = next(op.layer_label for op in tl.trace(model, tokens[:1]).layer_list if op.layer_type == "relu")
 stat = tl.stats.TopK(k=3, unit_axis=-1, encoder=sae.encode, name="latents")
 batches = [tokens[0:3], tokens[3:6], tokens[6:8]]
-top = tl.aggregate(model, batches, metrics={relu: tl.stats.Aggregator(stat)})[relu]["latents"]
+top = tl.stats.aggregate(model, batches, metrics={relu: tl.stats.Aggregator(stat)})[relu]["latents"]
 
 write_sae_dashboard(top, tokens, path="dataset/dashboard.json")
 write_delphi(top, tokens, site="hidden", model_name="gpt2", directory="dataset/latents")

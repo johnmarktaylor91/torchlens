@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
 from torchlens.intervention.rerun import _merge_rerun_host_rng_verdict
 from torchlens.options import CaptureOptions, InterventionOptions
 

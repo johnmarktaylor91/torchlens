@@ -114,9 +114,9 @@ class TapObserver:
                 span_names=span_names,
                 timestamp=time.monotonic(),
                 direction="forward",
-                _raw_site_label=_hook_layer_label(hook.layer_log),
+                _raw_site_label=_hook_layer_label(hook.op),
                 _trace_ref=_active_trace_ref(),
-                selection_mask=self._selection_mask_for(hook.layer_log, value),
+                selection_mask=self._selection_mask_for(hook.op, value),
             )
         )
         return out
@@ -141,7 +141,7 @@ class TapObserver:
                 else getattr(layer_log, "layer_label", None)
             )
         for entry in entries:
-            if entry.kind == "ACT" and entry.site_key[0] == layer_label:
+            if entry.kind == "ACT" and entry.key[0] == layer_label:
                 mask = entry.mask
                 if tuple(mask.shape) == tuple(value.shape):
                     return mask
@@ -411,7 +411,7 @@ def log_value(name: str, value: Any) -> None:
     ``torchlens.report``, which keeps a compatibility alias): observers own
     capture-time annotation writers, reporting surfaces own the readers.
     Values land under ``trace.annotations["logged_values"]`` and read back
-    through ``Trace.logged_values``; they render in ``tl.report.explain`` and
+    through ``Trace.logged_values``; they render in ``trace.explain`` and
     ``Trace.to_agent_json``.
 
     Parameters
@@ -439,19 +439,40 @@ _REDIRECTS: dict[str, str] = {
     "record_span": "use torchlens.observers.span -- record_span was renamed"
 }
 
+#: Live names resolved on first access (``register_tensor_connection`` lives
+#: with the capture door).
+_LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
+    "register_tensor_connection": ("torchlens.user_funcs", "register_tensor_connection"),
+}
+
 
 # Runtime only: under TYPE_CHECKING a module ``__getattr__`` would make every
 # name on this module type-check as Any.
 if not TYPE_CHECKING:
 
     def __getattr__(name: str) -> Any:
-        """Raise the typed teaching error for a removed torchlens.observers name."""
+        """Resolve a lazy torchlens.observers name or teach a removed one."""
 
-        from .utils.facade import resolve_facade_attr
+        from ._utils.facade import resolve_facade_attr
 
         return resolve_facade_attr(
-            owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
+            owner=__name__,
+            name=name,
+            module_globals=globals(),
+            lazy_attrs=_LAZY_ATTRS,
+            redirects=_REDIRECTS,
         )
 
 
-__all__ = ["TapObserver", "TapRecord", "active_span_records", "log_value", "span", "tap"]
+if TYPE_CHECKING:
+    from .user_funcs import register_tensor_connection as register_tensor_connection
+
+__all__ = [
+    "TapObserver",
+    "TapRecord",
+    "active_span_records",
+    "log_value",
+    "register_tensor_connection",
+    "span",
+    "tap",
+]

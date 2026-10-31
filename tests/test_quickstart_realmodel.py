@@ -16,14 +16,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.quickstart import (
-    SynthesizedValueReadWarning,
-    state_dict_hash,
-    trace_input_provenance,
-)
+from torchlens._quickstart import trace_input_provenance
+from torchlens._quickstart._primitive import state_dict_hash
+from torchlens.errors import SynthesizedValueReadWarning
 from torchlens.user_funcs import render
-
-pytestmark = pytest.mark.heavy
 
 
 @pytest.fixture(scope="module")
@@ -34,6 +30,9 @@ def resnet18_eval() -> nn.Module:
     return torchvision.models.resnet18(weights="IMAGENET1K_V1").eval()
 
 
+# Tiers are additive: the resnet and gpt2 rungs are heavy; the three
+# multi-model riders below are slow only (heavy + slow contradicts).
+@pytest.mark.heavy
 class TestResnet18Rungs:
     """All three rungs on the README model; matched policy; restoration."""
 
@@ -44,7 +43,7 @@ class TestResnet18Rungs:
         gold = tl.trace(resnet18_eval, torch.rand(1, 3, 224, 224))
         declared = tl.trace(resnet18_eval, input_size=(1, 3, 224, 224))
         inferred = tl.trace(resnet18_eval)
-        assert gold.num_tensors == declared.num_tensors == inferred.num_tensors
+        assert len(gold) == len(declared) == len(inferred)
         assert trace_input_provenance(gold) is None
         assert trace_input_provenance(declared).origin == "declared"
         assert trace_input_provenance(inferred).origin == "inferred"
@@ -59,7 +58,7 @@ class TestResnet18Rungs:
         tl.summary(resnet18_eval, input_size=(1, 3, 224, 224))
         assert state_dict_hash(resnet18_eval) == hash_before
         assert result.receipt.state_verified is True
-        assert result.total_ops == 151  # the eval-mode regression fixture count
+        assert result.num_ops == 151  # the eval-mode regression fixture count
 
     def test_train_mode_gold_capture_warns_and_differs(self) -> None:
         """The 211-vs-151 measurement is a regression fixture, not a bug.
@@ -76,9 +75,9 @@ class TestResnet18Rungs:
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             log = tl.trace(model, torch.rand(1, 3, 224, 224))
-        assert log.num_tensors == 211
+        assert len(log) == 211
         eval_log = tl.trace(model.eval(), torch.rand(1, 3, 224, 224))
-        assert eval_log.num_tensors == 151
+        assert len(eval_log) == 151
 
 
 class TestGpt2Rungs:
@@ -91,6 +90,7 @@ class TestGpt2Rungs:
         transformers = pytest.importorskip("transformers")
         return transformers.AutoModelForCausalLM.from_pretrained("gpt2").eval()
 
+    @pytest.mark.heavy
     def test_string_is_a_gold_input_with_tokenizer_provenance(self, gpt2: nn.Module) -> None:
         """A prompt string is rung 1; the tokenizer record stays authoritative."""
 
@@ -98,7 +98,7 @@ class TestGpt2Rungs:
         log = tl.trace(gpt2, "The quick brown fox")
         record = log.input_preprocessor
         assert record is not None
-        assert record.source != "torchlens.quickstart.input_resolver"
+        assert record.source != "torchlens._quickstart.input_resolver"
         assert trace_input_provenance(log) is None  # reads as gold
         from torchlens.errors import TorchLensError
 
@@ -126,7 +126,7 @@ class TestGpt2Rungs:
         assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"
 
         path = tmp_path / "gpt2_declared.tlspec"
-        tl.save(log, str(path))
+        log.save(str(path))
         loaded = tl.load(str(path))
         loaded_provenance = trace_input_provenance(loaded)
         assert loaded_provenance is not None
@@ -162,9 +162,9 @@ class TestClipBoundaryRider:
     def test_zero_arg_refusal_names_multi_input_and_quotes_the_probe(self, clip: nn.Module) -> None:
         """The CLIP fix: multi_input_required, never a geometric misdiagnosis."""
 
-        from torchlens.debug._infer_input_shape import infer_input_shape
+        from torchlens.debug._infer_input_shape import guess_input_shape
 
-        result = infer_input_shape(clip)
+        result = guess_input_shape(clip)
         assert result.found is False
         assert result.reason == "multi_input_required"
         assert "NoneType" in result.message

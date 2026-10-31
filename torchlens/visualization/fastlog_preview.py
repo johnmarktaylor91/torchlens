@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, cast
 
+from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from ..capture.predicates import _normalize_capture_decision
 from ..capture.projections import _build_record_context
 from ..fastlog.exceptions import RecordContextFieldError
 from ..fastlog.types import CaptureDecision, CaptureSpec, ModuleStackFrame, RecordContext
-from ..utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .node_spec import NodeSpec
 
 

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ...ir.container import (
+from ..._ir.container import (
     ContainerSpec,
     DataclassField,
     DictKey,
@@ -21,8 +21,8 @@ from ...ir.container import (
     namedtuple_type_can_carry_instance_state,
     reconstruction_is_lossy,
 )
-from ...ir.container_registry import OUTPUT_TREE_MAX_DEPTH
-from ...utils.introspection import (
+from ..._ir.container_registry import OUTPUT_TREE_MAX_DEPTH
+from ..._utils.introspection import (
     get_vars_of_type_from_obj,
 )
 

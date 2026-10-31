@@ -28,6 +28,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens._save_budget import (
     ACCOUNTING_PHASES,
     DEFAULT_SAVE_BUDGET_FRACTION,
@@ -37,7 +38,6 @@ from torchlens._save_budget import (
     format_bytes,
     resolve_save_budget,
 )
-from torchlens.data_classes.trace import Trace
 from torchlens.fastlog import _storage_resolver
 from torchlens.options import CaptureOptions
 
@@ -617,8 +617,8 @@ def test_dead_accountant_does_not_break_payload_release() -> None:
 def test_save_budget_is_a_session_knob_not_a_portable_field() -> None:
     """The budget describes this process, so it must not enter the schema."""
 
+    from torchlens._constants import MODEL_LOG_FIELD_ORDER
     from torchlens._io import FieldPolicy
-    from torchlens.constants import MODEL_LOG_FIELD_ORDER
 
     assert Trace.FIELD_POLICY["save_budget"].portable_policy is FieldPolicy.DROP
     assert Trace.FIELD_POLICY["_save_budget_accountant"].portable_policy is FieldPolicy.DROP
@@ -633,7 +633,7 @@ def test_saved_trace_round_trips_with_the_default_budget(tmp_path: Path) -> None
     assert trace.save_budget is None
 
     path = tmp_path / "trace.tlspec"
-    tl.save(trace, str(path))
+    trace.save(str(path))
     loaded = tl.load(str(path))
     # DROP means the ceiling is not round-tripped: a loaded trace retains nothing,
     # so it is restored to the default rather than to this session's setting.
@@ -713,7 +713,7 @@ def test_saved_arg_value_copies_are_charged() -> None:
     torch.manual_seed(0)
     plain = tl.trace(model, x)
     torch.manual_seed(0)
-    with_args = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    with_args = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
 
     plain_committed = sum(
         ledger.committed_bytes
@@ -863,6 +863,6 @@ def test_saved_args_refuse_at_pre_allocation_admission() -> None:
         tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(save_arg_values=True, save_budget=1000),
+            capture=tl.options.CaptureOptions(save_args=True, save_budget=1000),
         )
     assert excinfo.value.fields["accounting_phase"] == "pre_allocation_admission"

@@ -59,7 +59,7 @@ def _assert_params_require_grad(module: nn.Module, expected: bool) -> None:
 
 
 def _first_payload_by_layer_type(
-    recording: tl.fastlog.Recording,
+    recording: tl.Recording,
     layer_type: str,
 ) -> torch.Tensor:
     """Return the first RAM payload matching a fastlog layer type."""
@@ -105,7 +105,7 @@ def test_train_mode_preserves_user_requires_grad(
         trace = tl.trace(
             tiny_resnet_with_probe,
             torch.randn(3, 4, requires_grad=True),
-            capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
+            capture=tl.options.CaptureOptions(backward_ready=True, seed=0),
         )
     finally:
         handle.remove()
@@ -129,7 +129,7 @@ def test_aux_loss_slow(two_layer_mlp: TwoLayerMlp) -> None:
     trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
+        capture=tl.options.CaptureOptions(backward_ready=True, seed=0),
     )
     hidden = trace["relu_1_2"].out
     output = trace[trace.output_layers[0]].out
@@ -145,14 +145,12 @@ def test_aux_loss_slow(two_layer_mlp: TwoLayerMlp) -> None:
 def test_aux_loss_replay(two_layer_mlp: TwoLayerMlp) -> None:
     """Pattern A: replay capture supports an auxiliary loss on an intermediate out."""
 
-    trace = tl.trace(
-        two_layer_mlp, torch.randn(3, 4), capture=tl.options.CaptureOptions(random_seed=0)
-    )
+    trace = tl.trace(two_layer_mlp, torch.randn(3, 4), capture=tl.options.CaptureOptions(seed=0))
     trace.save_new_outs(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
-        random_seed=0,
+        seed=0,
     )
     hidden = trace["relu_1_2"].out
     output = trace[trace.output_layers[0]].out
@@ -168,7 +166,7 @@ def test_aux_loss_replay(two_layer_mlp: TwoLayerMlp) -> None:
 def test_aux_loss_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     """Pattern A: fastlog backward_ready supports an auxiliary out loss."""
 
-    output, recording = tl.fastlog.record(
+    output, recording = tl.record(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -189,7 +187,7 @@ def test_probe_frozen_backbone_slow(tiny_resnet_with_probe: TinyResnetWithProbe)
     trace = tl.trace(
         tiny_resnet_with_probe,
         torch.randn(3, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
+        capture=tl.options.CaptureOptions(backward_ready=True, seed=0),
     )
     saved = trace[trace.output_layers[0]].out
 
@@ -207,13 +205,13 @@ def test_probe_frozen_backbone_replay(tiny_resnet_with_probe: TinyResnetWithProb
     trace = tl.trace(
         tiny_resnet_with_probe,
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(random_seed=0),
+        capture=tl.options.CaptureOptions(seed=0),
     )
     trace.save_new_outs(
         tiny_resnet_with_probe,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
-        random_seed=0,
+        seed=0,
     )
     saved = trace[trace.output_layers[0]].out
 
@@ -228,7 +226,7 @@ def test_probe_frozen_backbone_replay(tiny_resnet_with_probe: TinyResnetWithProb
 def test_probe_frozen_backbone_fastlog(tiny_resnet_with_probe: TinyResnetWithProbe) -> None:
     """Pattern B: fastlog capture trains only the probe on a frozen backbone."""
 
-    output, recording = tl.fastlog.record(
+    output, recording = tl.record(
         tiny_resnet_with_probe,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -249,7 +247,7 @@ def test_multi_tap_loss_slow(multi_tap_model: MultiTapModel) -> None:
     trace = tl.trace(
         multi_tap_model,
         torch.randn(3, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
+        capture=tl.options.CaptureOptions(backward_ready=True, seed=0),
     )
     hidden = trace["relu_1_2"].out
     output = trace[trace.output_layers[1]].out
@@ -265,7 +263,7 @@ def test_multi_tap_loss_slow(multi_tap_model: MultiTapModel) -> None:
 def test_multi_tap_loss_fastlog(multi_tap_model: MultiTapModel) -> None:
     """Pattern C: fastlog supports losses from multiple saved taps."""
 
-    outputs, recording = tl.fastlog.record(
+    outputs, recording = tl.record(
         multi_tap_model,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -286,7 +284,7 @@ def test_distillation_slow(teacher_student_pair: TeacherStudentPair) -> None:
     trace = tl.trace(
         teacher_student_pair,
         torch.randn(3, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
+        capture=tl.options.CaptureOptions(backward_ready=True, seed=0),
     )
     teacher = trace[trace.output_layers[0]].out
     student = trace[trace.output_layers[1]].out
@@ -302,7 +300,7 @@ def test_distillation_slow(teacher_student_pair: TeacherStudentPair) -> None:
 def test_distillation_fastlog(teacher_student_pair: TeacherStudentPair) -> None:
     """Pattern D: fastlog supports frozen-teacher distillation."""
 
-    (teacher, student), recording = tl.fastlog.record(
+    (teacher, student), recording = tl.record(
         teacher_student_pair,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -326,7 +324,7 @@ def test_multi_pass_recorder_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     with tl.fastlog.Recorder(two_layer_mlp, backward_ready=True) as recorder:
         for _step in range(4):
             optimizer.zero_grad(set_to_none=True)
-            output = recorder.log(torch.randn(3, 4, requires_grad=True))
+            output = recorder(torch.randn(3, 4, requires_grad=True))
             loss = output.square().mean()
             loss.backward()
             optimizer.step()
@@ -338,7 +336,7 @@ def test_multi_pass_recorder_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     ]
 
     assert len(losses) == 4
-    assert recorder.recording.n_ops == 4
+    assert recorder.recording.num_ops == 4
     assert len({id(payload) for payload in payloads}) == 4
     assert all(payload.grad_fn is not None for payload in payloads)
     _assert_any_grad(two_layer_mlp)
@@ -362,7 +360,7 @@ def test_train_mode_shared_module_requires_grad() -> None:
         trace = tl.trace(
             model,
             torch.randn(3, 4, requires_grad=True),
-            capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
+            capture=tl.options.CaptureOptions(backward_ready=True, seed=0),
         )
     finally:
         handle.remove()
@@ -387,14 +385,14 @@ def test_save_new_outs_train_mode_inherits() -> None:
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, random_seed=0),
+        capture=tl.options.CaptureOptions(backward_ready=True, seed=0),
     )
 
     trace.save_new_outs(
         model,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=None,
-        random_seed=0,
+        seed=0,
     )
 
     saved = trace[trace.output_layers[0]].out
@@ -410,7 +408,7 @@ def test_save_new_outs_train_mode_overrides() -> None:
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(detach_saved_activations=True, random_seed=0),
+        capture=tl.options.CaptureOptions(detach_saved_activations=True, seed=0),
     )
     original_layer_flags = [layer.detach_saved_activations for layer in trace]
 
@@ -418,7 +416,7 @@ def test_save_new_outs_train_mode_overrides() -> None:
         model,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
-        random_seed=0,
+        seed=0,
     )
 
     saved = trace[trace.output_layers[0]].out
@@ -432,7 +430,7 @@ def test_save_new_outs_train_mode_overrides() -> None:
 def test_fastlog_train_mode_sugar_promotes_defaults() -> None:
     """fastlog backward_ready promotes omitted defaults to keep-grad capture specs."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         SharedFrozenModule(),
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -449,7 +447,7 @@ def test_fastlog_train_mode_sugar_promotes_defaults() -> None:
 def test_fastlog_train_mode_explicit_default_op_false() -> None:
     """Explicit default_op=False remains disabled under backward_ready sugar."""
 
-    recording = tl.fastlog.record(
+    recording = tl.record(
         SharedFrozenModule(),
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -463,7 +461,7 @@ def test_fastlog_train_mode_default_op_true_errors() -> None:
     """default_op=True contradicts backward_ready keep-grad sugar."""
 
     with pytest.raises(tl.errors.TrainingModeConfigError, match="default_op=True"):
-        tl.fastlog.record(
+        tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
             backward_ready=True,
@@ -472,14 +470,14 @@ def test_fastlog_train_mode_default_op_true_errors() -> None:
 
 
 def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
-    """CaptureSpec keep_grad=False contradicts backward_ready keep-grad sugar."""
+    """CaptureSpec save_grad=False contradicts backward_ready keep-grad sugar."""
 
-    with pytest.raises(tl.errors.TrainingModeConfigError, match="keep_grad=False"):
-        tl.fastlog.record(
+    with pytest.raises(tl.errors.TrainingModeConfigError, match="save_grad=False"):
+        tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
             backward_ready=True,
-            default_op=tl.fastlog.CaptureSpec(keep_grad=False),
+            default_op=tl.fastlog.CaptureSpec(save_grad=False),
         )
 
 
@@ -490,7 +488,7 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     trace = tl.trace(
         model,
         torch.ones(2, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(detach_saved_activations=True, random_seed=0),
+        capture=tl.options.CaptureOptions(detach_saved_activations=True, seed=0),
     )
     original_layer_flags = [layer.detach_saved_activations for layer in trace]
 
@@ -507,7 +505,7 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
             model,
             torch.ones(2, 4, requires_grad=True),
             backward_ready=True,
-            random_seed=0,
+            seed=0,
         )
     except ValueError:
         pass

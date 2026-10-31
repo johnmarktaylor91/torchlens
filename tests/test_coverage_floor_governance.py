@@ -253,7 +253,7 @@ def test_package_percentage_aggregation_is_red_capable() -> None:
 #: surviving wave-0 addition is the _encoding.py import-time two-row
 #: classification guard, unreachable while the completeness pin holds.
 #: 51 -> 57 (2026-08-28 F27): six uncoverable-on-CPU-CI seams -- the two
-#: native_profile CUDA legs (device activities + synchronize), the wrappers/
+#: kernel_profile CUDA legs (device activities + synchronize), the wrappers/
 #: backward observability-import failure belts (the substrate always imports
 #: in CI; the belt exists for torn installs), and the no-loadavg platform
 #: branch in the overhead harness, plus the compute-truth join lookup's

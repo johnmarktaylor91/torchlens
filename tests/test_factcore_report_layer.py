@@ -13,7 +13,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.report import EVIDENCE_VALUES, SummaryReport, compute_aggregation
+from torchlens.report import SummaryReport
+from torchlens.report._compute_truth import compute_aggregation
+from torchlens.report._summary_report import EVIDENCE_VALUES
 
 
 def _model() -> nn.Module:
@@ -50,8 +52,8 @@ def test_raw_numbers_pin() -> None:
         "params_total",
         "flops_forward_fma2",
         "macs_forward",
-        "at_capture_bytes",
-        "retained_now_bytes",
+        "captured_bytes",
+        "retained_bytes",
     ):
         value = getattr(totals, name)
         assert value is None or type(value) is int, name
@@ -91,7 +93,7 @@ def test_report_totals_read_the_one_aggregation() -> None:
     assert report.totals.macs_forward == int(aggregation.macs_total)
     assert report.totals.compute_coverage["unknown"] == aggregation.coverage.unknown
     # profile consumes the SAME aggregation: its whole-trace total agrees.
-    assert int(trace.total_flops_forward) == report.totals.flops_forward_fma2
+    assert int(trace.cost.total_flops_forward) == report.totals.flops_forward_fma2
 
 
 def test_report_rows_carry_identity_and_evidence() -> None:

@@ -16,8 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import ResolvedPostprocessing
 from torchlens._errors import InvalidArgumentError
-from torchlens.data_classes.trace import ResolvedPostprocessing
 
 
 def _logits_model() -> nn.Module:
@@ -54,7 +54,7 @@ def test_builtin_style_is_unaffected() -> None:
 def test_custom_style_resolved_by_a_registered_detector_is_honored() -> None:
     """The documented custom-detector route keeps working."""
 
-    @tl.autoroute.output.register(name="walk_labels", priority=5)
+    @tl._autoroute.output.register(name="walk_labels", priority=5)
     def walk_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
         """Resolve output_style='walk_labels'."""
 
@@ -79,13 +79,13 @@ def test_custom_style_resolved_by_a_registered_detector_is_honored() -> None:
         assert trace.output_postprocessor is not None
         assert trace.output_postprocessor.identifier == "walk_labels"
     finally:
-        tl.autoroute.output.unregister("walk_labels")
+        tl._autoroute.output.unregister("walk_labels")
 
 
 def test_style_declined_by_every_custom_detector_refuses_after_capture() -> None:
     """With custom detectors registered, the post-capture check refuses."""
 
-    @tl.autoroute.output.register(name="walk_decliner", priority=5)
+    @tl._autoroute.output.register(name="walk_decliner", priority=5)
     def walk_decliner(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
         """Decline everything."""
 
@@ -98,4 +98,4 @@ def test_style_declined_by_every_custom_detector_refuses_after_capture() -> None
         assert excinfo.value.fields["code"] == "output_style_unknown"
         assert "no built-in or registered custom output detector" in str(excinfo.value)
     finally:
-        tl.autoroute.output.unregister("walk_decliner")
+        tl._autoroute.output.unregister("walk_decliner")

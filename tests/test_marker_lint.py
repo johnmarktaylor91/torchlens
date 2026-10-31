@@ -456,7 +456,7 @@ def test_warn_once_sentinel_census_matches_autouse_reset(
     # silently (grind p5, B2P3-16 / sol R76-2). A test that trips one of these
     # degrades every later test in the session, so the reset is REQUIRED.
     sticky_latches = {
-        ("torchlens.utils.rng", "_cuda_rng_unusable"),
+        ("torchlens._utils.rng", "_cuda_rng_unusable"),
         # Last-degradation record for lazy auto-arm (fix/distributed-r4): not
         # "warned"-shaped, but a test that degrades arming would otherwise
         # leak its reason into every later auto_arm_degradation() read.
@@ -657,7 +657,7 @@ def _facet_register_aliases(tree: ast.Module) -> set[str]:
 def test_no_module_level_registry_mutation_in_tests() -> None:
     """Test modules must not mutate public registries at IMPORT time.
 
-    A module-level ``@tl.facets.register`` or ``tl.register_container(...)``
+    A module-level ``@tl.facets.register`` or ``tl.types.register_container(...)``
     fires at pytest COLLECTION -- before any fixture can isolate it -- so a
     full collection left extra recipes/containers in the process-global
     registry for the whole session while a targeted run did not: the same

@@ -53,11 +53,11 @@ def test_fork_outcome_is_derived_never_aliased(parent_trace: tl.Trace) -> None:
 
     fork = parent_trace.fork()
     assert parent_trace.outcome.status is CaptureStatus.COMPLETE
-    assert parent_trace.outcome.derived is False
+    assert parent_trace.outcome.is_derived is False
     assert fork.outcome is not parent_trace.outcome
     assert fork.outcome.status is CaptureStatus.UNATTESTED
-    assert fork.outcome.derived is True
-    assert fork.outcome.settlement_note == "forked_from=complete"
+    assert fork.outcome.is_derived is True
+    assert fork.outcome.note == "forked_from=complete"
 
 
 def test_mutated_fork_cannot_save_as_attested_complete(parent_trace: tl.Trace, tmp_path) -> None:
@@ -74,11 +74,11 @@ def test_mutated_fork_cannot_save_as_attested_complete(parent_trace: tl.Trace, t
     op = fork["relu_1_2"].ops[0]
     op.out = torch.zeros_like(op.out)
     path = os.path.join(tmp_path, "mutated_fork.tlspec")
-    tl.save(fork, path)
+    fork.save(path)
     restored = tl.load(path)
     assert restored.outcome.status is not CaptureStatus.COMPLETE
     assert restored.outcome.status is CaptureStatus.UNATTESTED
-    assert restored.outcome.derived is True
+    assert restored.outcome.is_derived is True
 
 
 def test_fork_outcome_survives_pickle_coherently(parent_trace: tl.Trace) -> None:
@@ -87,8 +87,8 @@ def test_fork_outcome_survives_pickle_coherently(parent_trace: tl.Trace) -> None
     fork = parent_trace.fork()
     restored = pickle.loads(pickle.dumps(fork))
     assert restored.outcome.status is CaptureStatus.UNATTESTED
-    assert restored.outcome.derived is True
-    assert restored.outcome.settlement_note == "forked_from=complete"
+    assert restored.outcome.is_derived is True
+    assert restored.outcome.note == "forked_from=complete"
 
 
 def test_fork_of_fork_records_unattested_provenance(parent_trace: tl.Trace) -> None:
@@ -97,7 +97,7 @@ def test_fork_of_fork_records_unattested_provenance(parent_trace: tl.Trace) -> N
     fork = parent_trace.fork()
     grandfork = fork.fork()
     assert grandfork.outcome.status is CaptureStatus.UNATTESTED
-    assert grandfork.outcome.settlement_note == "forked_from=unattested"
+    assert grandfork.outcome.note == "forked_from=unattested"
 
 
 def test_fork_keeps_analysis_capabilities(parent_trace: tl.Trace, tmp_path) -> None:
@@ -106,7 +106,7 @@ def test_fork_keeps_analysis_capabilities(parent_trace: tl.Trace, tmp_path) -> N
     fork = parent_trace.fork()
     # save_analysis allows UNATTESTED.
     path = os.path.join(tmp_path, "fork.tlspec")
-    tl.save(fork, path)
+    fork.save(path)
     assert tl.load(path)["relu_1_2"] is not None
     # validation entry allows UNATTESTED (the tripwire stays armed).
     from torchlens.capture.outcome import require_capture_capability

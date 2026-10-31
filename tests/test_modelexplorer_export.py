@@ -94,7 +94,7 @@ def test_ids_survive_tlspec_round_trip(port_log: Any, tmp_path: Path) -> None:
     (composition row 6)."""
 
     before = tl.export.to_model_explorer_dict(port_log)
-    tl.save(port_log, tmp_path / "trace.tlspec")
+    port_log.save(tmp_path / "trace.tlspec")
     loaded = tl.load(tmp_path / "trace.tlspec")
     after = tl.export.to_model_explorer_dict(loaded)
     assert [n["id"] for n in before["graphs"][0]["nodes"]] == [

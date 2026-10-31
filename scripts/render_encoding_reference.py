@@ -104,8 +104,8 @@ class ChainedLoops(nn.Module):
 def _render(trace: tl.Trace, name: str, **kwargs: object) -> None:
     trace.draw(
         vis_save_only=True,
-        vis_fileformat="svg",
-        vis_outpath=str(OUTPUT_DIR / name),
+        file_format="svg",
+        path=str(OUTPUT_DIR / name),
         **kwargs,
     )
     print(f"rendered {name}.svg")

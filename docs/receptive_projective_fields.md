@@ -124,7 +124,7 @@ silently selecting a representative; use the trace table to enumerate boundary o
 
 `tl.receptive_field` is lazy and deliberately outside `tl.__all__`. Its result vocabulary is
 `GridLayout`, `ReceptiveField`, `ReceptiveFieldAxis`, `ReceptiveFieldBox`,
-`ReceptiveFieldBoxAxis`, `GradientReceptiveField`, `ReceptiveFieldProfile`,
+`ReceptiveFieldBoxAxis`, `GradReceptiveField`, `ReceptiveFieldProfile`,
 `ReceptiveFieldValidation`, `ReceptiveFieldValidationStatus`, `ReceptiveFieldViolation`,
 `ReceptiveFieldStatus`, `ReceptiveFieldAlignment`, and `ReceptiveFieldDirection`. The query
 view type is `ReceptiveFieldView`.
@@ -191,7 +191,7 @@ unit = op.receptive_field.center_unit(batch_index=0)
 trace.draw(
     node_spec_fn=tl.receptive_field.node_spec(op, unit=unit),
     vis_save_only=True,
-    vis_fileformat="svg",
+    file_format="svg",
 )
 
 # Save the source image overlay and the empirical gradient heatmap together.

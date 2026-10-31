@@ -46,7 +46,7 @@ def test_a_gpt2_small_circuit_runs_as_one_call_and_matches_plain_hooks(r1_loader
         edges = [e for e in _outside_random_circuit(graph, keep=0.05) if chosen(e.receiver)]
         assert len({edge.receiver.name for edge in edges}) == 12 + 1 + 3 * 36
         started = time.perf_counter()
-        patched = torchlens.mechinterp.patch_edges(clean, edges, corrupt=corrupt)
+        patched = torchlens.mechinterp.patch_edges(clean, edges, corrupted_graph=corrupt)
         elapsed = time.perf_counter() - started
         receivers = len({edge.receiver.name for edge in edges})
         print(f"patch_edges: {len(edges)} edges into {receivers} receivers in {elapsed:.1f} s")

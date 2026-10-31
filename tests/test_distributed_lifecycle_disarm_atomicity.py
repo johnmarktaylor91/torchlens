@@ -24,12 +24,12 @@ import torch
 
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
 from torchlens.distributed._lifecycle import GroupIdentity  # noqa: E402
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
-# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# census-vetted torch build exists (torchlens.distributed.is_vetted_build());
 # on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
 # Both tests in this module arm() as their first step.
 pytestmark = [
@@ -38,9 +38,9 @@ pytestmark = [
         reason="torch.distributed gloo unavailable",
     ),
     pytest.mark.skipif(
-        not has_vetted_snapshot(),
+        not is_vetted_build(),
         reason="full collective arming requires a census-vetted torch build "
-        "(torchlens.distributed.has_vetted_snapshot() is False here)",
+        "(torchlens.distributed.is_vetted_build() is False here)",
     ),
 ]
 

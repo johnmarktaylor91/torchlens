@@ -40,7 +40,7 @@ def test_biased_linear_true_macs_not_flops_over_two() -> None:
         assert record.other_flops == 32  # the bias adds, NOT MACs
         assert record.mac_applicability == "mac"
         assert record.evidence == "formula_exact"
-        assert int(log.total_macs_forward) == 256
+        assert int(log.cost.total_macs_forward) == 256
     finally:
         log.cleanup()
 
@@ -123,7 +123,7 @@ def test_fma_outside_the_closed_vocabulary_refuses_typed() -> None:
 def test_flop_count_conventions() -> None:
     """A6: utils.flop_count honors the default/fma2/fma1 convention."""
 
-    from torchlens.utils import flop_count
+    from torchlens._utils import flop_count
 
     model = nn.Linear(8, 16, bias=True)
     x = torch.randn(2, 8)
@@ -150,7 +150,7 @@ def test_flop_count_refuses_removed_and_unknown_options(
     """The removed count_fma_as_two spelling refuses typed naming flop_convention."""
 
     from torchlens._errors import InvalidArgumentError
-    from torchlens.utils import flop_count
+    from torchlens._utils import flop_count
 
     model = nn.Linear(2, 2)
     calls: list[int] = []
@@ -186,9 +186,9 @@ def test_backward_macs_are_none_never_half_flops() -> None:
         assert first_op.macs_backward is None
         assert first_op.macs_total is None
         assert op.macs_backward is None
-        assert log.total_macs_backward is None
-        assert log.total_macs is None
-        assert log.macs_by_op_type()["linear"]["backward"] is None
+        assert log.cost.total_macs_backward is None
+        assert log.cost.total_macs is None
+        assert log.cost.macs_by_kind()["linear"]["backward"] is None
     finally:
         log.cleanup()
 
@@ -263,7 +263,7 @@ def test_bert_base_exact_mac_decomposition() -> None:
         assert len(fused) == 73
         assert sum(int(op.macs_forward) for op in fused) == 1_019_805_696
         assert sum(int(op.macs_forward) for op in fused) != 1_020_303_744
-        assert int(log.total_macs_forward) == 1_019_805_696 + 2_654_208
+        assert int(log.cost.total_macs_forward) == 1_019_805_696 + 2_654_208
         assert log.macs_unknown_split_ops == ()
     finally:
         log.cleanup()

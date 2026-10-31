@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.options import EpisodeSpec
+from torchlens.options import EpisodeOptions
 
 pytest.importorskip("transformers")
 
@@ -129,12 +129,12 @@ def test_real_generate_shape_and_kv_cache_feed_agree():
     append_trace = tl.trace(
         append_all,
         prompt,
-        episode=EpisodeSpec(stepped_module=append_all.model, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=append_all.model, num_steps=N_STEPS),
     )
     kv_trace = tl.trace(
         kv_cache,
         prompt,
-        episode=EpisodeSpec(stepped_module=kv_cache.model, n_steps=N_STEPS),
+        episode=EpisodeOptions(stepped_module=kv_cache.model, num_steps=N_STEPS),
     )
 
     append_column = _column(append_trace)
@@ -161,9 +161,9 @@ def test_real_float_logits_root_digest_kind():
     trace = tl.trace(
         model,
         _prompt(),
-        episode=EpisodeSpec(
+        episode=EpisodeOptions(
             stepped_module=model.model,
-            n_steps=N_STEPS,
+            num_steps=N_STEPS,
             step_output_kind="digest",
             step_axis=1,
         ),
@@ -183,9 +183,9 @@ def test_real_dict_root_declared_slot():
     trace = tl.trace(
         model,
         prompt,
-        episode=EpisodeSpec(
+        episode=EpisodeOptions(
             stepped_module=model.model,
-            n_steps=N_STEPS,
+            num_steps=N_STEPS,
             step_output_from="sequences",
         ),
     )

@@ -28,15 +28,15 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `node_mode:profiling` | node_mode='profiling' (time/memory rows) | p42 |
 | `node_spec_fn:vision` | node_spec_fn=vision_node_mode (conv-oriented rows) | p43 |
 | `node_spec_fn:attention` | node_spec_fn=attention_node_mode (attention-oriented rows) | p43 |
-| `theme:torchlens` | vis_theme='torchlens' (default) | p53 |
-| `theme:paper` | vis_theme='paper' | p53 |
-| `theme:dark` | vis_theme='dark' | p53 |
-| `theme:colorblind` | vis_theme='colorblind' | p53 |
-| `theme:high_contrast` | vis_theme='high_contrast' | p53 |
+| `theme:torchlens` | theme='torchlens' (default) | p53 |
+| `theme:paper` | theme='paper' | p53 |
+| `theme:dark` | theme='dark' | p53 |
+| `theme:colorblind` | theme='colorblind' | p53 |
+| `theme:high_contrast` | theme='high_contrast' | p53 |
 | `show_legend` | show_legend=True legend box | p8 |
-| `buffers:never` | show_buffer_layers='never' | p6 |
-| `buffers:meaningful` | show_buffer_layers='meaningful' (default) | p3, p6 |
-| `buffers:always` | show_buffer_layers='always' | p6 |
+| `buffers:never` | show_buffers='never' | p6 |
+| `buffers:meaningful` | show_buffers='meaningful' (default) | p3, p6 |
+| `buffers:always` | show_buffers='always' | p6 |
 | `containers:labels` | show_containers='labels' | p15 |
 | `containers:cluster` | show_containers='cluster' (single-owner required; falls back to labels) | p15 |
 | `containers:collapsed` | show_containers='collapsed' homogeneous-container merge | p15 |
@@ -140,7 +140,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `combined:cluster_rest` | intervening_cluster 'outside'/'downstream' mirror the two placements shown ('upstream'/'own') with different cluster targets. |
 | `overrides:grad_edge` | vis_grad_edge_overrides styles gradient edges via the same override dict machinery as vis_edge_overrides (shown). |
 | `plumbing` | vis_outpath / vis_fileformat / vis_save_only / return_graph / vis_graph_overrides and the draw() short-form params (view, depth, renderer, layout, node_style) have no visual identity of their own. |
-| `show:dispatcher` | Trace.show(method='graph'/'repr') dispatches to draw()/repr(). method='html' returns Trace._repr_html_() -- see the html_repr entry. |
+| `show:dispatcher` | Trace.show(kind='graph'/'repr') dispatches to draw()/repr(). method='html' returns Trace._repr_html_() -- see the html_repr entry. |
 | `html_repr` | Trace._repr_html_() is a bespoke HTML identity card (layers/ops/save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz render, so it cannot appear in this PDF. |
 | `animate_ops` | Trace.animate_ops() returns an HTML play/pause widget for repeated-pass ops; interactive HTML, out of scope for a static PDF. |
 | `code_panel:callable` | code_panel=<callable> reuses the same panel box styling as the string modes; only the text source differs. |

@@ -1,6 +1,6 @@
 """Token-position editing.
 
-``at_positions(edit, positions, ...)`` restricts any same-shape edit to chosen
+``positions(edit, positions, ...)`` restricts any same-shape edit to chosen
 token positions of a ``(batch, tokens, ...)`` site value: the edit computes its
 full replacement as usual, and only the selected positions take it (the others
 keep the original value). Positions are physical indices (an int, a list of
@@ -100,7 +100,7 @@ def _row_mask(
     return selected
 
 
-def at_positions(
+def positions(
     edit: Any,
     positions: Any,
     *,

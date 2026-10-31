@@ -22,8 +22,8 @@ import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import BackendUnsupportedError  # noqa: E402
 from torchlens.backends.mlx import MLXBackend  # noqa: E402
+from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
 
 class _TwoLayerMLP(nn.Module):
@@ -196,7 +196,7 @@ def test_mlx_backward_direction_intervene_refuses_typed() -> None:
             _TwoLayerMLP(),
             _input(),
             backend="mlx",
-            intervene=tl.when(tl.func("relu"), tl.grad_zero()),
+            intervene=tl.when(tl.func("relu"), tl.zero_grad()),
         )
 
 
@@ -234,7 +234,7 @@ def test_mlx_recipes_refuses_typed() -> None:
     """Recipe specs stay refused; only tl.when static predicates dispatch."""
 
     with pytest.raises(BackendUnsupportedError, match="recipe"):
-        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", recipes=object())
+        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", facets=object())
 
 
 def test_mlx_halt_non_selector_refuses_typed() -> None:
@@ -263,9 +263,7 @@ def test_mlx_interventions_flag_false_refuses_the_surface() -> None:
     """Review probe, reverse direction: flipping interventions=False in place
     refuses trace(intervene=) typed — the table stays load-bearing on MLX."""
 
-    from torchlens.backends import get_backend_spec
-
-    spec = get_backend_spec("mlx")
+    spec = tl.backends.spec("mlx")
     object.__setattr__(spec.capabilities, "interventions", False)
     try:
         with pytest.raises(BackendUnsupportedError, match="interventions=False"):

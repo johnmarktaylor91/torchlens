@@ -15,9 +15,12 @@ from example_models import TinyReluAdd as _ReluModel
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir.container import TupleIndex
+from torchlens._ir.selector_eval import selector_from_spec
+from torchlens.intervention import check_spec_compat
 from torchlens.intervention.errors import (
     MultiMatchWarning,
-    OpaqueCallableInExecutableSaveError,
+    OpaqueCallableError,
     ReplayPreconditionError,
     UntrustedCallableError,
 )
@@ -30,6 +33,7 @@ from torchlens.intervention.save import (
     resolve_function_registry_key,
     save_intervention,
 )
+from torchlens.intervention.selectors import output_at
 from torchlens.intervention.types import (
     Edit,
     FireRecord,
@@ -37,9 +41,6 @@ from torchlens.intervention.types import (
     InterventionSpec,
 )
 from torchlens.io import load_intervention_spec
-from torchlens.ir.container import TupleIndex
-from torchlens.ir.selector_eval import selector_from_spec
-from torchlens.validation import check_spec_compat
 
 _INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention.resolver")
 
@@ -148,7 +149,7 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     assert tl.load(path) == spec
     compat = check_spec_compat(spec, _log(_ReluModel(), x))
     assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.targets_resolve_identically is True
+    assert compat.has_identical_target_resolution is True
 
 
 def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
@@ -244,7 +245,7 @@ def test_where_hook_save_manifest_tolerates_nonportable_predicate(tmp_path: Path
 
     for level in ("executable_with_callables", "portable"):
         path = tmp_path / f"where_{level}.tlspec"
-        with pytest.raises(OpaqueCallableInExecutableSaveError, match="Callable selector"):
+        with pytest.raises(OpaqueCallableError, match="Callable selector"):
             log.save_intervention(path, level=level)
 
 
@@ -258,12 +259,12 @@ def test_target_spec_selector_rehydration_covers_path_and_pattern_selectors() ->
     )
 
     with pytest.warns(MultiMatchWarning):
-        output_labels = log.resolve_sites(tl.output_at(0).to_target_spec()).labels()
+        output_labels = log.resolve_sites(output_at(0).to_target_spec()).labels()
     assert "chunk_1_2" in output_labels
     with pytest.warns(MultiMatchWarning):
-        regex_labels = log.resolve_sites(tl.regex("chunk_[12]").to_target_spec()).labels()
+        regex_labels = log.resolve_sites(tl.label_matches("chunk_[12]").to_target_spec()).labels()
     assert regex_labels == ("chunk_1_2", "chunk_2_3")
-    assert repr(selector_from_spec("input_at", (0,), {})) == "tl.input_at((0,))"
+    assert repr(selector_from_spec("input_at", (0,), {})) == "tl.model_input((0,))"
 
 
 def test_loaded_forward_hook_spec_executes_on_fresh_trace(tmp_path: Path) -> None:
@@ -291,7 +292,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     x = torch.ones(1, 4)
     output_log = _log(_ChunkModel(), x)
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        output_log.attach_hooks(tl.output_at(1), tl.zero_ablate(), confirm_mutation=True)
+        output_log.attach_hooks(output_at(1), tl.zero_ablate(), confirm_mutation=True)
     output_path = tmp_path / "loaded_output_at.tlspec"
     output_log.save_intervention(output_path, level="portable")
     output_spec = load_intervention_spec(output_path)
@@ -303,7 +304,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     assert torch.count_nonzero(output_tensor) == 0
 
     regex_log = _log(_ReluModel(), torch.ones(1, 3))
-    regex_log.attach_hooks(tl.regex("relu"), tl.scale(0.0), confirm_mutation=True)
+    regex_log.attach_hooks(tl.label_matches("relu"), tl.scale(0.0), confirm_mutation=True)
     regex_path = tmp_path / "loaded_regex.tlspec"
     regex_log.save_intervention(regex_path, level="portable")
     regex_spec = load_intervention_spec(regex_path)
@@ -435,7 +436,7 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_clamp(0, 0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp_grad(0, 0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
@@ -457,7 +458,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_scale(2.0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale_grad(2.0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_execute.tlspec"
 
@@ -488,7 +489,7 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(type="relu"), tl.grad_scale(2.0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale_grad(2.0), confirm_mutation=True)
     path = tmp_path / "backward_before_pass.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -550,11 +551,11 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.grad_clamp(0, 0),
+        helper=tl.clamp_grad(0, 0),
         site_label="relu_back_1_1",
         timing="post",
         direction="backward",
-        helper_name="grad_clamp",
+        helper_name="clamp_grad",
         timestamp=1.0,
         backward_pass_index=1,
         call_index=1,
@@ -566,11 +567,11 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.grad_clamp(0, 0),
+        helper=tl.clamp_grad(0, 0),
         site_label="relu_back_1_1",
         timing="post",
         direction="backward",
-        helper_name="grad_clamp",
+        helper_name="clamp_grad",
         timestamp=2.0,
         backward_pass_index=1,
         call_index=1,
@@ -582,11 +583,11 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.grad_clamp(0, 0),
+        helper=tl.clamp_grad(0, 0),
         site_label="relu_back_1_1",
         timing="post",
         direction="backward",
-        helper_name="grad_clamp",
+        helper_name="clamp_grad",
         timestamp=1.0,
         backward_pass_index=1,
         call_index=1,
@@ -627,7 +628,7 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
         return out
 
     log.attach_hooks({tl.func("relu"): opaque_hook}, confirm_mutation=True)
-    with pytest.raises(OpaqueCallableInExecutableSaveError):
+    with pytest.raises(OpaqueCallableError):
         log.save_intervention(tmp_path / "opaque.tlspec", level="portable")
 
 
@@ -861,9 +862,9 @@ def test_red_team_custom_module_side_effect_is_not_imported(
 
 _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE = [
     ("torchlens._io.tlspec:os.system", "system"),
-    ("torchlens.utils:importlib.import_module", "import_module"),
+    ("torchlens._utils:importlib.import_module", "import_module"),
     ("torchlens.intervention.selectors:builtins.eval", "eval"),
-    ("torchlens.utils:subprocess.getoutput", "getoutput"),
+    ("torchlens._utils:subprocess.getoutput", "getoutput"),
 ]
 
 

@@ -27,8 +27,8 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens._quickstart import render
 from torchlens.errors._base import TorchLensWarning
-from torchlens.quickstart import render
 
 #: Wall budget for the whole default render (capture included), seconds.
 FLAT_800_TIME_BUDGET_S = 60.0
@@ -55,7 +55,7 @@ def test_flat_800_layer_default_render_within_budget(tmp_path: Path) -> None:
         elapsed = time.perf_counter() - started
     assert elapsed < FLAT_800_TIME_BUDGET_S, f"default render took {elapsed:.1f} s"
     assert target.is_file() and target.stat().st_size > 0
-    assert result.total_ops is not None and result.total_ops >= 800
+    assert result.num_ops is not None and result.num_ops >= 800
     codes = {
         str(getattr(record.message, "fields", {}).get("code"))
         for record in records

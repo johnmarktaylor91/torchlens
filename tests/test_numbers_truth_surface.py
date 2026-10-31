@@ -54,14 +54,6 @@ def test_tl_summary_is_a_first_class_front_door() -> None:
     assert "Linear" in text
 
 
-def test_visualization_summary_alias_resolves() -> None:
-    """The historically-taught torchlens.visualization.summary spelling resolves (A8)."""
-
-    import torchlens.visualization as visualization
-
-    assert callable(visualization.summary)
-
-
 @pytest.mark.heavy
 def test_readme_idiom_subprocess_zero_warnings() -> None:
     """The README one-call idiom runs warning-free in a fresh process (A8 pin)."""
@@ -111,7 +103,7 @@ def test_control_flow_summary_has_no_escape_bytes() -> None:
 def test_memory_footer_reports_measured_peak(small_log: tl.Trace) -> None:
     """The memory footer prints the measured peak + backend, never 'not tracked' (A7)."""
 
-    from torchlens.observe import pass_peak_facts
+    from torchlens._observe._peaks import pass_peak_facts
 
     text = str(small_log.summary())
     assert "not tracked" not in text

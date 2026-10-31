@@ -13,7 +13,7 @@ import torch._ops as _torch_ops  # r47 hon2_1: enumerate the ``torch.ops.*`` __c
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ...utils._callable_safety import private_c_forward_op_module_names
+from ..._utils._callable_safety import private_c_forward_op_module_names
 from ._completeness_types import _WitnessState
 from ._tl import (
     get_buffer_address,
@@ -259,7 +259,7 @@ def _private_c_forward_op_modules() -> tuple[Any, ...]:
     """Resolve the patchable module-typed private-C forward-op modules (r49 hon2_1).
 
     Structurally enumerated from the canonical forward-op module authority
-    (:func:`torchlens.utils._callable_safety.private_c_forward_op_module_names` -> the
+    (:func:`torchlens._utils._callable_safety.private_c_forward_op_module_names` -> the
     ``torch._C._*`` entries of ``_ALLOWED_FORWARD_OP_MODULES``), resolved on the RUNNING torch
     and filtered to ``types.ModuleType`` so:
 

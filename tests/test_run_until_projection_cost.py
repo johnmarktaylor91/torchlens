@@ -18,11 +18,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._data_classes._state_adapter import state_items
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
 from torchlens.capture import projectors
 from torchlens.capture.projectors import RefreshProjector
-from torchlens.data_classes._state_adapter import state_items
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
 
 #: Op field writes per executed op on the base (f271e1568) for ``_stack()`` under
 #: ``until="block1"``, measured by this file's counter (the refresh copy plus the

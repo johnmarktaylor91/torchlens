@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
+    from .._data_classes.module import Module
 
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .invariants import (
         MetadataInvariantError,
         _check_module_call_boundary_and_tree,

@@ -236,7 +236,7 @@ def resolve_artifact_path(path_arg: str) -> Path:
         raise InvalidArgumentError(
             f"No artifact at {str(path)!r}",
             code="agent_artifact_unreadable",
-            remedy="pass the path of an artifact saved with tl.save(trace, path)",
+            remedy="pass the path of an artifact saved with trace.save(path)",
             path=str(path),
         )
     return path

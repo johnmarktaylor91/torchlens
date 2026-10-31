@@ -26,7 +26,7 @@ from .._errors import InvalidArgumentError
 from ._compute_truth import ComputeAggregation, compute_aggregation
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: FactCore schema version (bump on any section/field change).
 FACTCORE_SCHEMA_VERSION = 2
@@ -184,7 +184,7 @@ class ParamFacts:
     frozen: int | None
     tied_groups: tuple[tuple[str, ...], ...]
     evidence: str = "measured"
-    bytes: int | None = None
+    nbytes: int | None = None
     pruned: PrunedParamFacts | None = None
 
 
@@ -192,17 +192,17 @@ class ParamFacts:
 class MemoryFacts:
     """Payload byte figures under the D8 scope law.
 
-    ``at_capture_bytes`` is the immutable capture fact (what the capture
-    retained when it ran); ``retained_now_bytes`` is what THIS object holds
+    ``captured_bytes`` is the immutable capture fact (what the capture
+    retained when it ran); ``retained_bytes`` is what THIS object holds
     (present or lazily materializable payloads) -- zero on a
     payload-stripped artifact even though the capture once held 64 MB.
     """
 
-    at_capture_bytes: int
-    at_capture_saved_ops: int
-    retained_now_bytes: int
-    retained_now_present_ops: int
-    retained_now_lazy_ops: int
+    captured_bytes: int
+    captured_saved_ops: int
+    retained_bytes: int
+    retained_present_ops: int
+    retained_lazy_ops: int
     scope_note: str = "at_capture is a capture fact; retained_now describes THIS object"
 
 
@@ -320,16 +320,24 @@ def _params(trace: Any) -> ParamFacts:
         value = getattr(trace, name, None)
         return None if value is None else int(value)
 
-    tied = getattr(trace, "tied_param_groups", ()) or ()
+    def read_params(*path: str) -> int | None:
+        """Read one optional integer fact off ``trace.params`` along ``path``."""
+
+        value: Any = getattr(trace, "params", None)
+        for name in path:
+            value = getattr(value, name, None)
+        return None if value is None else int(value)
+
+    tied = getattr(getattr(trace, "graph", None), "tied_param_groups", ()) or ()
     return ParamFacts(
         total=read("num_params"),
-        per_path_total=read("num_params_by_path"),
-        executed=read("num_params_executed"),
-        unexecuted=read("num_params_unexecuted"),
+        per_path_total=read_params("numel_by_path"),
+        executed=read_params("executed", "numel"),
+        unexecuted=read_params("unexecuted", "numel"),
         trainable=read("num_params_trainable"),
         frozen=read("num_params_frozen"),
         tied_groups=tuple(tuple(str(name) for name in group) for group in tied),
-        bytes=_param_bytes(trace),
+        nbytes=_param_bytes(trace),
         pruned=_pruned_params(trace),
     )
 
@@ -415,11 +423,11 @@ def _memory(trace: Any) -> MemoryFacts:
             lazy += 1
             retained_bytes += size
     return MemoryFacts(
-        at_capture_bytes=at_capture_bytes,
-        at_capture_saved_ops=at_capture_saved,
-        retained_now_bytes=retained_bytes,
-        retained_now_present_ops=present,
-        retained_now_lazy_ops=lazy,
+        captured_bytes=at_capture_bytes,
+        captured_saved_ops=at_capture_saved,
+        retained_bytes=retained_bytes,
+        retained_present_ops=present,
+        retained_lazy_ops=lazy,
     )
 
 

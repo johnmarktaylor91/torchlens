@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.postprocess._site_key import (
+from torchlens._postprocess._site_key import (
     ROOT_CALL_INSTANCE,
     SITE_KEY_PREFIX,
     SiteKeyMinter,

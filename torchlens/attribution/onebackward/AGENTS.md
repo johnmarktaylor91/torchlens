@@ -35,7 +35,7 @@ naming sprint; error codes are the contract.
   artifact is standalone JSON through the bounded reader. F04 has NO
   field_intent rows -- adding one is a C07-owner amendment, not a lane edit.
 - Explicit enumeration is a contract; implicit population is a filter (D9,
-  both here and at the `by=` door in `torchlens/selection_values.py`).
+  both here and at the `by=` door in `torchlens/_selection_values.py`).
 
 Tests: `tests/test_onebackward_*.py` (core, hookband, refusals, frozen,
 bydoor, edgeplumbing, realmodel).

@@ -51,23 +51,23 @@ PACKAGE_LAYERS: dict[str, str] = {
     # capture engine, the inference search, and the renderer, with upward
     # imports deferred per Rule F; its interior modules declare their own
     # __tl_layer__ (plan/grammar L2, resolver/gate L3).
-    "quickstart": "FACADE",
+    "_quickstart": "FACADE",
     # -- L0 BASIS ---------------------------------------------------------
     "_errors": "L0",
     "errors": "L0",
     "_vocab": "L0",
     "_literals": "L0",
-    "constants": "L0",
-    "quantities": "L0",
+    "_constants": "L0",
+    "_quantities": "L0",
     "_architecture": "L0",
     "_deprecations": "L0",
     # -- L1 PRODUCT -------------------------------------------------------
-    "data_classes": "L1",
+    "_data_classes": "L1",
     "_trace_core": "L1",
     "schemas": "L1",
-    "accessors": "L1",
+    "appliances": "L1",
     "_registry": "L1",
-    "hash": "L1",
+    "fingerprint": "L1",
     "_io": "L1",
     "_io.format_errors": "L0",
     "_io.bundle": "L3",
@@ -86,7 +86,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     # -- L2 ENGINE ----------------------------------------------------------
     "capture": "L2",
     "backends": "L2",
-    "ir": "L2",
+    "_ir": "L2",
     "fastlog": "L2",
     "fastlog.types": "L1",
     "fastlog.recover": "L3",
@@ -94,7 +94,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "options": "L2",
     "observers": "L2",
     "_state": "L2",
-    "kernel_telemetry": "L2",
+    "_kernel_telemetry": "L2",
     "_options_validation": "L2",
     "_option_receipt": "L2",
     "_save_budget": "L2",
@@ -107,18 +107,18 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_chunked_capture_helpers": "L2",
     "_capture_state_helpers": "L2",
     "_capture_fingerprint": "L2",
-    "utils": "L1",
+    "_utils": "L1",
     # -- L3 SETTLE ----------------------------------------------------------
-    "postprocess": "L3",
+    "_postprocess": "L3",
     "_data_substrate": "L3",
     "validation": "L3",
-    "merged": "L3",
-    "partial": "L3",
+    "_merged": "L3",
+    "_partial": "L3",
     "distributed": "L3",
     "compat": "L3",
     "captured_run": "L3",
     "_fast_run": "L3",
-    "runnable": "L3",
+    "_runnable": "L3",
     "_transport": "L3",
     "_split_rebind": "L3",
     "_selection_align": "L4",
@@ -128,18 +128,18 @@ PACKAGE_LAYERS: dict[str, str] = {
     # -- L4 ALGEBRA -----------------------------------------------------------
     "intervention": "L4",
     "bundle": "L4",
-    "selection": "L4",
-    "selection_values": "L4",
-    "selection_compare": "L4",
-    "selection_graph": "L4",
-    "selection_subspace": "L4",
-    "trace_slice": "L4",
+    "_selection": "L4",
+    "_selection_values": "L4",
+    "_selection_compare": "L4",
+    "_selection_graph": "L4",
+    "_selection_subspace": "L4",
+    "_trace_slice": "L4",
     "facets": "L4",
-    "autoroute": "L4",
+    "_autoroute": "L4",
     "transforms": "L4",
     # -- L5 READS ------------------------------------------------------------
     "stats": "L5",
-    "observability": "L5",
+    "_observability": "L5",
     "receptive_field": "L5",
     "attribution": "L5",
     "repgeom": "L5",
@@ -151,7 +151,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "checks": "L5",
     # -- L6 APPLIANCES ---------------------------------------------------------
     "semantic": "L6",
-    "notebook": "L6",
+    "_notebook": "L6",
     "neuro": "L6",
     # -- L7 PRESENT --------------------------------------------------------------
     "visualization": "L7",
@@ -170,7 +170,7 @@ PACKAGE_LAYERS: dict[str, str] = {
 
 #: Packages licensed to touch torch privates: direct ``torch._*`` use or
 #: consumption of the sanctioned torch-compat chokepoint
-#: (``torchlens/utils/_torch_compat.py``). The license is a PER-MODULE
+#: (``torchlens/_utils/_torch_compat.py``). The license is a PER-MODULE
 #: contract orthogonal to layer (memo 3.2); this count is printed by the
 #: lint and may only SHRINK -- a new package touching torch privates
 #: without a row here is RED. Target: burn down toward engine- and
@@ -180,38 +180,38 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
     {
         # F04 one-backward reads: attribution/onebackward gates on the
         # HAS_GRADIENT_EDGE / HAS_NODE_PREHOOK capability flags, which live
-        # at the ONE sanctioned probe chokepoint (utils/_torch_compat); the
+        # at the ONE sanctioned probe chokepoint (_utils/_torch_compat); the
         # package holds no direct torch._ touches of its own.
         "attribution",
         # L8 floor fix: receptive_field's multi-axis any() reduction routes
         # through tensor_any_over_dims() at the ONE sanctioned probe
-        # chokepoint (utils/_torch_compat); the package holds no direct
+        # chokepoint (_utils/_torch_compat); the package holds no direct
         # torch._ touches of its own.
         "receptive_field",
         # F27 Kineto join + memory-parity oracle: observability consumes the
         # HAS_KINETO_INMEMORY_EVENTS / HAS_KINETO_EVENT_SCOPE /
         # HAS_MEMORY_PROFILE capability flags and their accessors, all living
-        # at the ONE sanctioned probe chokepoint (utils/_torch_compat); the
+        # at the ONE sanctioned probe chokepoint (_utils/_torch_compat); the
         # package holds no direct torch._ touches of its own.
-        "observability",
+        "_observability",
         "backends",
         "capture",
         "compat",
-        "constants",
-        "data_classes",
+        "_constants",
+        "_data_classes",
         "debug",
         "distributed",
         "_distributed",
         "errors",
         "fastlog",
         "intervention",
-        "ir",
+        "_ir",
         "_io",
-        "kernel_telemetry",
-        "merged",
-        "postprocess",
-        "runnable",
-        "utils",
+        "_kernel_telemetry",
+        "_merged",
+        "_postprocess",
+        "_runnable",
+        "_utils",
         "validation",
         "_capture_state_helpers",
         "_robustness",
@@ -227,13 +227,13 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "user_funcs",
         # floor2 fix (2026-10-01): the runnable-save CPU float8 path
         # consumes get_cpu_float8_deterministic_fill_support() at the ONE
-        # sanctioned probe chokepoint (utils/_torch_compat); the module
+        # sanctioned probe chokepoint (_utils/_torch_compat); the module
         # holds no direct torch._ touches of its own.
         "_user_public_impls",
         # L8 fix (2026-10-01): the FLOPs report's model-door capture holds
         # the fused MHA/TransformerEncoderLayer fast path off through
         # force_mha_slow_path() / HAS_MHA_FASTPATH_SWITCH at the ONE
-        # sanctioned probe chokepoint (utils/_torch_compat); the package
+        # sanctioned probe chokepoint (_utils/_torch_compat); the package
         # holds no direct torch._ touches of its own.
         "report",
     }

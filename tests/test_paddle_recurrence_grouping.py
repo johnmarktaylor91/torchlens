@@ -239,6 +239,6 @@ def test_paddle_intermediate_derived_grads_survive_grouping() -> None:
     relu_ops = [op for op in trace.layer_list if op.func_name == "functional.relu"]
 
     assert {op.num_passes for op in relu_ops} == {2}
-    records = trace.intermediate_derived_grads
+    records = trace.autograd.intermediate_derived_grads
     for op in relu_ops:
         assert op.label in records, f"derived grad silently dropped for {op.label}"

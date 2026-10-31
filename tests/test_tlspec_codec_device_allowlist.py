@@ -299,7 +299,7 @@ def _build_tinygrad_bundle(tmp_path: Path) -> Path:
     x = Tensor(np.random.randn(2, 4).astype(np.float32))
     trace = tl.trace(model, x, backend="tinygrad")
     bundle = tmp_path / "tiny.tlspec"
-    tl.save(trace, str(bundle))
+    trace.save(str(bundle))
     return bundle
 
 

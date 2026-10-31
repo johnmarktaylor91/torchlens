@@ -24,8 +24,8 @@ from torchlens._capture_state_helpers import (
     reset_compiled_model_unwrap_warning_state,
     unwrap_compiled_submodules,
 )
+from torchlens._utils._torch_compat import get_dynamo_optimized_module_type
 from torchlens.user_funcs import _reject_opaque_wrappers
-from torchlens.utils._torch_compat import get_dynamo_optimized_module_type
 
 
 class _Tiny(nn.Module):
@@ -235,16 +235,18 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
     reset_compiled_model_unwrap_warning_state()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        metadata = tl.io.log_model_metadata(torch.compile(_Tiny(), backend="eager"), input_tensor)
+        metadata = tl.trace(
+            torch.compile(_Tiny(), backend="eager"),
+            input_tensor,
+            capture=tl.options.CaptureOptions(layers_to_save="none"),
+        )
     assert "_orig_mod" not in {module.address for module in metadata.modules.values()}
     assert_single_note(caught)
 
     reset_compiled_model_unwrap_warning_state()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        rendered_summary = tl.visualization.summary(
-            torch.compile(_Tiny(), backend="eager"), input_tensor
-        )
+        rendered_summary = tl.summary(torch.compile(_Tiny(), backend="eager"), input_tensor)
     assert "_orig_mod" not in rendered_summary
     assert_single_note(caught)
 

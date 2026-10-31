@@ -232,7 +232,7 @@ def _run_public_layer_grad_validation(
     *,
     atol: float,
     rtol: float,
-    random_seed: int,
+    seed: int,
 ) -> LayerGradReport:
     """Run the shipped backward path and return its captured layer-grad report.
 
@@ -250,7 +250,7 @@ def _run_public_layer_grad_validation(
         Absolute tolerance for parameter and layer gradients.
     rtol:
         Relative tolerance for parameter and layer gradients.
-    random_seed:
+    seed:
         Seed shared by stock and captured passes.
 
     Returns
@@ -277,7 +277,7 @@ def _run_public_layer_grad_validation(
             input_args,
             input_kwargs=input_kwargs,
             loss_fn=loss_fn,
-            random_seed=random_seed,
+            seed=seed,
             atol=atol,
             rtol=rtol,
             validate_metadata=True,
@@ -633,7 +633,7 @@ def test_per_module_output_oracle_basic() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
     _assert_acceptance(report)
 
@@ -645,7 +645,7 @@ def test_validate_backward_pass_validate_layer_grads_public_flag() -> None:
     assert backward_validation.validate_backward_pass(
         TinyMLP(),
         torch.randn(2, 3),
-        random_seed=42,
+        seed=42,
         validate_layer_grads=True,
     )
 
@@ -682,7 +682,7 @@ def test_zero_parameter_grads_fail_independently_of_layer_grad_flag() -> None:
                 backward_validation.validate_backward_pass(
                     model,
                     x,
-                    random_seed=42,
+                    seed=42,
                     validate_layer_grads=validate_layer_grads,
                 )
             )
@@ -707,7 +707,7 @@ def test_layer_grad_default_runs_captured_grad_oracle(
         "torchlens.validation._layer_grad_report._compare_module_output_grads",
         count_comparison,
     )
-    assert backward_validation.validate_backward_pass(TinyMLP(), torch.randn(2, 3), random_seed=42)
+    assert backward_validation.validate_backward_pass(TinyMLP(), torch.randn(2, 3), seed=42)
     assert calls == 1
 
 
@@ -722,7 +722,7 @@ def test_nested_module_parent_and_child_outputs_are_covered() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
     assert report.coverage["0.1:1"] == "covered"
     assert report.coverage["0:1"] == "covered"
@@ -739,7 +739,7 @@ def test_identity_output_modules_are_skipped() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
     assert report.coverage["identity:1"] == "skipped_identity_output"
     assert report.skipped_identity_output_count == 1
@@ -756,7 +756,7 @@ def test_near_identity_output_modules_are_covered() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
 
     assert report.coverage["near:1"] == "covered"
@@ -810,7 +810,7 @@ def test_weight_tied_module_call_indices_are_separate() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
     assert report.coverage["shared:1"] == "covered"
     assert report.coverage["shared:2"] == "covered"
@@ -827,7 +827,7 @@ def test_oracle_rnn_3_step() -> None:
         _loss,
         atol=1e-5,
         rtol=1e-4,
-        random_seed=42,
+        seed=42,
     )
     _assert_acceptance(report)
 
@@ -851,7 +851,7 @@ def test_oracle_resnet50_eval() -> None:
         lambda output: output.float().sum(),
         atol=1e-4,
         rtol=1e-3,
-        random_seed=42,
+        seed=42,
     )
     _assert_acceptance(report)
 
@@ -878,7 +878,7 @@ def test_shipped_backward_path_resnet50_metadata_invariant_holds() -> None:
     backward_validation.validate_backward_pass(
         model,
         torch.randn(1, 3, 32, 32),
-        random_seed=42,
+        seed=42,
         validate_metadata=True,
         validate_layer_grads=False,
     )
@@ -914,7 +914,7 @@ def test_oracle_gpt2_small_forward_backward() -> None:
         gpt2_loss,
         atol=1e-4,
         rtol=1e-3,
-        random_seed=42,
+        seed=42,
     )
     _assert_acceptance(report)
 

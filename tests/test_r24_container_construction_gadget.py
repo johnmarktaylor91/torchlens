@@ -11,7 +11,7 @@ admitted STRUCTURALLY (``dataclasses.is_dataclass`` / ``*ModelOutput``) and then
 ANY loaded dataclass / ModelOutput with a side-effecting construction therefore turned it
 into a construction gadget with attacker-controlled kwargs.
 
-The fix (``torchlens/ir/container.py``) reconstructs these two kinds WITHOUT invoking any
+The fix (``torchlens/_ir/container.py``) reconstructs these two kinds WITHOUT invoking any
 attacker constructor code: ``cls.__new__(cls)`` (verified to be an inert builtin allocator)
 followed by inert per-field ``object.__setattr__`` (dataclass) or builtin-``dict`` mapping
 population + ``object.__setattr__`` (ModelOutput). No ``__init__`` / ``__post_init__`` /
@@ -33,7 +33,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.container import (
+from torchlens._ir.container import (
     ContainerSpec,
     _resolve_container_type,
     rebuild_container_from_spec,

@@ -46,7 +46,7 @@ class EditCell:
 
 EDIT_PRODUCT_MATRIX: dict[str, EditCell] = {
     "trace_live_fork": EditCell("WORKS"),
-    "trace_live_no_fork": EditCell("WORKS_WITH_DISCLOSURE"),  # MutateInPlaceWarning
+    "trace_live_no_fork": EditCell("WORKS_WITH_DISCLOSURE"),  # TraceMutationWarning
     "trace_loaded": EditCell(
         "REFUSES_CODELESS",
         exc="ReplayPreconditionError",
@@ -79,7 +79,7 @@ def edit_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     example = torch.randn(2, 4)
     live = tl.trace(model, example, capture=tl.options.CaptureOptions(intervention_ready=True))
     save_path = tmp_path_factory.mktemp("editmx") / "live.tlspec"
-    tl.save(live, str(save_path))
+    live.save(str(save_path))
     products = {
         "trace_live_fork": live,
         "trace_live_no_fork": live,
@@ -143,7 +143,7 @@ def test_edit_cell_matches_declared_state(product_name: str, edit_products: dict
                 warnings.simplefilter("always")
                 _edit(private)
             names = [type(entry.message).__name__ for entry in caught]
-            assert "MutateInPlaceWarning" in names, (
+            assert "TraceMutationWarning" in names, (
                 f"in-place do() on a live trace disclosed {names}: the mutate-"
                 "in-place disclosure is the cell's contract"
             )

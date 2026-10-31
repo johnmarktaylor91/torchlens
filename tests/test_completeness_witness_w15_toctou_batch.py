@@ -21,9 +21,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.backends.torch import completeness_witness as cw
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,
@@ -37,7 +37,7 @@ def _save_and_run(model: nn.Module, x: torch.Tensor, path: Path) -> tl.RunResult
 
     trace = tl.trace(model, x, capture=_CAPTURE)
     trace.save(path, level="runnable", include_weights=True)
-    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return_diverged")
+    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 class ParamRebindMutateRestore(nn.Module):

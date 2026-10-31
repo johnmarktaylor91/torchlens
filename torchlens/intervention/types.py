@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any, ClassVar, Literal, TypeAlias
 
 from .._io import FieldPolicy
-from ..ir.container import (
+from .._ir.container import (
     ContainerSpec,
     DataclassField,
     DictKey,
@@ -18,7 +18,7 @@ from ..ir.container import (
     TupleIndex,
     rebuild_container_from_spec,
 )
-from ..selection import _SelectionOperand
+from .._selection import _SelectionOperand
 
 GraphShapeHash: TypeAlias = str
 InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transform"]
@@ -172,7 +172,7 @@ HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
 class Edit:
     """Portable identity and hook factory for helper-built interventions."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "helper_name": FieldPolicy.KEEP,
         "args": FieldPolicy.KEEP,
         "kwargs": FieldPolicy.KEEP,
@@ -220,7 +220,7 @@ class Edit:
         """Render the public spelling of this edit (``tl.Edit`` is its public name).
 
         A builtin helper prints as the public constructor call that builds it
-        (``tl.grad_scale(2.0)``), which is also the identity a saved spec
+        (``tl.scale_grad(2.0)``), which is also the identity a saved spec
         rebuilds from. Every other edit prints as ``tl.Edit(...)`` with its
         identity fields; the hook factory is session-side and never printed.
 
@@ -258,7 +258,7 @@ class Edit:
         Builtin factories are local closures derived entirely from the
         stable ``(helper_name, args, kwargs)`` identity; ``__setstate__``
         rebuilds them through the same builtin registry ``tl.load`` uses,
-        so plain ``pickle`` and ``tl.save`` agree on helper-carrying specs.
+        so plain ``pickle`` and ``Trace.save`` agree on helper-carrying specs.
         ``opaque_audit`` factories (load-time raising placeholders) drop to
         the canonical factory-less audit-only form.
         """
@@ -437,7 +437,7 @@ REPLAY_TEMPLATE_TYPES: frozenset[type] = frozenset(
 class FireRecord:
     """Runtime record for one intervention firing."""
 
-    PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "target_label": FieldPolicy.KEEP,
         "call_label": FieldPolicy.KEEP,
         "func_call_id": FieldPolicy.KEEP,
@@ -505,7 +505,7 @@ class EdgeUseRecord(_SelectionOperand):
     def __selection__(self) -> Any:
         """Lift this edge occurrence as an EDGE selection term."""
 
-        from ..selection import _selection_from_edge
+        from .._selection import _selection_from_edge
 
         return _selection_from_edge(self)
 
@@ -869,7 +869,7 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
         Fork policies for Trace fields.
     """
 
-    from ..constants import MODEL_LOG_FIELD_ORDER
+    from .._constants import MODEL_LOG_FIELD_ORDER
 
     table = _fork_policy_table(
         MODEL_LOG_FIELD_ORDER,
@@ -906,7 +906,7 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
         Fork policies for Op fields.
     """
 
-    from ..constants import LAYER_PASS_LOG_FIELD_ORDER
+    from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
     table = _fork_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,

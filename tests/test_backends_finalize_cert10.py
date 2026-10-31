@@ -8,7 +8,7 @@ finalized preview-backend op therefore stayed on the "mid-capture" ``__str__``
 branch (``Op._str_during_pass``), which calls the torch-only
 ``print_override`` helper on a non-torch array and crashes with
 ``AttributeError`` (e.g. ``'array' object has no attribute 'grad_fn'`` on
-MLX). The fix mirrors ``torchlens.postprocess.finalization._set_tracing_finished``,
+MLX). The fix mirrors ``torchlens._postprocess.finalization._set_tracing_finished``,
 which also flips the per-op flag, not just the trace-level one.
 
 FIX 2 (MAJOR): ``op.param_memory`` was left as a plain ``int`` instead of the
@@ -27,12 +27,12 @@ installed.
 Known follow-up (explicitly NOT fixed here, out of ``_finalize.py`` scope):
 once ``_tracing_finished`` correctly flips, finalized preview-backend ops with
 a *saved* activation route into ``Op._str_after_pass`` ->
-``Op._tensor_contents_str_helper`` -> ``torchlens.utils.display.tensor_stats_summary``,
+``Op._tensor_contents_str_helper`` -> ``torchlens._utils.display.tensor_stats_summary``,
 which is typed and implemented for ``torch.Tensor`` only (``tensor.device``,
 ``torch.isnan``, ``.to(torch.float64)``, ...) and raises its own
 ``AttributeError`` on non-torch arrays. That is a distinct, pre-existing,
-always-torch-only limitation in ``torchlens/data_classes/op.py`` /
-``torchlens/utils/display.py`` -- unreachable before this fix (because ops
+always-torch-only limitation in ``torchlens/_data_classes/op.py`` /
+``torchlens/_utils/display.py`` -- unreachable before this fix (because ops
 never left the mid-capture branch), now reachable, and requires touching
 files outside this fix's scope. Tests below therefore exercise ``str()``/
 ``repr()`` on ops with no saved activation (``op.out is None``), which is
@@ -48,12 +48,12 @@ from collections import OrderedDict
 import pytest
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
+from torchlens._quantities import Bytes
 from torchlens.backends._finalize import (
     attach_function_root_module,
     finalize_single_pass_trace,
 )
-from torchlens.data_classes.trace import Trace
-from torchlens.quantities import Bytes
 
 mlx = pytest.importorskip("mlx")
 import mlx.core as mx  # noqa: E402

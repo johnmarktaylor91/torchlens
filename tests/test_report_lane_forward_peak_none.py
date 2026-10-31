@@ -19,14 +19,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TorchLensIOError
+from torchlens._io import ArtifactError
+from torchlens._observe import format_pass_peak
+from torchlens._observe._peaks import pass_peak_facts
 from torchlens.capture import peak_memory, trace as capture_trace
 from torchlens.capture.peak_memory import (
     CPU_ZERO_PEAK_REASON,
     CPU_ZERO_PEAK_WITH_PYTHON_REASON,
     forward_peak_value,
 )
-from torchlens.observe import format_pass_peak, pass_peak_facts
 from torchlens.options import CaptureOptions
 
 _FLAG = "measure_python_peak_memory=True"
@@ -68,7 +69,7 @@ def test_cpu_positive_delta_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> Non
     _rss(monkeypatch, 1_000_000, 1_004_096)
     trace = _capture()
 
-    assert isinstance(trace.forward_peak_memory, tl.Bytes)
+    assert isinstance(trace.forward_peak_memory, tl.types.Bytes)
     assert int(trace.forward_peak_memory) == 4096
     assert trace.forward_peak_memory_reason is None
     assert pass_peak_facts(trace).meaning == "process RSS growth (NOT a tensor peak)"
@@ -87,7 +88,7 @@ def test_every_printed_surface_shows_the_reason(monkeypatch: pytest.MonkeyPatch)
     summary = trace.summary()
     assert f"forward peak unavailable ({CPU_ZERO_PEAK_REASON})" in summary.render("unicode")
     assert _FLAG in str(summary)
-    for text in (str(trace), repr(trace), str(trace.profile()), tl.report.explain(trace)):
+    for text in (str(trace), repr(trace), str(trace.profile()), trace.explain()):
         assert isinstance(text, str)
 
 
@@ -105,7 +106,7 @@ def test_opt_in_positive_python_peak_is_a_value(monkeypatch: pytest.MonkeyPatch)
         capture=CaptureOptions(measure_python_peak_memory=True, measure_host_peak_memory=True)
     )
 
-    assert isinstance(trace.forward_peak_memory, tl.Bytes)
+    assert isinstance(trace.forward_peak_memory, tl.types.Bytes)
     assert int(trace.forward_peak_memory) > 0
     assert trace.forward_peak_memory_reason is None
 
@@ -130,7 +131,7 @@ def test_none_and_reason_round_trip_through_save_load(
     _rss(monkeypatch, 1_000_000)
     trace = _capture()
     path = tmp_path / "zero_peak.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     loaded = tl.load(path)
     assert loaded.forward_peak_memory is None
@@ -144,24 +145,20 @@ def test_positive_value_round_trips_with_no_reason(
     _rss(monkeypatch, 1_000_000, 1_004_096)
     trace = _capture()
     path = tmp_path / "positive_peak.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
     loaded = tl.load(path)
     assert int(loaded.forward_peak_memory) == 4096
     assert loaded.forward_peak_memory_reason is None
 
 
-def test_legacy_artifact_loads_with_no_reason() -> None:
-    """A real pre-change artifact (tlspec v7, no reason field) loads, reason None."""
+def test_legacy_artifact_refuses_as_2x() -> None:
+    """A real pre-change artifact (tlspec v7, no reason field) refuses typed: 2.x wrote it."""
 
-    import warnings
+    from _refuses_as_2x import assert_refuses_as_2x
 
     fixture = Path(__file__).parent / "fixtures" / "tlspec_v7" / "tiny_v7.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        loaded = tl.load(str(fixture))
-    assert loaded.forward_peak_memory_reason is None
-    assert isinstance(loaded.forward_peak_memory, tl.Bytes)
+    assert_refuses_as_2x(fixture)
 
 
 def test_state_without_the_field_restores_with_no_reason() -> None:
@@ -174,22 +171,22 @@ def test_state_without_the_field_restores_with_no_reason() -> None:
     restored.__setstate__(state)
     assert restored.forward_peak_memory_reason is None
     assert restored.forward_peak_memory is None or isinstance(
-        restored.forward_peak_memory, tl.Bytes
+        restored.forward_peak_memory, tl.types.Bytes
     )
 
 
 @pytest.mark.parametrize(
     ("peak", "reason", "why"),
-    [(None, 5, "not_a_string"), (tl.Bytes(4096), "forged", "reason_beside_a_value")],
+    [(None, 5, "not_a_string"), (tl.types.Bytes(4096), "forged", "reason_beside_a_value")],
 )
 def test_malformed_reason_refuses_at_load(tmp_path: Path, peak: Any, reason: Any, why: str) -> None:
     trace = _capture()
     trace.forward_peak_memory = peak
     trace.forward_peak_memory_reason = reason
     path = tmp_path / f"forged_{why}.tlspec"
-    tl.save(trace, path)
+    trace.save(path)
 
-    with pytest.raises(TorchLensIOError) as excinfo:
+    with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
     assert excinfo.value.fields["code"] == "artifact_forward_peak_memory_invalid"
     assert excinfo.value.fields["reason"] == why

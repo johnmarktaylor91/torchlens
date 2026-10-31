@@ -10,23 +10,19 @@ from typing import TYPE_CHECKING, Any
 
 from .._io import _json
 from ..intervention.resolver import resolve_sites
-from ..intervention.save import check_spec_compat
 from ..user_funcs import (
     validate_backward_pass,
     validate_batch_of_models_and_inputs,
     validate_forward_pass,
 )
-from .consolidated import InterventionValidationReport, validate
 from .diagnostics import (
-    ValidationDiagnostic,
-    ValidationFailure,
     get_validation_diagnostics,
     get_validation_failure,
     last_validation_failure,
     last_validation_peak_memory,
 )
-from .invariants import MetadataInvariantError, check_metadata_invariants
-from .status import ValidationReplayState as ValidationReplayState, ValidationReplayStatus
+from .invariants import check_metadata_invariants
+from .status import ValidationReplayState as ValidationReplayState
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -59,7 +55,7 @@ def validate_tlspec(
         If a unified manifest violates the v1 schema.
     FileNotFoundError
         If a unified manifest file is missing.
-    torchlens.errors.ArtifactVersionBelowFloorError
+    torchlens.errors.ArtifactTooOldError
         If the artifact is a pre-floor (pre-2.33) model-log bundle.
     """
 
@@ -348,7 +344,7 @@ def _validate_sparse_run_descriptor(
         contradict the Stage-0 runnable schema.
     """
 
-    from ..runnable import (
+    from .._runnable import (
         LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
         RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
         RUNNABLE_CALL_RECIPE_VERSION,
@@ -699,7 +695,7 @@ def _validate_tlspec_version_ceiling(tlspec_version: int) -> None:
 
     Raises
     ------
-    torchlens._io.ArtifactVersionAboveRuntimeError
+    torchlens._io.ArtifactTooNewError
         If the declared version is newer than this runtime supports. Typed
         through the one G3 chokepoint: the bare ``ValueError`` this used to
         raise was swallowed by the load path's generic exception laundering
@@ -917,7 +913,9 @@ def _validate_v2_backend_fields(manifest: dict[str, Any]) -> None:
         If backend-aware fields are invalid.
     """
 
-    from ..backends import UnknownBackendError, get_backend_spec
+    from torchlens.backends.registry import UnknownBackendError
+
+    from ..backends.registry import get_backend_spec
 
     backend_name = manifest.get("backend")
     if not isinstance(backend_name, str) or backend_name == "":
@@ -1304,11 +1302,11 @@ def _require_str_enum(
 #: its replacement (clean break, no alias).
 _REDIRECTS: dict[str, str] = {
     "validate_saved_outs": (
-        "use torchlens.validation.validate(model, x, scope='saved'), or "
+        "use torchlens.validate(model, x, scope='saved'), or "
         "trace.validate_forward_pass(ground_truth_outputs) -- validate_saved_outs was removed"
     ),
     "validate_trace_saved_outs": (
-        "use torchlens.validation.validate(model, x, scope='saved'), or "
+        "use torchlens.validate(model, x, scope='saved'), or "
         "trace.validate_forward_pass(ground_truth_outputs) -- validate_trace_saved_outs "
         "was removed"
     ),
@@ -1322,7 +1320,7 @@ if not TYPE_CHECKING:
     def __getattr__(name: str) -> Any:
         """Raise the typed teaching error for a removed torchlens.validation name."""
 
-        from ..utils.facade import resolve_facade_attr
+        from .._utils.facade import resolve_facade_attr
 
         return resolve_facade_attr(
             owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
@@ -1330,21 +1328,14 @@ if not TYPE_CHECKING:
 
 
 __all__ = [
-    "InterventionValidationReport",
-    "ValidationFailure",
-    "ValidationDiagnostic",
-    "ValidationReplayStatus",
     "get_validation_failure",
     "get_validation_diagnostics",
     "last_validation_failure",
     "last_validation_peak_memory",
     "validate_backward_pass",
     "validate_batch_of_models_and_inputs",
-    "validate",
     "validate_forward_pass",
     "check_metadata_invariants",
-    "check_spec_compat",
-    "MetadataInvariantError",
     "resolve_sites",
     "validate_tlspec",
 ]

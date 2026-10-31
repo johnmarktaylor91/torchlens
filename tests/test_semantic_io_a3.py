@@ -78,19 +78,19 @@ def test_output_table_shape_top_n_and_batch_item_overrides() -> None:
 
     trace = _trace_batch_classifier()
 
-    table = trace.output_table(top_n=2)
+    table = trace.output_table(k=2)
     assert list(table.columns) == ["batch_item", "rank", "label", "prob"]
     assert table.shape == (4, 4)
     assert table["batch_item"].tolist() == [0, 0, 1, 1]
     assert table["rank"].tolist() == [1, 2, 1, 2]
     assert table["label"].tolist() == ["class-1", "class-2", "class-0", "class-2"]
 
-    first_item = trace.output_table(top_n=1, batch_items=1)
+    first_item = trace.output_table(k=1, batch_items=1)
     assert first_item[["batch_item", "rank", "label"]].to_dict(orient="records") == [
         {"batch_item": 0, "rank": 1, "label": "class-1"}
     ]
 
-    explicit_item = trace.output_table(top_n=1, batch_items=[1])
+    explicit_item = trace.output_table(k=1, batch_items=[1])
     assert explicit_item[["batch_item", "rank", "label"]].to_dict(orient="records") == [
         {"batch_item": 1, "rank": 1, "label": "class-0"}
     ]
@@ -102,7 +102,7 @@ def test_decoded_output_uses_typed_batch_topk_representation() -> None:
     trace = _trace_batch_classifier()
 
     assert trace.decoded_output["kind"] == "batch_topk"
-    assert trace.decode_output(top_n=1)["rows"] == [
+    assert trace.decode_output(k=1)["rows"] == [
         row for row in trace.decoded_output["rows"] if row["rank"] == 1
     ]
 
@@ -186,14 +186,14 @@ def test_redecode_after_load_raises_clearly_when_logits_dropped(tmp_path: Path) 
 
     trace = _trace_batch_classifier()
     bundle_path = tmp_path / "decoded.tlspec"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     restored = tl.load(bundle_path)
     for output_label in restored.output_layers:
         for output_op in restored.layers[output_label].ops.values():
             output_op.out = None
 
     with pytest.raises(ValueError, match="re-decode unavailable"):
-        restored.output_table(top_n=6)
+        restored.output_table(k=6)
 
 
 def test_false_positive_output_detection_cases_fail_closed() -> None:
@@ -216,7 +216,7 @@ def test_output_table_recomputes_when_logits_are_retained() -> None:
     logits = torch.tensor([[0.0, 6.0, 5.0, 4.0, 3.0, 2.0]])
     trace = tl.trace(_Classifier(logits, _labels(6)).eval(), torch.ones(1, 2))
 
-    table = trace.output_table(top_n=6)
+    table = trace.output_table(k=6)
 
     assert table.shape == (6, 4)
     assert table["rank"].tolist() == [1, 2, 3, 4, 5, 6]

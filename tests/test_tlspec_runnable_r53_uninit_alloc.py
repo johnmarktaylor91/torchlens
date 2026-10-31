@@ -31,9 +31,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors.runnable import NumericAttestationError
+from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
+from torchlens.errors.runnable import ReplayValueMismatchError
 from torchlens.options import CaptureOptions
-from torchlens.runnable import NumericAttestationStatus, PathFaithfulness
 
 _CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
 
@@ -344,8 +344,8 @@ def test_untainted_archived_mismatch_still_raises(tmp_path: Path) -> None:
     victim = next(key for key in archive if "linear" in key)
     record = archive[victim]
     archive[victim] = dataclasses.replace(record, value=record.value + 0.5)
-    with pytest.raises(NumericAttestationError):
-        loaded.run(inputs=x.clone(), on_divergence="return_diverged")
+    with pytest.raises(ReplayValueMismatchError):
+        loaded.run(inputs=x.clone(), on_divergence="return")
 
 
 def _resize_disposition(model: nn.Module, x: torch.Tensor, tmp_path: Path):
@@ -428,7 +428,7 @@ def test_uninit_family_table_matches_live_aten_registry() -> None:
     aten name that is neither in the family table nor in the justified
     non-family allowlist below FAILS this test on any torch upgrade."""
 
-    from torchlens.utils.rng import (
+    from torchlens._utils.rng import (
         _UNINIT_ALLOC_FACTORY_TAILS,
         _UNINIT_ALLOC_RESIZE_TAILS,
     )
@@ -480,7 +480,7 @@ def test_uninit_family_python_tensor_method_surface() -> None:
     resize, or SIZE-GATED) or justified non-family below -- a future
     ``Tensor.<x>()`` uninit factory with no aten name FAILS this test."""
 
-    from torchlens.utils.rng import (
+    from torchlens._utils.rng import (
         _UNINIT_ALLOC_FACTORY_TAILS,
         _UNINIT_ALLOC_RESIZE_TAILS,
         _UNINIT_ALLOC_SIZE_GATED_TAILS,
@@ -526,7 +526,7 @@ def test_size_gated_new_recognition_and_arg_form() -> None:
 
     import numpy as np
 
-    from torchlens.utils.rng import (
+    from torchlens._utils.rng import (
         qualname_is_uninit_size_gated_alloc,
         qualname_is_uninitialized_alloc,
         uninit_new_call_is_size_form,
@@ -658,7 +658,7 @@ def test_nondeterministic_sources_field_vocabulary(tmp_path: Path) -> None:
     a seeded model declares ``seeded_rng``; the live provider declares
     nothing (it gathers no descriptor evidence)."""
 
-    from torchlens.runnable import NONDETERMINISTIC_SOURCE_VOCABULARY
+    from torchlens._runnable import NONDETERMINISTIC_SOURCE_VOCABULARY
 
     x = torch.randn(2, 4)
     report = _run_report(SeededRandModel(), x, tmp_path)

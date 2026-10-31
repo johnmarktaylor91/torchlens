@@ -29,7 +29,7 @@ from .._capture_honesty import (
 from .diagnostics import CHECK_SOURCE_PROVENANCE, ValidationFailure, record_validation_failure
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .core import ValidationDecisionRecorder
 
 _GAP_ADVISORY_KINDS = (
@@ -114,7 +114,7 @@ def check_source_provenance(
     record_validation_failure(
         trace,
         ValidationFailure(
-            check=CHECK_SOURCE_PROVENANCE,
+            check_name=CHECK_SOURCE_PROVENANCE,
             op_label=op_label,
             func_name=func_name,
             message=message,

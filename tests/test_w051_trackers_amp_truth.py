@@ -17,8 +17,8 @@ import pytest
 import torch
 
 import torchlens.trackers as trk
+from torchlens._utils._torch_compat import HAS_AMP_GRADSCALER
 from torchlens.trackers._amp import unscale_stage
-from torchlens.utils._torch_compat import HAS_AMP_GRADSCALER
 
 _requires_gradscaler = pytest.mark.skipif(
     not HAS_AMP_GRADSCALER,
@@ -150,7 +150,7 @@ class TestBoundaryTruth:
                 scaler.scale(model(torch.randn(4, 8)).sum()).backward()
                 opt.step()
         report = session.close()
-        assert report.final_sample_forced
+        assert report.is_final_sample_forced
         forced = next(
             p.value for p in sink.scalars if p.tag == "gradients/norm/0.weight" and p.step == 1
         )
@@ -173,7 +173,7 @@ class TestCorrectedBlock:
             opt.step()
         session.close()
         block = session.collector.ring.blocks[-1]
-        corrected, count = trk.corrected_gradient_block(block, 4.0)
+        corrected, count = trk.corrected_grad_block(block, 4.0)
         assert count == sum(1 for o in block.observations if o.stream == "param_grad")
         for before, after in zip(block.observations, corrected.observations, strict=True):
             if before.stream == "param_grad":

@@ -36,10 +36,10 @@ def test_dynamic_graph_records_1000_ops_with_varying_event_counts() -> None:
     model = DynamicMLP()
     with tl.fastlog.Recorder(model, save=lambda ctx: ctx.kind == "op") as recorder:
         for index in range(1000):
-            recorder.log(torch.full((1, 4), float(index)))
+            recorder(torch.full((1, 4), float(index)))
     recording = recorder.recording
     op_counts = Counter(record.ctx.pass_index for record in recording if record.ctx.kind == "op")
 
-    assert recording.n_ops == 1000
+    assert recording.num_ops == 1000
     assert set(op_counts.values()) == {3, 5, 7}
     assert {op_counts[index] for index in (1, 2, 3)} == {3, 5, 7}

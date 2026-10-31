@@ -21,8 +21,8 @@ from torch import nn
 from torch.overrides import TorchFunctionMode
 
 import torchlens as tl
+from torchlens._utils._torch_compat import autocast_is_enabled
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import autocast_is_enabled
 
 
 class _IntrospectingAutocastModel(nn.Module):
@@ -100,8 +100,8 @@ class _Other(_Passthrough):
 def test_device_context_absorption_restores_the_exact_interleaving() -> None:
     from torch.overrides import _get_current_function_mode_stack as stack
 
+    from torchlens._utils._torch_compat import get_torch_function_stack_surgery
     from torchlens.capture._weightsfree_admission import _absorbed_ambient_device_context
-    from torchlens.utils._torch_compat import get_torch_function_stack_surgery
 
     if get_torch_function_stack_surgery() is None:
         pytest.skip("mode-stack surgery unavailable; absorption refuses typed instead")
