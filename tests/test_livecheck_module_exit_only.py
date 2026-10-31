@@ -28,9 +28,19 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture import predicates as _capture_predicates
 from torchlens._utils._torch_compat import TorchCapabilityWarning
-from torchlens.backends.torch import _ops_interventions, ops as torch_ops
-from torchlens.intervention import runtime as intervention_runtime
+from torchlens.backends.torch import (
+    _ops_exhaustive,
+    _ops_interventions,
+    _ops_shared_fields,
+    ops as torch_ops,
+)
+from torchlens.intervention import (
+    _module_boundary as _intervention_module_boundary,
+    hooks as _intervention_hooks,
+    runtime as intervention_runtime,
+)
 from torchlens.intervention.hooks import NormalizedHookEntry
 from torchlens.intervention.selectors import CompositeSelector
 from torchlens.intervention.spec import Recipe
@@ -488,12 +498,23 @@ def test_validation_verdicts_unchanged_by_the_door() -> None:
 # 3. Deterministic per-op call counts
 # ---------------------------------------------------------------------------
 
-_COUNTED = ("make_live_site_proxy", "_build_shared_fields_dict", "_evaluate_intervene_op")
+# Each hot-path function's home module first, then every module that bound it
+# by from-import (callers call their own copy, so the counter wraps each one).
+_COUNTED: dict[str, tuple[Any, ...]] = {
+    "make_live_site_proxy": (
+        _intervention_hooks,
+        _ops_interventions,
+        _intervention_module_boundary,
+        torch_ops,
+    ),
+    "_build_shared_fields_dict": (_ops_shared_fields, _ops_exhaustive, _ops_interventions),
+    "_evaluate_intervene_op": (_capture_predicates, _ops_interventions, torch_ops),
+}
 
 
 @contextmanager
 def _call_counter() -> Iterator[dict[str, int]]:
-    """Count calls to the per-op hot-path functions as bound in the torch ops module.
+    """Count calls to the per-op hot-path functions wherever they are bound.
 
     Yields
     ------
@@ -502,7 +523,7 @@ def _call_counter() -> Iterator[dict[str, int]]:
     """
 
     counts = dict.fromkeys(_COUNTED, 0)
-    originals = {name: getattr(torch_ops, name) for name in _COUNTED}
+    originals = {name: getattr(modules[0], name) for name, modules in _COUNTED.items()}
 
     def counting(name: str) -> Callable[..., Any]:
         """Wrap one function with a counter."""
@@ -517,13 +538,16 @@ def _call_counter() -> Iterator[dict[str, int]]:
 
         return wrapper
 
-    for name in _COUNTED:
-        setattr(torch_ops, name, counting(name))
+    for name, modules in _COUNTED.items():
+        wrapper = counting(name)
+        for module in modules:
+            setattr(module, name, wrapper)
     try:
         yield counts
     finally:
-        for name, original in originals.items():
-            setattr(torch_ops, name, original)
+        for name, modules in _COUNTED.items():
+            for module in modules:
+                setattr(module, name, originals[name])
 
 
 def _trace_counts(spec_name: str | None) -> tuple[dict[str, int], int]:

@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._postprocess as postprocess_module
+import torchlens._postprocess.graph_traversal as graph_traversal_module
 from torchlens import trace as trace_fn
 from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError, streaming as streaming_module
@@ -110,7 +110,7 @@ def test_streaming_writes_blobs_before_postprocess(
 
     bundle_path = tmp_path / "stream_bundle.tl"
     observed: dict[str, object] = {}
-    original_add_output_layers = postprocess_module._add_output_layers
+    original_add_output_layers = graph_traversal_module._add_output_layers
 
     def _capturing_add_output_layers(
         self: Trace,
@@ -126,7 +126,7 @@ def test_streaming_writes_blobs_before_postprocess(
             self, output_tensors, output_tensor_addresses, output_parent_labels
         )
 
-    monkeypatch.setattr(postprocess_module, "_add_output_layers", _capturing_add_output_layers)
+    monkeypatch.setattr(graph_traversal_module, "_add_output_layers", _capturing_add_output_layers)
 
     model, inputs = _make_streaming_model()
     trace_fn(
