@@ -2,9 +2,9 @@
   "tlspec_version": 11,
   "torchlens_version": "2.36.1",
   "torch_version": "2.13.0+cpu",
-  "python_version": "3.10.19",
+  "python_version": "3.10.20",
   "platform": "linux-x86_64",
-  "created_at": "2026-10-31T14:08:23Z",
+  "created_at": "2026-10-31T16:55:16Z",
   "bundle_format": "directory",
   "n_layers": 9,
   "n_out_blobs": 3,
@@ -91,11 +91,11 @@
       ]
     },
     "rng_state_digests": {
-      "torch": "5972f2daafa9986d12940b8c63bf1cb14d5865456fe60737132b2bbec5f32471"
+      "torch": "a763bfb0cb593a1af83b60e570e50dd9ef81a9ff16729b9569ab914c01522e5e"
     },
     "input_hash": "unavailable:PayloadUnavailableError",
     "model_structure_hash": "b64e0ca91fabdcea447df157d84acafa3a15fa0b31d821d01699510bada0a362",
-    "git_commit_hash": "56df3e62128a1828fc1c15db55089e2a820e2cb8"
+    "git_commit_hash": "9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886"
   },
   "custom_attributes_disclosure": {
     "included": true,

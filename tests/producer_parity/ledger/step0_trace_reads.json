@@ -1,11 +1,11 @@
 [
  "_buffer_initial_values",
  "_module_capture_ws",
+ "_param_logs",
  "_raw_graph_ws",
  "_source_model_ref",
  "capture_events",
  "input_layers",
  "op_equivalence_classes",
- "param_logs",
  "structure_only"
 ]

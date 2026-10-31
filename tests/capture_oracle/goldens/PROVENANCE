@@ -1373,3 +1373,251 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: f63bdc9b9353c9981a5faef233c19dc9e1260373 (dirty)
 recorded: 2026-10-31T16:07:35.179266+00:00
+---
+generator: tests/capture_oracle (plain_cnn__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:34.373118+00:00
+---
+generator: tests/capture_oracle (plain_cnn__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:40.190779+00:00
+---
+generator: tests/capture_oracle (plain_cnn__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:45.274287+00:00
+---
+generator: tests/capture_oracle (plain_cnn__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:50.900338+00:00
+---
+generator: tests/capture_oracle (plain_cnn__mixed_selector)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:56:56.480609+00:00
+---
+generator: tests/capture_oracle (plain_cnn__lookback)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:02.152511+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:07.920407+00:00
+---
+generator: tests/capture_oracle (plain_cnn__intervene_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:13.069726+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:18.776776+00:00
+---
+generator: tests/capture_oracle (plain_cnn__halt_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:23.848609+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:29.607588+00:00
+---
+generator: tests/capture_oracle (plain_cnn__backward_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:34.669851+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:40.747382+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_predicate)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:46.858591+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:52.000042+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:57:57.777407+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:58:03.555963+00:00
+---
+generator: tests/capture_oracle (train_batchnorm__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:58:09.326780+00:00
+---
+generator: tests/capture_oracle (recurrent__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:58:15.084688+00:00
+---
+generator: tests/capture_oracle (recurrent__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:58:20.245611+00:00
+---
+generator: tests/capture_oracle (recurrent__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:58:26.112397+00:00
+---
+generator: tests/capture_oracle (conditional__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:58:31.757922+00:00
+---
+generator: tests/capture_oracle (conditional__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:58:37.461245+00:00
+---
+generator: tests/capture_oracle (in_place__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:58:43.054727+00:00
+---
+generator: tests/capture_oracle (in_place__predicate_live)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:58:48.587662+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:58:54.427231+00:00
+---
+generator: tests/capture_oracle (mutating_pre_hook__two_pass_negative)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:59:00.350458+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:59:07.480164+00:00
+---
+generator: tests/capture_oracle (tiny_transformer__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:59:13.039506+00:00
+---
+generator: tests/capture_oracle (failing_conditional__trace)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:59:18.713107+00:00
+---
+generator: tests/capture_oracle (failing_conditional__record)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: v11-rest: persisted-field rows (Trace removals and renames, Buffer/Param/Module rows, RunningStats, error codes, A2/A3 removals, ParentEdge._edge_use, legacy adapters cut, reader floor 11) (lane mp-v11-rest)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9c38b5ce4961b1fba9a24b1a8171b54fd0ddc886 (dirty)
+recorded: 2026-10-31T16:59:23.872763+00:00

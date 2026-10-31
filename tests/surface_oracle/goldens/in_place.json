@@ -220,7 +220,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||add||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -469,7 +468,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||clone||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -697,7 +695,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||input||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -938,7 +935,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||output||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -1186,7 +1182,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||relu||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -1257,9 +1252,9 @@
     "grads": [
      null
     ],
-    "had_pre_hook_input_change": false,
     "has_frozen_params": false,
     "has_multiple_addresses": false,
+    "has_pre_hook_input_change": false,
     "has_saved_forward_args": false,
     "has_trainable_params": false,
     "input_layers": [
@@ -1288,7 +1283,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 4,
     "num_layers": 5,
-    "num_ops": 5,
     "num_output_edges": 0,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -1472,9 +1466,7 @@
     "num_edges": 4,
     "num_input_edges": 0,
     "num_internal_edges": 4,
-    "num_layers": 5,
     "num_output_edges": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -1637,6 +1629,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "add_inplace_a09dc8be148d708c",
     "equivalent_ops": {
@@ -1742,7 +1735,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -1777,7 +1769,6 @@
     },
     "layer_label": "add_1_2",
     "layer_label_short": "add_1",
-    "layer_type": "add",
     "lookup_keys": [
      -3,
      2,
@@ -1818,12 +1809,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 2,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "add_1_2:1"
-     }
-    ],
     "ordinal_index": 2,
     "out": {
      "__tensor__": true,
@@ -2000,6 +1985,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "clone_966d0e7792d95d96",
     "equivalent_ops": {
@@ -2103,7 +2089,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -2138,7 +2123,6 @@
     },
     "layer_label": "clone_1_1",
     "layer_label_short": "clone_1",
-    "layer_type": "clone",
     "lookup_keys": [
      -4,
      1,
@@ -2177,12 +2161,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 1,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "clone_1_1:1"
-     }
-    ],
     "ordinal_index": 1,
     "out": {
      "__tensor__": true,
@@ -2343,6 +2321,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "input_2_4_torch.float32",
     "equivalent_ops": {
@@ -2416,7 +2395,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
@@ -2451,7 +2429,6 @@
     },
     "layer_label": "input_1",
     "layer_label_short": "input_1",
-    "layer_type": "input",
     "lookup_keys": [
      -5,
      0,
@@ -2491,12 +2468,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 0,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "input_1:1"
-     }
-    ],
     "ordinal_index": 0,
     "out": {
      "__tensor__": true,
@@ -2651,6 +2622,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "output_1_2_4_torch.float32",
     "equivalent_ops": {
@@ -2754,7 +2726,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
@@ -2789,7 +2760,6 @@
     },
     "layer_label": "output_1",
     "layer_label_short": "output_1",
-    "layer_type": "output",
     "lookup_keys": [
      -1,
      4,
@@ -2829,12 +2799,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 0,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "output_1:1"
-     }
-    ],
     "ordinal_index": 4,
     "out": {
      "__tensor__": true,
@@ -3019,6 +2983,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "relu_inplace_966d0e7792d95d96",
     "equivalent_ops": {
@@ -3122,7 +3087,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -3157,7 +3121,6 @@
     },
     "layer_label": "relu_1_3",
     "layer_label_short": "relu_1",
-    "layer_type": "relu",
     "lookup_keys": [
      -2,
      3,
@@ -3196,12 +3159,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 1,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "relu_1_3:1"
-     }
-    ],
     "ordinal_index": 3,
     "out": {
      "__tensor__": true,
@@ -3302,11 +3259,24 @@
    "_activation_transform_repr": null,
    "_ambiguous_lookup_keys": {},
    "_annotation_blobs": null,
+   "_append_history": [],
    "_append_sequence_id": 0,
+   "_backward_pass_logs": {},
+   "_buffer_num_calls": {},
    "_buffer_persistence": "<raises AttributeError>",
+   "_by_pass": {
+    "1": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   },
    "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
+   "_decoded_output": null,
    "_distributed_plane_p": null,
    "_fast_run_session": null,
    "_final_to_raw_layer_labels": {
@@ -3316,376 +3286,13 @@
     "\"output_1\"": "output_1_raw",
     "\"relu_1_3\"": "relu_1_4_raw"
    },
+   "_grad_fn_logs": {},
    "_grad_fn_param_refs": {},
    "_grad_op_nums_to_save": [],
    "_has_direct_writes": false,
    "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
    "_last_hook_handle_ids": [],
-   "_layer_num_to_lookup_keys_dict": {
-    "1": [
-     -5,
-     0,
-     "input.x",
-     "input_1",
-     "input_1",
-     "input_1",
-     "input_1:1",
-     "input_1:1",
-     "input_1_raw"
-    ],
-    "2": [
-     -4,
-     1,
-     "clone_1",
-     "clone_1:1",
-     "clone_1_1",
-     "clone_1_1:1",
-     "clone_1_2",
-     "clone_1_2_raw"
-    ],
-    "3": [
-     -3,
-     2,
-     "add_1",
-     "add_1:1",
-     "add_1_2",
-     "add_1_2:1",
-     "add_1_3",
-     "add_1_3_raw"
-    ],
-    "4": [
-     -2,
-     3,
-     "relu_1",
-     "relu_1:1",
-     "relu_1_3",
-     "relu_1_3:1",
-     "relu_1_4",
-     "relu_1_4_raw"
-    ],
-    "5": [
-     -1,
-     4,
-     "output",
-     "output_1",
-     "output_1",
-     "output_1",
-     "output_1:1",
-     "output_1:1",
-     "output_1_raw"
-    ]
-   },
-   "_layer_nums_to_save": "all",
-   "_layers_logged": true,
-   "_layers_saved": true,
-   "_lookup_keys_to_layer_num_dict": {
-    "\"add_1\"": 3,
-    "\"add_1:1\"": 3,
-    "\"add_1_2\"": 3,
-    "\"add_1_2:1\"": 3,
-    "\"add_1_3\"": 3,
-    "\"add_1_3_raw\"": 3,
-    "\"clone_1\"": 2,
-    "\"clone_1:1\"": 2,
-    "\"clone_1_1\"": 2,
-    "\"clone_1_1:1\"": 2,
-    "\"clone_1_2\"": 2,
-    "\"clone_1_2_raw\"": 2,
-    "\"input.x\"": 1,
-    "\"input_1\"": 1,
-    "\"input_1:1\"": 1,
-    "\"input_1_raw\"": 1,
-    "\"output\"": 5,
-    "\"output_1\"": 5,
-    "\"output_1:1\"": 5,
-    "\"output_1_raw\"": 5,
-    "\"relu_1\"": 4,
-    "\"relu_1:1\"": 4,
-    "\"relu_1_3\"": 4,
-    "\"relu_1_3:1\"": 4,
-    "\"relu_1_4\"": 4,
-    "\"relu_1_4_raw\"": 4,
-    "-1": 5,
-    "-2": 4,
-    "-3": 3,
-    "-4": 2,
-    "-5": 1,
-    "0": 1,
-    "1": 2,
-    "2": 3,
-    "3": 4,
-    "4": 5
-   },
-   "_orphan_labels": [],
-   "_orphan_logs": [],
-   "_out_dedup_mode": "identity",
-   "_out_hash_cache": {},
-   "_out_identity_cache": {},
-   "_out_recipe_revision": 0,
-   "_output_transform": null,
-   "_phase_timings": "<measured>",
-   "_raw_to_final_layer_labels": {
-    "\"add_1_3_raw\"": "add_1_2",
-    "\"clone_1_2_raw\"": "clone_1_1",
-    "\"input_1_raw\"": "input_1",
-    "\"output_1_raw\"": "output_1",
-    "\"relu_1_4_raw\"": "relu_1_3"
-   },
-   "_raw_to_final_op_labels": {
-    "\"add_1_3_raw\"": "add_1_2:1",
-    "\"clone_1_2_raw\"": "clone_1_1:1",
-    "\"input_1_raw\"": "input_1:1",
-    "\"output_1_raw\"": "output_1:1",
-    "\"relu_1_4_raw\"": "relu_1_3:1"
-   },
-   "_raw_to_final_parent_layer_labels": {
-    "\"add_1_3_raw\"": "add_1_2",
-    "\"clone_1_2_raw\"": "clone_1_1",
-    "\"input_1_raw\"": "input_1",
-    "\"output_1_raw\"": "output_1",
-    "\"relu_1_4_raw\"": "relu_1_3"
-   },
-   "_replay_arg_version_data_complete": true,
-   "_replay_frontier": {},
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
-   "_source_code_blob": {
-    "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
-    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
-    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()"
-   },
-   "_source_model_ref": "<callable ReferenceType>",
-   "_spec_revision": 0,
-   "_tracing_finished": true,
-   "_transform": null,
-   "_visualizer_dir": null,
-   "_warned_direct_write": false,
-   "_warned_mutate_in_place": false,
-   "activation_payloads_by_raw_label": {
-    "\"add_1_3_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"clone_1_2_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"input_1_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"output_1_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"relu_1_4_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    }
-   },
-   "activation_transform": null,
-   "annotations": {
-    "\"health_facts\"": {
-     "\"alias_nonfinite_labels\"": [],
-     "\"basis\"": "saved_payloads",
-     "\"capture_revision\"": "fc1-f3362ff6b785465e",
-     "\"checked\"": 5,
-     "\"nonfinite_labels\"": [],
-     "\"schema_version\"": 1,
-     "\"unchecked\"": 0,
-     "\"unexamined\"": 0,
-     "\"unmapped\"": 0
-    }
-   },
-   "append_history": [],
-   "archived_activations": {},
-   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
-   "backend": "torch",
-   "backend_runtime_config": null,
-   "backend_runtime_device_summary": null,
-   "backend_runtime_version": null,
-   "backward_durations": [],
-   "backward_events": [],
-   "backward_memory_backend": "<measured>",
-   "backward_pass_logs": {},
-   "backward_peak_memory": "<measured>",
-   "backward_peak_memory_reason": "<measured>",
-   "backward_ready": false,
-   "backward_root_grad_fn_object_ids": "<measured>",
-   "batch_render": "auto",
-   "buffer_layers": [],
-   "buffer_num_calls": {},
-   "buffer_read_ops": [],
-   "buffer_write_ops": [],
-   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
-   "by_pass": {
-    "1": [
-     0,
-     1,
-     2,
-     3,
-     4
-    ]
-   },
-   "call_tree": {
-    "__ref__": "ModuleCall",
-    "label": "self"
-   },
-   "capture_cache_hit": false,
-   "capture_cache_key": null,
-   "capture_cache_path": null,
-   "capture_duration": "<measured>",
-   "capture_end_time": "<measured>",
-   "capture_guard_passes": [
-    {
-     "\"capture_mode\"": "exhaustive",
-     "\"guard_pass_index\"": 1,
-     "\"owner_thread_id\"": "<measured>"
-    }
-   ],
-   "capture_kind": "plain",
-   "capture_mode": "exhaustive",
-   "capture_owner_thread_id": "<measured>",
-   "capture_owner_thread_qualified": true,
-   "capture_start_time": "<measured>",
-   "capture_tensor_grad_hooks": true,
-   "capture_thread_activity_detected": false,
-   "capture_thread_count_end": 1,
-   "capture_thread_count_start": 1,
-   "capture_verification_reason": null,
-   "capture_verified": null,
-   "chunked_forward": false,
-   "class_docstring": "Model with explicit in-place operations on an internal tensor.",
-   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 181,
-   "cleanup_duration": "<measured>",
-   "code_context": [],
-   "completeness_decompositions": [],
-   "completeness_diagnostics": [],
-   "completeness_witness_accounted_count": 0,
-   "completeness_witness_callback_ns": 0,
-   "completeness_witness_event_count": 0,
-   "completeness_witness_expected_opaque_count": 0,
-   "completeness_witness_mode": "off",
-   "completeness_witness_unaccounted_count": 0,
-   "completeness_witness_verified": null,
-   "compute_coverage": {
-    "\"known\"": 2,
-    "\"not_applicable\"": 2,
-    "\"unknown\"": 0,
-    "\"zero_by_rule\"": 1
-   },
-   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "conditional_arm_entry_edges": {},
-   "conditional_branch_edges": [],
-   "conditional_edge_call_indices": {},
-   "conditional_records": [],
-   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
-   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
-   "decoded_output": null,
-   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
-   "detach_saved_activations": false,
-   "distributed_scope": null,
-   "emit_nvtx": false,
-   "episode": null,
-   "episode_coupling": null,
-   "escape_detector_backward_coverage": "not_armed",
-   "escape_detector_callback_ns": 0,
-   "escape_detector_event_count": 0,
-   "escape_detector_mode": "off",
-   "escape_detector_verified": null,
-   "escape_diagnostics": [],
-   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_functions": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
-   "factcore": "<torchlens.report._factcore.FactCore>",
-   "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
-   "forward_duration": "<measured>",
-   "forward_memory_backend": "<measured>",
-   "forward_peak_memory": "<measured>",
-   "forward_peak_memory_reason": "<measured>",
-   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
-   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 191,
-   "func_calls_duration": "<measured>",
-   "grad_fn_logs": {},
-   "grad_fn_order": [],
-   "grad_fn_site_summary": {},
-   "grad_transform": null,
-   "grad_transform_repr": null,
-   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
-   "graph_shape_hash": "060aa7d621f1fde2443cca694d2d43682d210ad071eb9942d9151804214b7299",
-   "grouping": "structural",
-   "grouping_policy": {
-    "\"detector\"": "callsite_v1",
-    "\"effective\"": true,
-    "\"folded_sites\"": "none",
-    "\"policy\"": "structural",
-    "\"requested\"": "structural",
-    "\"schema\"": "grouping_policy_v1",
-    "\"settlement_note\"": null,
-    "\"site_join\"": "none"
-   },
-   "halt_frontier": null,
-   "halted": false,
-   "has_backward_pass": false,
-   "has_frozen_params": false,
-   "has_gradients": false,
-   "has_trainable_params": false,
-   "health_facts": "<torchlens.report._health.HealthFacts>",
-   "inference_only": false,
-   "init_docstring": "Initialize side-effect counters.",
-   "init_signature": "(self) -> 'None'",
-   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 184,
-   "injected_ops": [],
-   "input_annotations": {},
-   "input_layers": [
-    "input_1"
-   ],
-   "input_object_id": "<measured>",
-   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "input_preprocessor": null,
-   "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38",
-   "input_structure": "<raises AttributeError>",
-   "internal_sink_ops": [],
-   "internal_source_ops": [],
-   "internally_terminated_bool_ops": [],
-   "intervention_audit": [],
-   "is_appended": false,
-   "is_pristine": true,
-   "is_replayable": false,
-   "keep_orphans": false,
-   "last_run": null,
-   "layer_dict_all_keys": {
+   "_layer_dict_all_keys": {
     "\"add_1\"": {
      "__ref__": "Op",
      "label": "add_1_2:1"
@@ -3831,7 +3438,7 @@
      "label": "output_1:1"
     }
    },
-   "layer_dict_main_keys": {
+   "_layer_dict_main_keys": {
     "\"add_1_2:1\"": {
      "__ref__": "Op",
      "label": "add_1_2:1"
@@ -3853,14 +3460,7 @@
      "label": "relu_1_3:1"
     }
    },
-   "layer_labels": [
-    "input_1",
-    "clone_1_1",
-    "add_1_2",
-    "relu_1_3",
-    "output_1"
-   ],
-   "layer_list": [
+   "_layer_list": [
     {
      "__ref__": "Op",
      "label": "input_1:1"
@@ -3882,7 +3482,7 @@
      "label": "output_1:1"
     }
    ],
-   "layer_logs": {
+   "_layer_logs": {
     "\"add_1_2\"": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
@@ -3904,13 +3504,378 @@
      "label": "relu_1_3:1"
     }
    },
-   "layer_num_calls": {
+   "_layer_num_calls": {
     "\"add_1_2\"": 1,
     "\"clone_1_1\"": 1,
     "\"input_1\"": 1,
     "\"output_1\"": 1,
     "\"relu_1_3\"": 1
    },
+   "_layer_num_to_lookup_keys_dict": {
+    "1": [
+     -5,
+     0,
+     "input.x",
+     "input_1",
+     "input_1",
+     "input_1",
+     "input_1:1",
+     "input_1:1",
+     "input_1_raw"
+    ],
+    "2": [
+     -4,
+     1,
+     "clone_1",
+     "clone_1:1",
+     "clone_1_1",
+     "clone_1_1:1",
+     "clone_1_2",
+     "clone_1_2_raw"
+    ],
+    "3": [
+     -3,
+     2,
+     "add_1",
+     "add_1:1",
+     "add_1_2",
+     "add_1_2:1",
+     "add_1_3",
+     "add_1_3_raw"
+    ],
+    "4": [
+     -2,
+     3,
+     "relu_1",
+     "relu_1:1",
+     "relu_1_3",
+     "relu_1_3:1",
+     "relu_1_4",
+     "relu_1_4_raw"
+    ],
+    "5": [
+     -1,
+     4,
+     "output",
+     "output_1",
+     "output_1",
+     "output_1",
+     "output_1:1",
+     "output_1:1",
+     "output_1_raw"
+    ]
+   },
+   "_layer_nums_to_save": "all",
+   "_layers_logged": true,
+   "_layers_saved": true,
+   "_lookup_keys_to_layer_num_dict": {
+    "\"add_1\"": 3,
+    "\"add_1:1\"": 3,
+    "\"add_1_2\"": 3,
+    "\"add_1_2:1\"": 3,
+    "\"add_1_3\"": 3,
+    "\"add_1_3_raw\"": 3,
+    "\"clone_1\"": 2,
+    "\"clone_1:1\"": 2,
+    "\"clone_1_1\"": 2,
+    "\"clone_1_1:1\"": 2,
+    "\"clone_1_2\"": 2,
+    "\"clone_1_2_raw\"": 2,
+    "\"input.x\"": 1,
+    "\"input_1\"": 1,
+    "\"input_1:1\"": 1,
+    "\"input_1_raw\"": 1,
+    "\"output\"": 5,
+    "\"output_1\"": 5,
+    "\"output_1:1\"": 5,
+    "\"output_1_raw\"": 5,
+    "\"relu_1\"": 4,
+    "\"relu_1:1\"": 4,
+    "\"relu_1_3\"": 4,
+    "\"relu_1_3:1\"": 4,
+    "\"relu_1_4\"": 4,
+    "\"relu_1_4_raw\"": 4,
+    "-1": 5,
+    "-2": 4,
+    "-3": 3,
+    "-4": 2,
+    "-5": 1,
+    "0": 1,
+    "1": 2,
+    "2": 3,
+    "3": 4,
+    "4": 5
+   },
+   "_module_filter": null,
+   "_num_backward_passes": 0,
+   "_num_layers_with_params": 0,
+   "_num_ops": 3,
+   "_orphan_labels": [],
+   "_orphan_logs": [],
+   "_orphan_records": [],
+   "_out_dedup_mode": "identity",
+   "_out_hash_cache": {},
+   "_out_identity_cache": {},
+   "_out_recipe_revision": 0,
+   "_output_transform": null,
+   "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
+   "_parent_run": "<callable ReferenceType>",
+   "_phase_timings": "<measured>",
+   "_raw_to_final_layer_labels": {
+    "\"add_1_3_raw\"": "add_1_2",
+    "\"clone_1_2_raw\"": "clone_1_1",
+    "\"input_1_raw\"": "input_1",
+    "\"output_1_raw\"": "output_1",
+    "\"relu_1_4_raw\"": "relu_1_3"
+   },
+   "_raw_to_final_op_labels": {
+    "\"add_1_3_raw\"": "add_1_2:1",
+    "\"clone_1_2_raw\"": "clone_1_1:1",
+    "\"input_1_raw\"": "input_1:1",
+    "\"output_1_raw\"": "output_1:1",
+    "\"relu_1_4_raw\"": "relu_1_3:1"
+   },
+   "_raw_to_final_parent_layer_labels": {
+    "\"add_1_3_raw\"": "add_1_2",
+    "\"clone_1_2_raw\"": "clone_1_1",
+    "\"input_1_raw\"": "input_1",
+    "\"output_1_raw\"": "output_1",
+    "\"relu_1_4_raw\"": "relu_1_3"
+   },
+   "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
+   "_rescue_rerun": null,
+   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_source_code_blob": {
+    "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
+    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
+    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()"
+   },
+   "_source_model_ref": "<callable ReferenceType>",
+   "_spec_revision": 0,
+   "_tracing_finished": true,
+   "_transform": null,
+   "_visualizer_dir": null,
+   "_warned_direct_write": false,
+   "_warned_mutate_in_place": false,
+   "activation_payloads_by_raw_label": {
+    "\"add_1_3_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"clone_1_2_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"input_1_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"output_1_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"relu_1_4_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    }
+   },
+   "activation_transform": null,
+   "annotations": {
+    "\"health_facts\"": {
+     "\"alias_nonfinite_labels\"": [],
+     "\"basis\"": "saved_payloads",
+     "\"capture_revision\"": "fc1-f3362ff6b785465e",
+     "\"checked\"": 5,
+     "\"nonfinite_labels\"": [],
+     "\"schema_version\"": 1,
+     "\"unchecked\"": 0,
+     "\"unexamined\"": 0,
+     "\"unmapped\"": 0
+    }
+   },
+   "archived_activations": {},
+   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
+   "backend": "torch",
+   "backend_runtime_config": null,
+   "backend_runtime_device_summary": null,
+   "backend_runtime_version": null,
+   "backward_durations": [],
+   "backward_events": [],
+   "backward_memory_backend": "<measured>",
+   "backward_peak_memory": "<measured>",
+   "backward_peak_memory_reason": "<measured>",
+   "backward_ready": false,
+   "backward_root_grad_fn_object_ids": "<measured>",
+   "batch_render": "auto",
+   "buffer_layers": [],
+   "buffer_read_ops": [],
+   "buffer_write_ops": [],
+   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
+   "call_tree": {
+    "__ref__": "ModuleCall",
+    "label": "self"
+   },
+   "capture_cache_hit": false,
+   "capture_cache_key": null,
+   "capture_cache_path": null,
+   "capture_duration": "<measured>",
+   "capture_end_time": "<measured>",
+   "capture_guard_passes": [
+    {
+     "\"capture_mode\"": "exhaustive",
+     "\"guard_pass_index\"": 1,
+     "\"owner_thread_id\"": "<measured>"
+    }
+   ],
+   "capture_kind": "plain",
+   "capture_mode": "exhaustive",
+   "capture_owner_thread_id": "<measured>",
+   "capture_owner_thread_qualified": true,
+   "capture_start_time": "<measured>",
+   "capture_tensor_grad_hooks": true,
+   "capture_thread_activity_detected": false,
+   "capture_thread_count_end": 1,
+   "capture_thread_count_start": 1,
+   "capture_verification_reason": null,
+   "capture_verified": null,
+   "chunked_forward": false,
+   "class_docstring": "Model with explicit in-place operations on an internal tensor.",
+   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "class_source_line": 181,
+   "cleanup_duration": "<measured>",
+   "code_context": [],
+   "completeness_decompositions": [],
+   "completeness_diagnostics": [],
+   "completeness_witness_accounted_count": 0,
+   "completeness_witness_callback_ns": 0,
+   "completeness_witness_event_count": 0,
+   "completeness_witness_expected_opaque_count": 0,
+   "completeness_witness_mode": "off",
+   "completeness_witness_unaccounted_count": 0,
+   "completeness_witness_verified": null,
+   "compute_coverage": {
+    "\"known\"": 2,
+    "\"not_applicable\"": 2,
+    "\"unknown\"": 0,
+    "\"zero_by_rule\"": 1
+   },
+   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "conditional_arm_entry_edges": {},
+   "conditional_branch_edges": [],
+   "conditional_edge_call_indices": {},
+   "conditional_records": [],
+   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
+   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
+   "detach_saved_activations": false,
+   "distributed_scope": null,
+   "emit_nvtx": false,
+   "episode": null,
+   "episode_coupling": null,
+   "escape_detector_backward_coverage": "not_armed",
+   "escape_detector_callback_ns": 0,
+   "escape_detector_event_count": 0,
+   "escape_detector_mode": "off",
+   "escape_detector_verified": null,
+   "escape_diagnostics": [],
+   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
+   "facet_functions": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "factcore": "<torchlens.report._factcore.FactCore>",
+   "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
+   "forward_duration": "<measured>",
+   "forward_memory_backend": "<measured>",
+   "forward_peak_memory": "<measured>",
+   "forward_peak_memory_reason": "<measured>",
+   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
+   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "forward_source_line": 191,
+   "func_calls_duration": "<measured>",
+   "grad_fn_order": [],
+   "grad_fn_site_summary": {},
+   "grad_transform": null,
+   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
+   "graph_shape_hash": "060aa7d621f1fde2443cca694d2d43682d210ad071eb9942d9151804214b7299",
+   "grouping": "structural",
+   "grouping_policy": {
+    "\"detector\"": "callsite_v1",
+    "\"effective\"": true,
+    "\"folded_sites\"": "none",
+    "\"policy\"": "structural",
+    "\"requested\"": "structural",
+    "\"schema\"": "grouping_policy_v1",
+    "\"settlement_note\"": null,
+    "\"site_join\"": "none"
+   },
+   "halt_frontier": null,
+   "has_backward_pass": false,
+   "has_frozen_params": false,
+   "has_gradients": false,
+   "has_trainable_params": false,
+   "health_facts": "<torchlens.report._health.HealthFacts>",
+   "inference_only": false,
+   "init_docstring": "Initialize side-effect counters.",
+   "init_signature": "(self) -> 'None'",
+   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "init_source_line": 184,
+   "injected_ops": [],
+   "input": null,
+   "input_annotations": {},
+   "input_layers": [
+    "input_1"
+   ],
+   "input_object_id": "<measured>",
+   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "input_preprocessor": null,
+   "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38",
+   "input_structure": "<raises AttributeError>",
+   "internal_sink_ops": [],
+   "internal_source_ops": [],
+   "internally_terminated_bool_ops": [],
+   "intervention_audit": [],
+   "is_appended": false,
+   "is_pristine": true,
+   "is_replayable": false,
+   "is_stopped": false,
+   "keep_orphans": false,
+   "last_run": null,
+   "layer_labels": [
+    "input_1",
+    "clone_1_1",
+    "add_1_2",
+    "relu_1_3",
+    "output_1"
+   ],
    "layer_visualizers": null,
    "layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
@@ -3953,31 +3918,20 @@
      "0.0"
     ]
    ],
-   "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "name": "inplace_N_fork_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
-   "num_backward_passes": 0,
    "num_buffer_layers": 0,
    "num_context_lines": 7,
    "num_edges": 4,
    "num_input_layers": 1,
-   "num_layers_with_params": 0,
-   "num_modules": 1,
-   "num_ops": 3,
    "num_output_layers": 1,
-   "num_param_tensors": 0,
    "num_params": 0,
    "num_params_frozen": 0,
    "num_params_trainable": 0,
-   "num_saved_grad_fn_calls": 0,
-   "num_saved_grad_fns": 0,
-   "num_saved_layers": 5,
-   "num_saved_module_calls": 1,
-   "num_saved_ops": 5,
    "num_uncalled_modules": 0,
    "observer_spans": [],
    "op_equivalence_classes": {
@@ -4017,7 +3971,6 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "orphan_records": [],
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -4029,10 +3982,8 @@
    "output_postprocessor": null,
    "param_hash_full": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
    "param_hash_quick": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-   "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "param_source": "native-module",
    "params": "<torchlens._data_classes.param.ParamAccessor>",
-   "parent_run": "<callable ReferenceType>",
    "parent_trace": {
     "__ref__": "Trace",
     "label": "inplace_1"
@@ -4041,8 +3992,6 @@
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
-   "raw_input": null,
-   "raw_output": null,
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
@@ -4052,7 +4001,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.InPlaceModel.forward",
    "root_module": {
     "__ref__": "Module",
@@ -4099,6 +4047,7 @@
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "transform_repr": null,
+   "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
@@ -4327,7 +4276,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||add||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -4576,7 +4524,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||clone||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -4804,7 +4751,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||input||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -5045,7 +4991,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||output||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -5293,7 +5238,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||relu||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -5364,9 +5308,9 @@
     "grads": [
      null
     ],
-    "had_pre_hook_input_change": false,
     "has_frozen_params": false,
     "has_multiple_addresses": false,
+    "has_pre_hook_input_change": false,
     "has_saved_forward_args": false,
     "has_trainable_params": false,
     "input_layers": [
@@ -5395,7 +5339,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 4,
     "num_layers": 5,
-    "num_ops": 5,
     "num_output_edges": 0,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -5579,9 +5522,7 @@
     "num_edges": 4,
     "num_input_edges": 0,
     "num_internal_edges": 4,
-    "num_layers": 5,
     "num_output_edges": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -5744,6 +5685,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "add_inplace_a09dc8be148d708c",
     "equivalent_ops": {
@@ -5849,7 +5791,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -5884,7 +5825,6 @@
     },
     "layer_label": "add_1_2",
     "layer_label_short": "add_1",
-    "layer_type": "add",
     "lookup_keys": [
      -3,
      2,
@@ -5925,12 +5865,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 2,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "add_1_2:1"
-     }
-    ],
     "ordinal_index": 2,
     "out": {
      "__tensor__": true,
@@ -6107,6 +6041,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "clone_966d0e7792d95d96",
     "equivalent_ops": {
@@ -6210,7 +6145,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -6245,7 +6179,6 @@
     },
     "layer_label": "clone_1_1",
     "layer_label_short": "clone_1",
-    "layer_type": "clone",
     "lookup_keys": [
      -4,
      1,
@@ -6284,12 +6217,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 1,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "clone_1_1:1"
-     }
-    ],
     "ordinal_index": 1,
     "out": {
      "__tensor__": true,
@@ -6450,6 +6377,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "input_2_4_torch.float32",
     "equivalent_ops": {
@@ -6523,7 +6451,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
@@ -6558,7 +6485,6 @@
     },
     "layer_label": "input_1",
     "layer_label_short": "input_1",
-    "layer_type": "input",
     "lookup_keys": [
      -5,
      0,
@@ -6598,12 +6524,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 0,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "input_1:1"
-     }
-    ],
     "ordinal_index": 0,
     "out": {
      "__tensor__": true,
@@ -6758,6 +6678,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "output_1_2_4_torch.float32",
     "equivalent_ops": {
@@ -6861,7 +6782,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
@@ -6896,7 +6816,6 @@
     },
     "layer_label": "output_1",
     "layer_label_short": "output_1",
-    "layer_type": "output",
     "lookup_keys": [
      -1,
      4,
@@ -6936,12 +6855,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 0,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "output_1:1"
-     }
-    ],
     "ordinal_index": 4,
     "out": {
      "__tensor__": true,
@@ -7126,6 +7039,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "relu_inplace_966d0e7792d95d96",
     "equivalent_ops": {
@@ -7229,7 +7143,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -7264,7 +7177,6 @@
     },
     "layer_label": "relu_1_3",
     "layer_label_short": "relu_1",
-    "layer_type": "relu",
     "lookup_keys": [
      -2,
      3,
@@ -7303,12 +7215,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 1,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "relu_1_3:1"
-     }
-    ],
     "ordinal_index": 3,
     "out": {
      "__tensor__": true,
@@ -7409,11 +7315,24 @@
    "_activation_transform_repr": null,
    "_ambiguous_lookup_keys": {},
    "_annotation_blobs": null,
+   "_append_history": [],
    "_append_sequence_id": 0,
+   "_backward_pass_logs": {},
+   "_buffer_num_calls": {},
    "_buffer_persistence": "<raises AttributeError>",
+   "_by_pass": {
+    "1": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   },
    "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
+   "_decoded_output": null,
    "_distributed_plane_p": null,
    "_fast_run_session": null,
    "_final_to_raw_layer_labels": {
@@ -7423,364 +7342,13 @@
     "\"output_1\"": "output_1_raw",
     "\"relu_1_3\"": "relu_1_4_raw"
    },
+   "_grad_fn_logs": {},
    "_grad_fn_param_refs": {},
    "_grad_op_nums_to_save": [],
    "_has_direct_writes": false,
    "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
    "_last_hook_handle_ids": [],
-   "_layer_num_to_lookup_keys_dict": {
-    "1": [
-     -5,
-     0,
-     "input.x",
-     "input_1",
-     "input_1",
-     "input_1",
-     "input_1:1",
-     "input_1:1",
-     "input_1_raw"
-    ],
-    "2": [
-     -4,
-     1,
-     "clone_1",
-     "clone_1:1",
-     "clone_1_1",
-     "clone_1_1:1",
-     "clone_1_2",
-     "clone_1_2_raw"
-    ],
-    "3": [
-     -3,
-     2,
-     "add_1",
-     "add_1:1",
-     "add_1_2",
-     "add_1_2:1",
-     "add_1_3",
-     "add_1_3_raw"
-    ],
-    "4": [
-     -2,
-     3,
-     "relu_1",
-     "relu_1:1",
-     "relu_1_3",
-     "relu_1_3:1",
-     "relu_1_4",
-     "relu_1_4_raw"
-    ],
-    "5": [
-     -1,
-     4,
-     "output",
-     "output_1",
-     "output_1",
-     "output_1",
-     "output_1:1",
-     "output_1:1",
-     "output_1_raw"
-    ]
-   },
-   "_layer_nums_to_save": "all",
-   "_layers_logged": true,
-   "_layers_saved": true,
-   "_lookup_keys_to_layer_num_dict": {
-    "\"add_1\"": 3,
-    "\"add_1:1\"": 3,
-    "\"add_1_2\"": 3,
-    "\"add_1_2:1\"": 3,
-    "\"add_1_3\"": 3,
-    "\"add_1_3_raw\"": 3,
-    "\"clone_1\"": 2,
-    "\"clone_1:1\"": 2,
-    "\"clone_1_1\"": 2,
-    "\"clone_1_1:1\"": 2,
-    "\"clone_1_2\"": 2,
-    "\"clone_1_2_raw\"": 2,
-    "\"input.x\"": 1,
-    "\"input_1\"": 1,
-    "\"input_1:1\"": 1,
-    "\"input_1_raw\"": 1,
-    "\"output\"": 5,
-    "\"output_1\"": 5,
-    "\"output_1:1\"": 5,
-    "\"output_1_raw\"": 5,
-    "\"relu_1\"": 4,
-    "\"relu_1:1\"": 4,
-    "\"relu_1_3\"": 4,
-    "\"relu_1_3:1\"": 4,
-    "\"relu_1_4\"": 4,
-    "\"relu_1_4_raw\"": 4,
-    "-1": 5,
-    "-2": 4,
-    "-3": 3,
-    "-4": 2,
-    "-5": 1,
-    "0": 1,
-    "1": 2,
-    "2": 3,
-    "3": 4,
-    "4": 5
-   },
-   "_orphan_labels": [],
-   "_orphan_logs": [],
-   "_out_dedup_mode": "identity",
-   "_out_hash_cache": {},
-   "_out_identity_cache": {},
-   "_out_recipe_revision": 0,
-   "_output_transform": null,
-   "_phase_timings": "<measured>",
-   "_raw_to_final_layer_labels": {
-    "\"add_1_3_raw\"": "add_1_2",
-    "\"clone_1_2_raw\"": "clone_1_1",
-    "\"input_1_raw\"": "input_1",
-    "\"output_1_raw\"": "output_1",
-    "\"relu_1_4_raw\"": "relu_1_3"
-   },
-   "_raw_to_final_op_labels": {
-    "\"add_1_3_raw\"": "add_1_2:1",
-    "\"clone_1_2_raw\"": "clone_1_1:1",
-    "\"input_1_raw\"": "input_1:1",
-    "\"output_1_raw\"": "output_1:1",
-    "\"relu_1_4_raw\"": "relu_1_3:1"
-   },
-   "_raw_to_final_parent_layer_labels": {
-    "\"add_1_3_raw\"": "add_1_2",
-    "\"clone_1_2_raw\"": "clone_1_1",
-    "\"input_1_raw\"": "input_1",
-    "\"output_1_raw\"": "output_1",
-    "\"relu_1_4_raw\"": "relu_1_3"
-   },
-   "_replay_arg_version_data_complete": true,
-   "_replay_frontier": {},
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
-   "_source_code_blob": {
-    "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
-    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
-    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()"
-   },
-   "_source_model_ref": "<callable ReferenceType>",
-   "_spec_revision": 0,
-   "_tracing_finished": true,
-   "_transform": null,
-   "_visualizer_dir": null,
-   "_warned_direct_write": false,
-   "_warned_mutate_in_place": false,
-   "activation_payloads_by_raw_label": {
-    "\"add_1_3_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"clone_1_2_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"input_1_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"output_1_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"relu_1_4_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    }
-   },
-   "activation_transform": null,
-   "annotations": {},
-   "append_history": [],
-   "archived_activations": {},
-   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
-   "backend": "torch",
-   "backend_runtime_config": null,
-   "backend_runtime_device_summary": null,
-   "backend_runtime_version": null,
-   "backward_durations": [],
-   "backward_events": [],
-   "backward_memory_backend": "<measured>",
-   "backward_pass_logs": {},
-   "backward_peak_memory": "<measured>",
-   "backward_peak_memory_reason": "<measured>",
-   "backward_ready": false,
-   "backward_root_grad_fn_object_ids": "<measured>",
-   "batch_render": "auto",
-   "buffer_layers": [],
-   "buffer_num_calls": {},
-   "buffer_read_ops": [],
-   "buffer_write_ops": [],
-   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
-   "by_pass": {
-    "1": [
-     0,
-     1,
-     2,
-     3,
-     4
-    ]
-   },
-   "call_tree": {
-    "__ref__": "ModuleCall",
-    "label": "self"
-   },
-   "capture_cache_hit": false,
-   "capture_cache_key": null,
-   "capture_cache_path": null,
-   "capture_duration": "<measured>",
-   "capture_end_time": "<measured>",
-   "capture_guard_passes": [
-    {
-     "\"capture_mode\"": "exhaustive",
-     "\"guard_pass_index\"": 1,
-     "\"owner_thread_id\"": "<measured>"
-    }
-   ],
-   "capture_kind": "plain",
-   "capture_mode": "exhaustive",
-   "capture_owner_thread_id": "<measured>",
-   "capture_owner_thread_qualified": true,
-   "capture_start_time": "<measured>",
-   "capture_tensor_grad_hooks": true,
-   "capture_thread_activity_detected": false,
-   "capture_thread_count_end": 1,
-   "capture_thread_count_start": 1,
-   "capture_verification_reason": null,
-   "capture_verified": null,
-   "chunked_forward": false,
-   "class_docstring": "Model with explicit in-place operations on an internal tensor.",
-   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 181,
-   "cleanup_duration": "<measured>",
-   "code_context": [],
-   "completeness_decompositions": [],
-   "completeness_diagnostics": [],
-   "completeness_witness_accounted_count": 0,
-   "completeness_witness_callback_ns": 0,
-   "completeness_witness_event_count": 0,
-   "completeness_witness_expected_opaque_count": 0,
-   "completeness_witness_mode": "off",
-   "completeness_witness_unaccounted_count": 0,
-   "completeness_witness_verified": null,
-   "compute_coverage": {
-    "\"known\"": 2,
-    "\"not_applicable\"": 2,
-    "\"unknown\"": 0,
-    "\"zero_by_rule\"": 1
-   },
-   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "conditional_arm_entry_edges": {},
-   "conditional_branch_edges": [],
-   "conditional_edge_call_indices": {},
-   "conditional_records": [],
-   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
-   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
-   "decoded_output": null,
-   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
-   "detach_saved_activations": false,
-   "distributed_scope": null,
-   "emit_nvtx": false,
-   "episode": null,
-   "episode_coupling": null,
-   "escape_detector_backward_coverage": "not_armed",
-   "escape_detector_callback_ns": 0,
-   "escape_detector_event_count": 0,
-   "escape_detector_mode": "off",
-   "escape_detector_verified": null,
-   "escape_diagnostics": [],
-   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_functions": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
-   "factcore": "<torchlens.report._factcore.FactCore>",
-   "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
-   "forward_duration": "<measured>",
-   "forward_memory_backend": "<measured>",
-   "forward_peak_memory": "<measured>",
-   "forward_peak_memory_reason": "<measured>",
-   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
-   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 191,
-   "func_calls_duration": "<measured>",
-   "grad_fn_logs": {},
-   "grad_fn_order": [],
-   "grad_fn_site_summary": {},
-   "grad_transform": null,
-   "grad_transform_repr": null,
-   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
-   "graph_shape_hash": "060aa7d621f1fde2443cca694d2d43682d210ad071eb9942d9151804214b7299",
-   "grouping": "structural",
-   "grouping_policy": {
-    "\"detector\"": "callsite_v1",
-    "\"effective\"": true,
-    "\"folded_sites\"": "none",
-    "\"policy\"": "structural",
-    "\"requested\"": "structural",
-    "\"schema\"": "grouping_policy_v1",
-    "\"settlement_note\"": null,
-    "\"site_join\"": "none"
-   },
-   "halt_frontier": null,
-   "halted": false,
-   "has_backward_pass": false,
-   "has_frozen_params": false,
-   "has_gradients": false,
-   "has_trainable_params": false,
-   "health_facts": "<torchlens.report._health.HealthFacts>",
-   "inference_only": false,
-   "init_docstring": "Initialize side-effect counters.",
-   "init_signature": "(self) -> 'None'",
-   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 184,
-   "injected_ops": [],
-   "input_annotations": {},
-   "input_layers": [
-    "input_1"
-   ],
-   "input_object_id": "<measured>",
-   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "input_preprocessor": null,
-   "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38",
-   "input_structure": "<raises AttributeError>",
-   "internal_sink_ops": [],
-   "internal_source_ops": [],
-   "internally_terminated_bool_ops": [],
-   "intervention_audit": [],
-   "is_appended": false,
-   "is_pristine": true,
-   "is_replayable": false,
-   "keep_orphans": false,
-   "last_run": null,
-   "layer_dict_all_keys": {
+   "_layer_dict_all_keys": {
     "\"add_1\"": {
      "__ref__": "Op",
      "label": "add_1_2:1"
@@ -7926,7 +7494,7 @@
      "label": "output_1:1"
     }
    },
-   "layer_dict_main_keys": {
+   "_layer_dict_main_keys": {
     "\"add_1_2:1\"": {
      "__ref__": "Op",
      "label": "add_1_2:1"
@@ -7948,14 +7516,7 @@
      "label": "relu_1_3:1"
     }
    },
-   "layer_labels": [
-    "input_1",
-    "clone_1_1",
-    "add_1_2",
-    "relu_1_3",
-    "output_1"
-   ],
-   "layer_list": [
+   "_layer_list": [
     {
      "__ref__": "Op",
      "label": "input_1:1"
@@ -7977,7 +7538,7 @@
      "label": "output_1:1"
     }
    ],
-   "layer_logs": {
+   "_layer_logs": {
     "\"add_1_2\"": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
@@ -7999,13 +7560,366 @@
      "label": "relu_1_3:1"
     }
    },
-   "layer_num_calls": {
+   "_layer_num_calls": {
     "\"add_1_2\"": 1,
     "\"clone_1_1\"": 1,
     "\"input_1\"": 1,
     "\"output_1\"": 1,
     "\"relu_1_3\"": 1
    },
+   "_layer_num_to_lookup_keys_dict": {
+    "1": [
+     -5,
+     0,
+     "input.x",
+     "input_1",
+     "input_1",
+     "input_1",
+     "input_1:1",
+     "input_1:1",
+     "input_1_raw"
+    ],
+    "2": [
+     -4,
+     1,
+     "clone_1",
+     "clone_1:1",
+     "clone_1_1",
+     "clone_1_1:1",
+     "clone_1_2",
+     "clone_1_2_raw"
+    ],
+    "3": [
+     -3,
+     2,
+     "add_1",
+     "add_1:1",
+     "add_1_2",
+     "add_1_2:1",
+     "add_1_3",
+     "add_1_3_raw"
+    ],
+    "4": [
+     -2,
+     3,
+     "relu_1",
+     "relu_1:1",
+     "relu_1_3",
+     "relu_1_3:1",
+     "relu_1_4",
+     "relu_1_4_raw"
+    ],
+    "5": [
+     -1,
+     4,
+     "output",
+     "output_1",
+     "output_1",
+     "output_1",
+     "output_1:1",
+     "output_1:1",
+     "output_1_raw"
+    ]
+   },
+   "_layer_nums_to_save": "all",
+   "_layers_logged": true,
+   "_layers_saved": true,
+   "_lookup_keys_to_layer_num_dict": {
+    "\"add_1\"": 3,
+    "\"add_1:1\"": 3,
+    "\"add_1_2\"": 3,
+    "\"add_1_2:1\"": 3,
+    "\"add_1_3\"": 3,
+    "\"add_1_3_raw\"": 3,
+    "\"clone_1\"": 2,
+    "\"clone_1:1\"": 2,
+    "\"clone_1_1\"": 2,
+    "\"clone_1_1:1\"": 2,
+    "\"clone_1_2\"": 2,
+    "\"clone_1_2_raw\"": 2,
+    "\"input.x\"": 1,
+    "\"input_1\"": 1,
+    "\"input_1:1\"": 1,
+    "\"input_1_raw\"": 1,
+    "\"output\"": 5,
+    "\"output_1\"": 5,
+    "\"output_1:1\"": 5,
+    "\"output_1_raw\"": 5,
+    "\"relu_1\"": 4,
+    "\"relu_1:1\"": 4,
+    "\"relu_1_3\"": 4,
+    "\"relu_1_3:1\"": 4,
+    "\"relu_1_4\"": 4,
+    "\"relu_1_4_raw\"": 4,
+    "-1": 5,
+    "-2": 4,
+    "-3": 3,
+    "-4": 2,
+    "-5": 1,
+    "0": 1,
+    "1": 2,
+    "2": 3,
+    "3": 4,
+    "4": 5
+   },
+   "_module_filter": null,
+   "_num_backward_passes": 0,
+   "_num_layers_with_params": 0,
+   "_num_ops": 3,
+   "_orphan_labels": [],
+   "_orphan_logs": [],
+   "_orphan_records": [],
+   "_out_dedup_mode": "identity",
+   "_out_hash_cache": {},
+   "_out_identity_cache": {},
+   "_out_recipe_revision": 0,
+   "_output_transform": null,
+   "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
+   "_parent_run": null,
+   "_phase_timings": "<measured>",
+   "_raw_to_final_layer_labels": {
+    "\"add_1_3_raw\"": "add_1_2",
+    "\"clone_1_2_raw\"": "clone_1_1",
+    "\"input_1_raw\"": "input_1",
+    "\"output_1_raw\"": "output_1",
+    "\"relu_1_4_raw\"": "relu_1_3"
+   },
+   "_raw_to_final_op_labels": {
+    "\"add_1_3_raw\"": "add_1_2:1",
+    "\"clone_1_2_raw\"": "clone_1_1:1",
+    "\"input_1_raw\"": "input_1:1",
+    "\"output_1_raw\"": "output_1:1",
+    "\"relu_1_4_raw\"": "relu_1_3:1"
+   },
+   "_raw_to_final_parent_layer_labels": {
+    "\"add_1_3_raw\"": "add_1_2",
+    "\"clone_1_2_raw\"": "clone_1_1",
+    "\"input_1_raw\"": "input_1",
+    "\"output_1_raw\"": "output_1",
+    "\"relu_1_4_raw\"": "relu_1_3"
+   },
+   "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
+   "_rescue_rerun": null,
+   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_source_code_blob": {
+    "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
+    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
+    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()"
+   },
+   "_source_model_ref": "<callable ReferenceType>",
+   "_spec_revision": 0,
+   "_tracing_finished": true,
+   "_transform": null,
+   "_visualizer_dir": null,
+   "_warned_direct_write": false,
+   "_warned_mutate_in_place": false,
+   "activation_payloads_by_raw_label": {
+    "\"add_1_3_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"clone_1_2_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"input_1_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"output_1_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"relu_1_4_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    }
+   },
+   "activation_transform": null,
+   "annotations": {},
+   "archived_activations": {},
+   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
+   "backend": "torch",
+   "backend_runtime_config": null,
+   "backend_runtime_device_summary": null,
+   "backend_runtime_version": null,
+   "backward_durations": [],
+   "backward_events": [],
+   "backward_memory_backend": "<measured>",
+   "backward_peak_memory": "<measured>",
+   "backward_peak_memory_reason": "<measured>",
+   "backward_ready": false,
+   "backward_root_grad_fn_object_ids": "<measured>",
+   "batch_render": "auto",
+   "buffer_layers": [],
+   "buffer_read_ops": [],
+   "buffer_write_ops": [],
+   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
+   "call_tree": {
+    "__ref__": "ModuleCall",
+    "label": "self"
+   },
+   "capture_cache_hit": false,
+   "capture_cache_key": null,
+   "capture_cache_path": null,
+   "capture_duration": "<measured>",
+   "capture_end_time": "<measured>",
+   "capture_guard_passes": [
+    {
+     "\"capture_mode\"": "exhaustive",
+     "\"guard_pass_index\"": 1,
+     "\"owner_thread_id\"": "<measured>"
+    }
+   ],
+   "capture_kind": "plain",
+   "capture_mode": "exhaustive",
+   "capture_owner_thread_id": "<measured>",
+   "capture_owner_thread_qualified": true,
+   "capture_start_time": "<measured>",
+   "capture_tensor_grad_hooks": true,
+   "capture_thread_activity_detected": false,
+   "capture_thread_count_end": 1,
+   "capture_thread_count_start": 1,
+   "capture_verification_reason": null,
+   "capture_verified": null,
+   "chunked_forward": false,
+   "class_docstring": "Model with explicit in-place operations on an internal tensor.",
+   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "class_source_line": 181,
+   "cleanup_duration": "<measured>",
+   "code_context": [],
+   "completeness_decompositions": [],
+   "completeness_diagnostics": [],
+   "completeness_witness_accounted_count": 0,
+   "completeness_witness_callback_ns": 0,
+   "completeness_witness_event_count": 0,
+   "completeness_witness_expected_opaque_count": 0,
+   "completeness_witness_mode": "off",
+   "completeness_witness_unaccounted_count": 0,
+   "completeness_witness_verified": null,
+   "compute_coverage": {
+    "\"known\"": 2,
+    "\"not_applicable\"": 2,
+    "\"unknown\"": 0,
+    "\"zero_by_rule\"": 1
+   },
+   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "conditional_arm_entry_edges": {},
+   "conditional_branch_edges": [],
+   "conditional_edge_call_indices": {},
+   "conditional_records": [],
+   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
+   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
+   "detach_saved_activations": false,
+   "distributed_scope": null,
+   "emit_nvtx": false,
+   "episode": null,
+   "episode_coupling": null,
+   "escape_detector_backward_coverage": "not_armed",
+   "escape_detector_callback_ns": 0,
+   "escape_detector_event_count": 0,
+   "escape_detector_mode": "off",
+   "escape_detector_verified": null,
+   "escape_diagnostics": [],
+   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
+   "facet_functions": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "factcore": "<torchlens.report._factcore.FactCore>",
+   "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
+   "forward_duration": "<measured>",
+   "forward_memory_backend": "<measured>",
+   "forward_peak_memory": "<measured>",
+   "forward_peak_memory_reason": "<measured>",
+   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
+   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "forward_source_line": 191,
+   "func_calls_duration": "<measured>",
+   "grad_fn_order": [],
+   "grad_fn_site_summary": {},
+   "grad_transform": null,
+   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
+   "graph_shape_hash": "060aa7d621f1fde2443cca694d2d43682d210ad071eb9942d9151804214b7299",
+   "grouping": "structural",
+   "grouping_policy": {
+    "\"detector\"": "callsite_v1",
+    "\"effective\"": true,
+    "\"folded_sites\"": "none",
+    "\"policy\"": "structural",
+    "\"requested\"": "structural",
+    "\"schema\"": "grouping_policy_v1",
+    "\"settlement_note\"": null,
+    "\"site_join\"": "none"
+   },
+   "halt_frontier": null,
+   "has_backward_pass": false,
+   "has_frozen_params": false,
+   "has_gradients": false,
+   "has_trainable_params": false,
+   "health_facts": "<torchlens.report._health.HealthFacts>",
+   "inference_only": false,
+   "init_docstring": "Initialize side-effect counters.",
+   "init_signature": "(self) -> 'None'",
+   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "init_source_line": 184,
+   "injected_ops": [],
+   "input": null,
+   "input_annotations": {},
+   "input_layers": [
+    "input_1"
+   ],
+   "input_object_id": "<measured>",
+   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "input_preprocessor": null,
+   "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38",
+   "input_structure": "<raises AttributeError>",
+   "internal_sink_ops": [],
+   "internal_source_ops": [],
+   "internally_terminated_bool_ops": [],
+   "intervention_audit": [],
+   "is_appended": false,
+   "is_pristine": true,
+   "is_replayable": false,
+   "is_stopped": false,
+   "keep_orphans": false,
+   "last_run": null,
+   "layer_labels": [
+    "input_1",
+    "clone_1_1",
+    "add_1_2",
+    "relu_1_3",
+    "output_1"
+   ],
    "layer_visualizers": null,
    "layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
@@ -8048,31 +7962,20 @@
      "0.0"
     ]
    ],
-   "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "name": "inplace_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
-   "num_backward_passes": 0,
    "num_buffer_layers": 0,
    "num_context_lines": 7,
    "num_edges": 4,
    "num_input_layers": 1,
-   "num_layers_with_params": 0,
-   "num_modules": 1,
-   "num_ops": 3,
    "num_output_layers": 1,
-   "num_param_tensors": 0,
    "num_params": 0,
    "num_params_frozen": 0,
    "num_params_trainable": 0,
-   "num_saved_grad_fn_calls": 0,
-   "num_saved_grad_fns": 0,
-   "num_saved_layers": 5,
-   "num_saved_module_calls": 1,
-   "num_saved_ops": 5,
    "num_uncalled_modules": 0,
    "observer_spans": [],
    "op_equivalence_classes": {
@@ -8117,7 +8020,6 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "orphan_records": [],
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -8129,17 +8031,13 @@
    "output_postprocessor": null,
    "param_hash_full": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
    "param_hash_quick": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-   "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "param_source": "native-module",
    "params": "<torchlens._data_classes.param.ParamAccessor>",
-   "parent_run": null,
    "parent_trace": null,
    "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
-   "raw_input": null,
-   "raw_output": null,
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
@@ -8149,7 +8047,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.InPlaceModel.forward",
    "root_module": {
     "__ref__": "Module",
@@ -8195,6 +8092,7 @@
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "transform_repr": null,
+   "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
@@ -8423,7 +8321,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||add||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -8672,7 +8569,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||clone||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -8900,7 +8796,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||input||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -9141,7 +9036,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||output||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -9389,7 +9283,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||relu||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -9460,9 +9353,9 @@
     "grads": [
      null
     ],
-    "had_pre_hook_input_change": false,
     "has_frozen_params": false,
     "has_multiple_addresses": false,
+    "has_pre_hook_input_change": false,
     "has_saved_forward_args": false,
     "has_trainable_params": false,
     "input_layers": [
@@ -9491,7 +9384,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 4,
     "num_layers": 5,
-    "num_ops": 5,
     "num_output_edges": 0,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -9675,9 +9567,7 @@
     "num_edges": 4,
     "num_input_edges": 0,
     "num_internal_edges": 4,
-    "num_layers": 5,
     "num_output_edges": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -9840,6 +9730,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "add_inplace_a09dc8be148d708c",
     "equivalent_ops": {
@@ -9945,7 +9836,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -9980,7 +9870,6 @@
     },
     "layer_label": "add_1_2",
     "layer_label_short": "add_1",
-    "layer_type": "add",
     "lookup_keys": [
      -3,
      2,
@@ -10021,12 +9910,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 2,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "add_1_2:1"
-     }
-    ],
     "ordinal_index": 2,
     "out": {
      "__tensor__": true,
@@ -10203,6 +10086,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "clone_966d0e7792d95d96",
     "equivalent_ops": {
@@ -10306,7 +10190,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -10341,7 +10224,6 @@
     },
     "layer_label": "clone_1_1",
     "layer_label_short": "clone_1",
-    "layer_type": "clone",
     "lookup_keys": [
      -4,
      1,
@@ -10380,12 +10262,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 1,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "clone_1_1:1"
-     }
-    ],
     "ordinal_index": 1,
     "out": {
      "__tensor__": true,
@@ -10546,6 +10422,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "input_2_4_torch.float32",
     "equivalent_ops": {
@@ -10619,7 +10496,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
@@ -10654,7 +10530,6 @@
     },
     "layer_label": "input_1",
     "layer_label_short": "input_1",
-    "layer_type": "input",
     "lookup_keys": [
      -5,
      0,
@@ -10694,12 +10569,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 0,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "input_1:1"
-     }
-    ],
     "ordinal_index": 0,
     "out": {
      "__tensor__": true,
@@ -10854,6 +10723,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "output_1_2_4_torch.float32",
     "equivalent_ops": {
@@ -10957,7 +10827,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
@@ -10992,7 +10861,6 @@
     },
     "layer_label": "output_1",
     "layer_label_short": "output_1",
-    "layer_type": "output",
     "lookup_keys": [
      -1,
      4,
@@ -11032,12 +10900,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 0,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "output_1:1"
-     }
-    ],
     "ordinal_index": 4,
     "out": {
      "__tensor__": true,
@@ -11222,6 +11084,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "relu_inplace_966d0e7792d95d96",
     "equivalent_ops": {
@@ -11325,7 +11188,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -11360,7 +11222,6 @@
     },
     "layer_label": "relu_1_3",
     "layer_label_short": "relu_1",
-    "layer_type": "relu",
     "lookup_keys": [
      -2,
      3,
@@ -11399,12 +11260,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 1,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "relu_1_3:1"
-     }
-    ],
     "ordinal_index": 3,
     "out": {
      "__tensor__": true,
@@ -11505,11 +11360,24 @@
    "_activation_transform_repr": null,
    "_ambiguous_lookup_keys": {},
    "_annotation_blobs": null,
+   "_append_history": [],
    "_append_sequence_id": 0,
+   "_backward_pass_logs": {},
+   "_buffer_num_calls": {},
    "_buffer_persistence": {},
+   "_by_pass": {
+    "1": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   },
    "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
+   "_decoded_output": null,
    "_distributed_plane_p": null,
    "_fast_run_session": null,
    "_final_to_raw_layer_labels": {
@@ -11519,376 +11387,13 @@
     "\"output_1\"": "output_1_raw",
     "\"relu_1_3\"": "relu_1_4_raw"
    },
+   "_grad_fn_logs": {},
    "_grad_fn_param_refs": {},
    "_grad_op_nums_to_save": [],
    "_has_direct_writes": false,
    "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
    "_last_hook_handle_ids": [],
-   "_layer_num_to_lookup_keys_dict": {
-    "1": [
-     -5,
-     0,
-     "input.x",
-     "input_1",
-     "input_1",
-     "input_1",
-     "input_1:1",
-     "input_1:1",
-     "input_1_raw"
-    ],
-    "2": [
-     -4,
-     1,
-     "clone_1",
-     "clone_1:1",
-     "clone_1_1",
-     "clone_1_1:1",
-     "clone_1_2",
-     "clone_1_2_raw"
-    ],
-    "3": [
-     -3,
-     2,
-     "add_1",
-     "add_1:1",
-     "add_1_2",
-     "add_1_2:1",
-     "add_1_3",
-     "add_1_3_raw"
-    ],
-    "4": [
-     -2,
-     3,
-     "relu_1",
-     "relu_1:1",
-     "relu_1_3",
-     "relu_1_3:1",
-     "relu_1_4",
-     "relu_1_4_raw"
-    ],
-    "5": [
-     -1,
-     4,
-     "output",
-     "output_1",
-     "output_1",
-     "output_1",
-     "output_1:1",
-     "output_1:1",
-     "output_1_raw"
-    ]
-   },
-   "_layer_nums_to_save": "all",
-   "_layers_logged": true,
-   "_layers_saved": true,
-   "_lookup_keys_to_layer_num_dict": {
-    "\"add_1\"": 3,
-    "\"add_1:1\"": 3,
-    "\"add_1_2\"": 3,
-    "\"add_1_2:1\"": 3,
-    "\"add_1_3\"": 3,
-    "\"add_1_3_raw\"": 3,
-    "\"clone_1\"": 2,
-    "\"clone_1:1\"": 2,
-    "\"clone_1_1\"": 2,
-    "\"clone_1_1:1\"": 2,
-    "\"clone_1_2\"": 2,
-    "\"clone_1_2_raw\"": 2,
-    "\"input.x\"": 1,
-    "\"input_1\"": 1,
-    "\"input_1:1\"": 1,
-    "\"input_1_raw\"": 1,
-    "\"output\"": 5,
-    "\"output_1\"": 5,
-    "\"output_1:1\"": 5,
-    "\"output_1_raw\"": 5,
-    "\"relu_1\"": 4,
-    "\"relu_1:1\"": 4,
-    "\"relu_1_3\"": 4,
-    "\"relu_1_3:1\"": 4,
-    "\"relu_1_4\"": 4,
-    "\"relu_1_4_raw\"": 4,
-    "-1": 5,
-    "-2": 4,
-    "-3": 3,
-    "-4": 2,
-    "-5": 1,
-    "0": 1,
-    "1": 2,
-    "2": 3,
-    "3": 4,
-    "4": 5
-   },
-   "_orphan_labels": [],
-   "_orphan_logs": [],
-   "_out_dedup_mode": "identity",
-   "_out_hash_cache": {},
-   "_out_identity_cache": {},
-   "_out_recipe_revision": 0,
-   "_output_transform": null,
-   "_phase_timings": "<measured>",
-   "_raw_to_final_layer_labels": {
-    "\"add_1_3_raw\"": "add_1_2",
-    "\"clone_1_2_raw\"": "clone_1_1",
-    "\"input_1_raw\"": "input_1",
-    "\"output_1_raw\"": "output_1",
-    "\"relu_1_4_raw\"": "relu_1_3"
-   },
-   "_raw_to_final_op_labels": {
-    "\"add_1_3_raw\"": "add_1_2:1",
-    "\"clone_1_2_raw\"": "clone_1_1:1",
-    "\"input_1_raw\"": "input_1:1",
-    "\"output_1_raw\"": "output_1:1",
-    "\"relu_1_4_raw\"": "relu_1_3:1"
-   },
-   "_raw_to_final_parent_layer_labels": {
-    "\"add_1_3_raw\"": "add_1_2",
-    "\"clone_1_2_raw\"": "clone_1_1",
-    "\"input_1_raw\"": "input_1",
-    "\"output_1_raw\"": "output_1",
-    "\"relu_1_4_raw\"": "relu_1_3"
-   },
-   "_replay_arg_version_data_complete": true,
-   "_replay_frontier": {},
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
-   "_source_code_blob": {
-    "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
-    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
-    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()"
-   },
-   "_source_model_ref": null,
-   "_spec_revision": 0,
-   "_tracing_finished": true,
-   "_transform": null,
-   "_visualizer_dir": null,
-   "_warned_direct_write": false,
-   "_warned_mutate_in_place": false,
-   "activation_payloads_by_raw_label": {
-    "\"add_1_3_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"clone_1_2_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"input_1_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"output_1_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"relu_1_4_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    }
-   },
-   "activation_transform": null,
-   "annotations": {
-    "\"health_facts\"": {
-     "\"alias_nonfinite_labels\"": [],
-     "\"basis\"": "saved_payloads",
-     "\"capture_revision\"": "fc1-f3362ff6b785465e",
-     "\"checked\"": 5,
-     "\"nonfinite_labels\"": [],
-     "\"schema_version\"": 1,
-     "\"unchecked\"": 0,
-     "\"unexamined\"": 0,
-     "\"unmapped\"": 0
-    }
-   },
-   "append_history": [],
-   "archived_activations": {},
-   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
-   "backend": "torch",
-   "backend_runtime_config": null,
-   "backend_runtime_device_summary": null,
-   "backend_runtime_version": null,
-   "backward_durations": [],
-   "backward_events": [],
-   "backward_memory_backend": "<measured>",
-   "backward_pass_logs": {},
-   "backward_peak_memory": "<measured>",
-   "backward_peak_memory_reason": "<measured>",
-   "backward_ready": false,
-   "backward_root_grad_fn_object_ids": "<measured>",
-   "batch_render": "auto",
-   "buffer_layers": [],
-   "buffer_num_calls": {},
-   "buffer_read_ops": [],
-   "buffer_write_ops": [],
-   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
-   "by_pass": {
-    "1": [
-     0,
-     1,
-     2,
-     3,
-     4
-    ]
-   },
-   "call_tree": {
-    "__ref__": "ModuleCall",
-    "label": "self"
-   },
-   "capture_cache_hit": false,
-   "capture_cache_key": null,
-   "capture_cache_path": null,
-   "capture_duration": "<measured>",
-   "capture_end_time": "<measured>",
-   "capture_guard_passes": [
-    {
-     "\"capture_mode\"": "exhaustive",
-     "\"guard_pass_index\"": 1,
-     "\"owner_thread_id\"": "<measured>"
-    }
-   ],
-   "capture_kind": "plain",
-   "capture_mode": "exhaustive",
-   "capture_owner_thread_id": "<measured>",
-   "capture_owner_thread_qualified": true,
-   "capture_start_time": "<measured>",
-   "capture_tensor_grad_hooks": true,
-   "capture_thread_activity_detected": false,
-   "capture_thread_count_end": 1,
-   "capture_thread_count_start": 1,
-   "capture_verification_reason": null,
-   "capture_verified": null,
-   "chunked_forward": false,
-   "class_docstring": "Model with explicit in-place operations on an internal tensor.",
-   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 181,
-   "cleanup_duration": "<measured>",
-   "code_context": [],
-   "completeness_decompositions": [],
-   "completeness_diagnostics": [],
-   "completeness_witness_accounted_count": 0,
-   "completeness_witness_callback_ns": 0,
-   "completeness_witness_event_count": 0,
-   "completeness_witness_expected_opaque_count": 0,
-   "completeness_witness_mode": "off",
-   "completeness_witness_unaccounted_count": 0,
-   "completeness_witness_verified": null,
-   "compute_coverage": {
-    "\"known\"": 2,
-    "\"not_applicable\"": 2,
-    "\"unknown\"": 0,
-    "\"zero_by_rule\"": 1
-   },
-   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "conditional_arm_entry_edges": {},
-   "conditional_branch_edges": [],
-   "conditional_edge_call_indices": {},
-   "conditional_records": [],
-   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
-   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
-   "decoded_output": null,
-   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
-   "detach_saved_activations": false,
-   "distributed_scope": null,
-   "emit_nvtx": false,
-   "episode": null,
-   "episode_coupling": null,
-   "escape_detector_backward_coverage": "not_armed",
-   "escape_detector_callback_ns": 0,
-   "escape_detector_event_count": 0,
-   "escape_detector_mode": "off",
-   "escape_detector_verified": null,
-   "escape_diagnostics": [],
-   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_functions": null,
-   "factcore": "<torchlens.report._factcore.FactCore>",
-   "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
-   "forward_duration": "<measured>",
-   "forward_memory_backend": "<measured>",
-   "forward_peak_memory": "<measured>",
-   "forward_peak_memory_reason": "<measured>",
-   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
-   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 191,
-   "func_calls_duration": "<measured>",
-   "grad_fn_logs": {},
-   "grad_fn_order": [],
-   "grad_fn_site_summary": {},
-   "grad_transform": null,
-   "grad_transform_repr": null,
-   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
-   "graph_shape_hash": "060aa7d621f1fde2443cca694d2d43682d210ad071eb9942d9151804214b7299",
-   "grouping": "structural",
-   "grouping_policy": {
-    "\"detector\"": "callsite_v1",
-    "\"effective\"": true,
-    "\"folded_sites\"": "none",
-    "\"policy\"": "structural",
-    "\"requested\"": "structural",
-    "\"schema\"": "grouping_policy_v1",
-    "\"settlement_note\"": null,
-    "\"site_join\"": "none"
-   },
-   "halt_frontier": null,
-   "halted": false,
-   "has_backward_pass": false,
-   "has_frozen_params": false,
-   "has_gradients": false,
-   "has_trainable_params": false,
-   "health_facts": "<torchlens.report._health.HealthFacts>",
-   "inference_only": false,
-   "init_docstring": "Initialize side-effect counters.",
-   "init_signature": "(self) -> 'None'",
-   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 184,
-   "injected_ops": [],
-   "input_annotations": {},
-   "input_layers": [
-    "input_1"
-   ],
-   "input_object_id": "<measured>",
-   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "input_preprocessor": null,
-   "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38",
-   "input_structure": null,
-   "internal_sink_ops": [],
-   "internal_source_ops": [],
-   "internally_terminated_bool_ops": [],
-   "intervention_audit": [],
-   "is_appended": false,
-   "is_pristine": true,
-   "is_replayable": false,
-   "keep_orphans": false,
-   "last_run": null,
-   "layer_dict_all_keys": {
+   "_layer_dict_all_keys": {
     "\"add_1\"": {
      "__ref__": "Op",
      "label": "add_1_2:1"
@@ -12034,7 +11539,7 @@
      "label": "output_1:1"
     }
    },
-   "layer_dict_main_keys": {
+   "_layer_dict_main_keys": {
     "\"add_1_2:1\"": {
      "__ref__": "Op",
      "label": "add_1_2:1"
@@ -12056,14 +11561,7 @@
      "label": "relu_1_3:1"
     }
    },
-   "layer_labels": [
-    "input_1",
-    "clone_1_1",
-    "add_1_2",
-    "relu_1_3",
-    "output_1"
-   ],
-   "layer_list": [
+   "_layer_list": [
     {
      "__ref__": "Op",
      "label": "input_1:1"
@@ -12085,7 +11583,7 @@
      "label": "output_1:1"
     }
    ],
-   "layer_logs": {
+   "_layer_logs": {
     "\"add_1_2\"": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
@@ -12107,13 +11605,378 @@
      "label": "relu_1_3:1"
     }
    },
-   "layer_num_calls": {
+   "_layer_num_calls": {
     "\"add_1_2\"": 1,
     "\"clone_1_1\"": 1,
     "\"input_1\"": 1,
     "\"output_1\"": 1,
     "\"relu_1_3\"": 1
    },
+   "_layer_num_to_lookup_keys_dict": {
+    "1": [
+     -5,
+     0,
+     "input.x",
+     "input_1",
+     "input_1",
+     "input_1",
+     "input_1:1",
+     "input_1:1",
+     "input_1_raw"
+    ],
+    "2": [
+     -4,
+     1,
+     "clone_1",
+     "clone_1:1",
+     "clone_1_1",
+     "clone_1_1:1",
+     "clone_1_2",
+     "clone_1_2_raw"
+    ],
+    "3": [
+     -3,
+     2,
+     "add_1",
+     "add_1:1",
+     "add_1_2",
+     "add_1_2:1",
+     "add_1_3",
+     "add_1_3_raw"
+    ],
+    "4": [
+     -2,
+     3,
+     "relu_1",
+     "relu_1:1",
+     "relu_1_3",
+     "relu_1_3:1",
+     "relu_1_4",
+     "relu_1_4_raw"
+    ],
+    "5": [
+     -1,
+     4,
+     "output",
+     "output_1",
+     "output_1",
+     "output_1",
+     "output_1:1",
+     "output_1:1",
+     "output_1_raw"
+    ]
+   },
+   "_layer_nums_to_save": "all",
+   "_layers_logged": true,
+   "_layers_saved": true,
+   "_lookup_keys_to_layer_num_dict": {
+    "\"add_1\"": 3,
+    "\"add_1:1\"": 3,
+    "\"add_1_2\"": 3,
+    "\"add_1_2:1\"": 3,
+    "\"add_1_3\"": 3,
+    "\"add_1_3_raw\"": 3,
+    "\"clone_1\"": 2,
+    "\"clone_1:1\"": 2,
+    "\"clone_1_1\"": 2,
+    "\"clone_1_1:1\"": 2,
+    "\"clone_1_2\"": 2,
+    "\"clone_1_2_raw\"": 2,
+    "\"input.x\"": 1,
+    "\"input_1\"": 1,
+    "\"input_1:1\"": 1,
+    "\"input_1_raw\"": 1,
+    "\"output\"": 5,
+    "\"output_1\"": 5,
+    "\"output_1:1\"": 5,
+    "\"output_1_raw\"": 5,
+    "\"relu_1\"": 4,
+    "\"relu_1:1\"": 4,
+    "\"relu_1_3\"": 4,
+    "\"relu_1_3:1\"": 4,
+    "\"relu_1_4\"": 4,
+    "\"relu_1_4_raw\"": 4,
+    "-1": 5,
+    "-2": 4,
+    "-3": 3,
+    "-4": 2,
+    "-5": 1,
+    "0": 1,
+    "1": 2,
+    "2": 3,
+    "3": 4,
+    "4": 5
+   },
+   "_module_filter": null,
+   "_num_backward_passes": 0,
+   "_num_layers_with_params": 0,
+   "_num_ops": 3,
+   "_orphan_labels": [],
+   "_orphan_logs": [],
+   "_orphan_records": [],
+   "_out_dedup_mode": "identity",
+   "_out_hash_cache": {},
+   "_out_identity_cache": {},
+   "_out_recipe_revision": 0,
+   "_output_transform": null,
+   "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
+   "_parent_run": null,
+   "_phase_timings": "<measured>",
+   "_raw_to_final_layer_labels": {
+    "\"add_1_3_raw\"": "add_1_2",
+    "\"clone_1_2_raw\"": "clone_1_1",
+    "\"input_1_raw\"": "input_1",
+    "\"output_1_raw\"": "output_1",
+    "\"relu_1_4_raw\"": "relu_1_3"
+   },
+   "_raw_to_final_op_labels": {
+    "\"add_1_3_raw\"": "add_1_2:1",
+    "\"clone_1_2_raw\"": "clone_1_1:1",
+    "\"input_1_raw\"": "input_1:1",
+    "\"output_1_raw\"": "output_1:1",
+    "\"relu_1_4_raw\"": "relu_1_3:1"
+   },
+   "_raw_to_final_parent_layer_labels": {
+    "\"add_1_3_raw\"": "add_1_2",
+    "\"clone_1_2_raw\"": "clone_1_1",
+    "\"input_1_raw\"": "input_1",
+    "\"output_1_raw\"": "output_1",
+    "\"relu_1_4_raw\"": "relu_1_3"
+   },
+   "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
+   "_rescue_rerun": null,
+   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_source_code_blob": {
+    "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
+    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
+    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()"
+   },
+   "_source_model_ref": null,
+   "_spec_revision": 0,
+   "_tracing_finished": true,
+   "_transform": null,
+   "_visualizer_dir": null,
+   "_warned_direct_write": false,
+   "_warned_mutate_in_place": false,
+   "activation_payloads_by_raw_label": {
+    "\"add_1_3_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"clone_1_2_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"input_1_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"output_1_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"relu_1_4_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    }
+   },
+   "activation_transform": null,
+   "annotations": {
+    "\"health_facts\"": {
+     "\"alias_nonfinite_labels\"": [],
+     "\"basis\"": "saved_payloads",
+     "\"capture_revision\"": "fc1-f3362ff6b785465e",
+     "\"checked\"": 5,
+     "\"nonfinite_labels\"": [],
+     "\"schema_version\"": 1,
+     "\"unchecked\"": 0,
+     "\"unexamined\"": 0,
+     "\"unmapped\"": 0
+    }
+   },
+   "archived_activations": {},
+   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
+   "backend": "torch",
+   "backend_runtime_config": null,
+   "backend_runtime_device_summary": null,
+   "backend_runtime_version": null,
+   "backward_durations": [],
+   "backward_events": [],
+   "backward_memory_backend": "<measured>",
+   "backward_peak_memory": "<measured>",
+   "backward_peak_memory_reason": "<measured>",
+   "backward_ready": false,
+   "backward_root_grad_fn_object_ids": "<measured>",
+   "batch_render": "auto",
+   "buffer_layers": [],
+   "buffer_read_ops": [],
+   "buffer_write_ops": [],
+   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
+   "call_tree": {
+    "__ref__": "ModuleCall",
+    "label": "self"
+   },
+   "capture_cache_hit": false,
+   "capture_cache_key": null,
+   "capture_cache_path": null,
+   "capture_duration": "<measured>",
+   "capture_end_time": "<measured>",
+   "capture_guard_passes": [
+    {
+     "\"capture_mode\"": "exhaustive",
+     "\"guard_pass_index\"": 1,
+     "\"owner_thread_id\"": "<measured>"
+    }
+   ],
+   "capture_kind": "plain",
+   "capture_mode": "exhaustive",
+   "capture_owner_thread_id": "<measured>",
+   "capture_owner_thread_qualified": true,
+   "capture_start_time": "<measured>",
+   "capture_tensor_grad_hooks": true,
+   "capture_thread_activity_detected": false,
+   "capture_thread_count_end": 1,
+   "capture_thread_count_start": 1,
+   "capture_verification_reason": null,
+   "capture_verified": null,
+   "chunked_forward": false,
+   "class_docstring": "Model with explicit in-place operations on an internal tensor.",
+   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "class_source_line": 181,
+   "cleanup_duration": "<measured>",
+   "code_context": [],
+   "completeness_decompositions": [],
+   "completeness_diagnostics": [],
+   "completeness_witness_accounted_count": 0,
+   "completeness_witness_callback_ns": 0,
+   "completeness_witness_event_count": 0,
+   "completeness_witness_expected_opaque_count": 0,
+   "completeness_witness_mode": "off",
+   "completeness_witness_unaccounted_count": 0,
+   "completeness_witness_verified": null,
+   "compute_coverage": {
+    "\"known\"": 2,
+    "\"not_applicable\"": 2,
+    "\"unknown\"": 0,
+    "\"zero_by_rule\"": 1
+   },
+   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "conditional_arm_entry_edges": {},
+   "conditional_branch_edges": [],
+   "conditional_edge_call_indices": {},
+   "conditional_records": [],
+   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
+   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
+   "detach_saved_activations": false,
+   "distributed_scope": null,
+   "emit_nvtx": false,
+   "episode": null,
+   "episode_coupling": null,
+   "escape_detector_backward_coverage": "not_armed",
+   "escape_detector_callback_ns": 0,
+   "escape_detector_event_count": 0,
+   "escape_detector_mode": "off",
+   "escape_detector_verified": null,
+   "escape_diagnostics": [],
+   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
+   "facet_functions": null,
+   "factcore": "<torchlens.report._factcore.FactCore>",
+   "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
+   "forward_duration": "<measured>",
+   "forward_memory_backend": "<measured>",
+   "forward_peak_memory": "<measured>",
+   "forward_peak_memory_reason": "<measured>",
+   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
+   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "forward_source_line": 191,
+   "func_calls_duration": "<measured>",
+   "grad_fn_order": [],
+   "grad_fn_site_summary": {},
+   "grad_transform": null,
+   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
+   "graph_shape_hash": "060aa7d621f1fde2443cca694d2d43682d210ad071eb9942d9151804214b7299",
+   "grouping": "structural",
+   "grouping_policy": {
+    "\"detector\"": "callsite_v1",
+    "\"effective\"": true,
+    "\"folded_sites\"": "none",
+    "\"policy\"": "structural",
+    "\"requested\"": "structural",
+    "\"schema\"": "grouping_policy_v1",
+    "\"settlement_note\"": null,
+    "\"site_join\"": "none"
+   },
+   "halt_frontier": null,
+   "has_backward_pass": false,
+   "has_frozen_params": false,
+   "has_gradients": false,
+   "has_trainable_params": false,
+   "health_facts": "<torchlens.report._health.HealthFacts>",
+   "inference_only": false,
+   "init_docstring": "Initialize side-effect counters.",
+   "init_signature": "(self) -> 'None'",
+   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "init_source_line": 184,
+   "injected_ops": [],
+   "input": null,
+   "input_annotations": {},
+   "input_layers": [
+    "input_1"
+   ],
+   "input_object_id": "<measured>",
+   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "input_preprocessor": null,
+   "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38",
+   "input_structure": null,
+   "internal_sink_ops": [],
+   "internal_source_ops": [],
+   "internally_terminated_bool_ops": [],
+   "intervention_audit": [],
+   "is_appended": false,
+   "is_pristine": true,
+   "is_replayable": false,
+   "is_stopped": false,
+   "keep_orphans": false,
+   "last_run": null,
+   "layer_labels": [
+    "input_1",
+    "clone_1_1",
+    "add_1_2",
+    "relu_1_3",
+    "output_1"
+   ],
    "layer_visualizers": null,
    "layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
@@ -12156,31 +12019,20 @@
      "0.0"
     ]
    ],
-   "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "name": "inplace_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
-   "num_backward_passes": 0,
    "num_buffer_layers": 0,
    "num_context_lines": 7,
    "num_edges": 4,
    "num_input_layers": 1,
-   "num_layers_with_params": 0,
-   "num_modules": 1,
-   "num_ops": 3,
    "num_output_layers": 1,
-   "num_param_tensors": 0,
    "num_params": 0,
    "num_params_frozen": 0,
    "num_params_trainable": 0,
-   "num_saved_grad_fn_calls": 0,
-   "num_saved_grad_fns": 0,
-   "num_saved_layers": 5,
-   "num_saved_module_calls": 1,
-   "num_saved_ops": 5,
    "num_uncalled_modules": null,
    "observer_spans": [],
    "op_equivalence_classes": {
@@ -12220,7 +12072,6 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "orphan_records": [],
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -12232,17 +12083,13 @@
    "output_postprocessor": null,
    "param_hash_full": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
    "param_hash_quick": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-   "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "param_source": "native-module",
    "params": "<torchlens._data_classes.param.ParamAccessor>",
-   "parent_run": null,
    "parent_trace": null,
    "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
-   "raw_input": null,
-   "raw_output": null,
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
@@ -12252,7 +12099,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.InPlaceModel.forward",
    "root_module": {
     "__ref__": "Module",
@@ -12296,6 +12142,7 @@
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "transform_repr": null,
+   "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
@@ -12524,7 +12371,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||add||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -12773,7 +12619,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||clone||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -13001,7 +12846,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||input||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -13242,7 +13086,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||output||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -13490,7 +13333,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||relu||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -13561,9 +13403,9 @@
     "grads": [
      null
     ],
-    "had_pre_hook_input_change": false,
     "has_frozen_params": false,
     "has_multiple_addresses": false,
+    "has_pre_hook_input_change": false,
     "has_saved_forward_args": false,
     "has_trainable_params": false,
     "input_layers": [
@@ -13592,7 +13434,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 4,
     "num_layers": 5,
-    "num_ops": 5,
     "num_output_edges": 0,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -13776,9 +13617,7 @@
     "num_edges": 4,
     "num_input_edges": 0,
     "num_internal_edges": 4,
-    "num_layers": 5,
     "num_output_edges": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -13941,6 +13780,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "add_inplace_a09dc8be148d708c",
     "equivalent_ops": {
@@ -14046,7 +13886,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -14081,7 +13920,6 @@
     },
     "layer_label": "add_1_2",
     "layer_label_short": "add_1",
-    "layer_type": "add",
     "lookup_keys": [
      -3,
      2,
@@ -14122,12 +13960,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 2,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "add_1_2:1"
-     }
-    ],
     "ordinal_index": 2,
     "out": {
      "__tensor__": true,
@@ -14304,6 +14136,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "clone_966d0e7792d95d96",
     "equivalent_ops": {
@@ -14407,7 +14240,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -14442,7 +14274,6 @@
     },
     "layer_label": "clone_1_1",
     "layer_label_short": "clone_1",
-    "layer_type": "clone",
     "lookup_keys": [
      -4,
      1,
@@ -14481,12 +14312,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 1,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "clone_1_1:1"
-     }
-    ],
     "ordinal_index": 1,
     "out": {
      "__tensor__": true,
@@ -14647,6 +14472,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "input_2_4_torch.float32",
     "equivalent_ops": {
@@ -14720,7 +14546,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
@@ -14755,7 +14580,6 @@
     },
     "layer_label": "input_1",
     "layer_label_short": "input_1",
-    "layer_type": "input",
     "lookup_keys": [
      -5,
      0,
@@ -14795,12 +14619,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 0,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "input_1:1"
-     }
-    ],
     "ordinal_index": 0,
     "out": {
      "__tensor__": true,
@@ -14955,6 +14773,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "output_1_2_4_torch.float32",
     "equivalent_ops": {
@@ -15058,7 +14877,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
@@ -15093,7 +14911,6 @@
     },
     "layer_label": "output_1",
     "layer_label_short": "output_1",
-    "layer_type": "output",
     "lookup_keys": [
      -1,
      4,
@@ -15133,12 +14950,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 0,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "output_1:1"
-     }
-    ],
     "ordinal_index": 4,
     "out": {
      "__tensor__": true,
@@ -15323,6 +15134,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "relu_inplace_966d0e7792d95d96",
     "equivalent_ops": {
@@ -15426,7 +15238,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -15461,7 +15272,6 @@
     },
     "layer_label": "relu_1_3",
     "layer_label_short": "relu_1",
-    "layer_type": "relu",
     "lookup_keys": [
      -2,
      3,
@@ -15500,12 +15310,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 1,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "relu_1_3:1"
-     }
-    ],
     "ordinal_index": 3,
     "out": {
      "__tensor__": true,
@@ -15606,11 +15410,24 @@
    "_activation_transform_repr": null,
    "_ambiguous_lookup_keys": {},
    "_annotation_blobs": null,
+   "_append_history": [],
    "_append_sequence_id": 0,
+   "_backward_pass_logs": {},
+   "_buffer_num_calls": {},
    "_buffer_persistence": "<raises AttributeError>",
+   "_by_pass": {
+    "1": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   },
    "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
+   "_decoded_output": null,
    "_distributed_plane_p": null,
    "_fast_run_session": null,
    "_final_to_raw_layer_labels": {
@@ -15620,376 +15437,13 @@
     "\"output_1\"": "output_1_raw",
     "\"relu_1_3\"": "relu_1_4_raw"
    },
+   "_grad_fn_logs": {},
    "_grad_fn_param_refs": {},
    "_grad_op_nums_to_save": "all",
    "_has_direct_writes": false,
    "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
    "_last_hook_handle_ids": [],
-   "_layer_num_to_lookup_keys_dict": {
-    "1": [
-     -5,
-     0,
-     "input.x",
-     "input_1",
-     "input_1",
-     "input_1",
-     "input_1:1",
-     "input_1:1",
-     "input_1_raw"
-    ],
-    "2": [
-     -4,
-     1,
-     "clone_1",
-     "clone_1:1",
-     "clone_1_1",
-     "clone_1_1:1",
-     "clone_1_2",
-     "clone_1_2_raw"
-    ],
-    "3": [
-     -3,
-     2,
-     "add_1",
-     "add_1:1",
-     "add_1_2",
-     "add_1_2:1",
-     "add_1_3",
-     "add_1_3_raw"
-    ],
-    "4": [
-     -2,
-     3,
-     "relu_1",
-     "relu_1:1",
-     "relu_1_3",
-     "relu_1_3:1",
-     "relu_1_4",
-     "relu_1_4_raw"
-    ],
-    "5": [
-     -1,
-     4,
-     "output",
-     "output_1",
-     "output_1",
-     "output_1",
-     "output_1:1",
-     "output_1:1",
-     "output_1_raw"
-    ]
-   },
-   "_layer_nums_to_save": "all",
-   "_layers_logged": true,
-   "_layers_saved": true,
-   "_lookup_keys_to_layer_num_dict": {
-    "\"add_1\"": 3,
-    "\"add_1:1\"": 3,
-    "\"add_1_2\"": 3,
-    "\"add_1_2:1\"": 3,
-    "\"add_1_3\"": 3,
-    "\"add_1_3_raw\"": 3,
-    "\"clone_1\"": 2,
-    "\"clone_1:1\"": 2,
-    "\"clone_1_1\"": 2,
-    "\"clone_1_1:1\"": 2,
-    "\"clone_1_2\"": 2,
-    "\"clone_1_2_raw\"": 2,
-    "\"input.x\"": 1,
-    "\"input_1\"": 1,
-    "\"input_1:1\"": 1,
-    "\"input_1_raw\"": 1,
-    "\"output\"": 5,
-    "\"output_1\"": 5,
-    "\"output_1:1\"": 5,
-    "\"output_1_raw\"": 5,
-    "\"relu_1\"": 4,
-    "\"relu_1:1\"": 4,
-    "\"relu_1_3\"": 4,
-    "\"relu_1_3:1\"": 4,
-    "\"relu_1_4\"": 4,
-    "\"relu_1_4_raw\"": 4,
-    "-1": 5,
-    "-2": 4,
-    "-3": 3,
-    "-4": 2,
-    "-5": 1,
-    "0": 1,
-    "1": 2,
-    "2": 3,
-    "3": 4,
-    "4": 5
-   },
-   "_orphan_labels": [],
-   "_orphan_logs": [],
-   "_out_dedup_mode": "identity",
-   "_out_hash_cache": {},
-   "_out_identity_cache": {},
-   "_out_recipe_revision": 0,
-   "_output_transform": null,
-   "_phase_timings": "<measured>",
-   "_raw_to_final_layer_labels": {
-    "\"add_1_3_raw\"": "add_1_2",
-    "\"clone_1_2_raw\"": "clone_1_1",
-    "\"input_1_raw\"": "input_1",
-    "\"output_1_raw\"": "output_1",
-    "\"relu_1_4_raw\"": "relu_1_3"
-   },
-   "_raw_to_final_op_labels": {
-    "\"add_1_3_raw\"": "add_1_2:1",
-    "\"clone_1_2_raw\"": "clone_1_1:1",
-    "\"input_1_raw\"": "input_1:1",
-    "\"output_1_raw\"": "output_1:1",
-    "\"relu_1_4_raw\"": "relu_1_3:1"
-   },
-   "_raw_to_final_parent_layer_labels": {
-    "\"add_1_3_raw\"": "add_1_2",
-    "\"clone_1_2_raw\"": "clone_1_1",
-    "\"input_1_raw\"": "input_1",
-    "\"output_1_raw\"": "output_1",
-    "\"relu_1_4_raw\"": "relu_1_3"
-   },
-   "_replay_arg_version_data_complete": true,
-   "_replay_frontier": {},
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
-   "_source_code_blob": {
-    "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
-    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
-    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()"
-   },
-   "_source_model_ref": "<callable ReferenceType>",
-   "_spec_revision": 0,
-   "_tracing_finished": true,
-   "_transform": null,
-   "_visualizer_dir": null,
-   "_warned_direct_write": false,
-   "_warned_mutate_in_place": false,
-   "activation_payloads_by_raw_label": {
-    "\"add_1_3_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"clone_1_2_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"input_1_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"output_1_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"relu_1_4_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    }
-   },
-   "activation_transform": null,
-   "annotations": {
-    "\"health_facts\"": {
-     "\"alias_nonfinite_labels\"": [],
-     "\"basis\"": "saved_payloads",
-     "\"capture_revision\"": "fc1-f3362ff6b785465e",
-     "\"checked\"": 5,
-     "\"nonfinite_labels\"": [],
-     "\"schema_version\"": 1,
-     "\"unchecked\"": 0,
-     "\"unexamined\"": 0,
-     "\"unmapped\"": 0
-    }
-   },
-   "append_history": [],
-   "archived_activations": {},
-   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
-   "backend": "torch",
-   "backend_runtime_config": null,
-   "backend_runtime_device_summary": null,
-   "backend_runtime_version": null,
-   "backward_durations": [],
-   "backward_events": [],
-   "backward_memory_backend": "<measured>",
-   "backward_pass_logs": {},
-   "backward_peak_memory": "<measured>",
-   "backward_peak_memory_reason": "<measured>",
-   "backward_ready": false,
-   "backward_root_grad_fn_object_ids": "<measured>",
-   "batch_render": "auto",
-   "buffer_layers": [],
-   "buffer_num_calls": {},
-   "buffer_read_ops": [],
-   "buffer_write_ops": [],
-   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
-   "by_pass": {
-    "1": [
-     0,
-     1,
-     2,
-     3,
-     4
-    ]
-   },
-   "call_tree": {
-    "__ref__": "ModuleCall",
-    "label": "self"
-   },
-   "capture_cache_hit": false,
-   "capture_cache_key": null,
-   "capture_cache_path": null,
-   "capture_duration": "<measured>",
-   "capture_end_time": "<measured>",
-   "capture_guard_passes": [
-    {
-     "\"capture_mode\"": "exhaustive",
-     "\"guard_pass_index\"": 1,
-     "\"owner_thread_id\"": "<measured>"
-    }
-   ],
-   "capture_kind": "plain",
-   "capture_mode": "exhaustive",
-   "capture_owner_thread_id": "<measured>",
-   "capture_owner_thread_qualified": true,
-   "capture_start_time": "<measured>",
-   "capture_tensor_grad_hooks": true,
-   "capture_thread_activity_detected": false,
-   "capture_thread_count_end": 1,
-   "capture_thread_count_start": 1,
-   "capture_verification_reason": null,
-   "capture_verified": null,
-   "chunked_forward": false,
-   "class_docstring": "Model with explicit in-place operations on an internal tensor.",
-   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "class_source_line": 181,
-   "cleanup_duration": "<measured>",
-   "code_context": [],
-   "completeness_decompositions": [],
-   "completeness_diagnostics": [],
-   "completeness_witness_accounted_count": 0,
-   "completeness_witness_callback_ns": 0,
-   "completeness_witness_event_count": 0,
-   "completeness_witness_expected_opaque_count": 0,
-   "completeness_witness_mode": "off",
-   "completeness_witness_unaccounted_count": 0,
-   "completeness_witness_verified": null,
-   "compute_coverage": {
-    "\"known\"": 2,
-    "\"not_applicable\"": 2,
-    "\"unknown\"": 0,
-    "\"zero_by_rule\"": 1
-   },
-   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "conditional_arm_entry_edges": {},
-   "conditional_branch_edges": [],
-   "conditional_edge_call_indices": {},
-   "conditional_records": [],
-   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
-   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
-   "decoded_output": null,
-   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
-   "detach_saved_activations": false,
-   "distributed_scope": null,
-   "emit_nvtx": false,
-   "episode": null,
-   "episode_coupling": null,
-   "escape_detector_backward_coverage": "not_armed",
-   "escape_detector_callback_ns": 0,
-   "escape_detector_event_count": 0,
-   "escape_detector_mode": "off",
-   "escape_detector_verified": null,
-   "escape_diagnostics": [],
-   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_functions": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
-   "factcore": "<torchlens.report._factcore.FactCore>",
-   "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
-   "forward_duration": "<measured>",
-   "forward_memory_backend": "<measured>",
-   "forward_peak_memory": "<measured>",
-   "forward_peak_memory_reason": "<measured>",
-   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
-   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "forward_source_line": 191,
-   "func_calls_duration": "<measured>",
-   "grad_fn_logs": {},
-   "grad_fn_order": [],
-   "grad_fn_site_summary": {},
-   "grad_transform": null,
-   "grad_transform_repr": null,
-   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
-   "graph_shape_hash": "060aa7d621f1fde2443cca694d2d43682d210ad071eb9942d9151804214b7299",
-   "grouping": "structural",
-   "grouping_policy": {
-    "\"detector\"": "callsite_v1",
-    "\"effective\"": true,
-    "\"folded_sites\"": "none",
-    "\"policy\"": "structural",
-    "\"requested\"": "structural",
-    "\"schema\"": "grouping_policy_v1",
-    "\"settlement_note\"": null,
-    "\"site_join\"": "none"
-   },
-   "halt_frontier": null,
-   "halted": false,
-   "has_backward_pass": false,
-   "has_frozen_params": false,
-   "has_gradients": false,
-   "has_trainable_params": false,
-   "health_facts": "<torchlens.report._health.HealthFacts>",
-   "inference_only": false,
-   "init_docstring": "Initialize side-effect counters.",
-   "init_signature": "(self) -> 'None'",
-   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
-   "init_source_line": 184,
-   "injected_ops": [],
-   "input_annotations": {},
-   "input_layers": [
-    "input_1"
-   ],
-   "input_object_id": "<measured>",
-   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "input_preprocessor": null,
-   "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38",
-   "input_structure": "<raises AttributeError>",
-   "internal_sink_ops": [],
-   "internal_source_ops": [],
-   "internally_terminated_bool_ops": [],
-   "intervention_audit": [],
-   "is_appended": false,
-   "is_pristine": true,
-   "is_replayable": false,
-   "keep_orphans": false,
-   "last_run": null,
-   "layer_dict_all_keys": {
+   "_layer_dict_all_keys": {
     "\"add_1\"": {
      "__ref__": "Op",
      "label": "add_1_2:1"
@@ -16135,7 +15589,7 @@
      "label": "output_1:1"
     }
    },
-   "layer_dict_main_keys": {
+   "_layer_dict_main_keys": {
     "\"add_1_2:1\"": {
      "__ref__": "Op",
      "label": "add_1_2:1"
@@ -16157,14 +15611,7 @@
      "label": "relu_1_3:1"
     }
    },
-   "layer_labels": [
-    "input_1",
-    "clone_1_1",
-    "add_1_2",
-    "relu_1_3",
-    "output_1"
-   ],
-   "layer_list": [
+   "_layer_list": [
     {
      "__ref__": "Op",
      "label": "input_1:1"
@@ -16186,7 +15633,7 @@
      "label": "output_1:1"
     }
    ],
-   "layer_logs": {
+   "_layer_logs": {
     "\"add_1_2\"": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
@@ -16208,13 +15655,378 @@
      "label": "relu_1_3:1"
     }
    },
-   "layer_num_calls": {
+   "_layer_num_calls": {
     "\"add_1_2\"": 1,
     "\"clone_1_1\"": 1,
     "\"input_1\"": 1,
     "\"output_1\"": 1,
     "\"relu_1_3\"": 1
    },
+   "_layer_num_to_lookup_keys_dict": {
+    "1": [
+     -5,
+     0,
+     "input.x",
+     "input_1",
+     "input_1",
+     "input_1",
+     "input_1:1",
+     "input_1:1",
+     "input_1_raw"
+    ],
+    "2": [
+     -4,
+     1,
+     "clone_1",
+     "clone_1:1",
+     "clone_1_1",
+     "clone_1_1:1",
+     "clone_1_2",
+     "clone_1_2_raw"
+    ],
+    "3": [
+     -3,
+     2,
+     "add_1",
+     "add_1:1",
+     "add_1_2",
+     "add_1_2:1",
+     "add_1_3",
+     "add_1_3_raw"
+    ],
+    "4": [
+     -2,
+     3,
+     "relu_1",
+     "relu_1:1",
+     "relu_1_3",
+     "relu_1_3:1",
+     "relu_1_4",
+     "relu_1_4_raw"
+    ],
+    "5": [
+     -1,
+     4,
+     "output",
+     "output_1",
+     "output_1",
+     "output_1",
+     "output_1:1",
+     "output_1:1",
+     "output_1_raw"
+    ]
+   },
+   "_layer_nums_to_save": "all",
+   "_layers_logged": true,
+   "_layers_saved": true,
+   "_lookup_keys_to_layer_num_dict": {
+    "\"add_1\"": 3,
+    "\"add_1:1\"": 3,
+    "\"add_1_2\"": 3,
+    "\"add_1_2:1\"": 3,
+    "\"add_1_3\"": 3,
+    "\"add_1_3_raw\"": 3,
+    "\"clone_1\"": 2,
+    "\"clone_1:1\"": 2,
+    "\"clone_1_1\"": 2,
+    "\"clone_1_1:1\"": 2,
+    "\"clone_1_2\"": 2,
+    "\"clone_1_2_raw\"": 2,
+    "\"input.x\"": 1,
+    "\"input_1\"": 1,
+    "\"input_1:1\"": 1,
+    "\"input_1_raw\"": 1,
+    "\"output\"": 5,
+    "\"output_1\"": 5,
+    "\"output_1:1\"": 5,
+    "\"output_1_raw\"": 5,
+    "\"relu_1\"": 4,
+    "\"relu_1:1\"": 4,
+    "\"relu_1_3\"": 4,
+    "\"relu_1_3:1\"": 4,
+    "\"relu_1_4\"": 4,
+    "\"relu_1_4_raw\"": 4,
+    "-1": 5,
+    "-2": 4,
+    "-3": 3,
+    "-4": 2,
+    "-5": 1,
+    "0": 1,
+    "1": 2,
+    "2": 3,
+    "3": 4,
+    "4": 5
+   },
+   "_module_filter": null,
+   "_num_backward_passes": 0,
+   "_num_layers_with_params": 0,
+   "_num_ops": 3,
+   "_orphan_labels": [],
+   "_orphan_logs": [],
+   "_orphan_records": [],
+   "_out_dedup_mode": "identity",
+   "_out_hash_cache": {},
+   "_out_identity_cache": {},
+   "_out_recipe_revision": 0,
+   "_output_transform": null,
+   "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
+   "_parent_run": "<callable ReferenceType>",
+   "_phase_timings": "<measured>",
+   "_raw_to_final_layer_labels": {
+    "\"add_1_3_raw\"": "add_1_2",
+    "\"clone_1_2_raw\"": "clone_1_1",
+    "\"input_1_raw\"": "input_1",
+    "\"output_1_raw\"": "output_1",
+    "\"relu_1_4_raw\"": "relu_1_3"
+   },
+   "_raw_to_final_op_labels": {
+    "\"add_1_3_raw\"": "add_1_2:1",
+    "\"clone_1_2_raw\"": "clone_1_1:1",
+    "\"input_1_raw\"": "input_1:1",
+    "\"output_1_raw\"": "output_1:1",
+    "\"relu_1_4_raw\"": "relu_1_3:1"
+   },
+   "_raw_to_final_parent_layer_labels": {
+    "\"add_1_3_raw\"": "add_1_2",
+    "\"clone_1_2_raw\"": "clone_1_1",
+    "\"input_1_raw\"": "input_1",
+    "\"output_1_raw\"": "output_1",
+    "\"relu_1_4_raw\"": "relu_1_3"
+   },
+   "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
+   "_rescue_rerun": null,
+   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_source_code_blob": {
+    "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
+    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
+    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()"
+   },
+   "_source_model_ref": "<callable ReferenceType>",
+   "_spec_revision": 0,
+   "_tracing_finished": true,
+   "_transform": null,
+   "_visualizer_dir": null,
+   "_warned_direct_write": false,
+   "_warned_mutate_in_place": false,
+   "activation_payloads_by_raw_label": {
+    "\"add_1_3_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"clone_1_2_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"input_1_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"output_1_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"relu_1_4_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    }
+   },
+   "activation_transform": null,
+   "annotations": {
+    "\"health_facts\"": {
+     "\"alias_nonfinite_labels\"": [],
+     "\"basis\"": "saved_payloads",
+     "\"capture_revision\"": "fc1-f3362ff6b785465e",
+     "\"checked\"": 5,
+     "\"nonfinite_labels\"": [],
+     "\"schema_version\"": 1,
+     "\"unchecked\"": 0,
+     "\"unexamined\"": 0,
+     "\"unmapped\"": 0
+    }
+   },
+   "archived_activations": {},
+   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
+   "backend": "torch",
+   "backend_runtime_config": null,
+   "backend_runtime_device_summary": null,
+   "backend_runtime_version": null,
+   "backward_durations": [],
+   "backward_events": [],
+   "backward_memory_backend": "<measured>",
+   "backward_peak_memory": "<measured>",
+   "backward_peak_memory_reason": "<measured>",
+   "backward_ready": false,
+   "backward_root_grad_fn_object_ids": "<measured>",
+   "batch_render": "auto",
+   "buffer_layers": [],
+   "buffer_read_ops": [],
+   "buffer_write_ops": [],
+   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
+   "call_tree": {
+    "__ref__": "ModuleCall",
+    "label": "self"
+   },
+   "capture_cache_hit": false,
+   "capture_cache_key": null,
+   "capture_cache_path": null,
+   "capture_duration": "<measured>",
+   "capture_end_time": "<measured>",
+   "capture_guard_passes": [
+    {
+     "\"capture_mode\"": "exhaustive",
+     "\"guard_pass_index\"": 1,
+     "\"owner_thread_id\"": "<measured>"
+    }
+   ],
+   "capture_kind": "plain",
+   "capture_mode": "exhaustive",
+   "capture_owner_thread_id": "<measured>",
+   "capture_owner_thread_qualified": true,
+   "capture_start_time": "<measured>",
+   "capture_tensor_grad_hooks": true,
+   "capture_thread_activity_detected": false,
+   "capture_thread_count_end": 1,
+   "capture_thread_count_start": 1,
+   "capture_verification_reason": null,
+   "capture_verified": null,
+   "chunked_forward": false,
+   "class_docstring": "Model with explicit in-place operations on an internal tensor.",
+   "class_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "class_source_line": 181,
+   "cleanup_duration": "<measured>",
+   "code_context": [],
+   "completeness_decompositions": [],
+   "completeness_diagnostics": [],
+   "completeness_witness_accounted_count": 0,
+   "completeness_witness_callback_ns": 0,
+   "completeness_witness_event_count": 0,
+   "completeness_witness_expected_opaque_count": 0,
+   "completeness_witness_mode": "off",
+   "completeness_witness_unaccounted_count": 0,
+   "completeness_witness_verified": null,
+   "compute_coverage": {
+    "\"known\"": 2,
+    "\"not_applicable\"": 2,
+    "\"unknown\"": 0,
+    "\"zero_by_rule\"": 1
+   },
+   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "conditional_arm_entry_edges": {},
+   "conditional_branch_edges": [],
+   "conditional_edge_call_indices": {},
+   "conditional_records": [],
+   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
+   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
+   "detach_saved_activations": false,
+   "distributed_scope": null,
+   "emit_nvtx": false,
+   "episode": null,
+   "episode_coupling": null,
+   "escape_detector_backward_coverage": "not_armed",
+   "escape_detector_callback_ns": 0,
+   "escape_detector_event_count": 0,
+   "escape_detector_mode": "off",
+   "escape_detector_verified": null,
+   "escape_diagnostics": [],
+   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
+   "facet_functions": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
+   "factcore": "<torchlens.report._factcore.FactCore>",
+   "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
+   "forward_duration": "<measured>",
+   "forward_memory_backend": "<measured>",
+   "forward_peak_memory": "<measured>",
+   "forward_peak_memory_reason": "<measured>",
+   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
+   "forward_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "forward_source_line": 191,
+   "func_calls_duration": "<measured>",
+   "grad_fn_order": [],
+   "grad_fn_site_summary": {},
+   "grad_transform": null,
+   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
+   "graph_shape_hash": "060aa7d621f1fde2443cca694d2d43682d210ad071eb9942d9151804214b7299",
+   "grouping": "structural",
+   "grouping_policy": {
+    "\"detector\"": "callsite_v1",
+    "\"effective\"": true,
+    "\"folded_sites\"": "none",
+    "\"policy\"": "structural",
+    "\"requested\"": "structural",
+    "\"schema\"": "grouping_policy_v1",
+    "\"settlement_note\"": null,
+    "\"site_join\"": "none"
+   },
+   "halt_frontier": null,
+   "has_backward_pass": false,
+   "has_frozen_params": false,
+   "has_gradients": false,
+   "has_trainable_params": false,
+   "health_facts": "<torchlens.report._health.HealthFacts>",
+   "inference_only": false,
+   "init_docstring": "Initialize side-effect counters.",
+   "init_signature": "(self) -> 'None'",
+   "init_source_file": "<repo>/tests/capture_oracle/_models.py",
+   "init_source_line": 184,
+   "injected_ops": [],
+   "input": null,
+   "input_annotations": {},
+   "input_layers": [
+    "input_1"
+   ],
+   "input_object_id": "<measured>",
+   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "input_preprocessor": null,
+   "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38",
+   "input_structure": "<raises AttributeError>",
+   "internal_sink_ops": [],
+   "internal_source_ops": [],
+   "internally_terminated_bool_ops": [],
+   "intervention_audit": [],
+   "is_appended": false,
+   "is_pristine": true,
+   "is_replayable": false,
+   "is_stopped": false,
+   "keep_orphans": false,
+   "last_run": null,
+   "layer_labels": [
+    "input_1",
+    "clone_1_1",
+    "add_1_2",
+    "relu_1_3",
+    "output_1"
+   ],
    "layer_visualizers": null,
    "layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
@@ -16257,31 +16069,20 @@
      "0.0"
     ]
    ],
-   "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "name": "inplace_N_fork_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
-   "num_backward_passes": 0,
    "num_buffer_layers": 0,
    "num_context_lines": 7,
    "num_edges": 4,
    "num_input_layers": 1,
-   "num_layers_with_params": 0,
-   "num_modules": 1,
-   "num_ops": 3,
    "num_output_layers": 1,
-   "num_param_tensors": 0,
    "num_params": 0,
    "num_params_frozen": 0,
    "num_params_trainable": 0,
-   "num_saved_grad_fn_calls": 0,
-   "num_saved_grad_fns": 0,
-   "num_saved_layers": 5,
-   "num_saved_module_calls": 1,
-   "num_saved_ops": 5,
    "num_uncalled_modules": 0,
    "observer_spans": [],
    "op_equivalence_classes": {
@@ -16321,7 +16122,6 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "orphan_records": [],
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -16333,10 +16133,8 @@
    "output_postprocessor": null,
    "param_hash_full": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
    "param_hash_quick": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-   "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "param_source": "native-module",
    "params": "<torchlens._data_classes.param.ParamAccessor>",
-   "parent_run": "<callable ReferenceType>",
    "parent_trace": {
     "__ref__": "Trace",
     "label": "inplace_1"
@@ -16345,8 +16143,6 @@
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
-   "raw_input": null,
-   "raw_output": null,
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
@@ -16356,7 +16152,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.InPlaceModel.forward",
    "root_module": {
     "__ref__": "Module",
@@ -16411,6 +16206,7 @@
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "transform_repr": null,
+   "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
@@ -16639,7 +16435,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||add||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -16888,7 +16683,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||clone||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -17116,7 +16910,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||input||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -17346,7 +17139,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||output||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -17594,7 +17386,6 @@
     ],
     "shape_summary": null,
     "siblings": [],
-    "site_key": "s1||relu||1",
     "site_peers": [],
     "source_trace": {
      "__ref__": "Trace",
@@ -17665,9 +17456,9 @@
     "grads": [
      null
     ],
-    "had_pre_hook_input_change": false,
     "has_frozen_params": false,
     "has_multiple_addresses": false,
+    "has_pre_hook_input_change": false,
     "has_saved_forward_args": false,
     "has_trainable_params": false,
     "input_layers": [
@@ -17696,7 +17487,6 @@
     "num_input_edges": 0,
     "num_internal_edges": 4,
     "num_layers": 5,
-    "num_ops": 5,
     "num_output_edges": 0,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -17880,9 +17670,7 @@
     "num_edges": 4,
     "num_input_edges": 0,
     "num_internal_edges": 4,
-    "num_layers": 5,
     "num_output_edges": 0,
-    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -18043,6 +17831,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "add_inplace_a09dc8be148d708c",
     "equivalent_ops": {
@@ -18133,7 +17922,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -18165,7 +17953,6 @@
     "layer": "<raises AttributeError>",
     "layer_label": "add_1_2",
     "layer_label_short": "add_1",
-    "layer_type": "add",
     "lookup_keys": [
      -3,
      2,
@@ -18206,12 +17993,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 2,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "add_1_2:1"
-     }
-    ],
     "ordinal_index": 2,
     "out": {
      "__tensor__": true,
@@ -18388,6 +18169,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "clone_966d0e7792d95d96",
     "equivalent_ops": {
@@ -18476,7 +18258,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -18508,7 +18289,6 @@
     "layer": "<raises AttributeError>",
     "layer_label": "clone_1_1",
     "layer_label_short": "clone_1",
-    "layer_type": "clone",
     "lookup_keys": [
      -4,
      1,
@@ -18547,12 +18327,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 1,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "clone_1_1:1"
-     }
-    ],
     "ordinal_index": 1,
     "out": {
      "__tensor__": true,
@@ -18713,6 +18487,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "input_2_4_torch.float32",
     "equivalent_ops": {
@@ -18786,7 +18561,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": "input.x",
     "is_atomic_module": false,
     "is_buffer": false,
@@ -18818,7 +18592,6 @@
     "layer": "<raises AttributeError>",
     "layer_label": "input_1",
     "layer_label_short": "input_1",
-    "layer_type": "input",
     "lookup_keys": [
      -5,
      0,
@@ -18858,12 +18631,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 0,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "input_1:1"
-     }
-    ],
     "ordinal_index": 0,
     "out": {
      "__tensor__": true,
@@ -19018,6 +18785,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "output_1_2_4_torch.float32",
     "equivalent_ops": {
@@ -19106,7 +18874,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": "output",
     "is_atomic_module": false,
     "is_buffer": false,
@@ -19138,7 +18905,6 @@
     "layer": "<raises AttributeError>",
     "layer_label": "output_1",
     "layer_label_short": "output_1",
-    "layer_type": "output",
     "lookup_keys": [
      -1,
      4,
@@ -19178,12 +18944,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 0,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "output_1:1"
-     }
-    ],
     "ordinal_index": 4,
     "out": {
      "__tensor__": true,
@@ -19357,6 +19117,7 @@
     "edge_uses": [
      "<torchlens.intervention.types.EdgeUseRecord>"
     ],
+    "edits": [],
     "episode_step": null,
     "equivalence_class": "relu_inplace_966d0e7792d95d96",
     "equivalent_ops": {
@@ -19445,7 +19206,6 @@
      "__set__": []
     },
     "internal_source_parents": [],
-    "interventions": [],
     "io_role": null,
     "is_atomic_module": false,
     "is_buffer": false,
@@ -19477,7 +19237,6 @@
     "layer": "<raises AttributeError>",
     "layer_label": "relu_1_3",
     "layer_label_short": "relu_1",
-    "layer_type": "relu",
     "lookup_keys": [
      -2,
      3,
@@ -19516,12 +19275,6 @@
     "num_params_trainable": 0,
     "num_passes": 1,
     "num_pos_args": 1,
-    "ops": [
-     {
-      "__ref__": "Op",
-      "label": "relu_1_3:1"
-     }
-    ],
     "ordinal_index": 3,
     "out": {
      "__tensor__": true,
@@ -19622,11 +19375,24 @@
    "_activation_transform_repr": null,
    "_ambiguous_lookup_keys": {},
    "_annotation_blobs": null,
+   "_append_history": [],
    "_append_sequence_id": 0,
+   "_backward_pass_logs": {},
+   "_buffer_num_calls": {},
    "_buffer_persistence": {},
+   "_by_pass": {
+    "1": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   },
    "_capture_outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
+   "_decoded_output": null,
    "_distributed_plane_p": null,
    "_fast_run_session": null,
    "_final_to_raw_layer_labels": {
@@ -19636,370 +19402,13 @@
     "\"output_1\"": "output_1_raw",
     "\"relu_1_3\"": "relu_1_4_raw"
    },
+   "_grad_fn_logs": {},
    "_grad_fn_param_refs": {},
    "_grad_op_nums_to_save": [],
    "_has_direct_writes": false,
    "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
    "_last_hook_handle_ids": [],
-   "_layer_num_to_lookup_keys_dict": {
-    "1": [
-     -5,
-     0,
-     "input.x",
-     "input_1",
-     "input_1",
-     "input_1",
-     "input_1:1",
-     "input_1:1",
-     "input_1_raw"
-    ],
-    "2": [
-     -4,
-     1,
-     "clone_1",
-     "clone_1:1",
-     "clone_1_1",
-     "clone_1_1:1",
-     "clone_1_2",
-     "clone_1_2_raw"
-    ],
-    "3": [
-     -3,
-     2,
-     "add_1",
-     "add_1:1",
-     "add_1_2",
-     "add_1_2:1",
-     "add_1_3",
-     "add_1_3_raw"
-    ],
-    "4": [
-     -2,
-     3,
-     "relu_1",
-     "relu_1:1",
-     "relu_1_3",
-     "relu_1_3:1",
-     "relu_1_4",
-     "relu_1_4_raw"
-    ],
-    "5": [
-     -1,
-     4,
-     "output",
-     "output_1",
-     "output_1",
-     "output_1",
-     "output_1:1",
-     "output_1:1",
-     "output_1_raw"
-    ]
-   },
-   "_layer_nums_to_save": "all",
-   "_layers_logged": true,
-   "_layers_saved": true,
-   "_lookup_keys_to_layer_num_dict": {
-    "\"add_1\"": 3,
-    "\"add_1:1\"": 3,
-    "\"add_1_2\"": 3,
-    "\"add_1_2:1\"": 3,
-    "\"add_1_3\"": 3,
-    "\"add_1_3_raw\"": 3,
-    "\"clone_1\"": 2,
-    "\"clone_1:1\"": 2,
-    "\"clone_1_1\"": 2,
-    "\"clone_1_1:1\"": 2,
-    "\"clone_1_2\"": 2,
-    "\"clone_1_2_raw\"": 2,
-    "\"input.x\"": 1,
-    "\"input_1\"": 1,
-    "\"input_1:1\"": 1,
-    "\"input_1_raw\"": 1,
-    "\"output\"": 5,
-    "\"output_1\"": 5,
-    "\"output_1:1\"": 5,
-    "\"output_1_raw\"": 5,
-    "\"relu_1\"": 4,
-    "\"relu_1:1\"": 4,
-    "\"relu_1_3\"": 4,
-    "\"relu_1_3:1\"": 4,
-    "\"relu_1_4\"": 4,
-    "\"relu_1_4_raw\"": 4,
-    "-1": 5,
-    "-2": 4,
-    "-3": 3,
-    "-4": 2,
-    "-5": 1,
-    "0": 1,
-    "1": 2,
-    "2": 3,
-    "3": 4,
-    "4": 5
-   },
-   "_orphan_labels": [],
-   "_orphan_logs": [],
-   "_out_dedup_mode": null,
-   "_out_hash_cache": {},
-   "_out_identity_cache": {},
-   "_out_recipe_revision": 0,
-   "_output_transform": null,
-   "_phase_timings": "<measured>",
-   "_raw_to_final_layer_labels": {
-    "\"add_1_3_raw\"": "add_1_2",
-    "\"clone_1_2_raw\"": "clone_1_1",
-    "\"input_1_raw\"": "input_1",
-    "\"output_1_raw\"": "output_1",
-    "\"relu_1_4_raw\"": "relu_1_3"
-   },
-   "_raw_to_final_op_labels": {
-    "\"add_1_3_raw\"": "add_1_2:1",
-    "\"clone_1_2_raw\"": "clone_1_1:1",
-    "\"input_1_raw\"": "input_1:1",
-    "\"output_1_raw\"": "output_1:1",
-    "\"relu_1_4_raw\"": "relu_1_3:1"
-   },
-   "_raw_to_final_parent_layer_labels": {
-    "\"add_1_3_raw\"": "add_1_2",
-    "\"clone_1_2_raw\"": "clone_1_1",
-    "\"input_1_raw\"": "input_1",
-    "\"output_1_raw\"": "output_1",
-    "\"relu_1_4_raw\"": "relu_1_3"
-   },
-   "_replay_arg_version_data_complete": true,
-   "_replay_frontier": {},
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
-   "_source_code_blob": {
-    "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
-    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
-    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()"
-   },
-   "_source_model_ref": null,
-   "_spec_revision": 0,
-   "_tracing_finished": true,
-   "_transform": null,
-   "_visualizer_dir": null,
-   "_warned_direct_write": null,
-   "_warned_mutate_in_place": null,
-   "activation_payloads_by_raw_label": {
-    "\"add_1_3_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"clone_1_2_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"input_1_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"output_1_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    },
-    "\"relu_1_4_raw\"": {
-     "__tensor__": true,
-     "dtype": "torch.float32",
-     "requires_grad": false,
-     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
-     "shape": [
-      2,
-      4
-     ]
-    }
-   },
-   "activation_transform": null,
-   "annotations": {
-    "\"health_facts\"": {
-     "\"alias_nonfinite_labels\"": [],
-     "\"basis\"": "saved_payloads",
-     "\"capture_revision\"": "fc1-f3362ff6b785465e",
-     "\"checked\"": 5,
-     "\"nonfinite_labels\"": [],
-     "\"schema_version\"": 1,
-     "\"unchecked\"": 0,
-     "\"unexamined\"": 0,
-     "\"unmapped\"": 0
-    }
-   },
-   "append_history": [],
-   "archived_activations": {},
-   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
-   "backend": "torch",
-   "backend_runtime_config": null,
-   "backend_runtime_device_summary": null,
-   "backend_runtime_version": null,
-   "backward_durations": [],
-   "backward_events": [],
-   "backward_memory_backend": "<measured>",
-   "backward_pass_logs": {},
-   "backward_peak_memory": "<measured>",
-   "backward_peak_memory_reason": "<measured>",
-   "backward_ready": false,
-   "backward_root_grad_fn_object_ids": "<measured>",
-   "batch_render": "auto",
-   "buffer_layers": [],
-   "buffer_num_calls": {},
-   "buffer_read_ops": [],
-   "buffer_write_ops": [],
-   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
-   "by_pass": {
-    "1": [
-     0,
-     1,
-     2,
-     3,
-     4
-    ]
-   },
-   "call_tree": {
-    "__ref__": "ModuleCall",
-    "label": "self"
-   },
-   "capture_cache_hit": false,
-   "capture_cache_key": null,
-   "capture_cache_path": null,
-   "capture_duration": "<measured>",
-   "capture_end_time": "<measured>",
-   "capture_guard_passes": [],
-   "capture_kind": "plain",
-   "capture_mode": "exhaustive",
-   "capture_owner_thread_id": "<measured>",
-   "capture_owner_thread_qualified": null,
-   "capture_start_time": "<measured>",
-   "capture_tensor_grad_hooks": true,
-   "capture_thread_activity_detected": null,
-   "capture_thread_count_end": null,
-   "capture_thread_count_start": null,
-   "capture_verification_reason": null,
-   "capture_verified": null,
-   "chunked_forward": false,
-   "class_docstring": "Model with explicit in-place operations on an internal tensor.",
-   "class_source_file": "_models.py",
-   "class_source_line": 181,
-   "cleanup_duration": "<measured>",
-   "code_context": [],
-   "completeness_decompositions": [],
-   "completeness_diagnostics": [],
-   "completeness_witness_accounted_count": null,
-   "completeness_witness_callback_ns": null,
-   "completeness_witness_event_count": null,
-   "completeness_witness_expected_opaque_count": null,
-   "completeness_witness_mode": null,
-   "completeness_witness_unaccounted_count": null,
-   "completeness_witness_verified": null,
-   "compute_coverage": {
-    "\"known\"": 2,
-    "\"not_applicable\"": 2,
-    "\"unknown\"": 0,
-    "\"zero_by_rule\"": 1
-   },
-   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "conditional_arm_entry_edges": {},
-   "conditional_branch_edges": [],
-   "conditional_edge_call_indices": {},
-   "conditional_records": [],
-   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
-   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
-   "decoded_output": null,
-   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
-   "detach_saved_activations": false,
-   "distributed_scope": null,
-   "emit_nvtx": false,
-   "episode": null,
-   "episode_coupling": null,
-   "escape_detector_backward_coverage": null,
-   "escape_detector_callback_ns": null,
-   "escape_detector_event_count": null,
-   "escape_detector_mode": null,
-   "escape_detector_verified": null,
-   "escape_diagnostics": [],
-   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
-   "facet_functions": null,
-   "factcore": "<torchlens.report._factcore.FactCore>",
-   "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
-   "forward_duration": "<measured>",
-   "forward_memory_backend": "<measured>",
-   "forward_peak_memory": "<measured>",
-   "forward_peak_memory_reason": "<measured>",
-   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
-   "forward_source_file": "_models.py",
-   "forward_source_line": 191,
-   "func_calls_duration": "<measured>",
-   "grad_fn_logs": {},
-   "grad_fn_order": [],
-   "grad_fn_site_summary": {},
-   "grad_transform": null,
-   "grad_transform_repr": null,
-   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
-   "graph_shape_hash": "060aa7d621f1fde2443cca694d2d43682d210ad071eb9942d9151804214b7299",
-   "grouping": "structural",
-   "grouping_policy": {
-    "\"detector\"": "callsite_v1",
-    "\"effective\"": true,
-    "\"folded_sites\"": "none",
-    "\"policy\"": "structural",
-    "\"requested\"": "structural",
-    "\"schema\"": "grouping_policy_v1",
-    "\"settlement_note\"": null,
-    "\"site_join\"": "none"
-   },
-   "halt_frontier": null,
-   "halted": false,
-   "has_backward_pass": false,
-   "has_frozen_params": false,
-   "has_gradients": false,
-   "has_trainable_params": false,
-   "health_facts": "<torchlens.report._health.HealthFacts>",
-   "inference_only": false,
-   "init_docstring": "Initialize side-effect counters.",
-   "init_signature": "(self) -> 'None'",
-   "init_source_file": "_models.py",
-   "init_source_line": 184,
-   "injected_ops": [],
-   "input_annotations": {},
-   "input_layers": [
-    "input_1"
-   ],
-   "input_object_id": "<measured>",
-   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "input_preprocessor": null,
-   "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38",
-   "input_structure": null,
-   "internal_sink_ops": [],
-   "internal_source_ops": [],
-   "internally_terminated_bool_ops": [],
-   "intervention_audit": [],
-   "is_appended": false,
-   "is_pristine": true,
-   "is_replayable": false,
-   "keep_orphans": false,
-   "last_run": null,
-   "layer_dict_all_keys": {
+   "_layer_dict_all_keys": {
     "\"add_1\"": {
      "__ref__": "Op",
      "label": "add_1_2:1"
@@ -20145,7 +19554,7 @@
      "label": "output_1:1"
     }
    },
-   "layer_dict_main_keys": {
+   "_layer_dict_main_keys": {
     "\"add_1_2:1\"": {
      "__ref__": "Op",
      "label": "add_1_2:1"
@@ -20167,14 +19576,7 @@
      "label": "relu_1_3:1"
     }
    },
-   "layer_labels": [
-    "input_1",
-    "clone_1_1",
-    "add_1_2",
-    "relu_1_3",
-    "output_1"
-   ],
-   "layer_list": [
+   "_layer_list": [
     {
      "__ref__": "Op",
      "label": "input_1:1"
@@ -20196,7 +19598,7 @@
      "label": "output_1:1"
     }
    ],
-   "layer_logs": {
+   "_layer_logs": {
     "\"add_1_2\"": {
      "__ref__": "Layer",
      "label": "add_1_2:1"
@@ -20218,13 +19620,372 @@
      "label": "relu_1_3:1"
     }
    },
-   "layer_num_calls": {
+   "_layer_num_calls": {
     "\"add_1_2\"": 1,
     "\"clone_1_1\"": 1,
     "\"input_1\"": 1,
     "\"output_1\"": 1,
     "\"relu_1_3\"": 1
    },
+   "_layer_num_to_lookup_keys_dict": {
+    "1": [
+     -5,
+     0,
+     "input.x",
+     "input_1",
+     "input_1",
+     "input_1",
+     "input_1:1",
+     "input_1:1",
+     "input_1_raw"
+    ],
+    "2": [
+     -4,
+     1,
+     "clone_1",
+     "clone_1:1",
+     "clone_1_1",
+     "clone_1_1:1",
+     "clone_1_2",
+     "clone_1_2_raw"
+    ],
+    "3": [
+     -3,
+     2,
+     "add_1",
+     "add_1:1",
+     "add_1_2",
+     "add_1_2:1",
+     "add_1_3",
+     "add_1_3_raw"
+    ],
+    "4": [
+     -2,
+     3,
+     "relu_1",
+     "relu_1:1",
+     "relu_1_3",
+     "relu_1_3:1",
+     "relu_1_4",
+     "relu_1_4_raw"
+    ],
+    "5": [
+     -1,
+     4,
+     "output",
+     "output_1",
+     "output_1",
+     "output_1",
+     "output_1:1",
+     "output_1:1",
+     "output_1_raw"
+    ]
+   },
+   "_layer_nums_to_save": "all",
+   "_layers_logged": true,
+   "_layers_saved": true,
+   "_lookup_keys_to_layer_num_dict": {
+    "\"add_1\"": 3,
+    "\"add_1:1\"": 3,
+    "\"add_1_2\"": 3,
+    "\"add_1_2:1\"": 3,
+    "\"add_1_3\"": 3,
+    "\"add_1_3_raw\"": 3,
+    "\"clone_1\"": 2,
+    "\"clone_1:1\"": 2,
+    "\"clone_1_1\"": 2,
+    "\"clone_1_1:1\"": 2,
+    "\"clone_1_2\"": 2,
+    "\"clone_1_2_raw\"": 2,
+    "\"input.x\"": 1,
+    "\"input_1\"": 1,
+    "\"input_1:1\"": 1,
+    "\"input_1_raw\"": 1,
+    "\"output\"": 5,
+    "\"output_1\"": 5,
+    "\"output_1:1\"": 5,
+    "\"output_1_raw\"": 5,
+    "\"relu_1\"": 4,
+    "\"relu_1:1\"": 4,
+    "\"relu_1_3\"": 4,
+    "\"relu_1_3:1\"": 4,
+    "\"relu_1_4\"": 4,
+    "\"relu_1_4_raw\"": 4,
+    "-1": 5,
+    "-2": 4,
+    "-3": 3,
+    "-4": 2,
+    "-5": 1,
+    "0": 1,
+    "1": 2,
+    "2": 3,
+    "3": 4,
+    "4": 5
+   },
+   "_module_filter": null,
+   "_num_backward_passes": 0,
+   "_num_layers_with_params": 0,
+   "_num_ops": 3,
+   "_orphan_labels": [],
+   "_orphan_logs": [],
+   "_orphan_records": [],
+   "_out_dedup_mode": null,
+   "_out_hash_cache": {},
+   "_out_identity_cache": {},
+   "_out_recipe_revision": 0,
+   "_output_transform": null,
+   "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
+   "_parent_run": null,
+   "_phase_timings": "<measured>",
+   "_raw_to_final_layer_labels": {
+    "\"add_1_3_raw\"": "add_1_2",
+    "\"clone_1_2_raw\"": "clone_1_1",
+    "\"input_1_raw\"": "input_1",
+    "\"output_1_raw\"": "output_1",
+    "\"relu_1_4_raw\"": "relu_1_3"
+   },
+   "_raw_to_final_op_labels": {
+    "\"add_1_3_raw\"": "add_1_2:1",
+    "\"clone_1_2_raw\"": "clone_1_1:1",
+    "\"input_1_raw\"": "input_1:1",
+    "\"output_1_raw\"": "output_1:1",
+    "\"relu_1_4_raw\"": "relu_1_3:1"
+   },
+   "_raw_to_final_parent_layer_labels": {
+    "\"add_1_3_raw\"": "add_1_2",
+    "\"clone_1_2_raw\"": "clone_1_1",
+    "\"input_1_raw\"": "input_1",
+    "\"output_1_raw\"": "output_1",
+    "\"relu_1_4_raw\"": "relu_1_3"
+   },
+   "_replay_arg_version_data_complete": true,
+   "_replay_frontier": {},
+   "_rescue_rerun": null,
+   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_source_code_blob": {
+    "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
+    "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
+    "\"init+forward\"": "def __init__(self) -> None:\n    \"\"\"Initialize side-effect counters.\"\"\"\n\n    super().__init__()\n    self.forward_invocations = 0\n    self.pre_hook_invocations = 0\n\ndef forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()"
+   },
+   "_source_model_ref": null,
+   "_spec_revision": 0,
+   "_tracing_finished": true,
+   "_transform": null,
+   "_visualizer_dir": null,
+   "_warned_direct_write": null,
+   "_warned_mutate_in_place": null,
+   "activation_payloads_by_raw_label": {
+    "\"add_1_3_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"clone_1_2_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"input_1_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "e558859ff57abd6bde8990bb3c180065af6bc56e7a0be4cc04178f94428f64cc",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"output_1_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    },
+    "\"relu_1_4_raw\"": {
+     "__tensor__": true,
+     "dtype": "torch.float32",
+     "requires_grad": false,
+     "sha256": "b791535807678e8c2a7e7f502031fcbde5c5a376162627fa21f6f42693872766",
+     "shape": [
+      2,
+      4
+     ]
+    }
+   },
+   "activation_transform": null,
+   "annotations": {
+    "\"health_facts\"": {
+     "\"alias_nonfinite_labels\"": [],
+     "\"basis\"": "saved_payloads",
+     "\"capture_revision\"": "fc1-f3362ff6b785465e",
+     "\"checked\"": 5,
+     "\"nonfinite_labels\"": [],
+     "\"schema_version\"": 1,
+     "\"unchecked\"": 0,
+     "\"unexamined\"": 0,
+     "\"unmapped\"": 0
+    }
+   },
+   "archived_activations": {},
+   "autograd": "<torchlens._data_classes._trace_groups.TraceAutograd>",
+   "backend": "torch",
+   "backend_runtime_config": null,
+   "backend_runtime_device_summary": null,
+   "backend_runtime_version": null,
+   "backward_durations": [],
+   "backward_events": [],
+   "backward_memory_backend": "<measured>",
+   "backward_peak_memory": "<measured>",
+   "backward_peak_memory_reason": "<measured>",
+   "backward_ready": false,
+   "backward_root_grad_fn_object_ids": "<measured>",
+   "batch_render": "auto",
+   "buffer_layers": [],
+   "buffer_read_ops": [],
+   "buffer_write_ops": [],
+   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
+   "call_tree": {
+    "__ref__": "ModuleCall",
+    "label": "self"
+   },
+   "capture_cache_hit": false,
+   "capture_cache_key": null,
+   "capture_cache_path": null,
+   "capture_duration": "<measured>",
+   "capture_end_time": "<measured>",
+   "capture_guard_passes": [],
+   "capture_kind": "plain",
+   "capture_mode": "exhaustive",
+   "capture_owner_thread_id": "<measured>",
+   "capture_owner_thread_qualified": null,
+   "capture_start_time": "<measured>",
+   "capture_tensor_grad_hooks": true,
+   "capture_thread_activity_detected": null,
+   "capture_thread_count_end": null,
+   "capture_thread_count_start": null,
+   "capture_verification_reason": null,
+   "capture_verified": null,
+   "chunked_forward": false,
+   "class_docstring": "Model with explicit in-place operations on an internal tensor.",
+   "class_source_file": "_models.py",
+   "class_source_line": 181,
+   "cleanup_duration": "<measured>",
+   "code_context": [],
+   "completeness_decompositions": [],
+   "completeness_diagnostics": [],
+   "completeness_witness_accounted_count": null,
+   "completeness_witness_callback_ns": null,
+   "completeness_witness_event_count": null,
+   "completeness_witness_expected_opaque_count": null,
+   "completeness_witness_mode": null,
+   "completeness_witness_unaccounted_count": null,
+   "completeness_witness_verified": null,
+   "compute_coverage": {
+    "\"known\"": 2,
+    "\"not_applicable\"": 2,
+    "\"unknown\"": 0,
+    "\"zero_by_rule\"": 1
+   },
+   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "conditional_arm_entry_edges": {},
+   "conditional_branch_edges": [],
+   "conditional_edge_call_indices": {},
+   "conditional_records": [],
+   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
+   "cost": "<torchlens._data_classes._trace_groups.TraceCost>",
+   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
+   "detach_saved_activations": false,
+   "distributed_scope": null,
+   "emit_nvtx": false,
+   "episode": null,
+   "episode_coupling": null,
+   "escape_detector_backward_coverage": null,
+   "escape_detector_callback_ns": null,
+   "escape_detector_event_count": null,
+   "escape_detector_mode": null,
+   "escape_detector_verified": null,
+   "escape_diagnostics": [],
+   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
+   "facet_functions": null,
+   "factcore": "<torchlens.report._factcore.FactCore>",
+   "forward_docstring": "Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        ",
+   "forward_duration": "<measured>",
+   "forward_memory_backend": "<measured>",
+   "forward_peak_memory": "<measured>",
+   "forward_peak_memory_reason": "<measured>",
+   "forward_signature": "(self, x: 'torch.Tensor') -> 'torch.Tensor'",
+   "forward_source_file": "_models.py",
+   "forward_source_line": 191,
+   "func_calls_duration": "<measured>",
+   "grad_fn_order": [],
+   "grad_fn_site_summary": {},
+   "grad_transform": null,
+   "graph": "<torchlens._data_classes._trace_groups.TraceGraph>",
+   "graph_shape_hash": "060aa7d621f1fde2443cca694d2d43682d210ad071eb9942d9151804214b7299",
+   "grouping": "structural",
+   "grouping_policy": {
+    "\"detector\"": "callsite_v1",
+    "\"effective\"": true,
+    "\"folded_sites\"": "none",
+    "\"policy\"": "structural",
+    "\"requested\"": "structural",
+    "\"schema\"": "grouping_policy_v1",
+    "\"settlement_note\"": null,
+    "\"site_join\"": "none"
+   },
+   "halt_frontier": null,
+   "has_backward_pass": false,
+   "has_frozen_params": false,
+   "has_gradients": false,
+   "has_trainable_params": false,
+   "health_facts": "<torchlens.report._health.HealthFacts>",
+   "inference_only": false,
+   "init_docstring": "Initialize side-effect counters.",
+   "init_signature": "(self) -> 'None'",
+   "init_source_file": "_models.py",
+   "init_source_line": 184,
+   "injected_ops": [],
+   "input": null,
+   "input_annotations": {},
+   "input_layers": [
+    "input_1"
+   ],
+   "input_object_id": "<measured>",
+   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "input_preprocessor": null,
+   "input_signature_hash": "097076205b84820a02f5c0b4c03c3da1f96f3ba4d8322709c76528c1a2f58e38",
+   "input_structure": null,
+   "internal_sink_ops": [],
+   "internal_source_ops": [],
+   "internally_terminated_bool_ops": [],
+   "intervention_audit": [],
+   "is_appended": false,
+   "is_pristine": true,
+   "is_replayable": false,
+   "is_stopped": false,
+   "keep_orphans": false,
+   "last_run": null,
+   "layer_labels": [
+    "input_1",
+    "clone_1_1",
+    "add_1_2",
+    "relu_1_3",
+    "output_1"
+   ],
    "layer_visualizers": null,
    "layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
@@ -20267,31 +20028,20 @@
      "0.0"
     ]
    ],
-   "module_filter": null,
    "module_identity_mode": "torch_module",
    "modules": "<torchlens._data_classes.module.ModuleAccessor>",
    "name": "inplace_N",
    "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
-   "num_backward_passes": 0,
    "num_buffer_layers": 0,
    "num_context_lines": 7,
    "num_edges": 4,
    "num_input_layers": 1,
-   "num_layers_with_params": 0,
-   "num_modules": 1,
-   "num_ops": 3,
    "num_output_layers": 1,
-   "num_param_tensors": 0,
    "num_params": 0,
    "num_params_frozen": 0,
    "num_params_trainable": 0,
-   "num_saved_grad_fn_calls": 0,
-   "num_saved_grad_fns": 0,
-   "num_saved_layers": 5,
-   "num_saved_module_calls": 1,
-   "num_saved_ops": 5,
    "num_uncalled_modules": null,
    "observer_spans": [],
    "op_equivalence_classes": {
@@ -20331,7 +20081,6 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "orphan_records": [],
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -20343,17 +20092,13 @@
    "output_postprocessor": null,
    "param_hash_full": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
    "param_hash_quick": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-   "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "param_source": "native-module",
    "params": "<torchlens._data_classes.param.ParamAccessor>",
-   "parent_run": null,
    "parent_trace": null,
    "pinned_autograd_memory": "<measured>",
    "profile_enabled": false,
    "raise_on_nan": false,
    "random_seed": 20260812,
-   "raw_input": null,
-   "raw_output": null,
    "readiness": "<torchlens._runnable.ReadinessReport>",
    "recording_kept": true,
    "recurrence_detection": true,
@@ -20363,7 +20108,6 @@
     "\"model\"": "unknown",
     "\"weights\"": "unknown"
    },
-   "rescue_rerun": null,
    "root_entry_point": "module_call:capture_oracle._models.InPlaceModel.forward",
    "root_module": {
     "__ref__": "Module",
@@ -20407,6 +20151,7 @@
    "total_param_gradient_memory": "<measured>",
    "total_param_memory": "<measured>",
    "transform_repr": null,
+   "transformed_output": null,
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
