@@ -3043,6 +3043,7 @@ describe each surface in depth.
 | `tl.neuro.export_npz` | Export extracted features as npz interchange (D-21) |
 | `tl.neuro.plan_extraction` | Build a measured extraction plan from two real probe captures (D-15) |
 | `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
+| `tl.stats.TensorStats` | Frozen tensor statistics shared by tensor displays and narration; per-family evidence owns every claim |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
 | `tl._quickstart.Drawing` | Detached one-call render result. Always returned, never None |
 | `tl.stats.NarrationObserver` | Live stats-line echo mounted on the shipped observer surface |
@@ -3169,6 +3170,13 @@ describe each surface in depth.
 | `SavePlan.estimated_bytes` | Return the summed payload estimate for the named sites |
 | `SavePlan.module_subtrees` | field of `SavePlan` |
 | `SeriesPoint.is_coarsened` | field of `SeriesPoint` |
+| `TensorStats.mean_evidence` | `FamilyEvidence` with policy, population, sample size, and reason for the mean |
+| `TensorStats.nonfinite_evidence` | Exact census evidence, unavailable with a reason, or presence-only `verdict` with counts unknown |
+| `TensorStats.finite_min` | Minimum finite value, or `None`; read `extrema_evidence` for its policy |
+| `TensorStats.finite_max` | Maximum finite value, or `None`; read `extrema_evidence` for its policy |
+| `TensorStats.mean` | Mean, or `None`; read `mean_evidence` for its policy |
+| `TensorStats.numel` | Number of elements in the tensor |
+| `TensorStats.nbytes` | Tensor payload bytes, or `None` when unknown |
 | `TensorStats.has_no_finite_values` | Whether no element is finite (the fully poisoned case) |
 | `TensorStats.is_all_false` | bool family: every element false (exact) |
 | `TensorStats.is_all_true` | bool family: every element true (exact) |
@@ -3512,6 +3520,7 @@ The sections above describe each surface in depth.
 | `MergedTrace.at` | Return the SPMD fan: the ops matching `label` on every rank |
 | `MergedTrace.degradations` | Environment degradations recorded at load (empty on a live merge) |
 | `ModuleCall.parent_label` | Label of the parent ModuleCall in the dynamic call tree |
+| `NarrationEvent.stats` | `tl.stats.TensorStats` for this tensor, or `None` when no statistics were requested or available |
 | `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
 | `PreprocessingComparison.applied_source` | How the applied side was obtained: `"resolution"` / `"declaration"` / `"parsed_transform"` / `"undeclared"` / `"opaque_transform"` |
@@ -3651,7 +3660,7 @@ Members of classes whose public home changed, one entry per class.
 : Frozen reproducibility record for one subspace basis. `BasisProvenance.space_dim`: dimension of the space the basis lives in.
 
 **`tl.types.NarrationEvent`**
-: One immutable narration record. `NarrationEvent.extra_labels`: extra (key, value) labels; `NarrationEvent.late`: ordinal distance disclosed on a buffered release; `NarrationEvent.module_depth`: nesting depth of the module; `NarrationEvent.module_type`: class name of the module, or `None`; `NarrationEvent.ordinal`: position of the event in the narration; `NarrationEvent.output_index`: index of the output, or `None`; `NarrationEvent.source_location`: the source location, or `None`; `NarrationEvent.step_index`: the step index, or `None`.
+: One immutable narration record. `NarrationEvent.stats` holds `tl.stats.TensorStats` or `None`; sampled narration omits the finiteness family, while a reused positive verdict renders "nonfinite present" without a count. `NarrationEvent.extra_labels`: extra (key, value) labels; `NarrationEvent.late`: ordinal distance disclosed on a buffered release; `NarrationEvent.module_depth`: nesting depth of the module; `NarrationEvent.module_type`: class name of the module, or `None`; `NarrationEvent.ordinal`: position of the event in the narration; `NarrationEvent.output_index`: index of the output, or `None`; `NarrationEvent.source_location`: the source location, or `None`; `NarrationEvent.step_index`: the step index, or `None`.
 
 **`tl.types.TraceSlice`**
 : Frozen presenter over one trace's executed sub-DAG. `TraceSlice.as_region`: derive an admissible region that is operated on as one unit; `TraceSlice.source_trace`: the trace this slice views (never copied).

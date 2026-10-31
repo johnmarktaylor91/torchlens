@@ -41,6 +41,12 @@ Streaming statistics over activations and dataloaders (`tl.stats`, lazy).
   projects through `semantic.logit_lens._prepare_lens` / `_iter_layer_logits`,
   the one lens setup shared with `logit_lens` and `logit_lens_predictions`.
 
+- `TensorStats` is the frozen tensor statistics record shared by displays and
+  `NarrationEvent.stats`. Its `policy` summarizes per-family evidence; optional
+  nonfinite counts make no claim when `None`. Reused positive verdicts use
+  `nonfinite_evidence.policy="verdict"`; negative verdicts carry exact zero counts.
+  Sampled narration omits the finiteness family with an unavailable reason.
+
 ## Gotchas
 
 - Accumulators are STREAMING by contract: constant memory in the number of

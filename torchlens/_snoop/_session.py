@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 from .._state import pause_logging
 from ..errors._base import TorchLensWarning
 from ._errors import NarrationStatsError
-from ._event import NarrationEvent, NarrationStats
+from ._event import NarrationEvent
 from ._format import compact_device, compact_dtype, format_shape, render_line
 from ._sink import EchoSink
 from ._stats import exact_stats, reuse_stats, sampled_stats
@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 
     from .._ir.predicate import RecordContext
     from ..options import NarrationOptions
+    from ..stats._tensor_stats import TensorStats
 
 __tl_layer__ = "L5"
 
@@ -275,7 +276,7 @@ class EchoSession:
 
     def _stats_for(
         self, ctx: RecordContext, tensor: torch.Tensor | None, trace: Any
-    ) -> NarrationStats | None:
+    ) -> TensorStats | None:
         """Compute the armed stats rung for one narrated op, if any."""
 
         mode = self._stats_mode
@@ -285,7 +286,14 @@ class EchoSession:
         for dim in ctx.shape or ():
             numel *= dim
         if mode == "reuse":
-            return reuse_stats(trace, ctx.raw_label or ctx.label, numel)
+            return reuse_stats(
+                trace,
+                ctx.raw_label or ctx.label,
+                numel,
+                shape=ctx.shape or (),
+                dtype=compact_dtype(ctx.dtype) or "unknown",
+                device=compact_device(ctx.tensor_device) or "unknown",
+            )
         if tensor is None:
             return None
         if mode == "sampled":
@@ -301,7 +309,7 @@ class EchoSession:
         kind: str,
         ordinal: int,
         intervened: bool = False,
-        stats: NarrationStats | None = None,
+        stats: TensorStats | None = None,
     ) -> NarrationEvent:
         """Build the frozen narration record for one capture context.
 

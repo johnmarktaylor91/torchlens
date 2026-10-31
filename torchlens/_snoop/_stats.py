@@ -22,13 +22,15 @@ not echo ships (lovely repr, echo, the stats-helper fix, the tripwire).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from ._errors import NarrationStatsError
-from ._event import NarrationStats
 
 if TYPE_CHECKING:
     import torch
+
+    from ..stats._tensor_stats import TensorStats
 
 __tl_layer__ = "L5"
 
@@ -47,7 +49,7 @@ EXACT_NUMEL_BUDGET = 2**24
 _NONFINITE_STORE_ATTR = "_nonfinite_capture"
 
 
-def sampled_stats(tensor: torch.Tensor, *, identity: str | None = None) -> NarrationStats | None:
+def sampled_stats(tensor: torch.Tensor, *, identity: str | None = None) -> TensorStats | None:
     """Compute the sampled rung's moments from a bounded seeded sample.
 
     Parameters
@@ -60,40 +62,63 @@ def sampled_stats(tensor: torch.Tensor, *, identity: str | None = None) -> Narra
 
     Returns
     -------
-    NarrationStats | None
+    TensorStats | None
         Sampled-policy record with NO finiteness fields, or ``None`` when
-        the tensor has no elements or no orderable value family.
+        the tensor has no elements. Bool and complex omit moments.
     """
 
     import torch
 
     from ..stats._stats_kernel import identity_seed, seeded_sample
+    from ..stats._tensor_stats import FamilyEvidence, _dtype_token, _tensor_version, tensor_stats
 
     numel = tensor.numel()
     if numel == 0:
         return None
     if tensor.dtype is torch.bool or tensor.is_complex():
-        # Bool has no moment family; complex moments are magnitude-labeled
-        # kernel territory -- the live sampled rung omits rather than mislabels.
-        return NarrationStats(policy="sampled", population=numel, sample_size=0)
-    probe = tensor.detach().reshape(-1)
-    seed = identity_seed(identity, tuple(tensor.shape), str(tensor.dtype))
-    sample = seeded_sample(probe, min(SAMPLED_BUDGET, numel), seed)
-    values = sample.to(dtype=torch.float64)
-    minimum, maximum = values.aminmax()
-    sd, mean = torch.var_mean(values, correction=0 if values.numel() < 2 else 1)
-    return NarrationStats(
-        policy="sampled",
-        population=numel,
-        sample_size=int(values.numel()),
-        mean=float(mean),
-        sd=float(sd.sqrt()),
-        minimum=float(minimum),
-        maximum=float(maximum),
+        # No value reads: these families have no live narration moments.
+        sample = tensor.new_empty(0)
+    else:
+        probe = tensor.detach().reshape(-1)
+        seed = identity_seed(identity, tuple(tensor.shape), str(tensor.dtype))
+        sample = seeded_sample(probe, min(SAMPLED_BUDGET, numel), seed).to(torch.float64)
+    record = tensor_stats(sample, identity=identity)
+    sample_size = int(sample.numel())
+    sampled = FamilyEvidence("sampled", numel, sample_size)
+    unavailable = FamilyEvidence("unavailable", numel, reason="not computed for sampled narration")
+    # The shared kernel uses population std. Preserve narration's sample
+    # std convention for the sampled finite values without a second reduction.
+    std = record.std
+    if std is not None and record.num_finite is not None and record.num_finite > 1:
+        std *= (record.num_finite / (record.num_finite - 1)) ** 0.5
+    return replace(
+        record,
+        shape=tuple(tensor.shape),
+        dtype=_dtype_token(tensor.dtype),
+        device=str(tensor.device),
+        numel=numel,
+        nbytes=numel * tensor.element_size(),
+        num_nan=None,
+        num_posinf=None,
+        num_neginf=None,
+        nonfinite_evidence=FamilyEvidence(
+            "unavailable", numel, reason="sampled narration cannot establish finiteness"
+        ),
+        num_zero=None,
+        num_true=None,
+        extrema_evidence=sampled if record.finite_min is not None else unavailable,
+        mean_evidence=sampled,
+        std=std,
+        std_evidence=sampled if std is not None else unavailable,
+        histogram_counts=None,
+        histogram_edges=None,
+        histogram_evidence=unavailable,
+        tensor_version=_tensor_version(tensor),
+        small_values=None,
     )
 
 
-def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> NarrationStats:
+def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> TensorStats:
     """Compute the exact rung via the shared C02 kernel record.
 
     Parameters
@@ -105,7 +130,7 @@ def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> Narrati
 
     Returns
     -------
-    NarrationStats
+    TensorStats
         Exact-policy record carrying the exact nonfinite census.
 
     Raises
@@ -134,21 +159,18 @@ def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> Narrati
     # resolution of the whole cycle.
     from ..stats._tensor_stats import tensor_stats
 
-    record = tensor_stats(tensor.detach(), identity=identity)
-    return NarrationStats(
-        policy="exact",
-        population=record.numel,
-        mean=record.mean,
-        sd=record.std,
-        minimum=record.finite_min,
-        maximum=record.finite_max,
-        nan_count=record.num_nan,
-        posinf_count=record.num_posinf,
-        neginf_count=record.num_neginf,
-    )
+    return tensor_stats(tensor.detach(), identity=identity)
 
 
-def reuse_stats(trace: Any, raw_label: str | None, numel: int) -> NarrationStats | None:
+def reuse_stats(
+    trace: Any,
+    raw_label: str | None,
+    numel: int,
+    *,
+    shape: tuple[int, ...],
+    dtype: str,
+    device: str,
+) -> TensorStats | None:
     """Read the reuse rung's already-paid-for facts for one op.
 
     Parameters
@@ -158,11 +180,13 @@ def reuse_stats(trace: Any, raw_label: str | None, numel: int) -> NarrationStats
     raw_label:
         The op's raw capture label (the ``track_nonfinite`` store key).
     numel:
-        Element count for the population field.
+        Element count for family evidence.
+    shape, dtype, device:
+        Already-recorded tensor metadata; no payload reads.
 
     Returns
     -------
-    NarrationStats | None
+    TensorStats | None
         Reuse-policy record when a synchronous verdict exists; ``None``
         otherwise (deferred device flags are batched at finalize and are
         NEVER printed as though known live).
@@ -176,7 +200,39 @@ def reuse_stats(trace: Any, raw_label: str | None, numel: int) -> NarrationStats
     verdict = store.get("events", {}).get(raw_label)
     if not isinstance(verdict, bool):
         return None
-    return NarrationStats(policy="reuse", population=numel, has_nonfinite=verdict)
+    from ..stats._tensor_stats import TENSOR_STATS_SCHEMA_VERSION, FamilyEvidence, TensorStats
+
+    unavailable = FamilyEvidence("unavailable", numel, reason="not recorded by track_nonfinite")
+    return TensorStats(
+        schema_version=TENSOR_STATS_SCHEMA_VERSION,
+        shape=shape,
+        dtype=dtype,
+        device=device,
+        numel=numel,
+        nbytes=None,
+        num_nan=None if verdict else 0,
+        num_posinf=None if verdict else 0,
+        num_neginf=None if verdict else 0,
+        nonfinite_evidence=FamilyEvidence(
+            "verdict" if verdict else "exact", numel, reason="track_nonfinite"
+        ),
+        num_zero=None,
+        num_true=None,
+        finite_min=None,
+        finite_max=None,
+        extrema_evidence=unavailable,
+        mean=None,
+        mean_evidence=unavailable,
+        mean_se=None,
+        std=None,
+        std_evidence=unavailable,
+        std_se=None,
+        histogram_counts=None,
+        histogram_edges=None,
+        histogram_evidence=unavailable,
+        is_magnitude_based=False,
+        tensor_version=None,
+    )
 
 
 __all__ = ["EXACT_NUMEL_BUDGET", "SAMPLED_BUDGET", "exact_stats", "reuse_stats", "sampled_stats"]

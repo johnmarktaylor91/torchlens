@@ -27,7 +27,7 @@ from typing import Any, Literal
 import torch
 
 from ._stats_render import render_core_line, sparkline
-from ._tensor_stats import TensorStats, tensor_stats
+from ._tensor_stats import FamilyEvidence, TensorStats, tensor_stats
 
 
 def summary_cell(stats: TensorStats, *, max_width: int = 40, style: str = "ascii") -> str:
@@ -77,14 +77,14 @@ def treescope_card_fields(stats: TensorStats) -> dict[str, Any]:
         minimum), scalar facts, and per-family evidence tokens.
     """
 
-    def evidence_token(evidence: Any) -> str:
+    def evidence_token(evidence: FamilyEvidence) -> str:
         """One family's policy disclosure token."""
 
         if evidence.policy == "sampled" and evidence.sample_size:
             return f"sampled {evidence.sample_size}/{evidence.population}"
         if evidence.policy == "unavailable":
             return f"unavailable({evidence.reason})"
-        return "exact"
+        return evidence.policy
 
     counts = stats.histogram_counts
     return {

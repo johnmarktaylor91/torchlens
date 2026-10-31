@@ -16,7 +16,6 @@ exception; turn narration on (``narrate=``) when you expect the process to DIE
 
 from __future__ import annotations
 
-from ._event import NarrationStats
 from ._normalize import normalize_echo
 from ._session import EchoSession, active_echo_session
 from ._sink import EchoSink
@@ -29,7 +28,6 @@ __all__ = [
     "SAMPLED_BUDGET",
     "EchoSession",
     "EchoSink",
-    "NarrationStats",
     "active_echo_session",
     "normalize_echo",
 ]

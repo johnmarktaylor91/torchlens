@@ -1262,8 +1262,15 @@
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
   `EchoSession` and the sinks (the event record is `tl.types.NarrationEvent`);
-  `Trace.narrate` replays a finished
-  capture as narration.
+  `Trace.narrate` replays a finished capture as narration.
+  `NarrationEvent.stats` is a `tl.stats.TensorStats` (or `None`). Read
+  `stats.mean_evidence.population` / `stats.mean_evidence.sample_size` for
+  sampled evidence; values are `mean`, `std`, `finite_min`, `finite_max`,
+  `numel`, and `nbytes`. The counts are `num_nan`, `num_posinf`, `num_neginf`.
+  Sampled narration has `nonfinite_evidence.policy="unavailable"` with a reason.
+  Reuse with a positive `track_nonfinite` verdict has policy `"verdict"` for that
+  family and renders "nonfinite present" with no count; a negative verdict has
+  policy `"exact"`, reason `"track_nonfinite"`, and zero counts.
 - `torchlens.debug` owns power-user diagnostics such as `bisect_nan` and `hot_path`;
   the submodule is imported as `tl.debug` and is deliberately not in `__all__`.
 - `tl.receptive_field` is a lazy power-user submodule. `Op`, `Layer`, `ModuleCall`, and
