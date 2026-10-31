@@ -84,7 +84,6 @@ torchlens.io	torchlens.io	FACADE	facade	0	0
 torchlens.ir	torchlens.ir	L2	core	0	0
 torchlens.label	torchlens.intervention	L4	core	1	0
 torchlens.load	torchlens._io.bundle	L3	core	1	0
-torchlens.load_extraction	torchlens.dataset_extraction	L5	core	1	0
 torchlens.low_variance	torchlens.selection_values	L4	core	1	0
 torchlens.mean_ablate	torchlens.intervention	L4	core	1	0
 torchlens.merge_ranks	torchlens.merged	L3	core	1	0
@@ -123,7 +122,6 @@ torchlens.replace_with	torchlens.intervention	L4	core	1	0
 torchlens.report	torchlens.report	L7	present	0	1
 torchlens.run	torchlens.intervention	L4	core	1	0
 torchlens.saturated	torchlens.selection_values	L4	core	1	0
-Trace.save	torchlens._io.bundle	L3	core	1	0
 torchlens.scale	torchlens.intervention	L4	core	1	0
 torchlens.show_bundle_graph	torchlens.user_funcs	FACADE	facade	1	0
 torchlens.sign	torchlens.selection_values	L4	core	1	0
