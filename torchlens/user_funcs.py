@@ -67,6 +67,7 @@ from ._capture_state_helpers import (
 )
 from ._chunked_capture_helpers import (
     _append_chunk_trace_state,
+    _ChunkAppend,
     _should_store_auto_coerced_raw_input,
     _validate_chunked_forward_capture,
 )
@@ -3887,10 +3888,12 @@ def _trace_torch_model(
             _append_chunk_trace_state(
                 trace,
                 new_trace,
-                chunk_size=appended_chunk_size,
-                total_batch_size=chunk_plan.total_size,
-                append_sequence_id=chunk_index,
-                chunk_paths=normalize_chunk_paths(chunk_paths_value),
+                _ChunkAppend(
+                    chunk_size=appended_chunk_size,
+                    total_batch_size=chunk_plan.total_size,
+                    append_sequence_id=chunk_index,
+                    chunk_paths=normalize_chunk_paths(chunk_paths_value),
+                ),
             )
         trace.append_history = [initial_record, *trace.append_history]
         trace.chunked_forward = True
