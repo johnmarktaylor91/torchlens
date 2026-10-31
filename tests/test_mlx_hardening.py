@@ -456,7 +456,7 @@ def test_mlx_intermediate_derived_grads_do_not_pollute_module_call_counts() -> N
 
     assert trace.modules["proj"].num_calls == 1
     assert set(trace.module_calls.keys()) == {"self:1", "proj:1"}
-    assert trace.module_calls["proj:1"].num_ops >= 1
+    assert len(trace.module_calls["proj:1"].ops) >= 1
 
 
 @pytest.mark.optional
