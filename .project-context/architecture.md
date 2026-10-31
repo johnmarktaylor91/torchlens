@@ -262,7 +262,6 @@ one-liners derived from each module's docstring or a skim of its contents.
 | `_runnable_witness_contracts.py` | Control, shape, and host-escape witness checks |
 | `_save_budget.py` | Running budget for retained activation bytes with typed refusal (`SaveBudgetExceededError`) |
 | `_source_links.py` | Source-location link formatting helpers |
-| `_split_rebind.py` | Compatibility helpers for behavior-preserving module decomposition |
 | `_state.py` | Global state for toggle-gated decoration; single source of truth for capture-control mutable state |
 | `_trace_selector_helpers.py` | Internal predicate and selector helpers for public trace capture |
 | `_trace_state.py` | Run-state ownership for intervention execution (deliberately outside `intervention/`) |
