@@ -1117,7 +1117,7 @@ def _serialize_helper(
             "name": helper.name,
             "repr": repr(helper),
             "batch_independent": bool(helper.batch_independent),
-            "compatible_with_append": bool(helper.is_compatible_with_append),
+            "compatible_with_append": bool(helper.compatible_with_append),
         }
 
     return {
@@ -1129,7 +1129,7 @@ def _serialize_helper(
         "kwargs": {key: _serialize_value(value, save_level, state) for key, value in helper.kwargs},
         "metadata": _jsonish_metadata(dict(helper.metadata)),
         "batch_independent": bool(helper.batch_independent),
-        "compatible_with_append": bool(helper.is_compatible_with_append),
+        "compatible_with_append": bool(helper.compatible_with_append),
     }
 
 

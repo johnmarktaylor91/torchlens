@@ -1119,7 +1119,7 @@ def _helper_spec(
         metadata=tuple(sorted((metadata or {}).items())),
         direction=direction,
         batch_independent=batch_independent,
-        is_compatible_with_append=compatible_with_append,
+        compatible_with_append=compatible_with_append,
     )
 
 
@@ -1182,7 +1182,7 @@ def helper_from_serialized(
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
             batch_independent=bool(data.get("batch_independent", False)),
-            is_compatible_with_append=bool(data.get("compatible_with_append", False)),
+            compatible_with_append=bool(data.get("compatible_with_append", False)),
         )
 
     name = data["name"]
@@ -1459,7 +1459,7 @@ def _non_executable_builtin_placeholder(
             ("executable", False),
         ),
         batch_independent=bool(data.get("batch_independent", False)),
-        is_compatible_with_append=bool(data.get("compatible_with_append", False)),
+        compatible_with_append=bool(data.get("compatible_with_append", False)),
     )
 
 

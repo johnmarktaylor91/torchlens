@@ -15,7 +15,7 @@ The D20 laws implemented:
   (never a forward/backward mix); no fusion in v1.
 - ONE fire, ONE final scatter, ONE FireRecord, with the ordered leaf names on
   the helper identity and per-leaf failures naming ``compose[i]``.
-- Flags AND-combine (``batch_independent``/``is_compatible_with_append``);
+- Flags AND-combine (``batch_independent``/``compatible_with_append``);
   portability is the WEAKEST leaf; a leaf failure aborts the whole fire
   (atomic -- the engine never sees a half-applied chain).
 
@@ -214,7 +214,7 @@ def compose(*edits: Any) -> Edit:
         factory=factory,
         portability=portability,
         batch_independent=all(leaf.batch_independent for leaf in leaves),
-        compatible_with_append=all(leaf.is_compatible_with_append for leaf in leaves),
+        compatible_with_append=all(leaf.compatible_with_append for leaf in leaves),
         metadata={
             "compose_leaves": "|".join(leaf.helper_name for leaf in leaves),
             "compose_leaf_count": len(leaves),

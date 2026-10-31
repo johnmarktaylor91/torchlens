@@ -182,7 +182,7 @@ class Edit:
         "metadata": FieldPolicy.KEEP,
         "direction": FieldPolicy.KEEP,
         "batch_independent": FieldPolicy.KEEP,
-        "is_compatible_with_append": FieldPolicy.KEEP,
+        "compatible_with_append": FieldPolicy.KEEP,
         # L6 Query-Selection recipe family: persists as of tlspec v8 as
         # BLOB_RECURSIVE (recipe ASTs may embed unit-term masks), with the
         # audit digest relation validated at load. NEVER smuggled through
@@ -201,7 +201,7 @@ class Edit:
     metadata: tuple[tuple[str, Any], ...] = ()
     direction: HelperDirection | None = None
     batch_independent: bool = False
-    is_compatible_with_append: bool = False
+    compatible_with_append: bool = False
     selection_recipe: Any = field(default=None, compare=False)
 
     @property
