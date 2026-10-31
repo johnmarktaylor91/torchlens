@@ -145,7 +145,7 @@ Op.num_passes	int	quantity	num_passes	green	tests/oracles/test_legacy_quantity_d
 Op.num_pos_args	int	quantity	num_pos_args	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Op.ordinal_index	int	identifier	-	-	-	id/index/line
 Op.param_memory	Bytes	quantity	param_memory	green	tests/test_w051_mechinterp_roofline.py::test_roofline_linear_traffic_counts_parameter_bytes (I2)	-
-Op.pass_index	int	identifier	-	-	-	id/index/line
+Op.pass_number	int	identifier	-	-	-	id/index/line
 Op.raw_index	int	identifier	-	-	-	id/index/line
 Op.step_index	int	identifier	-	-	-	id/index/line
 Op.type_index	int	identifier	-	-	-	id/index/line
