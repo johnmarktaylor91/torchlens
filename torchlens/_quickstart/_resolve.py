@@ -236,7 +236,7 @@ def attach_provenance(trace: Any, provenance: InputProvenance) -> None:
 
     if provenance.has_semantic_values:
         return
-    existing = getattr(trace, "_provenance_input_preprocessor", None)
+    existing = trace._provenance_input_preprocessor
     if existing is not None and getattr(existing, "source", "") != (
         "torchlens._quickstart.input_resolver"
     ):

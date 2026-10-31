@@ -521,10 +521,8 @@ class PaddleBackend:
         trace._provenance_backend_config = {"version": trace._provenance_backend_version}
         trace.backend_runtime_device_summary = {}
         trace._pre_forward_rng_states = None
-        setattr(
-            trace,
-            "_options_seed",
-            cast(int, random_seed) if random_seed is not None else random.randint(1, 4294967294),
+        trace._options_seed = (
+            cast(int, random_seed) if random_seed is not None else random.randint(1, 4294967294)
         )
         self.tensor_store.clear()
         args = self._normalize_input_args(input_args)
@@ -1716,7 +1714,7 @@ class PaddleBackend:
             attach_object_module_logs=self._attach_object_module_logs,
             attach_op_params=attach_module_owned_op_params,
             count_layers_with_attached_params=True,
-            recurrence_detection=bool(getattr(trace, "_options_recurrence_detection", False)),
+            recurrence_detection=bool(trace._options_recurrence_detection),
         )
 
     def _attach_object_module_logs(self, trace: Trace, tree: PaddleModuleTree) -> None:

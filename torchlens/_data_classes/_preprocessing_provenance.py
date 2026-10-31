@@ -80,7 +80,7 @@ def stamp_user_transform_provenance(trace: Trace, input_transform: Callable[...,
     ``"unknown"`` -- never a guess about what the callable did.
     """
 
-    if getattr(trace, "_provenance_input_preprocessor", None) is not None:
+    if trace._provenance_input_preprocessor is not None:
         return
     from .trace import ResolvedPreprocessing, _scrubbed_transform_repr
 

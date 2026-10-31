@@ -149,6 +149,8 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
         Node and edge metadata for SVG/HTML exporters.
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     entries = _iter_layers(log)
     repeated_labels = _repeated_layer_labels(entries)
     node_ids = {_export_node_id(entry, repeated_labels) for entry in entries}
@@ -175,7 +177,7 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
     width = max((int(node["x"]) for node in nodes), default=0) + 160
     height = max((int(node["y"]) for node in nodes), default=0) + 100
     return {
-        "title": getattr(log, "_source_class_name", "TorchLens graph"),
+        "title": log._source_class_name if is_live_trace(log) else "TorchLens graph",
         "nodes": nodes,
         "edges": edges,
         "width": width,

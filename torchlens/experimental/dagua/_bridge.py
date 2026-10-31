@@ -208,24 +208,26 @@ def build_render_audit(trace: Any) -> TorchLensRenderAudit:
 
 def build_torchlens_caption(trace: Any) -> str:
     """Build the user-facing graph caption."""
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
     num_params = int(getattr(trace, "num_params", 0) or 0)
     trainable = int(getattr(trace, "num_params_trainable", 0) or 0)
     frozen = int(getattr(trace, "num_params_frozen", 0) or 0)
     if num_params == 0:
         params_line = "0 params"
     elif frozen == 0:
-        params_line = f"{num_params:,} params (all trainable, {human_readable_size(getattr(trace, '_cost_total_param_memory', 0) or 0)})"
+        params_line = f"{num_params:,} params (all trainable, {human_readable_size((trace._cost_total_param_memory if is_live_trace(trace) else 0) or 0)})"
     elif trainable == 0:
-        params_line = f"{num_params:,} params (all frozen, {human_readable_size(getattr(trace, '_cost_total_param_memory', 0) or 0)})"
+        params_line = f"{num_params:,} params (all frozen, {human_readable_size((trace._cost_total_param_memory if is_live_trace(trace) else 0) or 0)})"
     else:
         params_line = (
             f"{num_params:,} params "
-            f"({trainable:,}/{num_params:,} trainable, {human_readable_size(getattr(trace, '_cost_total_param_memory', 0) or 0)})"
+            f"({trainable:,}/{num_params:,} trainable, {human_readable_size((trace._cost_total_param_memory if is_live_trace(trace) else 0) or 0)})"
         )
     return (
-        f"{getattr(trace, '_source_class_name', 'TorchLens model')}\n"
+        f"{(trace._source_class_name if is_live_trace(trace) else 'TorchLens model')}\n"
         f"{len(trace)} tensors total "
-        f"({human_readable_size(getattr(trace, '_cost_total_activation_memory', 0) or 0)})\n"
+        f"({human_readable_size((trace._cost_total_activation_memory if is_live_trace(trace) else 0) or 0)})\n"
         f"{params_line}"
     )
 
@@ -763,6 +765,8 @@ def trace_to_dagua_graph(
     """Translate a TorchLens Trace into a DaguaGraph."""
     import dagua
 
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))
     entries = _entries_for_mode(trace, vis_mode)
     if not show_buffers:
@@ -845,7 +849,7 @@ def trace_to_dagua_graph(
             g.edge_container_role.append(_container_semantic_attrs(child)["container_role"])
 
     if include_grad_edges is None:
-        include_grad_edges = bool(getattr(trace, "_autograd_has_grads", False))
+        include_grad_edges = bool(trace._autograd_has_grads if is_live_trace(trace) else False)
 
     if include_grad_edges and vis_mode == "unrolled":
         for child in entries:

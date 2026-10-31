@@ -1312,7 +1312,7 @@ def _effective_activation_save_mode(
 ) -> SaveMode:
     """Return the effective saved-activation mode for one operation."""
 
-    save_mode = cast(SaveMode, getattr(trace, "_options_save_mode", "copy"))
+    save_mode = cast(SaveMode, trace._options_save_mode if trace is not None else "copy")
     if save_mode not in {"copy", "reference", "view", "cpu_async"}:
         raise InvalidArgumentError(
             "save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'; "
@@ -3021,7 +3021,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         trace = self._source_trace
         if trace is None:
             return None
-        return cast("Callable[..., Any] | None", getattr(trace, "_options_grad_transform", None))
+        return cast("Callable[..., Any] | None", trace._options_grad_transform)
 
     @property
     def is_buffer_source(self) -> bool:
@@ -3728,7 +3728,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                 target_device = torch.device("cpu")
             elif self.output_device not in ("same", str(t.device)):
                 target_device = torch.device(self.output_device)
-            save_raw_activations = getattr(trace, "_options_save_raw_activations", True)
+            save_raw_activations = (
+                trace._options_save_raw_activations if trace is not None else True
+            )
             store_raw = save_raw_activations or activation_transform is None
             # Explorer P2 (same gate as the exhaustive hot path): a declared
             # summary reducer with raw retention off skips the transient
@@ -3895,7 +3897,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         self.grad_shape = tuple(raw_grad.shape)
         self.grad_dtype = raw_grad.dtype
         self.gradient_memory = Bytes(get_memory_amount(raw_grad))
-        grad_transform = getattr(trace, "_options_grad_transform", None)
+        grad_transform = trace._options_grad_transform if trace is not None else None
         self._internal_set("transformed_grad", None)
         self.transformed_grad_shape = None
         self.transformed_grad_dtype = None
@@ -3964,7 +3966,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             self.transformed_grad_dtype = _dtype_or_none(self.transformed_grad)
             self.transformed_gradient_memory = _memory_or_none(self.transformed_grad)
 
-        save_raw_gradients = getattr(trace, "_options_save_raw_grads", True)
+        save_raw_gradients = trace._options_save_raw_grads if trace is not None else True
         store_raw = save_raw_gradients or grad_transform is None
         # Gradient payloads are ALWAYS genuine snapshots: under
         # save_mode="reference"/"view" an aliased payload would be silently
@@ -3974,7 +3976,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         # through the same chokepoint the event-sidecar path uses.
         from ..backends.torch.tensor_tracking import _copy_grad_payload
 
-        save_mode = cast(SaveMode, getattr(trace, "_options_save_mode", "copy"))
+        save_mode = cast(SaveMode, trace._options_save_mode if trace is not None else "copy")
         self._internal_set(
             "grad",
             _copy_grad_payload(raw_grad, save_mode=save_mode) if store_raw else None,
@@ -4050,7 +4052,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             transformed_tensor=output,
             transform_kind=transform_kind,
             tripwire_armed=train_mode_tripwire_armed(
-                backward_ready=getattr(trace, "_options_backward_ready", False),
+                backward_ready=trace._options_backward_ready if trace is not None else False,
                 transform=transform,
             ),
             label=self._streaming_label,

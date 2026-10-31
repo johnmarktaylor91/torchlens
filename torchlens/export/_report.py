@@ -687,6 +687,8 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
 
     import torchlens
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     manifest: dict[str, Any] = {
         "schema": REPORT_SCHEMA,
         "torchlens_version": getattr(torchlens, "__version__", "unknown"),
@@ -694,7 +696,7 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
         # otherwise match the dunder attribute access as a private touch.
         "torch_version": getattr(torch, "__version__", "unknown"),
         "model": _scrub(str(getattr(log, "model_name", "unknown"))),
-        "backend": str(getattr(log, "_provenance_backend", "unknown")),
+        "backend": str(log._provenance_backend if is_live_trace(log) else "unknown"),
         "outcome": getattr(
             getattr(getattr(log, "outcome", None), "status", None), "name", "UNKNOWN"
         ),

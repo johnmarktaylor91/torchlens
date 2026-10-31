@@ -1186,7 +1186,7 @@ class Layer(_SelectionOperand):
             trace = ops[0].trace
         except Exception:  # noqa: BLE001 - detached/cleaned records have no trace
             return
-        record = getattr(trace, "_provenance_input_preprocessor", None)
+        record = trace._provenance_input_preprocessor
         if (
             record is None
             or getattr(record, "verified", True)

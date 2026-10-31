@@ -193,12 +193,14 @@ def _refuse_trace(trace: Any, reason: str, detail: str, remedy: str) -> None:
         Exact recapture or ordering remedy, without the ``Remedy:`` prefix.
     """
 
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
     raise ReadError(
         f"One-backward reads need a live autograd registry, and this trace "
         f"cannot serve one: {detail} Remedy: {remedy}",
         code="read_addressing_unavailable",
         reason=reason,
-        trace_backend=getattr(trace, "_provenance_backend", None),
+        trace_backend=trace._provenance_backend if is_live_trace(trace) else None,
     )
 
 
@@ -213,7 +215,9 @@ def _check_trace_liveness(trace: Any) -> None:
         chunked / structure-only / detached / non-torch traces.
     """
 
-    backend = getattr(trace, "_provenance_backend", None)
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
+    backend = trace._provenance_backend if is_live_trace(trace) else None
     if backend is not None and backend != _SUPPORTED_BACKEND:
         _refuse_trace(
             trace,
@@ -228,14 +232,14 @@ def _check_trace_liveness(trace: Any) -> None:
             "Trace.cleanup() released its autograd registry.",
             "re-capture the model and read before cleanup",
         )
-    if getattr(trace, "_options_structure_only", False):
+    if trace._options_structure_only if is_live_trace(trace) else False:
         _refuse_trace(
             trace,
             "structure_only",
             "structure-only captures retain no values and no autograd graph.",
             "re-capture without CaptureOptions(structure_only=True)",
         )
-    if getattr(trace, "_options_inference_only", False):
+    if trace._options_inference_only if is_live_trace(trace) else False:
         _refuse_trace(
             trace,
             "inference_only",
@@ -245,14 +249,14 @@ def _check_trace_liveness(trace: Any) -> None:
             "re-capture with gradients enabled (outside torch.no_grad() and "
             "torch.inference_mode()) and without inference_only=True",
         )
-    if getattr(trace, "_options_chunk_size", False):
+    if trace._options_chunk_size if is_live_trace(trace) else False:
         _refuse_trace(
             trace,
             "chunked_forward",
             "chunk-assembled traces hold no single live autograd graph.",
             "re-capture without forward chunking",
         )
-    if getattr(trace, "_options_detach_saved_activations", False):
+    if trace._options_detach_saved_activations if is_live_trace(trace) else False:
         _refuse_trace(
             trace,
             "detached",

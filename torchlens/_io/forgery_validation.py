@@ -283,7 +283,7 @@ def _validate_site_keys(trace: Trace) -> None:
             )
 
     minter = SiteKeyMinter()
-    backend = str(getattr(trace, "_provenance_backend", "torch") or "torch")
+    backend = str(trace._provenance_backend or "torch")
     for op, key in zip(ops, keys, strict=True):
         if backend == JAX_BACKEND_NAME:
             from ..backends.jax._site_dialect import _jax_site_components
@@ -332,7 +332,7 @@ def _validate_distributed_scope(trace: Trace) -> None:
         Loaded trace carrying the shard-local disclosure marker.
     """
 
-    value = getattr(trace, "_provenance_distributed_scope", None)
+    value = trace._provenance_distributed_scope
     if value not in (None, "rank_local_shard"):
         _refuse(
             f"expected None or 'rank_local_shard', got {value!r}",

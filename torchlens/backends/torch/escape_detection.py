@@ -583,7 +583,7 @@ def _report_escape(
         "storage_hint": _storage_hint(callsite),
         "owner_thread_id": guard.owner_thread_id,
         "guard_pass_index": guard.guard_pass_index,
-        "capture_mode": getattr(guard.trace, "_options_mode", None),
+        "capture_mode": guard.trace._options_mode,
         "exhaustive_pass": guard.trace._wrapper_runtime_ws.in_exhaustive_pass,
         "stack": tuple(traceback.format_stack(callsite, limit=5)),
         "witness_corroborated": False,
@@ -873,13 +873,13 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
     guard_passes.append(
         {
             "guard_pass_index": guard_pass_index,
-            "capture_mode": getattr(trace, "_options_mode", None),
+            "capture_mode": trace._options_mode,
             "owner_thread_id": owner_thread_id,
         }
     )
     guard = _GuardState(trace, tables, owner_thread_id, mode, guard_pass_index)
     trace._health_escape_detector_mode = mode
-    if not hasattr(trace, "_health_escape_detector_verified"):
+    if "_health_escape_detector_verified" not in trace.__dict__:
         trace._health_escape_detector_verified = True if mode == "shadow" else None
     trace._provenance_owner_thread_id = owner_thread_id
     trace._provenance_owner_thread_qualified = True
@@ -914,7 +914,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                     with contextlib.suppress(Exception):
                         sys.setprofile(guard.prior_profile)
                 trace._health_escape_detector_verified = False
-                if getattr(trace, "_health_completeness_verified", None) is True:
+                if trace.__dict__.get("_health_completeness_verified") is True:
                     trace._health_completeness_verified = False
                 trace._provenance_verified = False
                 trace._provenance_verification_reason = "escape_detector_teardown_failed"
@@ -940,15 +940,15 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
         trace._provenance_thread_count_end = thread_count_end
         trace._provenance_thread_activity_detected = thread_count_end != thread_count_start
         trace._health_num_escape_detector_events = (
-            int(getattr(trace, "_health_num_escape_detector_events", 0)) + guard.event_count
+            int(trace.__dict__.get("_health_num_escape_detector_events", 0)) + guard.event_count
         )
         trace._health_escape_detector_callback_ns = (
-            int(getattr(trace, "_health_escape_detector_callback_ns", 0)) + guard.callback_ns
+            int(trace.__dict__.get("_health_escape_detector_callback_ns", 0)) + guard.callback_ns
         )
         if trace._provenance_thread_activity_detected:
             if mode == "shadow":
                 trace._health_escape_detector_verified = False
-            if getattr(trace, "_health_completeness_verified", None) is True:
+            if trace.__dict__.get("_health_completeness_verified") is True:
                 trace._health_completeness_verified = False
             trace._provenance_verified = False
             trace._provenance_verification_reason = "owner_thread_tripwire_changed"

@@ -100,7 +100,7 @@ def _check_backend_neutral_module_mode_invariants(trace: Trace) -> None:
         If mode-specific module metadata is internally inconsistent.
     """
 
-    if getattr(trace, "_options_module_identity_mode", None) == "function_root":
+    if trace._options_module_identity_mode == "function_root":
         _check_function_root_module_invariants(trace)
         return
 
@@ -367,7 +367,7 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
     from ..backends.registry import get_backend_spec
 
     name = "backend_identity_invariants"
-    backend = getattr(trace, "_provenance_backend", None)
+    backend = trace._provenance_backend
     if not isinstance(backend, str) or backend == "":
         raise MetadataInvariantError(name, "Trace.provenance.backend must be a non-empty string")
     try:
@@ -377,7 +377,7 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
             name, f"Trace.provenance.backend {backend!r} is not registered"
         ) from exc
 
-    module_identity_mode = getattr(trace, "_options_module_identity_mode", None)
+    module_identity_mode = trace._options_module_identity_mode
     if module_identity_mode not in spec.capabilities.module_identity_modes:
         raise MetadataInvariantError(
             name,
@@ -385,7 +385,7 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
             f"{backend!r}",
         )
 
-    param_source = getattr(trace, "_provenance_param_source", None)
+    param_source = trace._provenance_param_source
     valid_param_sources = {"native-module", "pytree-derived", "none"}
     if param_source not in valid_param_sources:
         raise MetadataInvariantError(name, f"param_source={param_source!r} is invalid")
@@ -411,15 +411,15 @@ def _check_non_torch_backward_inert(trace: Trace) -> None:
     """
 
     name = "non_torch_backward_inert"
-    if getattr(trace, "_autograd_has_backward_pass", False):
+    if trace._autograd_has_backward_pass:
         raise MetadataInvariantError(name, "non-torch traces must not set has_backward_pass")
     if trace._grad_fn_logs:
         raise MetadataInvariantError(name, "non-torch traces must not populate _grad_fn_logs")
-    if getattr(trace, "_autograd_grad_fn_order", None):
+    if trace._autograd_grad_fn_order:
         raise MetadataInvariantError(name, "non-torch traces must not populate grad_fn_order")
     if trace._backward_pass_logs:
         raise MetadataInvariantError(name, "non-torch traces must not populate _backward_pass_logs")
-    if getattr(trace, "_autograd_backward_root_grad_fn_object_ids", None):
+    if trace._autograd_backward_root_grad_fn_object_ids:
         raise MetadataInvariantError(
             name,
             "non-torch traces must not populate backward_root_grad_fn_object_ids",

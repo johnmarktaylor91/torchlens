@@ -91,7 +91,7 @@ def _check_conditional_branch_membership_records(
             event_id_by_bool_label[bool_label] = event.id
     event_id_by_conditional_id: dict[str, int] = {}
     branch_kind_by_conditional_arm: dict[tuple[str, int], str] = {}
-    for conditional in getattr(ml, "_graph_conditionals", []) or []:
+    for conditional in ml._graph_conditionals or []:
         for arm in conditional.arms:
             if arm.terminal_bool_op_label is not None:
                 event_id = event_id_by_bool_label.get(arm.terminal_bool_op_label)
@@ -170,7 +170,7 @@ def _check_conditional_public_accessor_summary(
         Invariant check name for raised errors.
     """
 
-    conditionals = list(getattr(ml, "_graph_conditionals", []) or [])
+    conditionals = list(ml._graph_conditionals or [])
     conditional_ids = [conditional.id for conditional in conditionals]
     if len(conditional_ids) != len(set(conditional_ids)):
         _fail_conditional_invariant(

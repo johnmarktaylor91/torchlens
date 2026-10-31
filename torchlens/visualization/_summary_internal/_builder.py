@@ -27,7 +27,9 @@ def format_model_repr(trace: Trace) -> str:
         Short two-line representation.
     """
     state = getattr(getattr(trace, "state", None), "name", "UNKNOWN")
-    model_class_name = getattr(trace, "_source_class_name", None)
+    # cleanup() deletes the logged stores; a husked trace still has a repr.
+    husked = bool(trace.__dict__.get("_tl_cleaned_up", False))
+    model_class_name = None if husked else trace._source_class_name
     tracing_finished = getattr(trace, "_tracing_finished", True)
     if not tracing_finished:
         return (
@@ -36,15 +38,13 @@ def format_model_repr(trace: Trace) -> str:
             f"state={state})"
         )
 
-    # cleanup() deletes the layer store; a husked trace still has a repr.
-    husked = bool(trace.__dict__.get("_tl_cleaned_up", False))
     layer_logs = {} if husked else (trace._layer_logs or {})
     # Weightsfree memo L7: the repr was an unmarked channel — a slice of a
     # hypothesis is a hypothesis, and so is the identity card. The claim
     # ladder rides the session discharge state (HYPOTHESIS / CORROBORATED /
     # REFUTED), never a bare flag.
     structure_note = ""
-    if bool(getattr(trace, "_options_structure_only", False)):
+    if not husked and bool(trace._options_structure_only):
         from ...capture.structure_only import claim_status_for
 
         structure_note = f", structure_only={claim_status_for(trace).value.upper()}"

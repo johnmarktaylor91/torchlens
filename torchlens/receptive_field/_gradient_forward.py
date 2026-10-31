@@ -88,7 +88,7 @@ def _no_projective_vjp_reason(source: Op, targets: Sequence[Op], trace: Trace) -
         "but autograd returned no VJP, so the saved tensor identity is not the one in the "
         "captured graph."
     )
-    if str(getattr(trace, "_options_save_mode", "")) != "reference":
+    if str(trace._options_save_mode) != "reference":
         return reason + ' Recapture with save_mode="reference".'
     return (
         reason + ' This trace already used save_mode="reference", so the cause is not the '
@@ -381,12 +381,12 @@ def projective_gradient_for_unit(
     if atol < 0 or rtol < 0:
         raise ValueError("atol and rtol must be non-negative.")
     trace: Trace = source.source_trace
-    spec = get_backend_spec(str(getattr(trace, "_provenance_backend", "torch")))
+    spec = get_backend_spec(str(trace._provenance_backend))
     if not spec.capabilities.backward_capture:
         raise BackendUnsupportedError(
             f"Backend {spec.name!r} does not support projective gradient probes."
         )
-    if not getattr(trace, "_options_backward_ready", False):
+    if not trace._options_backward_ready:
         raise ReceptiveFieldUnavailableError(
             "Projective gradient fields require backward_ready=True and saved payloads. "
             f"Recapture with {_RECAPTURE_RECIPE}."

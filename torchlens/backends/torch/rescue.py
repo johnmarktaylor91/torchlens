@@ -224,7 +224,7 @@ def _escape_signal(trace: Trace) -> str | None:
     no-provenance source), the flag is a false alarm and no rescue runs.
     """
 
-    if getattr(trace, "_provenance_verified", None) is True:
+    if trace._provenance_verified is True:
         return None
     if getattr(trace, "escape_diagnostics", None):
         return "escape_detector_diagnostic"
@@ -414,7 +414,7 @@ def _partial_buffer_write_labels(exc: BaseException) -> tuple[str, ...] | None:
     trace = getattr(partial, "trace", None)
     if trace is None:
         return None
-    if getattr(trace, "_options_mode", None) != "exhaustive":
+    if trace._options_mode != "exhaustive":
         # The buffer-write tracker only arms exhaustive sessions; an empty
         # journal on any other mode proves nothing.
         return None
@@ -605,7 +605,7 @@ def _mark(trace: Trace, reason: str, info: dict[str, Any]) -> None:
     """
 
     trace._provenance_verified = False
-    existing_reason = getattr(trace, "_provenance_verification_reason", None)
+    existing_reason = trace._provenance_verification_reason
     if getattr(trace, "_raw_dynamo_region_detected", False) or (
         existing_reason in _SPECIFIC_VERIFICATION_REASONS
     ):

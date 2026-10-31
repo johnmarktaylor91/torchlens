@@ -1,7 +1,6 @@
 """Save budgets, predicate payloads, and lookback retention."""
 
 import dataclasses
-import time
 import warnings
 from collections import deque
 from collections.abc import Callable, Iterator
@@ -449,10 +448,10 @@ def _save_predicate_activation_fields(
         spec,
         intent,
         activation_transform=activation_transform,
-        save_raw_activations=getattr(trace, "_options_save_raw_activations", True),
+        save_raw_activations=trace._options_save_raw_activations,
         ctx=ctx,
         kind="activation",
-        detach_saved_activations=bool(getattr(trace, "_options_detach_saved_activations", True)),
+        detach_saved_activations=bool(trace._options_detach_saved_activations),
     )
     metadata_tensor = ram_payload
     if metadata_tensor is None:
@@ -679,14 +678,12 @@ def _copy_lookback_payload(
             transformed_tensor=transformed_out,
             transform_kind="activation",
             tripwire_armed=train_mode_tripwire_armed(
-                backward_ready=fields_dict.get(
-                    "backward_ready", getattr(trace, "_options_backward_ready", False)
-                ),
+                backward_ready=fields_dict.get("backward_ready", trace._options_backward_ready),
                 transform=trace._options_activation_transform,
             ),
             label=fields_dict.get("_layer_label_raw"),
         )
-    store_raw = policy != "transformed" or getattr(trace, "_options_save_raw_activations", True)
+    store_raw = policy != "transformed" or trace._options_save_raw_activations
     raw_shape = tuple(raw_out.shape)
     raw_dtype = raw_out.dtype
     _commit_save_budget(
@@ -862,7 +859,7 @@ def _build_trace_predicate_context(
         pass_index=int(fields_dict.get("pass_number", 0)),
         event_index=int(fields_dict["raw_index"]),
         step_index=fields_dict.get("step_index"),
-        capture_start_time=float(getattr(trace, "_provenance_start_time", time.time())),
+        capture_start_time=float(trace._provenance_start_time),
         include_source_events=False,
         sample_id=None,
         address=module_address,

@@ -108,7 +108,7 @@ def _validate_chunk_append_candidate(old_trace: Trace, new_trace: Trace) -> None
     """
 
     old_hash = getattr(old_trace, "_provenance_fingerprint", None)
-    new_hash = getattr(new_trace, "_provenance_fingerprint", None)
+    new_hash = new_trace._provenance_fingerprint
     if old_hash != new_hash:
         raise AppendMismatchError("graph shape changed")
 
@@ -160,8 +160,8 @@ def _append_chunk_trace_state(trace: Trace, new_trace: Trace, chunk: _ChunkAppen
 
     _validate_chunk_append_candidate(trace, new_trace)
     started_at = time.monotonic()
-    old_hash = getattr(trace, "_provenance_fingerprint", None)
-    new_hash = getattr(new_trace, "_provenance_fingerprint", None)
+    old_hash = trace._provenance_fingerprint
+    new_hash = new_trace._provenance_fingerprint
     old_predicate_options = getattr(trace, "_predicate_save_options", MISSING)
     new_predicate_options = getattr(new_trace, "_predicate_save_options", MISSING)
     try:

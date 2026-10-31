@@ -1242,7 +1242,7 @@ class Recording(TraceLike):
             cooked_reason = (
                 remapped_reason if isinstance(remapped_reason, str) else self.stop_reason
             )
-            remapped_frontier = getattr(trace, "_graph_stop_frontier", None)
+            remapped_frontier = trace._graph_stop_frontier
             cooked_boundary = (
                 remapped_frontier if isinstance(remapped_frontier, str) else cooked_reason
             )

@@ -425,7 +425,7 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     # the canonical registry constant (satisfies the backend-literal gate).
     from ..backends.registry import TORCH_BACKEND_NAME
 
-    if getattr(trace, "_provenance_backend", TORCH_BACKEND_NAME) != TORCH_BACKEND_NAME:
+    if trace._provenance_backend != TORCH_BACKEND_NAME:
         return
     capture_events = getattr(trace, "_capture_events", None)
     if capture_events is None:

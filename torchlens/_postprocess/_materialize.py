@@ -202,7 +202,7 @@ def build_ingest_inputs(trace: Trace, events: CaptureEvents) -> IngestInputs:
         # Orchestrator-side option read (contract I7: ingest itself never
         # touches the trace): structure-only captures strip buffer-write
         # payloads to declared geometry (W3, weightsfree memo defect L6).
-        scatter_options={"structure_only": bool(getattr(trace, "_options_structure_only", False))},
+        scatter_options={"structure_only": bool(trace._options_structure_only)},
     )
 
 

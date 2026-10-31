@@ -853,7 +853,7 @@ def _input_transform_summary_attrs(trace: "Trace", node_args: dict[str, str]) ->
         preprocessing record is present.
     """
 
-    record = getattr(trace, "_provenance_input_preprocessor", None)
+    record = trace._provenance_input_preprocessor
     if record is None:
         return {}
     verified = bool(getattr(record, "verified", False))

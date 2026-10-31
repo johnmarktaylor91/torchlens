@@ -309,7 +309,9 @@ def _refuse_release_during_active_capture() -> None:
     if _state._active_trace is None and not _state._logging_enabled:
         return
     trace = _state._active_trace
-    model_name = getattr(trace, "model_name", None) or getattr(trace, "_source_class_name", None)
+    model_name = getattr(trace, "model_name", None) or (
+        trace._source_class_name if trace is not None else None
+    )
     raise CaptureNotActiveError(
         "tl.release_model() was called while a TorchLens capture is still active"
         + (f" for model {model_name!r}" if model_name else ""),
@@ -707,7 +709,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             if (
                 not param_is_lazy
                 and param.is_leaf  # a non-leaf already requires grad; its flag is read-only
-                and not getattr(trace, "_options_backward_ready", False)
+                and not trace._options_backward_ready
                 and (torch.is_floating_point(param) or torch.is_complex(param))
             ):
                 param.requires_grad = True
@@ -942,7 +944,7 @@ def _capture_module_metadata(
     # Start from cached class-level metadata. dict() creates a shallow copy;
     # mutable fields (all_addresses, custom_attributes, custom_methods) are replaced
     # below with fresh instances per module, so no cross-contamination.
-    save_source = getattr(trace, "_options_save_source_context", False)
+    save_source = trace._options_save_source_context
     class_meta = _get_class_metadata(type(module), save_source_context=save_source)
     meta = dict(class_meta)
     meta["all_addresses"] = [address]
@@ -1181,8 +1183,7 @@ def _record_module_entry_metadata(
         module_call_label=module_call_label_str,
     )
     should_capture_template = bool(
-        getattr(trace, "is_replayable", False)
-        or getattr(trace, "_options_save_arg_templates", False)
+        getattr(trace, "is_replayable", False) or trace._options_save_arg_templates
     )
     forward_args_template = None
     forward_kwargs_template = None
@@ -1703,7 +1704,7 @@ def _ensure_module_output_tensor_logged(
             "out_versions_by_child": {},
             "grad": None,
             "transformed_grad": None,
-            "save_grads": getattr(trace, "_options_save_grads", None) not in (None, False),
+            "save_grads": trace._options_save_grads not in (None, False),
             "has_grad": False,
             "grad_shape": None,
             "transformed_grad_shape": None,

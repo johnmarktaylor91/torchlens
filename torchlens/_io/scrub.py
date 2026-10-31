@@ -231,8 +231,8 @@ def scrub_for_save(
         include_custom_attributes=include_custom_attributes,
         include_buffer_values=include_buffer_values,
         sparse_runnable=sparse_runnable,
-        structure_only=bool(getattr(trace, "_options_structure_only", False)),
-        backend_name=str(backend_name or getattr(trace, "_provenance_backend", "torch")),
+        structure_only=bool(trace._options_structure_only),
+        backend_name=str(backend_name or trace._provenance_backend),
         payload_materialization=payload_materialization,
     )
     options.payload_codec = get_payload_codec(options.backend_name)

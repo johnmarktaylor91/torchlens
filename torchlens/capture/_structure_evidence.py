@@ -52,9 +52,9 @@ def settle_weightsfree_capture(trace: Any, admission: MetaAdmissionRecord | None
     from .. import _state
 
     stamp_wrap_generation(trace, int(getattr(_state, "_wrap_epoch", 0)))
-    if admission is not None or bool(getattr(trace, "_options_structure_only", False)):
+    if admission is not None or bool(trace._options_structure_only):
         enforce_settlement_invariants(trace)
-    if bool(getattr(trace, "_options_structure_only", False)):
+    if bool(trace._options_structure_only):
         trace._graph_structure_evidence = build_structure_evidence(trace)
 
 

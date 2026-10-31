@@ -272,7 +272,7 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
 
     if not bool(getattr(trace, "_loaded_from_bundle", False)):
         return False
-    backend = str(getattr(trace, "_provenance_backend", "torch"))
+    backend = str(trace._provenance_backend)
     if backend == _MLX_VALIDATION_REPLAY_BACKEND:
         return True
     if backend == _JAX_VALIDATION_REPLAY_BACKEND:

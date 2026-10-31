@@ -371,13 +371,15 @@ def _layer_proof(layer: Any) -> tuple[CardNode, ...]:
 def trace_card(trace: Any, *, root: str | None = None) -> Card:
     """Assemble the Trace overview card (replaces the 525-byte box)."""
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     resolved_root = resolve_copy_root(trace, explicit_root=root)
     layers = list(trace._layer_logs or {})
     total, saved = _save_counts(trace)
     facts: list[CardNode] = [
         CardText(
             f"Layers: {len(layers)} | Ops: {trace._num_ops} | "
-            f"backend: {getattr(trace, '_provenance_backend', '?')} | "
+            f"backend: {(trace._provenance_backend if is_live_trace(trace) else '?')} | "
             f"modules: {len(trace.modules) if hasattr(trace, 'modules') else '?'}"
         ),
         CardText(

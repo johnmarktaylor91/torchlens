@@ -628,7 +628,7 @@ class CaptureSession:
                     (),
                     {},
                     False,
-                    getattr(trace, "_options_activation_transform", None),
+                    trace._options_activation_transform,
                 )
             if detached_spills:
                 from .._utils.display import user_stacklevel
@@ -750,7 +750,7 @@ class CaptureSession:
 
     def snapshot_recording_projection(
         self,
-        trace: object,
+        trace: Any,
         *,
         output_tensors: list[Any] | None = None,
         output_tensor_addresses: list[str] | None = None,
@@ -796,17 +796,13 @@ class CaptureSession:
                     getattr(getattr(tensor, "_tl", None), "label_raw", None)
                     for tensor in (output_tensors or ())
                 ),
-                "capture_start_time": getattr(trace, "_provenance_start_time", 0),
-                "setup_duration": getattr(trace, "_provenance_setup_duration", 0),
-                "forward_duration": getattr(trace, "_cost_forward_duration", 0),
-                "forward_peak_memory": getattr(trace, "_cost_forward_peak_memory", None),
-                "forward_peak_memory_reason": getattr(
-                    trace, "_cost_forward_peak_memory_reason", None
-                ),
-                "forward_memory_backend": getattr(
-                    trace, "_provenance_forward_memory_backend", None
-                ),
-                "random_seed": getattr(trace, "_options_seed", None),
+                "capture_start_time": trace._provenance_start_time,
+                "setup_duration": trace._provenance_setup_duration,
+                "forward_duration": trace._cost_forward_duration,
+                "forward_peak_memory": trace._cost_forward_peak_memory,
+                "forward_peak_memory_reason": trace._cost_forward_peak_memory_reason,
+                "forward_memory_backend": trace._provenance_forward_memory_backend,
+                "random_seed": trace._options_seed,
                 "source_model_ref": getattr(trace, "_source_model_ref", None),
                 "layer_counter": getattr(getattr(trace, "_raw_graph_ws", None), "layer_counter", 0),
             }
@@ -909,7 +905,7 @@ class CaptureSession:
 
 
 def compile_legacy_capture_plan(
-    trace: object,
+    trace: Any,
     *,
     backend_name: str,
     layers_to_save: Any,
@@ -940,7 +936,7 @@ def compile_legacy_capture_plan(
         Immutable mirror of today's already-validated intent.
     """
 
-    capture_mode = str(getattr(trace, "_options_mode", "exhaustive"))
+    capture_mode = str(trace._options_mode)
     projection_target = "trace" if postprocess else "recording"
     # This is a compatibility-only demand declaration.  Existing producers
     # continue to choose their historical work; no extra metadata or payload
@@ -952,7 +948,7 @@ def compile_legacy_capture_plan(
     deferred_selector = getattr(trace, "_deferred_retention_selector", None)
     deferred_activation = bool(deferred_selector)
     deferred_gradients = bool(getattr(trace, "_deferred_gradient_selector", None))
-    graph_connected = bool(getattr(trace, "_options_backward_ready", False))
+    graph_connected = bool(trace._options_backward_ready)
     from .._trace_selector_helpers import _selector_requires_unwindowed_escrow
 
     negative_windows = _negative_selector_windows(layers_to_save)
@@ -998,7 +994,7 @@ def compile_legacy_capture_plan(
         activation_attached=(
             deferred_activation
             and not graph_connected
-            and not bool(getattr(trace, "_options_detach_saved_activations", True))
+            and not bool(trace._options_detach_saved_activations)
         ),
     )
     return CapturePlan.compile(
@@ -1013,12 +1009,12 @@ def compile_legacy_capture_plan(
             "lookback_payload_policy": getattr(trace, "_predicate_lookback_payload_policy", None),
         },
         backward={
-            "backward_ready": getattr(trace, "_options_backward_ready", False),
+            "backward_ready": trace._options_backward_ready,
             "save_gradients": getattr(trace, "save_gradients", False),
         },
         execution_context={
             "random_seed": seed,
-            "inference_only": getattr(trace, "_options_inference_only", False),
+            "inference_only": trace._options_inference_only,
         },
         stop_policy=getattr(trace, "_stop_directive", None),
         backend_name=backend_name,

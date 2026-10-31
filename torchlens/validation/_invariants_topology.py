@@ -143,7 +143,7 @@ def _retained_orphan_computational_count(ml: Trace, name: str) -> int:
     if not retained_orphans:
         return 0
 
-    if not getattr(ml, "_options_keep_orphans", False):
+    if not ml._options_keep_orphans:
         raise MetadataInvariantError(name, "retained orphan logs require keep_orphans=True")
 
     orphan_raw_labels = list(getattr(ml, "_orphan_labels", ()))
