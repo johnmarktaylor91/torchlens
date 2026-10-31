@@ -439,18 +439,28 @@ _REDIRECTS: dict[str, str] = {
     "record_span": "use torchlens.observers.span -- record_span was renamed"
 }
 
+#: Live names resolved on first access (``register_tensor_connection`` lives
+#: with the capture door).
+_LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
+    "register_tensor_connection": ("torchlens.user_funcs", "register_tensor_connection"),
+}
+
 
 # Runtime only: under TYPE_CHECKING a module ``__getattr__`` would make every
 # name on this module type-check as Any.
 if not TYPE_CHECKING:
 
     def __getattr__(name: str) -> Any:
-        """Raise the typed teaching error for a removed torchlens.observers name."""
+        """Resolve a lazy torchlens.observers name or teach a removed one."""
 
         from ._utils.facade import resolve_facade_attr
 
         return resolve_facade_attr(
-            owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS
+            owner=__name__,
+            name=name,
+            module_globals=globals(),
+            lazy_attrs=_LAZY_ATTRS,
+            redirects=_REDIRECTS,
         )
 
 
@@ -466,13 +476,3 @@ __all__ = [
     "span",
     "tap",
 ]
-
-
-def __getattr__(name: str) -> object:
-    """Resolve ``register_tensor_connection`` lazily (its code lives with the capture door)."""
-
-    if name == "register_tensor_connection":
-        from .user_funcs import register_tensor_connection
-
-        return register_tensor_connection
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

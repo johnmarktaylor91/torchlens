@@ -88,9 +88,9 @@ def test_removed_member_raises_typed_redirect(
 
 #: (public module, removed module-level name, the live replacement's public spelling)
 REMOVED_MODULE_NAMES: list[tuple[str, str, str]] = [
-    ("torchlens.validation", "validate_saved_outs", "torchlens.validation.validate"),
-    ("torchlens.validation", "validate_trace_saved_outs", "torchlens.validation.validate"),
-    ("torchlens.io", "get_model_metadata", "torchlens.io.log_model_metadata"),
+    ("torchlens.validation", "validate_saved_outs", "torchlens.validate"),
+    ("torchlens.validation", "validate_trace_saved_outs", "torchlens.validate"),
+    ("torchlens.io", "get_model_metadata", "torchlens.trace"),
     ("torchlens.observers", "record_span", "torchlens.observers.span"),
     ("torchlens.intervention", "intervening", "torchlens.without_op"),
     ("torchlens.intervention", "replay_from", "Trace.do"),
