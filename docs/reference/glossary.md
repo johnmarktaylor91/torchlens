@@ -3203,6 +3203,9 @@ describe each surface in depth.
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
+| `axis_roles=` | field and constructor keyword of `ReceptiveField` |
+| `bin_edges=` | field and constructor keyword of `HistogramPoint` |
+| `comet_experiment=` | keyword of `tl.trackers.CometSink`: the Comet experiment to log to |
 | `draw_index=` | keyword of `tl.attribution.CausalAuditSet` |
 | `extra_facets=` | keyword of `tl.facets.snapshot` |
 | `frozen_sites=` | keyword of `tl.attribution.AttributionGraph` |
@@ -3222,7 +3225,9 @@ describe each surface in depth.
 | `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
+| `num_components=` | keyword of `tl.repgeom.classical_mds`, `tl.stats.PCA`, `tl.transforms.srp` and `tl.transforms.srp_fidelity_probe`: number of output components |
 | `num_examples=` | keyword of `tl.mechinterp.TrajectoryStats` |
+| `num_heads=` | keyword of `FacetSpec.heads`: number of attention heads to split into |
 | `num_kv_heads=` | keyword of `tl.mechinterp.HeadWeightViews` |
 | `num_nan=` | keyword of `tl.stats.TensorStats` |
 | `num_neginf=` | keyword of `tl.stats.TensorStats` |
@@ -3232,6 +3237,8 @@ describe each surface in depth.
 | `num_stimuli=` | keyword of `tl.neuro.ExtractionPlan`, `tl.neuro.plan_extraction` |
 | `num_true=` | keyword of `tl.stats.TensorStats` |
 | `num_zero=` | keyword of `tl.stats.TensorStats` |
+| `query_slice=` | keyword of `AttentionView.crop_to`: which query positions to keep, as a slice |
+| `rank_handles=` | keyword of `tl.types.MergedTrace`: mapping from rank to its handle |
 | `run_record=` | keyword of `tl.trackers.HistoryView` |
 | `signal=` | keyword of `tl.stats.NarrationObserver` |
 | `std_evidence=` | keyword of `tl.stats.TensorStats` |
@@ -3478,6 +3485,7 @@ The sections above describe each surface in depth.
 | `GuessInputShapeReport.value_range` | Synthetic value recipe: `("uniform", 0, 1)` or `("randint", 0, vocab)` |
 | `HealthFacts.num_nonfinite_ops` | Nonfinite ops in the identity partition (alias rows excluded) |
 | `HealthFacts.num_unmapped_ops` | Ops the health partition could not map |
+| `HistogramPoint.bin_edges` | Histogram bin edges for the point's counts |
 | `HistoryReader.num_chunks` | Number of committed chunks |
 | `HtmlReportOptions.deterministic` | Suppress the manifest timestamp for byte-exact regeneration |
 | `HtmlReportOptions.max_array_bytes` | Thumbnail byte budget, enforced before payloads are written |
@@ -3520,7 +3528,10 @@ The sections above describe each surface in depth.
 | `PreprocessingComparison.verdict` | `"verified"` / `"mismatch"` / `"unknown"` |
 | `ProfileReport.has_rescue_rerun` | Whether the profile needed a rescue rerun |
 | `ProfileReport.is_structure_only` | Whether the profiled capture kept structure only |
+| `ReceptiveField.axis_roles` | Axis layout of the input grid: per-axis kinds, windowed axes and their provenance |
 | `ReceptiveFieldValidation.num_violations` | Number of cross-validation violations found |
+| `ReceptiveFieldView.axis_roles` | Axis layout of the viewed op's input grid |
+| `ReceptiveFieldView.probe_grad` | Empirical gradient probe of one unit's receptive field |
 | `Recipe.address_class` | Most restrictive address class over all rules (worst wins) |
 | `Recipe.decision` | The sole rule's normalized decision (`None` on multi-clause specs) |
 | `Recipe.door_pairs` | Lower the spec to `(site, action)` pairs for the hook doors |
@@ -3553,10 +3564,12 @@ The sections above describe each surface in depth.
 | `Site.structural_site_key` | The structural site key when present, else `None` |
 | `SixNDFacts.num_params` | Parameter count used by the 6ND estimate |
 | `SpecCompat.has_identical_target_resolution` | Whether the spec resolves to the same targets on both sides |
+| `SrpSizing.num_components` | Recommended number of projection components |
 | `SummaryTotals.captured_bytes` | Bytes the capture retained when it ran |
 | `SummaryTotals.retained_bytes` | Bytes this object holds now |
 | `Super.absent_names` | Return bundle member names not represented by this view |
 | `Super.is_complete` | Return whether every bundle member is represented |
+| `TensorSpec.from_tensor` | Build a spec from a tensor (alternate constructor) |
 | `Trace.random_seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
