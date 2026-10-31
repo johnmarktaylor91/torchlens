@@ -189,7 +189,7 @@ def _key(model, transcoders, graph, monkeypatch) -> torch.Tensor:
             value = reader.pre(inputs[layer][0, node.position])[node.feature_index]
         elif node.kind == "logit":
             z = pre_softcap["z"][0, -1]
-            value = z[node.token] - z.mean()
+            value = z[node.token_id] - z.mean()
         else:
             continue
         grads = torch.autograd.grad(value, sources, retain_graph=True, allow_unused=True)

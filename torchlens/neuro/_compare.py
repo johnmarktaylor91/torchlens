@@ -524,7 +524,7 @@ def compare(  # noqa: PLR0913 -- the one-call door: source, target, the analysis
     n_stimuli = target_matrix.shape[0]
     if n_stimuli < max(3, num_folds + 2):
         raise ValueError(
-            f"neuro.compare needs at least max(3, n_folds + 2) = {max(3, num_folds + 2)} "
+            f"neuro.compare needs at least max(3, num_folds + 2) = {max(3, num_folds + 2)} "
             f"stimuli; the target has {n_stimuli}."
         )
     matrices = _site_matrices(source, sites)

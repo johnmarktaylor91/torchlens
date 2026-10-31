@@ -29,8 +29,8 @@ import torchlens as tl
 from torchlens.viz.node_plots import (
     _lineplot_point,
     _normalize_finite,
+    heatmap,
     lineplot,
-    render_heatmap,
 )
 
 
@@ -66,7 +66,7 @@ def test_m9_reversed_bounds_raise():
     with pytest.raises(ValueError, match="vmax must be greater than or equal to vmin"):
         _normalize_finite(arr, 3.0, 0.0)
     with pytest.raises(ValueError, match="vmax must be greater than or equal to vmin"):
-        render_heatmap(arr, vmin=3.0, vmax=0.0)
+        heatmap(arr, vmin=3.0, vmax=0.0)
 
 
 def test_m9_equal_bounds_still_uniform():

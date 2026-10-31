@@ -173,7 +173,7 @@ def _logit_metric(audit: attribution.CausalAudit, run: Any, ids: Tensor = IDS) -
 # ----------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("edit", ["zero", "mean", "baseline"])
+@pytest.mark.parametrize("ablation", ["zero", "mean", "baseline"])
 def test_dla_measured_effects_equal_the_closed_form(ablation: str) -> None:
     """Each component's measured logit effect equals the closed form exactly (float64)."""
 
@@ -397,7 +397,7 @@ def _read(model: nn.Module, x: Tensor = X, reduce: str | None = "sum", **kwargs:
     )
 
 
-@pytest.mark.parametrize("edit", ["zero", "mean", "baseline"])
+@pytest.mark.parametrize("ablation", ["zero", "mean", "baseline"])
 def test_read_site_rows_measure_the_closed_form(ablation: str) -> None:
     """Each site's measured effect is ``grad . (site - replacement)`` exactly (float64)."""
 

@@ -55,7 +55,7 @@ def test_fresh_run_sweeps_higher_index_stale_shards(tmp_path: Path) -> None:
         "manifest.json",
     ]
     reader = open_extraction(tmp_path)
-    assert reader.n_shards == 2 and reader.num_stimuli == 10
+    assert reader.n_shards == 2 and reader.n_stimuli == 10
     assert reader.verify_all()["crc_checked"] == 2
 
 

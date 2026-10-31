@@ -409,7 +409,7 @@ def _match_input_labels(plan: _CurvePlan) -> tuple[str, ...]:
                 f"curve step replay could not find the input layer holding an evaluated "
                 f"input of shape {tuple(leaf.shape)} (input layers: {list(trace.input_layers)}). "
                 "Remedy: replay the step on its perturbed inputs directly, e.g. "
-                f"model(step.inputs). {_DOCS_POINTER}",
+                f"model(step.build_inputs). {_DOCS_POINTER}",
                 code="attribution_curve_input_unmatched",
             )
         used.add(match)

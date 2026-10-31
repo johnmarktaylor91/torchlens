@@ -102,7 +102,7 @@ def _check_sets(audit: Any, case: _Case, table: Any) -> int:
     name_of = {(index,): str(row.address[0]) for index, row in enumerate(table.rows())}
     spanning = 0
     for item in audit.sets:
-        names = [name_of[unit] for unit in item.units]
+        names = [name_of[unit] for unit in item.indices]
         receivers = {name.split("->")[1] for name in names}
         spanning += len(receivers) > 1
         want = case.reference_effect(audit, names)

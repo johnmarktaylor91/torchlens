@@ -110,7 +110,7 @@ def _remedy(message: str) -> str:
     return found.group(1)
 
 
-@pytest.mark.parametrize("edit", ["zero", "mean", "baseline"])
+@pytest.mark.parametrize("ablation", ["zero", "mean", "baseline"])
 def test_measured_effects_equal_the_closed_form_on_a_linear_residual_model(ablation: str) -> None:
     """Each unit's measured effect equals ``W2[t, i] * sum_b (h_i - v_i)`` exactly (float64)."""
 

@@ -234,23 +234,23 @@ def test_node_fields_follow_the_reference_layout(graphs) -> None:
         assert got["activation"] == graph.feature_activations[i].item()
     for i in graph.node_indices("token"):
         node = graph.nodes[i]
-        got = by_id[f"E_{node.token}_{node.position}"]
+        got = by_id[f"E_{node.token_id}_{node.position}"]
         assert (got["feature"], got["layer"], got["feature_type"]) == (
             node.position,
             "E",
             "embedding",
         )
-        assert got["jsNodeId"] == f"E_{node.token}-{node.position}"
+        assert got["jsNodeId"] == f"E_{node.token_id}-{node.position}"
     for k, i in enumerate(graph.node_indices("logit")):
         node = graph.nodes[i]
         probability = graph.logit_probabilities[k].item()
-        got = by_id[f"4_{node.token}_{fx.N_POS - 1}"]
+        got = by_id[f"4_{node.token_id}_{fx.N_POS - 1}"]
         assert (got["layer"], got["feature_type"], got["jsNodeId"]) == (
             "4",
             "logit",
-            f"L_{node.token}-{fx.N_POS - 1}",
+            f"L_{node.token_id}-{fx.N_POS - 1}",
         )
-        assert got["clerp"] == f'Output "<{node.token}>" (p={probability:.3f})'
+        assert got["clerp"] == f'Output "<{node.token_id}>" (p={probability:.3f})'
         assert (got["token_prob"], got["is_target_logit"]) == (probability, k == 0)
     errors = [
         node for node in exported["nodes"] if node["feature_type"] == "mlp reconstruction error"
@@ -329,7 +329,7 @@ def test_refuses_invalid_arguments(graphs, kwargs) -> None:
 
 def _without_token_ids(graph):
     nodes = tuple(
-        dataclasses.replace(node, token=None) if node.kind == "token" else node
+        dataclasses.replace(node, token_id=None) if node.kind == "token" else node
         for node in graph.nodes
     )
     return dataclasses.replace(graph, nodes=nodes)

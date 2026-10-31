@@ -1345,7 +1345,7 @@ def test_rank_layout_without_neato_plugin_names_the_plugin_package(
         rank_layout._run_neato_with_fallbacks(
             rendered_path=str(tmp_path / "graph.svg"),
             source_path=str(tmp_path / "graph"),
-            file_format="svg",
+            vis_fileformat="svg",
             spline_mode="true",
             render_timeout=30,
         )

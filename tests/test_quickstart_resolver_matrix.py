@@ -143,7 +143,7 @@ class TestRenderFacade:
                 _cnn().eval(),
                 input_size=SIZE,
                 file=str(tmp_path / "g.svg"),
-                theme="torchlens",
+                path=str(tmp_path / "other"),
             )
         assert excinfo.value.fields["code"] == "render_kwarg_collision"
 

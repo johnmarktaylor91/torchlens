@@ -153,7 +153,7 @@ def test_one_receiver_through_the_multi_path_is_bitwise_the_single_path(tiny, re
     _model, _c, _x, clean, graph, corrupt = tiny
     edges = [edge for edge in graph.edges.values() if edge.receiver.name == receiver][:3]
     new = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
-    old = _patch_edges_single_receiver(clean, edges, corrupted_graph=corrupt)
+    old = _patch_edges_single_receiver(clean, edges, corrupt=corrupt)
     for op in clean.ops:
         a, b = new.ops[op.label].out, old.ops[op.label].out
         if isinstance(a, torch.Tensor):

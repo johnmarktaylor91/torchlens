@@ -548,7 +548,7 @@ Output:
 1.5 [[0.0, 1.0, 1.0, 1.0]]
 ```
 
-`step.inputs` and `step.build_baseline_mask` show the perturbed input and which elements hold the
+`step.build_inputs` and `step.build_baseline_mask` show the perturbed input and which elements hold the
 baseline. To compare against chance, evaluate a random ranking the same way
 (`attribution=torch.rand_like(x)`). Curves score the model output, so a `SiteTarget` refuses
 (`attribution_site_target_unsupported`); an attribution that does not cover the input (layer

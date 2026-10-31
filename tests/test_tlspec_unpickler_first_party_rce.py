@@ -176,8 +176,8 @@ def test_full_facet_registry_snapshot_round_trips_through_unpickler() -> None:
     try:
         facets_mod.reset()
         snapshot = facets_mod.snapshot()
-        assert snapshot.recipes, "expected built-in recipes in the registry snapshot"
-        recipe_names = {r.public.name for r in snapshot.recipes}
+        assert snapshot.functions, "expected built-in recipes in the registry snapshot"
+        recipe_names = {r.public.name for r in snapshot.functions}
         assert "transformer_residuals" in recipe_names, "residual recipe (private predicate)"
 
         blob = pickle.dumps(snapshot, protocol=pickle.HIGHEST_PROTOCOL)

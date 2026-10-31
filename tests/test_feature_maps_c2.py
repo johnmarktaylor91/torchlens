@@ -221,7 +221,7 @@ def test_non_spatial_selection_raises_and_mixed_selection_skips_dense() -> None:
     with pytest.raises(ValueError, match=r"spatial \[N, C, H, W\].*saw layer:linear.*save=.*conv"):
         feature_maps(dense_trace)
 
-    mixed_trace = _conv_trace(save=tl.func("conv2d") | tl.func("linear"), num_stimuli=2)
+    mixed_trace = _conv_trace(save=tl.func("conv2d") | tl.func("linear"), n_stimuli=2)
     maps = feature_maps(mixed_trace)
 
     assert list(maps) == ["layer:conv2d_1_1"]

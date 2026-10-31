@@ -101,7 +101,7 @@ def _readout(graph, node, ins, logits, transcoders):
         reader = transcoders[node.site]
         return ins[_layer(node.site)][node.position] @ reader.W_enc.double()[:, node.feature_index]
     direction = torch.zeros(fx.VOCAB, dtype=torch.float64)
-    direction[node.token] = 1.0
+    direction[node.token_id] = 1.0
     if graph.demeaned_logits:
         direction = direction - 1.0 / fx.VOCAB
     return logits[-1] @ direction
@@ -194,7 +194,7 @@ class TestPerLayerFixture:
             [layer, pos, feat] for layer in (0, 1) for pos in range(3) for feat in (0, 2)
         ]
         assert graph.input_token_ids.tolist() == list(fx.TOKENS)
-        assert [graph.nodes[i].token for i in graph.node_indices("token")] == list(fx.TOKENS)
+        assert [graph.nodes[i].token_id for i in graph.node_indices("token")] == list(fx.TOKENS)
         assert graph.transcoder_sites == ("blocks.0.mlp", "blocks.1.mlp")
         assert graph.error_sites == ("blocks.0.mlp", "blocks.1.mlp")
         probs = torch.softmax(fx.plain_forward(model).logits[-1], dim=-1)

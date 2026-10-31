@@ -70,7 +70,7 @@ def _identity(layers: dict[str, int], node) -> tuple:
         return ("error", int(node.site.split(".")[2]), node.position)
     if node.kind == "token":
         return ("token", node.position)
-    return ("logit", node.token)
+    return ("logit", node.token_id)
 
 
 class _Key:
@@ -268,14 +268,14 @@ class TestCrossLayerGemma2:
         assert torch.equal(remapped, graph.active_feature_indices)
         layers = {fx.read_label(trace, layer): layer for layer in range(fx.N_LAYERS)}
         assert [
-            (n.kind, n.site, n.position, n.token)
+            (n.kind, n.site, n.position, n.token_id)
             if n.feature_index is None
-            else (n.kind, n.site, n.position, int(idx[layers[n.site]][n.feature_index]), n.token)
+            else (n.kind, n.site, n.position, int(idx[layers[n.site]][n.feature_index]), n.token_id)
             for n in small.nodes
         ] == [
-            (n.kind, n.site, n.position, n.token)
+            (n.kind, n.site, n.position, n.token_id)
             if n.feature_index is None
-            else (n.kind, n.site, n.position, n.feature_index, n.token)
+            else (n.kind, n.site, n.position, n.feature_index, n.token_id)
             for n in graph.nodes
         ]
         assert torch.equal(small.adjacency_matrix, graph.adjacency_matrix)

@@ -130,7 +130,7 @@ class TestOpLabelReadSite:
 
         def identity(graph, mapping):
             return [
-                (n.kind, mapping.get(n.site, n.site), n.position, n.feature_index, n.token)
+                (n.kind, mapping.get(n.site, n.site), n.position, n.feature_index, n.token_id)
                 for n in graph.nodes
             ]
 

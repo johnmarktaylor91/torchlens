@@ -1641,7 +1641,7 @@ class TestVisualizationBugfixes:
                 log,
                 vis_call_depth=0,
                 vis_save_only=True,
-                path=opj(VIS_DIR, "test_call_depth_0"),
+                vis_outpath=opj(VIS_DIR, "test_call_depth_0"),
             )
         except ImportError:
             pytest.skip("graphviz not available")
@@ -1694,7 +1694,7 @@ class TestVisualizationBugfixes:
         try:
             from torchlens.visualization._render_dot import draw
 
-            dot = draw(log, vis_save_only=True, path=opj(VIS_DIR, "test_selective_save"))
+            dot = draw(log, vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_selective_save"))
         except ImportError:
             pytest.skip("graphviz not available")
         # A no-op renderer would return "" and write nothing; assert real output.

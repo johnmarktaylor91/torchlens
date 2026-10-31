@@ -32,7 +32,9 @@ def test_option_class_constructible_with_defaults(option_cls: type[Any]) -> None
     """Every option class should be constructible without arguments."""
 
     instance = option_cls()
-    assert isinstance(instance.to_dict(), dict)
+    # VisualizationOptions spells it to_dict; the other option classes keep as_dict.
+    as_mapping = instance.to_dict if option_cls is VisualizationOptions else instance.as_dict
+    assert isinstance(as_mapping(), dict)
 
 
 @pytest.mark.parametrize("option_cls", _OPTION_CLASSES)

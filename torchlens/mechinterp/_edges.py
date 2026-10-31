@@ -283,7 +283,7 @@ def _require_mha(trace: Any, address: str) -> int:
             remedy="use torchlens.mechinterp.attention_head_contributions(trace) for per-head "
             "writer rows on this model",
             module_address=address,
-            num_q_heads=n_q,
+            n_q_heads=n_q,
             n_kv_heads=n_kv,
         )
     return n_q

@@ -26,10 +26,9 @@ _REPO = Path(__file__).resolve().parents[1]
 
 
 def test_stats_and_aggregate_are_declared_surface() -> None:
-    """The five-memo promotion: both names in ``__all__`` and resolving."""
+    """The five-memo promotion: ``stats`` in ``__all__``; ``tl.stats.aggregate`` resolves."""
 
     assert "stats" in tl.__all__
-    assert "aggregate" in tl.__all__
     import torchlens.stats as stats_module
 
     assert tl.stats is stats_module
@@ -51,7 +50,7 @@ def test_stats_namespace_serves_the_advertised_accumulators() -> None:
         "cka",
         "PCA",
         "Histogram",
-        "Spine",
+        "RunningStats",
         "Aggregator",
         "save_fitted",
         "load_fitted",

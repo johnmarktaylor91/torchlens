@@ -321,7 +321,7 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | Graph overlay bridge and controls | `overlay`, `source`, `reduce`, `abs_sum`, `abs_mean`, `sum`, `max` | unstable -- no deprecation shim owed |
 
 | F06 wrapping contract | `noise_tunnel`, `attribute`, `method`, `method_kwargs` | unstable -- no deprecation shim owed |
-| F06 noise tunnel controls and evidence | `num_samples`, `stdevs`, `aggregation`, `noise_bank`, `mean_square`, `variance`, `stdevs_resolved`, `residual_of_means` | unstable -- no deprecation shim owed |
+| F06 noise tunnel controls and evidence | `num_samples`, `stdevs`, `reduce`, `noise_bank`, `mean_square`, `variance`, `stdevs_resolved`, `residual_of_means` | unstable -- no deprecation shim owed |
 | F06 GradientShap controls | `gradient_shap`, `baselines`, `draw_bank`, `store_draws` | unstable -- no deprecation shim owed |
 | F06 guided methods and evidence | `guided_backprop`, `deconvolution`, `sites`, `absolute`, `site_census` | unstable -- no deprecation shim owed |
 | F06 occlusion map controls | `occlusion_map`, `window`, `strides`, `baseline_value`, `occlude_leaf`, `max_passes`, `average` | unstable -- no deprecation shim owed |
@@ -610,7 +610,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   multiplier, each library object gives the native steer's logits.
 
 **`Direction.upload_to_neuronpedia` (publish a vector)** — *documented-unstable*
-: `direction.upload_to_neuronpedia(*, api_key, scan, vector_label, layer=None,
+: `direction.upload_to_neuronpedia(*, api_key, model_id, name, layer=None,
   hook_type="resid_post", default_steering_strength=1.0)` publishes the vector on neuronpedia.org under
   the account that owns `api_key` through Neuronpedia's "Create Vector" endpoint and returns
   the vector page's URL. `model_id` is Neuronpedia's model id, `name` the name it shows,
@@ -2826,7 +2826,7 @@ deprecation shim owed*
   softmax after the score softcap).
 
 **`AttributionGraph.to_neuronpedia` (export in Neuronpedia's attribution-graph schema)** — *unstable — no deprecation shim owed*
-: `graph.to_neuronpedia(*, slug, scan, tokenizer, prompt=None, node_influence_coverage=0.8,
+: `graph.to_neuronpedia(*, slug, model_id, tokenizer, prompt=None, node_influence_coverage=0.8,
   edge_influence_coverage=0.98, path=None)` returns the graph, pruned by circuit-tracer's
   influence rule, as a dict in Neuronpedia's published attribution-graph schema
   (and writes it to `path` when given). `slug` is the graph's name on

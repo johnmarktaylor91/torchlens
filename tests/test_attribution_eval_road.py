@@ -147,4 +147,4 @@ def test_road_refuses_bad_settings_and_the_remedy_runs(
     assert excinfo.value.fields.get("code") == "attribution_eval_setting_invalid"
     scope = {"tl": tl, "model": model, "x": x, "attribution": attribution}
     fixed = eval(_remedy(str(excinfo.value)), scope)  # noqa: S307
-    assert isinstance(fixed, attribution_kit.CurveResult)
+    assert isinstance(fixed, attribution_kit.PerturbationCurve)

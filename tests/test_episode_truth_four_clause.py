@@ -133,7 +133,7 @@ def test_settlement_cost_is_exactly_the_priced_dispatcher_reads():
     resolved = ResolvedEpisode(
         episode_id="ep-price-probe",
         address="step",
-        num_steps=N_STEPS,
+        n_steps=N_STEPS,
         step_axis=-1,
         step_output_kind="tokens",
         step_output_from=None,

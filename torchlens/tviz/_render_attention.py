@@ -128,7 +128,7 @@ def _effect_border(ax: Any, value: float | None, scale: float) -> None:
     matplotlib = require_matplotlib()
     cmap = matplotlib.colormaps[DIVERGING_CMAP]
     color = cmap(0.5 + 0.5 * max(-1.0, min(1.0, value / scale)))
-    for spine in ax.running_stats.values():
+    for spine in ax.spines.values():
         spine.set_color(color)
         spine.set_linewidth(3.0)
 

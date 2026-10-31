@@ -77,7 +77,11 @@ def test_srp_dims_for_matches_the_dense_jl_formula() -> None:
 def test_srp_dims_for_validates_inputs() -> None:
     """Row count and eps domains refuse typed."""
 
-    for kwargs in ({"n_samples": 1}, {"n_samples": 10, "eps": 0.0}, {"n_samples": 10, "eps": 1.0}):
+    for kwargs in (
+        {"num_samples": 1},
+        {"num_samples": 10, "eps": 0.0},
+        {"num_samples": 10, "eps": 1.0},
+    ):
         with pytest.raises(TransformContractError) as excinfo:
             srp_dims_for(**kwargs)  # type: ignore[arg-type]
         assert excinfo.value.fields["code"] == "transform_params_invalid"

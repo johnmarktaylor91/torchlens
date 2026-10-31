@@ -81,7 +81,7 @@ def test_each_analysis_equals_its_standalone_computation() -> None:
     )
     assert result.scores["cka"]["s"] == pytest.approx(cka(site, target), abs=1e-12)
     predicted, _alphas = cross_validated_ridge(
-        site, target, alphas=result.settings["ridge_alphas"], num_folds=5, seed=0
+        site, target, alphas=result.settings["ridge_alphas"], n_folds=5, seed=0
     )
     columns = [np.corrcoef(predicted[:, j], target[:, j])[0, 1] for j in range(4)]
     assert result.scores["ridge"]["s"] == pytest.approx(float(np.mean(columns)), abs=1e-12)
@@ -104,7 +104,7 @@ def test_ridge_matches_explicit_folds_and_brute_force_leave_one_out() -> None:
     x = rng.normal(size=(18, 4))
     y = x @ rng.normal(size=(4, 2)) + 0.5 * rng.normal(size=(18, 2))
     alphas = (0.01, 1.0, 100.0)
-    predicted, chosen = cross_validated_ridge(x, y, alphas=alphas, num_folds=3, seed=4)
+    predicted, chosen = cross_validated_ridge(x, y, alphas=alphas, n_folds=3, seed=4)
     expected = np.empty_like(y)
     for fold, held_out in enumerate(ridge_folds(18, 3, 4)):
         train = np.setdiff1d(np.arange(18), held_out)

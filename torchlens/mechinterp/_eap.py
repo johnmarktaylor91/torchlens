@@ -320,7 +320,9 @@ def _point_gradients(
             unreached.append(name)
             continue
         if read.spec is not None:
-            grad = read.spec.scatter_update(torch.zeros_like(grad), read.spec.apply(grad))
+            grad = read.spec.scatter_update(
+                torch.zeros_like(grad), read.spec.apply_transforms(grad)
+            )
         key = (read.input_label, read.seed_label)
         grouped.setdefault(key, []).append((read.seed_label, grad))
         names.setdefault(key, []).append(name)

@@ -124,7 +124,7 @@ def test_fixture_measured_effects_equal_the_hand_patch(method: str, reduction: s
     assert audit.extra["claim_kind"] == "edge_table"
     assert audit.extra["claim_method"] == method
     assert audit.extra["example_reduction"] == reduction
-    assert audit.settings["edit"] == "edge_patch"
+    assert audit.settings["ablation"] == "edge_patch"
     assert audit.original_score == _reduced(fixture_metric(model(clean).detach()), reduction)
     assert [row.index for row in audit.units] == [(index,) for index in range(5)]
 
@@ -162,13 +162,13 @@ def test_fixture_sets_into_one_receiver_or_several_are_measured() -> None:
         }
         r = e_c + values["m0->logits"][0] + values["m1->logits"][0]
         patched = r
-        for unit in top.units:
+        for unit in top.indices:
             sender_clean, sender_corrupt = values[name_of[unit]]
             patched = patched - sender_clean + sender_corrupt
         want = float(_metric(model, patched)[0]) - float(_metric(model, r)[0])
     assert top.measured_effect == want
     claimed_of = {row.index: row.claimed_effect for row in audit.units}
-    assert top.claimed_effect == math.fsum(claimed_of[unit] for unit in top.units)
+    assert top.claimed_effect == math.fsum(claimed_of[unit] for unit in top.indices)
     across = _audit(table, model, k=2, num_random_draws=2)
     assert across.extra["sets_not_measured"] == ()
     assert [item.kind for item in across.sets] == ["top", "bottom", "random", "random"]
@@ -178,7 +178,7 @@ def test_fixture_sets_into_one_receiver_or_several_are_measured() -> None:
 
 def _names(audit: Any, item: Any) -> list[str]:
     name_of = {row.index: row.component for row in audit.units}
-    return [name_of[unit] for unit in item.units]
+    return [name_of[unit] for unit in item.indices]
 
 
 def test_fixture_rows_without_a_score_are_reported_apart() -> None:
@@ -380,7 +380,7 @@ def test_edge_missing_corrupted_or_metric_refuses_and_the_remedy_runs(kind: str)
 
     model = Fixture().eval()
     call: dict[str, Any] = {"corrupted_input": CORRUPT, "metric": fixture_metric}
-    call.pop("corrupted" if kind == "no_corrupted" else "metric")
+    call.pop("corrupted_input" if kind == "no_corrupted" else "metric")
     _misaligned_refusal_runs_its_remedy(model, _table(model), call)
 
 

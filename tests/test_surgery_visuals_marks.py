@@ -467,7 +467,7 @@ def test_diff_draw_line_styles_and_census_sidecar(tmp_path) -> None:
     fork = subject.fork()
     fork.do(tl.units("linear_1_1:1", [(0, 0)]).resolve(fork), tl.zero_ablate())
     diff = intervention_diff(fork, reference)
-    rendered = diff.draw(str(tmp_path / "diff_fig"), file_format="svg", vis_save_only=True)
+    rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg", vis_save_only=True)
     figure_text = (tmp_path / "diff_fig.svg").read_text()
     assert rendered.endswith("diff_fig.svg")
     assert "stroke-dasharray" in figure_text  # the heuristic join renders dashed
