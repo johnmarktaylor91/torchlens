@@ -21,6 +21,7 @@ UNSTABLE pending the naming sprint.
 
 from __future__ import annotations
 
+from ..semantic import patching
 from ..semantic.logit_lens import LogitLens, LogitLensPrediction, LogitLensPredictions
 from ..stats._trajectory import TrajectoryStats, measure_trajectory
 from ._aliases import AliasResolution, alias_report, resolve_alias, translation_table
@@ -50,6 +51,7 @@ from ._retention import SavePlan, retention_plan
 from ._scores import FixedPeriodInduction, HeadScores, head_scores
 
 __all__ = [
+    "patching",
     "TrajectoryStats",
     "measure_trajectory",
     "LogitLens",

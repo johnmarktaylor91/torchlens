@@ -1,6 +1,6 @@
 """Semantic facet views for TorchLens records."""
 
-from . import patching as patching, recipes as recipes
+from . import recipes as recipes
 from .coverage import (
     FacetCoverageReport as FacetCoverageReport,
     ModuleCoverageRow as ModuleCoverageRow,
@@ -19,5 +19,4 @@ from .logit_lens import (
 __all__ = [
     "logit_lens",
     "logit_lens_predictions",
-    "patching",
 ]
