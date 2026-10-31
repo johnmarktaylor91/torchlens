@@ -161,9 +161,18 @@ def build_module_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
         ):
             continue
         labels = tuple(item.label for item in resolved)
-        # A module exits after its LAST output op: a returned KV cache
-        # carries tensors produced long before the module's final op.
-        exit_index = max(int(getattr(item, "raw_index", 0) or 0) for item in resolved)
+        # A module exits after the LAST op recorded inside its call, its
+        # children's included (``mc.ops``), not after its last OUTPUT op: a
+        # module that returns one early tensor of a child's later tuple
+        # (``out, _ = self.rnn(x)``) still returns after that child.
+        contained = (
+            trace.layer_dict_all_keys[label]
+            for label in getattr(module_call, "ops", ())
+            if label in trace.layer_dict_all_keys
+        )
+        exit_index = max(
+            int(getattr(item, "raw_index", 0) or 0) for item in (*contained, *resolved)
+        )
         keyed.append(
             (
                 exit_index,

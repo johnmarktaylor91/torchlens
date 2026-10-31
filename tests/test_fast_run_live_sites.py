@@ -111,3 +111,47 @@ def test_fast_run_setitem_site_collects_the_mutated_receiver() -> None:
     """Capture records the receiver as the setter's output; the fast run sees the same."""
 
     _fast_matches_full(SetItemSite(), torch.arange(6.0).view(2, 3))
+
+
+class PairChild(nn.Module):
+    """Returns a tuple whose second leaf is computed after the first."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return ``(a, b)`` with ``b`` the later op."""
+
+        a = x + 1
+        b = a * 2
+        return a, b
+
+
+class EarlyLeafParent(nn.Module):
+    """Returns the child's EARLY leaf, so its last output op precedes the child's."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.child = PairChild()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Hand back the first leaf of the child's pair."""
+
+        a, _b = self.child(x)
+        return a
+
+
+class EarlyLeafModel(nn.Module):
+    """Root holding the parent, so the parent is a planned atomic exit."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.parent = EarlyLeafParent()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the parent then one op."""
+
+        return self.parent(x) - 1
+
+
+def test_fast_run_module_plans_follow_module_exit_order() -> None:
+    """A parent returning a child's early leaf still exits after that child."""
+
+    _fast_matches_full(EarlyLeafModel(), torch.arange(4.0))
