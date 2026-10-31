@@ -7,7 +7,9 @@ through its shape, rank, element count, dtype or device (a DeBERTa-style
 value cannot depend on that argument's elements, so perturbing them cannot change the
 output: the edge is outside the perturbation contract (C2), the same class as arg 1 of
 ``view_as`` in ``STRUCTURAL_ARG_POSITIONS``. Membership is proved per scripted function
-from its own TorchScript graph (``function.graph``), never from a name:
+from its own TorchScript graph with nested scripted calls inlined (``function.inlined_graph``,
+the same program, so a helper that hands an argument to another scripted helper is judged by
+what that helper does with it), never from a name:
 
 - only ops whose callable is the TorchScript boundary replay callable;
 - only a graph input typed ``Tensor`` with at least one use, every use being input 0 of a
@@ -15,7 +17,7 @@ from its own TorchScript graph (``function.graph``), never from a name:
 - every call slot the perturbed parent fills must map to such an input, so a parent that
   also feeds a value-bearing argument stays perturbation-tested;
 - an unreadable graph, a schema/graph arity mismatch, a container slot, or any other use
-  (a value op, ``prim::CallFunction``, a block or graph return, ``prim::PythonOp``, ...)
+  (a value op, a block or graph return, ``prim::PythonOp``, a call left un-inlined, ...)
   gives no proof and the perturbation check runs as before.
 
 A proof is reported as its own exemption reason (:data:`SCRIPT_METADATA_ONLY_REASON`) with
@@ -60,7 +62,7 @@ def _named_graph_inputs(function: Any) -> list[tuple[str, Any]] | None:
 
     try:
         names = [argument.name for argument in function.schema.arguments]
-        inputs = list(function.graph.inputs())
+        inputs = list(function.inlined_graph.inputs())
     except (AttributeError, RuntimeError, TypeError):
         return None
     if len(names) != len(inputs):

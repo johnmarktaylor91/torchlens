@@ -4,10 +4,12 @@ A scripted helper that reads only ``x.size(-1)`` (the DeBERTa ``scaled_size_sqrt
 returns the same value whatever ``x`` holds, so the boundary op is insensitive to that
 parent by construction. The validator accepts that edge only through a graph proof that
 every use of the argument is a metadata read, and records the proof as its own exemption
-reason. Armed negatives: a helper that reads one element, a helper mixing a size read and an
-element read, and an argument reaching a node kind outside the enumerated list (a nested
-scripted call) all keep the perturbation check and still fail it; a parent that fills both
-a metadata slot and a value slot gets no proof; plain eager capture is unaffected.
+reason; a size read inside a nested scripted helper counts (the graph is inlined). Armed
+negatives: a helper that reads one element, a helper mixing a size read and an element read,
+an element read inside a nested scripted helper, an element read on a branch the call does
+not take, and an argument reaching a node kind outside the enumerated list all keep the
+perturbation check and still fail it; a parent that fills both a metadata slot and a value
+slot gets no proof; plain eager capture is unaffected.
 """
 
 from __future__ import annotations
@@ -69,9 +71,25 @@ def size_and_element_read(x: torch.Tensor) -> torch.Tensor:
 
 @torch.jit.script
 def nested_size_call(x: torch.Tensor) -> torch.Tensor:
-    """Hands the argument to another scripted function: a node kind outside the list."""
+    """Hands the argument to a scripted helper that reads only its size (proved inlined)."""
 
     return scaled_size_sqrt(x, 2)
+
+
+@torch.jit.script
+def nested_element_call(x: torch.Tensor) -> torch.Tensor:
+    """Hands the argument to a scripted helper that reads one element."""
+
+    return one_element_read(x)
+
+
+@torch.jit.script
+def untaken_branch_element_read(x: torch.Tensor) -> torch.Tensor:
+    """Reads an element only on a branch that a 2-D argument never takes."""
+
+    if x.dim() > 2:
+        return x.view(-1)[0] * 0.0 + 8.0
+    return torch.tensor(8.0)
 
 
 @torch.jit.script
@@ -186,7 +204,14 @@ def test_graph_proof_names_exactly_the_metadata_only_arguments() -> None:
     assert metadata_only_arguments(scaled_size_sqrt) == {"query_layer": frozenset({"aten::size"})}
     assert metadata_only_arguments(metadata_reads) == {"x": METADATA_READ_NODE_KINDS}
     assert metadata_only_arguments(scale_by_last_dim) == {"x": frozenset({"aten::size"})}
-    for function in (one_element_read, size_and_element_read, nested_size_call, is_cuda_read):
+    assert metadata_only_arguments(nested_size_call) == {"x": frozenset({"aten::size"})}
+    for function in (
+        one_element_read,
+        size_and_element_read,
+        nested_element_call,
+        untaken_branch_element_read,
+        is_cuda_read,
+    ):
         assert metadata_only_arguments(function) == {}
 
 
@@ -213,16 +238,36 @@ def test_size_read_mixed_with_an_element_read_still_fails_perturbation() -> None
     _assert_boundary_perturbation_failure(trace, result)
 
 
-@pytest.mark.parametrize("helper", [nested_size_call, is_cuda_read], ids=["call", "is_cuda"])
-def test_unknown_node_kind_keeps_the_perturbation_check(helper) -> None:
-    """Armed negative: a use outside the enumerated kinds keeps the check.
+def test_unknown_node_kind_keeps_the_perturbation_check() -> None:
+    """Armed negative: ``x.is_cuda`` is metadata too, but ``prim::is_cuda`` is not enumerated."""
 
-    Both helpers are insensitive to the argument's elements (the nested call reads only
-    the size, ``is_cuda`` is metadata), but neither ``prim::CallFunction`` nor
-    ``prim::is_cuda`` is enumerated, so there is no proof and the check fails.
-    """
+    trace, result = _trace_and_validate(_HelperModel(is_cuda_read), torch.randn(3, 4))
+    _assert_boundary_perturbation_failure(trace, result)
 
-    trace, result = _trace_and_validate(_HelperModel(helper), torch.randn(3, 4))
+
+def test_size_read_inside_a_nested_scripted_helper_passes() -> None:
+    """The nested helper is inlined, so its size-only read gives the proof."""
+
+    trace, result = _trace_and_validate(_HelperModel(nested_size_call), torch.randn(3, 4))
+
+    assert result is True
+    (decision,) = _metadata_decisions(trace)
+    assert nested_size_call.qualified_name in decision["justification"]
+
+
+def test_element_read_inside_a_nested_scripted_helper_still_fails_perturbation() -> None:
+    """Armed negative: inlining exposes the nested helper's element read."""
+
+    trace, result = _trace_and_validate(_HelperModel(nested_element_call), torch.randn(3, 4))
+    _assert_boundary_perturbation_failure(trace, result)
+
+
+def test_element_read_on_an_untaken_branch_still_fails_perturbation() -> None:
+    """Armed negative: the proof is not path-sensitive; any value use voids it."""
+
+    trace, result = _trace_and_validate(
+        _HelperModel(untaken_branch_element_read), torch.randn(3, 4)
+    )
     _assert_boundary_perturbation_failure(trace, result)
 
 
