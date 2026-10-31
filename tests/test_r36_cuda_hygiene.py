@@ -108,7 +108,12 @@ def test_capture_touched_cuda_predicate_gates_on_trace_fact() -> None:
         )
         is True
     )
-    assert capture_touched_cuda(SimpleNamespace(_layer_list=None)) is True
+    assert (
+        capture_touched_cuda(
+            SimpleNamespace(_provenance_forward_memory_backend=None, _layer_list=None)
+        )
+        is True
+    )
     # Other KNOWN accelerator homes must not flush the CUDA allocator (the
     # old blanket `not in ("cpu", "mps")` over-broadly flushed for them).
     assert (
@@ -260,7 +265,7 @@ def test_capture_touched_cuda_keys_on_recorded_op_devices() -> None:
         ops = [SimpleNamespace(device_ref=DeviceRef.from_value(name)) for name in device_names]
 
         class _FakeTrace:
-            forward_memory_backend = backend
+            _provenance_forward_memory_backend = backend
             _layer_list = None
 
             def __iter__(self):

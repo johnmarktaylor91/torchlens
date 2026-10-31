@@ -95,7 +95,7 @@ class _AddrIndexed(list):
 def test_backend_identity_invariants_fires_on_missing_backend() -> None:
     """Arm 0: Trace.provenance.backend must be a non-empty string."""
 
-    fake_trace = SimpleNamespace(backend="")
+    fake_trace = SimpleNamespace(_provenance_backend="")
     with pytest.raises(MetadataInvariantError, match="must be a non-empty string"):
         _check_backend_identity_invariants(fake_trace)  # type: ignore[arg-type]
 
@@ -103,7 +103,7 @@ def test_backend_identity_invariants_fires_on_missing_backend() -> None:
 def test_backend_identity_invariants_fires_on_unregistered_backend() -> None:
     """Arm 1: an unregistered backend name must raise."""
 
-    fake_trace = SimpleNamespace(backend="not_a_real_backend")
+    fake_trace = SimpleNamespace(_provenance_backend="not_a_real_backend")
     with pytest.raises(MetadataInvariantError, match="is not registered"):
         _check_backend_identity_invariants(fake_trace)  # type: ignore[arg-type]
 
@@ -111,7 +111,9 @@ def test_backend_identity_invariants_fires_on_unregistered_backend() -> None:
 def test_backend_identity_invariants_fires_on_unsupported_module_identity_mode() -> None:
     """Arm 2: a module_identity_mode unsupported by the backend must raise."""
 
-    fake_trace = SimpleNamespace(backend="torch", module_identity_mode="not_a_real_mode")
+    fake_trace = SimpleNamespace(
+        _provenance_backend="torch", _options_module_identity_mode="not_a_real_mode"
+    )
     with pytest.raises(MetadataInvariantError, match="is not supported by backend"):
         _check_backend_identity_invariants(fake_trace)  # type: ignore[arg-type]
 
@@ -301,6 +303,7 @@ def test_equivalence_symmetry_fires_on_non_set_equivalence_class_value() -> None
     """Arm 0: op_equivalence_classes values must be sets."""
 
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         op_labels=["relu_1"],
         _graph_op_equivalence_classes={"type_a": ["relu_1"]},
         _layer_list=[],
@@ -325,6 +328,7 @@ def test_equivalence_symmetry_fires_on_whole_trace_label_cross_check() -> None:
             return [set(v) | {"ghost_op"} for v in dict.values(self)]
 
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         op_labels=["relu_1"],
         _graph_op_equivalence_classes=_ShiftingEquivalenceClasses({"type_a": {"relu_1"}}),
         _layer_list=[],
@@ -339,7 +343,11 @@ def test_equivalence_symmetry_fires_on_non_set_op_equivalent_ops() -> None:
 
     op = SimpleNamespace(label="op_1_1", equivalence_class=None, equivalent_ops=["op_1_1"])
     fake_trace = SimpleNamespace(
-        op_labels=["op_1_1"], _graph_op_equivalence_classes={}, _layer_list=[op], _layer_logs={}
+        _options_grouping_policy=None,
+        op_labels=["op_1_1"],
+        _graph_op_equivalence_classes={},
+        _layer_list=[op],
+        _layer_logs={},
     )
     with pytest.raises(MetadataInvariantError, match="equivalent_ops is not a set"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -350,7 +358,11 @@ def test_equivalence_symmetry_fires_on_op_equivalent_ops_outside_op_labels() -> 
 
     op = SimpleNamespace(label="op_1_1", equivalence_class=None, equivalent_ops={"ghost_op"})
     fake_trace = SimpleNamespace(
-        op_labels=["op_1_1"], _graph_op_equivalence_classes={}, _layer_list=[op], _layer_logs={}
+        _options_grouping_policy=None,
+        op_labels=["op_1_1"],
+        _graph_op_equivalence_classes={},
+        _layer_list=[op],
+        _layer_logs={},
     )
     with pytest.raises(MetadataInvariantError, match=r"op_1_1\.equivalent_ops contains"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -361,6 +373,7 @@ def test_equivalence_symmetry_fires_on_non_set_layer_equivalent_ops() -> None:
 
     layer = SimpleNamespace(layer_label="layer_1", ops={}, equivalent_ops=["not", "a", "set"])
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         op_labels=[],
         _graph_op_equivalence_classes={},
         _layer_list=[],
@@ -375,6 +388,7 @@ def test_equivalence_symmetry_fires_on_layer_equivalent_ops_outside_op_labels() 
 
     layer = SimpleNamespace(layer_label="layer_1", ops={}, equivalent_ops={"ghost_op"})
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         op_labels=[],
         _graph_op_equivalence_classes={},
         _layer_list=[],
@@ -391,6 +405,7 @@ def test_equivalence_symmetry_fires_on_pass_disagreement() -> None:
     op2 = SimpleNamespace(equivalent_ops={"op_1_2"})
     layer = SimpleNamespace(layer_label="layer_1", ops={1: op1, 2: op2}, equivalent_ops={"op_1_1"})
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         op_labels=["op_1_1", "op_1_2"],
         _graph_op_equivalence_classes={},
         _layer_list=[],
@@ -737,6 +752,7 @@ def test_loop_detection_invariants_fires_on_unknown_recurrent_ops_member() -> No
 
     op = SimpleNamespace(label="relu_1", layer_label="relu_1", recurrent_ops=["relu_1", "ghost_op"])
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         _layer_list=[op],
         op_labels=["relu_1"],
         _layer_logs={},
@@ -755,6 +771,7 @@ def test_loop_detection_invariants_fires_on_asymmetric_recurrent_ops() -> None:
     )
     other = SimpleNamespace(label="relu_2", layer_label="relu_1", recurrent_ops=["relu_2"])
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         _layer_list=[anchor],
         op_labels=["relu_1", "relu_2"],
         _layer_logs={},
@@ -781,6 +798,7 @@ def test_loop_detection_invariants_fires_on_equivalence_class_mismatch() -> None
         equivalence_class="type_b",
     )
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         _layer_list=[anchor],
         op_labels=["relu_1", "relu_2"],
         _layer_logs={},
@@ -812,6 +830,7 @@ def test_loop_detection_invariants_fires_on_full_path_func_mismatch() -> None:
         func_name="sigmoid",
     )
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         _layer_list=[anchor],
         op_labels=["relu_1", "relu_2"],
         _layer_logs={},

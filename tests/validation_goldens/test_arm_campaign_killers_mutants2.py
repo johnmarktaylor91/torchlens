@@ -84,8 +84,8 @@ def test_backend_identity_invariants_fires_on_invalid_param_source() -> None:
     """Arm 3: an unrecognized ``param_source`` domain value must raise."""
 
     fake_trace = SimpleNamespace(
-        backend="torch",
-        module_identity_mode="torch_module",
+        _provenance_backend="torch",
+        _options_module_identity_mode="torch_module",
         _provenance_param_source="bogus_source",
         _num_param_tensors=0,
     )
@@ -208,7 +208,11 @@ def test_edge_use_parent_arg_consistency_fires_on_unresolved_child_label() -> No
 def test_equivalence_symmetry_fires_on_registry_label_outside_op_labels() -> None:
     """Arm 1: an op_equivalence_classes member must exist in op_labels."""
 
-    fake_trace = SimpleNamespace(op_labels=[], _graph_op_equivalence_classes={"t": {"ghost_op"}})
+    fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
+        op_labels=[],
+        _graph_op_equivalence_classes={"t": {"ghost_op"}},
+    )
 
     with pytest.raises(MetadataInvariantError, match=r"op_equivalence_classes\[.*\] contains"):
         _check_equivalence_symmetry(fake_trace)  # type: ignore[arg-type]
@@ -229,6 +233,7 @@ def test_equivalence_symmetry_fires_on_layer_pass_mismatch() -> None:
         equivalent_ops={"op_2_2"},
     )
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         op_labels=["op_1_1", "op_2_2"],
         _graph_op_equivalence_classes={},
         _layer_list=[op],
@@ -364,6 +369,7 @@ def test_loop_detection_invariants_fires_on_empty_recurrent_ops() -> None:
 
     layer = SimpleNamespace(label="op_1_1", layer_label="layer_1_1", recurrent_ops=())
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         op_labels=[],
         _layer_logs={},
         _layer_dict_all_keys={},
@@ -401,6 +407,7 @@ def test_loop_detection_invariants_fires_on_mismatched_member_layer_label() -> N
         func_name="relu",
     )
     fake_trace = SimpleNamespace(
+        _options_grouping_policy=None,
         op_labels=["op_1_1", "op_2_1"],
         _layer_logs={"op_1_1": anchor, "op_2_1": member},
         _layer_dict_all_keys={},

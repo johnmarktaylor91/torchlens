@@ -731,7 +731,7 @@ def _make_collective_wrap(site: CollectiveSite, original: Callable[..., Any]) ->
             with _BoundaryScope():
                 return original(*args, **kwargs)
 
-        trace = _state._active_trace
+        trace: Any = _state._active_trace  # non-None: ``capturing`` checked it
         if trace._options_mode == "predicate":
             raise CompatibilityError(
                 "Fastlog cannot represent collective boundary journals; refusing before "

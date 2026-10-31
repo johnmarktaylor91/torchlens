@@ -649,7 +649,9 @@ def require_structure_only_capability(
     marker persists plainly as of tlspec v8 and the row is supported.
     """
 
-    if not bool(trace._options_structure_only):
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
+    if not bool(trace._options_structure_only if is_live_trace(trace) else False):
         return None
     row = STRUCTURE_ONLY_CAPABILITIES[capability]
     if row.status_v1.startswith("refuse:"):

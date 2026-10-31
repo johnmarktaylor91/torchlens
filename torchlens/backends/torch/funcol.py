@@ -878,7 +878,7 @@ def _make_funcol_wrap(site: FuncolSite, original: Callable[..., Any]) -> Callabl
             with _BoundaryScope():
                 return original(*args, **kwargs)
 
-        trace = active_trace
+        trace: Any = active_trace  # non-None: ``capturing`` checked it
         if trace._options_mode == "predicate":
             raise CompatibilityError(
                 "Fastlog cannot represent collective boundary journals; refusing before "

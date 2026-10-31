@@ -959,7 +959,7 @@ def _active_save_grads_policy(trace: "Trace") -> Any:
 
     if hasattr(trace, "_active_save_grads_policy"):
         return getattr(trace, "_active_save_grads_policy")
-    return trace._options_save_grads
+    return None if trace.__dict__.get("_tl_cleaned_up", False) else trace._options_save_grads
 
 
 def _log_tensor_grad(

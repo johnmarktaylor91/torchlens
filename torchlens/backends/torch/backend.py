@@ -240,7 +240,7 @@ def _promote_layers_to_save_output_parent(
         in_ram=streaming is None or streaming.bundle_path is None or streaming.retain_in_memory,
         on_disk=streaming is not None and streaming.bundle_path is not None,
     )
-    output_device = trace._options_output_device
+    output_device: str | None = trace._options_output_device
     if output_device == "same":
         output_device = None
     spec = CaptureSpec(

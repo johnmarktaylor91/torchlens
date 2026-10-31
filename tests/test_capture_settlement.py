@@ -452,7 +452,8 @@ def test_unrelated_capture_error_after_swallowed_nonfinite_settles_failed() -> N
 
     latched = CaptureError("nan in relu_1_1")
     unrelated = CaptureError("event stream desync")
-    trace = SimpleNamespace()
+    # settle_failed reads the inference-only store directly (a real Trace sets it).
+    trace = SimpleNamespace(_options_inference_only=False)
     trace.__dict__["_stop_requested"] = StopRequest(
         kind="nonfinite",
         reason="nan in relu_1_1",
@@ -467,7 +468,7 @@ def test_unrelated_capture_error_after_swallowed_nonfinite_settles_failed() -> N
     assert outcome.reason == "event stream desync"
 
     # The exact latched exception still classifies the clean abort.
-    trace2 = SimpleNamespace()
+    trace2 = SimpleNamespace(_options_inference_only=False)
     trace2.__dict__["_stop_requested"] = trace.__dict__["_stop_requested"]
     aborted = settle_failed(trace2, None, latched, num_committed_ops=0)
     assert aborted.status is CaptureStatus.ABORTED_NONFINITE

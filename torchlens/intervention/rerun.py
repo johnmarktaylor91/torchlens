@@ -8,7 +8,7 @@ from collections import Counter
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 from torch import nn
@@ -974,7 +974,7 @@ def _capture_with_active_spec(
             model=model,
             input_args=x,
             input_kwargs={},
-            output_device=log._options_output_device,
+            output_device=cast('Literal["same", "cpu", "cuda"]', log._options_output_device),
             activation_transform=log._options_activation_transform,
             grad_transform=log._options_grad_transform,
             save_raw_activations=log._options_save_raw_activations,

@@ -1738,7 +1738,7 @@ class Trace(
         self._provenance_param_hash_full: str | None = None
         self._provenance_input_object_id: int | None = None
         self._provenance_input_signature_hash: str | None = None
-        self._options_seed = None
+        self._options_seed: int | None = None
         self._options_output_device = output_device
         self._options_detach_saved_activations = detach_saved_activations
         self._options_backward_ready = backward_ready
