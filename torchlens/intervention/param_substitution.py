@@ -247,8 +247,8 @@ def _substituted_value(
         name=helper_name,
         timing="post",
         direction="forward",
-        layer_log=None,
-        run_ctx={},
+        op=None,
+        run_context={},
         args=(consumed,),
         kwargs={},
     )

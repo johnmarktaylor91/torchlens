@@ -270,8 +270,8 @@ def apply_edge_substitution_do(
                 name=helper_name,
                 timing="post",
                 direction="forward",
-                layer_log=child_op,
-                run_ctx={},
+                op=child_op,
+                run_context={},
                 args=(consumed,),
                 kwargs={},
             )

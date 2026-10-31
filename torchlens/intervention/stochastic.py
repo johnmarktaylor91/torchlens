@@ -418,7 +418,7 @@ def _resolve_over_axes(
             "from rank (on stock nn.TransformerEncoderLayer axis 0 is TIME)",
             code="axis_semantics_unknown",
             remedy="pass the explicit integer axis (or tuple of axes) for this site's geometry",
-            argument="over",
+            argument="dim",
         )
     axes: tuple[Any, ...]
     if isinstance(over, bool):
@@ -439,7 +439,7 @@ def _resolve_over_axes(
             "label defect this gate exists to kill",
             code="intervention_over_invalid",
             remedy="pass over='all' for the explicit global scalar, or explicit integer axes",
-            argument="over",
+            argument="dim",
         )
     if ndim is None:
         return tuple(int(axis) for axis in axes)
@@ -456,7 +456,7 @@ def _normalize_over_axes(axes: tuple[Any, ...], ndim: int, verb: str) -> tuple[i
                 f"{verb} axis {axis} is out of range for rank {ndim}",
                 code="sampling_geometry_mismatch",
                 remedy=f"pass axes in [-{ndim}, {ndim - 1}]",
-                argument="over",
+                argument="dim",
             )
         normalized.append(axis % ndim)
     return tuple(dict.fromkeys(normalized))
@@ -1371,8 +1371,8 @@ def mean_fill(
     return _helper_spec(
         "mean_fill",
         kwargs={
-            "over": over_kwarg,
-            "force_shape_change": allow_shape_change,
+            "dim": over_kwarg,
+            "allow_shape_change": allow_shape_change,
             **(
                 {
                     "population_identity": reference.identity,
@@ -1475,7 +1475,7 @@ def set_direction_mean(
                 code="sampling_geometry_mismatch",
                 remedy="align feature_axis= with the members' feature axis, or "
                 "rebuild the population at the direction's geometry",
-                argument="feature_axis",
+                argument="dim",
             )
         shape = [1] * member.ndim
         shape[axis] = extent
@@ -1499,7 +1499,7 @@ def set_direction_mean(
                     f"{out.shape[fire_axis]} (shape {tuple(out.shape)!r})",
                     code="sampling_geometry_mismatch",
                     remedy="target sites whose feature axis carries the direction's extent",
-                    argument="feature_axis",
+                    argument="dim",
                 )
             shape = [1] * out.ndim
             shape[fire_axis] = extent
@@ -1543,7 +1543,7 @@ def set_direction_mean(
     return _helper_spec(
         "set_direction_mean",
         kwargs={
-            "feature_axis": explicit_axis,
+            "dim": explicit_axis,
             "direction_digest": direction_digest,
             "population_identity": reference.identity,
             "population_count": len(reference),

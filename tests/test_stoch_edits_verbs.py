@@ -118,8 +118,8 @@ def test_permute_batch_gradients_route_to_permuted_sources() -> None:
     run_ctx: dict[str, object] = {}
     context = make_hook_context(
         name="permute_batch",
-        layer_log={"label": "unit", "pass_index": 1},
-        run_ctx=run_ctx,
+        op={"label": "unit", "pass_index": 1},
+        run_context=run_ctx,
     )
     out = hook_fn(x, hook=context)
     permutation = run_ctx["sampling_records"][-1]["permutation"]  # type: ignore[index]

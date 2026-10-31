@@ -1,7 +1,7 @@
 """Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 
-Two of this package's public names are resolved LAZILY through the module
-``__getattr__`` below rather than imported eagerly, because their modules import
+One of this package's public names is resolved LAZILY through the module
+``__getattr__`` below rather than imported eagerly, because its module imports
 BACK into modules whose own import pulls in ``torchlens.intervention``:
 
 * ``Bundle`` lives in :mod:`torchlens.bundle`, which imports
@@ -9,12 +9,8 @@ BACK into modules whose own import pulls in ``torchlens.intervention``:
   of those first executes THIS ``__init__``, so an eager ``from .bundle import
   Bundle`` here made ``import torchlens.bundle`` -- a PUBLIC module -- fail with a
   partially-initialized-module ``ImportError``.
-* ``rerun`` / ``run`` live in :mod:`torchlens.intervention.rerun`, which imports
-  ``torchlens._chunking``; ``_chunking`` imports ``.intervention.errors``, so an
-  eager ``from .rerun import ...`` here made ``import torchlens._chunking`` fail
-  the same way.
 
-Deferring exactly these three names keeps every module in the package standalone
+Deferring exactly this name keeps every module in the package standalone
 importable (gated by ``tests/test_module_import_isolation.py``) while leaving the
 public surface, ``__all__``, and static types unchanged.
 """
@@ -228,15 +224,14 @@ __all__ = [
 # ever observed.
 _LAZY_NAMES: dict[str, str] = {
     "Bundle": ".bundle",
-    "run": ".rerun",
 }
 
 #: Removed spellings: each raises the typed ``facade_redirect`` error naming
 #: its replacement (clean break, no alias).
 _REDIRECTS: dict[str, str] = {
     "resample_ablate": _RESAMPLE_ABLATE_REDIRECT,
-    "intervening": "use torchlens.intervention.without_op -- intervening was renamed",
-    "replay_from": "use torchlens.intervention.push_from -- replay_from was renamed",
+    "intervening": "use torchlens.without_op -- intervening was renamed",
+    "replay_from": "use Trace.do -- replay_from was removed",
 }
 
 

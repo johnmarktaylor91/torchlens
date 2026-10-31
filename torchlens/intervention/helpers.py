@@ -54,7 +54,7 @@ def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
 
     return _helper_spec(
         "zero_ablate",
-        kwargs={"force_shape_change": allow_shape_change},
+        kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
         is_batch_independent=True,
         compatible_with_append=not allow_shape_change,
@@ -116,7 +116,7 @@ def mean_ablate(
                 "pass over='self' for the global fire-time mean, or pass "
                 "source=<tensor> to fill from an external source's mean"
             ),
-            argument="over",
+            argument="dim",
             received=repr(dim),
             supported=MEAN_ABLATE_OVER_TOKENS,
         )
@@ -146,7 +146,7 @@ def mean_ablate(
     return _helper_spec(
         "mean_ablate",
         args=(source,),
-        kwargs={"over": dim, "force_shape_change": allow_shape_change},
+        kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
         is_batch_independent=batch_independent,
         compatible_with_append=not allow_shape_change,
@@ -251,7 +251,7 @@ def scramble_elements(
     return _helper_spec(
         "scramble_elements",
         args=(source_value,),
-        kwargs={"seed": seed, "force_shape_change": allow_shape_change},
+        kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
         is_batch_independent=False,
         compatible_with_append=not allow_shape_change,
@@ -311,9 +311,9 @@ def steer(
         "steer",
         args=(direction,),
         kwargs={
-            "magnitude": scale_value,
-            "feature_axis": dim,
-            "force_shape_change": allow_shape_change,
+            "strength": scale_value,
+            "dim": dim,
+            "allow_shape_change": allow_shape_change,
         },
         factory=factory,
         is_batch_independent=True,
@@ -356,7 +356,7 @@ def scale(factor: float, *, allow_shape_change: bool = False) -> Edit:
     return _helper_spec(
         "scale",
         args=(factor,),
-        kwargs={"force_shape_change": allow_shape_change},
+        kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
         is_batch_independent=True,
         compatible_with_append=not allow_shape_change,
@@ -407,7 +407,7 @@ def clamp(
 
     return _helper_spec(
         "clamp",
-        kwargs={"min": low, "max": high, "force_shape_change": allow_shape_change},
+        kwargs={"low": low, "high": high, "allow_shape_change": allow_shape_change},
         factory=factory,
         is_batch_independent=True,
         compatible_with_append=not allow_shape_change,
@@ -471,7 +471,7 @@ def add_noise(
     return _helper_spec(
         "add_noise",
         args=(std,),
-        kwargs={"seed": seed, "force_shape_change": allow_shape_change},
+        kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
         is_batch_independent=True,
         compatible_with_append=not allow_shape_change,
@@ -531,7 +531,7 @@ def project_onto(
     return _helper_spec(
         "project_onto",
         args=(direction,),
-        kwargs={"feature_axis": dim, "force_shape_change": allow_shape_change},
+        kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
         is_batch_independent=True,
         compatible_with_append=not allow_shape_change,
@@ -588,7 +588,7 @@ def project_out(
     return _helper_spec(
         "project_out",
         args=(direction,),
-        kwargs={"feature_axis": dim, "force_shape_change": allow_shape_change},
+        kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
         is_batch_independent=True,
         compatible_with_append=not allow_shape_change,
@@ -666,7 +666,7 @@ def swap_with(
     return _helper_spec(
         "swap_with",
         args=(other_label,),
-        kwargs={"force_shape_change": allow_shape_change},
+        kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
         is_batch_independent=True,
         compatible_with_append=not allow_shape_change,
@@ -749,7 +749,7 @@ def splice_module(
     return _helper_spec(
         "splice_module",
         args=(module,),
-        kwargs={"input": input, "output": output, "force_shape_change": allow_shape_change},
+        kwargs={"input": input, "output": output, "allow_shape_change": allow_shape_change},
         factory=factory,
         metadata={"input": input, "output": output},
         is_batch_independent=False,
@@ -830,7 +830,7 @@ def zero_grad(*, allow_shape_change: bool = False) -> Edit:
     return _helper_spec(
         "zero_grad",
         kind="backward",
-        kwargs={"force_shape_change": allow_shape_change},
+        kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
@@ -875,7 +875,7 @@ def scale_grad(factor: float, *, allow_shape_change: bool = False) -> Edit:
         "scale_grad",
         args=(factor,),
         kind="backward",
-        kwargs={"force_shape_change": allow_shape_change},
+        kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
         metadata={"live_rerun_only": True},
         direction="backward",
@@ -1048,7 +1048,7 @@ def clamp_grad(low: float | None = None, high: float | None = None) -> Edit:
 
     return _helper_spec(
         "clamp_grad",
-        kwargs={"min": low, "max": high},
+        kwargs={"low": low, "high": high},
         kind="backward",
         factory=factory,
         metadata={"live_rerun_only": True, "mount_shape": "tuple"},
@@ -1313,7 +1313,7 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
             "not load",
             code="intervention_helper_renamed",
             remedy=(
-                f"rebuild the edit with torchlens.intervention.{renamed_to}(...) (the same "
+                f"rebuild the edit with {renamed_to}(...) (the same "
                 "helper under its new name, same arguments and bytes) and save it again"
             ),
             argument="name",
@@ -1600,7 +1600,17 @@ _REDIRECTS: dict[str, str] = {"resample_ablate": _RESAMPLE_ABLATE_REDIRECT}
 
 #: Old builtin helper names a saved spec may still carry -> the new name. A load
 #: refuses them typed (``intervention_helper_renamed``); there is no load alias.
-_RENAMED_HELPER_NAMES: dict[str, str] = {"resample_ablate": "scramble_elements"}
+_RENAMED_HELPER_NAMES: dict[str, str] = {
+    "resample_ablate": "scramble_elements",
+    "bwd_hook": "hook_grad",
+    "grad_clamp": "clamp_grad",
+    "grad_clip": "clip_grad",
+    "grad_noise": "add_grad_noise",
+    "grad_scale": "scale_grad",
+    "grad_zero": "zero_grad",
+    "noise": "add_noise",
+    "project_off": "project_out",
+}
 
 
 # Under ``not TYPE_CHECKING`` so type checkers keep seeing the real module

@@ -90,7 +90,7 @@ def test_tap_backward_tensor_mount_forward_selector() -> None:
 
     assert len(tap.records) == 1
     record = tap.records[0]
-    assert record.signal == "backward"
+    assert record.direction == "backward"
     assert record.grad_kind == "grad_output"
     assert record.backward_call_index == 1
     assert torch.equal(record.value, torch.ones(2, 3))
@@ -104,7 +104,7 @@ def test_tap_backward_tensor_mount_compute_op_still_matches() -> None:
 
     assert len(tap.records) == 1
     record = tap.records[0]
-    assert record.signal == "backward"
+    assert record.direction == "backward"
     assert record.grad_kind == "grad_output"
     assert record.backward_call_index == 1
     assert torch.equal(record.value, torch.ones(2, 3))
@@ -127,7 +127,7 @@ def test_tap_backward_tensor_mount_input_alias_matches() -> None:
 
     assert len(tap.records) == 1
     record = tap.records[0]
-    assert record.signal == "backward"
+    assert record.direction == "backward"
     assert record.grad_kind == "grad_output"
     assert record.backward_call_index == 1
     assert torch.equal(record.value, torch.ones(2, 3))
@@ -140,7 +140,7 @@ def test_tap_backward_grad_fn_mount_backward_selector() -> None:
     _trace_with_tap(tap)
 
     assert len(tap.records) == 1
-    assert tap.records[0].signal == "backward"
+    assert tap.records[0].direction == "backward"
     assert tap.records[0].site_label is not None
     assert tap.records[0].site_label.startswith("relu_back")
 

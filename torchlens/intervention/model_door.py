@@ -157,9 +157,9 @@ def resolve_model_operand(model: Any, *, door: str, intervene: Any = None) -> Do
             f"tl.{door} received a bound intervention executor, not a model; "
             "a binding is a capture-free live lane and doors never silently "
             "treat it as a plain model. The canonical spelling is "
-            f"tl.{door}(binding.model, ..., intervene=binding.spec)",
+            f"tl.{door}(binding.model, ..., intervene=binding.recipe)",
             code="model_door_binding_refused",
-            remedy="pass binding.model as the model and binding.spec as "
+            remedy="pass binding.model as the model and binding.recipe as "
             "intervene=, or run the capture-free lane by calling the binding",
             argument="model",
         )
@@ -169,13 +169,13 @@ def resolve_model_operand(model: Any, *, door: str, intervene: Any = None) -> Do
             "explicit intervene= spec; the funnel never merges two spec "
             "sources silently",
             code="model_door_intervene_conflict",
-            remedy="merge the specs explicitly (binding.spec & other_spec) "
+            remedy="merge the specs explicitly (binding.recipe & other_spec) "
             "and pass one spec, or pass the plain base model",
             argument="intervene",
         )
     return DoorResolution(
         model=model.model,
-        spec=model.spec,
+        spec=model.recipe,
         normalized=True,
         door=door,
     )

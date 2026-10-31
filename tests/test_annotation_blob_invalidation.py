@@ -82,7 +82,7 @@ def test_rerun_same_shape_drops_annotation_blobs() -> None:
     model = _TinyConv().eval()
     trace = _annotated_trace(model)
     stale_maps = trace._annotation_blobs["featmap:layer:conv2d_1_1:maps"].clone()
-    tl.run(trace, model, _input_batch(offset=1.0))
+    trace.run(model, _input_batch(offset=1.0))
     assert trace._annotation_blobs is None, (
         "rerun kept stale annotation blobs; draw() would render the OLD "
         f"activations (stale mean {stale_maps.mean():.4f}) on the new batch"

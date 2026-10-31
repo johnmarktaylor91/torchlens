@@ -451,7 +451,7 @@ class _BindSession:
         # Rule ids are content-derived and read live (a staged tensor can be
         # edited in place between calls), so one call keys every ledger by
         # the identity its rules had when the call started.
-        self.rule_ids: dict[int, str] = {id(rule): rule.rule_id for rule in binding.spec.rules}
+        self.rule_ids: dict[int, str] = {id(rule): rule.rule_id for rule in binding.recipe.rules}
         self.rule_fire_counts: dict[str, int] = dict.fromkeys(self.rule_ids.values(), 0)
         self.helper_tensor_versions = binding._helper_tensor_versions()
         self.start = time.monotonic()
@@ -659,7 +659,7 @@ def _consider_op(
             module_pass_index=(getattr(module_frame, "pass_index", None) if module_frame else None),
         )
         try:
-            rule = binding.spec.match(ctx)
+            rule = binding.recipe.match(ctx)
         except InvalidArgumentError:
             raise
         except Exception as exc:
@@ -1213,7 +1213,7 @@ class BoundModel:
     ``generate()`` holds the runtime across the whole generation with
     pass-qualified rule semantics, including a lazy generation whose
     forwards run while the caller iterates; the ledger is out-of-band on
-    ``.last_report``; ``.spec``/``.model`` are read-only; runtime state
+    ``.last_report``; ``.recipe``/``.model`` are read-only; runtime state
     installs and removes atomically on success or exception; zero-fire rules
     settle by the ``on_zero_fire`` policy after the call (default ``"warn"``:
     a coded warning plus the recorded fact); there is no binding
@@ -1280,7 +1280,7 @@ class BoundModel:
             f"<bound intervention executor: {len(self._spec.rules)} rule(s) "
             f"{self._spec.digest} over {type(self._base_model).__name__}; "
             f"capture-free live lane (values replaced after execution); "
-            f".spec/.model read-only; last call: {status}>"
+            f".recipe/.model read-only; last call: {status}>"
         )
 
     # ------------------------------------------------------------------

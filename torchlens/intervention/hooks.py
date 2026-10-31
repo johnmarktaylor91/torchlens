@@ -244,7 +244,7 @@ def normalize_hook_plan(
         # entry metadata so a helper-requested shape change reaches
         # validate_hook_output, mirroring the append-safety check in rerun.py.
         entry_force_shape_change = helper_spec is not None and bool(
-            dict(helper_spec.kwargs).get("force_shape_change", False)
+            dict(helper_spec.kwargs).get("allow_shape_change", False)
         )
         _validate_live_site_target(
             site_target,
@@ -269,7 +269,7 @@ def normalize_hook_plan(
                         {
                             "attach_order": order,
                             "composition": "left_to_right",
-                            "force_shape_change": entry_force_shape_change,
+                            "allow_shape_change": entry_force_shape_change,
                             "direction": concrete_direction,
                             "timing": "post",
                         }
@@ -857,7 +857,7 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
         metadata = {
             "attach_order": order,
             "composition": "left_to_right",
-            "force_shape_change": False,
+            "allow_shape_change": False,
             "direction": "forward",
             "timing": "post",
             **value_spec.metadata,

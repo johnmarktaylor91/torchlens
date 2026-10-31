@@ -532,7 +532,7 @@ def _apply_live_hooks(
                 normalized_entry.normalized_callable,
                 current_out,
                 hook_context,
-                allow_shape_change=bool(normalized_entry.metadata.get("force_shape_change", False)),
+                allow_shape_change=bool(normalized_entry.metadata.get("allow_shape_change", False)),
             )
         result, replaced = _apply_inplace_replacement_to_mutated_storage(
             result,

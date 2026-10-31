@@ -109,7 +109,7 @@ def _validate_feature_axis(feature_axis: Any, helper_name: str) -> int:
             f"{helper_name} feature_axis= must be an int axis index; got {feature_axis!r}",
             code="subspace_basis_invalid",
             remedy="name the axis the basis indexes, e.g. feature_axis=-1",
-            argument="feature_axis",
+            argument="dim",
         )
     return int(feature_axis)
 
@@ -199,7 +199,7 @@ def subspace_ablate(
     return _helper_spec(
         "subspace_ablate",
         args=(basis,),
-        kwargs={"mode": mode, "feature_axis": axis, "mean": mean, "seed": seed},
+        kwargs={"mode": mode, "dim": axis, "mean": mean, "seed": seed},
         factory=factory,
         portability="opaque_audit",
         is_batch_independent=mode != "resample",
@@ -257,7 +257,7 @@ def subspace_interchange(
     return _helper_spec(
         "subspace_interchange",
         args=(basis,),
-        kwargs={**dict(donor_spec.kwargs), "feature_axis": axis},
+        kwargs={**dict(donor_spec.kwargs), "dim": axis},
         factory=factory,
         portability="opaque_audit",
         is_batch_independent=True,

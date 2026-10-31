@@ -373,7 +373,7 @@ def _receipt_digest(plan: InterventionPlan, sites: list[str], fire_counts: list[
 
     payload = json.dumps(
         {
-            "spec_digest": plan.digest,
+            "spec_digest": plan.spec_digest,
             "site_keys": list(sites),
             "fire_counts": [int(count) for count in fire_counts],
         },

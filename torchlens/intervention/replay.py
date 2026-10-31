@@ -1193,7 +1193,7 @@ def _apply_replay_hooks(
             entry.normalized_callable,
             current,
             context,
-            allow_shape_change=bool(entry.metadata.get("force_shape_change", False)),
+            allow_shape_change=bool(entry.metadata.get("allow_shape_change", False)),
         )
         records.append(
             _replay_fire_record(

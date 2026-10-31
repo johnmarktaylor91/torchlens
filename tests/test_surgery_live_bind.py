@@ -400,7 +400,7 @@ def test_model_door_refuse_arm_is_default(toy) -> None:
         tl.trace(bound, x)
     assert excinfo.value.fields["code"] == "model_door_binding_refused"
     assert "binding.model" in str(excinfo.value)
-    assert "intervene=binding.spec" in str(excinfo.value)
+    assert "intervene=binding.recipe" in str(excinfo.value)
     with pytest.raises(Exception) as excinfo:
         tl.release_model(bound)
     assert excinfo.value.fields["code"] == "model_door_binding_refused"

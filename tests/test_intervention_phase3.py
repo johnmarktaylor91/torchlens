@@ -55,7 +55,7 @@ def _context() -> HookContext:
 
     return make_hook_context(
         name="test",
-        layer_log={
+        op={
             "layer_label": "relu_1_1",
             "layer_type": "relu",
             "shape": (2, 3),
@@ -83,7 +83,7 @@ def _context_with_args(*args: Any) -> HookContext:
 
     return make_hook_context(
         name="test",
-        layer_log={
+        op={
             "layer_label": "linear_1_1",
             "layer_type": "linear",
             "shape": (2, 3),
@@ -110,7 +110,7 @@ def test_phase3_helpers_import_and_return_specs() -> None:
         tl.add_noise(0.1, seed=1),
         tl.project_onto(torch.ones(3), dim=-1),
         tl.project_out(torch.ones(3), dim=-1),
-        tl.swap_with(torch.ones(2, 3)),
+        tl.intervention.helpers.swap_with(torch.ones(2, 3)),
         tl.splice_module(torch.nn.Identity()),
         tl.hook_grad(_good_hook),
         tl.zero_grad(),

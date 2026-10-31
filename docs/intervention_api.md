@@ -102,7 +102,6 @@ Forward helpers return `Edit` objects that can be passed to `set`,
 | `tl.add_noise` | `add_noise(std, *, seed=None, allow_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
 | `tl.project_onto` | `project_onto(direction, *, dim=None, allow_shape_change=False)` | Portable when `direction` is tensor data. |
 | `tl.project_out` | `project_out(direction, *, dim=None, allow_shape_change=False)` | Portable when `direction` is tensor data. |
-| `tl.swap_with` | `swap_with(other_label, *, allow_shape_change=False)` | Tensor and Op-like (`.out`) sources work in memory; **string labels are not supported and raise `HookValueError` immediately** -- no execution path resolves a bare label to another site's tensor today. |
 | `tl.splice_module` | `splice_module(module, *, input="in", output="out", allow_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
 
 The packaged SAE splice experiment, `torchlens.bridge.sae.splice(...)`
@@ -209,7 +208,7 @@ For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
 | --- | --- |
 | `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
 | `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
-| `log.do(...)` / `tl.do(log, ...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
+| `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
 | `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
 | `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |

@@ -105,7 +105,7 @@ def _validate_leaves(leaves: list[Edit]) -> None:
                 "seed='auto' on the derived-seed family)",
                 argument="edits",
             )
-        if kwargs.get("force_shape_change"):
+        if kwargs.get("allow_shape_change"):
             raise InvalidArgumentError(
                 f"compose[{index}] ({leaf.helper_name!r}) declares a shape "
                 "change; v1 refuses ANY shape-changing leaf (the "

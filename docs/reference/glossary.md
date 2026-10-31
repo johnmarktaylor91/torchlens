@@ -1025,13 +1025,12 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (elementwise iid scramble from a flattened source -- the honest rename of
   the removed `resample_ablate` spelling, which a saved spec may not name either: it refuses
   `intervention_helper_renamed`; for coherent donor patching use
-  `tl.patch_from`), `tl.replace_with` (fixed value), `tl.swap_with` (another
-  site's tensor), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
+  `tl.patch_from`), `tl.replace_with` (fixed value), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
   `tl.project_out` (keep or remove the component along a direction), and
   `tl.splice_module` (call a module as a black-box forward splice). Availability outside
   the torch backend is narrower; see the per-backend rosters in the backends guide.
-  Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`, `tl.project_out`,
-  `tl.swap_with`) keep the caller's tensor by reference. Each staged entry records a
+  Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`, `tl.project_out`)
+  keep the caller's tensor by reference. Each staged entry records a
   full-content digest of those tensors when it is staged; a rerun and `save_intervention`
   refuse `helper_tensor_changed_since_capture` once the tensor changed (in place or through
   `.data`). Re-stage the edit to use the new value. A bound executor (`spec.bind(model)`) reads
@@ -1045,9 +1044,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   backward pass.
 
 **Replay verbs**
-: `tl.do` applies a one-shot intervention to a captured log; `tl.push` pushes an edit
-  downstream through the recorded graph (DAG replay) and `tl.push_from` pushes from a
-  pre-mutated site; `tl.run` performs a full-forward run with the log's active
+: `Trace.do` applies a one-shot intervention to a captured log; `Trace.push` pushes an edit
+  downstream through the recorded graph (DAG replay) and `Trace.push_from` pushes from a
+  pre-mutated site; `Trace.run` performs a full-forward run with the log's active
   intervention spec; `tl.sweep` captures one intervened trace per swept replacement
   value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) The replay engine operates on pass-qualified op labels
   (`label:pass`): cone traversal, the replay overlay, hook targets, and commits are
@@ -1059,7 +1058,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   Engines treat the trace's staged spec as read-only: a rerun (plain, append, or
   chunked), a failed or interrupted rerun, and a fork leave it exactly as staged.
   A capture-time `intervene=` predicate that is not lowered to module hooks stages
-  one entry per fired op on its final label; `tl.run` re-arms the trace's retained
+  one entry per fired op on its final label; `Trace.run` re-arms the trace's retained
   predicate through the capture door instead, and refuses
   `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
   different ops than the staged entries name, or at the same ops with changed rule content
@@ -1429,7 +1428,7 @@ shims, by declared contract. Each carries the same tag at its definition.
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
   `tl.facet(name).latent(k)` then addresses latent `k` at the doors a
   `tl.head` selector serves (`Trace.set`, `attach_hooks`, `Trace.do`,
-  `fork().do`, `tl.do`; and, as a bare selector, `trace[selector]` and
+  `fork().do`; and, as a bare selector, `trace[selector]` and
   `trace.resolve_sites(selector)`, which return the `Facet` whose `.value` is
   the read, and `tl.trace(save=selector)`, which keeps the ops that read
   needs), and `trace[site].facets[name]` (every latent),

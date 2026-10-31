@@ -279,12 +279,12 @@ def _resolve_helper_applier(spec: Edit, mx: Any) -> MLXHookApplier:
             )
         return MLXHookApplier(identity, lambda out: out + delta)
     if name == "clamp":
-        low = kwargs.get("min")
-        high = kwargs.get("max")
+        low = kwargs.get("low")
+        high = kwargs.get("high")
         return MLXHookApplier(identity, lambda out: mx.clip(out, low, high))
     if name == "mean_ablate":
         source = spec.args[0] if spec.args else None
-        if source is not None or kwargs.get("over", "self") != "self":
+        if source is not None or kwargs.get("dim", "self") != "self":
             raise BackendUnsupportedError(
                 "MLX backend tl.mean_ablate(...) interventions support the "
                 "over='self' form only; tensor sources are torch-side semantics."

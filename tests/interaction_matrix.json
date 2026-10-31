@@ -495,7 +495,7 @@
    "evidence": "docs/reference/error_refusal_contract.md",
    "code": "model_door_binding_refused",
    "confidence": "medium",
-   "note": "episode= is a tl.trace option; tl.trace refuses a bound executor and prints the canonical spelling (base_model plus intervene=binding.spec)."
+   "note": "episode= is a tl.trace option; tl.trace refuses a bound executor and prints the canonical spelling (base_model plus intervene=binding.recipe)."
   },
   {
    "a": "bind",

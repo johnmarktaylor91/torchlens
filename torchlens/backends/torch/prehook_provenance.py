@@ -869,15 +869,11 @@ def _compare_observations(
             kinds.add("structure")
             paths.add(path)
             continue
-        if left.object_id != right.python_object_id:
+        if left.object_id != right.object_id:
             kinds.add("identity")
             paths.add(path)
             continue
-        if (
-            left.version is not None
-            and right.version is not None
-            and left.version != right.mutation_version
-        ):
+        if left.version is not None and right.version is not None and left.version != right.version:
             kinds.add("in_place_tensor")
             paths.add(path)
         left_metadata = (left.shape, left.dtype, left.device, left.layout, left.requires_grad)
