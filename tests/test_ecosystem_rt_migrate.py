@@ -87,9 +87,13 @@ def test_stranded_staging_refuses_before_mutation(corpus_dir: Path, tmp_path: Pa
     assert manifest["tlspec_version"] == 6  # untouched
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
-    "name", ["art_v2.31.0_portable", "art_v2.33.0_portable", "art_v2.34.1_portable"]
+    "name",
+    [
+        pytest.param("art_v2.31.0_portable", marks=pytest.mark.smoke),
+        "art_v2.33.0_portable",
+        "art_v2.34.1_portable",
+    ],
 )
 def test_pre_floor_source_refuses_as_saved_by_2x(
     corpus_dir: Path, tmp_path: Path, name: str
