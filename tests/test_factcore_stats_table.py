@@ -71,7 +71,7 @@ def test_full_health_scan_batches_syncs() -> None:
     stop-at-first path keeps it (the first sync IS its point).
     """
 
-    from torchlens.data_classes import _nonfinite
+    from torchlens._data_classes import _nonfinite
 
     x = torch.randn(2, 4)
     x[0, 0] = float("nan")
@@ -98,7 +98,7 @@ def test_full_health_scan_batches_syncs() -> None:
 def test_batched_and_sequential_scans_agree() -> None:
     """The batched verdicts equal the per-op verdicts payload for payload."""
 
-    from torchlens.data_classes._nonfinite import _has_nonfinite
+    from torchlens._data_classes._nonfinite import _has_nonfinite
 
     x = torch.randn(2, 4)
     x[0, 1] = float("inf")

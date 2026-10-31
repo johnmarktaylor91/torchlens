@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.field_policy import FieldPolicy
+from torchlens._data_classes.field_policy import FieldPolicy
 from torchlens.validation.diagnostics import (
     TRACE_DIAGNOSTICS_ATTR,
     TRACE_FAILURE_ATTR,

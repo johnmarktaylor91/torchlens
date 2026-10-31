@@ -101,7 +101,7 @@ RESULT = sum(1 for line in sink.getvalue().splitlines() if line.lstrip().startsw
 - **Evidence-qualified stats**: per-line descriptive statistics (the one open
   torchsnooper issue) ride a four-rung cost ladder.
 - **Aligned diffs**: byte-stable transcripts diff cleanly by construction, and
-  `tl.debug.compare(trace_a, trace_b)` is the aligned, value-level upgrade of
+  `tl._debug.compare(trace_a, trace_b)` is the aligned, value-level upgrade of
   text-diffing two logs.
 
 ## Cost ladder (stats=)

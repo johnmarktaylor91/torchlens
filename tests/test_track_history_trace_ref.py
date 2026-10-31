@@ -13,8 +13,9 @@ from pathlib import Path
 
 import pytest
 import torch
+from torchlens.observability._artifact import CommittedBlock, HistoryWriter
 
-from torchlens.observability import (
+from torchlens._observability import (
     HISTORY_SCHEMA_VERSION,
     ObservationRecord,
     RunRecord,
@@ -22,9 +23,8 @@ from torchlens.observability import (
     Spine,
     StepBlockRecord,
 )
-from torchlens.observability._artifact import CommittedBlock, HistoryWriter
-from torchlens.observability._errors import HistorySchemaError
-from torchlens.observability._op_tier import OpTierCollector
+from torchlens._observability._errors import HistorySchemaError
+from torchlens._observability._op_tier import OpTierCollector
 from torchlens.trackers import HistoryReader
 
 

@@ -7,8 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import HAS_RMSNORM_MODULE
 from torchlens.semantic import LogitLensError, logit_lens
-from torchlens.utils._torch_compat import HAS_RMSNORM_MODULE
 
 _requires_rmsnorm = pytest.mark.skipif(
     not HAS_RMSNORM_MODULE, reason="torch.nn.RMSNorm postdates the torch 2.1 floor (added 2.4)"

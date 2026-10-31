@@ -19,6 +19,7 @@ import pytest
 from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
+from torchlens._ecosystem import compat_window
 from torchlens._io import TorchLensIOError
 from torchlens._io.compat_ledger import (
     LEDGER_ROWS,
@@ -29,7 +30,6 @@ from torchlens._io.compat_ledger import (
     pair_is_governed,
     ungoverned_pair_error,
 )
-from torchlens.ecosystem import compat_window
 
 GOLDENS_DIR = Path(__file__).parent / "release_goldens"
 CORPUS_PATH = GOLDENS_DIR / "genuine_release_artifacts.tar.gz"

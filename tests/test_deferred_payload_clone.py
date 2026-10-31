@@ -26,7 +26,7 @@ from _forward_stash import stashed
 
 import torchlens as tl
 import torchlens.backends.torch.wrappers as _wrappers
-from torchlens.utils import tensor_utils as _tu
+from torchlens._utils import tensor_utils as _tu
 
 
 @contextlib.contextmanager

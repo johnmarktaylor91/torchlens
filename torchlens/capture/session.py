@@ -12,8 +12,8 @@ from typing import Any, Literal
 from weakref import ref
 
 from .. import _state
-from ..ir.events import OpEvent
-from ..utils.tensor_utils import safe_copy
+from .._ir.events import OpEvent
+from .._utils.tensor_utils import safe_copy
 from .outcome import CaptureOutcome
 from .plan import CapturePlan, EnrichmentLevel, RetentionKind, RetentionProfile
 
@@ -309,7 +309,7 @@ class CaptureSession:
         addresses = profile.activation_module_exit_addresses
         if addresses is None or profile.activation_kind is not RetentionKind.ACTIVATION:
             return False
-        from ..ir.selector_eval import module_address_matches
+        from .._ir.selector_eval import module_address_matches
 
         return any(module_address_matches(module_call_label, address) for address in addresses)
 
@@ -535,8 +535,8 @@ class CaptureSession:
                 for parent_label in output_op.parents:
                     parent = trace.layer_dict_all_keys[parent_label]
                     live_output_by_raw_index[parent.raw_index] = output_tensor
+            from .._ir.selector_eval import selector_contains_kind
             from ..intervention.selectors import BaseSelector
-            from ..ir.selector_eval import selector_contains_kind
 
             selected: list[int] | str
             if isinstance(activation_selector, BaseSelector):
@@ -635,8 +635,8 @@ class CaptureSession:
                     getattr(trace, "activation_transform", None),
                 )
             if detached_spills:
+                from .._utils.display import user_stacklevel
                 from ..errors import TorchLensWarning
-                from ..utils.display import user_stacklevel
 
                 warnings.warn(
                     TorchLensWarning(
@@ -652,7 +652,7 @@ class CaptureSession:
                     ),
                     stacklevel=user_stacklevel(),
                 )
-            from ..postprocess import _refresh_fast_saved_summary
+            from .._postprocess import _refresh_fast_saved_summary
 
             _refresh_fast_saved_summary(trace)
             trace._layer_nums_to_save = sorted(selected_nums)
@@ -964,7 +964,7 @@ def compile_legacy_capture_plan(
         activation_window = None
     if _selector_requires_unwindowed_escrow(grad_layers_to_save):
         gradient_window = None
-    from ..ir.selector_eval import module_exit_bound_addresses
+    from .._ir.selector_eval import module_exit_bound_addresses
     from .preflight import _escrow_remedy
 
     # A selector whose matches all lie among module-pass outputs (``tl.module``

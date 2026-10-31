@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any, ClassVar, Literal, TypeAlias
 
 from .._io import FieldPolicy
-from ..ir.container import (
+from .._ir.container import (
     ContainerSpec,
     DataclassField,
     DictKey,
@@ -869,7 +869,7 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
         Fork policies for Trace fields.
     """
 
-    from ..constants import MODEL_LOG_FIELD_ORDER
+    from .._constants import MODEL_LOG_FIELD_ORDER
 
     table = _fork_policy_table(
         MODEL_LOG_FIELD_ORDER,
@@ -906,7 +906,7 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
         Fork policies for Op fields.
     """
 
-    from ..constants import LAYER_PASS_LOG_FIELD_ORDER
+    from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
     table = _fork_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,

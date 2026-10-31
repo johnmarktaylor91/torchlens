@@ -80,7 +80,7 @@ def _assert_typed_unknown_refusal(excinfo: pytest.ExceptionInfo, record_type: st
 def test_trace_dict_path_refuses_unknown_field(tiny_trace) -> None:
     """The must-not-drop case: the path that never crashed is the path checked."""
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     state = tiny_trace.__getstate__()
     state[UNKNOWN_KEY] = 1
@@ -93,7 +93,7 @@ def test_trace_dict_path_refuses_unknown_field(tiny_trace) -> None:
 def test_trace_refusal_covers_both_writer_directions(tiny_trace) -> None:
     """Symmetric refusal: same-stamp drift AND older-writer unknown field."""
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     for declared_version in (TLSPEC_VERSION, 6):
         state = tiny_trace.__getstate__()
@@ -107,8 +107,8 @@ def test_trace_refusal_covers_both_writer_directions(tiny_trace) -> None:
 def test_op_columnar_path_refuses_typed_never_attributeerror(tiny_trace) -> None:
     """Acceptance bar: typed refusal, never AttributeError, on the Op path."""
 
-    from torchlens.data_classes._state_adapter import state_new
-    from torchlens.data_classes.op import Op
+    from torchlens._data_classes._state_adapter import state_new
+    from torchlens._data_classes.op import Op
 
     donor_state = tiny_trace[0].__getstate__()
     donor_state[UNKNOWN_KEY] = 1
@@ -122,8 +122,8 @@ def test_op_columnar_path_refuses_typed_never_attributeerror(tiny_trace) -> None
 def test_slotted_path_refuses_unknown_field() -> None:
     """The third storage path: a slotted value record refuses identically."""
 
-    from torchlens.data_classes._state_adapter import state_new
-    from torchlens.data_classes.grad_fn_call import GradFnCall
+    from torchlens._data_classes._state_adapter import state_new
+    from torchlens._data_classes.grad_fn_call import GradFnCall
 
     with governed_artifact_load(), pytest.raises(UnknownPersistedFieldError) as excinfo:
         state_new(GradFnCall).__setstate__({"tlspec_version": TLSPEC_VERSION, UNKNOWN_KEY: 1})
@@ -133,7 +133,7 @@ def test_slotted_path_refuses_unknown_field() -> None:
 def test_absent_fields_keep_tolerant_default_fill(tiny_trace) -> None:
     """The contract refuses UNKNOWN fields only; ABSENT fields still fill."""
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     state = tiny_trace.__getstate__()
     state.setdefault("tlspec_version", TLSPEC_VERSION)
@@ -254,7 +254,7 @@ def test_inert_inventory_reports_without_loading(
 
     tampered = inspect_state_contract(tampered_main_bundle)
     assert tampered["unknown_field_total"] >= 1
-    trace_row = tampered["record_types"]["torchlens.data_classes.trace.Trace"]
+    trace_row = tampered["record_types"]["torchlens._data_classes.trace.Trace"]
     assert UNKNOWN_KEY in trace_row["unknown_fields"]
     assert trace_row["ungoverned"] is False
 

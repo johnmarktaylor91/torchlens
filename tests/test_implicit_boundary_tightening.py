@@ -19,8 +19,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._ir.events import BackwardPassEnd, BackwardPassStart
 from torchlens.backends.torch import backward as backward_mod, tensor_tracking as tracking_mod
-from torchlens.ir.events import BackwardPassEnd, BackwardPassStart
 
 _HAS_GRAPH_TASK_ID = hasattr(torch._C, "_current_graph_task_id")
 
@@ -152,7 +152,7 @@ def test_star_engine_drain_and_sync_point_project_identical_records(monkeypatch)
     assert drain_paths.count("engine_drain") == 1
     assert sync_paths == ["sync_point"]
 
-    from torchlens.ir.events import OpGradObserved
+    from torchlens._ir.events import OpGradObserved
 
     # Implicit (unmanaged) passes carry no walked grad-fn hooks; their
     # projected records are the pass records plus op/param gradient events.

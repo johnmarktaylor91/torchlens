@@ -260,8 +260,8 @@ def _safe_qualname(value: Any) -> str:
 def _build_export_sites() -> dict[int, tuple[str, ...]]:
     """Build exact raw-id to currently registered torch export-site names."""
 
-    from ...constants import get_orig_torch_funcs
-    from ...utils.introspection import nested_getattr
+    from ..._constants import get_orig_torch_funcs
+    from ..._utils.introspection import nested_getattr
 
     sites: dict[int, list[str]] = {}
     for namespace_name, func_name in get_orig_torch_funcs():

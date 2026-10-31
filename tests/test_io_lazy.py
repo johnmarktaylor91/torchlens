@@ -14,8 +14,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import load, trace as trace_fn
+from torchlens._data_classes.trace import Trace
 from torchlens._io import BlobRef, TorchLensIOError
-from torchlens.data_classes.trace import Trace
 from torchlens.io import materialize_nested
 
 

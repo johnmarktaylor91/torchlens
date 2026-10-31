@@ -81,7 +81,7 @@ Intervention specs can be saved at audit, executable-with-callables, or portable
 
 ### Appliances
 The appliance subfolders `notebook` and `neuro` are part of the 2.x package layout. Their
-extras enforcement is DEFERRED, never import-time: `import torchlens.notebook` /
+extras enforcement is DEFERRED, never import-time: `import torchlens._notebook` /
 `torchlens.neuro` stays inert by design, and the dependency check fires on first
 attribute access via PEP-562 `__getattr__` — precisely so a bare import can never run
 foreign code without a trust opt-in (RCE-hardened, gated by

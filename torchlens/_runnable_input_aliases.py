@@ -21,7 +21,7 @@ from ._runnable_state import (
     _guarded_defensive_materialize,
     runnable_tensor_byte_digest,
 )
-from .utils.alias_footprint import touched_bytes_relation
+from ._utils.alias_footprint import touched_bytes_relation
 
 if TYPE_CHECKING:
     from ._runnable_execution import (

@@ -48,7 +48,7 @@
   becomes a presence gap), aligns seq counters as deltas from each rank's first recorded key,
   and treats witness digests as demote-only evidence. Artifacts save as `merged-directory`
   bundles whose descriptor is a cache: loads rederive from the rank cores and refuse typed on
-  any inequality. Frozen enums + error/finding codes: `torchlens.merged` +
+  any inequality. Frozen enums + error/finding codes: `torchlens._merged` +
   `docs/reference/merged_trace_contract.md` (ordered-equality gated). p2p/pipeline (C3) and
   DTensor topologies (C2) refuse typed; merged replay does not exist.
 - `CaptureOptions(save_budget=...)` is a per-device ceiling on retained activation bytes, default
@@ -176,7 +176,7 @@
   next call, and `BindReport.helper_tensor_versions` shows the version counter moving.
 - "Pristine" has three senses; never read one as another. `Trace.pristine` (documented-unstable)
   is the derived reading "nothing ever intervened on this trace", computed from the evidence the
-  trace carries (`torchlens/data_classes/_trace_pristine.py`, one function), so it survives save
+  trace carries (`torchlens/_data_classes/_trace_pristine.py`, one function), so it survives save
   and load and stays `False` after `clear_hooks()`, a `Trace.state` reassignment or a fork; `None`
   means no evidence (an artifact older than tlspec 9, or a non-torch backend) and must never be
   treated as `True`. `TraceState.PRISTINE` is only the operational state machine's start value: an

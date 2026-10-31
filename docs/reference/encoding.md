@@ -30,7 +30,7 @@ the session-time Kineto join: exact-attribution device nanoseconds per
 pass-qualified op, summed with the mandatory aggregation legend line on
 rolled nodes. The channel exists only on a trace captured under an owned
 profiler session whose join reached `joined`
-(`torchlens.observability.native_profile`); explicitly requesting it
+(`torchlens._observability.native_profile`); explicitly requesting it
 anywhere else refuses typed (`device_time_unavailable`) with the cause and
 remedy — never silent zeros. Joined-but-kernel-less nodes read honest n/a.
 

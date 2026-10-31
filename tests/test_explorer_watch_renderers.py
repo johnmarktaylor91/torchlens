@@ -13,8 +13,9 @@ import xml.etree.ElementTree as ET
 
 import pytest
 import torch
+from torchlens.observability._artifact import CommittedBlock
 
-from torchlens.observability import (
+from torchlens._observability import (
     Histogram,
     HistoryCollector,
     HistoryView,
@@ -36,7 +37,6 @@ from torchlens.observability import (
     render_fan,
     render_waterfall,
 )
-from torchlens.observability._artifact import CommittedBlock
 
 
 def _observed(

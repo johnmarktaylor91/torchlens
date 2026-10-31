@@ -12,6 +12,7 @@ import math
 import pytest
 import torch
 
+from torchlens._utils._torch_compat import get_cpu_half_kernels_support
 from torchlens.stats import (
     GLYPH_RAMP_ASCII,
     GLYPH_RAMP_UNICODE,
@@ -27,7 +28,6 @@ from torchlens.stats._stats_kernel import (
     identity_seed,
     seeded_sample,
 )
-from torchlens.utils._torch_compat import get_cpu_half_kernels_support
 
 
 def _oracle_moments(tensor: torch.Tensor) -> tuple[float, float]:
@@ -223,7 +223,7 @@ def test_complex_magnitude_labeled() -> None:
     assert stats.mean == pytest.approx(float(magnitude.mean()), rel=1e-9)
     line = render_core_line(stats)
     assert "|mean|=" in line and "|sd|=" in line
-    from torchlens.utils.display import tensor_stats_summary
+    from torchlens._utils.display import tensor_stats_summary
 
     compat = tensor_stats_summary(tensor)
     assert "|mean|=" in compat and "neg=" not in compat
@@ -349,7 +349,7 @@ def test_special_case_lines() -> None:
 def test_compat_wrapper_preserves_field_layout() -> None:
     """tensor_stats_summary keeps its shape over the sound kernel."""
 
-    from torchlens.utils.display import tensor_stats_summary
+    from torchlens._utils.display import tensor_stats_summary
 
     line = tensor_stats_summary(torch.tensor([[1.0, 2.0], [3.0, 4.0]]))
     assert line == (

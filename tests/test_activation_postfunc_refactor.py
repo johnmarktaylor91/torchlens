@@ -212,15 +212,6 @@ def test_portable_save_roundtrip_preserves_transformed_out(tmp_path: Path) -> No
     assert restored_layer.transformed_activation_memory == layer.transformed_activation_memory
 
 
-def test_transform_type_aliases_exported() -> None:
-    """Activation and grad transform aliases are importable from torchlens."""
-
-    from torchlens.types import ActivationPostfunc, GradientPostfunc
-
-    assert ActivationPostfunc is not None
-    assert GradientPostfunc is not None
-
-
 def test_streaming_preserves_transformed_out(tmp_path: Path) -> None:
     """Streaming bundles write transformed out fields."""
 

@@ -8,8 +8,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 from .._errors import CaptureContextError, InvalidArgumentError, PayloadUnavailableError
+from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
-from ..utils.display import user_stacklevel
 from . import _render_utils
 from ._boundary_bundle import bundle_member_nodes
 from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
@@ -82,8 +82,8 @@ def _view_rendered_file(filepath: str) -> None:
 
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
-    from ..data_classes.trace import Trace
+    from .._data_classes.module import Module
+    from .._data_classes.trace import Trace
     from ._mutated_params import MutatedParameterEmission
     from .auto_collapse import ModuleRepeatFold
     from .node_universe import NodeUniverse

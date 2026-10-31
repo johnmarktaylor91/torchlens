@@ -9,22 +9,22 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 from ... import _state
+from ..._data_classes.param import ParamAccessor
+from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
-from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendName
-from ...capture.outcome import stamp_backend_finalized
-from ...data_classes.param import ParamAccessor
-from ...data_classes.trace import Trace
-from ...intervention.selectors import BaseSelector
-from ...ir.capture_events import CaptureEvents
-from ...options import CaptureOptions, merge_capture_options
-from ...postprocess._materialize import materialize_from_events
-from ...postprocess._selective_save import (
+from ..._ir.capture_events import CaptureEvents
+from ..._postprocess._materialize import materialize_from_events
+from ..._postprocess._selective_save import (
     _STATIC_SELECTOR_KINDS,
     reject_selector_outside_kinds,
     warn_zero_match_save_predicate,
 )
-from ...quantities import Duration
+from ..._quantities import Duration
+from ..._trace_core.relation_views import freeze_trace_relation_views
+from ...backends import BackendName
+from ...capture.outcome import stamp_backend_finalized
+from ...intervention.selectors import BaseSelector
+from ...options import CaptureOptions, merge_capture_options
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,

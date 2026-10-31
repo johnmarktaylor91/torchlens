@@ -7,7 +7,7 @@ kernel). No ``grads=``, no ``optimizer=``: transient gradients are
 phase-sensitive (a checkpoint verdict must not depend on WHEN you called
 it), and the caller who names the mapping owns the phase label.
 
-Knob parity with ``tl.debug.dtype_range_audit`` is pinned by test against
+Knob parity with ``tl._debug.dtype_range_audit`` is pinned by test against
 :mod:`torchlens.checks._constants` (one constants module, memo 4.4).
 """
 
@@ -347,7 +347,7 @@ def audit_params(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed pub
         ``None``. Unknown names refuse typed.
     max_fraction:
         Fraction of the dtype ceiling above which headroom warns (knob
-        parity with ``tl.debug.dtype_range_audit``).
+        parity with ``tl._debug.dtype_range_audit``).
     subnormal_fraction_threshold:
         Minimum subnormal fraction that warns.
 

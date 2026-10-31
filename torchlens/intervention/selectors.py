@@ -91,7 +91,7 @@ class BaseSelector:
 
         if not isinstance(other, BaseSelector) and hasattr(other, "__selection__"):
             return NotImplemented
-        from ..ir.selector_eval import contains_followed_by
+        from .._ir.selector_eval import contains_followed_by
 
         if contains_followed_by(self) or contains_followed_by(other):
             from .errors import SelectorCompositionError
@@ -112,7 +112,7 @@ class BaseSelector:
             Negated selector.
         """
 
-        from ..ir.selector_eval import contains_followed_by
+        from .._ir.selector_eval import contains_followed_by
 
         if contains_followed_by(self):
             from .errors import SelectorCompositionError
@@ -236,7 +236,7 @@ class BaseSelector:
             Whether ``ctx`` matches this selector.
         """
 
-        from ..ir.selector_eval import evaluate
+        from .._ir.selector_eval import evaluate
 
         return evaluate(self, ctx, lifecycle="capture")
 
@@ -610,7 +610,7 @@ class SiteSelector(BaseSelector):
                     remedy="pass either the rendered key or components, not both",
                     argument="key",
                 )
-            from ..postprocess._site_key import parse_site_key
+            from .._postprocess._site_key import parse_site_key
 
             try:
                 parse_site_key(key)
@@ -650,7 +650,7 @@ class SiteSelector(BaseSelector):
             return False
         if self.key is not None:
             return rendered_key == self.key
-        from ..postprocess._site_key import parse_site_key
+        from .._postprocess._site_key import parse_site_key
 
         try:
             module_site, layer_type, output_slot, call_ordinal = parse_site_key(rendered_key)
@@ -1716,7 +1716,7 @@ def in_module(address_or_layer: Any, address: str | None = None) -> InModuleSele
     if address is None:
         return InModuleSelector(str(address_or_layer))
 
-    from ..ir.selector_eval import module_address_matches
+    from .._ir.selector_eval import module_address_matches
 
     if getattr(address_or_layer, "is_output", False):
         # The synthetic output alias carries its producer's module stamp for
@@ -1860,7 +1860,7 @@ def _check_composition(a: SelectorLike, b: SelectorLike) -> None:
         Raises when composition is invalid.
     """
 
-    from ..ir.selector_eval import contains_followed_by, flatten_and_conjuncts
+    from .._ir.selector_eval import contains_followed_by, flatten_and_conjuncts
     from .errors import SelectorCompositionError
 
     a_dir = _classify_selector_direction(a)

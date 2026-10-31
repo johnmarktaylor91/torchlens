@@ -23,20 +23,20 @@ import torch
 from torch import nn
 
 from . import _state
+from ._data_classes.trace import Trace
 from ._plain_attr_fidelity import (
     assert_copy_kept_instance_attrs,
     is_registered_tensor_alias,
     restore_simple_plain_attrs_on_copy,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
-from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
-from .data_classes.trace import Trace
-from .utils._torch_compat import (
+from ._utils._torch_compat import (
     force_eager_stance_scope,
     get_dynamo_optimized_module_type,
     get_fsdp_wrapper_type,
     is_dynamo_compiled_callable,
 )
+from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 
 # Content-fingerprint / attribute-fragment family: split to _capture_fingerprint.py
 # under the R43 file-size ratchet. Re-exported here because the historical import
@@ -1458,7 +1458,7 @@ def _is_uninitialized_param(value: Any) -> bool:
     copy path (see ``utils.tensor_utils._is_uninitialized_lazy_tensor``).
     """
 
-    from .utils.tensor_utils import _is_uninitialized_lazy_tensor
+    from ._utils.tensor_utils import _is_uninitialized_lazy_tensor
 
     return _is_uninitialized_lazy_tensor(value)
 
@@ -2148,7 +2148,7 @@ def _move_tensors_to_device_inner(
         raise_input_tree_cycle_refusal,
         raise_input_tree_depth_refusal,
     )
-    from torchlens.ir.container import get_registered_container
+    from torchlens._ir.container import get_registered_container
 
     if isinstance(obj, torch.Tensor):
         target = torch.device(device) if not isinstance(device, torch.device) else device
@@ -2238,7 +2238,7 @@ def _move_tensors_to_device_inner(
             # A tuple SUBCLASS (namedtuple, structseq, torch.Size, user class):
             # the shared identity-verified ladder, probing under pause_logging so
             # no constructor side effect can enter the captured graph.
-            from torchlens.utils.arg_handling import rebuild_tuple_like
+            from torchlens._utils.arg_handling import rebuild_tuple_like
 
             rebuilt = rebuild_tuple_like(obj_type, moved_sequence)
             return rebuilt if rebuilt is not None else _UNMOVED
@@ -2302,7 +2302,7 @@ def _move_tensors_to_device_inner(
                 ]
                 if type(obj) is dict:
                     return dict(moved_pairs)
-                from torchlens.utils.arg_handling import rebuild_mapping_like
+                from torchlens._utils.arg_handling import rebuild_mapping_like
 
                 rebuilt = rebuild_mapping_like(obj, moved_pairs)
                 return rebuilt if rebuilt is not None else _UNMOVED
@@ -2317,7 +2317,7 @@ def _move_tensors_to_device_inner(
             moved_state, changed = _children(state_items[name] for name in state_names)
             if not changed:
                 return _UNMOVED
-            from torchlens.utils.arg_handling import _inert_state_enumeration_total
+            from torchlens._utils.arg_handling import _inert_state_enumeration_total
 
             if not _inert_state_enumeration_total(type(obj), ()):
                 return _UNMOVED
@@ -2340,7 +2340,7 @@ def _move_tensors_to_device_inner(
         obj_type = type(obj)
         if obj_type is list:
             return list(moved_sequence)
-        from torchlens.utils.arg_handling import rebuild_list_like
+        from torchlens._utils.arg_handling import rebuild_list_like
 
         rebuilt = rebuild_list_like(obj, moved_sequence)
         return rebuilt if rebuilt is not None else _UNMOVED

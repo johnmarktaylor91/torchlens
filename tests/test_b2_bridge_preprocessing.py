@@ -20,6 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._data_classes._preprocessing_provenance as provenance
 from torchlens import preprocessing as tlp
 from torchlens._errors import InvalidArgumentError
 
@@ -63,7 +64,7 @@ def test_attached_torchvision_weights_are_discovered() -> None:
     resolution = tlp.resolve(model=model)
     assert resolution.record.source == "torchvision_weights"
     assert resolution.record.config["resolution_method"] == "model_metadata"
-    assert resolution.status == tlp.STATUS_AUTHORITATIVE
+    assert resolution.status == provenance.STATUS_AUTHORITATIVE
     assert resolution.declared is not None and resolution.declared.resize_size == 256
     # Attaching records metadata only: the module tree is unchanged.
     assert [name for name, _ in model.named_modules()] == modules_before
@@ -81,7 +82,7 @@ def test_explicit_transform_that_is_an_authority_stamps_its_own_record() -> None
     expected = tlp.resolve(_V1.transforms()).record
     assert record.source == "torchvision_preset" == expected.source
     assert record.config == expected.config
-    assert tlp.status_of(record) == tlp.STATUS_AUTHORITATIVE
+    assert provenance.status_of(record) == provenance.STATUS_AUTHORITATIVE
 
 
 def test_unrecognized_transform_still_stamps_user_transform() -> None:
@@ -90,7 +91,7 @@ def test_unrecognized_transform_still_stamps_user_transform() -> None:
 
     record = _trace_with(halve).input_preprocessor
     assert record.source == "user_transform"
-    assert tlp.status_of(record) == tlp.STATUS_UNKNOWN
+    assert provenance.status_of(record) == provenance.STATUS_UNKNOWN
 
 
 def test_open_clip_model_resolves_its_own_preprocess_cfg() -> None:
@@ -102,7 +103,7 @@ def test_open_clip_model_resolves_its_own_preprocess_cfg() -> None:
 
     assert resolution.record.source == "open_clip_preprocess_cfg"
     assert resolution.record.config["resolution_method"] == "model_metadata"
-    assert resolution.status == tlp.STATUS_AUTHORITATIVE
+    assert resolution.status == provenance.STATUS_AUTHORITATIVE
     declared = resolution.declared
     assert declared is not None
     assert declared.mean == pytest.approx(tuple(config["mean"]))

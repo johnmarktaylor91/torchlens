@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 import torch
 
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 from torchlens.semantic.logit_lens import LogitLensEntry, LogitLensResult
-from torchlens.tviz._lens_heatmap import (
+from torchlens.transformer._lens_heatmap import (
     MAX_HEATMAP_POSITIONS,
     _clip,
     _heatmap_cells,

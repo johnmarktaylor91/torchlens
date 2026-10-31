@@ -102,7 +102,7 @@ Forward helpers return `Edit` objects that can be passed to `set`,
 | `tl.add_noise` | `add_noise(std, *, seed=None, allow_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
 | `tl.project_onto` | `project_onto(direction, *, dim=None, allow_shape_change=False)` | Portable when `direction` is tensor data. |
 | `tl.project_out` | `project_out(direction, *, dim=None, allow_shape_change=False)` | Portable when `direction` is tensor data. |
-| `tl.splice_module` | `splice_module(module, *, input="in", output="out", allow_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
+| `tl.splice_module` | `splice_module(module, *, input_route="in", output_route="out", allow_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
 
 The packaged SAE splice experiment, `torchlens.bridge.sae.splice(...)`
 (documented-unstable), composes `splice_module` with fork + push: it swaps a
@@ -200,7 +200,7 @@ current-call event. Failed partials are not topology-complete, so `Recording.to_
 `Recording.log_backward()` reject them.
 
 For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
-`tl.partial.from_failed_capture(exc)`.
+`tl._partial.from_failed_capture(exc)`.
 
 ## Trace Mutators
 

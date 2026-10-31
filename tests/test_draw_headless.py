@@ -57,7 +57,7 @@ def test_view_rendered_file_silent_in_notebook(
     monkeypatch.setattr(_render_utils.sys, "platform", "linux")
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
-    monkeypatch.setattr("torchlens.utils.display.in_notebook", lambda: True)
+    monkeypatch.setattr("torchlens._utils.display.in_notebook", lambda: True)
 
     def fail_if_opened(*_: object, **__: object) -> None:
         """Fail the test if the platform viewer would have been launched."""

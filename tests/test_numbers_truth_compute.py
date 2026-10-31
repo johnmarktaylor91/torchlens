@@ -123,7 +123,7 @@ def test_fma_outside_the_closed_vocabulary_refuses_typed() -> None:
 def test_flop_count_conventions() -> None:
     """A6: utils.flop_count honors the default/fma2/fma1 convention."""
 
-    from torchlens.utils import flop_count
+    from torchlens._utils import flop_count
 
     model = nn.Linear(8, 16, bias=True)
     x = torch.randn(2, 8)
@@ -150,7 +150,7 @@ def test_flop_count_refuses_removed_and_unknown_options(
     """The removed count_fma_as_two spelling refuses typed naming flop_convention."""
 
     from torchlens._errors import InvalidArgumentError
-    from torchlens.utils import flop_count
+    from torchlens._utils import flop_count
 
     model = nn.Linear(2, 2)
     calls: list[int] = []

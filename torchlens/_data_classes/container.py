@@ -1,0 +1,1185 @@
+"""Runtime views over captured TorchLens output containers."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Literal
+
+from .._errors import InvalidArgumentError, PayloadUnavailableError
+from .._ir.container import (
+    ContainerSpec,
+    DataclassField,
+    DictKey,
+    HFKey,
+    NamedField,
+    OutputPathComponent,
+    TupleIndex,
+    rebuild_container_from_spec,
+)
+from .._ir.container_registry import (
+    ContainerLeafOccurrence,
+    ContainerRecord,
+    ContainerSnapshot,
+    Role,
+    Site,
+)
+
+if TYPE_CHECKING:
+    from .op import Op
+
+ContainerRootKind = Literal["call", "final_output", "path"]
+
+
+@dataclass(frozen=True)
+class Container:
+    """Computed view over a captured Python output container."""
+
+    spec: ContainerSpec | None
+    leaves: tuple[Op, ...]
+    root_kind: ContainerRootKind
+    root_id: tuple[str, Any]
+    path: tuple[OutputPathComponent, ...] = ()
+    supports_reconstruct: bool = True
+    leaf_occurrences: tuple[ContainerLeafOccurrence, ...] = ()
+
+    @property
+    def kind(self) -> str | None:
+        """Return the container kind for this view.
+
+        Returns
+        -------
+        str | None
+            Spec kind, or ``None`` for path-only degraded views.
+        """
+
+        return self.spec.kind if self.spec is not None else None
+
+    @property
+    def reconstructable(self) -> bool:
+        """Return whether this view can reconstruct the original Python object.
+
+        Returns
+        -------
+        bool
+            ``True`` when a full spec and all leaf payloads are available.
+        """
+
+        return (
+            self.supports_reconstruct
+            and self.spec is not None
+            and all(_value_for_op(op, "out") is not None for op in self._leaf_ops())
+        )
+
+    def __len__(self) -> int:
+        """Return the number of immediate elements in the container.
+
+        Returns
+        -------
+        int
+            Immediate container arity.
+        """
+
+        if self.spec is None:
+            return 0
+        if self.spec.kind in {"tuple", "list", "registered"}:
+            return int(self.spec.length or 0)
+        if self.spec.kind in {"dict", "hf_model_output"}:
+            return len(self.spec.keys)
+        if self.spec.kind in {"namedtuple", "dataclass"}:
+            return len(self.spec.fields)
+        if self.spec.kind == "literal":
+            return 1
+        return 0
+
+    def __iter__(self) -> Iterator[Any]:
+        """Iterate over immediate elements.
+
+        Yields
+        ------
+        Any
+            Immediate leaf ``Op`` objects or nested ``Container`` views.
+        """
+
+        if self.spec is None:
+            return
+        for key in _element_keys(self.spec):
+            yield self[key]
+
+    def __getitem__(self, key: int | str | Any) -> Any:
+        """Return an immediate element by index, dict key, or field name.
+
+        Parameters
+        ----------
+        key:
+            Tuple/list index, dict/HF key, or dataclass/namedtuple field name.
+
+        Returns
+        -------
+        Any
+            Leaf ``Op`` or nested ``Container`` view.
+
+        Raises
+        ------
+        KeyError
+            If the key is not present in this container.
+        """
+
+        if self.spec is None:
+            raise KeyError(key)
+        component = _component_for_key(self.spec, key)
+        child_spec = dict(self.spec.child_specs).get(component)
+        child_path = (*self.path, component)
+        if child_spec is not None:
+            return Container(
+                spec=child_spec,
+                leaves=self.leaves,
+                root_kind=self.root_kind,
+                root_id=self.root_id,
+                path=child_path,
+                supports_reconstruct=self.supports_reconstruct,
+                leaf_occurrences=self.leaf_occurrences,
+            )
+        leaf = self._leaf_by_path(child_path)
+        if leaf is not None:
+            return leaf
+        if self.spec.kind == "literal":
+            return self.spec.literal_value
+        raise KeyError(key)
+
+    def reconstruct(self, values: Literal["out", "transformed"] = "out") -> Any:
+        """Reconstruct the original Python container.
+
+        Parameters
+        ----------
+        values:
+            Leaf value source. ``"out"`` uses saved outputs; ``"transformed"``
+            uses transformed outputs.
+
+        Returns
+        -------
+        Any
+            Rebuilt Python object.
+
+        Raises
+        ------
+        ValueError
+            If this view is path-only or leaf values are unavailable.
+        """
+
+        if self.spec is None:
+            raise PayloadUnavailableError(
+                "Path-only container views cannot be reconstructed",
+                code="container_not_reconstructable",
+                remedy="capture with capture_container_structure=True to persist the spec",
+            )
+        if not self.supports_reconstruct:
+            raise PayloadUnavailableError(
+                "This container view is not reconstructable for the current backend",
+                code="container_not_reconstructable",
+                remedy="use a backend that persists container structure for this view",
+            )
+        leaves = []
+        for op in self._leaf_ops():
+            value = _value_for_op(op, values)
+            if value is None:
+                raise PayloadUnavailableError(
+                    f"Container leaf {op.layer_label!r} has no saved {values} value",
+                    code="container_leaf_not_saved",
+                    remedy="re-run the capture with save= covering the container leaves",
+                    label=op.layer_label,
+                )
+            leaves.append(value)
+        return rebuild_container_from_spec(self.spec, leaves)
+
+    def reconstruct_at(
+        self,
+        *,
+        site: Site | None = None,
+        role: Role | None = None,
+        values: Literal["out", "transformed"] = "out",
+    ) -> Any:
+        """Reconstruct this registry-backed container with a snapshot selector.
+
+        Parameters
+        ----------
+        site:
+            Optional boundary site. Site aliases are considered matches.
+        role:
+            Optional boundary role.
+        values:
+            Leaf value source. ``"out"`` uses saved outputs; ``"transformed"``
+            uses transformed outputs.
+
+        Returns
+        -------
+        Any
+            Rebuilt Python object.
+
+        Raises
+        ------
+        ValueError
+            If the selector is invalid for this view.
+        """
+
+        ordinal = self.root_id[1] if self.root_id[0] == "container" else None
+        trace = self._source_trace()
+        if ordinal is None or trace is None:
+            if site is not None or role is not None:
+                raise InvalidArgumentError(
+                    "Snapshot selectors require a registry-backed container view",
+                    code="container_selector_requires_registry",
+                    remedy="call reconstruct() without site/role on this view",
+                )
+            return self.reconstruct(values=values)
+        record = getattr(trace, "_containers", {}).get(ordinal)
+        if not isinstance(record, ContainerRecord):
+            raise InvalidArgumentError(
+                "Snapshot selectors require a registry-backed container record",
+                code="container_selector_requires_registry",
+                remedy="call reconstruct() without site/role on this view",
+            )
+        snapshot = record.snapshot_at(site=site, role=role)
+        selected = _container_from_snapshot(trace, record, snapshot)
+        return selected.reconstruct(values=values)
+
+    def __repr__(self) -> str:
+        """Return an indented tree representation.
+
+        Returns
+        -------
+        str
+            Human-readable container tree.
+        """
+
+        lines = [self._repr_line()]
+        self._append_repr_lines(lines, indent=2)
+        return "\n".join(lines)
+
+    def summary(self) -> str:
+        """Return an indented tree summary of this container.
+
+        Returns
+        -------
+        str
+            Human-readable container tree with leaf output references.
+        """
+
+        return repr(self)
+
+    def _leaf_ops(self) -> tuple[Op, ...]:
+        """Return leaf ops under this view in spec traversal order.
+
+        Returns
+        -------
+        tuple[Op, ...]
+            Ordered leaf operations.
+        """
+
+        if self.spec is None:
+            return ()
+        if len(self.leaf_occurrences) == len(self.leaves):
+            by_path = {
+                tuple(occurrence.path): op
+                for occurrence, op in zip(self.leaf_occurrences, self.leaves, strict=True)
+            }
+            return tuple(
+                by_path[path]
+                for path in _leaf_paths(self.spec, prefix=self.path)
+                if path in by_path
+            )
+        by_path = {tuple(getattr(op, "container_path", ()) or ()): op for op in self.leaves}
+        return tuple(
+            by_path[path] for path in _leaf_paths(self.spec, prefix=self.path) if path in by_path
+        )
+
+    def _leaf_by_path(self, path: tuple[OutputPathComponent, ...]) -> Op | None:
+        """Return the leaf operation at ``path``.
+
+        Parameters
+        ----------
+        path:
+            Typed container path.
+
+        Returns
+        -------
+        Op | None
+            Leaf op when present.
+        """
+
+        if len(self.leaf_occurrences) == len(self.leaves):
+            for occurrence, op in zip(self.leaf_occurrences, self.leaves, strict=True):
+                if tuple(occurrence.path) == path:
+                    return op
+        for op in self.leaves:
+            if tuple(getattr(op, "container_path", ()) or ()) == path:
+                return op
+        return None
+
+    def _source_trace(self) -> Any:
+        """Return a source trace attached to this view, if available.
+
+        Returns
+        -------
+        Any
+            Source trace or ``None``.
+        """
+
+        for op in self.leaves:
+            trace = op._source_trace_or_none()
+            if trace is not None:
+                return trace
+        return None
+
+    def _repr_line(self) -> str:
+        """Return the root line for ``repr``.
+
+        Returns
+        -------
+        str
+            Single-line summary.
+        """
+
+        return (
+            f"Container(kind={self.kind!r}, root_kind={self.root_kind!r}, "
+            f"root_id={self.root_id!r}, reconstructable={self.reconstructable})"
+        )
+
+    def _append_repr_lines(self, lines: list[str], *, indent: int) -> None:
+        """Append child tree lines to a representation buffer.
+
+        Bounded display walk (r-b4 R27-5): nesting past 50 levels renders a
+        ``<max-depth>`` marker instead of crashing ``repr`` on an over-deep
+        (or forged self-referential) container spec.
+
+        Parameters
+        ----------
+        lines:
+            Mutable output line buffer.
+        indent:
+            Current indentation width.
+        """
+
+        if indent > 100:
+            lines.append(f"{' ' * indent}<max-depth>")
+            return
+        if self.spec is None:
+            lines.append(f"{' ' * indent}<path-only>")
+            return
+        for key in _element_keys(self.spec):
+            label = _display_key(key)
+            try:
+                value = self[key]
+            except KeyError:
+                lines.append(f"{' ' * indent}{label}: <missing>")
+                continue
+            if isinstance(value, Container):
+                lines.append(f"{' ' * indent}{label}: {value.kind}")
+                value._append_repr_lines(lines, indent=indent + 2)
+            else:
+                lines.append(f"{' ' * indent}{label}: -> {_leaf_reference(value)}")
+
+
+def container_from_op(op: Op) -> Container | None:
+    """Build a container view rooted at an op's captured output container.
+
+    Parameters
+    ----------
+    op:
+        Operation whose output container metadata should be viewed.
+
+    Returns
+    -------
+    Container | None
+        Runtime container view, degraded path-only view, or ``None``.
+    """
+
+    registry_container = _container_from_registry(op)
+    if registry_container is not None:
+        return registry_container
+    spec = getattr(op, "container_spec", None)
+    path = tuple(getattr(op, "container_path", ()) or ())
+    capability = _output_container_structure_capability(op)
+    if capability == "none":
+        return None
+    if spec is None and not path:
+        return None
+    root_kind, root_id = _root_identity(op)
+    leaves = _sibling_leaves(op, spec=spec, root_kind=root_kind)
+    return Container(
+        spec=spec,
+        leaves=leaves,
+        root_kind=root_kind,
+        root_id=root_id,
+        supports_reconstruct=spec is not None,
+    )
+
+
+def output_containers_from_op(op: Op) -> tuple[Container, ...]:
+    """Return output container views associated with an op.
+
+    Parameters
+    ----------
+    op:
+        Operation whose output-container records should be viewed.
+
+    Returns
+    -------
+    tuple[Container, ...]
+        Registry-backed output containers, or the legacy single container view.
+    """
+
+    trace = op._source_trace_or_none()
+    if trace is None or not hasattr(trace, "_containers"):
+        container = container_from_op(op)
+        return () if container is None else (container,)
+    if getattr(op, "container_spec", None) is None and not _op_is_final_output(op):
+        container = container_from_op(op)
+        return () if container is None else (container,)
+    index = _output_registry_index(trace)
+    labels = (getattr(op, "layer_label", None), getattr(op, "layer_label_raw", None))
+    ordinals: list[int] = []
+    for label in labels:
+        if label is not None:
+            ordinals.extend(index.get(label, ()))
+    containers = []
+    for ordinal in dict.fromkeys(ordinals):
+        record = trace._containers[ordinal]
+        if isinstance(record, ContainerRecord):
+            containers.append(_container_from_record(op, record, roles=_output_roles_for_op(op)))
+    return tuple(container for container in containers if container is not None)
+
+
+def containers_from_op(op: Op) -> tuple[Container, ...]:
+    """Return all input and output container views associated with an op.
+
+    Parameters
+    ----------
+    op:
+        Operation whose container memberships should be viewed.
+
+    Returns
+    -------
+    tuple[Container, ...]
+        Deduplicated input and output container views.
+    """
+
+    containers = (*input_containers_from_op(op), *output_containers_from_op(op))
+    unique: list[Container] = []
+    seen: set[tuple[tuple[str, Any], tuple[OutputPathComponent, ...]]] = set()
+    for container in containers:
+        key = (container.root_id, container.path)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(container)
+    return tuple(unique)
+
+
+def input_containers_from_op(op: Op) -> tuple[Container, ...]:
+    """Return input container views consumed by an op call site.
+
+    Parameters
+    ----------
+    op:
+        Operation whose function-call inputs should be viewed.
+
+    Returns
+    -------
+    tuple[Container, ...]
+        Registry-backed input containers for ``op.func_call_id``.
+    """
+
+    trace = op._source_trace_or_none()
+    if trace is None or not hasattr(trace, "_containers"):
+        return ()
+    func_call_id = getattr(op, "func_call_id", None)
+    if func_call_id is None:
+        return ()
+    ordinals = _input_registry_index(trace).get(func_call_id, ())
+    containers = []
+    for ordinal in ordinals:
+        record = trace._containers[ordinal]
+        if isinstance(record, ContainerRecord):
+            containers.append(_container_from_record(op, record, roles={Role.CALL_INPUT}))
+    return tuple(container for container in containers if container is not None)
+
+
+def _container_from_registry(op: Op) -> Container | None:
+    """Build the primary output container view from registry records when available."""
+
+    trace = op._source_trace_or_none()
+    if trace is None or not hasattr(trace, "_containers"):
+        return None
+    if getattr(op, "container_spec", None) is None and not _op_is_final_output(op):
+        # A per-op spec is the opt-in metadata (capture_container_structure /
+        # intervention_ready); the FINAL-output snapshot is registered on every
+        # capture (W051-HONESTY H2), so final-output ops read the registry even
+        # when their own record carries no spec.
+        return None
+    index = _output_registry_index(trace)
+    labels = (getattr(op, "layer_label", None), getattr(op, "layer_label_raw", None))
+    for label in labels:
+        if label is None:
+            continue
+        for ordinal in index.get(label, ()):
+            record = trace._containers[ordinal]
+            if not isinstance(record, ContainerRecord):
+                continue
+            container = _container_from_record(op, record, roles=_output_roles_for_op(op))
+            if container is not None:
+                return container
+    return None
+
+
+def _output_roles_for_op(op: Op) -> set[Role]:
+    """Return output-container roles that should back ``op`` views.
+
+    Parameters
+    ----------
+    op:
+        Operation whose container view is being resolved.
+
+    Returns
+    -------
+    set[Role]
+        ``MODEL_OUTPUT`` for synthetic final-output ops and ``CALL_OUTPUT`` for
+        producer/call-site ops.
+    """
+
+    if _op_is_final_output(op):
+        return {Role.MODEL_OUTPUT}
+    return {Role.CALL_OUTPUT}
+
+
+def _output_registry_index(trace: Any) -> dict[str, tuple[int, ...]]:
+    """Return a lazy reverse index from output op label to container ordinals."""
+
+    cached = trace.__dict__.get("_container_ordinals_by_output_op_label")
+    if isinstance(cached, dict):
+        return cached
+    index: dict[str, list[int]] = {}
+    for ordinal, record in getattr(trace, "_containers", {}).items():
+        if not isinstance(record, ContainerRecord):
+            continue
+        for snapshot in record.snapshots:
+            if snapshot.role not in {Role.CALL_OUTPUT, Role.MODEL_OUTPUT}:
+                continue
+            for occurrence in snapshot.leaf_occurrences:
+                label = occurrence.producer_op_label
+                if label is not None:
+                    index.setdefault(label, []).append(ordinal)
+                if snapshot.role == Role.MODEL_OUTPUT:
+                    for output_label in getattr(trace, "output_layers", ()) or ():
+                        output_op = trace.ops[output_label]
+                        if tuple(getattr(output_op, "container_path", ()) or ()) == occurrence.path:
+                            index.setdefault(output_label, []).append(ordinal)
+                            raw_label = getattr(output_op, "layer_label_raw", None)
+                            if raw_label is not None:
+                                index.setdefault(raw_label, []).append(ordinal)
+    frozen = {label: tuple(dict.fromkeys(ordinals)) for label, ordinals in index.items()}
+    trace.__dict__["_container_ordinals_by_output_op_label"] = frozen
+    return frozen
+
+
+def _input_registry_index(trace: Any) -> dict[int, tuple[int, ...]]:
+    """Return a lazy reverse index from consuming func_call_id to container ordinals."""
+
+    cached = trace.__dict__.get("_container_ordinals_by_input_func_call_id")
+    if isinstance(cached, dict):
+        return cached
+    index: dict[int, list[int]] = {}
+    for ordinal, record in getattr(trace, "_containers", {}).items():
+        if not isinstance(record, ContainerRecord):
+            continue
+        for snapshot in record.snapshots:
+            if snapshot.role != Role.CALL_INPUT:
+                continue
+            func_call_id = getattr(snapshot.site, "func_call_id", None)
+            if isinstance(func_call_id, int):
+                index.setdefault(func_call_id, []).append(ordinal)
+    frozen = {key: tuple(dict.fromkeys(ordinals)) for key, ordinals in index.items()}
+    trace.__dict__["_container_ordinals_by_input_func_call_id"] = frozen
+    return frozen
+
+
+def _container_from_record(
+    op: Op,
+    record: ContainerRecord,
+    *,
+    roles: set[Role] | None = None,
+) -> Container | None:
+    """Build a container view from the latest matching snapshot in a record."""
+
+    selected_roles = roles or {Role.CALL_OUTPUT, Role.MODEL_OUTPUT}
+    snapshots = [snapshot for snapshot in record.snapshots if snapshot.role in selected_roles]
+    if not snapshots:
+        return None
+    snapshot = snapshots[-1]
+    root_kind = _root_kind_for_role(snapshot.role)
+    leaves = _registry_sibling_leaves(op, snapshot)
+    capability = _container_structure_capability(op, snapshot.role)
+    if capability == "none":
+        return None
+    return Container(
+        spec=snapshot.spec if capability == "full_spec" else None,
+        leaves=leaves,
+        root_kind=root_kind,
+        root_id=("container", record.ordinal),
+        supports_reconstruct=snapshot.reconstructable and capability == "full_spec",
+        leaf_occurrences=snapshot.leaf_occurrences,
+    )
+
+
+def _container_from_snapshot(
+    trace: Any,
+    record: ContainerRecord,
+    snapshot: ContainerSnapshot,
+) -> Container:
+    """Build a container view for an explicitly selected snapshot.
+
+    Parameters
+    ----------
+    trace:
+        Source trace.
+    record:
+        Container identity record.
+    snapshot:
+        Selected snapshot.
+
+    Returns
+    -------
+    Container
+        Snapshot-specific runtime view.
+    """
+
+    return Container(
+        spec=snapshot.spec
+        if _trace_container_capability(trace, snapshot.role) == "full_spec"
+        else None,
+        leaves=_registry_sibling_leaves_from_trace(trace, snapshot),
+        root_kind=_root_kind_for_role(snapshot.role),
+        root_id=("container", record.ordinal),
+        supports_reconstruct=snapshot.reconstructable
+        and _trace_container_capability(trace, snapshot.role) == "full_spec",
+        leaf_occurrences=snapshot.leaf_occurrences,
+    )
+
+
+def _root_kind_for_role(role: Role) -> ContainerRootKind:
+    """Return the public root kind for a snapshot role.
+
+    Parameters
+    ----------
+    role:
+        Snapshot role.
+
+    Returns
+    -------
+    ContainerRootKind
+        Public container root kind.
+    """
+
+    if role == Role.MODEL_OUTPUT:
+        return "final_output"
+    return "call"
+
+
+def _registry_sibling_leaves(op: Op, snapshot: ContainerSnapshot) -> tuple[Op, ...]:
+    """Return leaf ops named by a registry snapshot."""
+
+    trace = op._source_trace_or_none()
+    if trace is None:
+        return (op,)
+    return _registry_sibling_leaves_from_trace(trace, snapshot) or (op,)
+
+
+def _registry_sibling_leaves_from_trace(
+    trace: Any,
+    snapshot: ContainerSnapshot,
+) -> tuple[Op, ...]:
+    """Return leaf ops named by a registry snapshot in a trace.
+
+    Parameters
+    ----------
+    trace:
+        Source trace.
+    snapshot:
+        Container snapshot.
+
+    Returns
+    -------
+    tuple[Op, ...]
+        Leaf operations in snapshot occurrence order.
+    """
+
+    leaves = []
+    for occurrence in snapshot.leaf_occurrences:
+        if snapshot.role == Role.MODEL_OUTPUT:
+            for output_label in getattr(trace, "output_layers", ()) or ():
+                output_op = trace.ops[output_label]
+                if tuple(getattr(output_op, "container_path", ()) or ()) == occurrence.path:
+                    leaves.append(output_op)
+                    break
+            continue
+        label = occurrence.producer_op_label
+        if label is not None and label in trace.ops:
+            leaves.append(trace.ops[label])
+        elif label is not None:
+            raw_match = _op_from_raw_label(trace, label)
+            if raw_match is not None:
+                leaves.append(raw_match)
+    return tuple(leaves)
+
+
+def _op_from_raw_label(trace: Any, raw_label: str) -> Op | None:
+    """Return the op whose raw label matches ``raw_label``."""
+
+    for candidate in trace.layer_list:
+        if (
+            getattr(candidate, "layer_label_raw", None) == raw_label
+            or getattr(candidate, "_layer_label_raw", None) == raw_label
+        ):
+            return candidate
+    return None
+
+
+def _container_structure_capability(op: Op, role: Role) -> str:
+    """Return the owning backend's declared role-specific container capability.
+
+    Parameters
+    ----------
+    op:
+        Operation whose source trace may declare a backend.
+    role:
+        Container role being viewed.
+
+    Returns
+    -------
+    str
+        ``"none"``, ``"paths_only"``, or ``"full_spec"``; a trace without a
+        backend field resolves the torch default, an unresolvable backend
+        fails closed to ``"none"``.
+    """
+
+    return _trace_container_capability(op._source_trace_or_none(), role)
+
+
+def _output_container_structure_capability(op: Op) -> str:
+    """Return the owning backend's declared output-container capability.
+
+    Parameters
+    ----------
+    op:
+        Operation whose source trace may declare a backend.
+
+    Returns
+    -------
+    str
+        ``"none"``, ``"paths_only"``, or ``"full_spec"``; a trace without a
+        backend field resolves the torch default, an unresolvable backend
+        fails closed to ``"none"``.
+    """
+
+    return _container_structure_capability(op, Role.CALL_OUTPUT)
+
+
+def _trace_container_capability(trace: Any, role: Role) -> str:
+    """Return a trace backend's declared role-specific container capability.
+
+    Parameters
+    ----------
+    trace:
+        Trace-like object.
+    role:
+        Container role being viewed.
+
+    Returns
+    -------
+    str
+        ``"none"``, ``"paths_only"``, or ``"full_spec"``.
+    """
+
+    # b1 R22 F2 (carried r1-F3): both fallthroughs used to return
+    # "full_spec" -- the STRONGEST capability claim (full structure plus
+    # supports_reconstruct=True) -- for a backend that never declared
+    # container structure. A trace WITHOUT a backend field predates the
+    # backend seam (a torch-era legacy artifact), so it resolves the torch
+    # default instead of a hardcoded claim; an unresolvable backend fails
+    # CLOSED to "none".
+    backend = getattr(trace, "backend", None) or "torch"
+    try:
+        from ..backends import get_backend_spec
+
+        capabilities = get_backend_spec(str(backend)).capabilities
+        if role in {Role.CALL_INPUT, Role.MODEL_INPUT}:
+            return str(capabilities.input_container_structure)
+        return str(capabilities.output_container_structure)
+    except Exception:
+        return "none"
+
+
+def reconstruct_output(trace: Any, values: Literal["out", "transformed"] = "out") -> Any:
+    """Reconstruct the traced model's final output container.
+
+    Parameters
+    ----------
+    trace:
+        Trace with synthetic output nodes.
+    values:
+        Leaf value source passed through to ``Container.reconstruct``.
+
+    Returns
+    -------
+    Any
+        Reconstructed model return value.
+    """
+
+    output_labels = tuple(getattr(trace, "output_layers", ()) or ())
+    for label in output_labels:
+        op = trace.ops[label]
+        container = container_from_op(op)
+        # A path-only final-output view (supports_reconstruct=False) means the
+        # container path was retained for replay validation but the structural
+        # spec was never persisted because capture_container_structure was off.
+        # Such a view cannot be rebuilt; fall through to the informative error
+        # rather than raising the opaque "path-only" message.
+        if (
+            container is not None
+            and container.root_kind == "final_output"
+            and container.supports_reconstruct
+        ):
+            return container.reconstruct(values=values)
+    if len(output_labels) == 1:
+        return trace.ops[output_labels[0]].out
+    raise PayloadUnavailableError(
+        "No reconstructable final-output container was captured",
+        code="container_not_reconstructable",
+        remedy="trace with capture_container_structure=True to persist container structure",
+    )
+
+
+def reconstruct_container(
+    trace: Any,
+    *,
+    site: Site | None = None,
+    role: Role | None = None,
+    values: Literal["out", "transformed"] = "out",
+) -> Any:
+    """Reconstruct a captured container selected by site and role.
+
+    Parameters
+    ----------
+    trace:
+        Trace with container registry records.
+    site:
+        Optional boundary site. Site aliases are considered matches.
+    role:
+        Optional boundary role.
+    values:
+        Leaf value source.
+
+    Returns
+    -------
+    Any
+        Rebuilt Python object.
+
+    Raises
+    ------
+    ValueError
+        If the selector is ambiguous or reconstructability is unavailable.
+    """
+
+    selected: list[tuple[ContainerRecord, ContainerSnapshot]] = []
+    for record in getattr(trace, "_containers", {}).values():
+        if not isinstance(record, ContainerRecord):
+            continue
+        for snapshot in record.snapshots:
+            if role is not None and snapshot.role != role:
+                continue
+            if site is not None and snapshot.site != site and site not in snapshot.site_aliases:
+                continue
+            selected.append((record, snapshot))
+    if len(selected) != 1:
+        detail = "matched no containers" if not selected else "matched multiple containers"
+        raise InvalidArgumentError(
+            f"Container reconstruct selector {detail}",
+            code="container_selector_unresolved",
+            remedy="pass a more specific site= and role= selector",
+            matched=len(selected),
+        )
+    record, snapshot = selected[0]
+    return _container_from_snapshot(trace, record, snapshot).reconstruct(values=values)
+
+
+def _root_identity(op: Op) -> tuple[ContainerRootKind, tuple[str, Any]]:
+    """Return the public root identity for an op container view.
+
+    Parameters
+    ----------
+    op:
+        Operation carrying container metadata.
+
+    Returns
+    -------
+    tuple[ContainerRootKind, tuple[str, Any]]
+        Root kind and stable root id.
+    """
+
+    if _op_is_final_output(op):
+        return "final_output", ("final_output", 0)
+    func_call_id = getattr(op, "func_call_id", None)
+    if func_call_id is not None:
+        return "call", ("call", func_call_id)
+    return "path", ("path", tuple(getattr(op, "container_path", ()) or ()))
+
+
+def _sibling_leaves(
+    op: Op,
+    *,
+    spec: ContainerSpec | None,
+    root_kind: ContainerRootKind,
+) -> tuple[Op, ...]:
+    """Return sibling leaf ops for a container root.
+
+    Parameters
+    ----------
+    op:
+        Seed operation.
+    spec:
+        Root container spec.
+    root_kind:
+        Root identity kind.
+
+    Returns
+    -------
+    tuple[Op, ...]
+        Sibling leaves in trace order.
+    """
+
+    trace = op._source_trace_or_none()
+    if trace is None:
+        return (op,)
+    candidates = trace.output_layers if root_kind == "final_output" else trace.layer_labels
+    leaves = []
+    for label in candidates:
+        sibling = trace.ops[label]
+        if root_kind == "final_output":
+            if _same_container_spec(getattr(sibling, "container_spec", None), spec):
+                leaves.append(sibling)
+            continue
+        if getattr(sibling, "func_call_id", None) == getattr(op, "func_call_id", None) and (
+            spec is None or _same_container_spec(getattr(sibling, "container_spec", None), spec)
+        ):
+            leaves.append(sibling)
+    return tuple(leaves) or (op,)
+
+
+def _op_is_final_output(op: Op) -> bool:
+    """Return whether an op belongs to the trace final-output layer set.
+
+    Parameters
+    ----------
+    op:
+        Candidate operation.
+
+    Returns
+    -------
+    bool
+        ``True`` when the op is explicitly marked output or appears in
+        ``trace.output_layers``.
+    """
+
+    if bool(getattr(op, "is_output", False)):
+        return True
+    trace = op._source_trace_or_none()
+    if trace is None:
+        return False
+    output_labels = set(getattr(trace, "output_layers", ()) or ())
+    if getattr(op, "layer_label", None) in output_labels:
+        return True
+    if getattr(op, "layer_label_raw", None) in output_labels:
+        return True
+    return any(trace.ops[label] is op for label in output_labels if label in trace.ops)
+
+
+def _same_container_spec(left: ContainerSpec | None, right: ContainerSpec | None) -> bool:
+    """Return whether two specs represent the same captured container root.
+
+    Parameters
+    ----------
+    left:
+        Candidate sibling spec.
+    right:
+        Seed op spec.
+
+    Returns
+    -------
+    bool
+        ``True`` when specs are the same object or equal frozen dataclasses.
+    """
+
+    return left is right or (left is not None and right is not None and left == right)
+
+
+def _value_for_op(op: Op, source: str) -> Any:
+    """Return a leaf value from an op.
+
+    Parameters
+    ----------
+    op:
+        Leaf operation.
+    source:
+        Value source name.
+
+    Returns
+    -------
+    Any
+        Saved value or ``None``.
+    """
+
+    if source == "out":
+        return getattr(op, "out", None)
+    if source == "transformed":
+        return getattr(op, "transformed_out", None)
+    raise InvalidArgumentError(
+        f"Unsupported container value source {source!r}",
+        code="container_value_source_invalid",
+        remedy="pass values='out' or values='transformed'",
+        argument="values",
+    )
+
+
+def _element_keys(spec: ContainerSpec) -> tuple[Any, ...]:
+    """Return immediate user-facing keys for a spec.
+
+    Parameters
+    ----------
+    spec:
+        Container spec.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Immediate keys.
+    """
+
+    if spec.kind in {"tuple", "list", "registered"}:
+        return tuple(range(spec.length or 0))
+    if spec.kind in {"dict", "hf_model_output"}:
+        return spec.keys
+    if spec.kind in {"namedtuple", "dataclass"}:
+        return spec.fields
+    if spec.kind == "literal":
+        return ("literal",)
+    return ()
+
+
+def _component_for_key(spec: ContainerSpec, key: Any) -> OutputPathComponent:
+    """Convert a user key to a typed output path component.
+
+    Parameters
+    ----------
+    spec:
+        Container spec.
+    key:
+        User-facing key.
+
+    Returns
+    -------
+    OutputPathComponent
+        Typed path component.
+    """
+
+    if spec.kind in {"tuple", "list", "registered"} and isinstance(key, int):
+        return TupleIndex(key)
+    if spec.kind == "dict":
+        return DictKey(key)
+    if spec.kind == "hf_model_output":
+        return HFKey(key)
+    if spec.kind == "namedtuple" and isinstance(key, str):
+        return NamedField(key)
+    if spec.kind == "dataclass" and isinstance(key, str):
+        return DataclassField(key)
+    if spec.kind == "literal" and key == "literal":
+        return TupleIndex(0)
+    raise KeyError(key)
+
+
+def _leaf_paths(
+    spec: ContainerSpec,
+    *,
+    prefix: tuple[OutputPathComponent, ...],
+) -> Iterator[tuple[OutputPathComponent, ...]]:
+    """Yield tensor leaf paths in spec traversal order.
+
+    Parameters
+    ----------
+    spec:
+        Container spec.
+    prefix:
+        Path prefix for this spec node.
+
+    Yields
+    ------
+    tuple[OutputPathComponent, ...]
+        Leaf paths.
+    """
+
+    child_by_key = dict(spec.child_specs)
+    if spec.kind == "literal":
+        return
+    for key in _element_keys(spec):
+        component = _component_for_key(spec, key)
+        child_spec = child_by_key.get(component)
+        child_path = (*prefix, component)
+        if child_spec is None:
+            yield child_path
+        else:
+            yield from _leaf_paths(child_spec, prefix=child_path)
+
+
+def _display_key(key: Any) -> str:
+    """Return a display label for an immediate key.
+
+    Parameters
+    ----------
+    key:
+        User-facing key.
+
+    Returns
+    -------
+    str
+        Readable key label.
+    """
+
+    return f"[{key!r}]" if not isinstance(key, str) else key
+
+
+def _leaf_reference(value: Any) -> str:
+    """Return a stable leaf reference for a container tree line.
+
+    Parameters
+    ----------
+    value:
+        Leaf value, usually an ``Op``.
+
+    Returns
+    -------
+    str
+        Output-style layer label when available, otherwise ``repr(value)``.
+    """
+
+    layer_label = getattr(value, "layer_label", None)
+    if layer_label is not None:
+        return str(layer_label)
+    return repr(value)
+
+
+__all__ = [
+    "Container",
+    "container_from_op",
+    "containers_from_op",
+    "reconstruct_container",
+    "reconstruct_output",
+]

@@ -16,8 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.aten_op import OpRef
 from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
-from torchlens.data_classes.aten_op import OpRef
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
 

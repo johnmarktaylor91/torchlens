@@ -37,7 +37,7 @@ from .._errors import InvalidArgumentError
 from ._compute_truth import ComputeAggregation, compute_aggregation, row_mac_flops
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 
 class _RemainderMass(NamedTuple):

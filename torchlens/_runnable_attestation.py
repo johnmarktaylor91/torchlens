@@ -16,7 +16,7 @@ from ._runnable import (
     TensorSlotRole,
     is_mode_sensitive_qualname,
 )
-from .utils.rng import (
+from ._utils.rng import (
     deterministic_fill_governs,
     qualname_is_uninit_growth_resize,
     qualname_is_uninit_size_gated_alloc,

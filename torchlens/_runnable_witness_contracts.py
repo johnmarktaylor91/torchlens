@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ._ir.container import (
+    ContainerSpec,
+)
 from ._runnable import (
     ControlWitness,
     ControlWitnessKind,
@@ -16,9 +19,6 @@ from ._runnable import (
 )
 from ._runnable_state import (
     runnable_tensor_byte_digest,
-)
-from .ir.container import (
-    ContainerSpec,
 )
 
 if TYPE_CHECKING:
@@ -68,7 +68,7 @@ def _hybrid_registered_flatten_children(value: Any) -> list[Any] | None:
 
     if not isinstance(value, (Mapping, list, tuple)):
         return None
-    from torchlens.ir.container import get_registered_container
+    from torchlens._ir.container import get_registered_container
 
     registration = get_registered_container(type(value))
     if registration is None:
@@ -315,7 +315,7 @@ def _container_kind(value: Any) -> str:
     honest identical run then false-DIVERGED with OUTPUT_STRUCTURE_MISMATCH.
     """
 
-    from torchlens.ir.container import get_registered_container
+    from torchlens._ir.container import get_registered_container
 
     if isinstance(value, torch.Tensor):
         return "tensor"
@@ -416,7 +416,7 @@ def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
         a fully named ``torch.return_types`` value.
     """
 
-    from .utils._torch_compat import torch_structseq_field_names
+    from ._utils._torch_compat import torch_structseq_field_names
 
     return torch_structseq_field_names(value)
 

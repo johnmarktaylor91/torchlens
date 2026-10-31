@@ -101,7 +101,7 @@ def classify_where(target: Any) -> AddressClass:
     from .selectors import BaseSelector
 
     if isinstance(target, BaseSelector):
-        from ..ir.selector_eval import selector_contains_kind
+        from .._ir.selector_eval import selector_contains_kind
 
         if selector_contains_kind(target, "predicate", unwrap=True):
             return "value_dependent"

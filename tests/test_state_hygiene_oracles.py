@@ -833,7 +833,7 @@ def _raw_event(
 def test_raw_event_hash_folds_only_value_preserving_replacements() -> None:
     """The fold is narrow: a same-shape replacement folds; a reshaping one or a source does not."""
 
-    from torchlens.utils.hashing import compute_raw_event_shape_hash
+    from torchlens._utils.hashing import compute_raw_event_shape_hash
 
     def digest(*middle: SimpleNamespace, relu_parent: str = "linear") -> str:
         events = [

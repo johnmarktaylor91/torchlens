@@ -5,7 +5,7 @@
 
 TorchLens never builds dashboards. It computes more and better statistics
 than the trackers' built-in watchers and feeds their dashboards: one
-collection engine (the `torchlens.observability` per-step records), one
+collection engine (the `torchlens._observability` per-step records), one
 conversion layer, and first-party sinks.
 
 ```python
@@ -31,7 +31,7 @@ print(watch.close().format())
 | Tier | Signals | Mechanism | Cost class | Status |
 |---|---|---|---|---|
 | P (default) | parameters, gradients, updates | optimizer-boundary hooks; NO forward is wrapped or run | cheap (whole-step numbers publish only after the quiet-GPU gate) | shipped |
-| M | module-output activations | ordinary forward hooks; one real discovery forward at attach (`example_input=`), run in the model's CURRENT mode | ~1.1x class (forward-only ratio) | shipped |
+| M | module-output activations | ordinary forward hooks; one real discovery forward at attach (`inputs=`), run in the model's CURRENT mode | ~1.1x class (forward-only ratio) | shipped |
 | O | op-grain (and facet) activations | the root `forward` is WRAPPED: sampled steps run inside one fastlog capture, other steps run plain | calibrated at attach and disclosed; op capture is WRAP-dominated | shipped behind consent |
 
 Tier O needs explicit consent because it is the one tier that wraps your
@@ -41,7 +41,7 @@ model's forward:
 session = watch(
     model, to=sink, signals=("activations",), grain="op",
     select=tl.func("softmax"),          # or module path prefixes
-    example_input=x, allow_forward_wrap=True,
+    inputs=x, allow_forward_wrap=True,
     facets={"softmax_3_12": split_heads(12, dim=1)},  # optional per-head series
 )
 print(session.plan_report())            # names the wrap and the calibrated cost
@@ -50,7 +50,7 @@ print(session.plan_report())            # names the wrap and the calibrated cost
 Without `allow_forward_wrap=True` the call refuses
 `watch_forward_wrap_consent_required`. With it, attach runs one
 metadata-only discovery pass and a short interleaved A/B calibration (the
-plain forward against the wrapped pass on `example_input`, under `no_grad`;
+plain forward against the wrapped pass on `inputs`, under `no_grad`;
 the RNG state and every buffer are restored), then discloses the measured
 ratio in `plan_report()`, in the `torchlens/meta/op_grain_calibration` text
 row and the `torchlens/run/op_grain_overhead_median_x` scalar, and in one

@@ -13,8 +13,8 @@ import torchlens as tl
 import torchlens.validation as tl_validation
 import torchlens.validation.backward as backward_validation
 import torchlens.validation.consolidated as consolidated_validation
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.ir.events import BackwardPassStart, OpGradObserved
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._ir.events import BackwardPassStart, OpGradObserved
 from torchlens.options import CaptureOptions, SaveOptions
 
 _NO_GRAD_AUTOGRAD_ERROR = "element 0 of tensors does not require grad and does not have a grad_fn"
@@ -405,8 +405,8 @@ def test_backward_reprojection_folds_incrementally() -> None:
 
 def test_backward_events_share_one_monotonic_seq_domain() -> None:
     """Every backward event kind carries one writer-stamped monotonic seq."""
+    from torchlens._ir.events import BackwardPassEnd as _End
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.ir.events import BackwardPassEnd as _End
 
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
@@ -432,8 +432,8 @@ def _invariant_check(trace: tl.Trace) -> None:
 
 def test_backward_seq_invariants_fire_on_planted_mutations() -> None:
     """Each rewritten exact-seq assertion still fails on a planted misorder."""
+    from torchlens._ir.events import BackwardPassEnd as _End
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.ir.events import BackwardPassEnd as _End
     from torchlens.validation.invariants import MetadataInvariantError
 
     _model, _x, trace = _logged_model()
@@ -503,7 +503,7 @@ def test_backward_capture_refuses_missing_event_stream() -> None:
 
 def test_param_gradients_enter_the_backward_event_stream() -> None:
     """Every recorded AccumulateGrad increment has a ParamGradObserved event."""
-    from torchlens.ir.events import ParamGradObserved
+    from torchlens._ir.events import ParamGradObserved
 
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
@@ -529,7 +529,7 @@ def test_param_gradients_enter_the_backward_event_stream() -> None:
 
 def test_param_gradient_payloads_honor_per_call_retention_policy() -> None:
     """Per-call ``save_grads=False`` keeps param-grad facts but drops payloads."""
-    from torchlens.ir.events import ParamGradObserved
+    from torchlens._ir.events import ParamGradObserved
 
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace), save_grads=False)
@@ -596,8 +596,8 @@ def test_backward_tail_failure_restores_globals_and_closes_journal(
 ) -> None:
     """Tail finalizer failures cannot strand globals or a start-only pass."""
     from torchlens import _state
+    from torchlens._ir.events import BackwardPassEnd
     from torchlens.backends.torch import backward
-    from torchlens.ir.events import BackwardPassEnd
 
     _model, _x, trace = _logged_model()
 
@@ -793,8 +793,8 @@ def test_backward_entrypoints_finalize_streaming_on_exception(
 @pytest.mark.slow
 def test_separate_unmanaged_engine_calls_get_separate_implicit_passes() -> None:
     """Graph-task identity prevents adjacent unmanaged backwards from merging."""
+    from torchlens._ir.events import BackwardPassStart
     from torchlens.backends.torch import backward
-    from torchlens.ir.events import BackwardPassStart
 
     if not hasattr(torch._C, "_current_graph_task_id"):
         pytest.skip("torch build does not expose autograd graph-task identity")
@@ -891,8 +891,8 @@ def test_backward_reprojection_guard_survives_count_preserving_mutation() -> Non
     """A count-preserving event mutation still triggers reprojection."""
     from dataclasses import replace as dataclass_replace
 
+    from torchlens._ir.events import BackwardPassEnd
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.ir.events import BackwardPassEnd
 
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
@@ -1474,8 +1474,8 @@ def test_op_grad_reconciliation_counts_multiplicity() -> None:
 
 def test_grad_fn_discovered_source_is_frozen_by_the_writer() -> None:
     """In-place mutation of GradFnDiscovered.source raises instead of biting."""
+    from torchlens._ir.events import GradFnDiscovered
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.ir.events import GradFnDiscovered
 
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
@@ -1488,8 +1488,8 @@ def test_grad_fn_discovered_source_is_frozen_by_the_writer() -> None:
 
 def test_higher_order_discovery_bracketing_is_armed() -> None:
     """A created_in_pass discovery moved past its pass end fails the invariant."""
+    from torchlens._ir.events import BackwardPassEnd, GradFnDiscovered
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.ir.events import BackwardPassEnd, GradFnDiscovered
     from torchlens.validation.invariants import MetadataInvariantError
 
     class _HigherOrderModel(nn.Module):
@@ -1541,8 +1541,8 @@ def test_higher_order_discovery_bracketing_is_armed() -> None:
 
 def test_pass_brackets_reject_partial_interleaving() -> None:
     """Two pass brackets that partially overlap fail the invariant."""
+    from torchlens._ir.events import BackwardPassEnd
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.ir.events import BackwardPassEnd
     from torchlens.validation.invariants import MetadataInvariantError
 
     _model, _x, trace = _logged_model()
@@ -1811,8 +1811,8 @@ def test_grad_fn_discovered_source_snapshot_defeats_caller_proxy() -> None:
     """
     from types import MappingProxyType
 
-    from torchlens.ir.capture_events import CaptureEvents
-    from torchlens.ir.events import GradFnDiscovered
+    from torchlens._ir.capture_events import CaptureEvents
+    from torchlens._ir.events import GradFnDiscovered
 
     backing = {
         "class_source_file": "/original/source.py",
@@ -1847,7 +1847,7 @@ def test_fork_deep_copy_debug_mode_rethrows(monkeypatch: pytest.MonkeyPatch) -> 
     """
     import copy
 
-    from torchlens.data_classes import _trace_intervention as trace_intervention
+    from torchlens._data_classes import _trace_intervention as trace_intervention
 
     class _PoisonDeepCopy:
         """Object whose deepcopy always fails (shallow copy still works)."""
@@ -2055,7 +2055,7 @@ def test_amendment_lane_deletion_is_visible_to_the_journal_invariant() -> None:
     amendment, or a start offset the seal watermark does not explain is red.
     """
 
-    from torchlens.ir.capture_events import CaptureEvents
+    from torchlens._ir.capture_events import CaptureEvents
     from torchlens.validation.invariants import (
         MetadataInvariantError,
         _check_journal_seq_invariants,
@@ -2134,8 +2134,8 @@ def test_aliased_label_registrations_emit_one_grad_event_per_pass() -> None:
     """
     import collections
 
+    from torchlens._ir.events import OpGradObserved
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.ir.events import OpGradObserved
     from torchlens.validation.invariants import check_metadata_invariants
 
     class IdentityWrapper(nn.Module):
@@ -2173,9 +2173,9 @@ def test_aliased_label_registrations_emit_one_grad_event_per_pass() -> None:
 
 def test_failed_backward_walk_keeps_start_and_gains_failed_end() -> None:
     """A failed graph walk is evidence: Start stays, a failed End closes it."""
+    from torchlens._ir.events import BackwardPassEnd as _End
     from torchlens.backends.torch import backward as backward_mod
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.ir.events import BackwardPassEnd as _End
     from torchlens.validation.invariants import check_metadata_invariants
 
     _model, _x, trace = _logged_model()
@@ -2209,9 +2209,9 @@ def test_failed_backward_walk_keeps_start_and_gains_failed_end() -> None:
 
 def test_hook_registration_failure_records_typed_coverage_gap() -> None:
     """A registration skip is a typed BackwardCoverageGap, and validation fails closed."""
+    from torchlens._ir.events import BackwardCoverageGap
     from torchlens.backends.torch import backward as backward_mod
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.ir.events import BackwardCoverageGap
     from torchlens.validation.invariants import check_metadata_invariants
 
     _model, _x, trace = _logged_model()
@@ -2383,7 +2383,7 @@ def test_gradient_validation_tolerances_are_named_constants() -> None:
     """The grad tolerance pairs are spelled ONCE and shared by every consumer.
 
     Two backward checks of one capture used to disagree 10x via bare literals
-    in three files; the pairs now live in torchlens.utils.tensor_utils with a
+    in three files; the pairs now live in torchlens._utils.tensor_utils with a
     documented error model (param grads = batch/position reductions, layer
     grads and RF adjoint probes = elementwise comparisons).
 
@@ -2397,14 +2397,14 @@ def test_gradient_validation_tolerances_are_named_constants() -> None:
 
     import inspect
 
-    from torchlens.receptive_field import verify as rf_verify
-    from torchlens.utils.tensor_utils import (
+    from torchlens._utils.tensor_utils import (
         LAYER_GRAD_VALIDATION_ATOL,
         LAYER_GRAD_VALIDATION_RTOL,
         PARAM_GRAD_VALIDATION_ATOL,
         PARAM_GRAD_VALIDATION_RTOL,
         derive_float_tolerances,
     )
+    from torchlens.receptive_field import verify as rf_verify
     from torchlens.validation._layer_grad_report import _compare_module_output_grads
 
     # New contract: every tolerance param defaults to the dtype-aware sentinel

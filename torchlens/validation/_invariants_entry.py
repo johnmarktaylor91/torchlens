@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 from .status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .invariants import (
         InvariantResult,
         MetadataInvariantError,

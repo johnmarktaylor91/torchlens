@@ -45,12 +45,12 @@ import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._constants import OP_LOG_FIELD_ORDER
 from .._errors import InvalidArgumentError
-from ..constants import OP_LOG_FIELD_ORDER
 from ..errors import TorchLensWarning
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: Peak-provenance vocabulary (D18): nothing is ever auto-selected and
 #: sparse marketing peaks never default.

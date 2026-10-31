@@ -354,8 +354,8 @@ def test_edge_save_refusal_refires_if_schema_regresses(capture, tmp_path, monkey
 
     from dataclasses import replace
 
+    from torchlens._data_classes.op import Op
     from torchlens._io import FieldPolicy
-    from torchlens.data_classes.op import Op
 
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
@@ -409,8 +409,8 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
 
     from dataclasses import replace
 
+    from torchlens._data_classes.op import Op
     from torchlens._io import FieldPolicy
-    from torchlens.data_classes.op import Op
 
     model, x, trace = capture
     fork = trace.fork()
@@ -447,7 +447,7 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
 def test_tap_masked_values(capture):
     model, x, trace = capture
     selection = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)]).resolve(trace)
-    observer = tl.tap(selection)
+    observer = tl.observers.tap(selection)
     fork = trace.fork()
     fork.attach_hooks("relu_1_2", observer, confirm_mutation=True)
     fork.push()

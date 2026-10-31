@@ -17,7 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from tests.oracles.test_legacy_graph_counts import Graph
-from torchlens.data_classes.module import ModuleCall
+from torchlens._data_classes.module import ModuleCall
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
 

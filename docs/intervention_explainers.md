@@ -125,7 +125,7 @@ rows, the edit acts on the coordinates `c = Q x` (one per row) and the site gets
 - Coordinate verbs act on `c`: `tl.zero_ablate()`, `tl.scale(...)`, `tl.clamp(...)`,
   `tl.add_noise(...)`, `tl.mean_ablate()`, `mean_fill(dim=...)` without `reference=`,
   `scramble_elements(seed=...)` without `source=`, `tl.add(scalar)`,
-  `splice_module(module, input="out")`, and any hook callable `fn(c, *, hook)`, which receives
+  `splice_module(module, input_route="out")`, and any hook callable `fn(c, *, hook)`, which receives
   the coordinates with the bound axis resized to `k`.
 - Value verbs compute a value in activation space and write its component: `tl.patch_from(source)`
   is the interchange (the component becomes the source run's), and likewise `swap_with`,
@@ -137,7 +137,7 @@ rows, the edit acts on the coordinates `c = Q x` (one per row) and the site gets
   projection edits themselves (`project_out`, `project_onto`, `set_direction_mean`,
   `subspace_ablate`, `subspace_interchange`), `compose` (apply the edits one at a time),
   `at_positions` (restrict positions through `within=`), a `source=` that is an activation value,
-  `splice_module(input="in")` and the backward verbs.
+  `splice_module(input_route="in")` and the backward verbs.
 
 An orthonormal basis is used exactly as given, so the coordinates are yours. Any other full-rank
 basis is orthonormalised by Gram-Schmidt in row order with each row's sign kept, so one direction

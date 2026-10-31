@@ -27,8 +27,8 @@ from typing import (
 
 import torch
 
-from ..data_classes.op import Op
-from ..ir.container import (
+from .._data_classes.op import Op
+from .._ir.container import (
     DataclassField,
     DictKey,
     HFKey,
@@ -36,13 +36,13 @@ from ..ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
-from ..ir.events import is_control_edge_use
+from .._ir.events import is_control_edge_use
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
-from ..utils.collections import assign_to_sequence_or_dict
-from ..utils.tensor_utils import (
+from .._utils.collections import assign_to_sequence_or_dict
+from .._utils.tensor_utils import (
     _ACCUMULATING_REPLAY_ULP_HEADROOM,
     derive_float_tolerances,
     fp8_safe_comparison_pair,

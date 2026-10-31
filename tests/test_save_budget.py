@@ -28,6 +28,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens._save_budget import (
     ACCOUNTING_PHASES,
     DEFAULT_SAVE_BUDGET_FRACTION,
@@ -37,7 +38,6 @@ from torchlens._save_budget import (
     format_bytes,
     resolve_save_budget,
 )
-from torchlens.data_classes.trace import Trace
 from torchlens.fastlog import _storage_resolver
 from torchlens.options import CaptureOptions
 
@@ -617,8 +617,8 @@ def test_dead_accountant_does_not_break_payload_release() -> None:
 def test_save_budget_is_a_session_knob_not_a_portable_field() -> None:
     """The budget describes this process, so it must not enter the schema."""
 
+    from torchlens._constants import MODEL_LOG_FIELD_ORDER
     from torchlens._io import FieldPolicy
-    from torchlens.constants import MODEL_LOG_FIELD_ORDER
 
     assert Trace.FIELD_POLICY["save_budget"].portable_policy is FieldPolicy.DROP
     assert Trace.FIELD_POLICY["_save_budget_accountant"].portable_policy is FieldPolicy.DROP

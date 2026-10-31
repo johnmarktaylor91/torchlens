@@ -195,7 +195,7 @@ def test_ambient_snapshot_covers_every_recorded_field() -> None:
     (minus the derived ``attestation_ineligible_context``). A future
     result-affecting knob added to either side without the other FAILS here."""
 
-    from torchlens.utils._torch_compat import snapshot_ambient_execution_context
+    from torchlens._utils._torch_compat import snapshot_ambient_execution_context
 
     snapshot_keys = set(snapshot_ambient_execution_context())
     recorded_fields = {field.name for field in dataclasses.fields(AmbientExecutionContext)} - {

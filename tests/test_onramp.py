@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import utils
+from torchlens import _utils as utils
 from torchlens.experimental import attribute_walk
 
 

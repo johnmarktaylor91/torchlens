@@ -21,7 +21,7 @@ Each edit verb has one of four meanings here:
 * coordinate verbs run on ``c`` itself (``zero_ablate``, ``scale``,
   ``clamp``, ``noise``, ``mean_ablate()``, ``mean_fill`` without ``ref=``,
   ``scramble_elements`` without ``source=``, ``add`` of a scalar,
-  ``splice_module(module, input="out")`` and any hook callable, which
+  ``splice_module(module, input_route="out")`` and any hook callable, which
   receives the coordinates);
 * value verbs compute a value in activation space and the edit takes that
   value's component (``patch_from``, the interchange; ``swap_with``,
@@ -186,7 +186,7 @@ _CONDITIONAL_MEANINGS: dict[str, Callable[[Edit, dict[str, Any]], str | None]] =
     "scramble_elements": lambda edit, _kw: (
         "coordinates" if edit.args and edit.args[0] is None else None
     ),
-    "splice_module": lambda _edit, kw: "coordinates" if kw.get("input") == "out" else None,
+    "splice_module": lambda _edit, kw: "coordinates" if kw.get("input_route") == "out" else None,
 }
 
 

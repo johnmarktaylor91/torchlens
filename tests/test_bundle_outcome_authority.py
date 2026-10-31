@@ -28,6 +28,7 @@ import torch
 from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens.bundle import Bundle, _fold_member_outcomes
 from torchlens.capture.outcome import (
     CaptureOutcome,
@@ -36,7 +37,6 @@ from torchlens.capture.outcome import (
     outcome_for,
     require_capture_capability,
 )
-from torchlens.data_classes.trace import Trace
 from torchlens.errors import InvalidArgumentError
 
 # Least -> most severe; the fold picks the maximum over members.
@@ -73,7 +73,7 @@ def _failed_trace() -> Trace:
         with torch.no_grad():
             tl.trace(ExplodingModel(), torch.ones(1, 3))
     except RuntimeError as exc:
-        return tl.partial.from_failed_capture(exc).trace
+        return tl._partial.from_failed_capture(exc).trace
     raise AssertionError("capture unexpectedly succeeded")
 
 

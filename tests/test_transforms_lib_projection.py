@@ -22,14 +22,13 @@ from torchlens.transforms import (
     TransformContractError,
     chain,
     pca_apply,
-    pipeline_from_record,
-    pipeline_record,
     project,
     srp,
     srp_dims_for,
     srp_fidelity_probe,
 )
 from torchlens.transforms._helpers import _condensed_corr_rdm, _condensed_l2_rdm, spearman
+from torchlens.transforms._pipeline import pipeline_from_record, pipeline_record
 from torchlens.transforms._projection import _BASIS_STORE, _reset_projection_store
 
 

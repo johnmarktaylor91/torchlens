@@ -651,7 +651,7 @@ def _resolve_stat_term(node: _StatTerm, trace: Any) -> ResolvedSelection:
 def _validate_samples(samples: Any, producer: str, single_trace_hint: str) -> tuple[Any, ...]:
     """Validate the evidence set: an iterable of >= 2 Traces (Bundle iterates)."""
 
-    from .data_classes.trace import Trace
+    from ._data_classes.trace import Trace
 
     if isinstance(samples, (str, bytes, torch.Tensor, Trace)):
         raise ValueError(

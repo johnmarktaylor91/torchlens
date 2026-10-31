@@ -236,19 +236,19 @@ _LAZY_EXCEPTION_PATHS = {
     # users from the public ``Op.multi_output_type`` property, so its except
     # must be spellable from the public error surface.
     "ContainerReconstructionError": (
-        "torchlens.ir.container",
+        "torchlens._ir.container",
         "ContainerReconstructionError",
     ),
     "CompileCountsUnavailableError": (
-        "torchlens.debug._compile_counter",
+        "torchlens._debug._compile_counter",
         "CompileCountsUnavailableError",
     ),
     "GraphBreaksNormalizationError": (
-        "torchlens.debug._graph_breaks",
+        "torchlens._debug._graph_breaks",
         "GraphBreaksNormalizationError",
     ),
     "GraphBreaksUnavailableError": (
-        "torchlens.debug._graph_breaks",
+        "torchlens._debug._graph_breaks",
         "GraphBreaksUnavailableError",
     ),
     "FacadeTeachingError": ("torchlens._errors", "FacadeTeachingError"),
@@ -263,8 +263,8 @@ _LAZY_EXCEPTION_PATHS = {
     # lazily: the class lands in the same fixwave as this registration, and a
     # lazy binding keeps this module importable at every commit interleaving.
     "SparseCorePayloadError": ("torchlens.errors.runnable", "SparseCorePayloadError"),
-    "StructuralHashMismatchError": ("torchlens.hash", "StructuralHashMismatchError"),
-    "TorchCapabilityWarning": ("torchlens.utils._torch_compat", "TorchCapabilityWarning"),
+    "StructuralHashMismatchError": ("torchlens.fingerprint", "StructuralHashMismatchError"),
+    "TorchCapabilityWarning": ("torchlens._utils._torch_compat", "TorchCapabilityWarning"),
     "UncapturedCollectiveOpError": (
         "torchlens.distributed._recognizer",
         "UncapturedCollectiveOpError",
@@ -294,7 +294,7 @@ _LAZY_EXCEPTION_PATHS = {
         "UnsupportedRendererCapabilityError",
     ),
     "StopSignalSwallowedError": ("torchlens.capture.outcome", "StopSignalSwallowedError"),
-    "PartialCaptureLookupError": ("torchlens.partial", "PartialCaptureLookupError"),
+    "PartialCaptureLookupError": ("torchlens._partial", "PartialCaptureLookupError"),
     # Taxonomy closure: user-reachable typed refusals defined in subpackage
     # error modules, bound lazily so every user-facing class has one public
     # catch spelling. The defining module stays the import home.
@@ -304,16 +304,16 @@ _LAZY_EXCEPTION_PATHS = {
     "RegionError": ("torchlens.intervention.errors", "RegionError"),
     # -- observability substrate (F25) and trackers (F26); every class is in
     # its subpackage __all__ and carries contract-doc codes --
-    "HistoryArtifactError": ("torchlens.observability._errors", "HistoryArtifactError"),
-    "HistorySchemaError": ("torchlens.observability._errors", "HistorySchemaError"),
-    "ObservabilityError": ("torchlens.observability._errors", "ObservabilityError"),
-    "ObserverEventError": ("torchlens.observability._errors", "ObserverEventError"),
-    "ProfilerSessionError": ("torchlens.observability._errors", "ProfilerSessionError"),
-    "SpanError": ("torchlens.observability._errors", "SpanError"),
-    "StatKernelError": ("torchlens.observability._errors", "StatKernelError"),
-    "WatchLifecycleError": ("torchlens.observability._errors", "WatchLifecycleError"),
-    "WatchPlanError": ("torchlens.observability._errors", "WatchPlanError"),
-    "WatchRenderError": ("torchlens.observability._quantiles", "WatchRenderError"),
+    "HistoryArtifactError": ("torchlens._observability._errors", "HistoryArtifactError"),
+    "HistorySchemaError": ("torchlens._observability._errors", "HistorySchemaError"),
+    "ObservabilityError": ("torchlens._observability._errors", "ObservabilityError"),
+    "ObserverEventError": ("torchlens._observability._errors", "ObserverEventError"),
+    "ProfilerSessionError": ("torchlens._observability._errors", "ProfilerSessionError"),
+    "SpanError": ("torchlens._observability._errors", "SpanError"),
+    "StatKernelError": ("torchlens._observability._errors", "StatKernelError"),
+    "WatchLifecycleError": ("torchlens._observability._errors", "WatchLifecycleError"),
+    "WatchPlanError": ("torchlens._observability._errors", "WatchPlanError"),
+    "WatchRenderError": ("torchlens._observability._quantiles", "WatchRenderError"),
     "SinkDeliveryError": ("torchlens.trackers._errors", "SinkDeliveryError"),
     "SinkProtocolError": ("torchlens.trackers._errors", "SinkProtocolError"),
     "TagGrammarError": ("torchlens.trackers._errors", "TagGrammarError"),
@@ -329,7 +329,7 @@ _LAZY_EXCEPTION_PATHS = {
     "CheckViolationError": ("torchlens.checks._errors", "CheckViolationError"),
     "ReadError": ("torchlens.attribution.onebackward._errors", "ReadError"),
     "ReadInternalError": ("torchlens.attribution.onebackward._errors", "ReadInternalError"),
-    "GradFnWalkError": ("torchlens.debug._grad_fn_walk", "GradFnWalkError"),
+    "GradFnWalkError": ("torchlens._debug._grad_fn_walk", "GradFnWalkError"),
     "ModelExplorerExportError": (
         "torchlens.export._model_explorer._errors",
         "ModelExplorerExportError",
@@ -343,21 +343,21 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens.semantic._norm_reconstruction",
         "NormReconstructionError",
     ),
-    "EchoConfigError": ("torchlens.snoop._errors", "EchoConfigError"),
-    "EchoStatsError": ("torchlens.snoop._errors", "EchoStatsError"),
+    "EchoConfigError": ("torchlens._snoop._errors", "EchoConfigError"),
+    "EchoStatsError": ("torchlens._snoop._errors", "EchoStatsError"),
     "FittedArtifactError": ("torchlens.stats._fitted", "FittedArtifactError"),
-    "TvizError": ("torchlens.tviz._errors", "TvizError"),
+    "TvizError": ("torchlens.transformer._errors", "TvizError"),
     "RankRenderEndpointError": (
         "torchlens.visualization._rank_layout_internal.layout",
         "RankRenderEndpointError",
     ),
     # -- semantic output decode: an output_style= no detector resolves --
     "OutputStyleUnknownError": (
-        "torchlens.autoroute._builtin_output",
+        "torchlens._autoroute._builtin_output",
         "OutputStyleUnknownError",
     ),
-    "PluginLoadWarning": ("torchlens.ecosystem.plugins", "PluginLoadWarning"),
-    "SynthesizedValueReadWarning": ("torchlens.quickstart._gate", "SynthesizedValueReadWarning"),
+    "PluginLoadWarning": ("torchlens._ecosystem.plugins", "PluginLoadWarning"),
+    "SynthesizedValueReadWarning": ("torchlens._quickstart._gate", "SynthesizedValueReadWarning"),
 }
 
 

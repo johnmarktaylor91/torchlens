@@ -574,7 +574,7 @@ loaded analysis and runnable traces. Three deterministic byte streams per case:
   kind per name, invalid-access exception class/args/message. Floats via `float.hex()`;
   sets sorted by canonical bytes; dicts as ordered pairs; only documented volatile
   fields masked, each into a named bucket proven against a baseline-vs-baseline run.
-  The documented volatile surface is `_ARTIFACT_VOLATILE_METADATA_FIELDS` in `torchlens/constants.py`
+  The documented volatile surface is `_ARTIFACT_VOLATILE_METADATA_FIELDS` in `torchlens/_constants.py`
   (metadata.pkl: `random_seed`, capture start/end times, `_phase_timings`, the four
   duration fields, `forward_peak_memory`) plus `_ARTIFACT_VOLATILE_MANIFEST_FIELDS`
   (manifest.json: `created_at`, `rng_state_digests`) — empirically derived from a

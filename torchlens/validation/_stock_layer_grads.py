@@ -362,7 +362,7 @@ def _stock_layer_grads(
         Captured stock module-output grads and identity-output addresses.
     """
 
-    from ..utils.rng import set_random_seed
+    from .._utils.rng import set_random_seed
     from ._live_model_state import load_state_dict_restore, restore_state_dict_if_changed
 
     collector = _StockModuleGradCollector()

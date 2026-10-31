@@ -8,7 +8,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import CaptureError
-from torchlens.partial import PartialTrace
+from torchlens.types import PartialTrace
 
 
 class NonFiniteFixture(nn.Module):
@@ -107,7 +107,7 @@ def test_raise_on_nan_raises_capture_error_with_partial_graph() -> None:
     assert error.fields["op"] == "__truediv__"
     assert error.fields["shape"] == (1, 2)
 
-    partial = tl.partial.from_failed_capture(error)
+    partial = tl._partial.from_failed_capture(error)
     graph = partial.draw()
     assert "digraph torchlens_partial" in graph
     assert "__truediv__" in graph
@@ -123,7 +123,7 @@ def test_partial_trace_constructible_from_failed_capture() -> None:
             _input_tensor(),
             capture=tl.options.CaptureOptions(raise_on_nan=True),
         )
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     assert isinstance(partial, PartialTrace)
     assert partial is exc_info.value.partial_log
     assert len(partial.raw_layers) >= 1
@@ -157,7 +157,7 @@ def test_partial_trace_recoverable_when_exception_rejects_attachment() -> None:
             tl.trace(FailingModel(), torch.ones(1))
 
     assert not hasattr(exc_info.value, "partial_log")
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     assert isinstance(partial, PartialTrace)
     assert partial.original_exception is exc_info.value
     assert len(partial.raw_layers) >= 1
@@ -168,7 +168,7 @@ def test_partial_trace_attached_to_generic_forward_exception() -> None:
 
     with pytest.raises(RuntimeError) as exc_info:
         tl.trace(ForwardErrorFixture(), _input_tensor())
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     assert isinstance(partial, PartialTrace)
     graph = partial.draw()
     assert "__add__" in graph
@@ -178,7 +178,7 @@ def test_partial_trace_attached_to_generic_forward_exception() -> None:
 def test_find_nan_accepts_explicit_capture_options() -> None:
     """find_nan preserves only explicit capture fields while enabling its diagnostic gate."""
 
-    result = tl.debug.find_nan(
+    result = tl._debug.find_nan(
         NonFiniteFixture(),
         _input_tensor(),
         capture=tl.options.CaptureOptions(inference_only=True),

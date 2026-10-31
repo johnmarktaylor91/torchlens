@@ -21,6 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens._io import FieldPolicy, PreReleaseArtifactError
 from torchlens._io.prerelease import (
     PRERELEASE_MARKER,
@@ -33,7 +34,6 @@ from torchlens._io.prerelease import (
     validate_prerelease_state,
 )
 from torchlens._io.scrub import scrub_for_save
-from torchlens.data_classes.trace import Trace
 
 #: Existing declared-DROP scalar Trace field used as the planted gated field.
 #: Any declared-DROP field works; this one is a plain session-time int.

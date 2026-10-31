@@ -39,7 +39,7 @@ from ._nonfinite import NonfiniteChannel, derive_nonfinite_channel, nonfinite_sp
 from ._roster import LENS_SUBJECTS, PERF_FAMILIES
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 __all__ = [
     "LENS_DETAIL_CEILING",

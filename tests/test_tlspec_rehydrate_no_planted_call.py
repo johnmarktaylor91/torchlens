@@ -30,13 +30,13 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._data_classes.trace import Trace
 from torchlens._io.bundle import _RenameAwareUnpickler
 from torchlens._io.rehydrate import _assign_rehydrated_field
 from torchlens._io.state_keys import (
     PortableStateKeyError,
     refuse_callable_shadowing_state_keys,
 )
-from torchlens.data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
 

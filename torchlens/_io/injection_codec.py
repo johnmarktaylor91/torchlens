@@ -38,7 +38,7 @@ from .format_contract import BlobRef, TorchLensIOError
 from .scrub import BlobSpec
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 __all__ = [
     "append_injected_op_rows",
@@ -171,8 +171,8 @@ def _synthesize_row(
 ) -> Any:
     """Build one already-scrubbed op row for one injected record."""
 
-    from ..constants import LAYER_PASS_LOG_FIELD_ORDER
-    from ..data_classes.op import Op
+    from .._constants import LAYER_PASS_LOG_FIELD_ORDER
+    from .._data_classes.op import Op
 
     out_value: Any = None
     args_encoded: Any = None

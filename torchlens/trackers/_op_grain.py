@@ -2,7 +2,7 @@
 
 ``watch(model, to=sink, signals=("activations",), grain="op", select=...,
 example_input=x, allow_forward_wrap=True)`` drives the Route-B op-tier
-collector (:class:`~torchlens.observability.OpTierCollector`) from the
+collector (:class:`~torchlens._observability.OpTierCollector`) from the
 ordinary training loop. Per-op activations exist only inside a captured
 forward, so this tier replaces the ROOT module's ``forward`` (an instance
 attribute, removed again at ``close()``) with a wrapper that runs the
@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..observability import (
+from .._observability import (
     ArmSpec,
     OpTierCollector,
     OverheadMeasurement,
@@ -46,8 +46,8 @@ from ..observability import (
     WatchSettings,
     measure_overhead,
 )
+from .._observability._collector import StepTruth
 from ..observability._artifact import CommittedBlock
-from ..observability._collector import StepTruth
 from ._errors import WatchConfigError
 
 if TYPE_CHECKING:

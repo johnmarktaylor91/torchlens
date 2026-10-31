@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 
 
 def _view(n_heads: int = 2, n_dst: int = 4, n_src: int = 4, **kwargs) -> tviz.AttentionView:
@@ -170,8 +170,8 @@ class TestGqa:
         """Shared-heads wording names the group and its query-head span."""
 
         gqa = tviz.GqaInfo(n_query_heads=14, n_kv_heads=2)
-        assert gqa.group_of(0) == 0
-        assert gqa.group_of(7) == 1
+        assert gqa.group(0) == 0
+        assert gqa.group(7) == 1
         header = gqa.header(3)
         assert "kv group 1 of 2" in header
         assert "query heads 0-6" in header
@@ -253,7 +253,7 @@ class TestCausalReceipt:
         """A genuine measured zero is a value, not a refusal."""
 
         receipt = _receipt(effects=(0.0, None))
-        assert receipt.measured_n == 1
+        assert receipt.num_measured_heads == 1
         assert receipt.cell_sum == 0.0
 
 

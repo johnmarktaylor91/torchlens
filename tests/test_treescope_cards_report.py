@@ -208,7 +208,7 @@ def test_partial_trace_report_is_first_class(tmp_path: Path) -> None:
     try:
         tl.trace(Dies(), torch.randn(2, 4))
     except RuntimeError as error:
-        partial = tl.partial.from_failed_capture(error)
+        partial = tl._partial.from_failed_capture(error)
     assert partial is not None
     text = _write(partial, tmp_path / "p.html")
     assert "FAILED CAPTURE" in text

@@ -24,9 +24,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._autoroute import _builtin_output
+from torchlens._autoroute._builtin_output import semantic_output_cache_key
 from torchlens._capture_fingerprint import _attribute_state_fragment
-from torchlens.autoroute import _builtin_output
-from torchlens.autoroute._builtin_output import semantic_output_cache_key
 
 
 def test_object_dtype_ndarray_fragment_never_matches() -> None:
@@ -137,7 +137,7 @@ def test_unreadable_projected_allocation_refuses_instead_of_charging_zero() -> N
 def test_provenance_digest_failures_record_unavailable_sentinels(monkeypatch) -> None:
     """Could-not-compute must stay distinguishable from does-not-apply."""
 
-    from torchlens import hash as trace_hash_module
+    from torchlens import fingerprint as trace_hash_module
     from torchlens._io import bundle as bundle_module
 
     trace = tl.trace(nn.Linear(2, 2), torch.randn(1, 2))

@@ -46,7 +46,7 @@ import torch
 from ..intervention.errors import BundleMemberError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from . import Bundle
 
 __all__ = [

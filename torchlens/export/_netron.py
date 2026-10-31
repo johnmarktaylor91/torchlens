@@ -23,8 +23,8 @@ from .._capture_honesty import capture_honesty_facts
 from .._errors import ArgumentTypeError
 from .._literals import BufferVisibilityLiteral
 from .._options_validation import _validate_buffer_visibility
+from .._utils.display import atomic_write_text
 from ..errors import ConfigurationError, TorchLensWarning
-from ..utils.display import atomic_write_text
 from ._common import _require_trace
 from ._netron_attachment import write_attachment
 from ._netron_diff import NetronBaselineDiff, apply_node_facts, build_baseline_diff, sidecar_rows
@@ -232,7 +232,7 @@ def _baseline_slot(
         return None, None
     if isinstance(baseline, str):
         return baseline, None
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
     if not isinstance(baseline, Trace):
         raise ArgumentTypeError(

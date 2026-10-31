@@ -18,7 +18,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.data_classes._nonfinite import (
+from torchlens._data_classes._nonfinite import (
     coverage_gap_note,
     inference_payload_count,
     nonfinite_coverage,

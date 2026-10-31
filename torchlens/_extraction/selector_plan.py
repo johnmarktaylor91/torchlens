@@ -252,7 +252,7 @@ def _saved_sites(trace: Any, selector: Any = None) -> list[tuple[str, str | None
         Ordered ``(pass_qualified_label, site_key, out)`` rows.
     """
 
-    from ..ir.selector_eval import evaluate
+    from .._ir.selector_eval import evaluate
 
     sites: list[tuple[str, str | None, torch.Tensor]] = []
     for op in trace.saved_ops:

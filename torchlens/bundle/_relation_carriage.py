@@ -20,9 +20,9 @@ from ._fed_by import FED_BY_KIND, settle_fed_by_params
 from ._relations import MEMBER_ROW_KINDS, MemberRelationRow, MemberRelationTable
 
 if TYPE_CHECKING:
+    from .._data_classes.trace import Trace
     from ..capture._episode_fold import EpisodeFoldResult
     from ..capture._episode_ledger import EpisodeLedger
-    from ..data_classes.trace import Trace
     from . import Bundle
 
 

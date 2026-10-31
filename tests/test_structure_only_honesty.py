@@ -42,17 +42,17 @@ def test_meta_and_real_tensors_of_identical_geometry_never_collide() -> None:
     real = torch.zeros(3, 4)
     with torch.device("meta"):
         meta = torch.zeros(3, 4)
-    assert tl.hash.content(real) != tl.hash.content(meta)
+    assert tl.fingerprint.content(real) != tl.fingerprint.content(meta)
     # And two meta tensors of identical geometry DO agree (the digest is a
     # real digest of the geometry, never None/absent).
     with torch.device("meta"):
         meta_twin = torch.zeros(3, 4)
-    assert tl.hash.content(meta) == tl.hash.content(meta_twin)
+    assert tl.fingerprint.content(meta) == tl.fingerprint.content(meta_twin)
 
 
 def test_structure_digests_always_computed() -> None:
     log = _structure_trace()
-    digest = tl.hash.trace(log)
+    digest = tl.fingerprint.trace(log)
     assert isinstance(digest, str) and len(digest) == 64
 
 

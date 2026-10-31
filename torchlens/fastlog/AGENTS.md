@@ -60,7 +60,7 @@ skipped/partial current-call event. `Recording.to_trace()` and `Recording.log_ba
 reject failed partials because the topology is incomplete.
 
 Trace has a separate failed-capture diagnostic: failed `tl.trace(...)` exceptions carry
-`exc.partial_log`, which can be retrieved with `tl.partial.from_failed_capture(exc)`.
+`exc.partial_log`, which can be retrieved with `tl._partial.from_failed_capture(exc)`.
 
 ## Training Semantics
 `backward_ready=True` promotes omitted defaults to graph-connected out capture. Explicit

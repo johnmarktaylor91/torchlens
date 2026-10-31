@@ -13,7 +13,7 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._io import PreReleaseArtifactError
 from torchlens._io.prerelease import activate_prerelease_fields
-from torchlens.postprocess._site_key import SiteKeyMinter
+from torchlens._postprocess._site_key import SiteKeyMinter
 from torchlens.validation import MetadataInvariantError, check_metadata_invariants
 
 
@@ -171,7 +171,7 @@ def test_g5_legacy_v7_artifact_loads_keyless_and_refuses_typed() -> None:
     with pytest.raises(InvalidArgumentError) as peers_exc:
         _ = loaded["linear_1_1"].site_peers
     assert peers_exc.value.fields["code"] == "site_key_unavailable"
-    from torchlens.postprocess._site_join import site_profile
+    from torchlens._postprocess._site_join import site_profile
 
     with pytest.raises(InvalidArgumentError) as profile_exc:
         site_profile(loaded)

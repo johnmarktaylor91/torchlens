@@ -31,11 +31,10 @@ from torch.overrides import handle_torch_function, has_torch_function_unary  # n
 
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
+from ..._constants import _get_torchvision_funcs, get_orig_torch_funcs
+from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureContextError
-from ...capture.arg_positions import _ensure_schema_tensor_position_corrections
-from ...constants import _get_torchvision_funcs, get_orig_torch_funcs
-from ...data_classes.internal_types import FuncExecutionContext
-from ...utils._torch_compat import (
+from ..._utils._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     dynamo_is_compiling,
     fix_tensor_sequence_slot,
@@ -49,11 +48,11 @@ from ...utils._torch_compat import (
     get_torch_function_mode_stack_length,
     mark_torch_capability_missing,
 )
-from ...utils.display import identity
-from ...utils.hashing import make_random_barcode
-from ...utils.introspection import get_vars_of_type_from_obj
-from ...utils.rng import log_current_autocast_state, log_current_rng_states
-from ...utils.tensor_utils import (
+from ..._utils.display import identity
+from ..._utils.hashing import make_random_barcode
+from ..._utils.introspection import get_vars_of_type_from_obj
+from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ..._utils.tensor_utils import (
     _DEFER_ENABLED as _COW_ENABLED,
     _DEFER_PENDING as _COW_PENDING,
     arm_deferred_payload_window,
@@ -62,6 +61,7 @@ from ...utils.tensor_utils import (
     print_override,
     safe_copy,
 )
+from ...capture.arg_positions import _ensure_schema_tensor_position_corrections
 from ._callable_location import _callable_source_location
 from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
 from ._modes import SubclassConstructionUnderDispatchModeError, pause_own_dispatch_modes
@@ -1864,7 +1864,7 @@ def torch_func_decorator(
         device_memory_before = None
         if getattr(trace, "track_device_memory", False):
             # Observe item 15 (deferred import per the spine layer lint).
-            from ...observe._device_memory import read_before as _dm_read_before
+            from ..._observe._device_memory import read_before as _dm_read_before
 
             device_memory_before = _dm_read_before(trace)
         mode_pause = pause_own_dispatch_modes() if pauses_owned_modes else nullcontext(())
@@ -1901,7 +1901,7 @@ def torch_func_decorator(
             # Observe item 15: the OOM raised BEFORE this op committed -- name
             # the ATTEMPTED call, never the last committed op.
             if getattr(trace, "track_device_memory", False):
-                from ...observe._device_memory import settle_op_bracket
+                from ..._observe._device_memory import settle_op_bracket
 
                 settle_op_bracket(trace, func_name, func_call_id, device_memory_before, oom=True)
             raise
@@ -1940,7 +1940,7 @@ def torch_func_decorator(
                 _record_mode_paused_interior(trace, owner_func_call_id=func_call_id)
         func_exec_duration = time.time() - func_exec_start
         if device_memory_before is not None or getattr(trace, "track_device_memory", False):
-            from ...observe._device_memory import settle_op_bracket
+            from ..._observe._device_memory import settle_op_bracket
 
             settle_op_bracket(trace, func_name, func_call_id, device_memory_before)
         if _echo is not None:

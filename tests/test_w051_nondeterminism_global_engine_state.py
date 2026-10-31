@@ -25,8 +25,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.utils import _rng_channels
-from torchlens.utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
+from torchlens._utils import _rng_channels
+from torchlens._utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
 
 
 class _LinearNoBias(nn.Module):
@@ -192,7 +192,7 @@ def test_get_draw_set_capture_requires_the_capture_seed(
     np.random.seed(999)
     seeded = loaded.run(inputs=x.clone(), seed=capture_seed)
     assert seeded.report.path_faithfulness.value == "verified"
-    tl.utils.rng.set_random_seed(capture_seed)
+    tl._utils.rng.set_random_seed(capture_seed)
     fresh = model(x)
     assert torch.allclose(seeded.output, fresh)
 

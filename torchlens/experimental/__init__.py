@@ -270,7 +270,7 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
         If ``TORCHLENS_AUTO=1`` is set.
     """
 
-    from ..utils.env_flags import closed_bool_env
+    from .._utils.env_flags import closed_bool_env
 
     if closed_bool_env("TORCHLENS_AUTO"):
         raise RuntimeError("TORCHLENS_AUTO is intentionally unsupported; use auto_capture().")

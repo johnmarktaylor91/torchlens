@@ -1,7 +1,7 @@
 """Typed-door tests for the r3 data_classes refusal conversions.
 
 Every case provokes a public refusal converted from a raw builtin raise in
-``torchlens/data_classes/`` and asserts the error-refusal contract: the
+``torchlens/_data_classes/`` and asserts the error-refusal contract: the
 exception is a ``TorchLensError`` subclass retaining its historical builtin
 base, carries a stable ``fields["code"]``, and names a concrete remedy in
 both ``fields["remedy"]`` and the message tail.

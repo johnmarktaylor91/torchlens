@@ -69,7 +69,7 @@ def _tolerate_op_count_disclosure() -> Iterator[None]:
 
     These tests deliberately build >=50k-op ``RandomGraphModel`` instances to
     exercise TorchLens at scale, so the capture-side op-count disclosure
-    (``torchlens/ir/capture_events.py``, fired once per journal at
+    (``torchlens/_ir/capture_events.py``, fired once per journal at
     ``OP_COUNT_DISCLOSURE_THRESHOLD``) is expected here, not a regression;
     the default ``error::UserWarning:torchlens`` filter would otherwise turn
     it into a test failure. ``tests/test_scaling_ladder.py`` owns the

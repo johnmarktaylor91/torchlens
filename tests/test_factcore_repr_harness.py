@@ -23,7 +23,7 @@ import torchlens as tl
 _NO_AUTO_REPR_CLASSES = (
     "torchlens.fastlog.types:Recording",
     "torchlens.fastlog.types:ActivationRecord",
-    "torchlens.ir.predicate:RecordContext",
+    "torchlens._ir.predicate:RecordContext",
     "torchlens._runnable:RunResult",
     "torchlens._runnable:RunReport",
     "torchlens._runnable:ReadinessReport",

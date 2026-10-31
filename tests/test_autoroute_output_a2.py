@@ -13,9 +13,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import autoroute
-from torchlens.autoroute._builtin_output import load_imagenet1k_labels
-from torchlens.data_classes.trace import ResolvedPostprocessing
+from torchlens import _autoroute as autoroute
+from torchlens._autoroute._builtin_output import load_imagenet1k_labels
+from torchlens._data_classes.trace import ResolvedPostprocessing
 from torchlens.user_funcs import semantic_output_cache_key
 
 
@@ -167,7 +167,7 @@ def test_output_style_override_and_output_head_select_named_head() -> None:
 
 
 def test_custom_registered_output_detector_decodes() -> None:
-    """A custom output detector registered via ``tl.autoroute.output.register`` decodes."""
+    """A custom output detector registered via ``tl._autoroute.output.register`` decodes."""
 
     labels = {0: "left", 1: "right"}
     model = _Classifier(torch.tensor([[3.0, 0.0]])).eval()
@@ -416,7 +416,7 @@ def test_nested_tensor_output_never_aborts_capture_with_raw_torch_error() -> Non
 def test_detector_exception_degrades_to_disclosed_warning_not_abort() -> None:
     """A raising registered detector is disclosed and skipped, never fatal."""
 
-    from torchlens.autoroute import output as autoroute_output
+    from torchlens._autoroute import output as autoroute_output
     from torchlens.errors import TorchLensWarning
 
     @autoroute_output.register(name="raising_probe_detector", priority=5)

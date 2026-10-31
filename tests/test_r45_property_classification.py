@@ -2,7 +2,7 @@
 
 The safe pure-read tensor-property surface (``x.T`` / ``x.mT`` / ``x.H`` / ``x.mH`` /
 ``x.real`` / ``x.imag``) is the single canonical set
-``torchlens.utils._callable_safety._PURE_TENSOR_PROPERTY_NAMES``, shared by the capture-side
+``torchlens._utils._callable_safety._PURE_TENSOR_PROPERTY_NAMES``, shared by the capture-side
 keyer (``torchlens.backends.torch.ops``), the load-side resolver
 (``torchlens._io.runnable_load._safe_tensor_property_getter``) and the security gate's
 recognized-operator predicate. r45 made it STRUCTURALLY computed -- a descriptor is admitted
@@ -33,16 +33,16 @@ import torchlens as tl
 from torchlens._io.runnable import build_sparse_run_descriptor
 from torchlens._io.runnable_load import _safe_tensor_property_getter
 from torchlens._runnable import PathFaithfulness, ReadinessStatus
-from torchlens.intervention.types import FunctionRegistryKey
-from torchlens.options import CaptureOptions
-from torchlens.utils._callable_safety import (
+from torchlens._utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
     _iter_tensor_getset_descriptor_names,
     _pure_view,
     _unwrap_capture_wrapper,
     is_pure_forward_callable,
 )
-from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
+from torchlens._utils._torch_compat import HAS_NAMED_TENSOR_API
+from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
     intervention_ready=True,

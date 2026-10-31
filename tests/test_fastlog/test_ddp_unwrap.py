@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.distributed import has_vetted_snapshot
+from torchlens.distributed import is_vetted_build
 
 
 class DdpModel(nn.Module):
@@ -80,7 +80,7 @@ def _record_under_group(*args: object, **kwargs: object):
     gap to route around.
     """
 
-    if has_vetted_snapshot():
+    if is_vetted_build():
         return tl.fastlog.record(*args, **kwargs)
     with pytest.warns(UserWarning, match="uncaptured_collective_op"):
         return tl.fastlog.record(*args, **kwargs)
@@ -114,9 +114,9 @@ def test_ddp_bundle_path_gets_rank_prefix(process_group: None, tmp_path: Path) -
 
 
 @pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 def test_process_group_teardown_leaves_distributed_capture_dormant(process_group: None) -> None:
     """A capture under the group arms distributed capture; after teardown it is dormant.

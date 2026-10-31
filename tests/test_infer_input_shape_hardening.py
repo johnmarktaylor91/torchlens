@@ -1,4 +1,4 @@
-"""Hardening tests for ``tl.debug.infer_input_shape`` (round 22).
+"""Hardening tests for ``tl.report.guess_input_shape`` (round 22).
 
 Three mandated properties:
 
@@ -407,7 +407,7 @@ def _assert_model_unchanged(model: nn.Module, snapshot: tuple[dict, dict, tuple]
 
 
 def _tensor_from_result(
-    result: tl.debug.InferInputShapeResult, shape: tuple[int, ...]
+    result: tl.report.GuessInputShapeReport, shape: tuple[int, ...]
 ) -> torch.Tensor:
     """Build a fresh input of ``shape`` from a result's dtype and value recipe."""
 
@@ -443,8 +443,8 @@ def test_no_escape_and_no_side_effects(name: str, factory: Callable[[], nn.Modul
 
     model = factory()
     snapshot = _state_snapshot(model)
-    result = tl.debug.infer_input_shape(model, on_failure="return")
-    assert isinstance(result, tl.debug.InferInputShapeResult)
+    result = tl.report.guess_input_shape(model, on_failure="return")
+    assert isinstance(result, tl.report.GuessInputShapeReport)
     if result.found:
         assert result.shape is not None
         assert all(dim >= 1 for dim in result.shape), "degenerate zero/negative dim reported"
@@ -462,22 +462,22 @@ def test_on_failure_raise_is_typed(factory: Callable[[], nn.Module]) -> None:
     """on_failure='raise' raises ShapeInferenceError, never a raw internal error."""
 
     with pytest.raises(ShapeInferenceError):
-        tl.debug.infer_input_shape(factory(), on_failure="raise")
+        tl.report.guess_input_shape(factory(), on_failure="raise")
 
 
 def test_failure_reasons_are_specific() -> None:
     """Failures carry the honest, specific reason for their class."""
 
-    lazy = tl.debug.infer_input_shape(LazyMlp(), on_failure="return")
+    lazy = tl.report.guess_input_shape(LazyMlp(), on_failure="return")
     assert not lazy.found
     assert lazy.reason == "lazy_uninitialized"
     assert "lazy" in lazy.message.lower()
 
-    meta = tl.debug.infer_input_shape(make_meta_mlp(), on_failure="return")
+    meta = tl.report.guess_input_shape(make_meta_mlp(), on_failure="return")
     assert not meta.found
     assert meta.reason == "verification_failed"
 
-    device = tl.debug.infer_input_shape(MetaBufferModel(), on_failure="return")
+    device = tl.report.guess_input_shape(MetaBufferModel(), on_failure="return")
     assert not device.found
     assert device.reason == "device_mismatch"
     assert "device" in device.message.lower()
@@ -488,7 +488,7 @@ def test_lazy_model_still_works_after_refusal() -> None:
     """A refused lazy model materializes correctly on its first real input."""
 
     model = LazyMlp()
-    result = tl.debug.infer_input_shape(model, on_failure="return")
+    result = tl.report.guess_input_shape(model, on_failure="return")
     assert not result.found
     out = model(torch.rand(2, 20))
     assert out.shape == (2, 2)
@@ -499,7 +499,7 @@ def test_subclass_conv_is_inferred_like_a_conv() -> None:
     """Conv2d subclasses dispatch by rank, not exact type, and succeed."""
 
     model = SubclassConvNet()
-    result = tl.debug.infer_input_shape(model)
+    result = tl.report.guess_input_shape(model)
     assert result.found
     assert result.shape is not None
     assert len(result.shape) == 4
@@ -511,7 +511,7 @@ def test_train_mode_bn1d_succeeds_without_escape() -> None:
 
     model = make_train_bn1d()
     assert model.training
-    result = tl.debug.infer_input_shape(model, on_failure="return")
+    result = tl.report.guess_input_shape(model, on_failure="return")
     assert result.found
     assert result.shape == (1, 20)
     assert model.training
@@ -531,7 +531,7 @@ def test_argument_validation_raises_typed_errors() -> None:
         {"channels": 0},
     ):
         with pytest.raises(ShapeInferenceError):
-            tl.debug.infer_input_shape(model, **kwargs)
+            tl.report.guess_input_shape(model, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -543,7 +543,7 @@ def test_lstm_per_step_head_stays_rank3() -> None:
     """A correct rank-3 RNN success is never normalized down to rank 2."""
 
     model = LstmPerStepHead()
-    result = tl.debug.infer_input_shape(model)
+    result = tl.report.guess_input_shape(model)
     assert result.found
     assert result.shape == (1, 16, 32)
     assert result.strategy != "executed_op_normalize"
@@ -557,14 +557,14 @@ def test_lstm_per_step_head_stays_rank3() -> None:
 def test_transformer_batch_first_layouts() -> None:
     """batch_size lands on the dimension the encoder layer reads as batch."""
 
-    seq_first = tl.debug.infer_input_shape(EncoderWrap(batch_first=False), batch_size=4)
+    seq_first = tl.report.guess_input_shape(EncoderWrap(batch_first=False), batch_size=4)
     assert seq_first.found
     assert seq_first.shape is not None
     assert len(seq_first.shape) == 3
     assert seq_first.shape[1] == 4, "batch must land on dim 1 for seq-first layers"
     assert seq_first.shape[2] == 32
 
-    batch_first = tl.debug.infer_input_shape(EncoderWrap(batch_first=True), batch_size=4)
+    batch_first = tl.report.guess_input_shape(EncoderWrap(batch_first=True), batch_size=4)
     assert batch_first.found
     assert batch_first.shape is not None
     assert len(batch_first.shape) == 3
@@ -578,7 +578,7 @@ def test_no_broadcast_escape_on_image_model() -> None:
     model = GrayscaleRepeat()
     with torch.no_grad():
         model(torch.rand(1, 1, 32, 32))
-    result = tl.debug.infer_input_shape(model)
+    result = tl.report.guess_input_shape(model)
     assert result.found
     assert result.shape is not None
     assert len(result.shape) == 4, f"broadcast escape: got rank {len(result.shape)}"
@@ -589,7 +589,7 @@ def test_depthwise_functional_conv_channels_corrected() -> None:
     """Parsed channel-mismatch facts drive a corrected retry (depthwise case)."""
 
     model = DepthwiseFunctional()
-    result = tl.debug.infer_input_shape(model)
+    result = tl.report.guess_input_shape(model)
     assert result.found
     assert result.shape is not None
     assert len(result.shape) == 4
@@ -599,7 +599,7 @@ def test_depthwise_functional_conv_channels_corrected() -> None:
 def test_sequence_model_never_reported_as_2d() -> None:
     """A broadcast-only 2D 'success' is rejected instead of reported verified."""
 
-    result = tl.debug.infer_input_shape(SeqPosAdd(), on_failure="return")
+    result = tl.report.guess_input_shape(SeqPosAdd(), on_failure="return")
     if result.found:
         assert result.shape is not None
         assert len(result.shape) >= 3
@@ -610,7 +610,7 @@ def test_sequence_model_never_reported_as_2d() -> None:
 def test_pure_linear_win_discloses_rank_ambiguity() -> None:
     """A last-dim-only constraint success discloses rank under-determination."""
 
-    result = tl.debug.infer_input_shape(TinyMlp())
+    result = tl.report.guess_input_shape(TinyMlp())
     assert result.found
     assert result.shape == (1, 20)
     assert "under-determined" in result.message
@@ -625,7 +625,7 @@ def test_claimed_flexible_dims_tolerate_growth(factory: Callable[[], nn.Module])
     """Every claimed flexible dim actually runs when grown by 4."""
 
     model = factory()
-    result = tl.debug.infer_input_shape(model)
+    result = tl.report.guess_input_shape(model)
     assert result.found
     assert result.shape is not None
     assert result.flexible_dims, "these models genuinely have a flexible dim"
@@ -641,7 +641,7 @@ def test_claimed_flexible_dims_tolerate_growth(factory: Callable[[], nn.Module])
 def test_fixed_branch_drops_false_flexible_claim() -> None:
     """A fixed-size parallel branch falsifies the adaptive-pool flexibility claim."""
 
-    result = tl.debug.infer_input_shape(FixedBranchAdaptive())
+    result = tl.report.guess_input_shape(FixedBranchAdaptive())
     assert result.found
     assert result.shape == (1, 3, 224, 224)
     assert result.flexible_dims == (), "spatial dims claimed flexible but a branch pins 224"
@@ -650,7 +650,7 @@ def test_fixed_branch_drops_false_flexible_claim() -> None:
 def test_position_ids_buffer_does_not_cap_sequence_to_one() -> None:
     """An HF-style (1, max_len) position_ids buffer must not cap seq len at 1."""
 
-    result = tl.debug.infer_input_shape(PosIdsLm())
+    result = tl.report.guess_input_shape(PosIdsLm())
     assert result.found
     assert result.shape is not None
     assert result.shape[0] == 1
@@ -660,7 +660,7 @@ def test_position_ids_buffer_does_not_cap_sequence_to_one() -> None:
 def test_token_value_range_reports_executed_vocab() -> None:
     """dtype-corrected token models report the real embedding vocabulary."""
 
-    result = tl.debug.infer_input_shape(FuncWte())
+    result = tl.report.guess_input_shape(FuncWte())
     assert result.found
     assert result.dtype == torch.long
     assert result.value_range == ("randint", 0.0, 50.0)

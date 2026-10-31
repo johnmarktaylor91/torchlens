@@ -2,7 +2,7 @@
 
 ``torchlens.distributed`` is a power-user submodule (imported as
 ``tl.distributed``; deliberately not in the top-level ``__all__``, matching
-``tl.debug``). It owns the C0 correlation/evidence layer of the merge-ranks
+``tl._debug``). It owns the C0 correlation/evidence layer of the merge-ranks
 tier:
 
 * :func:`arm` -- the explicit process-start opt-in that installs the
@@ -14,7 +14,7 @@ tier:
   the merge engine runs over it.
 * Typed refusal vocabulary: ``ambiguous_group_lifetime``,
   ``group_lifetime_evidence_conflict``, ``uncaptured_collective_op``.
-* :func:`has_vetted_snapshot` -- the read-only capability probe for whether
+* :func:`is_vetted_build` -- the read-only capability probe for whether
   this torch build's collective dispatcher matches a censused row in
   :data:`torchlens.distributed._recognizer.VETTED_NAMESPACE_SNAPSHOTS`. Never
   raises; use it to know in advance whether :func:`arm` can succeed, without
@@ -39,27 +39,21 @@ from ._ledger import (
     membership_digest_for_ranks,
 )
 from ._lifecycle import (
-    AMBIGUOUS_GROUP_LIFETIME,
     AmbiguousGroupLifetimeError,
     ArmingRecord,
     GroupIdentity,
     arm,
-    auto_arm_degradation,
     disarm,
     is_armed,
 )
 from ._recognizer import (
-    COLLECTIVE_NAMESPACES,
     UNCAPTURED_COLLECTIVE_OP,
     CollectiveRecognizer as CollectiveRecognizer,
     UncapturedCollectiveOpError,
-    derive_collective_recognizer,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
 
 __all__ = [
-    "AMBIGUOUS_GROUP_LIFETIME",
-    "COLLECTIVE_NAMESPACES",
     "GROUP_LIFETIME_EVIDENCE_CONFLICT",
     "UNCAPTURED_COLLECTIVE_OP",
     "AmbiguousGroupLifetimeError",
@@ -70,10 +64,8 @@ __all__ = [
     "UncapturedCollectiveOpError",
     "arm",
     "audit_membership_lineages",
-    "auto_arm_degradation",
-    "derive_collective_recognizer",
     "disarm",
-    "has_vetted_snapshot",
+    "is_vetted_build",
     "is_armed",
     "membership_digest_for_ranks",
 ]

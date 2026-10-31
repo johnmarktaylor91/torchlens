@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.preprocessing as pp
-from torchlens.data_classes.trace import ResolvedPreprocessing
+import torchlens._data_classes._preprocessing_provenance as provenance
+from torchlens._data_classes.trace import ResolvedPreprocessing
 
 
 class _Tiny(nn.Module):
@@ -46,7 +46,7 @@ def test_transform_capture_stamps_user_transform_record() -> None:
     assert record is not None
     assert record.source == "user_transform"
     assert record.verified is False
-    assert record.status == pp.STATUS_UNKNOWN
+    assert record.status == provenance.STATUS_UNKNOWN
     assert "0x" not in record.identifier or "0x<scrubbed>" in record.identifier
 
 
@@ -81,7 +81,7 @@ def test_record_survives_save_load_with_stable_status(tmp_path) -> None:
     assert record.verified is True
     assert record.config["mean"] == [0.485, 0.456, 0.406]
     assert record.description == "torchvision preset: resize=232 crop=224"
-    assert record.status == pp.STATUS_AUTHORITATIVE
+    assert record.status == provenance.STATUS_AUTHORITATIVE
 
 
 def test_unverified_fallback_status_survives_save_load(tmp_path) -> None:
@@ -102,4 +102,4 @@ def test_unverified_fallback_status_survives_save_load(tmp_path) -> None:
     path = tmp_path / "trace_fallback.tlspec"
     log.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.input_preprocessor.status == pp.STATUS_UNVERIFIED_FALLBACK
+    assert loaded.input_preprocessor.status == provenance.STATUS_UNVERIFIED_FALLBACK

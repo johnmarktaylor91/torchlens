@@ -121,7 +121,7 @@ def test_unwrap_restores_the_weight_norm_module_alias():
 def test_shadowed_namespace_resolution_is_narrow():
     """Only a non-module walk result with an imported same-named submodule is redirected."""
 
-    from torchlens.utils._torch_compat import get_optional_torch_namespace
+    from torchlens._utils._torch_compat import get_optional_torch_namespace
 
     # The shadowed case: the package attribute is the function, the roster means the module.
     assert callable(torch.nn.utils.weight_norm)

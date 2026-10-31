@@ -35,8 +35,8 @@ pytestmark = pytest.mark.heavy
 def _cooked_with_spy() -> tuple[Any, dict]:
     """Cook a recording while observing what step 0 actually consumes."""
 
-    import torchlens.postprocess as postprocess_module
-    import torchlens.postprocess._materialize as materialize_module
+    import torchlens._postprocess as postprocess_module
+    import torchlens._postprocess._materialize as materialize_module
 
     original = materialize_module.materialize_from_events
     seen: dict = {}
@@ -87,13 +87,13 @@ def test_late_buffer_append_is_materialized_today() -> None:
 def test_hash_covers_post_pre0_stream_today() -> None:
     """`_raw_event_shape_hash` on the cooked path reflects the late append."""
 
-    from torchlens.utils.hashing import compute_raw_event_shape_hash
+    from torchlens._utils.hashing import compute_raw_event_shape_hash
 
     cooked, seen = _cooked_with_spy()
     assert cooked._raw_event_shape_hash
     # Recompute over the retained (released) structural stream is impossible
     # post-release; instead assert the invariant the hash mechanism gives us:
-    # the hash was computed AFTER pre-0 (postprocess/__init__.py computes it
+    # the hash was computed AFTER pre-0 (_postprocess/__init__.py computes it
     # from trace.capture_events after _resolve_output_parent_labels), so a
     # journal WITHOUT the buffer event must hash differently.
     model, inputs = BufferOutputModel(), _small_vec_input()

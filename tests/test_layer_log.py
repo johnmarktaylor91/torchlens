@@ -5,9 +5,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.trace import Trace
 from torchlens.options import CaptureOptions
 
 # ---------------------------------------------------------------------------

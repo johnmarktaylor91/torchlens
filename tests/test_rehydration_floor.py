@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.op import Op
 from torchlens._io import (
     MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
@@ -24,7 +25,6 @@ from torchlens._io import (
     TorchLensIOError,
 )
 from torchlens._io._canonical_pickle import dump_canonical_metadata
-from torchlens.data_classes.op import Op
 from torchlens.errors import ArtifactVersionBelowFloorError
 
 FLOOR_MATCH = "torchlens 2.31.0"

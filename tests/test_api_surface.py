@@ -11,21 +11,17 @@ TARGET_ALL = [
     # L3 ATen profile facade (documented-unstable; exported at __all__ head).
     # Ratchet row repaired by L6 post-merge: the L1/L3 merge train landed the
     # export without this row, leaving main red on the frozen-surface test.
-    "AtenOp",
     "trace",
     "release_model",
     "clear_capture_cache",
     "export",
-    "hash",
-    "assert_unchanged",
+    "fingerprint",
     "fastlog",
     "facets",
     "record",
     "Recording",
     "ActivationLookup",
     "CapturedRun",
-    "JaxPayloadLoadHint",
-    "PayloadLoadHints",
     "load",
     "bundle",
     "pluck",
@@ -43,13 +39,7 @@ TARGET_ALL = [
     "ReentrantTraceError",
     "Trace",
     "Layer",
-    "Container",
     "Op",
-    "Quantity",
-    "Bytes",
-    "Duration",
-    "Flops",
-    "Macs",
     "Bundle",
     "add",
     "label",
@@ -67,7 +57,6 @@ TARGET_ALL = [
     "output",
     "output_at",
     "input_at",
-    "register_container",
     "preceded_by",
     "contains",
     "facet",
@@ -84,7 +73,6 @@ TARGET_ALL = [
     "replace_with",
     "scale",
     "splice_module",
-    "span",
     "steer",
     "sweep",
     "zero_ablate",
@@ -95,7 +83,6 @@ TARGET_ALL = [
     "clamp_grad",
     "scale_grad",
     "zero_grad",
-    "tap",
     "Selection",
     "ResolvedSelection",
     "units",
@@ -120,7 +107,7 @@ TARGET_ALL = [
     "pass_variance",
     "subspace",
     # F39 unhide (conflict-ledger row 8): tl.stats / tl.aggregate promoted
-    # from reachable-but-undeclared lazy names to declared surface = 116.
+    # from reachable-but-undeclared lazy names to declared surface.
     "stats",
     "aggregate",
 ]
@@ -136,15 +123,15 @@ CANONICAL_SUBMODULES = [
     "torchlens.experimental.dagua",
     "torchlens.export",
     "torchlens.fastlog",
-    "torchlens.hash",
+    "torchlens.fingerprint",
     "torchlens.io",
     "torchlens.options",
-    "torchlens.partial",
+    "torchlens._partial",
     "torchlens.report",
     "torchlens.semantic",
     "torchlens.stats",
     "torchlens.types",
-    "torchlens.utils",
+    "torchlens._utils",
     "torchlens.validation",
     "torchlens.visualization",
     "torchlens.viz",
@@ -188,7 +175,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     `release_model` = 93. The predicate-interpreter consolidation exports
     `grad_fn_label` (its own selector kind after the label-kind collision fix) = 94.
     Merge-ranks rung C1 adds `merge_ranks` and `merge_report` (spec'd
-    top-level entry points; machinery lives in `torchlens.merged`) = 96.
+    top-level entry points; machinery lives in `torchlens._merged`) = 96.
     The grind R39 cache remedy exports `clear_capture_cache` (the agreed
     user-facing half of the capture-cache bounds fix) = 97.
     The L6 selection algebra (feature work, DOCUMENTED-UNSTABLE pending

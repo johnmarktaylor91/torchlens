@@ -132,7 +132,7 @@ def test_resnet50_block_splice_box_and_marks(tmp_path) -> None:
         x,
         intervene=tl.when(
             tl.in_module("layer1.0") & tl.func("relu"),
-            tl.splice_module(torch.nn.ReLU(), input="out"),
+            tl.splice_module(torch.nn.ReLU(), input_route="out"),
         ),
         capture=tl.options.CaptureOptions(intervention_ready=True, log_injections=True),
     )

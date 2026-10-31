@@ -26,7 +26,7 @@ if _TYPE_CHECKING:
 __version__ = "2.36.1"
 
 if _TYPE_CHECKING:
-    from .data_classes.trace import Trace
+    from ._data_classes.trace import Trace
     from .intervention import Bundle
 
 _LAZY_ATTRS = {
@@ -36,48 +36,25 @@ _LAZY_ATTRS = {
     # marginal-import guard in tests/test_import_hygiene.py holds the line.
     "ActivationLookup": ("torchlens.captured_run", "ActivationLookup"),
     "AmbiguousOpLookupError": ("torchlens._errors", "AmbiguousOpLookupError"),
-    "Bytes": ("torchlens.quantities", "Bytes"),
     "CapturedRun": ("torchlens.captured_run", "CapturedRun"),
-    "Duration": ("torchlens.quantities", "Duration"),
-    "Flops": ("torchlens.quantities", "Flops"),
-    "Macs": ("torchlens.quantities", "Macs"),
-    "Quantity": ("torchlens.quantities", "Quantity"),
     "ReentrantTraceError": ("torchlens._state", "ReentrantTraceError"),
     # Agent surface (F29): the read-only inspection core. Deliberately NOT in
     # __all__ (frozen root budget); reachable as tl.agent per the docs.
     "agent": ("torchlens.agent", None),
-    # The docs teach tl.utils.doctor(); the row was missing so the taught
-    # spelling raised AttributeError on a cold import (agent memo 3.10).
-    "utils": ("torchlens.utils", None),
     "captured_run": ("torchlens.captured_run", None),
     "errors": ("torchlens.errors", None),
-    "ir": ("torchlens.ir", None),
     "observers": ("torchlens.observers", None),
     "options": ("torchlens.options", None),
-    "quantities": ("torchlens.quantities", None),
     "brainpipe": ("torchlens.brainpipe", None),
-    "register_container": ("torchlens.ir.container", "register_container"),
-    "span": ("torchlens.observers", "span"),
-    "tap": ("torchlens.observers", "tap"),
     "to_disk": ("torchlens.options", "to_disk"),
-    "AtenOp": ("torchlens.data_classes.aten_op", "AtenOp"),
     "Bundle": ("torchlens.intervention", "Bundle"),
-    "Container": ("torchlens.data_classes.container", "Container"),
-    "JaxPayloadLoadHint": ("torchlens._io", "JaxPayloadLoadHint"),
-    "Layer": ("torchlens.data_classes.layer", "Layer"),
-    "Op": ("torchlens.data_classes.op", "Op"),
-    "PayloadLoadHints": ("torchlens._io", "PayloadLoadHints"),
+    "Layer": ("torchlens._data_classes.layer", "Layer"),
+    "Op": ("torchlens._data_classes.op", "Op"),
     "Recording": ("torchlens.fastlog", "Recording"),
-    "Trace": ("torchlens.data_classes.trace", "Trace"),
+    "Trace": ("torchlens._data_classes.trace", "Trace"),
     "add": ("torchlens.intervention.predicates", "add"),
     "aggregate": ("torchlens.stats", "aggregate"),
-    "assert_unchanged": ("torchlens.hash", "assert_unchanged"),
     "attribution": ("torchlens.attribution", None),
-    # r7 R81 (sol b2): docs/semantic_io.md documents tl.autoroute.output.*
-    # and the agent docs list autoroute among the lazy attrs, but the row
-    # was missing -- the documented spelling resolved only after a separate
-    # `import torchlens.autoroute` (import-order side effect).
-    "autoroute": ("torchlens.autoroute", None),
     # Entry/facade repair (workstream A10; WT1 A-VI item 27, neuro memo item
     # 2): the integration and appliance namespaces were absent from this map,
     # so `tl.bridge` resolved only after an unrelated capture side effect
@@ -87,14 +64,11 @@ _LAZY_ATTRS = {
     "bridge": ("torchlens.bridge", None),
     "callbacks": ("torchlens.callbacks", None),
     "neuro": ("torchlens.neuro", None),
-    "notebook": ("torchlens.notebook", None),
     "hook_grad": ("torchlens.intervention.helpers", "hook_grad"),
     "clamp": ("torchlens.intervention.helpers", "clamp"),
     "compat": ("torchlens.compat", None),
     "contains": ("torchlens.intervention.selectors", "contains"),
     "decide_recording_of_batch": ("torchlens.user_funcs", "decide_recording_of_batch"),
-    "debug": ("torchlens.debug", None),
-    "data_classes": ("torchlens.data_classes", None),
     # Dataset extraction (D7/V5): the implementation module is lazy so the
     # manifest/resume machinery costs nothing until first use.
     "dataset_extraction": ("torchlens.dataset_extraction", None),
@@ -118,7 +92,7 @@ _LAZY_ATTRS = {
     "grad_output": ("torchlens.intervention.selectors", "grad_output"),
     "scale_grad": ("torchlens.intervention.helpers", "scale_grad"),
     "zero_grad": ("torchlens.intervention.helpers", "zero_grad"),
-    "hash": ("torchlens.hash", None),
+    "fingerprint": ("torchlens.fingerprint", None),
     "head": ("torchlens.intervention.selectors", "head"),
     "in_backward_pass": ("torchlens.intervention.selectors", "in_backward_pass"),
     "in_module": ("torchlens.intervention.selectors", "in_module"),
@@ -128,14 +102,12 @@ _LAZY_ATTRS = {
     "load": ("torchlens._io.bundle", "load"),
     "label": ("torchlens.intervention.selectors", "label"),
     "mean_ablate": ("torchlens.intervention.helpers", "mean_ablate"),
-    "merge_ranks": ("torchlens.merged", "merge_ranks"),
-    "merge_report": ("torchlens.merged", "merge_report"),
-    "merged": ("torchlens.merged", None),
+    "merge_ranks": ("torchlens._merged", "merge_ranks"),
+    "merge_report": ("torchlens._merged", "merge_report"),
     "module": ("torchlens.intervention.selectors", "module"),
     "add_noise": ("torchlens.intervention.helpers", "add_noise"),
     "output": ("torchlens.intervention.selectors", "output"),
     "output_at": ("torchlens.intervention.selectors", "output_at"),
-    "partial": ("torchlens.partial", None),
     "report": ("torchlens.report", None),
     "repgeom": ("torchlens.repgeom", None),
     "preceded_by": ("torchlens.intervention.selectors", "preceded_by"),
@@ -229,7 +201,7 @@ def _resolve_top_level(name: str) -> _Any:
 
 
 # Five-step facade tables (architecture memo 5.4; mechanism owned by
-# torchlens.utils.facade). The redirect table is the teaching compensator for
+# torchlens._utils.facade). The redirect table is the teaching compensator for
 # the 2026-08 shim-removal pass (docs/migration/v2.0_api_changes.md): every
 # removed top-level spelling raises a typed ``facade_redirect`` AttributeError
 # naming its canonical home instead of a bare "no attribute" (AUD-CODE 3.14).
@@ -245,8 +217,18 @@ def _resolve_top_level(name: str) -> _Any:
 # file for that group through its audited _ALLOWED ledger (GATE-FIX row 1);
 # docs/reference/deprecations.md teaches the same names in prose.
 _REDIRECTS: dict[str, str] = {
-    "ActivationPostfunc": "use torchlens.types.ActivationPostfunc",
     "batched_extract": "use torchlens.extract_dataset",
+    "AtenOp": "use torchlens.types.AtenOp",
+    "Container": "use torchlens.types.Container",
+    "register_container": "use torchlens.types.register_container",
+    "span": "use torchlens.observers.span",
+    "tap": "use torchlens.observers.tap",
+    "assert_unchanged": "use torchlens.fingerprint.assert_unchanged",
+    "Quantity": "use torchlens.types.Quantity",
+    "Bytes": "use torchlens.types.Bytes",
+    "Duration": "use torchlens.types.Duration",
+    "Flops": "use torchlens.types.Flops",
+    "Macs": "use torchlens.types.Macs",
     "Buffer": "use torchlens.types.Buffer",
     "build_render_audit": "use torchlens.experimental.dagua.build_render_audit",
     "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
@@ -261,7 +243,6 @@ _REDIRECTS: dict[str, str] = {
     "GradFn": "use torchlens.types.GradFn",
     "GradFnAccessor": "use torchlens.accessors.GradFnAccessor",
     "GradFnCall": "use torchlens.types.GradFnCall",
-    "GradientPostfunc": "use torchlens.types.GradientPostfunc",
     "intervening": "use torchlens.without_op -- intervening was renamed",
     "LayerAccessor": "use torchlens.accessors.LayerAccessor",
     "list_logs": "use torchlens.io.list_traces",
@@ -281,7 +262,7 @@ _REDIRECTS: dict[str, str] = {
     "peek": "use torchlens.pluck",
     "PreHookEffect": "use torchlens.types.PreHookEffect",
     "preview_fastlog": "use torchlens.fastlog.preview",
-    "record_span": "use torchlens.span",
+    "record_span": "use torchlens.observers.span",
     "rehydrate_nested": "use torchlens.io.materialize_nested",
     "render_graph": "use torchlens.visualization.show_model_graph, or trace.draw()",
     "render_lines_to_html": "use torchlens.experimental.dagua.render_lines_to_html",
@@ -305,12 +286,11 @@ _REDIRECTS: dict[str, str] = {
     "suppress_mutate_warnings": "use torchlens.io.suppress_mutate_warnings",
     "TargetManifestDiff": "use torchlens.types.TargetManifestDiff",
     "TensorInputObservation": "use torchlens.types.TensorInputObservation",
-    "TensorLog": "use torchlens.types.TensorLog",
     "TorchLensPostfuncError": "use torchlens.errors.TorchLensPostfuncError",
     "trace_to_dagua_graph": "use torchlens.experimental.dagua.trace_to_dagua_graph",
     "TraceState": "use torchlens.io.TraceState",
     "TrainingModeConfigError": "use torchlens.errors.TrainingModeConfigError",
-    "tviz": "import torchlens.tviz, then use torchlens.tviz.render_logit_lens_heatmap and its siblings -- a submodule, not a root name",
+    "transformer": "import torchlens.transformer, then use torchlens.transformer.render_answer_trajectory and its siblings -- a submodule, not a root name",
     "unwrap_torch": "use torchlens.backends.torch.wrappers.unwrap_torch",
     "validate_backward_pass": "use torchlens.validation.validate_backward_pass",
     "validate_batch_of_models_and_inputs": "use torchlens.validation.validate_batch_of_models_and_inputs",
@@ -353,7 +333,7 @@ def __getattr__(name: str) -> _Any:
         Per the five-step contract above.
     """
 
-    from .utils.facade import resolve_facade_attr
+    from ._utils.facade import resolve_facade_attr
 
     return resolve_facade_attr(
         owner=__name__,
@@ -375,7 +355,7 @@ def __dir__() -> list[str]:
         single-underscore implementation aliases are not advertised.
     """
 
-    from .utils.facade import facade_dir
+    from ._utils.facade import facade_dir
 
     return facade_dir(globals(), _LAZY_ATTRS)
 
@@ -756,21 +736,17 @@ _sys.modules[__name__].__class__ = _TorchLensModule
 
 
 __all__ = [
-    "AtenOp",
     "trace",
     "release_model",
     "clear_capture_cache",
     "export",
-    "hash",
-    "assert_unchanged",
+    "fingerprint",
     "fastlog",
     "facets",
     "record",
     "Recording",
     "ActivationLookup",
     "CapturedRun",
-    "JaxPayloadLoadHint",
-    "PayloadLoadHints",
     "load",
     "bundle",
     "pluck",
@@ -788,13 +764,7 @@ __all__ = [
     "ReentrantTraceError",
     "Trace",
     "Layer",
-    "Container",
     "Op",
-    "Quantity",
-    "Bytes",
-    "Duration",
-    "Flops",
-    "Macs",
     "Bundle",
     "add",
     "label",
@@ -812,7 +782,6 @@ __all__ = [
     "output",
     "output_at",
     "input_at",
-    "register_container",
     "preceded_by",
     "contains",
     "facet",
@@ -829,7 +798,6 @@ __all__ = [
     "replace_with",
     "scale",
     "splice_module",
-    "span",
     "steer",
     "sweep",
     "zero_ablate",
@@ -840,7 +808,6 @@ __all__ = [
     "clamp_grad",
     "scale_grad",
     "zero_grad",
-    "tap",
     "Selection",
     "ResolvedSelection",
     "units",

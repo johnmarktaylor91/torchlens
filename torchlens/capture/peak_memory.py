@@ -355,7 +355,7 @@ def record_forward_peak(
         Whether the capture opted in with ``measure_host_peak_memory=True``.
     """
 
-    from ..quantities import Bytes
+    from .._quantities import Bytes
 
     peak, trace.forward_peak_memory_reason = forward_peak_value(
         backend,
@@ -385,7 +385,7 @@ def record_backward_peak(trace: Any, backend: str, peak_delta: int) -> None:
         The pass's peak above its starting baseline, in bytes.
     """
 
-    from ..quantities import Bytes
+    from .._quantities import Bytes
 
     if backend == "cpu" and not getattr(trace, "measure_host_peak_memory", False):
         trace.backward_peak_memory = None

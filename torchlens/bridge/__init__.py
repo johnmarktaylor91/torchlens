@@ -3,7 +3,7 @@
 Every bridge module is import-inert without its foreign peer (the L8 rule):
 resolving ``tl.bridge.captum`` imports only TorchLens code, and the peer
 import is deferred into the functions that need it. Attribute access resolves
-through the shared five-step facade order (``torchlens.utils.facade``), so
+through the shared five-step facade order (``torchlens._utils.facade``), so
 ``hasattr`` probes and dunder lookups can never explode and a bridge module
 whose own import fails surfaces as a typed error that is BOTH an
 ``ImportError`` and an ``AttributeError``.
@@ -60,7 +60,7 @@ def __getattr__(name: str) -> ModuleType:
         ``AttributeError``.
     """
 
-    from ..utils.facade import resolve_facade_attr
+    from .._utils.facade import resolve_facade_attr
 
     resolved: ModuleType = resolve_facade_attr(
         owner=__name__,
@@ -80,7 +80,7 @@ def __dir__() -> list[str]:
         Sorted bridge module names plus real public globals.
     """
 
-    from ..utils.facade import facade_dir
+    from .._utils.facade import facade_dir
 
     return facade_dir(globals(), _BRIDGE_MODULES)
 

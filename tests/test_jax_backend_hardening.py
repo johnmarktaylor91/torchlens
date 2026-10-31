@@ -619,7 +619,9 @@ def test_jax_sharded_array_explicit_sharding_hint_restores_requested_sharding(
     trace.save(path, level="portable")
     loaded = tl.load(
         path,
-        payload_hints=tl.PayloadLoadHints(jax=tl.JaxPayloadLoadHint(sharding=sharded.sharding)),
+        payload_hints=tl._io.PayloadLoadHints(
+            jax=tl._io.JaxPayloadLoadHint(sharding=sharded.sharding)
+        ),
     )
     loaded_array = _first_saved_op(loaded).out
 
@@ -641,8 +643,8 @@ def test_jax_sharded_array_reconstruct_hint_uses_saved_metadata(
     trace.save(path, level="portable")
     loaded = tl.load(
         path,
-        payload_hints=tl.PayloadLoadHints(
-            jax=tl.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu")
+        payload_hints=tl._io.PayloadLoadHints(
+            jax=tl._io.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu")
         ),
     )
     loaded_array = _first_saved_op(loaded).out
@@ -660,7 +662,9 @@ def test_jax_sharded_array_lazy_and_op_materialize_accept_payload_hints(
     sharded, expected, device_count = _named_sharded_array(platform="cpu")
     trace = tl.trace(cast(Any, _identity_array), (None, sharded), backend="jax")
     path = tmp_path / "jax_sharded_lazy_hint.tlspec"
-    hint = tl.PayloadLoadHints(jax=tl.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu"))
+    hint = tl._io.PayloadLoadHints(
+        jax=tl._io.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu")
+    )
 
     trace.save(path, level="portable")
     lazy_loaded = tl.load(path, lazy=True, payload_hints=hint)
@@ -692,8 +696,8 @@ def test_jax_sharded_array_unsatisfiable_hint_fails_closed(tmp_path: Path) -> No
     with pytest.raises(BackendRuntimeCompatibilityError, match="mesh axis names"):
         tl.load(
             path,
-            payload_hints=tl.PayloadLoadHints(
-                jax=tl.JaxPayloadLoadHint(
+            payload_hints=tl._io.PayloadLoadHints(
+                jax=tl._io.JaxPayloadLoadHint(
                     reconstruct_sharding=True,
                     mesh_axis_names=("wrong",),
                 )
@@ -721,7 +725,9 @@ def test_jax_sharding_reconstruction_rejects_unaddressable_metadata() -> None:
             np.asarray([1.0], dtype=np.float32),
             {"logical_dtype": "float32", "codec_metadata": metadata},
             map_location=None,
-            payload_hints=tl.PayloadLoadHints(jax=tl.JaxPayloadLoadHint(reconstruct_sharding=True)),
+            payload_hints=tl._io.PayloadLoadHints(
+                jax=tl._io.JaxPayloadLoadHint(reconstruct_sharding=True)
+            ),
             strict_runtime=True,
         )
 
@@ -1282,7 +1288,7 @@ def test_jax_builtin_output_pytree_container_reconstructs() -> None:
     trace = tl.trace(cast(Any, model), ({}, x), backend="jax")
     container = trace.ops[trace.output_layers[0]].container
 
-    assert isinstance(container, tl.Container)
+    assert isinstance(container, tl.types.Container)
     assert container.reconstructable is True
     rebuilt = container.reconstruct()
     assert set(rebuilt) == {"a", "b"}

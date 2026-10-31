@@ -2,7 +2,7 @@
 
 The taught-spelling lint: every code span the surface teaches (guide
 snippets, api_map rows, breadcrumbs, error remedies) resolves in a fresh
-subprocess. Plus the facade repairs (tl.utils/tl.agent cold-resolve, the
+subprocess. Plus the facade repairs (tl._utils/tl.agent cold-resolve, the
 did-you-mean step-5 message) and the typed HF entry recovery.
 """
 
@@ -50,9 +50,9 @@ def test_breadcrumb_spellings_resolve_cold() -> None:
 
 @pytest.mark.heavy
 def test_docs_taught_facade_names_resolve_cold() -> None:
-    """tl.utils / tl.bridge / tl.backends / tl.callbacks / tl.agent cold-resolve."""
+    """tl._utils / tl.bridge / tl.backends / tl.callbacks / tl.agent cold-resolve."""
 
-    for spelling in ("tl.utils.doctor", "tl.bridge", "tl.backends", "tl.callbacks", "tl.agent"):
+    for spelling in ("tl._utils.doctor", "tl.bridge", "tl.backends", "tl.callbacks", "tl.agent"):
         _resolves_cold(spelling)
 
 

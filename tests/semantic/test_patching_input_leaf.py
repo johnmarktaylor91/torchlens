@@ -306,7 +306,7 @@ def test_teardown_restores_state_when_cleanup_raises(
     fork must be released too.
     """
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     model = MixedNestingModel()
     clean, corrupted = _mixed_tree(10.0), _mixed_tree(1.0)

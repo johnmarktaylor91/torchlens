@@ -13,12 +13,12 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
+from .._ir.intervention import FireResult
 from .._state import pause_logging
+from .._utils.arg_handling import copy_arg_tree
 from ..backends.torch._tl import copy_replacement_meta
 from ..capture.arg_positions import _normalize_func_name
-from ..data_classes._site_key import call_instance_id, render_site_key, site_axis
-from ..ir.intervention import FireResult
-from ..utils.arg_handling import copy_arg_tree
 from ._module_boundary import (
     _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
     _peek_module_intervention_parent_labels as _peek_module_intervention_parent_labels,
@@ -488,7 +488,7 @@ def _apply_live_hooks(
             if _is_plain_module_selector(normalized_entry.site_target):
                 continue
             raise HookValueError(
-                "splice_module(input='in') with a module-scoped op selector is ambiguous. "
+                "splice_module(input_route='in') with a module-scoped op selector is ambiguous. "
                 "Use tl.module(...)/tl.in_module(...) alone for one module-call splice, or use "
                 "an op selector without tl.in_module(...) for op-level splicing."
             )
@@ -1053,13 +1053,13 @@ def _helper_routes_inputs(helper: Any | None) -> bool:
     Returns
     -------
     bool
-        Whether the helper is ``splice_module(input='in')``.
+        Whether the helper is ``splice_module(input_route='in')``.
     """
 
     if helper is None or getattr(helper, "name", None) != "splice_module":
         return False
     metadata = dict(getattr(helper, "metadata", ()))
-    return metadata.get("input") == "in"
+    return metadata.get("input_route") == "in"
 
 
 def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> Any:
@@ -1132,7 +1132,7 @@ def _input_splice_module_scope(site_target: Any, entry: NormalizedHookEntry) -> 
     if helper is None or helper.name != "splice_module":
         return None
     helper_metadata = dict(helper.metadata)
-    if helper_metadata.get("input") != "in":
+    if helper_metadata.get("input_route") != "in":
         return None
     return _module_scope_address(site_target)
 
@@ -1170,7 +1170,7 @@ def _module_scope_address(site_target: Any) -> str | None:
 def _whole_call_site_view(site: Any) -> Any:
     """Return ``site`` as a whole-module-call site for input-splice matching.
 
-    ``splice_module(input="in")`` replaces a module call as a whole, so its
+    ``splice_module(input_route="in")`` replaces a module call as a whole, so its
     ``tl.in_module`` target fires at the boundary even when an op inside the
     call produced the output; drop the boundary's inner-alias mark (which
     otherwise keeps ``tl.in_module`` from re-firing there) for that match.
@@ -1472,7 +1472,7 @@ class _LiveSiteMinter:
     door fires BEFORE its op is journaled, so it PEEKS the key the postprocess
     minter will assign: consume every op already journaled on the capture's
     ``capture_events.op_events`` in execution order under the same cohort rule as
-    :class:`~torchlens.data_classes._site_key.SiteKeyMinter` (pass-qualified
+    :class:`~torchlens._data_classes._site_key.SiteKeyMinter` (pass-qualified
     innermost call instance, pass-free module site, layer type, output
     slot), then report ``seen + 1`` for the firing op without consuming it
     (it is consumed when its own record lands). Both doors therefore derive

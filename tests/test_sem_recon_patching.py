@@ -26,10 +26,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import TorchCapabilityWarning
 from torchlens.errors._base import TorchLensWarning
 from torchlens.semantic import FacetSpec
 from torchlens.semantic.patching import PatchApplicationError
-from torchlens.utils._torch_compat import TorchCapabilityWarning
 
 
 class ParamHeads(nn.Module):

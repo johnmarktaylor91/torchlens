@@ -35,7 +35,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **PartialTrace**
 : A recoverable prefix of a failed `tl.trace(...)` capture. A raised capture exception may expose
-  `exc.partial_log`; recover it with `tl.partial.from_failed_capture(exc)`. A partial trace is not
+  `exc.partial_log`; recover it with `tl._partial.from_failed_capture(exc)`. A partial trace is not
   silently treated as complete.
 
 **Failed partial Recording**
@@ -1192,7 +1192,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   once (the cross-shard mixing buffer) and yields token rows when `tokens=True`.
 
 **Observers**
-: `tl.tap` creates a tap observer for a site; `tl.span` records a named observer span
+: `tl.observers.tap` creates a tap observer for a site; `tl.observers.span` records a named observer span
   around captures or hook execution (the former `record_span` alias is removed);
   `tl.record_kpi_in_graph` records a user KPI on the active capture graph;
   `tl.register_tensor_connection` registers a manual parent-child tensor edge during
@@ -1241,20 +1241,20 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   carries no recorded request and re-saves by the capture's raw op indices, which is exact only
   when the rerun graph matches op for op; otherwise the rerun refuses `rerun_resave_ops_shifted`
   (trace unchanged).
-  `tl.PayloadLoadHints` carries backend-specific payload materialization hints
-  (`tl.JaxPayloadLoadHint` is the JAX-specific form).
+  `tl._io.PayloadLoadHints` carries backend-specific payload materialization hints
+  (`tl._io.JaxPayloadLoadHint` is the JAX-specific form).
 
 **Options**
 : `tl.options` groups the public option dataclasses: `CaptureOptions`, `SaveOptions`,
   `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StreamingOptions`.
 
 **Structural hash**
-: `tl.hash` is the provisional structural-hash namespace; `tl.assert_unchanged` asserts
+: `tl.fingerprint` is the provisional structural-hash namespace; `tl.fingerprint.assert_unchanged` asserts
   a model still matches a pinned address-free structural hash.
 
 **Container registration**
-: `tl.register_container` registers a custom container type (flatten/unflatten pair) for
-  capture and reconstruction. `tl.Container` is the computed view over a captured Python
+: `tl.types.register_container` registers a custom container type (flatten/unflatten pair) for
+  capture and reconstruction. `tl.types.Container` is the computed view over a captured Python
   output container.
 
 **Capture-product bases**
@@ -1341,15 +1341,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 ## Quantities and typed errors
 
 **Quantities**
-: `tl.Quantity` is the marker base for numeric quantity wrappers with unit-aware
-  display: `tl.Bytes` (memory), `tl.Duration` (seconds), `tl.Flops` (floating-point
-  operations), `tl.Macs` (multiply-accumulates).
+: `tl.types.Quantity` is the marker base for numeric quantity wrappers with unit-aware
+  display: `tl.types.Bytes` (memory), `tl.types.Duration` (seconds), `tl.types.Flops` (floating-point
+  operations), `tl.types.Macs` (multiply-accumulates).
 
 **FLOP convention (`flop_convention=`)**
 : `"fma2"` (default; one multiply-accumulate = 2 FLOPs) or `"fma1"` (recounted
   from each op's two-term compute record; refuses typed with
   `flop_convention_unavailable` when an op has no MAC split). Accepted by
-  `summary(...)` and `tl.utils.flop_count(...)`; the removed `count_fma_as_two=`
+  `summary(...)`; the removed `count_fma_as_two=`
   spelling refuses typed naming it.
 
 **Autograd-saved bytes**
@@ -1421,8 +1421,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   conflicts.
 
 **Merge vocabularies**
-: `MergeAlignment`, `BoundaryConsistency`, `MergeValueStatus`, and `MergedErrorCode` are
-  frozen vocabularies in `torchlens.merged`, release-gated against
+: `MergeAlignment` and `MergeValueStatus` are frozen vocabularies in `tl.types`,
+  release-gated against
   [the merged-trace contract](merged_trace_contract.md).
 
 **Trace.distributed_scope** — *unstable — no deprecation shim owed*
@@ -1533,13 +1533,13 @@ shims, by declared contract. Each carries the same tag at its definition.
 **ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.rdm_compare_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
 : A TorchLens score with a descriptive uncertainty interval beside it:
   `score` (the unchanged estimator on all stimuli), `low` and `high` (a
-  percentile bootstrap over stimuli), `confidence`, `n_resamples`, `n_valid`
+  percentile bootstrap over stimuli), `confidence`, `num_resamples`, `num_valid_resamples`
   (resamples with a finite score), `seed`, `basis` (how the interval was
   made, in words) and `similarity_repository_id` (the measure variant `score`
   computes: the linear CKA identifier from `cka_interval`, `None` from
   `rdm_compare_interval`, whose precomputed RDMs do not name their metric),
   plus `width` and `to_dict()` (every field). `rdm_compare_interval(rdm_a,
-  rdm_b, method, n_resamples=1000, seed=0, confidence=0.95)` resamples
+  rdm_b, method, num_resamples=1000, seed=0, confidence=0.95)` resamples
   stimuli and recomputes `rdm_compare`, dropping self-pairs; `cka_interval(a,
   b, ...)` does the same for linear CKA. Descriptive, not a test; inference
   stays with rsatoolbox.
@@ -1579,7 +1579,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   `n_folds` split, the penalty per fold chosen from `ridge_alphas` by exact
   leave-one-out on the training fold, then the mean over target columns of
   the Pearson r between out-of-fold predictions and the target); `"cka"` is
-  linear CKA. `n_resamples=` adds a `ScoreInterval` per score. The returned
+  linear CKA. `num_resamples=` adds a `ScoreInterval` per score. The returned
   report has `scores`, `intervals`, `settings`, `ridge_alphas_chosen`,
   `similarity_repository_ids`, `table()`, `disagreement()` (a
   `MetricDisagreement`) and `to_dict()`. Descriptive only: inference,
@@ -1725,22 +1725,8 @@ S2-gated*
   `structure_only_refuted_hypothesis`, `structure_only_discharge_precondition`,
   `structure_only_type_invalid`.
 
-**tl.ir.ModuleCaptureWorkspace.root_forward_args** — *unstable — no deprecation shim owed*
-: The root call's `(args, kwargs)`, kept on a capture's module workspace while the capture
-  runs: the root forward is never decorated, so the per-module forward-argument table has no
-  entry for it. Set at capture entry, read when finalization builds the root module pass, then
-  cleared with the other temporary build state (`None` outside a capture). The
-  `ModuleCaptureWorkspace(..., root_forward_args=...)` keyword sets the same field.
-
-**tl.ir.RawGraphWorkspace.buffer_version_keys** — *unstable — no deprecation shim owed*
-: Raw buffer label to the buffer version it was logged from: the tensor's object id, storage
-  key and version counter, or `None` when the storage or counter cannot be read. Recorded when a
-  buffer is logged; postprocess merges two buffer nodes only when they name the same version, and
-  the field goes away with the raw-graph workspace once the trace is projected. The
-  `RawGraphWorkspace(..., buffer_version_keys=...)` keyword sets the same field.
-
 **PredicateProtocol** — *unstable — no deprecation shim owed*
-: `torchlens.ir.predicate_registry.PredicateProtocol` — the frozen callable
+: `torchlens._ir.predicate_registry.PredicateProtocol` — the frozen callable
   signature for the capture-lifecycle `save`/`halt`/`until` predicate slots:
   one positional concrete `RecordContext`, returning a normalized decision.
   The S4 seam contract; normative page:
@@ -1749,7 +1735,7 @@ S2-gated*
 
 **coerce_predicate(value, \*, slot)** — *unstable — no deprecation shim owed*
 : The single documented coercion door for predicate consumers
-  (`torchlens.ir.predicate_registry`). Closed value domain {raw callable,
+  (`torchlens._ir.predicate_registry`). Closed value domain {raw callable,
   registered-name str}; raw callables (including `BaseSelector` instances and
   `followed_by` composites) return BY IDENTITY, registered names return a
   slot-aware enforcing wrapper carrying
@@ -2365,7 +2351,7 @@ shim owed*
 : Op-grain (tier O) watching: per-op activations from the Route-B op-tier
   collector during ordinary training. Needs `signals=("activations",)`,
   `select=` (module path prefixes or a selector-algebra object) and
-  `example_input=`; refuses `watch_forward_wrap_consent_required` without
+  `inputs=`; refuses `watch_forward_wrap_consent_required` without
   `allow_forward_wrap=True`, the consent to wrap the root module's forward.
   Attach calibrates the wrap (plain vs wrapped forward, RNG and buffers
   restored) into `session.collector.calibration` and discloses it in
@@ -2383,24 +2369,6 @@ shim owed*
   `[derived: logging_steps=N]` or `[default]`. Resolved values and sources stay
   on `callback.settings`; `hist_every=` is a constructor argument too. A
   malformed variable refuses `watch_env_config_invalid`.
-
-**StepBlockRecord.trace_ref (torchlens.observability)** — *unstable — no deprecation shim owed*
-: Nullable pointer (path or URI) from a history step block to a retained
-  `Trace` for that step; there is no raw-tensor snapshot tier. History schema
-  version 2 (`HISTORY_SCHEMA_VERSION`); version-1 artifacts load with
-  `trace_ref=None`; a non-string or empty pointer refuses
-  `history_trace_ref_invalid`. `OpTierCollector.settle_open_block(...)`
-  sets it (and the optimizer truth) for the open op-tier block;
-  `OpTierCollector.instrumented_forward(...)` runs the per-step pass without
-  committing a block.
-
-**WatchSettings(sketch_embeddings=, artifact_budget_bytes=) (torchlens.observability)** — *unstable — no deprecation shim owed*
-: `sketch_embeddings=False` (default) reduces embedding-table parameters with
-  at least `EMBEDDING_SKETCH_CAP_NUMEL` (2**20) elements spine-only and says
-  so in the plan table; `True` sketches them. `artifact_budget_bytes` (default
-  256 MiB, `None` disables) caps the disk history artifact: the block that
-  would cross it refuses `history_artifact_budget_exceeded` before any of its
-  bytes are written.
 
 **show_legend=None AUTO value** — *unstable — no deprecation shim owed*
 : The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless
@@ -2601,8 +2569,8 @@ deprecation shim owed*
   Trajectory statistics over many batches: `tl.stats.measure_trajectory`. See
   [facets](../facets.md).
 
-**render_logit_lens_heatmap (torchlens.tviz)** — *unstable — no deprecation shim owed*
-: `torchlens.tviz.render_logit_lens_heatmap(result, path)` draws a
+**render_logit_lens_heatmap (torchlens.transformer)** — *unstable — no deprecation shim owed*
+: `torchlens.transformer.render_logit_lens_heatmap(result, path)` draws a
   `LogitLensResult` as a layers-by-positions heatmap: one row per projected
   block, one column per input position, each cell printing that layer's
   top-1 next-token prediction and colored on a fixed 0-to-1 probability
@@ -2615,7 +2583,7 @@ deprecation shim owed*
   wider than 48 positions refuse `tv_record_invalid` until `positions=`
   names the columns; nothing is cropped silently. Returns a `SavedFigure`.
 
-**kv-group receipts (torchlens.tviz)** — *unstable — no deprecation shim owed*
+**kv-group receipts (torchlens.transformer)** — *unstable — no deprecation shim owed*
 : `tviz.receipt_from_patch_grid(grid, ..., kv_groups=tviz.GqaInfo(...))`
   builds a `CausalReceipt` whose cells are grouped-query KV groups, for
   grids over a key or value site. The receipt's `kv_groups` field holds the
@@ -2631,7 +2599,7 @@ deprecation shim owed*
   "effect source: ..." on the grid figure, and passing `kv_groups=` for it
   refuses `tv_receipt_invalid`.
 
-**Receipt cells and patch-grid baselines (torchlens.tviz, torchlens.mechinterp)** — *unstable — no deprecation shim owed*
+**Receipt cells and patch-grid baselines (torchlens.transformer, torchlens.mechinterp)** — *unstable — no deprecation shim owed*
 : A `mechinterp.PatchGrid` from `mechinterp.grid`, its presets or
   `mechinterp.patch_query_heads_grid` keeps `values` as the metric of each
   patched run (`to_pandas` names the column `metric`) and records the
@@ -2745,8 +2713,8 @@ deprecation shim owed*
   `AttentionCall` records (`module_name`, `probs`, `num_key_value_heads`,
   `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
 
-**DebugReport (`tl.debug.DebugReport`)** — *unstable — no deprecation shim owed*
-: The one typed result of every report-shaped `tl.debug` helper (U42.2):
+**DebugReport (`tl._debug.DebugReport`)** — *unstable — no deprecation shim owed*
+: The one typed result of every report-shaped `tl._debug` helper (U42.2):
   `report_type`, `subject` and `status` (the lead), `to_dict()` (a plain,
   JSON-friendly payload; tensors and graph records summarized, never
   inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:

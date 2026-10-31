@@ -32,16 +32,16 @@ __tl_layer__ = "FACADE"
 # C06 observability substrate (explorer D18): the always-on scalar Spine and
 # the fixed signed-log2 Histogram implement StreamingStat, closing the
 # tl.stats Histogram gap -- tl.aggregate gets dataset-mode histograms free.
-# One implementation home (torchlens/observability/_kernels.py); spellings
+# One implementation home (torchlens/_observability/_kernels.py); spellings
 # DOCUMENTED-UNSTABLE pending naming-session ratification.
-from ..intervention._metrics import cosine_distance, relative_l1, relative_l2  # noqa: E402
-from ..observability._kernels import (  # noqa: E402
+from .._observability._kernels import (  # noqa: E402
     Histogram,
     HistogramDescriptor,
     HistogramResult,
     Spine,
     SpineResult,
 )
+from ..intervention._metrics import cosine_distance, relative_l1, relative_l2  # noqa: E402
 
 # Reduce-and-discard capture (tl.trace(..., save="stats")) reads back through
 # site_spines; measure_trajectory folds logit-lens trajectory statistics over

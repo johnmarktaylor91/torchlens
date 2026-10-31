@@ -33,13 +33,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import Trace, trace as trace_fn
+from torchlens._data_classes.backward_pass import BackwardPass
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.param import Param
 from torchlens._io import TorchLensIOError
-from torchlens.data_classes.backward_pass import BackwardPass
-from torchlens.data_classes.grad_fn import GradFn
-from torchlens.data_classes.grad_fn_call import GradFnCall
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.param import Param
 from torchlens.options import CaptureOptions
 
 

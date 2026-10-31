@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 import torch
 
 from .._errors import CaptureContextError, InvalidArgumentError
+from .._ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
+from .._utils.tensor_utils import SaveMode
 from ..captured_run import CapturedRun
-from ..ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
-from ..utils.tensor_utils import SaveMode
 
 __all__ = [
     "ActivationRecord",
@@ -30,8 +30,8 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
+    from .._data_classes.trace import Trace
     from ..capture.session import CapturedRunCore
-    from ..data_classes.trace import Trace
 
 
 def _backfill_cooked_ancestry(events: Any) -> None:
@@ -67,7 +67,7 @@ def _backfill_cooked_ancestry(events: Any) -> None:
 
     from dataclasses import replace as _dc_replace
 
-    from ..ir.op_record import AncestryFacet, OpRecord
+    from .._ir.op_record import AncestryFacet, OpRecord
 
     folded = events.amended_op_records()
     closures: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
@@ -177,7 +177,7 @@ class CaptureSpec:
     def __post_init__(self) -> None:
         """Normalize and validate capture save-mode settings."""
 
-        from ..utils.tensor_utils import SAVE_MODES
+        from .._utils.tensor_utils import SAVE_MODES
 
         if self.save_mode not in SAVE_MODES:
             raise InvalidArgumentError(
@@ -1050,7 +1050,7 @@ class Recording(CapturedRun):
             Keep only the last ``last`` rows.
         select:
             Optional filter: a substring, or a callable over
-            :class:`torchlens.snoop.NarrationEvent` rows.
+            :class:`torchlens._snoop.NarrationEvent` rows.
 
         Returns
         -------
@@ -1058,7 +1058,7 @@ class Recording(CapturedRun):
             Rendered narration block (no trailing newline).
         """
 
-        from ..snoop import narrate_recording
+        from .._snoop import narrate_recording
 
         return narrate_recording(self, last=last, select=select)
 
@@ -1077,7 +1077,7 @@ class Recording(CapturedRun):
             New immutable recording value with enriched records.
         """
 
-        from ..postprocess.incremental import enrich_recording
+        from .._postprocess.incremental import enrich_recording
 
         return enrich_recording(self, steps)
 
@@ -1150,8 +1150,8 @@ class Recording(CapturedRun):
                 code="recording_multipass_not_convertible",
                 remedy="record one pass per Recording before converting",
             )
+        from .._data_classes.trace import Trace
         from ..capture.projectors import RecordingProjector
-        from ..data_classes.trace import Trace
         from .options import RecordingOptions
 
         projection = RecordingProjector().project(self._captured_run_cores)

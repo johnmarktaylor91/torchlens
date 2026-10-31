@@ -12,15 +12,15 @@ from typing import Any, cast
 import pytest
 
 import torchlens as tl
+from torchlens._data_classes._compaction import _COMPACTED_TRACES
+from torchlens._postprocess.graph_traversal import _remove_orphan_nodes
 from torchlens.backends import BackendUnsupportedError
 from torchlens.backends.jax.backend import (
     _control_parent_labels,
     _data_parent_arg_positions,
     _data_parent_labels,
 )
-from torchlens.data_classes._compaction import _COMPACTED_TRACES
 from torchlens.intervention.types import EdgeUseRecord
-from torchlens.postprocess.graph_traversal import _remove_orphan_nodes
 from torchlens.validation.invariants import MetadataInvariantError
 from torchlens.validation.status import (
     REGION_REPLAY_CLASS,
@@ -978,7 +978,7 @@ def test_synthetic_control_parent_is_retained_by_orphan_pruning() -> None:
                 The raw graph fields are populated in place.
             """
 
-            from torchlens.ir.workspaces import (
+            from torchlens._ir.workspaces import (
                 ModuleCaptureWorkspace,
                 RawGraphWorkspace,
                 WrapperRuntimeWorkspace,

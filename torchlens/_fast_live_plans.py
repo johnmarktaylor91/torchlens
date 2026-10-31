@@ -61,8 +61,8 @@ def _pair_output_leaves(
 
     # Module import: the dotted spelling of this path matches the layer lint's
     # torch-private pattern, but the walker is TorchLens's own, not a torch private.
+    from ._utils.introspection import get_vars_of_type_from_obj
     from .backends.torch import _ops_containers
-    from .utils.introspection import get_vars_of_type_from_obj
 
     native = [
         (tuple(path), tensor)
@@ -100,7 +100,7 @@ def _module_output_paths(
     a unique path, which keeps the positional pairing.
     """
 
-    from .data_classes._module_role_hints import (
+    from ._data_classes._module_role_hints import (
         multi_output_role_from_path,
         role_hints_for_module_class,
     )

@@ -22,7 +22,7 @@ from ._summary_ladder import ResolvedView, ViewRow, resolve_view
 from ._summary_render import SummaryFacts, render_summary_pair
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ._summary_report import SummaryReport
 
 
@@ -74,7 +74,7 @@ def collect_summary_facts(
     # Pass-level peaks publish ONLY through the observe gate (F24 item 4):
     # the basis is named, cpu/mps render under their real meaning, and a
     # CUDA 0 is a high-water fact -- never a raw forward-peak read here.
-    from ..observe._peaks import pass_peak_facts
+    from .._observe._peaks import pass_peak_facts
 
     peak_facts = pass_peak_facts(trace, "forward")
     unexecuted_names: tuple[str, ...] = tuple(

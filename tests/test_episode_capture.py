@@ -360,7 +360,7 @@ def test_failed_episode_attaches_partial_ledger():
     spec = EpisodeOptions(stepped_module=stepped, num_steps=5)
     with pytest.raises(RuntimeError, match="injected step failure") as excinfo:
         tl.trace(runner, _prompt(), episode=spec)
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    partial = tl._partial.from_failed_capture(excinfo.value)
     payload = partial.trace.annotations.get("episode")
     assert payload is not None
     ledger = EpisodeLedger.from_payload(payload)

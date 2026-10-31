@@ -47,7 +47,7 @@ sections:
    analyses=("rsa", "ridge", "cka"))`` reads each site's activations once
    and scores every site against one target with RSA, a cross-validated
    ridge score and linear CKA, all descriptive (optional stimulus-bootstrap
-   intervals with ``n_resamples=``); ``.disagreement()`` reports where the
+   intervals with ``num_resamples=``); ``.disagreement()`` reports where the
    analyses rank sites differently.
 6. REFUSALS: noise ceilings, crossnobis/mahalanobis, searchlight,
    inferential bootstrap/permutation/model fitting (descriptive intervals
@@ -68,7 +68,7 @@ import-time dependency check would run that foreign code with no trust
 opt-in.
 
 Attribute access resolves through the shared five-step facade order (neuro
-memo D15; ``torchlens.utils.facade``). Dependency checks are PER-NAME,
+memo D15; ``torchlens._utils.facade``). Dependency checks are PER-NAME,
 probed with ``importlib.util.find_spec`` so answering never executes
 foreign code, and every typed refusal subclasses ``AttributeError`` so
 ``hasattr``/IPython canary probes degrade instead of erroring. The facade
@@ -82,7 +82,7 @@ from __future__ import annotations
 
 from importlib.util import find_spec as _find_spec
 
-from ..utils.facade import DependencyGate as _DependencyGate
+from .._utils.facade import DependencyGate as _DependencyGate
 
 _INSTALL_NEURO = 'pip install "torchlens[neuro]"'
 _INSTALL_BRAINSCORE = 'pip install "torchlens[brainscore]" (Python >= 3.11)'
@@ -292,7 +292,7 @@ def __getattr__(name: str) -> object:
         for gated names whose dependency is absent.
     """
 
-    from ..utils.facade import resolve_facade_attr
+    from .._utils.facade import resolve_facade_attr
 
     return resolve_facade_attr(
         owner=__name__,
@@ -316,7 +316,7 @@ def __dir__() -> list[str]:
         implementation imports are not advertised.
     """
 
-    from ..utils.facade import facade_dir
+    from .._utils.facade import facade_dir
 
     return facade_dir(globals(), __all__)
 

@@ -677,8 +677,8 @@ def swap_with(
 def splice_module(
     module: nn.Module,
     *,
-    input: str = "in",
-    output: str = "out",
+    input_route: str = "in",
+    output_route: str = "out",
     allow_shape_change: bool = False,
 ) -> Edit:
     """Create a helper that calls a module as a black-box forward splice.
@@ -686,20 +686,20 @@ def splice_module(
     Transcoder support: a transcoder maps a block's MLP input to its MLP
     output, so it replaces the MLP call as a whole. Target the MLP module and
     route its call inputs, ``hooks={tl.module("mlp"):
-    tl.splice_module(transcoder, input="in")}``: the transcoder runs on the
+    tl.splice_module(transcoder, input_route="in")}``: the transcoder runs on the
     arguments the MLP was called with and its result becomes the MLP's
     output. An SAE reconstructs the site's own value instead, which is
-    ``input="out"`` (the route ``torchlens.bridge.sae.splice`` uses).
+    ``input_route="out"`` (the route ``torchlens.bridge.sae.splice`` uses).
 
     Parameters
     ----------
     module:
         Module to call under ``pause_logging()`` in the execution helper.
-    input:
+    input_route:
         Input routing policy. ``"in"`` runs ``module`` on the original call
         inputs (a transcoder on its MLP's inputs); ``"out"`` passes the
         site's output to ``module`` (an SAE on its site).
-    output:
+    output_route:
         Output routing policy. Only ``"out"`` is supported.
     allow_shape_change:
         Stored escape hatch allowing output metadata changes.
@@ -710,8 +710,10 @@ def splice_module(
         Built-in forward helper spec.
     """
 
-    if input not in {"in", "out"} or output != "out":
-        raise HookValueError("splice_module only supports input in {'in', 'out'} and output='out'")
+    if input_route not in {"in", "out"} or output_route != "out":
+        raise HookValueError(
+            "splice_module only supports input_route in {'in', 'out'} and output_route='out'"
+        )
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for module splicing.
@@ -725,7 +727,7 @@ def splice_module(
         def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
             """Call the spliced module and validate dtype/device."""
 
-            if input == "in":
+            if input_route == "in":
                 if not hook.args and not hook.kwargs:
                     raise HookValueError(
                         "splice_module input routing requires captured call inputs"
@@ -750,9 +752,13 @@ def splice_module(
     return _helper_spec(
         "splice_module",
         args=(module,),
-        kwargs={"input": input, "output": output, "allow_shape_change": allow_shape_change},
+        kwargs={
+            "input_route": input_route,
+            "output_route": output_route,
+            "allow_shape_change": allow_shape_change,
+        },
         factory=factory,
-        metadata={"input": input, "output": output},
+        metadata={"input_route": input_route, "output_route": output_route},
         batch_independent=False,
         compatible_with_append=False,
     )
@@ -1672,7 +1678,7 @@ if not TYPE_CHECKING:
             Typed ``facade_redirect`` for a removed spelling, plain otherwise.
         """
 
-        from ..utils.facade import resolve_facade_attr
+        from .._utils.facade import resolve_facade_attr
 
         return resolve_facade_attr(
             owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS

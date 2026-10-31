@@ -10,7 +10,7 @@ torch 2.13:
 
 * ``torch.rand_like`` / ``torch.randn_like`` / ``torch.randint_like`` are real public torch
   factories that were NOT wrapped: they are in torch's ``get_ignored_functions()`` (not
-  overridable via ``__torch_function__``) but were absent from ``torchlens.constants.IGNORED_FUNCS``
+  overridable via ``__torch_function__``) but were absent from ``torchlens._constants.IGNORED_FUNCS``
   -- unlike their non-``_like`` siblings ``rand`` / ``randn`` / ``randint``. A forward that called
   them recorded the output as an unattributed literal (the r45 ``.mH`` capture-gap class). The fix
   adds the three factories to ``IGNORED_FUNCS`` so they decorate and capture; their arg-specs
@@ -24,8 +24,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._constants import get_orig_torch_funcs
 from torchlens.capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_name
-from torchlens.constants import get_orig_torch_funcs
 
 _RANDOM_LIKE_FACTORIES = ("rand_like", "randn_like", "randint_like")
 

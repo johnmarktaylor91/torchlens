@@ -904,7 +904,7 @@ def _multiarg_refusal_cases() -> tuple[tuple[BaseException, dict[str, object]], 
     pickle/deepcopy/process boundary — e.g. a spawn child's
     ``MetadataInvariantError`` arrived in the parent as ``TypeError:
     __init__() missing 1 required positional argument``. The
-    ``torchlens.merged`` ``MergedTraceError`` family shares the shape but is
+    ``torchlens._merged`` ``MergedTraceError`` family shares the shape but is
     governed by its own frozen-vocabulary contract and lane.
 
     Returns
@@ -1329,46 +1329,46 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "private mid-stream byte-ceiling abort signal; raised and caught inside the "
         "capture-cache writer, never escapes user_funcs"
     ),
-    "torchlens.utils.rng._NotADigestableRng": (
+    "torchlens._utils.rng._NotADigestableRng": (
         "private RNG-classifier signal; caught inside the witness classifier"
     ),
     "torchlens._io.runnable._UnsupportedLiteralError": (
         "private save-time literal-classifier signal; converted to typed refusals"
     ),
-    "torchlens.utils._dynamo_explain_shapes._DynamoExplainOutputError": (
+    "torchlens._utils._dynamo_explain_shapes._DynamoExplainOutputError": (
         "private dynamo-explain probe failure; caught inside the capability probe"
     ),
     "torchlens.capture.projections.LiveOpViewFieldNotYetWritten": (
         "internal AttributeError shim for not-yet-written live OpRecord view fields"
     ),
-    "torchlens.ir.op_record.OpRecordAttributeError": (
+    "torchlens._ir.op_record.OpRecordAttributeError": (
         "internal strict-protocol AttributeError for OpRecord facet access"
     ),
-    "torchlens.ir.op_record.AmendmentValidationError": (
+    "torchlens._ir.op_record.AmendmentValidationError": (
         "internal journal amendment-lane invariant; a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.AmendmentTargetError": (
+    "torchlens._ir.capture_events.AmendmentTargetError": (
         "internal journal invariant (amendment target); a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.LaneMergePolicyError": (
+    "torchlens._ir.capture_events.LaneMergePolicyError": (
         "internal journal invariant (lane merge policy); a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.SealedJournalWriteError": (
+    "torchlens._ir.capture_events.SealedJournalWriteError": (
         "internal sealed-journal write invariant; a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.SealedJournalAppendError": (
+    "torchlens._ir.capture_events.SealedJournalAppendError": (
         "internal sealed-journal append invariant; a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.SealedJournalAmendmentError": (
+    "torchlens._ir.capture_events.SealedJournalAmendmentError": (
         "internal sealed-journal amendment invariant; a raise indicates a TorchLens bug"
     ),
-    "torchlens.ir.capture_events.SourceSequencingError": (
+    "torchlens._ir.capture_events.SourceSequencingError": (
         "internal journal source-sequencing invariant; a raise indicates a TorchLens bug"
     ),
     # ``ContainerReconstructionError`` left this allowlist (r3 b1-opus R64-3):
     # it escapes users from the public ``Op.multi_output_type`` property, so it
     # is registered on ``torchlens.errors`` with code ``container_spec_inadmissible``.
-    "torchlens.ir.live_index.LiveIndexWindowError": (
+    "torchlens._ir.live_index.LiveIndexWindowError": (
         "internal lookback-window KeyError; caught by the windowed-save machinery"
     ),
     # -- Errors governed by other contract docs / documented submodule homes --
@@ -1383,21 +1383,21 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "taxonomy member (TorchLensError); internal state-key codec error surfaced "
         "through the strict state binder"
     ),
-    "torchlens.merged._errors.MergedTraceError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md); "
+    "torchlens._merged._errors.MergedTraceError": (
+        "public home is torchlens._merged (frozen vocabulary per merged_trace_contract.md); "
         "taxonomy member via TorchLensError"
     ),
-    "torchlens.merged._errors.MergeConflictError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
+    "torchlens._merged._errors.MergeConflictError": (
+        "public home is torchlens._merged (frozen vocabulary per merged_trace_contract.md)"
     ),
-    "torchlens.merged._errors.MergeInputError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
+    "torchlens._merged._errors.MergeInputError": (
+        "public home is torchlens._merged (frozen vocabulary per merged_trace_contract.md)"
     ),
-    "torchlens.merged._errors.MergedArtifactError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
+    "torchlens._merged._errors.MergedArtifactError": (
+        "public home is torchlens._merged (frozen vocabulary per merged_trace_contract.md)"
     ),
-    "torchlens.merged._errors.MergedSurfaceUnsupportedError": (
-        "public home is torchlens.merged (frozen vocabulary per merged_trace_contract.md)"
+    "torchlens._merged._errors.MergedSurfaceUnsupportedError": (
+        "public home is torchlens._merged (frozen vocabulary per merged_trace_contract.md)"
     ),
     "torchlens.receptive_field._errors.ReceptiveFieldError": (
         "public home is the lazy tl.receptive_field submodule; taxonomy member via TorchLensError"
@@ -1444,7 +1444,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "public home is torchlens.semantic.__all__ (provisional surface); plain KeyError "
         "outside the taxonomy"
     ),
-    "torchlens.utils._multipass_access.MultiPassAmbiguityError": (
+    "torchlens._utils._multipass_access.MultiPassAmbiguityError": (
         "multi-pass access refusal raised via record accessors; plain ValueError outside "
         "the taxonomy — flagged for future taxonomy adoption"
     ),
@@ -1455,7 +1455,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.backends.tf.interventions.TFInterventionSiteUnreachableError": (
         "TF preview refusal catchable via its registered parent BackendUnsupportedError"
     ),
-    "torchlens.ir.predicate.MLXValueUnavailableError": (
+    "torchlens._ir.predicate.MLXValueUnavailableError": (
         "MLX preview value-access refusal; preview-backend surface, not yet in the stable registry"
     ),
     # -- Post-tour sprint (2026-08-19). All five ARE user-facing refusals from

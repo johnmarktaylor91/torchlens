@@ -373,7 +373,7 @@ def test_f3b_postprocess_edge_drop_fails_invariants(monkeypatch: pytest.MonkeyPa
     the sealed capture-time edge truth and must raise.
     """
 
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
     from torchlens.validation.invariants import (
         MetadataInvariantError,
         check_metadata_invariants,

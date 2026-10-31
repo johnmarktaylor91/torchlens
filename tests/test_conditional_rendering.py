@@ -10,9 +10,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
+from torchlens._utils._torch_compat import HAS_CODE_POSITIONS
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import HAS_CODE_POSITIONS
 
 
 class SimpleIfElseModel(nn.Module):

@@ -18,6 +18,12 @@ import pickle
 import pytest
 
 import torchlens as tl
+from torchlens._ir import predicate_registry
+from torchlens._ir.predicate import RetroactiveCaptureDecision
+from torchlens._ir.predicate_registry import (
+    coerce_predicate,
+    register_predicate,
+)
 from torchlens._trace_selector_helpers import _predicate_cache_key
 from torchlens.capture.predicates import (
     _is_supported_followed_by_predicate,
@@ -26,12 +32,6 @@ from torchlens.capture.predicates import (
 from torchlens.fastlog.exceptions import PredicateError
 from torchlens.fastlog.types import CaptureSpec
 from torchlens.intervention.selectors import BaseSelector
-from torchlens.ir import predicate_registry
-from torchlens.ir.predicate import RetroactiveCaptureDecision
-from torchlens.ir.predicate_registry import (
-    coerce_predicate,
-    register_predicate,
-)
 
 SLOTS = ("save", "halt", "until")
 
@@ -359,12 +359,12 @@ def test_no_loader_marker_and_pickled_reference_refuses():
     pin: the UntrustedCallableError path is unchanged by registration)."""
 
     from torchlens._io._safe_unpickle import SafeBundleUnpickler, _DeferredForeignCallable
-    from torchlens.intervention.errors import UntrustedCallableError
-    from torchlens.intervention.resolver import resolve_import_ref
-    from torchlens.utils._callable_safety import (
+    from torchlens._utils._callable_safety import (
         FACET_RECIPE_MARKER_ATTR,
         is_inert_first_party_callable,
     )
+    from torchlens.intervention.errors import UntrustedCallableError
+    from torchlens.intervention.resolver import resolve_import_ref
 
     register_predicate("pickled")(_plain_predicate)
     # No attribute consulted by the restricted loader is set, and the

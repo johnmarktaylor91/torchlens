@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ..data_classes.layer import Layer
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.layer import Layer
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .invariants import MetadataInvariantError
 
 
@@ -267,7 +267,7 @@ def _backward_trigger_forward_positions(trace: Trace) -> list[int]:
         forward op is the last layer guaranteed to exist when graph walking ran.
     """
 
-    from ..ir.events import BackwardPassStart
+    from .._ir.events import BackwardPassStart
 
     event_positions = {
         event.pass_index: event.forward_op_count_at_trigger
@@ -344,7 +344,7 @@ def _backward_pass_observed_forward_position(trace: Trace, pass_index: int) -> i
         Highest observed forward ``step_index`` for the pass, when available.
     """
 
-    from ..ir.events import OpGradObserved
+    from .._ir.events import OpGradObserved
 
     layer_lookup = getattr(trace, "layer_dict_all_keys", {})
     observed_steps = []

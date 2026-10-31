@@ -6,8 +6,8 @@ import pytest
 from _source_corpus import package_ast, package_files
 
 import torchlens as tl
-from torchlens.ir.capture_events import CaptureEvents
-from torchlens.utils.hashing import compute_raw_event_shape_hash
+from torchlens._ir.capture_events import CaptureEvents
+from torchlens._utils.hashing import compute_raw_event_shape_hash
 
 from ._models import SmallCNN, _cnn_input
 
@@ -24,8 +24,8 @@ def test_reducer_passthrough_is_the_raw_list_today() -> None:
 def test_hash_reads_through_the_reducer(monkeypatch: pytest.MonkeyPatch) -> None:
     """The persisted hash consumes the folded view, not the raw list."""
 
-    import torchlens.postprocess as postprocess_module
-    import torchlens.postprocess._materialize as materialize_module
+    import torchlens._postprocess as postprocess_module
+    import torchlens._postprocess._materialize as materialize_module
 
     seen: dict = {}
     original = materialize_module.materialize_from_events
@@ -91,6 +91,6 @@ def test_intervention_template_ref_is_dead() -> None:
                 and not (isinstance(node.value, ast.Constant) and node.value.value is None)
             ):
                 readers.append(f"writer!{rel}:{node.lineno}")
-    allowed_prefixes = ("torchlens/ir/op_record", "torchlens/ir/events")
+    allowed_prefixes = ("torchlens/_ir/op_record", "torchlens/_ir/events")
     unexpected = [site for site in readers if not site.startswith(allowed_prefixes)]
     assert not unexpected, f"intervention_template_ref is not dead: {unexpected}"

@@ -12,7 +12,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens.utils.tensor_utils import tensor_nanequal
+from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import (
     _copy_validation_args,

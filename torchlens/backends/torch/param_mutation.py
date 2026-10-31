@@ -18,8 +18,8 @@ from typing import Any
 import torch
 
 from ... import _state
-from ...utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
-from ...utils.tensor_utils import safe_copy
+from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
+from ..._utils.tensor_utils import safe_copy
 from ._tl import get_param_meta
 
 

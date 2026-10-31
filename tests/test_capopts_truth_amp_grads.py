@@ -53,7 +53,7 @@ def test_scaled_backward_false_flags_and_hints() -> None:
     """Without the kwarg every op explodes and the AMP hint is disclosed."""
 
     pytest.importorskip("pandas")
-    from torchlens.debug import gradient_flow_audit
+    from torchlens._debug import gradient_flow_audit
 
     frame = gradient_flow_audit(_scaled_backward_trace()).to_pandas()
     measurable = len(frame) - int(frame.attrs.get("unavailable", 0))
@@ -67,7 +67,7 @@ def test_grad_scale_audits_in_unscaled_units() -> None:
     """grad_scale=scaler.get_scale() clears the false flags and is disclosed."""
 
     pytest.importorskip("pandas")
-    from torchlens.debug import gradient_flow_audit
+    from torchlens._debug import gradient_flow_audit
 
     frame = gradient_flow_audit(_scaled_backward_trace(), grad_scale=SCALE).to_pandas()
     assert frame.attrs["exploding"] == 0, (
@@ -83,8 +83,8 @@ def test_grad_scale_junk_refuses_typed(bad_scale: float) -> None:
     """Non-positive / non-finite scales refuse with grad_scale_invalid."""
 
     pytest.importorskip("pandas")
+    from torchlens._debug import gradient_flow_audit
     from torchlens._errors import InvalidArgumentError
-    from torchlens.debug import gradient_flow_audit
 
     log = _scaled_backward_trace()
     with pytest.raises(InvalidArgumentError) as excinfo:
@@ -96,7 +96,7 @@ def test_unscaled_backward_stays_clean_without_hint() -> None:
     """A plain backward neither flags everything nor emits the AMP hint."""
 
     pytest.importorskip("pandas")
-    from torchlens.debug import gradient_flow_audit
+    from torchlens._debug import gradient_flow_audit
 
     torch.manual_seed(20260826)
     log = tl.trace(

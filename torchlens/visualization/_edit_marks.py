@@ -29,14 +29,14 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR
-from ..utils._multipass_access import get_multipass_attr
 from ._render_utils import html_escape
 from ._typography import EDIT_GAP_SIZE, format_pt
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ..intervention.types import Edit, FireRecord
     from .themes import VisualizationTheme
 

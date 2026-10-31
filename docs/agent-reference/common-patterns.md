@@ -270,10 +270,10 @@ except tl.errors.OutputStyleUnknownError as error:
     assert error.fields["code"] == "output_style_unknown"
 else:
     raise AssertionError("output_style_unknown did not refuse")
-# Also exported: tl.debug.DebugReport (base class of report-shaped tl.debug results),
+# Also exported: tl._debug.DebugReport (base class of report-shaped tl._debug results),
 # tl.report.PrunedParamFacts (prune state in the FactCore parameter facts),
 # torchlens.trackers.MLflowSink and torchlens.trackers.CometSink (forward-watch sinks over a run or
-# experiment the user owns) and torchlens.tviz.render_logit_lens_heatmap(result, path)
+# experiment the user owns) and torchlens.transformer.render_logit_lens_heatmap(result, path)
 # (the layers-by-positions logit-lens figure).
 ```
 

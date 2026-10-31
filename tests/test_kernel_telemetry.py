@@ -13,14 +13,14 @@ from _source_corpus import module_ast
 from torch import nn
 
 import torchlens as tl
-from torchlens import kernel_telemetry as telemetry
+from torchlens import _kernel_telemetry as telemetry
 from torchlens._io import FieldPolicy
 from torchlens._io.prerelease import registered_prerelease_fields
-from torchlens.kernel_telemetry import KernelLaunch
-from torchlens.observability._kineto import NormalizedEvent
+from torchlens._kernel_telemetry import KernelLaunch
+from torchlens._observability._kineto import NormalizedEvent
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_TELEMETRY_MODULE = "torchlens.kernel_telemetry"
+_TELEMETRY_MODULE = "torchlens._kernel_telemetry"
 _REAL_CUDA_ROWS = (
     "one ATen call to many kernels",
     "several ATen calls to one fused launch",

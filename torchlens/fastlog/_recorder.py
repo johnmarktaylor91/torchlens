@@ -13,9 +13,12 @@ import torch
 from torch import nn
 
 from .. import _state
+from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureContextError, KeywordConflictError
+from .._ir import CaptureEvents
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
+from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..capture.config import InternalCaptureConfig
 from ..capture.outcome import safe_exception_repr, safe_exception_str
 from ..capture.predicates import _save_selector_matches, validate_followed_by_capability
@@ -26,12 +29,9 @@ from ..capture.projections import (
 )
 from ..capture.stop import StopDirective, stop_directive_for_trace
 from ..capture.trace import _extract_and_mark_outputs
-from ..data_classes.trace import Trace
 from ..intervention.predicates import InterventionPredicate
-from ..ir import CaptureEvents
 from ..options import StreamingOptions
-from ..types import ActivationPostfunc, GradientPostfunc
-from ..utils._torch_compat import get_fsdp_wrapper_type
+from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import HaltSignal
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
@@ -220,11 +220,11 @@ class Recorder:
         storage: StreamingOptions | None | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
-        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
+        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
         save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
-        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
         backward_ready: bool = False,
         echo: Any | None | MissingType = MISSING,
@@ -321,7 +321,7 @@ class Recorder:
         if echo is MISSING or echo is None or echo is False:
             echo_normalized = None
         else:
-            from ..snoop import normalize_echo
+            from .._snoop import normalize_echo
 
             echo_normalized = normalize_echo(echo)
         self.options = merge_recording_options(
@@ -375,7 +375,7 @@ class Recorder:
         self._next_pass_index = 1
         self._echo_session: Any | None = None
         if self.options.echo is not None:
-            from ..snoop import EchoSession
+            from .._snoop import EchoSession
 
             # One narrator per Recorder: per-forward state resets each pass,
             # the configured scope/sink/stats persist (snoop D1).

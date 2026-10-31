@@ -3,7 +3,7 @@
 The fields in this module are ordinary Python objects after restricted
 unpickling, but their values remain hostile artifact input.  Validation here
 therefore uses closed vocabularies and independently persisted structural
-anchors before a rehydrated :class:`~torchlens.data_classes.trace.Trace` is
+anchors before a rehydrated :class:`~torchlens._data_classes.trace.Trace` is
 exposed to callers.
 """
 
@@ -19,7 +19,7 @@ from . import TorchLensIOError
 from ._forgery_identity_facts import _validate_identity_facts
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 _HEX_DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _SELECTION_RELATIONS = frozenset({"exact", "upper_bound", "lower_bound", "unknown"})
@@ -240,8 +240,8 @@ def _validate_site_keys(trace: Trace) -> None:
         Loaded trace carrying zero or more ``site_key_v1`` values.
     """
 
+    from .._data_classes._site_key import SiteKeyMinter, parse_site_key
     from ..backends.registry import JAX_BACKEND_NAME
-    from ..data_classes._site_key import SiteKeyMinter, parse_site_key
 
     ops = _trace_ops(trace)
     keys = tuple(getattr(op, "site_key", None) for op in ops)

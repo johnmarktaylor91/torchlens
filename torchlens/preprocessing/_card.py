@@ -19,7 +19,7 @@ from ._audit import VERDICT_MISMATCH, PreprocessingAudit, audit
 from ._records import COMPARABLE_FIELDS, DeclaredPreprocessing, Resolution
 
 if TYPE_CHECKING:
-    from torchlens.data_classes.trace import ResolvedPreprocessing
+    from torchlens._data_classes.trace import ResolvedPreprocessing
 
 
 def check_card(
@@ -136,7 +136,7 @@ def declared_from_record(record: ResolvedPreprocessing | None) -> DeclaredPrepro
 def _record_of(trace_or_record: Any) -> ResolvedPreprocessing | None:
     """Return the provenance record of a trace, or the record itself."""
 
-    from torchlens.data_classes.trace import ResolvedPreprocessing
+    from torchlens._data_classes.trace import ResolvedPreprocessing
 
     if isinstance(trace_or_record, ResolvedPreprocessing):
         return trace_or_record

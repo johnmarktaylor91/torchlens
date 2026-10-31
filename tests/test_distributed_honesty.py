@@ -42,12 +42,12 @@ from torchlens._distributed import (
     DistributedFinding,
     detect_distributed_state,
 )
+from torchlens._utils import _torch_compat
 from torchlens.backends.torch._ops_interventions import (
     _pop_tensor_live_fire_results,
     _set_tensor_live_fire_results,
 )
-from torchlens.distributed import has_vetted_snapshot
-from torchlens.utils import _torch_compat
+from torchlens.distributed import is_vetted_build
 
 DISTRIBUTED_ROW_KEYS = ("dtensor", "device_mesh", "tensor_parallel", "pipeline_parallel")
 
@@ -683,7 +683,7 @@ def test_typed_error_is_reachable_from_public_errors_namespace() -> None:
 def test_capability_snapshot_exposes_distributed_flags() -> None:
     """Every graceful-degradation point is visible as a named ``HAS_*`` flag."""
 
-    from torchlens.utils._torch_compat import get_torch_capability_snapshot
+    from torchlens._utils._torch_compat import get_torch_capability_snapshot
 
     snapshot = get_torch_capability_snapshot()
     for flag in ("HAS_DTENSOR", "HAS_DEVICE_MESH", "HAS_PIPELINING"):
@@ -692,15 +692,15 @@ def test_capability_snapshot_exposes_distributed_flags() -> None:
 
 
 def test_doctor_reports_distributed_capability_flags() -> None:
-    """``tl.utils.doctor()`` surfaces the new flags like every other capability.
+    """``tl._utils.doctor()`` surfaces the new flags like every other capability.
 
     The capability row is a grouped absences-first summary (r-b4 R26-4): a
     flag appears in the row text by name only when it is absent; a present
     flag is served through the full snapshot accessor the row points at.
     """
 
-    snapshot = tl.utils.capability_snapshot()
-    text = str(tl.utils.doctor())
+    snapshot = tl._utils.capability_snapshot()
+    text = str(tl._utils.doctor())
     for flag in ("HAS_DTENSOR", "HAS_DEVICE_MESH", "HAS_PIPELINING"):
         assert flag in snapshot
         if not snapshot[flag]:
@@ -925,7 +925,7 @@ def test_real_dense_model_still_captures_with_distributed_initialized(
     model = TinyModel()
     x = torch.randn(2, 4)
     assert detect_distributed_state(model, x) == ()
-    if has_vetted_snapshot():
+    if is_vetted_build():
         trace = tl.trace(model, x)
     else:
         with pytest.warns(UserWarning, match="uncaptured_collective_op"):

@@ -256,7 +256,7 @@ def __getattr__(name: str) -> Any:
 
     module_name = _LAZY_NAMES.get(name)
     if module_name is None:
-        from ..utils.facade import resolve_facade_attr
+        from .._utils.facade import resolve_facade_attr
 
         return resolve_facade_attr(
             owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS

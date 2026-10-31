@@ -34,6 +34,11 @@ import torch
 from torch import nn
 
 from . import _state
+from ._autoroute._builtin_output import (
+    check_output_style,
+    refuse_unresolved_output_style,
+    semantic_output_cache_key,
+)
 from ._capture_honesty import record_host_tensor_source_advisory
 from ._capture_intervention import (
     _backward_intervention_spec_from_predicate,
@@ -65,6 +70,10 @@ from ._chunked_capture_helpers import (
     _validate_chunked_forward_capture,
 )
 from ._chunking import iter_chunked_inputs, normalize_chunk_paths, normalize_chunk_size, plan_chunks
+from ._data_classes._preprocessing_provenance import stamp_user_transform_provenance
+from ._data_classes.trace import (
+    Trace,
+)
 from ._deprecations import MISSING, MissingType
 from ._errors import (
     ArgumentConflictError,
@@ -82,8 +91,15 @@ from ._input_coerce import (
 )
 from ._io import TorchLensIOError
 from ._io.streaming import BundleStreamWriter
+from ._ir import ParentEdge
+from ._ir.op_record import amend_graph_edge_insertion
+from ._ir.selector_eval import selector_contains_kind
 from ._literals import (
     OutputDeviceLiteral,
+)
+from ._postprocess._selective_save import (
+    apply_static_label_save_policy,
+    reject_selector_outside_kinds,
 )
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetExceededError, SaveBudgetOption
@@ -108,11 +124,11 @@ from ._training_validation import (
     effective_inference_only,
     validate_training_compatibility,
 )
-from .autoroute._builtin_output import (
-    check_output_style,
-    refuse_unresolved_output_style,
-    semantic_output_cache_key,
-)
+from ._utils._torch_compat import is_dynamo_compiled_callable
+from ._utils.display import _vprint, ensure_trace_visualizer_dir, warn_parallel
+from ._utils.env_flags import closed_bool_env
+from ._utils.introspection import _get_code_context
+from ._utils.tensor_utils import SaveMode
 from .backends import (
     BackendName,
     BackendSpec,
@@ -144,10 +160,6 @@ from .capture._structure_only_entry import (
     _StructureOnlyEntryFacts,
 )
 from .capture.stop import StopDirective
-from .data_classes._preprocessing_provenance import stamp_user_transform_provenance
-from .data_classes.trace import (
-    Trace,
-)
 from .fastlog.exceptions import PredicateError
 from .fastlog.options import HaltPredicateFn, PredicateFn, RecordingOptions
 from .fastlog.types import CaptureSpec
@@ -160,9 +172,6 @@ from .intervention.predicates import InterventionPredicate
 from .intervention.resolver import _selector_resolution_direction, resolve_sites
 from .intervention.selectors import BaseSelector
 from .intervention.types import InterventionDecision
-from .ir import ParentEdge
-from .ir.op_record import amend_graph_edge_insertion
-from .ir.selector_eval import selector_contains_kind
 from .options import (
     CaptureOptions,
     EpisodeOptions,
@@ -174,16 +183,7 @@ from .options import (
     merge_save_options,
     merge_streaming_options,
 )
-from .postprocess._selective_save import (
-    apply_static_label_save_policy,
-    reject_selector_outside_kinds,
-)
-from .types import ActivationPostfunc, GradientPostfunc
-from .utils._torch_compat import is_dynamo_compiled_callable
-from .utils.display import _vprint, ensure_trace_visualizer_dir, warn_parallel
-from .utils.env_flags import closed_bool_env
-from .utils.introspection import _get_code_context
-from .utils.tensor_utils import SaveMode
+from .types import _ActivationPostfunc, _GradientPostfunc
 from .visualization.code_panel import (
     capture_model_source_code,
     make_weak_model_ref,
@@ -764,8 +764,8 @@ def _trace_mlx_model(
     save_visualizations: bool | MissingType,
     keep_orphans: bool | MissingType,
     output_device: OutputDeviceLiteral | MissingType,
-    activation_transform: ActivationPostfunc | None | MissingType,
-    grad_transform: GradientPostfunc | None | MissingType,
+    activation_transform: _ActivationPostfunc | None | MissingType,
+    grad_transform: _GradientPostfunc | None | MissingType,
     save_raw_activations: bool | MissingType,
     save_raw_gradients: bool | MissingType,
     capture_tensor_grad_hooks: bool | MissingType,
@@ -1548,8 +1548,8 @@ def _run_model_and_save_specified_outs(
     layers_to_save: str | list[int | str] | None = "all",
     keep_orphans: bool = False,
     output_device: OutputDeviceLiteral = "same",
-    activation_transform: ActivationPostfunc | None = None,
-    grad_transform: GradientPostfunc | None = None,
+    activation_transform: _ActivationPostfunc | None = None,
+    grad_transform: _GradientPostfunc | None = None,
     save_raw_activations: bool = True,
     save_raw_gradients: bool = True,
     save_mode: SaveMode = "copy",
@@ -1937,7 +1937,7 @@ def _run_model_and_save_specified_outs(
     except BaseException:
         _release_capture_slot()
         raise
-    from .snoop._entry import echo_forward_failure, finish_echo, open_echo_session
+    from ._snoop._entry import echo_forward_failure, finish_echo, open_echo_session
 
     echo_session: Any = None
     try:
@@ -2527,11 +2527,11 @@ def render(*args: Any, **kwargs: Any) -> Any:
     ONE metadata-only eval/no-grad capture (training flags, RNG, and norm
     buffers restored), rendered with the facade default ``collapse="auto"``
     (``Trace.draw`` keeps ``"none"``). Detached
-    :class:`torchlens.quickstart.RenderResult`; never auto-opens a viewer.
-    See :func:`torchlens.quickstart.render` for the parameters.
+    :class:`torchlens._quickstart.RenderResult`; never auto-opens a viewer.
+    See :func:`torchlens._quickstart.render` for the parameters.
     """
 
-    from .quickstart._render import render as _render_impl
+    from ._quickstart._render import render as _render_impl
 
     return _render_impl(*args, **kwargs)
 
@@ -2540,7 +2540,7 @@ def trace(
     model: nn.Module | Callable[..., Any],
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
-    grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    grad_transform: _GradientPostfunc | None | MissingType = MISSING,
     save_mode: SaveMode | MissingType = MISSING,
     reconstruction_ready: bool | MissingType = MISSING,
     capture: CaptureOptions | None = None,
@@ -2629,7 +2629,7 @@ def trace(
         tuple, a sequence of shape tuples, or a mapping of forward keyword
         names to shapes (batch included exactly as written). Dtype/value
         recipes are fail-closed static facts (override:
-        ``torchlens.quickstart.InputSpec``); local seed-0 synthesis,
+        ``torchlens.types.InputSpec``); local seed-0 synthesis,
         disclosed in the trace's persistent provenance record.
     save:
         Which layers to save outs for; the canonical selection kwarg (see
@@ -2758,7 +2758,7 @@ def trace(
             ladder_kwargs = locals().copy()
             for consumed in ("model", "input_args", "input_kwargs", "input_size"):
                 ladder_kwargs.pop(consumed)
-            from .quickstart._ladder import _trace_via_ladder
+            from ._quickstart._ladder import _trace_via_ladder
 
             return _trace_via_ladder(model, input_args, input_kwargs, input_size, ladder_kwargs)
         if not isinstance(model, nn.Module) and is_dynamo_compiled_callable(model):
@@ -2784,13 +2784,13 @@ def trace(
         # an affirmative D1 ruling (the flip PR) / the episode capture kind.
         public_trace_kwargs.pop("grouping")
         if grouping is not MISSING:
-            from .postprocess._grouping_stamp import validate_grouping_knob
+            from ._postprocess._grouping_stamp import validate_grouping_knob
 
             validate_grouping_knob(grouping)
         if echo is not None and echo is not False:
             # Entry-time echo refusals (bad spellings, finalized-label selectors)
             # fire BEFORE any capture work on every backend path.
-            from .snoop import normalize_echo
+            from ._snoop import normalize_echo
 
             normalize_echo(echo)
         if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
@@ -2811,7 +2811,7 @@ def trace(
             and chunk_size in (MISSING, None)
             and (capture is None or not capture.is_field_explicit("transform"))
         ):
-            from . import autoroute
+            from . import _autoroute as autoroute
 
             # Only the surviving public kwargs are forwarded: capture knobs travel
             # inside the grouped ``capture=`` object, so re-entrant trace() calls
@@ -2850,7 +2850,7 @@ def trace(
         resolved_spec = explicit_backend_spec or resolve_backend_spec(
             backend, model, input_args, input_kwargs
         )
-        from .snoop._entry import refuse_echo_non_torch
+        from ._snoop._entry import refuse_echo_non_torch
 
         # Never a silent no-op: echo= is torch-only in wave 1 (typed refusal).
         refuse_echo_non_torch(echo, resolved_spec)
@@ -2905,8 +2905,8 @@ def _trace_torch_model(
     save_raw_output: str | bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
-    activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-    grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
+    grad_transform: _GradientPostfunc | None | MissingType = MISSING,
     save_raw_activations: bool | MissingType = MISSING,
     save_raw_gradients: bool | MissingType = MISSING,
     save_mode: SaveMode | MissingType = MISSING,
@@ -3088,7 +3088,7 @@ def _trace_torch_model(
     # Echo teaching refusals fire whether or not echo= is armed: EchoOptions
     # routed into save=/hooks= refuses with the measured receipts, and
     # echo x cache/chunked/structure_only composition refuses typed (snoop D1).
-    from .snoop._entry import resolve_echo_capture_options
+    from ._snoop._entry import resolve_echo_capture_options
 
     echo_options = resolve_echo_capture_options(
         echo,
@@ -3329,7 +3329,7 @@ def _trace_torch_model(
             halt = stop_after_site
             stop_after_selector_shaped = True
         elif isinstance(stop_after_site, str):
-            from .ir.selector_eval import looks_like_finalized_label
+            from ._ir.selector_eval import looks_like_finalized_label
 
             if looks_like_finalized_label(stop_after_site):
                 raise InvalidArgumentError(
@@ -3734,12 +3734,12 @@ def _trace_torch_model(
         recursive_save_value: SaveOptions | PredicateFn | BaseSelector | None = (
             save_predicate if save_predicate is not None else recursive_save_options
         )
-        recursive_activation_transform: ActivationPostfunc | None | MissingType = (
+        recursive_activation_transform: _ActivationPostfunc | None | MissingType = (
             activation_transform
             if save_predicate is not None and activation_transform is not None
             else MISSING
         )
-        recursive_grad_transform: GradientPostfunc | None | MissingType = (
+        recursive_grad_transform: _GradientPostfunc | None | MissingType = (
             grad_transform if save_predicate is not None and grad_transform is not None else MISSING
         )
         recursive_save_raw_activations: bool | MissingType = (

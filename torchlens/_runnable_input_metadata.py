@@ -21,11 +21,11 @@ from ._runnable_state import (
     RunResourceCeiling,
     _guarded_defensive_materialize,
 )
+from ._utils._torch_compat import tensor_has_named_dims
+from ._utils.alias_footprint import touched_bytes_relation
 from .errors import (
     PathDivergenceError,
 )
-from .utils._torch_compat import tensor_has_named_dims
-from .utils.alias_footprint import touched_bytes_relation
 
 if TYPE_CHECKING:
     from ._runnable_execution import (
@@ -585,7 +585,7 @@ def _model_input_storage_closure(descriptor: SparseRunDescriptor) -> set[str]:
 
 
 def _touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> str:
-    """Shared-engine adapter (see :func:`torchlens.utils.alias_footprint.touched_bytes_relation`)."""
+    """Shared-engine adapter (see :func:`torchlens._utils.alias_footprint.touched_bytes_relation`)."""
 
     with _state.pause_logging():
         return touched_bytes_relation(left, right)

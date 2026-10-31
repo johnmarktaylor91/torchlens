@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, cast
 import torch
 
 from .. import _state
+from .._utils._torch_compat import tensor_any_over_dims
 from ..backends import BackendUnsupportedError, get_backend_spec
-from ..utils._torch_compat import tensor_any_over_dims
 from . import _engine, _rules
 from ._errors import (
     ReceptiveFieldConfigurationError,
@@ -22,11 +22,11 @@ from ._errors import (
     ReceptiveFieldUnavailableError,
 )
 from ._path import require_path, resolve_graph_point
-from ._types import GradientReceptiveField, GridLayout, ReceptiveFieldDirection
+from ._types import GradReceptiveField, GridLayout, ReceptiveFieldDirection
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ._engine_geometry import _InputState
     from ._types import ReceptiveField
 
@@ -81,7 +81,7 @@ class _ProbeSnapshot:
     active_index: object
 
 
-class _GradientReceptiveFieldResult(GradientReceptiveField):
+class _GradientReceptiveFieldResult(GradReceptiveField):
     """Gradient result with deterministic influence-set convenience methods."""
 
     def indices(self) -> tuple[torch.Tensor, ...]:
@@ -355,7 +355,7 @@ def _input_ops_by_role(trace: Trace) -> dict[str, Op]:
 def _select_inputs(
     trace: Trace,
     descriptors: Mapping[str, ReceptiveField],
-    input: Op | str | None,
+    input_op: Op | str | None,
 ) -> tuple[tuple[str, Op, ReceptiveField | None], ...]:
     """Resolve requested input operations and their reachability descriptors.
 
@@ -365,7 +365,7 @@ def _select_inputs(
         Owning trace.
     descriptors:
         Geometrically reachable inputs for the target operation.
-    input:
+    input_op:
         Optional exact IO role or input-operation handle.
 
     Returns
@@ -380,7 +380,7 @@ def _select_inputs(
     """
 
     inputs_by_role = _input_ops_by_role(trace)
-    if input is None:
+    if input_op is None:
         selected: list[tuple[str, Op, ReceptiveField | None]] = []
         for role, descriptor in descriptors.items():
             op = next(
@@ -399,11 +399,11 @@ def _select_inputs(
             selected.append((role, op, descriptor))
         return tuple(selected)
 
-    if isinstance(input, str):
-        role = input
+    if isinstance(input_op, str):
+        role = input_op
         op = inputs_by_role.get(role)
     else:
-        requested = input
+        requested = input_op
         role = str(getattr(requested, "io_role", None) or getattr(requested, "label", ""))
         requested_label = str(getattr(requested, "label", ""))
         candidate = inputs_by_role.get(role)
@@ -660,7 +660,7 @@ def _build_result(
     atol: float,
     rtol: float,
     unit_shape: tuple[int, ...],
-) -> GradientReceptiveField:
+) -> GradReceptiveField:
     """Build the immutable empirical RF result for one full input gradient.
 
     Parameters
@@ -684,7 +684,7 @@ def _build_result(
 
     Returns
     -------
-    GradientReceptiveField
+    GradReceptiveField
         Full empirical influence-set result.
     """
 
@@ -729,12 +729,12 @@ def gradient_for_unit(
     target: Op,
     unit: Sequence[int],
     *,
-    input: Op | str | None = None,
+    input_op: Op | str | None = None,
     source: object | None = None,
     atol: float = 0.0,
     rtol: float = 0.0,
     retain_graph: bool = False,
-) -> GradientReceptiveField | Mapping[str, GradientReceptiveField]:
+) -> GradReceptiveField | Mapping[str, GradReceptiveField]:
     """Probe exactly one target output element against a selected source.
 
     Parameters
@@ -743,7 +743,7 @@ def gradient_for_unit(
         Target operation with a live saved output tensor.
     unit:
         Complete output-element index, including every target axis.
-    input:
+    input_op:
         Optional model-input Op or exact IO role. ``None`` probes every
         geometrically reachable model input in one autograd call.
     source:
@@ -756,7 +756,7 @@ def gradient_for_unit(
 
     Returns
     -------
-    GradientReceptiveField or Mapping[str, GradientReceptiveField]
+    GradReceptiveField or Mapping[str, GradReceptiveField]
         One result for an explicit input, otherwise an insertion-ordered mapping.
 
     Raises
@@ -771,15 +771,15 @@ def gradient_for_unit(
 
     if atol < 0 or rtol < 0:
         raise ReceptiveFieldConfigurationError("atol and rtol must be non-negative.")
-    if input is not None and source is not None:
-        raise TypeError("input= and source= cannot be used together.")
+    if input_op is not None and source is not None:
+        raise TypeError("input_op= and source= cannot be used together.")
     trace = target.source_trace
     if source is not None:
         _source_op = resolve_graph_point(trace, source)
         if bool(getattr(_source_op, "is_input", False)):
             # A model input passed as source= is exactly the legacy input query;
             # route it through the input path so the result is byte-identical.
-            input = _source_op
+            input_op = _source_op
             source = None
     spec = get_backend_spec(str(getattr(trace, "backend", "torch")))
     if not spec.capabilities.backward_capture:
@@ -851,7 +851,7 @@ def gradient_for_unit(
     with _builtin_rules_when_registry_empty():
         solution = _engine.solve(trace)
         descriptors = _engine.lookup(trace, target)
-    selected = _select_inputs(trace, descriptors, input)
+    selected = _select_inputs(trace, descriptors, input_op)
     if not selected:
         raise ReceptiveFieldUnavailableError(
             f"Target op {target.label!r} has no geometrically reachable model input."
@@ -870,8 +870,8 @@ def gradient_for_unit(
             allow_unused=True,
         )
 
-    results: dict[str, GradientReceptiveField] = {}
-    for (role, input_op, descriptor), grad in zip(selected, grads):
+    results: dict[str, GradReceptiveField] = {}
+    for (role, selected_op, descriptor), grad in zip(selected, grads):
         state = solution.states.get((target.label, role))
         if grad is None and descriptor is not None:
             raise ReceptiveFieldUnavailableError(
@@ -880,7 +880,7 @@ def gradient_for_unit(
                 f"save mode (the default); recapture with {_RECAPTURE_RECIPE}."
             )
         if grad is None:
-            grad = torch.zeros_like(_saved_tensor(input_op, "input"))
+            grad = torch.zeros_like(_saved_tensor(selected_op, "input"))
         results[role] = _build_result(
             target=target,
             role=role,
@@ -893,7 +893,7 @@ def gradient_for_unit(
             unit_shape=tuple(target_tensor.shape),
         )
 
-    if input is not None:
+    if input_op is not None:
         return next(iter(results.values()))
     return MappingProxyType(results)
 

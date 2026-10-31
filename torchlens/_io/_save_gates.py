@@ -38,7 +38,7 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
     ]
     if not carriers:
         return
-    from ..data_classes.op import Op as _Op
+    from .._data_classes.op import Op as _Op
     from . import FieldPolicy
     from .prerelease import prerelease_fields_active
 
@@ -78,7 +78,7 @@ def _refuse_shard_local_erasure(trace: Any) -> None:
 
     if getattr(trace, "distributed_scope", None) != "rank_local_shard":
         return
-    from ..data_classes.trace import Trace as _Trace
+    from .._data_classes.trace import Trace as _Trace
     from . import FieldPolicy
     from .prerelease import prerelease_fields_active
 

@@ -26,7 +26,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.data_classes._trace_fork as trace_fork
+import torchlens._data_classes._trace_fork as trace_fork
+from torchlens._data_classes._state_adapter import state_items, state_new
+from torchlens._data_classes.layer import OpAccessor
 from torchlens._trace_core.op_store import (
     _MISSING,
     DetachedOpStore,
@@ -35,8 +37,6 @@ from torchlens._trace_core.op_store import (
     cow_copy_value,
 )
 from torchlens._trace_core.record_rows import CORE_KEY, ROW_KEY
-from torchlens.data_classes._state_adapter import state_items, state_new
-from torchlens.data_classes.layer import OpAccessor
 from torchlens.options import CaptureOptions, InterventionOptions
 
 _NO_FLAT_COPY = trace_fork._NO_FLAT_COPY

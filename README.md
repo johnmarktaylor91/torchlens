@@ -528,7 +528,7 @@ you like; discovery helpers list what there is to ask for:
 
 ```python
 from torchlens.fastlog import Recorder
-from torchlens.utils import list_modules, list_ops
+from torchlens._utils import list_modules, list_ops
 
 with Recorder(model, save=tl.func('relu')) as rec:
     for step in range(2):                    # your optimizer loop
@@ -608,11 +608,11 @@ pinning model weights or module names:
 # `model` and `x` are your model and a representative example input.
 import torchlens as tl
 
-pinned = tl.assert_unchanged(model, x, expected=None)  # prints and returns a hash
-tl.assert_unchanged(model, x, pinned)  # raises if the architecture changes
+pinned = tl.fingerprint.assert_unchanged(model, x, expected=None)  # prints and returns a hash
+tl.fingerprint.assert_unchanged(model, x, pinned)  # raises if the architecture changes
 ```
 
-See [`tl.hash`](docs/reference/hash.md) for trace-level hashing and its structural scope.
+See [`tl.fingerprint`](docs/reference/hash.md) for trace-level hashing and its structural scope.
 
 ## Compatibility
 

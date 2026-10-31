@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
+    from .._data_classes.module import Module
 
 
 if TYPE_CHECKING:
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ..backends import BackendSpec
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
     from .invariants import (
         METADATA_INVARIANT_CONTRACTS,
         MetadataInvariantContract,

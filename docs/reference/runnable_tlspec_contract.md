@@ -983,7 +983,7 @@ and unordered/opaque containers are unsupported runnable outputs at every depth 
 typed producer refusal -- refuse-unless-proved, never accept-unless-flagged.
 
 r37 adds ONE per-kind reconstruction capability table (`CONTAINER_KIND_CAPABILITIES` in
-`torchlens/ir/container.py`) shared by spec construction, this producer proof, and the runtime
+`torchlens/_ir/container.py`) shared by spec construction, this producer proof, and the runtime
 independent recompute; a kind existing in only one site fails a coverage meta-test. The load-time
 recompute and sparse reconstruction are additionally coupled through ONE shared plain-substitution
 predicate (`_reconstruction_would_substitute_plain`), so any future gate/reconstruction criterion
@@ -1055,7 +1055,7 @@ instance-state rules it encodes:
   the exact-type gate (extra instance state is not type-observable on the trusted bases); honest
   captures never produce a stateful instance because the save refuses it.
 - `registered` requires the registration's explicit `state_complete=True` declaration
-  (`tl.register_container(..., state_complete=True)`) before an instance carrying extra
+  (`tl.types.register_container(..., state_complete=True)`) before an instance carrying extra
   `__dict__` state may save (`registered_container_instance_state` otherwise); the declaration is
   the trusted statement that `unflatten` restores everything `flatten` observed.
 - `opaque` is always a typed save refusal.
@@ -1079,9 +1079,9 @@ The torch ladder is fixed:
    The one non-torch exact entry is the closed TorchLens synthetic-op table: the module-boundary
    identity op (`nn.Identity` and pass-through module outputs, minted by
    `_state._decorated_identity`) is keyed `custom` / `identity` /
-   `torchlens.utils.display:identity` and resolves, by that exact key only, to the in-memory
-   `torchlens.utils.display.identity` (a pure pass-through; provenance
-   `torchlens_synthetic:torchlens.utils.display.identity`). No module is imported for it.
+   `torchlens._utils.display:identity` and resolves, by that exact key only, to the in-memory
+   `torchlens._utils.display.identity` (a pure pass-through; provenance
+   `torchlens_synthetic:torchlens._utils.display.identity`). No module is imported for it.
 2. Explicit producer-version-bounded aliases in `utils/_torch_compat.py`, including
    `Tensor`/`_TensorBase`/`TensorBase` and enumerated private-to-public mappings. Aliases never
    reinterpret exact matches. Current-runtime target availability remains capability-detected.
@@ -2438,7 +2438,7 @@ exists, which a source meta-test pins.
 ### Three-valued input alias topology
 
 Runtime input aliasing against the de-aliased capture is judged by ONE shared three-valued
-touched-byte engine (`torchlens.utils.alias_footprint`, r37 INV-2 (split out of tensor_utils in e11dd787)): identity (`a is b`) and PROVED
+touched-byte engine (`torchlens._utils.alias_footprint`, r37 INV-2 (split out of tensor_utils in e11dd787)): identity (`a is b`) and PROVED
 overlap of recorded-disjoint inputs are observed contradictions (`diverged`); PROVED disjointness
 passes; anything unproven is `unknown`, which adds the `input_alias_topology_unresolved` ceiling
 -- `unverifiable` path, `not_applicable` attestation -- never `overlap` by assumption and never
@@ -3127,7 +3127,7 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
   outside its closed vocabulary (section 7).
 - `CONTAINER_KIND_CAPABILITIES` (r37) -- the one per-kind output reconstruction capability table
   shared by spec construction, producer proof, and runtime recompute (section 5).
-- `tl.register_container(..., state_complete=...)` (r37) -- the explicit trusted declaration that
+- `tl.types.register_container(..., state_complete=...)` (r37) -- the explicit trusted declaration that
   a registered container's hooks round-trip all per-instance state; without it, runnable saves
   refuse instances carrying extra state.
 - `stage_state_to_slot_devices` (r37) -- the single atomic run-preparation staging authority for

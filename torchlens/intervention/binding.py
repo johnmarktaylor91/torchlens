@@ -260,7 +260,7 @@ def _label_term_unmatchable(kind: str, value: str) -> bool:
     the first op.
     """
 
-    from ..ir.selector_eval import looks_like_finalized_label
+    from .._ir.selector_eval import looks_like_finalized_label
 
     if looks_like_finalized_label(value):
         return True
@@ -587,8 +587,8 @@ def _wrap_name_universe() -> frozenset[str]:
 
     global _WRAP_UNIVERSE
     if _WRAP_UNIVERSE is None:
+        from .._constants import get_orig_torch_funcs
         from ..capture.arg_positions import _normalize_func_name
-        from ..constants import get_orig_torch_funcs
 
         _WRAP_UNIVERSE = frozenset(
             _normalize_func_name(func_name) for _ns, func_name in get_orig_torch_funcs()
@@ -811,7 +811,7 @@ class _ArmedRuntime:
     def _install_tracker_hooks(self) -> None:
         """Install the capture-parity module-stack tracker on every module."""
 
-        from ..ir.predicate import ModuleStackFrame
+        from .._ir.predicate import ModuleStackFrame
 
         session = self.session
         root_id = id(self.binding.model)
@@ -890,11 +890,11 @@ def _make_boundary_hook(
     def _boundary(module: Any, args: Any, output: Any) -> Any:
         """Replace the module's output leaves when the pass qualifier matches."""
 
+        from .._ir.selector_eval import module_address_matches
         from ..backends.torch._ops_interventions import (
             _iter_loggable_live_outputs,
             _replace_output_tensors_by_path,
         )
-        from ..ir.selector_eval import module_address_matches
         from .hooks import make_hook_context
         from .runtime import _execute_hook
 

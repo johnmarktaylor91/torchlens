@@ -153,8 +153,8 @@ def test_view_mapping_passthrough_at_and_center_unit() -> None:
     assert view.jump == descriptor.jump
     assert view.center0 == descriptor.center0
     assert view.layout is descriptor.layout
-    assert view.at((2, 2), input=input_op).unit == (2, 2)
-    assert view.at("center", input=role).unit == (3, 3)
+    assert view.at((2, 2), input_op=input_op).unit == (2, 2)
+    assert view.at("center", input_op=role).unit == (3, 3)
 
     with pytest.raises(ReceptiveFieldError, match="batch_index is required"):
         view.center_unit()
@@ -176,9 +176,9 @@ def test_landed_gradient_and_check_are_wired_with_typed_precondition_errors() ->
     input_op = next(op for op in trace.layer_list if op.is_input)
     view = target.receptive_field
 
-    gradient = view.gradient((0, 0, 2, 2), input=input_op, retain_graph=True)
+    gradient = view.gradient((0, 0, 2, 2), input_op=input_op, retain_graph=True)
     assert gradient.op_label == target.label
-    validation = view.check((0, 0, 2, 2), input=input_op)
+    validation = view.check((0, 0, 2, 2), input_op=input_op)
     assert validation.status is ReceptiveFieldValidationStatus.PASS
 
     unavailable_trace = tl.trace(nn.Conv2d(2, 4, 3), torch.randn(1, 2, 8, 8))

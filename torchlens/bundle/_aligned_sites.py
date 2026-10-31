@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from ..intervention.resolver import resolve_sites
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ..intervention._topology.topology import Supergraph
 
 

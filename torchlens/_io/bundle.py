@@ -35,12 +35,12 @@ from safetensors import SafetensorError
 from safetensors.torch import load_file, save_file
 
 from .. import __version__ as TORCHLENS_VERSION
+from .._data_classes._state_adapter import state_items
+from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
+from .._utils.display import user_stacklevel
 from ..backends import BackendPayloadUnsupportedError, BackendSpec, get_backend_spec
-from ..data_classes._state_adapter import state_items
-from ..data_classes.trace import Trace
 from ..errors import TorchLensWarning
-from ..utils.display import user_stacklevel
 from . import (
     TLSPEC_VERSION,
     BlobRef,
@@ -149,44 +149,44 @@ _RENAMED_PICKLE_GLOBALS: dict[tuple[str, str], tuple[str, str]] = {
     # Clean break: the edit-object class was renamed to ``Edit``; artifacts
     # written before the rename (tlspec 6-9) pickle it under its old name.
     ("torchlens.intervention.types", "HelperSpec"): ("torchlens.intervention.types", "Edit"),
-    ("torchlens.data_classes.model_log", "ModelLog"): (
-        "torchlens.data_classes.trace",
+    ("torchlens._data_classes.model_log", "ModelLog"): (
+        "torchlens._data_classes.trace",
         "Trace",
     ),
-    ("torchlens.data_classes.model_log", "Trace"): (
-        "torchlens.data_classes.trace",
+    ("torchlens._data_classes.model_log", "Trace"): (
+        "torchlens._data_classes.trace",
         "Trace",
     ),
-    ("torchlens.data_classes.layer_pass_log", "LayerPassLog"): (
-        "torchlens.data_classes.op",
+    ("torchlens._data_classes.layer_pass_log", "LayerPassLog"): (
+        "torchlens._data_classes.op",
         "Op",
     ),
-    ("torchlens.data_classes.layer_pass_log", "TensorLog"): (
-        "torchlens.data_classes.op",
+    ("torchlens._data_classes.layer_pass_log", "TensorLog"): (
+        "torchlens._data_classes.op",
         "TensorLog",
     ),
-    ("torchlens.data_classes.op_log", "Op"): (
-        "torchlens.data_classes.op",
+    ("torchlens._data_classes.op_log", "Op"): (
+        "torchlens._data_classes.op",
         "Op",
     ),
-    ("torchlens.data_classes.op_log", "TensorLog"): (
-        "torchlens.data_classes.op",
+    ("torchlens._data_classes.op_log", "TensorLog"): (
+        "torchlens._data_classes.op",
         "TensorLog",
     ),
-    ("torchlens.data_classes.module_log", "ModulePassLog"): (
-        "torchlens.data_classes.module",
+    ("torchlens._data_classes.module_log", "ModulePassLog"): (
+        "torchlens._data_classes.module",
         "ModuleCall",
     ),
-    ("torchlens.data_classes.module_log", "ModuleCall"): (
-        "torchlens.data_classes.module",
+    ("torchlens._data_classes.module_log", "ModuleCall"): (
+        "torchlens._data_classes.module",
         "ModuleCall",
     ),
-    ("torchlens.data_classes.grad_fn_pass_log", "GradFnPassLog"): (
-        "torchlens.data_classes.grad_fn_call",
+    ("torchlens._data_classes.grad_fn_pass_log", "GradFnPassLog"): (
+        "torchlens._data_classes.grad_fn_call",
         "GradFnCall",
     ),
-    ("torchlens.data_classes.grad_fn_call_log", "GradFnCall"): (
-        "torchlens.data_classes.grad_fn_call",
+    ("torchlens._data_classes.grad_fn_call_log", "GradFnCall"): (
+        "torchlens._data_classes.grad_fn_call",
         "GradFnCall",
     ),
     ("torchlens." + "multi_trace.node_view", "NodeView"): (
@@ -410,9 +410,9 @@ def save(
     # historical bare AttributeError from the poison gate. The sys.modules
     # gate keeps ordinary saves free of any merged import: a MergedTrace can
     # only exist after its module was imported.
-    merged_presenter = sys.modules.get("torchlens.merged._presenter")
+    merged_presenter = sys.modules.get("torchlens._merged._presenter")
     if merged_presenter is not None and isinstance(trace, merged_presenter.MergedTrace):
-        from ..merged import MergedErrorCode, MergedSurfaceUnsupportedError
+        from .._merged import MergedErrorCode, MergedSurfaceUnsupportedError
 
         raise MergedSurfaceUnsupportedError(
             "trace.save() does not support MergedTrace. Write the merged-directory "
@@ -425,7 +425,7 @@ def save(
     # persisted slice would imply replay/validation capabilities it cannot
     # honour. Same sys.modules gate shape as the MergedTrace refusal above
     # (owners disjoint; a slice can only exist after its module imported).
-    slice_presenter = sys.modules.get("torchlens.trace_slice")
+    slice_presenter = sys.modules.get("torchlens._trace_slice")
     if slice_presenter is not None and isinstance(trace, slice_presenter.TraceSlice):
         from ..selection import SelectionError
 
@@ -528,7 +528,7 @@ def save(
     # now otherwise crash untyped deeper in the save machinery. Same
     # sys.modules shape as the MergedTrace refusal: a PartialTrace can only
     # exist after its module was imported.
-    partial_module = sys.modules.get("torchlens.partial")
+    partial_module = sys.modules.get("torchlens._partial")
     if partial_module is not None and isinstance(trace, partial_module.PartialTrace):
         from ..capture.outcome import outcome_for
 
@@ -1430,7 +1430,7 @@ def load(
             except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                 candidate = None
             if isinstance(candidate, dict) and candidate.get("bundle_format") == "merged-directory":
-                from ..merged._artifact import load_merged
+                from .._merged._artifact import load_merged
 
                 return load_merged(bundle_path)  # type: ignore[return-value]
             if (
@@ -3580,7 +3580,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
         Provenance certificate. Individual unavailable facts are empty or ``None``.
     """
 
-    from .. import hash as trace_hash
+    from .. import fingerprint as trace_hash
 
     # A loaded trace carries its source bundle's provenance verbatim so a
     # plain resave preserves the CAPTURE-time certificate. That passthrough
@@ -3719,7 +3719,7 @@ def _git_commit_hash(cwd: Path) -> str | None:
         # R40: routed through the ONE bounded spawn seam so the timeout path
         # tears down the whole process group instead of orphaning a wedged
         # git helper's grandchildren.
-        from ..utils._subprocess import run_bounded_subprocess
+        from .._utils._subprocess import run_bounded_subprocess
 
         completed = run_bounded_subprocess(
             ["git", "rev-parse", "HEAD"],

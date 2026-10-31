@@ -92,12 +92,9 @@ from ._extraction_provenance import (
     coerce_input_preprocessing,
     input_preprocessing_of,
 )
-from .transforms import (
-    TransformPipeline,
-    coerce_transform,
-    coerce_transform_mapping,
-    pipeline_record as _pipeline_record,
-)
+from .transforms import TransformPipeline
+from .transforms._coerce import coerce_transform, coerce_transform_mapping
+from .transforms._pipeline import pipeline_record as _pipeline_record
 
 #: Legacy v1 manifest schema id (still readable forever; superseded on write).
 MANIFEST_SCHEMA = MANIFEST_SCHEMA_V1

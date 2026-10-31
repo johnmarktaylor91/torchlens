@@ -329,7 +329,7 @@ def journal_snapshot(snapshot: Snapshot, events: Any) -> None:
 def store_snapshot(snapshot: Snapshot, trace: Any) -> None:
     """Canonicalize per-op store cells in layout order."""
 
-    from torchlens.data_classes.op import _OP_SLOT_NAMES
+    from torchlens._data_classes.op import _OP_SLOT_NAMES
 
     canonizer = _Canonicalizer(snapshot, "store")
     for op in trace.ops:
@@ -544,8 +544,8 @@ def _journal_interception(
     post-commit" plant the a1 proof requires.
     """
 
-    postprocess_module = importlib.import_module("torchlens.postprocess")
-    materialize_module = importlib.import_module("torchlens.postprocess._materialize")
+    postprocess_module = importlib.import_module("torchlens._postprocess")
+    materialize_module = importlib.import_module("torchlens._postprocess._materialize")
     original_public = postprocess_module.materialize_from_events
     original_direct = materialize_module.materialize_from_events
 

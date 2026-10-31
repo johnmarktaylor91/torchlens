@@ -1,4 +1,4 @@
-"""Unit tests for ``torchlens.postprocess.ast_branches``."""
+"""Unit tests for ``torchlens._postprocess.ast_branches``."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ from textwrap import dedent
 
 import pytest
 
-import torchlens.postprocess.ast_branches as ast_branches
-from torchlens.data_classes.func_call_location import FuncCallLocation
-from torchlens.postprocess.ast_branches import (
+import torchlens._postprocess.ast_branches as ast_branches
+from torchlens._data_classes.func_call_location import FuncCallLocation
+from torchlens._postprocess.ast_branches import (
     BoolClassification,
     attribute_op,
     classify_bool,

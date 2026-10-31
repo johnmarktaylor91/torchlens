@@ -31,10 +31,10 @@ from ._runnable import (
     TensorSlotRole,
 )
 from ._transport import digest_byte_view
+from ._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
+from ._utils._torch_symbols import torch_attr
+from ._utils.lazy_state import raise_if_pending_state_slots
 from .errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
-from .utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
-from .utils._torch_symbols import torch_attr
-from .utils.lazy_state import raise_if_pending_state_slots
 
 _INPUT_STRUCTURE_SITE_PREFIX = "input_structure:"
 """Canonical site-label prefix for persisted input-boundary structure facts."""
@@ -753,7 +753,7 @@ def snapshot_state_alias_topology(model: object) -> Mapping[str, Any] | None:
     model exposes no named state accessors.
     """
 
-    from .utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
+    from ._utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
 
     named_parameters = getattr(model, "named_parameters", None)
     named_buffers = getattr(model, "named_buffers", None)

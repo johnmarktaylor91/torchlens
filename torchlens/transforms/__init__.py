@@ -16,30 +16,21 @@ item).
 
 from __future__ import annotations
 
-from ._coerce import DEFAULT, chain, coerce_transform, coerce_transform_mapping
+from ._coerce import DEFAULT, chain
 from ._context import (
     BTD,
     NCHW,
-    ROLE_EVIDENCE,
     ContextTransform,
     RoleDeclaration,
     SpecialTokenFacts,
     TransformContext,
     axis_for_role,
-    wants_context,
     with_context,
 )
 from ._errors import TransformContractError
 from ._helpers import ProbeReport, SrpSizing, srp_dims_for, srp_fidelity_probe
 from ._kernels import cast, flatten, magnitude, reduce, take_index, unit_norm
-from ._pipeline import (
-    PIPELINE_SCHEMA,
-    OpaqueStep,
-    TransformPipeline,
-    apply_dispatch,
-    pipeline_from_record,
-    pipeline_record,
-)
+from ._pipeline import OpaqueStep, TransformPipeline, apply_dispatch
 from ._pooling import channel_mean, cls_token, pool_spatial, pool_tokens
 from ._projection import pca_apply, project
 from ._registry import (
@@ -48,7 +39,7 @@ from ._registry import (
     register_transform,
     registered_transform_names,
 )
-from ._spec import PlannedStep, TensorSpec, TransformDefinition, TransformSpec, canonical_json
+from ._spec import PlannedStep, TensorSpec, TransformDefinition, TransformSpec
 from ._srp import srp, srp_realized_facts, srp_verify_matrix
 
 __tl_layer__ = "L4"
@@ -61,8 +52,6 @@ __all__ = [
     "BTD",
     "DEFAULT",
     "NCHW",
-    "PIPELINE_SCHEMA",
-    "ROLE_EVIDENCE",
     "ContextTransform",
     "OpaqueStep",
     "PlannedStep",
@@ -78,19 +67,14 @@ __all__ = [
     "TransformSpec",
     "apply_dispatch",
     "axis_for_role",
-    "canonical_json",
     "cast",
     "chain",
     "channel_mean",
     "cls_token",
-    "coerce_transform",
-    "coerce_transform_mapping",
     "flatten",
     "lookup_transform",
     "magnitude",
     "pca_apply",
-    "pipeline_from_record",
-    "pipeline_record",
     "pool_spatial",
     "pool_tokens",
     "project",
@@ -104,6 +88,5 @@ __all__ = [
     "srp_verify_matrix",
     "take_index",
     "unit_norm",
-    "wants_context",
     "with_context",
 ]

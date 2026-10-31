@@ -8,6 +8,13 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ... import _state as _st
+from ..._data_classes.internal_types import FuncExecutionContext
+from ..._ir.container import (
+    ContainerSpec,
+    OutputPathComponent,
+    TupleIndex,
+)
+from ..._ir.intervention import FireResult
 from ..._state import pause_logging
 from ...capture.arg_positions import (
     _normalize_func_name,
@@ -19,7 +26,6 @@ from ...capture.predicates import (
 from ...capture.projections import (
     get_active_recording_state,
 )
-from ...data_classes.internal_types import FuncExecutionContext
 from ...errors._base import CompatibilityError
 from ...fastlog.types import (
     RecordContext,
@@ -33,18 +39,12 @@ from ...intervention.types import (
     InterventionDecision,
     TargetSpec,
 )
-from ...ir.container import (
-    ContainerSpec,
-    OutputPathComponent,
-    TupleIndex,
-)
-from ...ir.intervention import FireResult
 from ._tl import (
     get_label_list,
 )
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ..._data_classes.trace import Trace
 
 if TYPE_CHECKING:
     from .ops import (

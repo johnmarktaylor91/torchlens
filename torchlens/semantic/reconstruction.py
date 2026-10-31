@@ -458,7 +458,7 @@ def _allclose_sdpa(
     reconstruction error model (``torchlens.semantic.tolerances``): same
     ULP-headroom relative term and denormal floor, plus an elementwise
     ``magnitude``-scaled term supplied by each call site. The replay table in
-    ``torchlens.utils.tensor_utils`` is deliberately untouched.
+    ``torchlens._utils.tensor_utils`` is deliberately untouched.
 
     Parameters
     ----------

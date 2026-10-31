@@ -29,7 +29,7 @@ pytestmark = pytest.mark.skipif(
 import torchlens as tl  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
-    has_vetted_snapshot,
+    is_vetted_build,
 )
 from torchlens.distributed._dtensor import (  # noqa: E402
     RANK_LOCAL_SHARD,
@@ -38,14 +38,14 @@ from torchlens.distributed._dtensor import (  # noqa: E402
 )
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
-# census-vetted torch build exists (torchlens.distributed.has_vetted_snapshot());
+# census-vetted torch build exists (torchlens.distributed.is_vetted_build());
 # on an unvetted torch, arm() fails closed with UncapturedCollectiveOpError.
 # Only the two TestMergeScopeMarkerKey tests that build a real armed rank
 # core need this; the rest of the module never arms.
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 
@@ -111,9 +111,9 @@ class TestShardedPredicate:
 
 class TestMarkerFieldSubstrate:
     def test_field_declared_ordered_and_persisting(self):
+        from torchlens._constants import MODEL_LOG_FIELD_ORDER
+        from torchlens._data_classes.trace import Trace
         from torchlens._io import FieldPolicy
-        from torchlens.constants import MODEL_LOG_FIELD_ORDER
-        from torchlens.data_classes.trace import Trace
 
         assert "distributed_scope" in MODEL_LOG_FIELD_ORDER
         entry = Trace.FIELD_POLICY["distributed_scope"]
@@ -167,9 +167,9 @@ class TestErasurePreventionInvariant:
 
         from dataclasses import replace
 
+        from torchlens._data_classes.trace import Trace
         from torchlens._errors import InvalidArgumentError
         from torchlens._io import FieldPolicy, prerelease
-        from torchlens.data_classes.trace import Trace
 
         log = self._marked_trace()
         entry = Trace.FIELD_POLICY["distributed_scope"]
@@ -211,7 +211,7 @@ class TestMergeScopeMarkerKey:
 
     @requires_vetted_snapshot
     def test_c5r_public_merge_entry_refuses(self, gloo_world):
-        from torchlens.merged._errors import MergeInputError
+        from torchlens._merged._errors import MergeInputError
 
         log = self._rank_core_with_marker(gloo_world)
         with pytest.raises(MergeInputError) as excinfo:
@@ -224,9 +224,9 @@ class TestMergeScopeMarkerKey:
         """The membership-authority precedent: the marker key runs INSIDE
         derive_merge, so directly constructed RankEvidence refuses too."""
 
-        from torchlens.merged._engine import derive_merge
-        from torchlens.merged._errors import MergeInputError
-        from torchlens.merged._evidence import extract_rank_evidence
+        from torchlens._merged._engine import derive_merge
+        from torchlens._merged._errors import MergeInputError
+        from torchlens._merged._evidence import extract_rank_evidence
 
         log = self._rank_core_with_marker(gloo_world)
         evidence = extract_rank_evidence(log, "live[0]")
@@ -243,7 +243,7 @@ class TestMergeScopeMarkerKey:
     def test_marker_field_is_required_not_defaulted(self):
         """Direct construction must consciously supply shard_local."""
 
-        from torchlens.merged._evidence import RankEvidence
+        from torchlens._merged._evidence import RankEvidence
 
         with pytest.raises(TypeError):
             RankEvidence(  # type: ignore[call-arg]

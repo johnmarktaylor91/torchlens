@@ -10,7 +10,7 @@ from .._errors import InvalidArgumentError
 from .request import ResolvedRenderRequest
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 
 @dataclass(frozen=True)
@@ -123,7 +123,7 @@ def _resolve_focus_module(trace: Trace, module: Any) -> Any:
         If the module cannot be found or belongs to a different trace.
     """
 
-    from ..data_classes.module import Module
+    from .._data_classes.module import Module
 
     if isinstance(module, str):
         if module not in trace.modules:

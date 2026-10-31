@@ -5,11 +5,11 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from ..constants import PRIMITIVE_OP_FIELD_ORDER
-from ..data_classes.aten_op import AtenOp, OpRef, _ModePausedInteriorGap
+from .._constants import PRIMITIVE_OP_FIELD_ORDER
+from .._data_classes.aten_op import AtenOp, OpRef, _ModePausedInteriorGap
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .invariants import MetadataInvariantError
 
 _CAPTURE_PHASES = frozenset({"forward", "backward", "setup"})

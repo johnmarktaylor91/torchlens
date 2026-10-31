@@ -12,7 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.notebook.cards import _stats_line
+from torchlens._notebook.cards import _stats_line
 from torchlens.stats import glance, render_core_line, tensor_stats
 
 TOKEN = "quantized: stats not computed"

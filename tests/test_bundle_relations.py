@@ -396,7 +396,7 @@ def test_fold_integration_real_failed_partial_member(tiny_trace: Any) -> None:
     x = torch.randn(2, 3)
     with pytest.raises(Exception) as excinfo:
         tl.trace(bomb, x)
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    partial = tl._partial.from_failed_capture(excinfo.value)
     outcome = partial.outcome
     assert outcome is not None and outcome.status.value == "failed"
 

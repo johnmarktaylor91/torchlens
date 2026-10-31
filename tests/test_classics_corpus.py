@@ -46,8 +46,8 @@ from tests.classics_corpus._loader import (
 )
 from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
 from torchlens._runnable import ResolverStatus, RunnableErrorCode
+from torchlens._utils.arg_handling import normalize_input_args
 from torchlens.options import CaptureOptions
-from torchlens.utils.arg_handling import normalize_input_args
 from torchlens.validation import last_validation_failure
 
 SMOKE_TIER_SIZE = (10, 20)

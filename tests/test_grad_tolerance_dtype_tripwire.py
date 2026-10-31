@@ -15,8 +15,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.utils._torch_compat import get_cpu_half_kernels_support
-from torchlens.utils.tensor_utils import (
+from torchlens._utils._torch_compat import get_cpu_half_kernels_support
+from torchlens._utils.tensor_utils import (
     LAYER_GRAD_VALIDATION_ATOL,
     LAYER_GRAD_VALIDATION_RTOL,
     PARAM_GRAD_VALIDATION_ATOL,

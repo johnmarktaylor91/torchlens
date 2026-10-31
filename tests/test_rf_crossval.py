@@ -59,7 +59,7 @@ def test_positive_conv_is_contained_and_tight() -> None:
     with torch.no_grad():
         model[0].weight.fill_(1.0)
     trace = _trace(model, torch.ones(1, 1, 7, 7, requires_grad=True))
-    result = _op(trace, "softplus").receptive_field.check((0, 0, 3, 3), input=_input_op(trace))
+    result = _op(trace, "softplus").receptive_field.check((0, 0, 3, 3), input_op=_input_op(trace))
 
     assert result.status is ReceptiveFieldValidationStatus.PASS
     assert result.slack_per_axis == (0, 0, 0, 0)
@@ -86,7 +86,7 @@ def test_deliberately_undersized_rule_fires_negative_tripwire() -> None:
     with torch.no_grad():
         model.weight.fill_(1.0)
     trace = _trace(model, torch.ones(1, 1, 5, 5, requires_grad=True))
-    result = _op(trace, "conv2d").receptive_field.check((0, 0, 2, 2), input=_input_op(trace))
+    result = _op(trace, "conv2d").receptive_field.check((0, 0, 2, 2), input_op=_input_op(trace))
 
     assert result.status is ReceptiveFieldValidationStatus.FAIL
     assert result.n_violations == 8
@@ -113,7 +113,7 @@ def test_validation_thresholds_cannot_suppress_real_support(validation_surface: 
     input_op = _input_op(trace)
     kwargs = {"atol": 2.0, "rtol": 2.0}
     if validation_surface == "check":
-        results = [target.receptive_field.check((0, 0, 2, 2), input=input_op, **kwargs)]
+        results = [target.receptive_field.check((0, 0, 2, 2), input_op=input_op, **kwargs)]
     elif validation_surface == "cross_validate":
         results = cross_validate(trace, ops=[target], units=(0, 0, 2, 2), inputs=input_op, **kwargs)
     else:
@@ -208,7 +208,7 @@ def test_normalization_matrix_contains_empirical_support(
     model.train(training)
     inputs = torch.linspace(0.1, 7.2, 72).reshape(4, 2, 3, 3).requires_grad_()
     trace = _trace(model, inputs)
-    result = _op(trace, name).receptive_field.check((0, 0, 1, 1), input=_input_op(trace))
+    result = _op(trace, name).receptive_field.check((0, 0, 1, 1), input_op=_input_op(trace))
 
     assert result.status is ReceptiveFieldValidationStatus.PASS
     assert result.cross_batch == expected_cross_batch
@@ -235,7 +235,7 @@ def test_squeeze_excite_broadcast_branch_is_contained() -> None:
 
     inputs = torch.linspace(0.1, 3.2, 32).reshape(1, 2, 4, 4).requires_grad_()
     trace = _trace(_SqueezeExcite(), inputs)
-    result = _op(trace, "__mul__").receptive_field.check((0, 0, 2, 2), input=_input_op(trace))
+    result = _op(trace, "__mul__").receptive_field.check((0, 0, 2, 2), input_op=_input_op(trace))
 
     assert result.status is ReceptiveFieldValidationStatus.PASS
     gradient = next(iter(result.gradient.values()))
@@ -264,7 +264,7 @@ def test_unknown_and_data_dependent_geometry_are_indeterminate(taint: str) -> No
         return context.data_dependent("attention mask geometry depends on runtime data")
 
     trace = _trace(_UnknownAttention(), torch.randn(1, 2, 4, requires_grad=True))
-    result = _op(trace, "softmax").receptive_field.check((0, 0, 1), input=_input_op(trace))
+    result = _op(trace, "softmax").receptive_field.check((0, 0, 1), input_op=_input_op(trace))
 
     assert result.status is ReceptiveFieldValidationStatus.INDETERMINATE
     assert result.n_violations == 0
@@ -288,7 +288,7 @@ def test_undeclared_training_batch_coupling_fails() -> None:
         model[0].weight.fill_(1.0)
     inputs = torch.linspace(0.1, 3.2, 32).reshape(2, 1, 4, 4).requires_grad_()
     trace = _trace(model, inputs)
-    result = _op(trace, "batch_norm").receptive_field.check((0, 0, 1, 1), input=_input_op(trace))
+    result = _op(trace, "batch_norm").receptive_field.check((0, 0, 1, 1), input_op=_input_op(trace))
 
     assert result.status is ReceptiveFieldValidationStatus.FAIL
     assert result.cross_batch == "undeclared"
@@ -362,7 +362,7 @@ def test_torchvision_resnet18_basic_block_tripwire() -> None:
                 module.bias.zero_()
     trace = _trace(block, torch.ones(1, 4, 8, 8, requires_grad=True))
     target = _op(trace, "__iadd__")
-    result = target.receptive_field.check((0, 0, 4, 4), input=_input_op(trace))
+    result = target.receptive_field.check((0, 0, 4, 4), input_op=_input_op(trace))
 
     assert result.status is ReceptiveFieldValidationStatus.PASS
 
@@ -379,7 +379,7 @@ def test_gradient_results_retain_signed_values() -> None:
     with torch.no_grad():
         model.weight.fill_(-1.0)  # every true partial is NEGATIVE.
     trace = _trace(model, torch.ones(1, 1, 5, 5, requires_grad=True))
-    result = _op(trace, "conv2d").receptive_field.gradient((0, 0, 2, 2), input=_input_op(trace))
+    result = _op(trace, "conv2d").receptive_field.gradient((0, 0, 2, 2), input_op=_input_op(trace))
 
     assert result.signed_grad is not None
     assert torch.equal(result.grad, result.signed_grad.abs())

@@ -155,7 +155,7 @@ def test_unknown_backend_refuses_typed() -> None:
     with pytest.raises(ConfigurationError) as excinfo:
         run_conformance("mystery-provider")
     assert excinfo.value.fields["code"] == "conformance_backend_unknown"
-    assert "torchlens.ecosystem.plugins" in str(excinfo.value)
+    assert "torchlens._ecosystem.plugins" in str(excinfo.value)
 
 
 def test_executed_floor_zero_green_never_reads_green() -> None:

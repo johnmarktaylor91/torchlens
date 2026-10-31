@@ -503,7 +503,7 @@ class ReceptiveFieldBox(_SelectionOperand):
 
 
 @dataclass(frozen=True)
-class GradientReceptiveField(_SelectionOperand):
+class GradReceptiveField(_SelectionOperand):
     """Empirical receptive-field influence set measured by autograd."""
 
     __match_args__: ClassVar[tuple[str, ...]] = (
@@ -639,7 +639,7 @@ class ReceptiveFieldValidation:
     op_label: str
     unit: tuple[int, ...]
     geometric: Mapping[str, ReceptiveFieldBox]
-    gradient: Mapping[str, GradientReceptiveField]
+    gradient: Mapping[str, GradReceptiveField]
     violations: tuple[ReceptiveFieldViolation, ...]
     n_violations: int
     per_axis_excess: tuple[int, ...] | None
@@ -726,7 +726,7 @@ class ReceptiveFieldProfile:
 
 
 __all__ = [
-    "GradientReceptiveField",
+    "GradReceptiveField",
     "GridLayout",
     "ReceptiveField",
     "ReceptiveFieldAlignment",

@@ -21,7 +21,7 @@ from torch import nn
 from torch.utils._python_dispatch import TorchDispatchMode
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
 from torchlens.intervention.errors import ReplayPreconditionError
 from torchlens.intervention.types import (
     CapturedArgTemplate,

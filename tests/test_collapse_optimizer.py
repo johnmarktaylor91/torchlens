@@ -19,7 +19,7 @@ import torchlens as tl
 import torchlens.visualization.auto_collapse as auto_collapse
 import torchlens.visualization.collapse_optimizer as collapse_optimizer
 import torchlens.visualization.source_graph as source_graph_module
-from torchlens.data_classes._trace_accessors import TraceOpAccessor
+from torchlens._data_classes._trace_accessors import TraceOpAccessor
 from torchlens.visualization._render_common import format_collapsed_module_contents
 from torchlens.visualization.auto_collapse import (
     _condensed_owner_for_op,
@@ -1826,7 +1826,7 @@ def test_repeat_fold_discovery_scans_module_table_once(
 
     from torch import nn
 
-    from torchlens.data_classes._accessor_base import Accessor
+    from torchlens._data_classes._accessor_base import Accessor
 
     model = nn.Sequential(*[nn.Sequential(nn.Linear(4, 4), nn.ReLU()) for _ in range(6)])
     trace = tl.trace(model, torch.randn(2, 4))

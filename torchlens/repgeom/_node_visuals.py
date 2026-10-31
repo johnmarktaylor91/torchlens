@@ -13,8 +13,8 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw
 
-from ..utils._multipass_access import get_multipass_attr
-from ..utils.display import ensure_trace_visualizer_dir
+from .._utils._multipass_access import get_multipass_attr
+from .._utils.display import ensure_trace_visualizer_dir
 from ..viz.node_plots import render_heatmap, render_image_scatter, render_lineplot
 from ._geometry import (
     _SCATTER_CANVAS_SIZE,

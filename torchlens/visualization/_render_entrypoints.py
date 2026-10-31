@@ -325,7 +325,7 @@ def render_backward_graph(
 
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 
 @_with_per_draw_collapse_cache

@@ -69,7 +69,7 @@ def test_corruption_arm_call_site_key_forgery_fails_contract_ii() -> None:
     (ii) must refuse.
     """
 
-    from torchlens.postprocess import _call_site_contract as contract
+    from torchlens._postprocess import _call_site_contract as contract
 
     log = trace_fn(
         _TwoLinearChain(),

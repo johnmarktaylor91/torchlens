@@ -38,9 +38,9 @@ SANCTIONED_INPLACE_OP_LANE_WRITERS = frozenset(
     {
         # The append chokepoint itself: seq-stamping single writer for the
         # forward op spine (refuses on sealed journals).
-        ("ir/capture_events.py", "CaptureEvents.append", "append"),
+        ("_ir/capture_events.py", "CaptureEvents.append", "append"),
         # Working-projection teardown after Step 0 consumes the lanes.
-        ("ir/capture_events.py", "CaptureEvents.release_working_projection", "clear"),
+        ("_ir/capture_events.py", "CaptureEvents.release_working_projection", "clear"),
         # THE cook-owned-projection carve-out (r7 R03-1): the fastlog
         # ancestry-closure backfill replaces op-lane cells in place, ONLY on
         # the ``_copy_for_replay`` projection a cook owns (never the sealed

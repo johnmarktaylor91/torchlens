@@ -360,7 +360,7 @@ def _resolve_bundle_saver(log_or_bundle_or_spec: Any) -> Any | None:
         no known portable-bundle save path.
     """
 
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
     if isinstance(log_or_bundle_or_spec, Trace):
         from .._io.bundle import save as _save_trace_bundle

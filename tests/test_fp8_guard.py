@@ -25,14 +25,14 @@ from support.fp8_guard import permit_cpu_float8_allocation
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes._nonfinite import nonfinite_layers, uncheckable_payload_count
-from torchlens.errors import CaptureError
-from torchlens.utils._torch_compat import get_fp8_dtypes, get_torch_capability_snapshot
-from torchlens.utils.tensor_utils import (
+from torchlens._data_classes._nonfinite import nonfinite_layers, uncheckable_payload_count
+from torchlens._utils._torch_compat import get_fp8_dtypes, get_torch_capability_snapshot
+from torchlens._utils.tensor_utils import (
     fp8_safe_comparison_pair,
     fp8_widen_for_numeric_ops,
     tensor_nanequal,
 )
+from torchlens.errors import CaptureError
 
 
 @pytest.fixture(autouse=True)

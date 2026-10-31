@@ -35,7 +35,7 @@ PACKAGE_ROOT = REPO / "torchlens"
 #: row requires the same justification class (a self-contained diagnostic
 #: that constructs its own model and never mutates user state).
 OPTIMIZER_LINT_EXEMPT: dict[str, str] = {
-    "observability/_memory_parity.py": (
+    "_observability/_memory_parity.py": (
         "pinned torch-memory-profiler parity scenario: builds its own MLP + "
         "SGD to exercise every allocator category; never touches user state"
     ),

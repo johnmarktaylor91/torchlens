@@ -18,8 +18,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes._trace_accessors import TraceGradFnCallAccessor
-from torchlens.data_classes.grad_fn_call import GradFnCall
+from torchlens._data_classes._trace_accessors import TraceGradFnCallAccessor
+from torchlens._data_classes.grad_fn_call import GradFnCall
 
 
 class _TraceStandIn:

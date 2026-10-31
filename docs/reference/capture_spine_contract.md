@@ -66,7 +66,7 @@ that directly observed the edit (2026-06-02 lesson, kept armed by
 `tests/test_validation_hardening.py`).
 
 **S9 — MERGE LAW.** Every journal lane declares a merge policy
-(`torchlens.ir.capture_events.LANE_MERGE_POLICIES`, total over all lanes);
+(`torchlens._ir.capture_events.LANE_MERGE_POLICIES`, total over all lanes);
 `CaptureEvents.concat` is the ONLY way to combine streams (multi-pass recording,
 failed-partial recovery). Ad-hoc lane splicing is forbidden. Merging preserves the
 source stream's cross-lane chronological order, appends CLONES (the sealed source is

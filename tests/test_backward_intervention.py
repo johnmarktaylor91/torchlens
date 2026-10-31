@@ -12,19 +12,19 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._data_classes.grad_fn import GradFn
+from torchlens._ir import CaptureEvents
+from torchlens._ir.selector_eval import selector_from_spec
 from torchlens.backends.torch.backward import (
     _clear_pending_accumulate_grad_records,
     _make_grad_fn_hook,
     _make_grad_fn_prehook,
 )
-from torchlens.data_classes.grad_fn import GradFn
 from torchlens.intervention.errors import HelperMountError, HookValueError, SelectorCompositionError
 from torchlens.intervention.helpers import _helper_spec
 from torchlens.intervention.hooks import normalize_hook_plan
 from torchlens.intervention.resolver import _selector_resolution_direction
 from torchlens.intervention.types import FireRecord, InterventionSpec, TargetSpec
-from torchlens.ir import CaptureEvents
-from torchlens.ir.selector_eval import selector_from_spec
 
 
 class _EncoderModel(nn.Module):

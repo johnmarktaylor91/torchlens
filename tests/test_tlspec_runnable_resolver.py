@@ -27,14 +27,14 @@ from torchlens._runnable import (
     RunnableErrorCode,
     SparseRunDescriptor,
 )
-from torchlens.errors import ReattachError
-from torchlens.intervention.types import FunctionRegistryKey
-from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import (
+from torchlens._utils._torch_compat import (
     _RUNNABLE_TORCH_ALIASES,
     _torch_minor_version,
     resolve_runnable_torch_alias,
 )
+from torchlens.errors import ReattachError
+from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.options import CaptureOptions
 
 
 def _restamp_runtime_fingerprints(run: dict) -> None:

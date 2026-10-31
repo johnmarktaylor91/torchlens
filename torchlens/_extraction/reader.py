@@ -31,7 +31,7 @@ import torch
 
 from .._data_substrate import ExtractionArtifactError, read_trusted_rows
 from .._errors import InvalidArgumentError
-from ..utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import torch_attr
 from .harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
 from .ragged import RaggedBatch, to_padded
 from .shards import read_shard

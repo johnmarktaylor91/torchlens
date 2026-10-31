@@ -6,10 +6,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final
 
 from .._errors import InvalidArgumentError
+from .._quantities import Duration
+from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils.display import human_readable_size
 from ..capture.flops import append_attention_note
-from ..quantities import Duration
-from ..utils._multipass_access import get_multipass_attr, is_multipass_layer
-from ..utils.display import human_readable_size
 
 PARAM_SEPARATOR: Final[str] = " · "
 

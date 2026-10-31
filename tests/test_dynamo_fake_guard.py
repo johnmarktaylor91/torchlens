@@ -37,13 +37,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._robustness import UnsupportedTensorVariantError, _tracing_tensor_kind
-from torchlens.backends.torch import wrappers as torch_wrappers
-from torchlens.utils import _torch_compat
-from torchlens.utils._torch_compat import (
+from torchlens._utils import _torch_compat
+from torchlens._utils._torch_compat import (
     dynamo_is_compiling,
     get_torch_capability_snapshot,
     get_tracing_tensor_types,
 )
+from torchlens.backends.torch import wrappers as torch_wrappers
 
 
 @pytest.fixture()

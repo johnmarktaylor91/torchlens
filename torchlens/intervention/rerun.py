@@ -14,13 +14,13 @@ import torch
 from torch import nn
 
 from .._chunking import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
+from .._data_classes._trace_accessors import boundary_label_rows
 from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
-from ..data_classes._trace_accessors import boundary_label_rows
+from .._utils._torch_compat import tensor_has_named_dims
+from .._utils.hashing import compute_graph_shape_hash
 from ..options import ReplayOptions, merge_replay_options
-from ..utils._torch_compat import tensor_has_named_dims
-from ..utils.hashing import compute_graph_shape_hash
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from ._rerun_predicate import (
     plan_rerun_spec,
@@ -48,7 +48,7 @@ from .hooks import normalize_hooks_from_spec
 from .runtime import active_intervention_context
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .hooks import NormalizedHookEntry
 
 

@@ -11,8 +11,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils import _call_site
 from torchlens.options import CaptureOptions
-from torchlens.utils import _call_site
 from torchlens.visualization._render_nodes import compute_default_node_lines
 
 # Session-private output root (conftest exports it before collection); the

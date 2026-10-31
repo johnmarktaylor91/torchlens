@@ -23,21 +23,13 @@ from typing import Any, Literal, cast
 import torch
 
 from ... import _state
+from ..._data_classes.backward_pass import BackwardPass
+from ..._data_classes.func_call_location import FuncCallLocation
+from ..._data_classes.grad_fn import GradFn, _paired_pass_op
+from ..._data_classes.grad_fn_call import GradFnCall
+from ..._data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ..._deprecations import MISSING, MissingType
-from ..._state import pause_logging
-from ...capture.peak_memory import (
-    peak_rss_bytes,
-    process_rss_bytes,
-    record_backward_peak,
-    reset_peak_rss,
-)
-from ...data_classes.backward_pass import BackwardPass
-from ...data_classes.func_call_location import FuncCallLocation
-from ...data_classes.grad_fn import GradFn, _paired_pass_op
-from ...data_classes.grad_fn_call import GradFnCall
-from ...data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
-from ...errors import ConfigurationError
-from ...ir.events import (
+from ..._ir.events import (
     BackwardCoverageGap,
     BackwardPassEnd,
     BackwardPassStart,
@@ -47,15 +39,23 @@ from ...ir.events import (
     OpGradObserved,
     ParamGradObserved,
 )
-from ...quantities import Bytes, Duration
-from ...utils._torch_compat import (
+from ..._quantities import Bytes, Duration
+from ..._state import pause_logging
+from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
     get_accumulate_grad_class,
     get_current_autograd_node_fn,
 )
-from ...utils._torch_symbols import torch_attr
-from ...utils.introspection import _get_code_qualname, _get_col_offset
-from ...utils.tensor_utils import synchronize_pending_cpu_async_copies
+from ..._utils._torch_symbols import torch_attr
+from ..._utils.introspection import _get_code_qualname, _get_col_offset
+from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
+from ...capture.peak_memory import (
+    peak_rss_bytes,
+    process_rss_bytes,
+    record_backward_peak,
+    reset_peak_rss,
+)
+from ...errors import ConfigurationError
 from ._backward_dispatch import outside_census
 from ._backward_markers import begin_grad_fn_marker, end_grad_fn_marker, executing_grad_fn_ref
 from ._backward_roots import _autograd_roots_from_call, _root_tensors, _roots_by_trace
@@ -533,7 +533,7 @@ def _enqueue_implicit_pass_drain_callback(
             return
         _close_implicit_backward_pass_if_open(live_trace, _close_path="engine_drain")
 
-    from ...utils._torch_compat import get_autograd_engine_queue_callback
+    from ..._utils._torch_compat import get_autograd_engine_queue_callback
 
     queue_callback = get_autograd_engine_queue_callback()
     if queue_callback is None:
@@ -1420,7 +1420,7 @@ def _materialize_backward_projections(trace: Any) -> None:
         # revision counter: fall back to the event count as a change signal.
         revision = len(events)
     if getattr(trace, "_backward_projection_revision", None) == revision:
-        from ...postprocess._primitive_profile import _materialize_backward_primitive_profile
+        from ..._postprocess._primitive_profile import _materialize_backward_primitive_profile
 
         _materialize_backward_primitive_profile(trace)
         return
@@ -1451,7 +1451,7 @@ def _materialize_backward_projections(trace: Any) -> None:
         # the retry (sol review finding 2).
         trace._backward_projection_event_count = len(events)
         trace._backward_projection_revision = revision
-        from ...postprocess._primitive_profile import _materialize_backward_primitive_profile
+        from ..._postprocess._primitive_profile import _materialize_backward_primitive_profile
 
         _materialize_backward_primitive_profile(trace)
     except BaseException:
@@ -3018,8 +3018,8 @@ def _is_static_truthy_keep_grad(value: Any) -> bool:
 def _selected_fastlog_forward_labels(recording: Any) -> set[str]:
     """Return labels for predicate-selected forward records."""
 
+    from ..._ir.predicate import RetroactiveCaptureDecision
     from ...capture.predicates import _evaluate_keep_op
-    from ...ir.predicate import RetroactiveCaptureDecision
 
     recording._ensure_records()  # noqa: SLF001
     labels: set[str] = set()
@@ -3669,7 +3669,7 @@ def _resolve_checkpoint_hook_cls() -> type | None:
     compat chokepoint; absence flips ``HAS_CHECKPOINT_HOOK_CLASS`` there.
     """
 
-    from ...utils._torch_compat import get_checkpoint_hook_class
+    from ..._utils._torch_compat import get_checkpoint_hook_class
 
     return get_checkpoint_hook_class()
 
@@ -3684,7 +3684,7 @@ def _checkpoint_hook_identity_attrs_in_play() -> bool:
     (torch 2.13 and earlier) means no such state exists to preserve.
     """
 
-    from ...utils._torch_compat import get_checkpoint_internal_hook_class
+    from ..._utils._torch_compat import get_checkpoint_internal_hook_class
 
     return get_checkpoint_internal_hook_class() is not None
 
@@ -4300,7 +4300,7 @@ def _finalize_grad_streaming(trace: Any) -> None:
     if writer is None or not getattr(trace, "_defer_streaming_bundle_finalization", False):
         return
 
-    from ...postprocess.finalization import (
+    from ..._postprocess.finalization import (
         _evict_streamed_grads,
         _evict_streamed_outs,
         _finalize_streamed_bundle,

@@ -868,7 +868,7 @@ class TestDerivedGradRecordPathFieldOrder:
     def test_derived_grad_record_path_in_field_order(self) -> None:
         """The field must be a real member of PARAM_LOG_FIELD_ORDER."""
 
-        from torchlens.constants import PARAM_LOG_FIELD_ORDER
+        from torchlens._constants import PARAM_LOG_FIELD_ORDER
 
         assert "_derived_grad_record_path" in PARAM_LOG_FIELD_ORDER
 

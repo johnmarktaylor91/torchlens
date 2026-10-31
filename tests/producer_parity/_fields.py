@@ -23,9 +23,8 @@ Tier semantics (design-of-record section 2.4):
 
 from __future__ import annotations
 
-from torchlens.fastlog.types import CaptureSpec
-from torchlens.ir.container import ContainerSpec
-from torchlens.ir.events import (
+from torchlens._ir.container import ContainerSpec
+from torchlens._ir.events import (
     ArgTemplateRef,
     BlobRef,
     FunctionCallRef,
@@ -34,8 +33,8 @@ from torchlens.ir.events import (
     OutputRef,
     ParentEdge,
 )
-from torchlens.ir.intervention import FireResult, InterventionTemplateRef
-from torchlens.ir.op_record import (
+from torchlens._ir.intervention import FireResult, InterventionTemplateRef
+from torchlens._ir.op_record import (
     AncestryFacet,
     AnnotationsFacet,
     AutogradFacet,
@@ -52,9 +51,10 @@ from torchlens.ir.op_record import (
     RecordingFacet,
     TransformFacet,
 )
-from torchlens.ir.predicate import ModuleStackFrame, RecordContext
-from torchlens.ir.refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, TensorRef
-from torchlens.ir.semantics import BackendSemantics, CapturePolicy
+from torchlens._ir.predicate import ModuleStackFrame, RecordContext
+from torchlens._ir.refs import DeferredRef, DeviceRef, DtypeRef, ParamRef, TensorRef
+from torchlens._ir.semantics import BackendSemantics, CapturePolicy
+from torchlens.fastlog.types import CaptureSpec
 
 # Roots for the Tier walker: every dataclass the record graph can carry,
 # including classes hidden behind ``object``-typed fields (record_context,

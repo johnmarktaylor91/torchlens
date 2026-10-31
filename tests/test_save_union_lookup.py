@@ -27,8 +27,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._ir.selector_eval as selector_eval
 import torchlens.capture.predicates as predicates_mod
-import torchlens.ir.selector_eval as selector_eval
 import torchlens.user_funcs as user_funcs_mod
 
 _WIDTH = 6

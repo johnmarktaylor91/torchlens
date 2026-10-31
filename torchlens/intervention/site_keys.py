@@ -36,7 +36,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
-from ..postprocess._site_key import SiteKeyMinter
+from .._postprocess._site_key import SiteKeyMinter
 
 _ACTIVE_LIVE_MINTER: ContextVar[LiveSiteKeyMinter | None] = ContextVar(
     "tl_active_live_site_key_minter", default=None
@@ -107,7 +107,7 @@ def predicate_needs_live_site_keys(*predicates: Any) -> bool:
     ``selector_contains_kind`` machinery.
     """
 
-    from ..ir.selector_eval import selector_contains_kind
+    from .._ir.selector_eval import selector_contains_kind
 
     for predicate in predicates:
         if predicate is None:

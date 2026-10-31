@@ -7,6 +7,16 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from ._ir.container import (
+    CONTAINER_KIND_CAPABILITIES,
+    ContainerReconstructionError,
+    ContainerSpec,
+    _reconstruction_would_substitute_plain,
+    namedtuple_type_can_carry_instance_state,
+    rebuild_container_from_spec,
+    reconstruction_is_lossy_by_type,
+    resolve_container_type,
+)
 from ._runnable import (
     ContractCheck,
     RunnableCallDescriptor,
@@ -19,20 +29,10 @@ from ._runnable_retention import _check_unretained_extent
 from ._runnable_state import (
     RunResourceCeiling,
 )
+from ._utils._torch_compat import tensor_version_or_none
 from .errors import (
     RunPreconditionError,
 )
-from .ir.container import (
-    CONTAINER_KIND_CAPABILITIES,
-    ContainerReconstructionError,
-    ContainerSpec,
-    _reconstruction_would_substitute_plain,
-    namedtuple_type_can_carry_instance_state,
-    rebuild_container_from_spec,
-    reconstruction_is_lossy_by_type,
-    resolve_container_type,
-)
-from .utils._torch_compat import tensor_version_or_none
 
 if TYPE_CHECKING:
     from ._runnable_execution import (

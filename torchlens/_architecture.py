@@ -170,7 +170,7 @@ PACKAGE_LAYERS: dict[str, str] = {
 
 #: Packages licensed to touch torch privates: direct ``torch._*`` use or
 #: consumption of the sanctioned torch-compat chokepoint
-#: (``torchlens/utils/_torch_compat.py``). The license is a PER-MODULE
+#: (``torchlens/_utils/_torch_compat.py``). The license is a PER-MODULE
 #: contract orthogonal to layer (memo 3.2); this count is printed by the
 #: lint and may only SHRINK -- a new package touching torch privates
 #: without a row here is RED. Target: burn down toward engine- and
@@ -180,18 +180,18 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
     {
         # F04 one-backward reads: attribution/onebackward gates on the
         # HAS_GRADIENT_EDGE / HAS_NODE_PREHOOK capability flags, which live
-        # at the ONE sanctioned probe chokepoint (utils/_torch_compat); the
+        # at the ONE sanctioned probe chokepoint (_utils/_torch_compat); the
         # package holds no direct torch._ touches of its own.
         "attribution",
         # L8 floor fix: receptive_field's multi-axis any() reduction routes
         # through tensor_any_over_dims() at the ONE sanctioned probe
-        # chokepoint (utils/_torch_compat); the package holds no direct
+        # chokepoint (_utils/_torch_compat); the package holds no direct
         # torch._ touches of its own.
         "receptive_field",
         # F27 Kineto join + memory-parity oracle: observability consumes the
         # HAS_KINETO_INMEMORY_EVENTS / HAS_KINETO_EVENT_SCOPE /
         # HAS_MEMORY_PROFILE capability flags and their accessors, all living
-        # at the ONE sanctioned probe chokepoint (utils/_torch_compat); the
+        # at the ONE sanctioned probe chokepoint (_utils/_torch_compat); the
         # package holds no direct torch._ touches of its own.
         "observability",
         "backends",
@@ -227,13 +227,13 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "user_funcs",
         # floor2 fix (2026-10-01): the runnable-save CPU float8 path
         # consumes get_cpu_float8_deterministic_fill_support() at the ONE
-        # sanctioned probe chokepoint (utils/_torch_compat); the module
+        # sanctioned probe chokepoint (_utils/_torch_compat); the module
         # holds no direct torch._ touches of its own.
         "_user_public_impls",
         # L8 fix (2026-10-01): the FLOPs report's model-door capture holds
         # the fused MHA/TransformerEncoderLayer fast path off through
         # force_mha_slow_path() / HAS_MHA_FASTPATH_SWITCH at the ONE
-        # sanctioned probe chokepoint (utils/_torch_compat); the package
+        # sanctioned probe chokepoint (_utils/_torch_compat); the package
         # holds no direct torch._ touches of its own.
         "report",
     }

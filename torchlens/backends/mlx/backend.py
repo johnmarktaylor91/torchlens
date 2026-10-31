@@ -14,6 +14,30 @@ from typing import Any, cast
 import numpy as np
 
 from ... import _state
+from ..._data_classes.derived_grad import (
+    DerivedGradAccessor,
+    DerivedGradRecord,
+    IntermediateDerivedGradAccessor,
+    IntermediateDerivedGradRecord,
+)
+from ..._data_classes.param import Param, ParamAccessor
+from ..._data_classes.trace import Trace
+from ..._ir.capture_events import CaptureEvents
+from ..._ir.events import (
+    ArgTemplateRef,
+    FunctionCallRef,
+    ModuleFrame,
+    OpEvent,
+    OutputRef,
+    ParentEdge,
+)
+from ..._ir.intervention import FireResult, FunctionEventInput
+from ..._ir.predicate import _DEFERRED_VALUE, RecordContext
+from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
+from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._ir.workspaces import RawGraphWorkspace
+from ..._postprocess._materialize import materialize_from_events
+from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends import (
     BackendName,
@@ -22,32 +46,8 @@ from ...backends import (
     require_capability_implementation,
 )
 from ...capture.outcome import StopRequest, stamp_backend_finalized
-from ...data_classes.derived_grad import (
-    DerivedGradAccessor,
-    DerivedGradRecord,
-    IntermediateDerivedGradAccessor,
-    IntermediateDerivedGradRecord,
-)
-from ...data_classes.param import Param, ParamAccessor
-from ...data_classes.trace import Trace
 from ...fastlog._halt import HaltSignal
 from ...fastlog.types import CaptureSpec
-from ...ir.capture_events import CaptureEvents
-from ...ir.events import (
-    ArgTemplateRef,
-    FunctionCallRef,
-    ModuleFrame,
-    OpEvent,
-    OutputRef,
-    ParentEdge,
-)
-from ...ir.intervention import FireResult, FunctionEventInput
-from ...ir.predicate import _DEFERRED_VALUE, RecordContext
-from ...ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
-from ...ir.semantics import BackendSemantics, CapturePolicy
-from ...ir.workspaces import RawGraphWorkspace
-from ...postprocess._materialize import materialize_from_events
-from ...quantities import Duration
 from ...validation.status import ValidationReplaySource, ValidationReplayStatus  # noqa: TC001
 from .._finalize import (
     attach_function_root_module,

@@ -1795,7 +1795,7 @@ def test_genuine_raw_hook_replacement_mints_journal_edit_and_validates() -> None
     forged plain-capture case (previous test) still fails.
     """
 
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.events import InterventionAppliedEvent
     from torchlens.validation.invariants import check_metadata_invariants
 
     model = _Tiny()
@@ -1851,8 +1851,8 @@ def test_forged_journal_edit_does_not_bless_plain_placeholder() -> None:
 
     import dataclasses
 
-    from torchlens.ir.capture_events import SealedJournalAppendError
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.capture_events import SealedJournalAppendError
+    from torchlens._ir.events import InterventionAppliedEvent
 
     trace, ground_truth = _capture(_Tiny(), torch.randn(3, 4))
     relu_op = [op for op in trace.layer_list if op.func_name == "relu"][0]
@@ -1913,7 +1913,7 @@ def test_cross_run_replayed_edit_does_not_bless_placeholder() -> None:
 
     import dataclasses
 
-    from torchlens.ir.events import InterventionAppliedEvent
+    from torchlens._ir.events import InterventionAppliedEvent
 
     # Run A: a genuine raw-hook replacement mints a BOUND edit record.
     model_a = _Tiny()

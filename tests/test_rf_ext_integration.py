@@ -98,7 +98,7 @@ def test_real_model_matrix_covers_receptive_projective_and_layer_to_layer(
     source = trace.input_ops[0]  # type: ignore[union-attr]
     first_conv, target = _ops(trace, "conv2d")
 
-    receptive = target.receptive_field.at("center", input=source)  # type: ignore[union-attr]
+    receptive = target.receptive_field.at("center", input_op=source)  # type: ignore[union-attr]
     layer_to_layer = target.receptive_field.at(  # type: ignore[union-attr]
         "center", source=first_conv
     )
@@ -247,7 +247,7 @@ def test_basic_block_geometric_adjoint_battery_is_exact() -> None:
         assert forward.status is ReceptiveFieldStatus.EXACT
         forward_bounds = _window_bounds(forward)
         for target_unit in target_units:
-            backward = target.receptive_field.at(target_unit, input=source)  # type: ignore[union-attr]
+            backward = target.receptive_field.at(target_unit, input_op=source)  # type: ignore[union-attr]
             assert backward.status is ReceptiveFieldStatus.EXACT
             backward_bounds = _window_bounds(backward)
             source_in_backward = all(

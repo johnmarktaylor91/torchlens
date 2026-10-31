@@ -426,7 +426,7 @@ def test_carry_state_does_not_change_the_trace():
 def test_unrestorable_state_warns_capture_state_restore_incomplete(monkeypatch):
     """A restore step that fails is named in one coded warning, never raised."""
 
-    import torchlens.utils.rng as rng
+    import torchlens._utils.rng as rng
     from torchlens.errors import TorchLensWarning
 
     def _broken(_states):

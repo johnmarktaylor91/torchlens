@@ -28,7 +28,7 @@ import pytest
 import torch
 from torch import nn
 
-from torchlens.utils.rng import (
+from torchlens._utils.rng import (
     _UNCERTAIN_DETAIL_CAP,
     host_nondeterminism_monitor,
 )

@@ -25,7 +25,7 @@ from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
 from torchlens._io import TorchLensIOError
-from torchlens.utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
+from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 
 CORPUS = Path(__file__).parent / "release_goldens" / "genuine_release_artifacts.tar.gz"
 
@@ -116,7 +116,7 @@ def test_root_stamp_disagreeing_with_manifest_refuses(source_bundle: Path, tmp_p
 
 
 def test_migrated_artifact_keeps_its_witnessed_stamp_lineage(tmp_path: Path) -> None:
-    from torchlens.ecosystem.migrate import migrate
+    from torchlens._ecosystem.migrate import migrate
 
     with tarfile.open(CORPUS, "r:gz") as tar:
         tar.extractall(tmp_path)

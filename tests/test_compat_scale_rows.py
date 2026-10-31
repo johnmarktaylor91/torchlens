@@ -15,8 +15,8 @@ import pytest
 import torch
 from torch import nn
 
+from torchlens._utils import _torch_compat
 from torchlens.compat import report
-from torchlens.utils import _torch_compat
 
 
 class _QuantMethod(str, enum.Enum):

@@ -17,7 +17,7 @@ from torch import nn
 
 from torchlens._distributed import DistributedFinding, detect_distributed_state
 from torchlens._robustness import _iter_tensors
-from torchlens.utils._torch_compat import (
+from torchlens._utils._torch_compat import (
     get_dynamo_optimized_module_type,
     get_fp8_dtypes,
     get_fx_graph_module_type,
@@ -757,7 +757,7 @@ def _cuda_graphs_row(model: nn.Module) -> CompatRow:
         Report row.
     """
 
-    from ..utils import _torch_compat
+    from .._utils import _torch_compat
 
     graphed = any(
         getattr(getattr(module, "__dict__", {}).get("forward"), "__qualname__", "")
@@ -1240,7 +1240,7 @@ def _torch_compile_row(model: nn.Module) -> CompatRow:
     """
 
     from .._capture_state_helpers import compiled_plain_callable_sites
-    from ..utils import _torch_compat
+    from .._utils import _torch_compat
 
     optimized_module_type = get_dynamo_optimized_module_type()
     optimized_detected = optimized_module_type is not None and isinstance(
@@ -1288,8 +1288,8 @@ def _torch_compile_row(model: nn.Module) -> CompatRow:
                 "dynamo_region_not_logged), not logged."
             )
         suggestion = (
-            "Verify the contract with tl.debug.count_compiles(); correlate Dynamo graph "
-            "breaks with tl.debug.graph_breaks(). For compiled-artifact introspection "
+            "Verify the contract with tl.report.count_compiles(); correlate Dynamo graph "
+            "breaks with tl.report.graph_breaks(). For compiled-artifact introspection "
             "use the ecosystem tools (torch DebugMode, tlparse, the profiler, depyf)."
             if detected
             else ""
@@ -1329,7 +1329,7 @@ def _torch_compile_row(model: nn.Module) -> CompatRow:
         detected,
         details,
         "Log the original eager model (torch >= 2.6 captures compiled callables eagerly "
-        "via set_stance). Correlate Dynamo graph breaks with tl.debug.graph_breaks(); "
+        "via set_stance). Correlate Dynamo graph breaks with tl.report.graph_breaks(); "
         "for compiled-code context use torch DebugMode, tlparse, or torchlens.bridge.depyf."
         if detected
         else "",
@@ -1666,7 +1666,7 @@ def _torch_capabilities_row() -> CompatRow:
         Report row summarizing private runtime capability probes.
     """
 
-    from ..utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
+    from .._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS
 
     snapshot = _runtime_capability_snapshot()
     absent = [name for name, available in snapshot.items() if not available]
@@ -1680,7 +1680,7 @@ def _torch_capabilities_row() -> CompatRow:
     # Grouped absences-first summary (ONE shared renderer with doctor); the
     # full name=value dump lives on report.capability_snapshot(), so a ~1,900
     # character data cell no longer inflates every renderer's line width.
-    from ..utils import format_capability_summary
+    from .._utils import format_capability_summary
 
     details = "Runtime capabilities: " + format_capability_summary(snapshot)
     if missing:
@@ -1689,7 +1689,7 @@ def _torch_capabilities_row() -> CompatRow:
         details += "; optional_absent=" + ", ".join(optional_absent)
     details += "; full dump: report.capability_snapshot()"
     suggestion = (
-        "Run torchlens.utils.doctor() for the same snapshot; missing flags indicate graceful "
+        "Run torchlens._utils.doctor() for the same snapshot; missing flags indicate graceful "
         "degradation of private runtime integration points."
         if missing
         else ""
@@ -1772,7 +1772,7 @@ def _mechanical_belt_row() -> CompatRow:
         True,
         details,
         "Avoid holding pre-wrap references to the named functions; "
-        "see torchlens.utils.doctor() for per-failure exception details.",
+        "see torchlens._utils.doctor() for per-failure exception details.",
     )
 
 

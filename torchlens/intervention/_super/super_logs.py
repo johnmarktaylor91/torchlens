@@ -11,11 +11,11 @@ from ._accessor_base import SuperAccessor
 from ._base import _TENSOR_FIELD_LITERAL, Super, _TensorBearing
 
 if TYPE_CHECKING:
-    from ...data_classes.buffer import Buffer
-    from ...data_classes.grad_fn import GradFn
-    from ...data_classes.grad_fn_call import GradFnCall
-    from ...data_classes.module import Module, ModuleCall
-    from ...data_classes.param import Param
+    from ..._data_classes.buffer import Buffer
+    from ..._data_classes.grad_fn import GradFn
+    from ..._data_classes.grad_fn_call import GradFnCall
+    from ..._data_classes.module import Module, ModuleCall
+    from ..._data_classes.param import Param
 
 
 class SuperModule(Super["Module"]):

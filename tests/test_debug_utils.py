@@ -1,4 +1,4 @@
-"""Tests for ``tl.debug`` diagnostic helpers."""
+"""Tests for ``tl._debug`` diagnostic helpers."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ class UserFunctionNanModel(nn.Module):
 def test_find_nan_live_reports_op_module_and_test_location() -> None:
     """Live find_nan stops at the non-finite operation with a user location."""
 
-    result = tl.debug.find_nan(nn.Sequential(NanModel()), torch.ones(2, 3))
+    result = tl._debug.find_nan(nn.Sequential(NanModel()), torch.ones(2, 3))
 
     assert result.found is True
     assert result.op is not None
@@ -101,7 +101,7 @@ def test_find_nan_live_reports_op_module_and_test_location() -> None:
 def test_find_nan_live_reports_nearest_user_function_location() -> None:
     """Live find_nan reports the function containing the offending operation."""
 
-    result = tl.debug.find_nan(UserFunctionNanModel(), torch.ones(2, 3))
+    result = tl._debug.find_nan(UserFunctionNanModel(), torch.ones(2, 3))
     source, start_line = inspect.getsourcelines(_user_nan_function)
     expected_line = start_line + source.index("    return zero / zero\n")
 
@@ -113,7 +113,7 @@ def test_trace_find_nan_agrees_with_live_capture() -> None:
     """Post-hoc full-save find_nan agrees with live detection."""
 
     model = NanModel()
-    live = tl.debug.find_nan(model, torch.ones(2, 3))
+    live = tl._debug.find_nan(model, torch.ones(2, 3))
     post_hoc = tl.trace(model, torch.ones(2, 3)).find_nan()
 
     assert post_hoc.found is True
@@ -138,7 +138,7 @@ def test_trace_find_nan_names_sparse_uncertainty_zone() -> None:
 def test_find_nan_live_clean_model_returns_clear_result() -> None:
     """Live find_nan returns a no-finding result without raising."""
 
-    result = tl.debug.find_nan(nn.ReLU(), torch.ones(2, 3))
+    result = tl._debug.find_nan(nn.ReLU(), torch.ones(2, 3))
 
     assert result.found is False
     assert result.kind == "none"
@@ -150,7 +150,7 @@ def test_bisect_nan_finds_first_nonfinite_op() -> None:
 
     trace = tl.trace(NanModel(), torch.randn(2, 3))
 
-    result = tl.debug.bisect_nan(trace)
+    result = tl.report.bisect_nan(trace)
 
     assert result.found is True
     assert result.op is not None
@@ -165,7 +165,7 @@ def test_bisect_nan_no_nonfinite_case() -> None:
 
     trace = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()).eval(), torch.randn(2, 3))
 
-    result = tl.debug.bisect_nan(trace)
+    result = tl.report.bisect_nan(trace)
 
     assert result.found is False
     assert result.op is None
@@ -187,7 +187,7 @@ def test_bisect_nan_unsaved_region_message() -> None:
 
     trace = tl.trace(NanModel(), torch.randn(2, 3), save=tl.func("sub"))
 
-    result = tl.debug.bisect_nan(trace)
+    result = tl.report.bisect_nan(trace)
 
     assert result.found is False
     assert "no saved activation for the suspect region" in result.message
@@ -201,7 +201,7 @@ def test_hot_path_returns_ranked_dataframe(metric: str) -> None:
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
     trace = tl.trace(model, torch.randn(3, 4))
 
-    frame = tl.debug.hot_path(trace, by=metric).to_pandas()  # type: ignore[arg-type]
+    frame = tl.report.hot_path(trace, by=metric).to_pandas()  # type: ignore[arg-type]
 
     assert list(frame.columns) == ["source_file:line", "op_count", "total_cost", "pct_total"]
     assert len(frame) > 0
@@ -225,7 +225,7 @@ def test_hot_path_rejects_missing_pandas(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
     with pytest.raises(ImportError, match=r"pip install torchlens\[tabular\]"):
-        tl.debug.hot_path(trace)
+        tl.report.hot_path(trace)
 
 
 def test_hot_path_reports_missing_metric_exclusions() -> None:
@@ -235,6 +235,6 @@ def test_hot_path_reports_missing_metric_exclusions() -> None:
     first_compute = next(op for op in trace.layer_list if int(op.step_index or 0) > 0)
     first_compute.flops_forward = None
 
-    frame = tl.debug.hot_path(trace, by="flops").to_pandas()
+    frame = tl.report.hot_path(trace, by="flops").to_pandas()
 
     assert frame.attrs["excluded_missing_metric_count"] >= 1

@@ -13,7 +13,7 @@ from torch import nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
-from torchlens.constants import (  # noqa: E402
+from torchlens._constants import (  # noqa: E402
     BUFFER_LOG_FIELD_ORDER,
     GRAD_FN_LOG_FIELD_ORDER,
     GRAD_FN_PASS_LOG_FIELD_ORDER,
@@ -22,7 +22,7 @@ from torchlens.constants import (  # noqa: E402
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.buffer import _TO_PANDAS_EXCLUDED_BUFFER_FIELDS  # noqa: E402
+from torchlens._data_classes.buffer import _TO_PANDAS_EXCLUDED_BUFFER_FIELDS  # noqa: E402
 
 
 class _RecordExportModel(nn.Module):

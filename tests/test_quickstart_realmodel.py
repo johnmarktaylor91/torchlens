@@ -16,8 +16,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.quickstart import SynthesizedValueReadWarning, trace_input_provenance
-from torchlens.quickstart._primitive import state_dict_hash
+from torchlens._quickstart import SynthesizedValueReadWarning, trace_input_provenance
+from torchlens._quickstart._primitive import state_dict_hash
 from torchlens.user_funcs import render
 
 pytestmark = pytest.mark.heavy
@@ -95,7 +95,7 @@ class TestGpt2Rungs:
         log = tl.trace(gpt2, "The quick brown fox")
         record = log.input_preprocessor
         assert record is not None
-        assert record.source != "torchlens.quickstart.input_resolver"
+        assert record.source != "torchlens._quickstart.input_resolver"
         assert trace_input_provenance(log) is None  # reads as gold
         from torchlens.errors import TorchLensError
 
@@ -159,9 +159,9 @@ class TestClipBoundaryRider:
     def test_zero_arg_refusal_names_multi_input_and_quotes_the_probe(self, clip: nn.Module) -> None:
         """The CLIP fix: multi_input_required, never a geometric misdiagnosis."""
 
-        from torchlens.debug._infer_input_shape import infer_input_shape
+        from torchlens._debug._infer_input_shape import guess_input_shape
 
-        result = infer_input_shape(clip)
+        result = guess_input_shape(clip)
         assert result.found is False
         assert result.reason == "multi_input_required"
         assert "NoneType" in result.message

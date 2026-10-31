@@ -3,7 +3,7 @@
 A transcoder here is any object with ``encode(x)``, ``W_enc``, ``b_enc``,
 ``W_dec`` and ``b_dec`` (the SAE Lens orientation: ``W_enc`` is
 ``(d_in, n_features)`` and ``W_dec`` is ``(n_features, d_out)``), the same
-object ``tl.splice_module(transcoder, input="in")`` splices in for an MLP.
+object ``tl.splice_module(transcoder, input_route="in")`` splices in for an MLP.
 A per-layer transcoder writes the output of the MLP whose input it reads; a
 cross-layer transcoder gives ``W_dec`` and ``b_dec`` as mappings from MLP
 module names to tensors, one entry per MLP output its features write.

@@ -19,9 +19,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
+from torchlens._data_classes._trace_accessors import _TRACE_MODULE_CALL_ACCESSOR_ATTR
+from torchlens._data_classes.trace import Trace
 from torchlens._io import FieldPolicy
-from torchlens.data_classes._trace_accessors import _TRACE_MODULE_CALL_ACCESSOR_ATTR
-from torchlens.data_classes.trace import Trace
 
 # Marks are PER-TEST: four session-state-scaling gc tests are re-tiered
 # `heavy` below (charged 9.4-19.3s min(wall, cpu) in the merged full
@@ -379,7 +379,7 @@ class TestTraceGC:
         that exception, so once it dies the entry is unreachable garbage.
         """
 
-        from torchlens import partial as partial_module
+        from torchlens import _partial as partial_module
 
         class _FrameLocalMarker:
             """Stands in for the model/inputs a traceback frame keeps alive."""
@@ -510,7 +510,7 @@ class TestTraceGC:
         losing recovery.
         """
 
-        from torchlens import partial as partial_module
+        from torchlens import _partial as partial_module
 
         trace = tl.trace(_SimpleLinear(), torch.randn(1, 5))
         exception = RuntimeError("unweakrefable probe")
@@ -541,7 +541,7 @@ class TestTraceGC:
         pins that the registry entry is the ONLY thing retaining it.
         """
 
-        from torchlens import partial as partial_module
+        from torchlens import _partial as partial_module
 
         class _LockedSlots(Exception):
             __slots__ = ()
@@ -739,7 +739,7 @@ class TestLifetimeCoverageGaps:
         artifact, not a leak — this arm is structured so it cannot report one.
         """
 
-        from torchlens import partial as partial_module
+        from torchlens import _partial as partial_module
 
         class _Boom(nn.Module):
             def forward(self, x):
@@ -913,7 +913,7 @@ def test_failed_capture_registry_never_pins_a_nonweakrefable_exception_graph():
         try:
             tl.trace(model, torch.ones(1, 3))
         except _LockedError as exc:
-            partial = tl.partial.from_failed_capture(exc)
+            partial = tl._partial.from_failed_capture(exc)
             assert partial is not None
             del exc, partial
 
@@ -952,7 +952,7 @@ def test_merged_trace_release_drops_member_traces():
     activations) with no counterpart to Trace.cleanup().
     """
 
-    from torchlens.merged._presenter import MergedTrace, _RankHandle
+    from torchlens._merged._presenter import MergedTrace, _RankHandle
 
     trace_a = tl.trace(_SimpleLinear(), torch.randn(2, 5))
     trace_b = tl.trace(_SimpleLinear(), torch.randn(2, 5))

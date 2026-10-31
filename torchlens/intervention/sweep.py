@@ -19,7 +19,7 @@ from .spec import Recipe, when
 from .types import Edit
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 SWEEP_NAME = "sweep"
 

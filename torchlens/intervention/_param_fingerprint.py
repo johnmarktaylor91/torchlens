@@ -29,9 +29,9 @@ from ..errors import InterventionError
 from .errors import ReplayPreconditionError
 
 if TYPE_CHECKING:
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ..backends.torch._param_fingerprint import ParamFingerprint
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
     from .types import LiteralTensor
 
 CHANGED_PARAMS_RUN_KEY = "replayed_with_changed_params"

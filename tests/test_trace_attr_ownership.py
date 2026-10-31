@@ -10,7 +10,7 @@ hand -- and nothing structural stopped the next one, which is why this is a
 GOVERNANCE gate rather than a one-off fix.
 
 The rule: every private attribute written onto a trace-shaped name from
-OUTSIDE ``torchlens/data_classes/`` must either
+OUTSIDE ``torchlens/_data_classes/`` must either
 
 * be declared in ``TRACE_FIELD_OWNERSHIP`` (i.e. it is a real Trace field with
   a ``FieldPolicy`` and an owning component), or
@@ -36,7 +36,7 @@ from pathlib import Path
 import pytest
 from _source_corpus import package_ast, package_files
 
-from torchlens.data_classes._trace_components import (
+from torchlens._data_classes._trace_components import (
     TRACE_EXTERNAL_WRITE_EXEMPTIONS,
     TRACE_FIELD_OWNERSHIP,
 )
@@ -181,7 +181,7 @@ def test_every_external_private_write_is_declared_or_exempted() -> None:
         "and a schema decision, or -- if it is genuinely transient backend "
         "scratch -- add a reason-bearing row to "
         "TRACE_EXTERNAL_WRITE_EXEMPTIONS in "
-        "torchlens/data_classes/_trace_components.py."
+        "torchlens/_data_classes/_trace_components.py."
     )
 
 

@@ -163,7 +163,7 @@ def _record(
         Assembled resolution.
     """
 
-    from torchlens.data_classes.trace import ResolvedPreprocessing
+    from torchlens._data_classes.trace import ResolvedPreprocessing
 
     config: dict[str, Any] = {"resolution_method": "explicit"}
     if declared is not None:
@@ -678,7 +678,7 @@ def _discover_from_model(model: Any, offline: bool | None) -> Resolution:
 def _as_model_metadata(resolution: Resolution) -> Resolution:
     """Re-stamp an explicit-adapter resolution as model-attached metadata."""
 
-    from torchlens.data_classes.trace import ResolvedPreprocessing
+    from torchlens._data_classes.trace import ResolvedPreprocessing
 
     record = resolution.record
     config = dict(record.config)

@@ -29,11 +29,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
-from torchlens.options import CaptureOptions
-from torchlens.utils.rng import (
+from torchlens._utils.rng import (
     _rng_exempt_instances,
     host_nondeterminism_monitor,
 )
+from torchlens.options import CaptureOptions
 
 _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
 

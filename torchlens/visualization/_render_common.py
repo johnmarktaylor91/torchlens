@@ -38,7 +38,20 @@ import torch
 from graphviz.quoting import quote as quote_dot_id
 from PIL import Image
 
+from .._data_classes.internal_types import VisualizationOverrides
+from .._data_classes.layer import Layer
+from .._data_classes.op import Op
 from .._errors import _actionable_message, _ActionableErrorMixin
+from .._ir.container import (
+    ContainerSpec,
+    DataclassField,
+    DictKey,
+    HFKey,
+    NamedField,
+    OutputPathComponent,
+    TupleIndex,
+)
+from .._ir.container_registry import ContainerRecord, ContainerSnapshot, Role
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
@@ -50,23 +63,10 @@ from .._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from ..data_classes.internal_types import VisualizationOverrides
-from ..data_classes.layer import Layer
-from ..data_classes.op import Op
+from .._quantities import Duration
+from .._utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
+from .._utils.env_flags import closed_bool_env
 from ..errors._base import CompatibilityError
-from ..ir.container import (
-    ContainerSpec,
-    DataclassField,
-    DictKey,
-    HFKey,
-    NamedField,
-    OutputPathComponent,
-    TupleIndex,
-)
-from ..ir.container_registry import ContainerRecord, ContainerSnapshot, Role
-from ..quantities import Duration
-from ..utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
-from ..utils.env_flags import closed_bool_env
 from ._label_format import (
     format_memory,
     format_module_kwargs,
@@ -187,7 +187,7 @@ def format_collapsed_module_contents(num_layers: int, num_buffer_layers: int) ->
 
 
 if TYPE_CHECKING:
-    from ..data_classes.module import Module
+    from .._data_classes.module import Module
     from .auto_collapse import ModuleRepeatFold
 
 BaseGraphNode = Union["Op", "Layer"]

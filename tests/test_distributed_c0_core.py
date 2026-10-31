@@ -21,13 +21,13 @@ from torchlens.distributed import (  # noqa: E402
     GroupLifecycleEvent,
     GroupLifecycleLedger,
     UncapturedCollectiveOpError,
-    _lifecycle as lifecycle,  # noqa: E402
-    _recognizer as recognizer_mod,  # noqa: E402
+    _lifecycle as lifecycle,
+    _recognizer as recognizer_mod,
     audit_membership_lineages,
-    derive_collective_recognizer,
-    has_vetted_snapshot,
+    is_vetted_build,
     membership_digest_for_ranks,
 )
+from torchlens.distributed._recognizer import derive_collective_recognizer  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # ledger helpers
@@ -64,9 +64,9 @@ M2 = membership_digest_for_ranks([0, 1, 2, 3])
 # TestCollectiveRecognizer.test_derivation_refuses_typed_when_not_vetted and
 # tests/test_distributed_boundary_gloo.py::TestUnvettedTorchRefusesArming).
 requires_vetted_snapshot = pytest.mark.skipif(
-    not has_vetted_snapshot(),
+    not is_vetted_build(),
     reason="full collective arming requires a census-vetted torch build "
-    "(torchlens.distributed.has_vetted_snapshot() is False here)",
+    "(torchlens.distributed.is_vetted_build() is False here)",
 )
 
 
@@ -327,7 +327,7 @@ class TestCollectiveRecognizer:
         assert recognizer.classify("aten::mm") is None
 
     @pytest.mark.skipif(
-        has_vetted_snapshot(),
+        is_vetted_build(),
         reason="the unvetted-torch refusal is only observable without a census match",
     )
     def test_derivation_refuses_typed_when_not_vetted(self):
@@ -337,7 +337,7 @@ class TestCollectiveRecognizer:
         # arming an uncensused dispatcher. This is the correct product
         # behavior, proven here against the REAL (untampered) runtime census,
         # not a synthetic mismatch.
-        assert not has_vetted_snapshot()
+        assert not is_vetted_build()
         with pytest.raises(UncapturedCollectiveOpError) as excinfo:
             derive_collective_recognizer()
         assert excinfo.value.fields["kind"] == "uncaptured_collective_op"
@@ -612,8 +612,8 @@ class TestC10dGroupSeqCompatRouting:
     """
 
     def test_missing_capability_short_circuits_to_none(self, monkeypatch):
+        from torchlens._utils import _torch_compat as tc
         from torchlens.backends.torch import collectives
-        from torchlens.utils import _torch_compat as tc
 
         monkeypatch.setattr(
             tc, "probe_c10d_capabilities", lambda **_: {"HAS_C10D_GROUP_SEQ": False}
@@ -630,8 +630,8 @@ class TestC10dGroupSeqCompatRouting:
         assert Recording.called is False
 
     def test_present_capability_reads_the_private_counter(self, monkeypatch):
+        from torchlens._utils import _torch_compat as tc
         from torchlens.backends.torch import collectives
-        from torchlens.utils import _torch_compat as tc
 
         monkeypatch.setattr(tc, "probe_c10d_capabilities", lambda **_: {"HAS_C10D_GROUP_SEQ": True})
 
@@ -653,8 +653,8 @@ class TestC10dGroupSeqCompatRouting:
 
         import warnings as warnings_module
 
+        from torchlens._utils import _torch_compat as tc
         from torchlens.backends.torch import collectives
-        from torchlens.utils import _torch_compat as tc
 
         monkeypatch.setattr(tc, "HAS_C10D_GROUP_SEQ", True)
         monkeypatch.setattr(tc, "_C10D_GROUP_SEQ_PROBED", True)

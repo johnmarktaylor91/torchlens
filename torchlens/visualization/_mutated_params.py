@@ -28,7 +28,7 @@ from ._render_common import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from ._render_dot import _ForwardRenderContext
     from .themes import VisualizationTheme
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
-import torchlens.utils as utils
+import torchlens._utils as utils
 
 
 def test_register_op_rule_affects_flops() -> None:

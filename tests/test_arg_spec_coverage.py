@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+from torchlens._constants import get_orig_torch_funcs
 from torchlens.capture.arg_positions import (
     FUNC_ARG_SPECS,
     ArgSpec,
@@ -12,7 +13,6 @@ from torchlens.capture.arg_positions import (
     _normalize_func_name,
     extract_tensors_and_params,
 )
-from torchlens.constants import get_orig_torch_funcs
 
 _HIGH_CONFIDENCE_STATIC_NAMES = frozenset(
     {
@@ -118,7 +118,7 @@ _HIGH_CONFIDENCE_STATIC_NAMES = frozenset(
         "quantizepertensordynamic",
         # ``randintlike`` (and its siblings ``rand_like`` / ``randn_like``) are real public torch
         # factories in torch's get_ignored_functions(); r18cg added them to
-        # torchlens.constants.IGNORED_FUNCS so they are now decorated + captured (their arg-specs
+        # torchlens._constants.IGNORED_FUNCS so they are now decorated + captured (their arg-specs
         # already existed). Keep this entry: it guards that the wrap is not regressed -- do NOT
         # relax the set to work around a future un-wrap, root-cause it (validation-integrity).
         "randintlike",

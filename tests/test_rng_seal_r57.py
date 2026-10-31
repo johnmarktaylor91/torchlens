@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.utils.rng import _skip_retired_hooks, host_nondeterminism_monitor
+from torchlens._utils.rng import _skip_retired_hooks, host_nondeterminism_monitor
 
 _HELD_LOCALTIME = time.localtime  # pre-window held alias (module import time)
 
@@ -162,7 +162,7 @@ def test_call_site_time_arg_proof_skips_interposed_call_bookkeeping(
     bookkeeping opcode tomorrow.
     """
 
-    import torchlens.utils.rng as rng_module
+    import torchlens._utils.rng as rng_module
 
     class _FakeInstruction:
         def __init__(self, offset: int, opname: str, argval: object = None) -> None:

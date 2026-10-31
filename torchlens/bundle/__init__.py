@@ -77,9 +77,9 @@ from ._vary import bundle_vary as _bundle_vary
 if TYPE_CHECKING:
     from torch import nn
 
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ..capture.outcome import CaptureOutcome
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
 
 
 _OP_LABEL_RE = re.compile(r"^.+_\d+_\d+$")
@@ -102,7 +102,7 @@ _BUNDLE_ACCESSOR_NAMES = (
 def _member_outcome_token(member: Any) -> str:
     """One member's settled outcome-status token, degrading to ``unknown``."""
 
-    from ..utils.fail_open import fail_open
+    from .._utils.fail_open import fail_open
 
     outcome = fail_open(lambda: getattr(member, "outcome", None), lambda _error: None)
     return getattr(getattr(outcome, "status", None), "value", None) or "unknown"
@@ -479,7 +479,7 @@ class Bundle:
 
         helper = dynamic_bundle_methods().get(name)
         if helper is None:
-            from ..utils.facade import refuse_removed_member
+            from .._utils.facade import refuse_removed_member
 
             refuse_removed_member("Bundle", name, _REMOVED_BUNDLE_MEMBERS)
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
@@ -2092,8 +2092,8 @@ class Bundle:
             ``bundle_member_type_invalid`` for any other value.
         """
 
-        from ..data_classes.trace import Trace as _Trace
-        from ..partial import PartialTrace as _PartialTrace
+        from .._data_classes.trace import Trace as _Trace
+        from .._partial import PartialTrace as _PartialTrace
 
         if not isinstance(value, (_Trace, _PartialTrace)):
             raise BundleMemberError(

@@ -284,7 +284,7 @@ def test_plain_pickle_buffer_model_round_trips() -> None:
 def test_standalone_buffer_pickle_round_trips() -> None:
     """A standalone ``Buffer`` (holding a source-trace weakref) must pickle."""
 
-    from torchlens.data_classes.buffer import Buffer
+    from torchlens._data_classes.buffer import Buffer
 
     torch.manual_seed(0)
     model = _BufferModel()
@@ -342,7 +342,7 @@ def test_trace_setstate_absent_container_fields_restore_typed() -> None:
 def test_op_setstate_absent_container_fields_restore_typed() -> None:
     """Legacy/partial Op state missing container fields must restore typed."""
 
-    from torchlens.data_classes.op import Op
+    from torchlens._data_classes.op import Op
 
     torch.manual_seed(0)
     trace = trace_fn(_TrainableModel(), torch.randn(3, 4))
@@ -387,9 +387,9 @@ def test_backend_address_none_is_preserved_and_pre_floor_refuses() -> None:
     refuse instead of triggering the migration.
     """
 
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.op import Op
     from torchlens._io import TLSPEC_VERSION, ArtifactVersionBelowFloorError
-    from torchlens.data_classes.layer import Layer
-    from torchlens.data_classes.op import Op
 
     trace = _build_trace()
     op_state = trace.ops[0].__getstate__()
@@ -414,7 +414,7 @@ def test_backend_address_none_is_preserved_and_pre_floor_refuses() -> None:
 def test_setstate_present_but_wrong_typed_container_is_coerced() -> None:
     """Present-but-wrong-typed container fields must be coerced on restore."""
 
-    from torchlens.data_classes.op import Op
+    from torchlens._data_classes.op import Op
 
     torch.manual_seed(0)
     trace = trace_fn(_TrainableModel(), torch.randn(3, 4))
@@ -445,8 +445,8 @@ def test_all_field_order_container_defaults_are_typed() -> None:
     future field added without a typed default in the ``__setstate__`` fill.
     """
 
-    from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-    from torchlens.data_classes.op import Op
+    from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
+    from torchlens._data_classes.op import Op
 
     torch.manual_seed(0)
     trace = trace_fn(_TrainableModel(), torch.randn(3, 4))

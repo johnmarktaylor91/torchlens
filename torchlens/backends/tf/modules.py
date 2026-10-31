@@ -10,9 +10,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from ...data_classes.param import Param
-from ...ir.events import ModuleFrame
-from ...ir.refs import DeviceRef, DtypeRef
+from ..._data_classes.param import Param
+from ..._ir.events import ModuleFrame
+from ..._ir.refs import DeviceRef, DtypeRef
 from .._finalize import numel_from_shape as _numel, value_nbytes as _nbytes
 
 

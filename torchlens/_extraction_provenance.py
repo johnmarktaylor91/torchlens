@@ -185,7 +185,7 @@ def coerce_input_preprocessing(
         else:
             transform_callable = input_transform
             opaque = True
-            from torchlens.data_classes.trace import _scrubbed_transform_repr
+            from torchlens._data_classes.trace import _scrubbed_transform_repr
 
             transform_repr = _scrubbed_transform_repr(input_transform) or "<transform>"
             identity = {"kind": "opaque", "repr": transform_repr}

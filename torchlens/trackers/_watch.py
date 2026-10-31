@@ -8,12 +8,12 @@
   executes the user's model at all.
 - **Tier M** -- module-output activations through ordinary forward hooks
   (the C06 Route-A collector). Requires an explicit selector AND
-  ``example_input=`` (the one real attach-time forward, run in the model's
+  ``inputs=`` (the one real attach-time forward, run in the model's
   CURRENT mode -- never the shipped Lightning callback's eval()/no_grad()
   re-trace flaw); zero matches refuse at attach with the live module census.
 - **Tier O (op grain)** -- per-op (and declared per-facet) activations
   through the Route-B op-tier collector. Needs ``grain="op"``, a selector,
-  ``example_input=`` AND explicit consent (``allow_forward_wrap=True``):
+  ``inputs=`` AND explicit consent (``allow_forward_wrap=True``):
   the root forward is wrapped so sampled steps run inside one fastlog
   capture, and that cost is calibrated and disclosed at attach
   (``trackers/_op_grain.py``).
@@ -41,19 +41,19 @@ from typing import Any
 import torch
 
 from .. import _state
-from ..observability import (
+from .._observability import (
     EventStream,
     HistogramDescriptor,
     HistoryCollector,
     ObserverEvent,
     WatchSettings,
 )
+from .._observability._collector import StepTruth
+from .._observability._kernels import spine_result_from_vector, spine_vector
+from .._observability._schema import validate_step_order
+from .._utils.env_flags import closed_bool_env
 from ..observability._artifact import CommittedBlock
-from ..observability._collector import StepTruth
-from ..observability._kernels import spine_result_from_vector, spine_vector
-from ..observability._schema import validate_step_order
-from ..utils.env_flags import closed_bool_env
-from ._amp import correct_spine, corrected_gradient_block, observed_grad_scale, unscale_stage
+from ._amp import correct_running_stats, corrected_grad_block, observed_grad_scale, unscale_stage
 from ._errors import SinkProtocolError, TrackersError, WatchConfigError, WatchRuntimeError
 from ._op_grain import (
     OpGrainCollector,
@@ -69,12 +69,12 @@ from ._records import (
     TextPoint,
     build_manifest,
     emission_from_block,
-    spine_scalars,
+    running_stats_scalars,
 )
 
 __tl_layer__ = "L8"
 
-#: The kill switch (off-only; registered in torchlens.utils.env_flags).
+#: The kill switch (off-only; registered in torchlens._utils.env_flags).
 WATCH_DISABLE_ENV = "TORCHLENS_WATCH_DISABLE"
 
 #: Closed signal vocabulary -> C06 stream (or a typed deferral).
@@ -371,7 +371,7 @@ class WatchSession:
         truth = block.block
         if truth.unscaled != "no" or truth.scale is None or truth.scale <= 0.0:
             return (block, 0)
-        return corrected_gradient_block(block, float(truth.scale))
+        return corrected_grad_block(block, float(truth.scale))
 
     def _drain_events(self, block: CommittedBlock) -> None:
         """Serialize check findings from the shared event stream (chassis).
@@ -858,8 +858,8 @@ class WatchSession:
                         continue
                     spine = spine_result_from_vector(spine_vector(tensor).cpu(), "float64")
                     if family == "gradients" and derive_scale is not None:
-                        spine = correct_spine(spine, float(derive_scale))
-                    for statistic, value in spine_scalars(spine).items():
+                        spine = correct_running_stats(spine, float(derive_scale))
+                    for statistic, value in running_stats_scalars(spine).items():
                         scalars.append(
                             ScalarPoint(self.grammar.data(family, statistic, leaf), last, value)
                         )
@@ -1038,14 +1038,14 @@ def _validate_signals(
             )
         if example_input is None:
             raise WatchConfigError(
-                "Module-tier activations need example_input= at attach: the "
+                "Module-tier activations need inputs= at attach: the "
                 "one real discovery forward (run in the model's CURRENT "
                 "mode) is what catalogs sites, validates the selector "
                 "against reality, and prices the plan before your loop "
                 "spends time.",
                 code="watch_signals_invalid",
                 signals=requested,
-                remedy="Pass example_input=<a real batch> (tuple/tensor).",
+                remedy="Pass inputs=<a real batch> (tuple/tensor).",
             )
     return requested
 
@@ -1062,7 +1062,7 @@ def watch(
     hist_every: int | None = None,
     name: str | None = None,
     namespace: str | None = None,
-    example_input: Any = None,
+    inputs: Any = None,
     grain: str | None = None,
     descriptor: HistogramDescriptor | None = None,
     budgets: Mapping[str, int] | None = None,
@@ -1112,12 +1112,12 @@ def watch(
     namespace:
         Tag re-rooting remedy for layout collisions in a shared sink
         (memo 3.4).
-    example_input:
+    inputs:
         Attach-time discovery batch (required for activations).
     grain:
         ``None`` (module grain) or ``"op"``: per-op activations through the
         Route-B op-tier collector, behind ``allow_forward_wrap=True``. Only
-        ``signals=("activations",)``; ``example_input=`` and ``select=``
+        ``signals=("activations",)``; ``inputs=`` and ``select=``
         required; only the first forward of a sampled step is observed.
     descriptor:
         Histogram grid override. Only when both this and ``settings`` are
@@ -1139,18 +1139,18 @@ def watch(
         Advanced C06 collector plumbing (ring capacity, output_dir, ...).
     facets:
         ``grain="op"`` only: ``{op_label: splitter}`` declaring facet slices
-        of op sites (``torchlens.observability.split_heads(n)`` slices
+        of op sites (``torchlens._observability.split_heads(n)`` slices
         attention heads); each slice is its own series under
         ``<op label>/<facet>``.
     allow_forward_wrap:
         ``grain="op"`` only: explicit consent to wrap the root module's
         forward. Attach then calibrates the wrap (plain vs wrapped forward on
-        ``example_input``, RNG and buffers restored) and discloses the cost
+        ``inputs``, RNG and buffers restored) and discloses the cost
         in ``plan_report()``, the tracker rows and one warning.
     """
 
     sinks = tuple(to) if isinstance(to, (tuple, list)) else (to,)
-    requested = _validate_signals(signals, select, example_input)
+    requested = _validate_signals(signals, select, inputs)
     validate_grain_request(grain, requested, facets, allow_forward_wrap)
     grammar = TagGrammar(name=name, namespace=namespace)
     disabled_by = WATCH_DISABLE_ENV if closed_bool_env(WATCH_DISABLE_ENV) else None
@@ -1210,7 +1210,7 @@ def watch(
         op_collector = OpGrainCollector(
             model, save=op_selector(select), facets=facets, settings=base_settings
         )
-        return _attach_op_grain(sinks, grammar, config, op_collector, example_input, budgets)
+        return _attach_op_grain(sinks, grammar, config, op_collector, inputs, budgets)
     collector = HistoryCollector(
         model,
         sites=tuple(select) if select is not None else None,
@@ -1218,8 +1218,8 @@ def watch(
         cadence=1,
         settings=base_settings,
     )
-    if example_input is not None:
-        args = example_input if isinstance(example_input, tuple) else (example_input,)
+    if inputs is not None:
+        args = inputs if isinstance(inputs, tuple) else (inputs,)
         collector.discover(*args)
     else:
         _discover_without_forward(collector)
@@ -1462,7 +1462,7 @@ def _discover_without_forward(collector: HistoryCollector) -> None:
         raise WatchConfigError(
             "Activation streams need the discovery forward; this door is parameter-streams-only.",
             code="watch_signals_invalid",
-            remedy="Pass example_input= so discover() can run.",
+            remedy="Pass inputs= so discover() can run.",
         )
     collector._catalog_param_sites()
     if not collector._sites_by_id:

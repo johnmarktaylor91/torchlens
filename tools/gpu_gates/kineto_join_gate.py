@@ -71,7 +71,7 @@ def run_cell(cell: str) -> dict[str, Any]:
     """Run one gate cell and return its JSON-able artifact."""
 
     import torchlens as tl
-    from torchlens import observability as obs
+    from torchlens import _observability as obs
 
     phase, model_name = cell.split("-", 1)
     model, inputs = _build_gpt2() if model_name == "gpt2" else _build_resnet50()

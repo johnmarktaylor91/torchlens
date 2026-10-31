@@ -636,7 +636,7 @@ def ungoverned_pair_error(
         detail = "no governed ledger window covers that writer"
     remedy = (
         "verify the artifact's provenance; a lawful pair appears in "
-        "torchlens.ecosystem.compat_window(), and a migrated artifact must "
+        "torchlens._ecosystem.compat_window(), and a migrated artifact must "
         "carry its tl_migration_provenance.json witness"
     )
     return TorchLensIOError(
@@ -732,7 +732,7 @@ def bridge_reader_remedy(artifact_kind: str, *, writer_release: str | None = Non
     return (
         "no verified bridge reader is recorded in the compatibility ledger for "
         "this format era; re-save with the release that wrote it. See "
-        "torchlens.ecosystem.compat_window() for the governed rows"
+        "torchlens._ecosystem.compat_window() for the governed rows"
     )
 
 

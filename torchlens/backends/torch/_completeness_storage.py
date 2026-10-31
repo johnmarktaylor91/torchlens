@@ -16,8 +16,8 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
+from ..._utils import _exception_notes
 from ...errors import ScalarEscapeWarning
-from ...utils import _exception_notes
 from ._tl import (
     DescriptorCompatProperty,
     get_tensor_label,
@@ -336,7 +336,7 @@ def _completeness_census_active() -> bool:
     converting a belt-witnessed escape into an unwitnessed one (false VERIFIED).
     """
 
-    from torchlens.utils._torch_compat import get_current_dispatch_mode_stack
+    from torchlens._utils._torch_compat import get_current_dispatch_mode_stack
 
     stack = get_current_dispatch_mode_stack()
     if stack is None:

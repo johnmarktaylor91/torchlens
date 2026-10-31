@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens.observability import (
+from torchlens._observability import (
     PHASES,
     PRESENCE,
     STREAMS,
@@ -163,7 +163,7 @@ class TestMerges:
             merge_observations(a, b)
 
     def test_mixed_sketch_presence_refuses(self) -> None:
-        from torchlens.observability import Histogram
+        from torchlens._observability import Histogram
 
         h = Histogram()
         h.update(torch.tensor([1.0]))

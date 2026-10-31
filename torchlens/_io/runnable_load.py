@@ -19,6 +19,7 @@ from typing import Any, cast
 import torch
 
 from .. import _state
+from .._constants import get_orig_torch_funcs
 from .._errors import _ActionableErrorMixin
 from .._input_walk import INPUT_CONTAINER_KINDS
 from .._runnable import (
@@ -90,17 +91,16 @@ from .._runnable import (
     derived_witness_completeness,
 )
 from .._runnable_state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
-from ..backends import TORCH_BACKEND_NAME
-from ..constants import get_orig_torch_funcs
-from ..errors._base import TorchLensError
-from ..intervention.types import FunctionRegistryKey
-from ..utils._callable_safety import (
+from .._utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
     is_pure_forward_callable,
     unsafe_callable_reason,
 )
-from ..utils._torch_compat import resolve_runnable_torch_alias
-from ..utils.display import identity as _module_boundary_identity
+from .._utils._torch_compat import resolve_runnable_torch_alias
+from .._utils.display import identity as _module_boundary_identity
+from ..backends import TORCH_BACKEND_NAME
+from ..errors._base import TorchLensError
+from ..intervention.types import FunctionRegistryKey
 from ._torch_symbols import torch_attr
 from .runnable_coherence import _callable_registry_contradiction
 
@@ -137,7 +137,7 @@ _ENUMERATED_TORCH_NAMESPACES = frozenset(
 _REMOVED_TORCH_CALLABLES = frozenset({"torch.gesv"})
 # TorchLens-owned synthetic ops that capture records as computational calls. The module
 # boundary mint (``_state._decorated_identity``: ``nn.Identity`` and pass-through module
-# outputs) records ``torchlens.utils.display.identity``, a pure pass-through. This is a
+# outputs) records ``torchlens._utils.display.identity``, a pure pass-through. This is a
 # closed table keyed on the exact persisted registry key and resolved by in-memory
 # reference: no artifact-selected module is ever imported.
 _TORCHLENS_SYNTHETIC_CALLABLES: Mapping[FunctionRegistryKey, tuple[str, Callable[..., Any]]] = {
@@ -145,10 +145,10 @@ _TORCHLENS_SYNTHETIC_CALLABLES: Mapping[FunctionRegistryKey, tuple[str, Callable
         "custom",
         "identity",
         "function",
-        import_path="torchlens.utils.display:identity",
-    ): ("torchlens.utils.display.identity", _module_boundary_identity),
+        import_path="torchlens._utils.display:identity",
+    ): ("torchlens._utils.display.identity", _module_boundary_identity),
 }
-# Canonical copy lives in ``torchlens.utils._callable_safety`` so the capture-side
+# Canonical copy lives in ``torchlens._utils._callable_safety`` so the capture-side
 # keyer, this resolver, and the security gate's recognized-operator predicate can
 # never drift apart on the safe pure-read property surface.
 _SAFE_TENSOR_PROPERTY_NAMES = _PURE_TENSOR_PROPERTY_NAMES

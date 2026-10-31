@@ -20,13 +20,13 @@ import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._io import ArtifactSchemaAgeWarning
 from torchlens._io.prerelease import activate_prerelease_fields
-from torchlens.errors._base import TorchLensWarning
-from torchlens.postprocess._grouping_stamp import (
+from torchlens._postprocess._grouping_stamp import (
     GROUPING_POLICY_SCHEMA,
     build_grouping_policy_stamp,
     degraded_grouping_policy_stamp,
     validate_grouping_policy_stamp,
 )
+from torchlens.errors._base import TorchLensWarning
 
 
 def _tiny_trace(**kwargs) -> tl.Trace:

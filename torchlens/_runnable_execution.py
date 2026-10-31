@@ -34,6 +34,16 @@ from . import (
     _state,
 )
 from ._io._torch_symbols import torch_attr
+from ._ir.container import (
+    CONTAINER_KIND_CAPABILITIES,
+    ContainerReconstructionError,
+    ContainerSpec,
+    _reconstruction_would_substitute_plain,
+    namedtuple_type_can_carry_instance_state,
+    rebuild_container_from_spec,
+    reconstruction_is_lossy_by_type,
+    resolve_container_type,
+)
 from ._runnable import (
     NONDETERMINISTIC_SOURCE_VOCABULARY,
     ActivationPayloadLayerDescriptor,
@@ -95,28 +105,9 @@ from ._split_rebind import (
     rebind_function as _rebind_function,
     rebind_lru_cache as _rebind_lru_cache,
 )
-from .errors import (
-    NumericAttestationError,
-    PathDivergenceError,
-    ReattachError,
-    RunCapabilityUnavailableError,
-    RunPreconditionError,
-    RuntimeSignatureDriftError,
-)
-from .intervention.replay import _CallConeNode, _walk_call_cone
-from .ir.container import (
-    CONTAINER_KIND_CAPABILITIES,
-    ContainerReconstructionError,
-    ContainerSpec,
-    _reconstruction_would_substitute_plain,
-    namedtuple_type_can_carry_instance_state,
-    rebuild_container_from_spec,
-    reconstruction_is_lossy_by_type,
-    resolve_container_type,
-)
-from .utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
-from .utils.alias_footprint import touched_bytes_relation
-from .utils.rng import (
+from ._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
+from ._utils.alias_footprint import touched_bytes_relation
+from ._utils.rng import (
     aten_qualname_is_seeded_rng,
     deterministic_fill_governs,
     qualname_is_uninit_growth_resize,
@@ -127,6 +118,15 @@ from .utils.rng import (
     snapshot_host_rng,
     uninit_new_call_is_size_form,
 )
+from .errors import (
+    NumericAttestationError,
+    PathDivergenceError,
+    ReattachError,
+    RunCapabilityUnavailableError,
+    RunPreconditionError,
+    RuntimeSignatureDriftError,
+)
+from .intervention.replay import _CallConeNode, _walk_call_cone
 
 _RUN_FORK_COUNTER = count(1)
 

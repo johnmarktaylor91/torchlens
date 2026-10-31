@@ -19,7 +19,7 @@ consumers read instead of re-deriving their own joins:
 - ``changed``            joined, both payloads retained, delta nonzero
 
 Pairing authority is the shipped guarded site join
-(:mod:`torchlens.postprocess._site_join`): ``corroborated`` and
+(:mod:`torchlens._postprocess._site_join`): ``corroborated`` and
 ``positional`` verdicts admit comparison, refused verdicts become
 ``unresolved`` rows, and labels never enter the join key (leverage D-2).
 The report is SESSION-ONLY and never persisted. Every spelling here is
@@ -257,7 +257,7 @@ def diff_report(subject: Any, reference: Any) -> DifferentialReport:
             code="differential_subject_is_reference",
             remedy="pass two different captures",
         )
-    from .postprocess._site_join import (
+    from ._postprocess._site_join import (
         join_site_profiles,
         occurrence_coordinates,
         site_profile,

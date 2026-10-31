@@ -1,7 +1,7 @@
 """Round-25 container-reconstruction regression: SEC1 + F1/C1 + SEC2.
 
 Three findings in the r24 non-invoking output-container rebuild
-(``torchlens/ir/container.py``):
+(``torchlens/_ir/container.py``):
 
 * SEC1 (HIGH, security): ``object.__setattr__`` HONORS data descriptors, so populating a
   captured field/key whose name is a settable ``property`` (or any data descriptor) fired
@@ -35,9 +35,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import PathFaithfulness
-from torchlens._runnable_execution import _container_spec_reconstruction_lossy
-from torchlens.ir.container import (
+from torchlens._ir.container import (
     ContainerSpec,
     _container_type_is_admissible,
     _model_output_has_foreign_init,
@@ -46,6 +44,8 @@ from torchlens.ir.container import (
     reconstruction_is_lossy,
     reconstruction_is_lossy_by_type,
 )
+from torchlens._runnable import PathFaithfulness
+from torchlens._runnable_execution import _container_spec_reconstruction_lossy
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(

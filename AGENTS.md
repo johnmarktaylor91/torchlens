@@ -32,10 +32,10 @@ TorchLens supports torch 2.1 -> 2.12+ for eager torch capture. The declared floo
 declared support floor.
 
 Every fragile torch-private-API probe or cross-version torch signature must route through
-`torchlens/utils/_torch_compat.py`. Feature-detect the runtime capability; do not parse
+`torchlens/_utils/_torch_compat.py`. Feature-detect the runtime capability; do not parse
 `torch.__version__` for behavioral branching. Every graceful degradation must flip a named
 `HAS_*` capability flag and be visible through the torch capability snapshot in
-`torchlens.utils.doctor()` / `torchlens.compat.report()`.
+`torchlens._utils.doctor()` / `torchlens.compat.report()`.
 
 ## Model Menagerie and the classics corpus
 

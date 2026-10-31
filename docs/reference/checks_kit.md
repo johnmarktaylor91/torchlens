@@ -2,7 +2,7 @@
 
 > Every spelling on this page is DOCUMENTED-UNSTABLE pending naming-session
 > ratification. The import spelling is `import torchlens.checks`; the one-shot
-> parameter audit is also served as `tl.debug.audit_params`. The kit is
+> parameter audit is also served as `tl._debug.audit_params`. The kit is
 > STANDALONE and CAPTURE-FREE: it constructs and runs with TorchLens capture
 > entirely off, and the step-check family runs on `torch.compile`'d models.
 
@@ -163,7 +163,7 @@ or inferred evidence never produces an exact pass.
 ```python
 import torchlens.checks as checks
 
-audit = checks.audit_params(model)          # also: tl.debug.audit_params(model)
+audit = checks.audit_params(model)          # also: tl._debug.audit_params(model)
 print(audit)                                # notebook-style summary
 assert not audit.findings                    # healthy fresh model
 ```

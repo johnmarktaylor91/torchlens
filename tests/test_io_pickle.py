@@ -14,7 +14,7 @@ from torchlens import Trace, trace as trace_fn
 from torchlens._io import TLSPEC_VERSION, TorchLensIOError
 from torchlens._io.rehydrate import rehydrate_trace
 from torchlens._io.scrub import scrub_for_save
-from torchlens.quantities import Bytes
+from torchlens._quantities import Bytes
 
 
 class _TinyIOModel(nn.Module):

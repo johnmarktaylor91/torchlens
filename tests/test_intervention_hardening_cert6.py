@@ -137,7 +137,7 @@ def test_fork_shares_optimizer_aliasing_live_params() -> None:
 def test_fork_policy_shares_optimizer_but_keeps_it_off_the_display_field_order() -> None:
     """MAJOR-1: ``_optimizer`` has a SHARE policy yet stays out of FIELD_ORDER."""
 
-    from torchlens.constants import MODEL_LOG_FIELD_ORDER
+    from torchlens._constants import MODEL_LOG_FIELD_ORDER
     from torchlens.intervention.types import (
         MODEL_LOG_FIELD_FORK_POLICY,
         ForkFieldPolicy,

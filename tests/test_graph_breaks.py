@@ -7,8 +7,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.debug import GraphBreaksNormalizationError, GraphBreaksUnavailableError
-from torchlens.utils import _torch_compat
+from torchlens._debug import GraphBreaksNormalizationError, GraphBreaksUnavailableError
+from torchlens._utils import _torch_compat
 
 
 class _ExplicitBreakModel(nn.Module):
@@ -60,7 +60,7 @@ class _BreakFreeModel(nn.Module):
 def test_graph_breaks_reports_source_and_safe_correlation() -> None:
     """A guaranteed break retains its user source and correlation accounting."""
 
-    report = tl.debug.graph_breaks(_ExplicitBreakModel(), torch.ones(2, 3))
+    report = tl.report.graph_breaks(_ExplicitBreakModel(), torch.ones(2, 3))
 
     assert len(report.breaks) >= 1
     graph_break = report.breaks[0]
@@ -77,7 +77,7 @@ def test_graph_breaks_reports_source_and_safe_correlation() -> None:
 def test_graph_breaks_break_free_model_is_empty() -> None:
     """A fully traceable model returns an empty break list."""
 
-    report = tl.debug.graph_breaks(_BreakFreeModel(), torch.ones(2, 3))
+    report = tl.report.graph_breaks(_BreakFreeModel(), torch.ones(2, 3))
 
     assert report.breaks == ()
 
@@ -90,7 +90,7 @@ def test_graph_breaks_unavailable_capability_is_typed(
     monkeypatch.setattr(_torch_compat, "HAS_DYNAMO_EXPLAIN", False)
 
     with pytest.raises(GraphBreaksUnavailableError, match="unavailable") as exc_info:
-        tl.debug.graph_breaks(_BreakFreeModel(), torch.ones(2, 3))
+        tl.report.graph_breaks(_BreakFreeModel(), torch.ones(2, 3))
     assert exc_info.value.code == "graph_breaks_unavailable"
 
 
@@ -103,5 +103,5 @@ def test_graph_breaks_unknown_runtime_shape_is_typed(
     monkeypatch.setattr(_torch_compat, "run_dynamo_explain", lambda *_args, **_kwargs: object())
 
     with pytest.raises(GraphBreaksNormalizationError, match="unsupported") as excinfo:
-        tl.debug.graph_breaks(_BreakFreeModel(), torch.ones(2, 3))
+        tl.report.graph_breaks(_BreakFreeModel(), torch.ones(2, 3))
     assert excinfo.value.fields["code"] == "graph_breaks_normalization_failed"

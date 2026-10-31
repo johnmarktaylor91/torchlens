@@ -79,7 +79,7 @@ def first_input_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
     Falls back to resolving the input through the op graph -- the same fallback
     ``module_input_op_spec`` already implements -- when ``call.forward_args`` is
     empty/``None``. Finalization ("GC-11",
-    ``torchlens/postprocess/finalization.py``) unconditionally nulls
+    ``torchlens/_postprocess/finalization.py``) unconditionally nulls
     ``forward_args``/``forward_kwargs`` for every ``module_identity_mode`` except
     ``pytree_module``/``object_module`` -- i.e. for the standard/default
     ``torch_module`` mode used by ordinary ``nn.Module`` tracing -- regardless of
@@ -214,7 +214,7 @@ def _primary_output_label(module: Any, call: Any) -> str | None:
     paths = tuple(getattr(call, "output_paths", ()) or ())
     if not paths:
         return None
-    from ...data_classes._module_role_hints import multi_output_role_from_path
+    from ..._data_classes._module_role_hints import multi_output_role_from_path
 
     primary_role = multi_output_role_from_path(paths[0], 0)
     if primary_role is None:

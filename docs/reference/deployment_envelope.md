@@ -21,7 +21,7 @@ small quantized MLPs). "Verified" means exactly what the named tests assert.
 | `accelerate.disk_offload` / `accelerate.cpu_offload` (execution on CPU) | exact op-label parity with the plain twin (zero hook-infrastructure ops), materialized weights attribute to their prep-time `Param` records, captured logits equal the bare forward, forward replay validation passes |
 | bitsandbytes `Linear8bitLt` / `Linear4bit` on CPU | captured outputs equal the bare forward; degradation DISCLOSED (see below), never silent |
 | PEFT/LoRA (`peft.get_peft_model`) | output parity, adapter modules in the hierarchy, adapter params attributed at their addresses, forward replay validation passes |
-| post-hoc `tl.debug.walk_grad_fn` / `sketch_grad_fn` | a real GPT-2 cross-entropy loss graph walks completely with named parameter leaves; structure-only legend on every render |
+| post-hoc `tl.report.walk_grad_fn` / `sketch_grad_fn` | a real GPT-2 cross-entropy loss graph walks completely with named parameter leaves; structure-only legend on every render |
 
 The compatibility report (`tl.compat.report(model, x)`) reflects the same
 ledger: single-execution-device dispatch, offload, quantization, and PEFT

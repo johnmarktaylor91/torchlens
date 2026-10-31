@@ -20,8 +20,8 @@ from typing import Any
 import torch
 
 from ..._errors import InvalidArgumentError
+from ..._utils.display import atomic_write_text
 from ...errors._base import TorchLensError
-from ...utils.display import atomic_write_text
 from ._collection import to_model_explorer_dict
 from ._ids import LEGACY_ID_PREFIX
 from ._validate import validate_model_explorer_payload

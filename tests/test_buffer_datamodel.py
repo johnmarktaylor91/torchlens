@@ -13,13 +13,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch import buffer_writes
-from torchlens.data_classes.cleanup import (
+from torchlens._data_classes.cleanup import (
     _scrub_layer_entry_conditional_fields,
     _scrub_per_op_equivalence_lists,
 )
+from torchlens._postprocess.labeling import _replace_layer_names_for_layer_entry
+from torchlens.backends.torch import buffer_writes
 from torchlens.errors import TraceNotReproducibleWarning
-from torchlens.postprocess.labeling import _replace_layer_names_for_layer_entry
 
 TensorFactory = Callable[[], torch.Tensor]
 
@@ -892,7 +892,7 @@ def test_buffer_dedup_avoids_pairwise_tensor_compares_on_distinct_values() -> No
     num_passes = 12
     model = _LoopBN(num_passes).train()
 
-    from torchlens.postprocess import control_flow
+    from torchlens._postprocess import control_flow
 
     calls = {"n": 0}
     original_identical = control_flow._buffer_values_identical

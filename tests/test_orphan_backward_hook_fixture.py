@@ -35,7 +35,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.ir.events import BackwardCoverageGap, GradFnDiscovered, GradFnFired
+from torchlens._ir.events import BackwardCoverageGap, GradFnDiscovered, GradFnFired
 
 
 class _TwoHead(nn.Module):

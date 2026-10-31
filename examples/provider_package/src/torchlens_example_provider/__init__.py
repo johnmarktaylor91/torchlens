@@ -2,7 +2,7 @@
 
 The ``torchlens.export_targets`` entry point in ``pyproject.toml`` names
 :func:`export_target`, a zero-arg factory. TorchLens never imports this
-module during discovery; ``torchlens.ecosystem.plugins.activate`` imports it,
+module during discovery; ``torchlens._ecosystem.plugins.activate`` imports it,
 calls the factory once and registers the returned row through the export
 door. The module needs nothing from TorchLens at import time.
 """

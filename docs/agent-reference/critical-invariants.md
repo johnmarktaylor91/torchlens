@@ -192,7 +192,7 @@
     containers carrying extra per-instance state refuse at runnable save
     (`missing_output_container_contract`; one per-kind capability table --
     `CONTAINER_KIND_CAPABILITIES` -- governs capture proof, save refusal, and forged-flag-proof
-    load recompute; `tl.register_container` gains an explicit `state_complete=` declaration).
+    load recompute; `tl.types.register_container` gains an explicit `state_complete=` declaration).
     Host nondeterminism outside the two replayable global engines (RNG instances incl.
     outside-held NumPy Generators via a chained `sys`/`threading.setprofile` classifier + a cheap
     model-attribute state digest (no process-wide gc scan), bare

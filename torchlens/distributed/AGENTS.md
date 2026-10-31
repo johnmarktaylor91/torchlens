@@ -2,7 +2,7 @@
 
 C0 correlation/evidence layer for merge-ranks: arming, group-lifetime identity, and
 the membership-lineage audit. Imported lazily as `tl.distributed` and deliberately
-not in the top-level `__all__` (matching `tl.debug`). Explicit `torch.distributed`
+not in the top-level `__all__` (matching `tl._debug`). Explicit `torch.distributed`
 collectives inside a traced forward become first-class boundary nodes; the boundary
 op capture itself lives in `backends/torch/collectives.py`.
 
@@ -34,17 +34,17 @@ op capture itself lives in `backends/torch/collectives.py`.
   unknown collective refuses arming rather than passing uncaptured.
 - `VETTED_NAMESPACE_SNAPSHOTS` is a reviewed census, one row per torch build that
   has had a capture-fidelity review (currently only `"torch-2.13"`); extending it
-  is a reviewed change, never a routine compat patch. `has_vetted_snapshot()` is
+  is a reviewed change, never a routine compat patch. `is_vetted_build()` is
   the companion read-only capability probe (layer 1 only, never raises): it
   answers whether THIS runtime matches a row, so callers (including tests) can
   know in advance whether `arm()` can succeed instead of branching on the raised
-  exception. It is exported as `tl.distributed.has_vetted_snapshot` and documented
-  there; it lives here (not `torchlens/utils/_torch_compat.py`) because it checks
+  exception. It is exported as `tl.distributed.is_vetted_build` and documented
+  there; it lives here (not `torchlens/_utils/_torch_compat.py`) because it checks
   against our own census table, not a generic torch API capability. F1 ruling
   2026-10-01: on an unvetted torch, the gloo/distributed/merge-ranks test suites
   assert the typed `UncapturedCollectiveOpError` fail-closed refusal (gated
-  `skipif(has_vetted_snapshot())`) instead of running the full arming tests
-  (gated `skipif(not has_vetted_snapshot())`); adding a census row for a new torch
+  `skipif(is_vetted_build())`) instead of running the full arming tests
+  (gated `skipif(not is_vetted_build())`); adding a census row for a new torch
   minor is a separate, reviewed capture-fidelity sprint, not a side effect of a CI
   fix.
 

@@ -21,10 +21,10 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load_file
 
+from .._data_classes._state_adapter import state_items
+from .._data_classes.trace import Trace
+from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
 from ..backends import BackendRuntimeCompatibilityError
-from ..data_classes._state_adapter import state_items
-from ..data_classes.trace import Trace
-from ..ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
 from . import BlobRef, FieldPolicy, PayloadLoadHints, TorchLensIOError, prerelease as _prerelease
 from ._torch_symbols import torch_attr
 from .accessor_rebuild import rebuild_trace_accessors
@@ -194,7 +194,7 @@ def rehydrate_trace(
         # An artifact written before the root call counted among saved module
         # calls stores a count without it; re-derive the stored scalar from the
         # loaded records so it matches ``saved_module_calls``.
-        from ..postprocess.saved_summary import refresh_saved_module_call_count
+        from .._postprocess.saved_summary import refresh_saved_module_call_count
 
         refresh_saved_module_call_count(trace)
 
@@ -223,7 +223,7 @@ def _bind_conditional_arms(trace: Trace) -> None:
         Rehydrated trace whose runtime-only conditional bindings should be restored.
     """
 
-    from ..data_classes.trace import ConditionalAccessor
+    from .._data_classes.trace import ConditionalAccessor
 
     accessor = getattr(trace, "conditionals", None)
     if not isinstance(accessor, ConditionalAccessor):

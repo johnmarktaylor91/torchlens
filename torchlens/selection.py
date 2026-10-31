@@ -50,7 +50,7 @@ import torch
 from .errors._base import ConfigurationError, TorchLensError
 
 if TYPE_CHECKING:
-    from .data_classes.trace import Trace
+    from ._data_classes.trace import Trace
 
 __all__ = [
     "ResolvedSelection",
@@ -368,7 +368,7 @@ def _graph_entry_order(trace: Any, entries: Iterable[SiteEntry]) -> tuple[SiteEn
     site-key sort, appended after placed entries deterministically.
     """
 
-    from .utils.fail_open import fail_open
+    from ._utils.fail_open import fail_open
 
     placed = _canonical_entry_order(entries)
 
@@ -616,7 +616,7 @@ class _BoxTerm:
 
 @dataclass(frozen=True)
 class _GradientTerm:
-    """AST leaf lifting a ``GradientReceptiveField`` region into a Selection."""
+    """AST leaf lifting a ``GradReceptiveField`` region into a Selection."""
 
     gradient_rf: Any
 
@@ -1623,7 +1623,7 @@ def _selection_from_box(box: Any) -> Selection:
 
 
 def _selection_from_gradient(gradient_rf: Any) -> Selection:
-    """Lift a GradientReceptiveField as an exact empirical ACT term."""
+    """Lift a GradReceptiveField as an exact empirical ACT term."""
 
     return Selection(_GradientTerm(gradient_rf=gradient_rf), kind="ACT")
 

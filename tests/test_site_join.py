@@ -27,7 +27,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.postprocess._site_join import (
+from torchlens._postprocess._site_join import (
     FoldRow,
     _SiteJoinVerdict,
     fold_rows_from_trace,

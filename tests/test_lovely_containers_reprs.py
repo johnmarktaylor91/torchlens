@@ -113,7 +113,7 @@ def test_partial_trace_badge_first() -> None:
 
     with pytest.raises(Exception) as exc_info:
         tl.trace(_Boom(), torch.randn(2, 2))
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     line = repr(partial)
     assert line.startswith("PartialTrace [partial]")
     card = str(partial)

@@ -96,7 +96,7 @@ image_trace = tl.trace(
 )
 image_trace.model_profile
 image_trace.output_table(top_n=5)
-tl.repgeom.mds_evolution(image_trace, save=mds_layers, min_n=8)
+tl.repgeom.mds_evolution(image_trace, save=mds_layers, min_stimuli=8)
 tl.repgeom.rdm_evolution(image_trace, save=mds_layers)
 tl.viz.feature_map_evolution(image_trace, save=mds_layers)
 tl.repgeom.scree_evolution(image_trace, save=mds_layers)

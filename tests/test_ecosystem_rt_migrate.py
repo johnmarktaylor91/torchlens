@@ -20,10 +20,10 @@ import pytest
 from _oracle_env import expect_bundle_minor_version_mismatch
 
 import torchlens as tl
+from torchlens._ecosystem import migrate
+from torchlens._ecosystem.migrate import _ABSENT_FAMILIES_BY_TARGET
 from torchlens._io import TorchLensIOError
 from torchlens._io.compat_ledger import MIGRATION_WITNESS_FILENAME, read_migration_witness
-from torchlens.ecosystem import migrate
-from torchlens.ecosystem.migrate import _ABSENT_FAMILIES_BY_TARGET
 
 GOLDENS_DIR = Path(__file__).parent / "release_goldens"
 CORPUS_PATH = GOLDENS_DIR / "genuine_release_artifacts.tar.gz"
@@ -220,7 +220,7 @@ def test_broken_witness_refuses_typed(corpus_dir: Path, tmp_path: Path) -> None:
 def test_every_v1_step_declares_manifest_level() -> None:
     """The step-protocol guard: no v1 step quietly claims STATE level."""
 
-    from torchlens.ecosystem.migrate import _plan_steps
+    from torchlens._ecosystem.migrate import _plan_steps
 
     for step in _plan_steps(6):
         assert step.level == "manifest"
@@ -233,7 +233,7 @@ def test_migrate_source_has_no_execution_imports() -> None:
 
     import importlib
 
-    migrate_module = importlib.import_module("torchlens.ecosystem.migrate")
+    migrate_module = importlib.import_module("torchlens._ecosystem.migrate")
     source = Path(migrate_module.__file__).read_text(encoding="utf-8")
     for forbidden in ("from ..capture", "from ..backends", "from ..semantic", "import torch\n"):
         assert forbidden not in source, forbidden

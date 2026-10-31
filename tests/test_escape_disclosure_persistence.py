@@ -94,7 +94,7 @@ def test_deferred_storage_key_never_touches_fake_tensor_storage() -> None:
 
     fake_tensor_mode = pytest.importorskip("torch._subclasses.fake_tensor").FakeTensorMode
 
-    from torchlens.utils.tensor_utils import _deferred_storage_key
+    from torchlens._utils.tensor_utils import _deferred_storage_key
 
     with fake_tensor_mode() as mode:
         fake = mode.from_tensor(torch.randn(2, 2))

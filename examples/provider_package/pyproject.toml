@@ -1,7 +1,7 @@
 # An installable example TorchLens provider distribution.
 #
 # It declares one entry point in an approved TorchLens group. Installing it
-# runs no provider code: torchlens.ecosystem.plugins.discover() reads this
+# runs no provider code: torchlens._ecosystem.plugins.discover() reads this
 # declaration from the installed metadata, and only an explicit
 # activate("torchlens-example-provider") imports the module and commits the
 # factory's result through the export-target door.

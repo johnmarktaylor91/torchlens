@@ -199,7 +199,7 @@ class ParameterArgumentReferences:
         target = self.retention_device(tensor)
         if target is None:
             return None
-        from .utils.tensor_utils import _clone_tensor_payload
+        from ._utils.tensor_utils import _clone_tensor_payload
 
         moved = cast(
             torch.Tensor,

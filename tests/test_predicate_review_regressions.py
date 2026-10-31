@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir.selector_eval import ensure_supported, selector_from_spec
 from torchlens.intervention.errors import (
     SelectorCapabilityError,
     SiteResolutionError,
@@ -29,7 +30,6 @@ from torchlens.intervention.selectors import (
     SelectorKind,
 )
 from torchlens.intervention.types import TargetSpec
-from torchlens.ir.selector_eval import ensure_supported, selector_from_spec
 
 
 class TinyConvNet(nn.Module):
@@ -410,7 +410,7 @@ def test_site_upfront_refusal_set_matches_evaluator_contract() -> None:
     short-circuiting sibling.
     """
 
-    from torchlens.ir.selector_eval import _evaluate_subject
+    from torchlens._ir.selector_eval import _evaluate_subject
 
     site = SimpleNamespace(
         layer_label="relu_1_1", lookup_keys=(), func_name="relu", layer_type="relu"
@@ -499,7 +499,7 @@ def test_strict_rejects_nested_where(conv_trace: Any) -> None:
 def test_capture_module_fallback_for_nontorch_backend() -> None:
     """Non-torch capture subjects fall back to the single ``module`` candidate."""
 
-    from torchlens.ir.selector_eval import evaluate
+    from torchlens._ir.selector_eval import evaluate
 
     subject = SimpleNamespace(
         output_of_module_calls=(),

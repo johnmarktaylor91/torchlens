@@ -1,6 +1,6 @@
-# Transformer pictures (`torchlens.tviz`)
+# Transformer pictures (`torchlens.transformer`)
 
-`torchlens.tviz` renders the transformer-visualization picture families --
+`torchlens.transformer` renders the transformer-visualization picture families --
 token-labeled attention heatmaps and grids, the attention atlas, colored-token
 strips, logit-lens prediction pictures, per-token loss/entropy strips, the
 term-complete score decomposition -- plus the one picture the dormant
@@ -8,7 +8,7 @@ incumbents (CircuitsVis, BertViz, Ecco, inspectus) never shipped: attention
 annotated with **measured** ablation effects.
 
 Every spelling is DOCUMENTED-UNSTABLE pending the naming session. Import as
-`import torchlens.tviz` (the root-name budget is frozen; a root spelling
+`import torchlens.transformer` (the root-name budget is frozen; a root spelling
 awaits the registration sweep). Display records are session-only values and
 are never persisted into `.tlspec` artifacts.
 
@@ -66,7 +66,7 @@ exact wording "zero and masked positions are not distinguished".
 
 ```python
 import torchlens as tl
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 
 log = tl.trace(model, input_ids)  # eager attention captures the real pattern
 views = tviz.attention_views(log, tokens=tokens)
@@ -231,7 +231,7 @@ recon_err = float(nmf.reconstruction_err_)
 #    factor that does not reappear across seeds is noise, not structure.
 
 # 4. Render: one strip row per factor, disclosures in the footer.
-import torchlens.tviz as tviz
+import torchlens.transformer as tviz
 rows = tuple(
     tviz.TokenScoreRow(label=f"factor {k}", scores=tuple(weights[:, k].tolist()))
     for k in range(rank)
@@ -267,6 +267,6 @@ head's expanded copy.
 
 ## Refusal codes
 
-All tviz refusals ride `torchlens.tviz.TvizError` with a stable
+All tviz refusals ride `torchlens.transformer.TvizError` with a stable
 `fields["code"]`; the contract rows live in
 `docs/reference/error_refusal_contract.md`.

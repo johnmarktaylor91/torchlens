@@ -19,7 +19,7 @@ the run path -- the 14 Python-level forward dunders on the gated root ``torch._t
 descriptor path. Denying those would break replay (the LOCKED zero-forward-regression +
 validation-tripwire rules).
 
-The fix (``torchlens/utils/_callable_safety.py``) is a POSITIVE ``_ALLOWED_FORWARD_DUNDERS``
+The fix (``torchlens/_utils/_callable_safety.py``) is a POSITIVE ``_ALLOWED_FORWARD_DUNDERS``
 allowlist checked by a DEDICATED helper (``_is_denied_forward_dunder_name``) wired into
 ``is_pure_forward_callable`` BEFORE every module branch -- so it covers BOTH the module-less
 ``_is_tensor_method_descriptor`` path AND the gated-root ``_is_recognized_operator`` path.
@@ -55,11 +55,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
-from torchlens.backends.torch.wrappers import wrap_torch
-from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_import_ref
-from torchlens.options import CaptureOptions
-from torchlens.utils._callable_safety import (
+from torchlens._utils._callable_safety import (
     _ALLOWED_FORWARD_DUNDERS,
     _is_denied_forward_dunder_name,
     _is_side_effecting_callable_name,
@@ -67,6 +63,10 @@ from torchlens.utils._callable_safety import (
     _unwrap_capture_wrapper,  # mechanical capture-unwrap only; NOT the gate decision
     is_pure_forward_callable,
 )
+from torchlens.backends.torch.wrappers import wrap_torch
+from torchlens.intervention.errors import UntrustedCallableError
+from torchlens.intervention.resolver import resolve_import_ref
+from torchlens.options import CaptureOptions
 
 # Install the torch wrappers so resolved callables mirror the live (wrapped) state: the
 # gate must unwrap before deciding, exactly as the run path does.

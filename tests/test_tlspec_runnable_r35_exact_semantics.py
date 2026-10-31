@@ -293,7 +293,7 @@ def test_r35_large_int32_structseq_replays_verified(tmp_path: Path) -> None:
 def test_r35_structseq_helper_is_repr_independent() -> None:
     """Unit rows: exact fields for every family; repr text cannot influence."""
 
-    from torchlens.utils._torch_compat import torch_structseq_field_names
+    from torchlens._utils._torch_compat import torch_structseq_field_names
 
     x = torch.randn(6, 7).to(torch.float64)
     assert torch_structseq_field_names(torch.max(x, dim=1)) == ("values", "indices")
@@ -310,7 +310,7 @@ def test_r35_structseq_helper_is_repr_independent() -> None:
     # No repr involvement: the module source must not parse repr for fields.
     import inspect
 
-    from torchlens.utils import _torch_compat
+    from torchlens._utils import _torch_compat
 
     helper_source = inspect.getsource(_torch_compat.torch_structseq_field_names)
     assert "repr(" not in helper_source

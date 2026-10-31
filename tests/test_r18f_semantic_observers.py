@@ -198,9 +198,12 @@ def test_backward_record_span_direction_enforced() -> None:
     torch.manual_seed(12)
     model = _LinearRelu()
     x = torch.randn(2, 3)
-    tap = tl.tap(tl.grad_fn(name="relu"), direction="backward")
+    tap = tl.observers.tap(tl.grad_fn(name="relu"), direction="backward")
 
-    with tl.span("fwd_only", direction="forward"), tl.span("bwd_ok", direction="backward"):
+    with (
+        tl.observers.span("fwd_only", direction="forward"),
+        tl.observers.span("bwd_ok", direction="backward"),
+    ):
         trace = tl.trace(
             model, x, capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap)
         )
@@ -219,9 +222,12 @@ def test_forward_record_span_direction_enforced() -> None:
     torch.manual_seed(12)
     model = _LinearRelu()
     x = torch.randn(2, 3)
-    tap = tl.tap(tl.func("relu"), direction="forward")
+    tap = tl.observers.tap(tl.func("relu"), direction="forward")
 
-    with tl.span("bwd_only", direction="backward"), tl.span("fwd_ok", direction="forward"):
+    with (
+        tl.observers.span("bwd_only", direction="backward"),
+        tl.observers.span("fwd_ok", direction="forward"),
+    ):
         tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap))
 
     assert tap.records
@@ -242,7 +248,7 @@ def test_forward_tap_site_label_is_public_not_raw() -> None:
     torch.manual_seed(0)
     model = _LinearRelu()
     x = torch.randn(2, 3)
-    tap = tl.tap(tl.func("relu"))
+    tap = tl.observers.tap(tl.func("relu"))
 
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap))
 

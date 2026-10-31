@@ -11,19 +11,19 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ..fastlog.exceptions import PredicateError
-from ..fastlog.types import CaptureSpec, ModuleStackFrame, RecordContext
-from ..intervention.predicates import as_intervention_decision
-from ..intervention.selectors import BaseSelector
-from ..intervention.types import InterventionDecision
-from ..ir.predicate import RetroactiveCaptureDecision
-from ..ir.selector_eval import (
+from .._ir.predicate import RetroactiveCaptureDecision
+from .._ir.selector_eval import (
     contains_followed_by,
     module_union_addresses,
     module_union_matches,
     selector_contains_kind,
     split_followed_by_conjunction,
 )
+from ..fastlog.exceptions import PredicateError
+from ..fastlog.types import CaptureSpec, ModuleStackFrame, RecordContext
+from ..intervention.predicates import as_intervention_decision
+from ..intervention.selectors import BaseSelector
+from ..intervention.types import InterventionDecision
 
 if TYPE_CHECKING:
     from ..fastlog.options import RecordingOptions

@@ -250,8 +250,8 @@ def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
     assert excluded == {
         "tests/classics_corpus/models",
         "tests/release_goldens",
-        "torchlens/data_classes/_schema_bindings.py",
-        "torchlens/ir/op_record_manifest.py",
+        "torchlens/_data_classes/_schema_bindings.py",
+        "torchlens/_ir/op_record_manifest.py",
     }
     assert "--exclude" not in lint_text
 

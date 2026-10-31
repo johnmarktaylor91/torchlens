@@ -56,7 +56,7 @@ _NEW_FILE_LINE_CAP = 2000
 #: next 50-line step above their post-wave sizes -- the growth is the wave's
 #: reviewed defensive fixes (typed refusals, R56 teardown guards, provenance
 #: sentinels), not drift. tensor_utils.py instead SHRANK below the unledgered
-#: cap by splitting the r37 INV-2 alias engine into utils/alias_footprint.py.
+#: cap by splitting the r37 INV-2 alias engine into _utils/alias_footprint.py.
 #: 2026-08-16 fixwave-6 integration settle: 10 ceilings re-stepped to the next
 #: 50 above the union-tree measurement -- this ledger was frozen on the
 #: fix/infra-r7 lane while the other fixwave-6 lanes (capture/iomerged/
@@ -78,14 +78,14 @@ _NEW_FILE_LINE_CAP = 2000
 #: kickoff 75439a67 (the debloat pass's target to return to or beat):
 #:   _io/bundle.py 4450 | backends/torch/backward.py 3800
 #:   bundle/__init__.py 2450 | capture/trace.py 2200
-#:   data_classes/trace.py 3750 | options.py 2425 | user_funcs.py 3900
+#:   _data_classes/trace.py 3750 | options.py 2425 | user_funcs.py 3900
 #:   _runnable_state.py 2700 (L4 D18 mode-aware projector + snapshot-restore)
 #:   visualization/_render_edges.py 2350 (portable rolled-edge label placement)
 #: 2026-08-16 L6 merge settle (same debt record): three more ceilings
 #: re-stepped for reviewed L6 selection-algebra / edge-substitution mass
 #: (edge boundary verdict in validation/core, tier-(ii) edge stores on Op,
 #: the v7 save boundary in _io/bundle). PRE-SPRINT BASELINE at 75439a67:
-#:   validation/core.py 5300 | data_classes/op.py 5200
+#:   validation/core.py 5300 | _data_classes/op.py 5200
 #:   (_io/bundle.py already listed above at 4450; L6 re-steps 4500 -> 4550)
 #: 2026-08-17 gov-sweep settle: the L6 edge-boundary check family moved out
 #: of validation/core into validation/_edge_boundary.py; core re-keyed
@@ -95,7 +95,7 @@ _NEW_FILE_LINE_CAP = 2000
 #: + pairing), checkpoint invocation tokens (classifier + witness + D1-D6),
 #: and the journal/scavenge/finalize implicit-close split all land in
 #: backends/torch/backward.py (3900 -> 4450); the two DROP-gated Trace fields
-#: + init/load-fill land in data_classes/trace.py (3850 -> 3900).
+#: + init/load-fill land in _data_classes/trace.py (3850 -> 3900).
 #: PRE-SPRINT BASELINES unchanged (backward.py 3800, trace.py 3750 at
 #: 75439a67); the post-features debloat pass keeps both as targets.
 #: 2026-08-17 L8 C2-recording merge settle (same debt record): three ceilings
@@ -103,7 +103,7 @@ _NEW_FILE_LINE_CAP = 2000
 #: shard-local erasure-prevention chokepoint in _io/bundle.py (4550 -> 4600),
 #: the plane-P record branch + rebinds in backends/torch/completeness_witness
 #: (2050 -> 2100), and the funcol group-resolution / wait-interposition
-#: capability probes in utils/_torch_compat.py (3450 -> 3550). PRE-SPRINT
+#: capability probes in _utils/_torch_compat.py (3450 -> 3550). PRE-SPRINT
 #: BASELINES unchanged (bundle 4450, _torch_compat 3450-eve, witness 2050-eve
 #: at 75439a67); the debloat pass keeps all three as targets.
 #: 2026-08-26 P03 fix cycle: options.py (2371, over its 2300 ceiling after the
@@ -129,7 +129,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # dedup split to _op_dedup.py (T77) lands on the merged tree alongside
     # the F10 deletions; re-keyed down to the next 50-line step above the
     # merged measurement (4794).
-    "torchlens/data_classes/op.py": 4800,
+    "torchlens/_data_classes/op.py": 4800,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -137,7 +137,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # so sys.modules-based detection missed them) land at the one
     # TORCH_RNG_SURFACE chokepoint; next 50-line step above the measured
     # 5065.
-    "torchlens/utils/rng.py": 5100,
+    "torchlens/_utils/rng.py": 5100,
     # 4600 -> 4350 (2026-08-27 C05 fix cycle): the segment descriptor/label
     # family split to _segment_descriptors.py under R43; re-keyed down to the
     # next 50-line step above the post-split measurement (4326).
@@ -249,7 +249,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # bound-method-root mass (4274) fits 4290 alone, and the F28 echo facade
     # residual (+40: the echo= entry param, docstring, and the four thin
     # snoop._entry seam calls; the lane already paid its extraction to
-    # torchlens/snoop/_entry.py at its own gate debt commit) rode the F28
+    # torchlens/_snoop/_entry.py at its own gate debt commit) rode the F28
     # branch; the union measures 4314. Next 50-line step, conscious raise
     # with both contributions named, not silent regrowth; split target
     # (trace-entry resolution vs cache vs chunking) unchanged.
@@ -317,7 +317,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # measure_host_peak_memory DROP knob and the KEEP backward_peak_memory_reason
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
-    "torchlens/data_classes/trace.py": 4050,
+    "torchlens/_data_classes/trace.py": 4050,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
@@ -404,14 +404,14 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # measured ~4995. Debloat target unchanged: 3450.
     # Held at 5000 (2026-10-06 next-release): the legacy-constructor flag
     # registration fit by moving the tensor sq_item ctypes layout mirror out to
-    # its stdlib-only sibling leaf utils/_type_sequence_slot.py (flag, probe and
+    # its stdlib-only sibling leaf _utils/_type_sequence_slot.py (flag, probe and
     # capability warning stay here); measured 4968. Debloat target: 3450.
-    "torchlens/utils/_torch_compat.py": 5000,
+    "torchlens/_utils/_torch_compat.py": 5000,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
     # wrapped-call site (before-read, OOM attempted-call row, settle); the
-    # sampler/provider live in torchlens/observe/_device_memory.py.
+    # sampler/provider live in torchlens/_observe/_device_memory.py.
     # 3300 -> 3330 (2026-08-28 F33 weightsfree): the W1-CTX slot consult in
     # the factory-injection helper + the W1-BUF-2 snapshot-carrying-call
     # fallback + the meta-safe alias-key reads; conscious raise, the 50-line
@@ -464,7 +464,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # the landed T85 train (3258 alone) unions with F20's reviewed contract
     # additions to 3301 on the merged tree; the F20-side 3350 ceiling already
     # clears the union and stays.
-    "torchlens/postprocess/_contracts.py": 3350,
+    "torchlens/_postprocess/_contracts.py": 3350,
     # 3200 -> 3250 (2026-08-29 F28 re-reconcile): merge union -- the F41
     # owner-identity source-metadata derivation (3184) fits 3200 alone, and
     # the F28 echo module-seam emits (duck-typed _echo_session reads at the
@@ -479,13 +479,13 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # _quantized_flops.py (3127 measured); the ceiling follows the file down.
     "torchlens/backends/torch/model_prep.py": 3150,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
-    # resolution helper family split to data_classes/_call_tree.py after the
+    # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
     # 2948); ceilings follow files down (R43-F2). Next 50-line step above the
     # post-split measurement (2750; ~2760 with the F10 union). Supersedes the
     # F10-side 2950 -> 3000 raise (dropped at the T74b reconcile merge) --
     # the bounce froze this ceiling, so the split is the fix, not the raise.
-    "torchlens/data_classes/module.py": 2800,
+    "torchlens/_data_classes/module.py": 2800,
     # 2100 -> 2150 (2026-08-29 F11 T74b fix): +9 lines documenting the
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
@@ -516,7 +516,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # (__str__/__repr__/_detached_from_trace; the accessor delta re-landed
     # in _layer_accessors.py) adds +36; the union measures 2133. Next
     # 50-line step, conscious raise, not silent regrowth.
-    "torchlens/data_classes/layer.py": 2150,
+    "torchlens/_data_classes/layer.py": 2150,
     # Re-keyed 2750 -> 2500 at the F03 T69 fix microlane (2026-08-29): the
     # module-level delta/compare helper seam (delta_map/norm_delta/
     # output_delta/compare/aligned_pairs/show_diff + shared metric
@@ -524,7 +524,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 2350 -> 2400: C02 safety tranche lands the OpAccessor basis fix
     # (bug 27) with its coherent get/repr in-place -- the accessor lives
     # with its Layer owner; +11 measured lines, next 50-line step.
-    "torchlens/postprocess/loop_grouping_adapter.py": 2600,
+    "torchlens/_postprocess/loop_grouping_adapter.py": 2600,
     "torchlens/visualization/_render_leaf.py": 2400,
     # Re-keyed down 2450 -> 2350 (r7 R43-F2 slack rule) after the F13 legend
     # rewrite deleted the six-node emitter from this module; 2350 -> 2100 after
@@ -563,8 +563,8 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # final shape carrying both the A08 W3 raise and the A09 split (measured
     # 2069; next 50-step). Shrink freely, raise consciously.
     "torchlens/_io/scrub.py": 2100,
-    "torchlens/debug/_infer_input_shape.py": 2250,
-    "torchlens/postprocess/ast_branches.py": 2250,
+    "torchlens/_debug/_infer_input_shape.py": 2250,
+    "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/visualization/_render_nodes.py": 2150,
     # 2100 -> 2150 (2026-10-02 ci-fix fast2 settle): the numpy bounded-scalar
     # reconstructor trust fix (`fix(io): trust numpy's bounded scalar

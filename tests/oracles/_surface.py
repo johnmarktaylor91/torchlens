@@ -176,7 +176,7 @@ def _normalize_import_state(namespace: types.ModuleType) -> None:
     """Import every public top-level submodule so ``dir(cls)`` is stable.
 
     Opt-in submodules may install documented members on public classes at
-    import time (``torchlens.kernel_telemetry`` installs ``gpu_kernels`` on
+    import time (``torchlens._kernel_telemetry`` installs ``gpu_kernels`` on
     ``Op``/``AtenOp``), so a raw ``dir(cls)`` walk counts differently
     depending on which tests ran first -- green alone, red in a session.
     Importing the deterministic filesystem submodule set pins the walk to

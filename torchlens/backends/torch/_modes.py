@@ -7,8 +7,8 @@ from contextlib import contextmanager
 
 from torch.utils._python_dispatch import TorchDispatchMode
 
+from ..._utils._torch_compat import get_current_dispatch_mode_stack
 from ...errors._base import CompatibilityError
-from ...utils._torch_compat import get_current_dispatch_mode_stack
 
 
 class _TorchLensDispatchMode(TorchDispatchMode):
@@ -23,7 +23,7 @@ class SubclassConstructionUnderDispatchModeError(CompatibilityError, RuntimeErro
     from ``__new__``/``_make_subclass``/``as_subclass`` while a python
     ``TorchDispatchMode`` is active -- reproduced on stock torch with a no-op
     mode, not something TorchLens's own wrapping causes (see
-    ``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE`` in ``torchlens.utils._torch_compat``).
+    ``HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE`` in ``torchlens._utils._torch_compat``).
     Whether a GIVEN construction actually hits it is not cheaply predictable
     (e.g. ``torch.nn.Parameter`` construction via ``_make_subclass`` routinely
     succeeds there), so TorchLens translates the torch error into this typed

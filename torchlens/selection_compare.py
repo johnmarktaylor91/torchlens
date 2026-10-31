@@ -106,7 +106,7 @@ def _reference_display(reference: Any) -> str:
 def _validate_reference(reference: Any, producer: str) -> Any:
     """Validate the reference operand: exactly ONE Trace, refused with teaching."""
 
-    from .data_classes.trace import Trace
+    from ._data_classes.trace import Trace
 
     if isinstance(reference, Trace):
         return reference
@@ -160,7 +160,7 @@ class _JoinGuard:
 
     Delegation to the shipped site join (leverage B4): when BOTH captures
     carry L1 structural site keys, subject entries pair to reference ops by
-    SITE KEY under :func:`~torchlens.postprocess._site_join.join_site_profiles`
+    SITE KEY under :func:`~torchlens._postprocess._site_join.join_site_profiles`
     verdicts — labels leave the join key entirely, so a live edit's label
     renumbering can no longer break comparison of structurally intact sites.
     ``corroborated`` and ``positional`` verdicts admit comparison (D-2);
@@ -185,12 +185,12 @@ class _JoinGuard:
     def build(cls, subject: Any, reference: Any) -> _JoinGuard | None:
         """Build the guard, or ``None`` when either side is keyless."""
 
-        from .errors._base import TorchLensError
-        from .postprocess._site_join import (
+        from ._postprocess._site_join import (
             join_site_profiles,
             occurrence_coordinates,
             site_profile,
         )
+        from .errors._base import TorchLensError
 
         try:
             subject_profile = site_profile(subject)

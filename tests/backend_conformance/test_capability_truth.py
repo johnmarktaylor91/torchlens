@@ -25,6 +25,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._data_classes._backend_capability_guards import raise_if_no_backward_capture
 from torchlens.backends import (
     GATED_CAPABILITY_FLAGS,
     BackendCapabilities,
@@ -50,7 +51,6 @@ from torchlens.backends._options import (
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
 )
-from torchlens.data_classes._backend_capability_guards import raise_if_no_backward_capture
 
 pytestmark = pytest.mark.backend_parity
 
@@ -380,7 +380,7 @@ def test_backward_accessor_guard_without_derived_surface_has_no_redirect(
     not exist.
     """
 
-    from torchlens.data_classes import _backend_capability_guards as guards
+    from torchlens._data_classes import _backend_capability_guards as guards
 
     original = get_backend_spec("tf")
     flipped = dataclasses.replace(

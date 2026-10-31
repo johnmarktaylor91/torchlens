@@ -8,10 +8,10 @@ from typing import Any, Final, Literal, get_args
 
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError
+from .._ir.predicate import RetroactiveCaptureDecision
 from ..intervention.predicates import InterventionPredicate
-from ..ir.predicate import RetroactiveCaptureDecision
 from ..options import StreamingOptions
-from ..types import ActivationPostfunc, GradientPostfunc
+from ..types import _ActivationPostfunc, _GradientPostfunc
 from .types import CaptureSpec, GradRecordContext, RecordContext
 
 CaptureDecision = bool | CaptureSpec | None
@@ -95,11 +95,11 @@ class RecordingOptions:
     on_forward_error: ForwardErrorMode
     streaming: StreamingOptions | None
     random_seed: int | None
-    activation_transform: ActivationPostfunc | None
+    activation_transform: _ActivationPostfunc | None
     save_raw_activations: bool
     save_grads: GradPredicateFn | bool | CaptureSpec | None
     default_grad: bool | CaptureSpec
-    grad_transform: GradientPostfunc | None
+    grad_transform: _GradientPostfunc | None
     save_raw_gradients: bool
     #: Normalized live-narration options (``torchlens.options.EchoOptions``)
     #: or ``None``; typed ``Any`` here because fastlog (L2) never imports
@@ -136,11 +136,11 @@ class RecordingOptions:
         on_forward_error: ForwardErrorMode | MissingType = MISSING,
         streaming: StreamingOptions | None | MissingType = MISSING,
         random_seed: int | None | MissingType = MISSING,
-        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
+        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
         save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
-        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
         echo: Any | None | MissingType = MISSING,
         detach_saved_activations: bool | MissingType = MISSING,
@@ -393,11 +393,11 @@ def merge_recording_options(
     on_forward_error: ForwardErrorMode | MissingType = MISSING,
     streaming: StreamingOptions | None | MissingType = MISSING,
     random_seed: int | None | MissingType = MISSING,
-    activation_transform: ActivationPostfunc | None | MissingType = MISSING,
+    activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
     save_raw_activations: bool | MissingType = MISSING,
     save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
     default_grad: bool | CaptureSpec | MissingType = MISSING,
-    grad_transform: GradientPostfunc | None | MissingType = MISSING,
+    grad_transform: _GradientPostfunc | None | MissingType = MISSING,
     save_raw_gradients: bool | MissingType = MISSING,
     echo: Any | None | MissingType = MISSING,
     detach_saved_activations: bool | MissingType = MISSING,

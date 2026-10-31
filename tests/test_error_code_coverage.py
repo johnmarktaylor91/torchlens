@@ -45,8 +45,8 @@ from pathlib import Path
 import pytest
 from _source_corpus import package_ast, package_files
 
+from torchlens._merged import MergedErrorCode
 from torchlens._runnable import RunnableErrorCode
-from torchlens.merged import MergedErrorCode
 
 # Per-test smoke marks (the former module-level pytestmark was additive
 # with the census's heavy re-tier and tripped the marker-combination

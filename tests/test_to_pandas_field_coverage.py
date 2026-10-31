@@ -88,26 +88,26 @@ import torch.nn as nn
 pd = pytest.importorskip("pandas")
 
 from torchlens import trace as trace_fn  # noqa: E402
-from torchlens._io import FieldPolicy  # noqa: E402
-from torchlens.constants import (  # noqa: E402
+from torchlens._constants import (  # noqa: E402
     BACKWARD_PASS_FIELD_ORDER,
     BUFFER_LOG_FIELD_ORDER,
     LAYER_LOG_FIELD_ORDER,
     LAYER_PASS_LOG_FIELD_ORDER,
     MODULE_LOG_FIELD_ORDER,
 )
-from torchlens.data_classes.backward_pass import (  # noqa: E402
+from torchlens._data_classes.backward_pass import (  # noqa: E402
     _TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS,
     BackwardPass,
 )
-from torchlens.data_classes.buffer import (  # noqa: E402
+from torchlens._data_classes.buffer import (  # noqa: E402
     _TO_PANDAS_EXCLUDED_BUFFER_FIELDS,
     Buffer,
 )
-from torchlens.data_classes.layer import Layer  # noqa: E402
-from torchlens.data_classes.module import _TO_PANDAS_EXCLUDED_MODULE_FIELDS, Module  # noqa: E402
-from torchlens.data_classes.op import Op  # noqa: E402
-from torchlens.data_classes.trace import Trace  # noqa: E402
+from torchlens._data_classes.layer import Layer  # noqa: E402
+from torchlens._data_classes.module import _TO_PANDAS_EXCLUDED_MODULE_FIELDS, Module  # noqa: E402
+from torchlens._data_classes.op import Op  # noqa: E402
+from torchlens._data_classes.trace import Trace  # noqa: E402
+from torchlens._io import FieldPolicy  # noqa: E402
 from torchlens.options import CaptureOptions  # noqa: E402
 
 # Per-class documented exclusions for `test_field_order_has_no_keep_field_desync`.
@@ -118,7 +118,7 @@ from torchlens.options import CaptureOptions  # noqa: E402
 _KEEP_FIELD_DESYNC_EXCLUSIONS: dict[type[Any], frozenset[str]] = {
     Trace: frozenset(
         {
-            # Computed @property (data_classes/_trace_stats.py); never stored
+            # Computed @property (_data_classes/_trace_stats.py); never stored
             # in self.__dict__, so there is no state for FIELD_ORDER to lose.
             # Its sibling `num_ops_with_params` (also computed) correctly has
             # no _PORTABLE_STATE_SPEC entry at all -- this KEEP declaration is

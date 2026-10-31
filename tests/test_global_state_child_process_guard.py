@@ -34,7 +34,7 @@ def test_child_process_capture_refusal_is_typed(monkeypatch: pytest.MonkeyPatch)
 
     import multiprocessing as mp
 
-    from torchlens.utils.display import warn_parallel
+    from torchlens._utils.display import warn_parallel
 
     class _FakeChild:
         """Stand in for a non-rank, non-daemonic child process."""
@@ -68,7 +68,7 @@ def test_child_process_guard_ignores_spoofed_main_process_name(
 
     import multiprocessing as mp
 
-    from torchlens.utils.display import warn_parallel
+    from torchlens._utils.display import warn_parallel
 
     class _SpoofedChild:
         """A child process wearing the main process's name."""
@@ -96,8 +96,8 @@ def test_child_process_guard_refuses_fork_inherited_group_stamp(
 
     import multiprocessing as mp
 
-    import torchlens.utils.display as display_mod
-    from torchlens.utils.display import warn_parallel
+    import torchlens._utils.display as display_mod
+    from torchlens._utils.display import warn_parallel
 
     class _FakeChild:
         """A non-daemonic child claiming rank via an inherited group flag."""
@@ -156,8 +156,8 @@ def test_child_process_guard_import_pid_rank_reclaims_stolen_stamp(
 
     import multiprocessing as mp
 
-    import torchlens.utils.display as display_mod
-    from torchlens.utils.display import warn_parallel
+    import torchlens._utils.display as display_mod
+    from torchlens._utils.display import warn_parallel
 
     class _FakeRank:
         """The real rank process (spawn-style: fresh import, own import PID)."""
@@ -204,7 +204,7 @@ def test_child_process_guard_import_pid_rank_reclaims_stolen_stamp(
 def test_main_process_capture_is_never_refused() -> None:
     """The guard is a no-op in the main process, including from a worker thread."""
 
-    from torchlens.utils.display import warn_parallel
+    from torchlens._utils.display import warn_parallel
 
     warn_parallel()
     errors: list[BaseException] = []
@@ -276,8 +276,8 @@ def test_main_process_rank_stamps_ownership_so_fork_children_stay_refused(
 
     import multiprocessing as mp
 
-    import torchlens.utils.display as display_mod
-    from torchlens.utils.display import warn_parallel
+    import torchlens._utils.display as display_mod
+    from torchlens._utils.display import warn_parallel
 
     class _MainProcess:
         name = "MainProcess"

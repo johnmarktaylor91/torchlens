@@ -128,7 +128,7 @@ alignment transforms (including gLocal), export and apply your own -- see
 ```python
 print(loaded.manifest["signature"]["model_identity"]["digest"][:16])  # who computed this
 print(loaded.input_preprocessing["verdict"])                          # on what input regime
-tl.assert_unchanged(model)                                            # model untouched
+tl.fingerprint.assert_unchanged(model)                                            # model untouched
 ```
 
 A resumed run refuses typed on ANY semantic signature mismatch (different

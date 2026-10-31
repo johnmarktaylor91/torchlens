@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.events import BackwardPassEnd, GradFnFired, OpGradObserved
+from torchlens._ir.events import BackwardPassEnd, GradFnFired, OpGradObserved
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
 

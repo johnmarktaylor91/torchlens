@@ -2,7 +2,7 @@
 
 This document is the **frozen specification** for cross-rank merged traces
 produced by `tl.merge_ranks()` and persisted as `merged-directory` artifacts.
-It plays the same role for `torchlens.merged` that
+It plays the same role for `torchlens._merged` that
 `runnable_tlspec_contract.md` plays for runnable artifacts: the enum and
 finding-kind tables below are release-gated against the code by
 ordered-list-equality tests (`tests/test_merged_engine.py::TestContractLockstep`).

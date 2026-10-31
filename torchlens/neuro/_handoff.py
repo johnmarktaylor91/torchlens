@@ -704,7 +704,7 @@ def _safe_label(record: Any) -> str | None:
         several passes.
     """
 
-    from ..utils._multipass_access import get_multipass_attr
+    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(record, "label", None, multipass=None)
     return str(label) if label is not None else None

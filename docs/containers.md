@@ -71,10 +71,10 @@ Container membership is a per-pass fact. On a rolled graph, a multi-pass (recurr
 
 ## Custom Containers
 
-Register proprietary containers with `tl.register_container(type, flatten, unflatten)`.
+Register proprietary containers with `tl.types.register_container(type, flatten, unflatten)`.
 
 ```python
-tl.register_container(
+tl.types.register_container(
     PairBox,
     lambda value: ([value.left, value.right], None),
     lambda aux, children: PairBox(children[0], children[1]),

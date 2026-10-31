@@ -54,12 +54,12 @@ from ._save_budget import SaveBudgetOption
 from ._vocab.node_spec import NodeSpec
 
 if TYPE_CHECKING:
-    from .data_classes.layer import Layer
-    from .data_classes.module import Module
+    from ._data_classes.layer import Layer
+    from ._data_classes.module import Module
 
 T = TypeVar("T")
-ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
-GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
+_ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
+_GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
@@ -648,7 +648,7 @@ class CaptureOptions:
         session-time knob. Doc: ``docs/reference/capture_outcomes.md``.
     track_device_memory:
         Whether torch capture samples device allocator counters around each op call, served by
-        ``torchlens.observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
+        ``torchlens._observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
         opt-in, never resetting; allocated/reserved before/after, signed deltas, high-water ADVANCE
         per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
     structure_only:
@@ -1002,16 +1002,16 @@ class SaveOptions:
     True
     """
 
-    activation_transform: ActivationPostfunc | None = None
-    grad_transform: GradientPostfunc | None = None
+    activation_transform: _ActivationPostfunc | None = None
+    grad_transform: _GradientPostfunc | None = None
     save_raw_activations: bool = True
     save_raw_gradients: bool = True
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
-        activation_transform: ActivationPostfunc | None | MissingType = MISSING,
-        grad_transform: GradientPostfunc | None | MissingType = MISSING,
+        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
+        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
         save_raw_gradients: bool | MissingType = MISSING,
     ) -> None:
@@ -1341,7 +1341,7 @@ class VisualizationOptions:
         def __getattr__(self, name: str) -> Any:
             """Name the replacement for a removed public member, else fail as usual."""
 
-            from .utils.facade import refuse_removed_member
+            from ._utils.facade import refuse_removed_member
 
             refuse_removed_member(
                 "VisualizationOptions", name, _REMOVED_VISUALIZATION_OPTION_MEMBERS

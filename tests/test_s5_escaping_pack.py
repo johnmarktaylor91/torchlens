@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.layer import Layer
+from torchlens._data_classes.layer import Layer
 from torchlens.visualization._render_edges import (
     _html_combined_recurrence_label,
     _html_container_edge_label,

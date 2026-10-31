@@ -19,8 +19,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir.events import OpEvent
 from torchlens.fastlog import Recording
-from torchlens.ir.events import OpEvent
 
 from ._models import build_model_case, side_effect_count
 
@@ -465,7 +465,7 @@ def _install_instrumentation() -> _Instrumentation:
 
     restore_callbacks.append(restore_policy)
 
-    materialize_module = importlib.import_module("torchlens.postprocess._materialize")
+    materialize_module = importlib.import_module("torchlens._postprocess._materialize")
     original_ingest = materialize_module.ingest_op_records
 
     def observing_ingest(inputs: Any, manifest: Any) -> Any:
@@ -769,7 +769,7 @@ def _run_capture(
                 capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=_SEED),
             )
         except RuntimeError as exc:
-            return tl.partial.from_failed_capture(exc), exc, None
+            return tl._partial.from_failed_capture(exc), exc, None
         raise AssertionError("intentional failing trace unexpectedly completed")
     raise KeyError(f"unknown capture-oracle config: {config}")
 
@@ -1113,7 +1113,7 @@ def _partial_product_from_exception(exception: Exception) -> Any | None:
     if getattr(exception, "partial_log", None) is None:
         return None
     try:
-        return tl.partial.from_failed_capture(exception)
+        return tl._partial.from_failed_capture(exception)
     except Exception:
         return None
 

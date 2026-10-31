@@ -11,6 +11,8 @@ from types import MappingProxyType
 import pytest
 from _source_corpus import package_ast, package_files
 
+from torchlens._constants import MODEL_LOG_FIELD_ORDER
+from torchlens._data_classes.trace import Trace
 from torchlens._runnable_seam import (
     LEGACY_RUNNABLE_TRACE_FIELD_MAP,
     RUNNABLE_TRACE_PUBLIC_MEMBERS,
@@ -18,8 +20,6 @@ from torchlens._runnable_seam import (
     RunnableTraceState,
     normalize_runnable_trace_state,
 )
-from torchlens.constants import MODEL_LOG_FIELD_ORDER
-from torchlens.data_classes.trace import Trace
 
 _PACKAGE_ROOT = Path(__file__).parents[1] / "torchlens"
 _MIGRATION_DIRECT_READER_ALLOWLIST = frozenset()
@@ -213,7 +213,7 @@ def test_runnable_fork_keeps_mutable_witness_ledgers_independent() -> None:
         input_metadata_reads={("args", 0): {"shape": (2, 3)}},
     )
 
-    from torchlens.data_classes._trace_fork import _fork_model_field
+    from torchlens._data_classes._trace_fork import _fork_model_field
 
     forked_state = _fork_model_field(parent, "_runnable", parent_state, {})
 

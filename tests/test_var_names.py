@@ -9,7 +9,7 @@ from typing import Any
 import torch
 
 import torchlens as tl
-from torchlens.data_classes.trace import Trace
+from torchlens._data_classes.trace import Trace
 
 
 def _first_var_names(trace: Trace, func_name: str) -> list[str]:

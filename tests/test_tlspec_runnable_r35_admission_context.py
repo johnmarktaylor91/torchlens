@@ -18,9 +18,9 @@ from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
+from torchlens._utils._torch_compat import HAS_NAMED_TENSOR_API
 from torchlens.errors import PathDivergenceError, RunPreconditionError
 from torchlens.options import CaptureOptions
-from torchlens.utils._torch_compat import HAS_NAMED_TENSOR_API
 
 
 class _AddOneModel(nn.Module):

@@ -11,10 +11,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.arg_handling import copy_arg_tree
+from torchlens._utils.tensor_utils import _clone_tensor_payload, copy_tensor_payload
 from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
 from torchlens.backends.torch.ops import _get_parent_output_version_snapshot
-from torchlens.utils.arg_handling import copy_arg_tree
-from torchlens.utils.tensor_utils import _clone_tensor_payload, copy_tensor_payload
 
 
 class PartialConvRelu(nn.Module):

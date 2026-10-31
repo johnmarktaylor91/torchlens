@@ -9,7 +9,7 @@ never evidence. Each test traces a tiny model and compares the multiset of
 ``"tanh:3 linear:1x2"`` (one tanh layer with 3 passes, two single-pass linear layers).
 
 Rows 27, 28, 30 and 31 depend on the module-call choice
-(``torchlens.utils._call_site.MODULE_CALL_IS_PASS``, decided True) and run under both values.
+(``torchlens._utils._call_site.MODULE_CALL_IS_PASS``, decided True) and run under both values.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint
 
 import torchlens as tl
+from torchlens._utils import _call_site
 from torchlens.backends.torch.wrappers import wrap_torch
-from torchlens.utils import _call_site
 
 # ---------------------------------------------------------------- helpers
 

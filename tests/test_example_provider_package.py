@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from torchlens.ecosystem import plugins
+from torchlens._ecosystem import plugins
 
 pytestmark = pytest.mark.slow
 
@@ -42,7 +42,7 @@ _PROBE = textwrap.dedent(
     import torch
 
     import torchlens as tl
-    from torchlens.ecosystem import plugins
+    from torchlens._ecosystem import plugins
     from torchlens.export import describe_target, resolve_target
 
     rows = [r for r in plugins.discover({_GROUP!r}) if r.distribution == {_DISTRIBUTION!r}]

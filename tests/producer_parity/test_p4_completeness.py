@@ -47,9 +47,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.ir.capture_events import CaptureEvents
-from torchlens.ir.events import OpEvent
-from torchlens.ir.op_record import (
+from torchlens._ir.capture_events import CaptureEvents
+from torchlens._ir.events import OpEvent
+from torchlens._ir.op_record import (
     _FACET_ATTRIBUTES,
     AMENDMENT_FAMILIES,
     PATH_TO_FLAT,
@@ -314,7 +314,7 @@ _BATTERY: tuple[tuple[str, Callable[[], tuple[nn.Module, Any]], Callable[..., An
             m,
             x,
             save=tl.func("linear"),
-            intervene=tl.when(tl.module("fc"), tl.tap(lambda t: None)),
+            intervene=tl.when(tl.module("fc"), tl.observers.tap(lambda t: None)),
         ),
     ),
     (
@@ -383,8 +383,8 @@ def _journal_templates(monkeypatch: pytest.MonkeyPatch, producer: str) -> list[A
     is synthesized through the retained inverse adapter (S15 stand-in).
     """
 
-    postprocess_module = importlib.import_module("torchlens.postprocess")
-    materialize_module = importlib.import_module("torchlens.postprocess._materialize")
+    postprocess_module = importlib.import_module("torchlens._postprocess")
+    materialize_module = importlib.import_module("torchlens._postprocess._materialize")
     original = materialize_module.materialize_from_events
     grabbed: list[Any] = []
 
@@ -547,7 +547,7 @@ def test_static_ast_guard_no_expansion_no_conditional_kwargs() -> None:
         "user_funcs.py",
         "backends/torch/model_prep.py",
         "backends/torch/backend.py",
-        "postprocess/graph_traversal.py",
+        "_postprocess/graph_traversal.py",
         "backends/tf/backend.py",
         "backends/tf/interventions.py",
         "backends/mlx/backend.py",

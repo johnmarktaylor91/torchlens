@@ -73,7 +73,7 @@ def test_raw_nan_aborts_even_when_transform_sanitizes() -> None:
             capture=tl.options.CaptureOptions(raise_on_nan=True),
             save=tl.options.SaveOptions(activation_transform=sanitize),
         )
-    outcome = tl.partial.from_failed_capture(exc_info.value).trace.outcome
+    outcome = tl._partial.from_failed_capture(exc_info.value).trace.outcome
     assert outcome.status is CaptureStatus.ABORTED_NONFINITE
 
 
@@ -158,7 +158,7 @@ def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> 
 
 
 def test_memory_error_in_postprocess_settles_failed(monkeypatch) -> None:
-    import torchlens.postprocess as pp
+    import torchlens._postprocess as pp
 
     captured: list = []
 

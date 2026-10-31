@@ -18,8 +18,10 @@ import torch
 
 pytest.importorskip("torchvision")
 
+import torchlens._data_classes._preprocessing_provenance as provenance  # noqa: E402
 import torchlens.preprocessing as pp  # noqa: E402
-from torchlens.data_classes.trace import ResolvedPreprocessing  # noqa: E402
+import torchlens.preprocessing._records as records  # noqa: E402
+from torchlens._data_classes.trace import ResolvedPreprocessing  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +54,7 @@ class TestResolver:
         assert declared.resize_size == 232
         assert declared.crop_size == 224
         assert declared.mean == pytest.approx((0.485, 0.456, 0.406))
-        assert resnet50_v2_resolution.status == pp.STATUS_AUTHORITATIVE
+        assert resnet50_v2_resolution.status == provenance.STATUS_AUTHORITATIVE
         assert resnet50_v2_resolution.transform is not None
 
     def test_detection_authority_declares_nothing(self, detection_resolution) -> None:
@@ -67,7 +69,7 @@ class TestResolver:
 
         resolution = pp.resolve({"image_mean": [0.5, 0.5, 0.5], "std": 0.5, "mystery_knob": 3})
         assert resolution.record.source == "explicit_declaration"
-        assert resolution.status == pp.STATUS_AUTHORITATIVE
+        assert resolution.status == provenance.STATUS_AUTHORITATIVE
         assert resolution.declared is not None
         assert resolution.declared.mean == pytest.approx((0.5, 0.5, 0.5))
         assert resolution.declared.extras["unrecognized_keys"] == ["mystery_knob"]
@@ -126,7 +128,7 @@ class TestResolver:
         """An opaque callable declares nothing; the callable is preserved."""
 
         resolution = pp.resolve(lambda x: x)
-        assert resolution.status == pp.STATUS_UNKNOWN
+        assert resolution.status == provenance.STATUS_UNKNOWN
         assert resolution.declared is None
         assert resolution.transform is not None
 
@@ -134,7 +136,7 @@ class TestResolver:
         """A plain nn.Module resolves unknown -- never a TorchLens recipe."""
 
         resolution = pp.resolve(model=torch.nn.Linear(4, 4))
-        assert resolution.status == pp.STATUS_UNKNOWN
+        assert resolution.status == provenance.STATUS_UNKNOWN
         assert resolution.record.source == "unknown"
         assert resolution.transform is None
 
@@ -261,7 +263,7 @@ class TestAuditOracle:
             config={"mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225]},
             description="fallback",
         )
-        assert fallback.status == pp.STATUS_UNVERIFIED_FALLBACK
+        assert fallback.status == provenance.STATUS_UNVERIFIED_FALLBACK
         resolution = pp.Resolution(record=fallback, declared=None, transform=None)
         report = pp.audit(resolution, None)
         assert report.verdict == "unknown"
@@ -292,7 +294,7 @@ class TestAuditOracle:
         payload = json.loads(json.dumps(report.to_json()))
         assert payload["schema"] == "tl_preprocessing_audit_v1"
         assert payload["verdict"] == report.verdict
-        assert len(payload["findings"]) == len(pp.COMPARABLE_FIELDS)
+        assert len(payload["findings"]) == len(records.COMPARABLE_FIELDS)
 
     def test_status_property_serves_legacy_records(self) -> None:
         """The derived status is read-time: legacy-shaped records serve it."""
@@ -304,7 +306,7 @@ class TestAuditOracle:
             config={},
             description="legacy record without resolution_method",
         )
-        assert legacy.status == pp.STATUS_AUTHORITATIVE
+        assert legacy.status == provenance.STATUS_AUTHORITATIVE
 
 
 class TestDiagnosticsNeverMatch:

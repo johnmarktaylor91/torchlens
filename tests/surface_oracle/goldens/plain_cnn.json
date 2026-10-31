@@ -93,9 +93,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "conv2d_dsU1LzZK_oDRCwlmsconv",
     "equivalent_ops": {
@@ -214,7 +214,7 @@
     "op_labels": [
      "conv2d_1_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 1,
     "out": {
      "__tensor__": true,
@@ -254,7 +254,7 @@
       2
      ]
     ],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "input_1"
@@ -388,9 +388,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "input_1_1_4_4_torch.float32",
     "equivalent_ops": {
@@ -492,7 +492,7 @@
     "op_labels": [
      "input_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 0,
     "out": {
      "__tensor__": true,
@@ -512,7 +512,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {},
      "\"kwargs\"": {}
@@ -628,9 +628,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "output_1_1_2_4_4_torch.float32",
     "equivalent_ops": {
@@ -732,7 +732,7 @@
     "op_labels": [
      "output_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 3,
     "out": {
      "__tensor__": true,
@@ -752,7 +752,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "relu_1_2"
@@ -911,9 +911,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "relu_43c01414e3d13308",
     "equivalent_ops": {
@@ -1014,7 +1014,7 @@
     "op_labels": [
      "relu_1_2:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 2,
     "out": {
      "__tensor__": true,
@@ -1034,7 +1034,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "conv2d_1_1"
@@ -1430,7 +1430,7 @@
     "backward_hooks": [],
     "backward_pre_hooks": [],
     "buffer_layers": [],
-    "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
     "call_children_addresses": [],
     "call_children_modules": [],
@@ -1448,7 +1448,7 @@
      "__ref__": "ModuleCall",
      "label": "conv"
     },
-    "calls": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies a 2D convolution over an input signal composed of several input\n    planes.\n\n    In the simplest case, the output value of the layer with input size\n    :math:`(N, C_{\\text{in}}, H, W)` and output :math:`(N, C_{\\text{out}}, H_{\\text{out}}, W_{\\text{out}})`\n    can be precisely described as:\n\n    .. math::\n        \\text{out}(N_i, C_{\\text{out}_j}) = \\text{bias}(C_{\\text{out}_j}) +\n        \\sum_{k = 0}^{C_{\\text{in}} - 1} \\text{weight}(C_{\\text{out}_j}, k) \\star \\text{input}(N_i, k)\n\n\n    where :math:`\\star` is the valid 2D `cross-correlation`_ operator,\n    :math:`N` is a batch size, :math:`C_{\\text{in}}` and :math:`C_{\\text{out}}` correspond to\n    :attr:`in_channels` and :attr:`out_channels` respectively,\n    :math:`H` and :math:`W` are the input height and width in pixels.\n    See the Shape section below for how :math:`H_{\\text{out}}` and :math:`W_{\\text{out}}`\n    are derived from :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, and :attr:`dilation`.\n    \n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    * :attr:`stride` controls the stride for the cross-correlation, a single\n      number or a tuple.\n\n    * :attr:`padding` controls the amount of padding applied to the input. It\n      can be either a string {'valid', 'same'} or an int / a tuple of ints giving the\n      amount of implicit padding applied on both sides.\n\n    * :attr:`dilation` controls the spacing between the kernel points; also\n      known as the \u00e0 trous algorithm. It is harder to describe, but this `link`_\n      has a nice visualization of what :attr:`dilation` does.\n\n\n    * :attr:`groups` controls the connections between inputs and outputs.\n      :attr:`in_channels` and :attr:`out_channels` must both be divisible by\n      :attr:`groups`. For example,\n\n        * At groups=1, all inputs are convolved to all outputs.\n        * At groups=2, the operation becomes equivalent to having two conv\n          layers side by side, each seeing half the input channels\n          and producing half the output channels, and both subsequently\n          concatenated.\n        * At groups= :attr:`in_channels`, each input channel is convolved with\n          its own set of filters (of size\n          :math:`\\frac{\\text{out\\_channels}}{\\text{in\\_channels}}`).\n\n    The parameters :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, :attr:`dilation` can either be:\n\n        - a single ``int`` -- in which case the same value is used for the height and width dimension\n        - a ``tuple`` of two ints -- in which case, the first `int` is used for the height dimension,\n          and the second `int` for the width dimension\n\n    Note:\n        When `groups == in_channels` and `out_channels == K * in_channels`,\n        where `K` is a positive integer, this operation is also known as a \"depthwise convolution\".\n\n        In other words, for an input of size :math:`(N, C_{in}, L_{in})`,\n        a depthwise convolution with a depthwise multiplier `K` can be performed with the arguments\n        :math:`(C_\\text{in}=C_\\text{in}, C_\\text{out}=C_\\text{in} \\times \\text{K}, ..., \\text{groups}=C_\\text{in})`.\n\n    Note:\n        In some circumstances when given tensors on a CUDA device and using CuDNN, this operator may select a nondeterministic algorithm to increase performance. If this is undesirable, you can try to make the operation deterministic (potentially at a performance cost) by setting ``torch.backends.cudnn.deterministic = True``. See :doc:`/notes/randomness` for more information.\n\n    Note:\n        ``padding='valid'`` is the same as no padding. ``padding='same'`` pads\n        the input so the output has the shape as the input. However, this mode\n        doesn't support any stride values other than 1.\n\n    Note:\n        This module supports complex data types i.e. ``complex32, complex64, complex128``.\n\n    Args:\n        in_channels (int): Number of channels in the input image\n        out_channels (int): Number of channels produced by the convolution\n        kernel_size (int or tuple): Size of the convolving kernel\n        stride (int or tuple, optional): Stride of the convolution. Default: 1\n        padding (int, tuple or str, optional): Padding added to all four sides of\n            the input. Default: 0\n        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1\n        groups (int, optional): Number of blocked connections from input\n            channels to output channels. Default: 1\n        bias (bool, optional): If ``True``, adds a learnable bias to the\n            output. Default: ``True``\n        padding_mode (str, optional): ``'zeros'``, ``'reflect'``,\n            ``'replicate'`` or ``'circular'``. Default: ``'zeros'``\n    \n\n    Shape:\n        - Input: :math:`(N, C_{in}, H_{in}, W_{in})` or :math:`(C_{in}, H_{in}, W_{in})`\n        - Output: :math:`(N, C_{out}, H_{out}, W_{out})` or :math:`(C_{out}, H_{out}, W_{out})`, where\n\n          .. math::\n              H_{out} = \\left\\lfloor\\frac{H_{in}  + 2 \\times \\text{padding}[0] - \\text{dilation}[0]\n                        \\times (\\text{kernel\\_size}[0] - 1) - 1}{\\text{stride}[0]} + 1\\right\\rfloor\n\n          .. math::\n              W_{out} = \\left\\lfloor\\frac{W_{in}  + 2 \\times \\text{padding}[1] - \\text{dilation}[1]\n                        \\times (\\text{kernel\\_size}[1] - 1) - 1}{\\text{stride}[1]} + 1\\right\\rfloor\n\n    Attributes:\n        weight (Tensor): the learnable weights of the module of shape\n            :math:`(\\text{out\\_channels}, \\frac{\\text{in\\_channels}}{\\text{groups}},`\n            :math:`\\text{kernel\\_size[0]}, \\text{kernel\\_size[1]})`.\n            The values of these weights are sampled from\n            :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n        bias (Tensor):   the learnable bias of the module of shape\n            (out_channels). If :attr:`bias` is ``True``,\n            then the values of these weights are\n            sampled from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n\n    Examples:\n\n        >>> # With square kernels and equal stride\n        >>> m = nn.Conv2d(16, 33, 3, stride=2)\n        >>> # non-square kernels and unequal stride and with padding\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2))\n        >>> # non-square kernels and unequal stride and with padding and dilation\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2), dilation=(3, 1))\n        >>> input = torch.randn(20, 16, 50, 100)\n        >>> output = m(input)\n\n    .. _cross-correlation:\n        https://en.wikipedia.org/wiki/Cross-correlation\n\n    .. _link:\n        https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md\n    ",
     "class_name": "Conv2d",
     "class_qualname": "torch.nn.modules.conv.Conv2d",
@@ -1555,7 +1555,7 @@
     "num_recursive_params": 2,
     "num_recursive_params_frozen": 0,
     "num_recursive_params_trainable": 2,
-    "ops": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "ops": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "out": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -1604,14 +1604,14 @@
      }
     ],
     "param_memory": "<measured>",
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_param_addresses": [
      "conv.weight",
      "conv.bias"
     ],
-    "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
+    "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1824,
@@ -1648,7 +1648,7 @@
     "backward_hooks": [],
     "backward_pre_hooks": [],
     "buffer_layers": [],
-    "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [
      "conv"
     ],
@@ -1672,7 +1672,7 @@
      "__ref__": "ModuleCall",
      "label": "self"
     },
-    "calls": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
     "class_name": "PlainCNN",
     "class_qualname": "capture_oracle._models.PlainCNN",
@@ -1771,7 +1771,7 @@
     "num_recursive_params": 2,
     "num_recursive_params_frozen": 0,
     "num_recursive_params_trainable": 2,
-    "ops": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "ops": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "out": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -1820,14 +1820,14 @@
      }
     ],
     "param_memory": "<measured>",
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_param_addresses": [
      "conv.weight",
      "conv.bias"
     ],
-    "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
+    "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1888,
@@ -1911,10 +1911,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -1960,10 +1960,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
@@ -2045,7 +2045,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -2088,7 +2088,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 1, 4, 4])"
     ],
@@ -2250,7 +2250,7 @@
       2
      ]
     ],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "input_1"
@@ -2364,10 +2364,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -2396,10 +2396,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
@@ -2439,7 +2439,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -2467,7 +2467,7 @@
     "input_containers": [],
     "input_dtypes": [],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [],
     "input_to_module_calls": [
      "conv:1"
@@ -2595,7 +2595,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {},
      "\"kwargs\"": {}
@@ -2702,10 +2702,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -2732,10 +2732,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
@@ -2790,7 +2790,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -2833,7 +2833,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 2, 4, 4])"
     ],
@@ -2955,7 +2955,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "relu_1_2"
@@ -3084,10 +3084,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -3125,10 +3125,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
@@ -3185,7 +3185,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -3228,7 +3228,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 2, 4, 4])"
     ],
@@ -3349,7 +3349,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "conv2d_1_1"
@@ -3451,12 +3451,12 @@
     ],
     "device_ref": null,
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
     "grad_shape": null,
     "gradient_memory": "<measured>",
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -3518,7 +3518,7 @@
       2
      ]
     },
-    "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
+    "value_basis": "<torchlens._data_classes.param.ParamValueBasis>"
    },
    "conv.weight": {
     "_derived_grad_record_path": null,
@@ -3536,12 +3536,12 @@
     ],
     "device_ref": null,
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
     "grad_shape": null,
     "gradient_memory": "<measured>",
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -3612,7 +3612,7 @@
       3
      ]
     },
-    "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
+    "value_basis": "<torchlens._data_classes.param.ParamValueBasis>"
    }
   },
   "trace": {
@@ -3834,7 +3834,7 @@
    "backward_events": [],
    "backward_memory_backend": "<measured>",
    "backward_pass_logs": {},
-   "backward_passes": "<torchlens.data_classes.backward_pass.BackwardPassAccessor>",
+   "backward_passes": "<torchlens._data_classes.backward_pass.BackwardPassAccessor>",
    "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
    "backward_ready": false,
@@ -3845,7 +3845,7 @@
    "buffer_num_calls": {},
    "buffer_read_ops": [],
    "buffer_write_ops": [],
-   "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
    "by_pass": {
     "1": [
      0,
@@ -3903,15 +3903,15 @@
     "\"unknown\"": 0,
     "\"zero_by_rule\"": 0
    },
-   "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "compute_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {},
    "conditional_branch_edges": [],
    "conditional_edge_call_indices": {},
    "conditional_records": [],
-   "conditionals": "<torchlens.data_classes.trace.ConditionalAccessor>",
+   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
    "decoded_output": null,
-   "derived_grads": "<torchlens.data_classes.derived_grad.DerivedGradAccessor>",
+   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
    "detach_saved_activations": false,
    "distributed_scope": null,
    "edges": "<raises SelectionError>",
@@ -3924,7 +3924,7 @@
    "escape_detector_mode": "off",
    "escape_detector_verified": null,
    "escape_diagnostics": [],
-   "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
+   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
@@ -3960,12 +3960,12 @@
    "forward_source_line": 67,
    "forward_source_location": "<repo>/tests/capture_oracle/_models.py:67",
    "func_calls_duration": "<measured>",
-   "grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
+   "grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
    "grad_fn_fire_timings": "<measured>",
    "grad_fn_logs": {},
    "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_fns": "<torchlens.data_classes.grad_fn.GradFnAccessor>",
+   "grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
    "grad_transform": null,
    "grad_transform_repr": null,
    "graph_shape_hash": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
@@ -4002,14 +4002,14 @@
     "input_1"
    ],
    "input_object_id": "<measured>",
-   "input_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "input_preprocessor": null,
    "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
    "input_structure": "<raises AttributeError>",
-   "intermediate_derived_grads": "<torchlens.data_classes.derived_grad.IntermediateDerivedGradAccessor>",
-   "internal_sink_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "intermediate_derived_grads": "<torchlens._data_classes.derived_grad.IntermediateDerivedGradAccessor>",
+   "internal_sink_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_sink_ops": [],
-   "internal_source_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "internal_source_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
@@ -4216,7 +4216,7 @@
     "\"relu_1_2\"": 1
    },
    "layer_visualizers": null,
-   "layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
    "layers_with_params": {
     "\"conv2d_1_1\"": [
@@ -4275,8 +4275,8 @@
      "label": "output_1:1"
     }
    ],
-   "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
-   "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "model_profile": "<torchlens._data_classes._trace_profile.ModelProfile>",
+   "module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "module_collapse_order": [
     [
      "conv",
@@ -4289,8 +4289,8 @@
    ],
    "module_filter": null,
    "module_identity_mode": "torch_module",
-   "modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
+   "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
    "num_backward_edges": null,
@@ -4377,10 +4377,10 @@
     "relu_1_2:1",
     "output_1:1"
    ],
-   "ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
-   "ops_with_params": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "orphans": "<torchlens.data_classes._trace_accessors.OrphanAccessor>",
+   "orphans": "<torchlens._data_classes._trace_accessors.OrphanAccessor>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -4388,14 +4388,14 @@
     "output_1"
    ],
    "output_num_classes": null,
-   "output_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "output_postprocessor": null,
    "overhead_duration": "<measured>",
    "param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
    "param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_logs": "<torchlens.data_classes.param.ParamAccessor>",
+   "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "param_source": "native-module",
-   "params": "<torchlens.data_classes.param.ParamAccessor>",
+   "params": "<torchlens._data_classes.param.ParamAccessor>",
    "parent_run": "<callable ReferenceType>",
    "parent_trace": {
     "__ref__": "Trace",
@@ -4411,7 +4411,7 @@
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
-   "recurrent_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "recurrent_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "relationship_evidence": {
     "\"graph\"": "unknown",
     "\"input\"": "unknown",
@@ -4442,17 +4442,17 @@
    "save_rng_states": "<measured>",
    "save_visualizations": false,
    "saved_activation_memory": "<measured>",
-   "saved_grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "saved_grad_fns": "<torchlens.data_classes.grad_fn.GradFnAccessor>",
-   "saved_grad_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "saved_grad_module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
-   "saved_grad_modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "saved_grad_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "saved_grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
+   "saved_grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
+   "saved_grad_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "saved_gradient_memory": "<measured>",
-   "saved_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "saved_module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
-   "saved_modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "saved_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "saved_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "saved_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "saved_modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
    "source_snapshots": [],
@@ -4579,9 +4579,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "conv2d_dsU1LzZK_oDRCwlmsconv",
     "equivalent_ops": {
@@ -4700,7 +4700,7 @@
     "op_labels": [
      "conv2d_1_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 1,
     "out": {
      "__tensor__": true,
@@ -4740,7 +4740,7 @@
       2
      ]
     ],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "input_1"
@@ -4874,9 +4874,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "input_1_1_4_4_torch.float32",
     "equivalent_ops": {
@@ -4978,7 +4978,7 @@
     "op_labels": [
      "input_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 0,
     "out": {
      "__tensor__": true,
@@ -4998,7 +4998,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {},
      "\"kwargs\"": {}
@@ -5114,9 +5114,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "output_1_1_2_4_4_torch.float32",
     "equivalent_ops": {
@@ -5218,7 +5218,7 @@
     "op_labels": [
      "output_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 3,
     "out": {
      "__tensor__": true,
@@ -5238,7 +5238,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "relu_1_2"
@@ -5397,9 +5397,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "relu_43c01414e3d13308",
     "equivalent_ops": {
@@ -5500,7 +5500,7 @@
     "op_labels": [
      "relu_1_2:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 2,
     "out": {
      "__tensor__": true,
@@ -5520,7 +5520,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "conv2d_1_1"
@@ -5916,7 +5916,7 @@
     "backward_hooks": [],
     "backward_pre_hooks": [],
     "buffer_layers": [],
-    "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
     "call_children_addresses": [],
     "call_children_modules": [],
@@ -5934,7 +5934,7 @@
      "__ref__": "ModuleCall",
      "label": "conv"
     },
-    "calls": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies a 2D convolution over an input signal composed of several input\n    planes.\n\n    In the simplest case, the output value of the layer with input size\n    :math:`(N, C_{\\text{in}}, H, W)` and output :math:`(N, C_{\\text{out}}, H_{\\text{out}}, W_{\\text{out}})`\n    can be precisely described as:\n\n    .. math::\n        \\text{out}(N_i, C_{\\text{out}_j}) = \\text{bias}(C_{\\text{out}_j}) +\n        \\sum_{k = 0}^{C_{\\text{in}} - 1} \\text{weight}(C_{\\text{out}_j}, k) \\star \\text{input}(N_i, k)\n\n\n    where :math:`\\star` is the valid 2D `cross-correlation`_ operator,\n    :math:`N` is a batch size, :math:`C_{\\text{in}}` and :math:`C_{\\text{out}}` correspond to\n    :attr:`in_channels` and :attr:`out_channels` respectively,\n    :math:`H` and :math:`W` are the input height and width in pixels.\n    See the Shape section below for how :math:`H_{\\text{out}}` and :math:`W_{\\text{out}}`\n    are derived from :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, and :attr:`dilation`.\n    \n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    * :attr:`stride` controls the stride for the cross-correlation, a single\n      number or a tuple.\n\n    * :attr:`padding` controls the amount of padding applied to the input. It\n      can be either a string {'valid', 'same'} or an int / a tuple of ints giving the\n      amount of implicit padding applied on both sides.\n\n    * :attr:`dilation` controls the spacing between the kernel points; also\n      known as the \u00e0 trous algorithm. It is harder to describe, but this `link`_\n      has a nice visualization of what :attr:`dilation` does.\n\n\n    * :attr:`groups` controls the connections between inputs and outputs.\n      :attr:`in_channels` and :attr:`out_channels` must both be divisible by\n      :attr:`groups`. For example,\n\n        * At groups=1, all inputs are convolved to all outputs.\n        * At groups=2, the operation becomes equivalent to having two conv\n          layers side by side, each seeing half the input channels\n          and producing half the output channels, and both subsequently\n          concatenated.\n        * At groups= :attr:`in_channels`, each input channel is convolved with\n          its own set of filters (of size\n          :math:`\\frac{\\text{out\\_channels}}{\\text{in\\_channels}}`).\n\n    The parameters :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, :attr:`dilation` can either be:\n\n        - a single ``int`` -- in which case the same value is used for the height and width dimension\n        - a ``tuple`` of two ints -- in which case, the first `int` is used for the height dimension,\n          and the second `int` for the width dimension\n\n    Note:\n        When `groups == in_channels` and `out_channels == K * in_channels`,\n        where `K` is a positive integer, this operation is also known as a \"depthwise convolution\".\n\n        In other words, for an input of size :math:`(N, C_{in}, L_{in})`,\n        a depthwise convolution with a depthwise multiplier `K` can be performed with the arguments\n        :math:`(C_\\text{in}=C_\\text{in}, C_\\text{out}=C_\\text{in} \\times \\text{K}, ..., \\text{groups}=C_\\text{in})`.\n\n    Note:\n        In some circumstances when given tensors on a CUDA device and using CuDNN, this operator may select a nondeterministic algorithm to increase performance. If this is undesirable, you can try to make the operation deterministic (potentially at a performance cost) by setting ``torch.backends.cudnn.deterministic = True``. See :doc:`/notes/randomness` for more information.\n\n    Note:\n        ``padding='valid'`` is the same as no padding. ``padding='same'`` pads\n        the input so the output has the shape as the input. However, this mode\n        doesn't support any stride values other than 1.\n\n    Note:\n        This module supports complex data types i.e. ``complex32, complex64, complex128``.\n\n    Args:\n        in_channels (int): Number of channels in the input image\n        out_channels (int): Number of channels produced by the convolution\n        kernel_size (int or tuple): Size of the convolving kernel\n        stride (int or tuple, optional): Stride of the convolution. Default: 1\n        padding (int, tuple or str, optional): Padding added to all four sides of\n            the input. Default: 0\n        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1\n        groups (int, optional): Number of blocked connections from input\n            channels to output channels. Default: 1\n        bias (bool, optional): If ``True``, adds a learnable bias to the\n            output. Default: ``True``\n        padding_mode (str, optional): ``'zeros'``, ``'reflect'``,\n            ``'replicate'`` or ``'circular'``. Default: ``'zeros'``\n    \n\n    Shape:\n        - Input: :math:`(N, C_{in}, H_{in}, W_{in})` or :math:`(C_{in}, H_{in}, W_{in})`\n        - Output: :math:`(N, C_{out}, H_{out}, W_{out})` or :math:`(C_{out}, H_{out}, W_{out})`, where\n\n          .. math::\n              H_{out} = \\left\\lfloor\\frac{H_{in}  + 2 \\times \\text{padding}[0] - \\text{dilation}[0]\n                        \\times (\\text{kernel\\_size}[0] - 1) - 1}{\\text{stride}[0]} + 1\\right\\rfloor\n\n          .. math::\n              W_{out} = \\left\\lfloor\\frac{W_{in}  + 2 \\times \\text{padding}[1] - \\text{dilation}[1]\n                        \\times (\\text{kernel\\_size}[1] - 1) - 1}{\\text{stride}[1]} + 1\\right\\rfloor\n\n    Attributes:\n        weight (Tensor): the learnable weights of the module of shape\n            :math:`(\\text{out\\_channels}, \\frac{\\text{in\\_channels}}{\\text{groups}},`\n            :math:`\\text{kernel\\_size[0]}, \\text{kernel\\_size[1]})`.\n            The values of these weights are sampled from\n            :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n        bias (Tensor):   the learnable bias of the module of shape\n            (out_channels). If :attr:`bias` is ``True``,\n            then the values of these weights are\n            sampled from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n\n    Examples:\n\n        >>> # With square kernels and equal stride\n        >>> m = nn.Conv2d(16, 33, 3, stride=2)\n        >>> # non-square kernels and unequal stride and with padding\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2))\n        >>> # non-square kernels and unequal stride and with padding and dilation\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2), dilation=(3, 1))\n        >>> input = torch.randn(20, 16, 50, 100)\n        >>> output = m(input)\n\n    .. _cross-correlation:\n        https://en.wikipedia.org/wiki/Cross-correlation\n\n    .. _link:\n        https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md\n    ",
     "class_name": "Conv2d",
     "class_qualname": "torch.nn.modules.conv.Conv2d",
@@ -6041,7 +6041,7 @@
     "num_recursive_params": 2,
     "num_recursive_params_frozen": 0,
     "num_recursive_params_trainable": 2,
-    "ops": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "ops": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "out": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -6090,14 +6090,14 @@
      }
     ],
     "param_memory": "<measured>",
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_param_addresses": [
      "conv.weight",
      "conv.bias"
     ],
-    "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
+    "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1824,
@@ -6134,7 +6134,7 @@
     "backward_hooks": [],
     "backward_pre_hooks": [],
     "buffer_layers": [],
-    "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [
      "conv"
     ],
@@ -6158,7 +6158,7 @@
      "__ref__": "ModuleCall",
      "label": "self"
     },
-    "calls": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
     "class_name": "PlainCNN",
     "class_qualname": "capture_oracle._models.PlainCNN",
@@ -6257,7 +6257,7 @@
     "num_recursive_params": 2,
     "num_recursive_params_frozen": 0,
     "num_recursive_params_trainable": 2,
-    "ops": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "ops": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "out": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -6306,14 +6306,14 @@
      }
     ],
     "param_memory": "<measured>",
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_param_addresses": [
      "conv.weight",
      "conv.bias"
     ],
-    "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
+    "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1888,
@@ -6397,10 +6397,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -6446,10 +6446,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
@@ -6531,7 +6531,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -6574,7 +6574,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 1, 4, 4])"
     ],
@@ -6736,7 +6736,7 @@
       2
      ]
     ],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "input_1"
@@ -6850,10 +6850,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -6882,10 +6882,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
@@ -6925,7 +6925,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -6953,7 +6953,7 @@
     "input_containers": [],
     "input_dtypes": [],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [],
     "input_to_module_calls": [
      "conv:1"
@@ -7081,7 +7081,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {},
      "\"kwargs\"": {}
@@ -7188,10 +7188,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -7218,10 +7218,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
@@ -7276,7 +7276,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -7319,7 +7319,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 2, 4, 4])"
     ],
@@ -7441,7 +7441,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "relu_1_2"
@@ -7570,10 +7570,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -7611,10 +7611,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
@@ -7671,7 +7671,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -7714,7 +7714,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 2, 4, 4])"
     ],
@@ -7835,7 +7835,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "conv2d_1_1"
@@ -7937,12 +7937,12 @@
     ],
     "device_ref": null,
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
     "grad_shape": null,
     "gradient_memory": "<measured>",
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -8004,7 +8004,7 @@
       2
      ]
     },
-    "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
+    "value_basis": "<torchlens._data_classes.param.ParamValueBasis>"
    },
    "conv.weight": {
     "_derived_grad_record_path": null,
@@ -8022,12 +8022,12 @@
     ],
     "device_ref": null,
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
     "grad_shape": null,
     "gradient_memory": "<measured>",
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -8098,7 +8098,7 @@
       3
      ]
     },
-    "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
+    "value_basis": "<torchlens._data_classes.param.ParamValueBasis>"
    }
   },
   "trace": {
@@ -8308,7 +8308,7 @@
    "backward_events": [],
    "backward_memory_backend": "<measured>",
    "backward_pass_logs": {},
-   "backward_passes": "<torchlens.data_classes.backward_pass.BackwardPassAccessor>",
+   "backward_passes": "<torchlens._data_classes.backward_pass.BackwardPassAccessor>",
    "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
    "backward_ready": false,
@@ -8319,7 +8319,7 @@
    "buffer_num_calls": {},
    "buffer_read_ops": [],
    "buffer_write_ops": [],
-   "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
    "by_pass": {
     "1": [
      0,
@@ -8377,15 +8377,15 @@
     "\"unknown\"": 0,
     "\"zero_by_rule\"": 0
    },
-   "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "compute_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {},
    "conditional_branch_edges": [],
    "conditional_edge_call_indices": {},
    "conditional_records": [],
-   "conditionals": "<torchlens.data_classes.trace.ConditionalAccessor>",
+   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
    "decoded_output": null,
-   "derived_grads": "<torchlens.data_classes.derived_grad.DerivedGradAccessor>",
+   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
    "detach_saved_activations": false,
    "distributed_scope": null,
    "edges": "<raises SelectionError>",
@@ -8398,7 +8398,7 @@
    "escape_detector_mode": "off",
    "escape_detector_verified": null,
    "escape_diagnostics": [],
-   "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
+   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
@@ -8434,12 +8434,12 @@
    "forward_source_line": 67,
    "forward_source_location": "<repo>/tests/capture_oracle/_models.py:67",
    "func_calls_duration": "<measured>",
-   "grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
+   "grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
    "grad_fn_fire_timings": "<measured>",
    "grad_fn_logs": {},
    "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_fns": "<torchlens.data_classes.grad_fn.GradFnAccessor>",
+   "grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
    "grad_transform": null,
    "grad_transform_repr": null,
    "graph_shape_hash": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
@@ -8476,14 +8476,14 @@
     "input_1"
    ],
    "input_object_id": "<measured>",
-   "input_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "input_preprocessor": null,
    "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
    "input_structure": "<raises AttributeError>",
-   "intermediate_derived_grads": "<torchlens.data_classes.derived_grad.IntermediateDerivedGradAccessor>",
-   "internal_sink_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "intermediate_derived_grads": "<torchlens._data_classes.derived_grad.IntermediateDerivedGradAccessor>",
+   "internal_sink_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_sink_ops": [],
-   "internal_source_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "internal_source_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
@@ -8690,7 +8690,7 @@
     "\"relu_1_2\"": 1
    },
    "layer_visualizers": null,
-   "layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
    "layers_with_params": {
     "\"conv2d_1_1\"": [
@@ -8749,8 +8749,8 @@
      "label": "output_1:1"
     }
    ],
-   "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
-   "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "model_profile": "<torchlens._data_classes._trace_profile.ModelProfile>",
+   "module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "module_collapse_order": [
     [
      "conv",
@@ -8763,8 +8763,8 @@
    ],
    "module_filter": null,
    "module_identity_mode": "torch_module",
-   "modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
+   "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
    "num_backward_edges": null,
@@ -8845,9 +8845,9 @@
     }
    },
    "op_events": [
-    "<torchlens.ir.op_record.OpRecord>",
-    "<torchlens.ir.op_record.OpRecord>",
-    "<torchlens.ir.op_record.OpRecord>"
+    "<torchlens._ir.op_record.OpRecord>",
+    "<torchlens._ir.op_record.OpRecord>",
+    "<torchlens._ir.op_record.OpRecord>"
    ],
    "op_labels": [
     "input_1:1",
@@ -8855,10 +8855,10 @@
     "relu_1_2:1",
     "output_1:1"
    ],
-   "ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
-   "ops_with_params": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "orphans": "<torchlens.data_classes._trace_accessors.OrphanAccessor>",
+   "orphans": "<torchlens._data_classes._trace_accessors.OrphanAccessor>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -8866,14 +8866,14 @@
     "output_1"
    ],
    "output_num_classes": null,
-   "output_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "output_postprocessor": null,
    "overhead_duration": "<measured>",
    "param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
    "param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_logs": "<torchlens.data_classes.param.ParamAccessor>",
+   "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "param_source": "native-module",
-   "params": "<torchlens.data_classes.param.ParamAccessor>",
+   "params": "<torchlens._data_classes.param.ParamAccessor>",
    "parent_run": null,
    "parent_trace": null,
    "pinned_autograd_memory": "<measured>",
@@ -8886,7 +8886,7 @@
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
-   "recurrent_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "recurrent_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "relationship_evidence": {
     "\"graph\"": "unknown",
     "\"input\"": "unknown",
@@ -8914,23 +8914,23 @@
    "save_rng_states": "<measured>",
    "save_visualizations": false,
    "saved_activation_memory": "<measured>",
-   "saved_grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "saved_grad_fns": "<torchlens.data_classes.grad_fn.GradFnAccessor>",
-   "saved_grad_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "saved_grad_module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
-   "saved_grad_modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "saved_grad_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "saved_grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
+   "saved_grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
+   "saved_grad_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "saved_gradient_memory": "<measured>",
-   "saved_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "saved_module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
-   "saved_modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "saved_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "saved_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "saved_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "saved_modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [
-    "<torchlens.ir.events.ModulePrepEvent>",
-    "<torchlens.ir.events.ModulePrepEvent>",
-    "<torchlens.ir.events.ModuleEnterEvent>",
-    "<torchlens.ir.events.ModuleExitEvent>"
+    "<torchlens._ir.events.ModulePrepEvent>",
+    "<torchlens._ir.events.ModulePrepEvent>",
+    "<torchlens._ir.events.ModuleEnterEvent>",
+    "<torchlens._ir.events.ModuleExitEvent>"
    ],
    "source_snapshots": [],
    "state": "TraceState.PRISTINE",
@@ -9056,9 +9056,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "conv2d_dsU1LzZK_oDRCwlmsconv",
     "equivalent_ops": {
@@ -9177,7 +9177,7 @@
     "op_labels": [
      "conv2d_1_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 1,
     "out": {
      "__tensor__": true,
@@ -9217,7 +9217,7 @@
       2
      ]
     ],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "input_1"
@@ -9351,9 +9351,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "input_1_1_4_4_torch.float32",
     "equivalent_ops": {
@@ -9455,7 +9455,7 @@
     "op_labels": [
      "input_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 0,
     "out": {
      "__tensor__": true,
@@ -9475,7 +9475,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {},
      "\"kwargs\"": {}
@@ -9591,9 +9591,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "output_1_1_2_4_4_torch.float32",
     "equivalent_ops": {
@@ -9695,7 +9695,7 @@
     "op_labels": [
      "output_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 3,
     "out": {
      "__tensor__": true,
@@ -9715,7 +9715,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "relu_1_2"
@@ -9874,9 +9874,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "relu_43c01414e3d13308",
     "equivalent_ops": {
@@ -9977,7 +9977,7 @@
     "op_labels": [
      "relu_1_2:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 2,
     "out": {
      "__tensor__": true,
@@ -9997,7 +9997,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "conv2d_1_1"
@@ -10393,7 +10393,7 @@
     "backward_hooks": [],
     "backward_pre_hooks": [],
     "buffer_layers": [],
-    "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
     "call_children_addresses": [],
     "call_children_modules": [],
@@ -10411,7 +10411,7 @@
      "__ref__": "ModuleCall",
      "label": "conv"
     },
-    "calls": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies a 2D convolution over an input signal composed of several input\n    planes.\n\n    In the simplest case, the output value of the layer with input size\n    :math:`(N, C_{\\text{in}}, H, W)` and output :math:`(N, C_{\\text{out}}, H_{\\text{out}}, W_{\\text{out}})`\n    can be precisely described as:\n\n    .. math::\n        \\text{out}(N_i, C_{\\text{out}_j}) = \\text{bias}(C_{\\text{out}_j}) +\n        \\sum_{k = 0}^{C_{\\text{in}} - 1} \\text{weight}(C_{\\text{out}_j}, k) \\star \\text{input}(N_i, k)\n\n\n    where :math:`\\star` is the valid 2D `cross-correlation`_ operator,\n    :math:`N` is a batch size, :math:`C_{\\text{in}}` and :math:`C_{\\text{out}}` correspond to\n    :attr:`in_channels` and :attr:`out_channels` respectively,\n    :math:`H` and :math:`W` are the input height and width in pixels.\n    See the Shape section below for how :math:`H_{\\text{out}}` and :math:`W_{\\text{out}}`\n    are derived from :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, and :attr:`dilation`.\n    \n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    * :attr:`stride` controls the stride for the cross-correlation, a single\n      number or a tuple.\n\n    * :attr:`padding` controls the amount of padding applied to the input. It\n      can be either a string {'valid', 'same'} or an int / a tuple of ints giving the\n      amount of implicit padding applied on both sides.\n\n    * :attr:`dilation` controls the spacing between the kernel points; also\n      known as the \u00e0 trous algorithm. It is harder to describe, but this `link`_\n      has a nice visualization of what :attr:`dilation` does.\n\n\n    * :attr:`groups` controls the connections between inputs and outputs.\n      :attr:`in_channels` and :attr:`out_channels` must both be divisible by\n      :attr:`groups`. For example,\n\n        * At groups=1, all inputs are convolved to all outputs.\n        * At groups=2, the operation becomes equivalent to having two conv\n          layers side by side, each seeing half the input channels\n          and producing half the output channels, and both subsequently\n          concatenated.\n        * At groups= :attr:`in_channels`, each input channel is convolved with\n          its own set of filters (of size\n          :math:`\\frac{\\text{out\\_channels}}{\\text{in\\_channels}}`).\n\n    The parameters :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, :attr:`dilation` can either be:\n\n        - a single ``int`` -- in which case the same value is used for the height and width dimension\n        - a ``tuple`` of two ints -- in which case, the first `int` is used for the height dimension,\n          and the second `int` for the width dimension\n\n    Note:\n        When `groups == in_channels` and `out_channels == K * in_channels`,\n        where `K` is a positive integer, this operation is also known as a \"depthwise convolution\".\n\n        In other words, for an input of size :math:`(N, C_{in}, L_{in})`,\n        a depthwise convolution with a depthwise multiplier `K` can be performed with the arguments\n        :math:`(C_\\text{in}=C_\\text{in}, C_\\text{out}=C_\\text{in} \\times \\text{K}, ..., \\text{groups}=C_\\text{in})`.\n\n    Note:\n        In some circumstances when given tensors on a CUDA device and using CuDNN, this operator may select a nondeterministic algorithm to increase performance. If this is undesirable, you can try to make the operation deterministic (potentially at a performance cost) by setting ``torch.backends.cudnn.deterministic = True``. See :doc:`/notes/randomness` for more information.\n\n    Note:\n        ``padding='valid'`` is the same as no padding. ``padding='same'`` pads\n        the input so the output has the shape as the input. However, this mode\n        doesn't support any stride values other than 1.\n\n    Note:\n        This module supports complex data types i.e. ``complex32, complex64, complex128``.\n\n    Args:\n        in_channels (int): Number of channels in the input image\n        out_channels (int): Number of channels produced by the convolution\n        kernel_size (int or tuple): Size of the convolving kernel\n        stride (int or tuple, optional): Stride of the convolution. Default: 1\n        padding (int, tuple or str, optional): Padding added to all four sides of\n            the input. Default: 0\n        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1\n        groups (int, optional): Number of blocked connections from input\n            channels to output channels. Default: 1\n        bias (bool, optional): If ``True``, adds a learnable bias to the\n            output. Default: ``True``\n        padding_mode (str, optional): ``'zeros'``, ``'reflect'``,\n            ``'replicate'`` or ``'circular'``. Default: ``'zeros'``\n    \n\n    Shape:\n        - Input: :math:`(N, C_{in}, H_{in}, W_{in})` or :math:`(C_{in}, H_{in}, W_{in})`\n        - Output: :math:`(N, C_{out}, H_{out}, W_{out})` or :math:`(C_{out}, H_{out}, W_{out})`, where\n\n          .. math::\n              H_{out} = \\left\\lfloor\\frac{H_{in}  + 2 \\times \\text{padding}[0] - \\text{dilation}[0]\n                        \\times (\\text{kernel\\_size}[0] - 1) - 1}{\\text{stride}[0]} + 1\\right\\rfloor\n\n          .. math::\n              W_{out} = \\left\\lfloor\\frac{W_{in}  + 2 \\times \\text{padding}[1] - \\text{dilation}[1]\n                        \\times (\\text{kernel\\_size}[1] - 1) - 1}{\\text{stride}[1]} + 1\\right\\rfloor\n\n    Attributes:\n        weight (Tensor): the learnable weights of the module of shape\n            :math:`(\\text{out\\_channels}, \\frac{\\text{in\\_channels}}{\\text{groups}},`\n            :math:`\\text{kernel\\_size[0]}, \\text{kernel\\_size[1]})`.\n            The values of these weights are sampled from\n            :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n        bias (Tensor):   the learnable bias of the module of shape\n            (out_channels). If :attr:`bias` is ``True``,\n            then the values of these weights are\n            sampled from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n\n    Examples:\n\n        >>> # With square kernels and equal stride\n        >>> m = nn.Conv2d(16, 33, 3, stride=2)\n        >>> # non-square kernels and unequal stride and with padding\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2))\n        >>> # non-square kernels and unequal stride and with padding and dilation\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2), dilation=(3, 1))\n        >>> input = torch.randn(20, 16, 50, 100)\n        >>> output = m(input)\n\n    .. _cross-correlation:\n        https://en.wikipedia.org/wiki/Cross-correlation\n\n    .. _link:\n        https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md\n    ",
     "class_name": "Conv2d",
     "class_qualname": "torch.nn.modules.conv.Conv2d",
@@ -10518,7 +10518,7 @@
     "num_recursive_params": 2,
     "num_recursive_params_frozen": 0,
     "num_recursive_params_trainable": 2,
-    "ops": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "ops": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "out": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -10567,14 +10567,14 @@
      }
     ],
     "param_memory": "<measured>",
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_param_addresses": [
      "conv.weight",
      "conv.bias"
     ],
-    "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
+    "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1824,
@@ -10611,7 +10611,7 @@
     "backward_hooks": [],
     "backward_pre_hooks": [],
     "buffer_layers": [],
-    "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [
      "conv"
     ],
@@ -10635,7 +10635,7 @@
      "__ref__": "ModuleCall",
      "label": "self"
     },
-    "calls": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
     "class_name": "PlainCNN",
     "class_qualname": "capture_oracle._models.PlainCNN",
@@ -10734,7 +10734,7 @@
     "num_recursive_params": 2,
     "num_recursive_params_frozen": 0,
     "num_recursive_params_trainable": 2,
-    "ops": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "ops": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "out": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -10783,14 +10783,14 @@
      }
     ],
     "param_memory": "<measured>",
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_param_addresses": [
      "conv.weight",
      "conv.bias"
     ],
-    "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
+    "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1888,
@@ -10874,10 +10874,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -10923,10 +10923,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
@@ -11008,7 +11008,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -11051,7 +11051,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 1, 4, 4])"
     ],
@@ -11213,7 +11213,7 @@
       2
      ]
     ],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "input_1"
@@ -11327,10 +11327,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -11359,10 +11359,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
@@ -11402,7 +11402,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -11430,7 +11430,7 @@
     "input_containers": [],
     "input_dtypes": [],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [],
     "input_to_module_calls": [
      "conv:1"
@@ -11558,7 +11558,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {},
      "\"kwargs\"": {}
@@ -11665,10 +11665,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -11695,10 +11695,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
@@ -11753,7 +11753,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -11796,7 +11796,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 2, 4, 4])"
     ],
@@ -11918,7 +11918,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "relu_1_2"
@@ -12047,10 +12047,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -12088,10 +12088,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
@@ -12148,7 +12148,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -12191,7 +12191,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 2, 4, 4])"
     ],
@@ -12312,7 +12312,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "conv2d_1_1"
@@ -12414,12 +12414,12 @@
     ],
     "device_ref": null,
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
     "grad_shape": null,
     "gradient_memory": "<measured>",
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -12451,7 +12451,7 @@
      "conv2d_1_1:1"
     ],
     "value": null,
-    "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
+    "value_basis": "<torchlens._data_classes.param.ParamValueBasis>"
    },
    "conv.weight": {
     "_derived_grad_record_path": null,
@@ -12469,12 +12469,12 @@
     ],
     "device_ref": null,
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
     "grad_shape": null,
     "gradient_memory": "<measured>",
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -12509,7 +12509,7 @@
      "conv2d_1_1:1"
     ],
     "value": null,
-    "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
+    "value_basis": "<torchlens._data_classes.param.ParamValueBasis>"
    }
   },
   "trace": {
@@ -12731,7 +12731,7 @@
    "backward_events": [],
    "backward_memory_backend": "<measured>",
    "backward_pass_logs": {},
-   "backward_passes": "<torchlens.data_classes.backward_pass.BackwardPassAccessor>",
+   "backward_passes": "<torchlens._data_classes.backward_pass.BackwardPassAccessor>",
    "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
    "backward_ready": false,
@@ -12742,7 +12742,7 @@
    "buffer_num_calls": {},
    "buffer_read_ops": [],
    "buffer_write_ops": [],
-   "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
    "by_pass": {
     "1": [
      0,
@@ -12800,15 +12800,15 @@
     "\"unknown\"": 0,
     "\"zero_by_rule\"": 0
    },
-   "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "compute_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {},
    "conditional_branch_edges": [],
    "conditional_edge_call_indices": {},
    "conditional_records": [],
-   "conditionals": "<torchlens.data_classes.trace.ConditionalAccessor>",
+   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
    "decoded_output": null,
-   "derived_grads": "<torchlens.data_classes.derived_grad.DerivedGradAccessor>",
+   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
    "detach_saved_activations": false,
    "distributed_scope": null,
    "edges": "<raises SelectionError>",
@@ -12821,7 +12821,7 @@
    "escape_detector_mode": "off",
    "escape_detector_verified": null,
    "escape_diagnostics": [],
-   "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
+   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": null,
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
@@ -12857,12 +12857,12 @@
    "forward_source_line": 67,
    "forward_source_location": "<repo>/tests/capture_oracle/_models.py:67",
    "func_calls_duration": "<measured>",
-   "grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
+   "grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
    "grad_fn_fire_timings": "<measured>",
    "grad_fn_logs": {},
    "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_fns": "<torchlens.data_classes.grad_fn.GradFnAccessor>",
+   "grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
    "grad_transform": null,
    "grad_transform_repr": null,
    "graph_shape_hash": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
@@ -12899,14 +12899,14 @@
     "input_1"
    ],
    "input_object_id": "<measured>",
-   "input_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "input_preprocessor": null,
    "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
    "input_structure": null,
-   "intermediate_derived_grads": "<torchlens.data_classes.derived_grad.IntermediateDerivedGradAccessor>",
-   "internal_sink_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "intermediate_derived_grads": "<torchlens._data_classes.derived_grad.IntermediateDerivedGradAccessor>",
+   "internal_sink_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_sink_ops": [],
-   "internal_source_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "internal_source_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
@@ -13113,7 +13113,7 @@
     "\"relu_1_2\"": 1
    },
    "layer_visualizers": null,
-   "layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
    "layers_with_params": {
     "\"conv2d_1_1\"": [
@@ -13172,8 +13172,8 @@
      "label": "output_1:1"
     }
    ],
-   "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
-   "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "model_profile": "<torchlens._data_classes._trace_profile.ModelProfile>",
+   "module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "module_collapse_order": [
     [
      "conv",
@@ -13186,8 +13186,8 @@
    ],
    "module_filter": null,
    "module_identity_mode": "torch_module",
-   "modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
+   "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
    "num_backward_edges": null,
@@ -13274,10 +13274,10 @@
     "relu_1_2:1",
     "output_1:1"
    ],
-   "ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
-   "ops_with_params": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "orphans": "<torchlens.data_classes._trace_accessors.OrphanAccessor>",
+   "orphans": "<torchlens._data_classes._trace_accessors.OrphanAccessor>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -13285,14 +13285,14 @@
     "output_1"
    ],
    "output_num_classes": null,
-   "output_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "output_postprocessor": null,
    "overhead_duration": "<measured>",
    "param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
    "param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_logs": "<torchlens.data_classes.param.ParamAccessor>",
+   "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "param_source": "native-module",
-   "params": "<torchlens.data_classes.param.ParamAccessor>",
+   "params": "<torchlens._data_classes.param.ParamAccessor>",
    "parent_run": null,
    "parent_trace": null,
    "pinned_autograd_memory": "<measured>",
@@ -13305,7 +13305,7 @@
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
-   "recurrent_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "recurrent_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "relationship_evidence": {
     "\"graph\"": "unknown",
     "\"input\"": "unknown",
@@ -13333,17 +13333,17 @@
    "save_rng_states": "<measured>",
    "save_visualizations": false,
    "saved_activation_memory": "<measured>",
-   "saved_grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "saved_grad_fns": "<torchlens.data_classes.grad_fn.GradFnAccessor>",
-   "saved_grad_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "saved_grad_module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
-   "saved_grad_modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "saved_grad_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "saved_grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
+   "saved_grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
+   "saved_grad_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "saved_gradient_memory": "<measured>",
-   "saved_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "saved_module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
-   "saved_modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "saved_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "saved_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "saved_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "saved_modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
    "source_snapshots": [],
@@ -13470,9 +13470,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "conv2d_dsU1LzZK_oDRCwlmsconv",
     "equivalent_ops": {
@@ -13591,7 +13591,7 @@
     "op_labels": [
      "conv2d_1_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 1,
     "out": {
      "__tensor__": true,
@@ -13631,7 +13631,7 @@
       2
      ]
     ],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "input_1"
@@ -13765,9 +13765,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "input_1_1_4_4_torch.float32",
     "equivalent_ops": {
@@ -13869,7 +13869,7 @@
     "op_labels": [
      "input_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 0,
     "out": {
      "__tensor__": true,
@@ -13889,7 +13889,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {},
      "\"kwargs\"": {}
@@ -14005,9 +14005,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "output_1_1_2_4_4_torch.float32",
     "equivalent_ops": {
@@ -14109,7 +14109,7 @@
     "op_labels": [
      "output_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 3,
     "out": {
      "__tensor__": true,
@@ -14129,7 +14129,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "relu_1_2"
@@ -14288,9 +14288,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "relu_43c01414e3d13308",
     "equivalent_ops": {
@@ -14391,7 +14391,7 @@
     "op_labels": [
      "relu_1_2:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 2,
     "out": {
      "__tensor__": true,
@@ -14411,7 +14411,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "conv2d_1_1"
@@ -14807,7 +14807,7 @@
     "backward_hooks": [],
     "backward_pre_hooks": [],
     "buffer_layers": [],
-    "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
     "call_children_addresses": [],
     "call_children_modules": [],
@@ -14825,7 +14825,7 @@
      "__ref__": "ModuleCall",
      "label": "conv"
     },
-    "calls": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies a 2D convolution over an input signal composed of several input\n    planes.\n\n    In the simplest case, the output value of the layer with input size\n    :math:`(N, C_{\\text{in}}, H, W)` and output :math:`(N, C_{\\text{out}}, H_{\\text{out}}, W_{\\text{out}})`\n    can be precisely described as:\n\n    .. math::\n        \\text{out}(N_i, C_{\\text{out}_j}) = \\text{bias}(C_{\\text{out}_j}) +\n        \\sum_{k = 0}^{C_{\\text{in}} - 1} \\text{weight}(C_{\\text{out}_j}, k) \\star \\text{input}(N_i, k)\n\n\n    where :math:`\\star` is the valid 2D `cross-correlation`_ operator,\n    :math:`N` is a batch size, :math:`C_{\\text{in}}` and :math:`C_{\\text{out}}` correspond to\n    :attr:`in_channels` and :attr:`out_channels` respectively,\n    :math:`H` and :math:`W` are the input height and width in pixels.\n    See the Shape section below for how :math:`H_{\\text{out}}` and :math:`W_{\\text{out}}`\n    are derived from :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, and :attr:`dilation`.\n    \n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    * :attr:`stride` controls the stride for the cross-correlation, a single\n      number or a tuple.\n\n    * :attr:`padding` controls the amount of padding applied to the input. It\n      can be either a string {'valid', 'same'} or an int / a tuple of ints giving the\n      amount of implicit padding applied on both sides.\n\n    * :attr:`dilation` controls the spacing between the kernel points; also\n      known as the \u00e0 trous algorithm. It is harder to describe, but this `link`_\n      has a nice visualization of what :attr:`dilation` does.\n\n\n    * :attr:`groups` controls the connections between inputs and outputs.\n      :attr:`in_channels` and :attr:`out_channels` must both be divisible by\n      :attr:`groups`. For example,\n\n        * At groups=1, all inputs are convolved to all outputs.\n        * At groups=2, the operation becomes equivalent to having two conv\n          layers side by side, each seeing half the input channels\n          and producing half the output channels, and both subsequently\n          concatenated.\n        * At groups= :attr:`in_channels`, each input channel is convolved with\n          its own set of filters (of size\n          :math:`\\frac{\\text{out\\_channels}}{\\text{in\\_channels}}`).\n\n    The parameters :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, :attr:`dilation` can either be:\n\n        - a single ``int`` -- in which case the same value is used for the height and width dimension\n        - a ``tuple`` of two ints -- in which case, the first `int` is used for the height dimension,\n          and the second `int` for the width dimension\n\n    Note:\n        When `groups == in_channels` and `out_channels == K * in_channels`,\n        where `K` is a positive integer, this operation is also known as a \"depthwise convolution\".\n\n        In other words, for an input of size :math:`(N, C_{in}, L_{in})`,\n        a depthwise convolution with a depthwise multiplier `K` can be performed with the arguments\n        :math:`(C_\\text{in}=C_\\text{in}, C_\\text{out}=C_\\text{in} \\times \\text{K}, ..., \\text{groups}=C_\\text{in})`.\n\n    Note:\n        In some circumstances when given tensors on a CUDA device and using CuDNN, this operator may select a nondeterministic algorithm to increase performance. If this is undesirable, you can try to make the operation deterministic (potentially at a performance cost) by setting ``torch.backends.cudnn.deterministic = True``. See :doc:`/notes/randomness` for more information.\n\n    Note:\n        ``padding='valid'`` is the same as no padding. ``padding='same'`` pads\n        the input so the output has the shape as the input. However, this mode\n        doesn't support any stride values other than 1.\n\n    Note:\n        This module supports complex data types i.e. ``complex32, complex64, complex128``.\n\n    Args:\n        in_channels (int): Number of channels in the input image\n        out_channels (int): Number of channels produced by the convolution\n        kernel_size (int or tuple): Size of the convolving kernel\n        stride (int or tuple, optional): Stride of the convolution. Default: 1\n        padding (int, tuple or str, optional): Padding added to all four sides of\n            the input. Default: 0\n        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1\n        groups (int, optional): Number of blocked connections from input\n            channels to output channels. Default: 1\n        bias (bool, optional): If ``True``, adds a learnable bias to the\n            output. Default: ``True``\n        padding_mode (str, optional): ``'zeros'``, ``'reflect'``,\n            ``'replicate'`` or ``'circular'``. Default: ``'zeros'``\n    \n\n    Shape:\n        - Input: :math:`(N, C_{in}, H_{in}, W_{in})` or :math:`(C_{in}, H_{in}, W_{in})`\n        - Output: :math:`(N, C_{out}, H_{out}, W_{out})` or :math:`(C_{out}, H_{out}, W_{out})`, where\n\n          .. math::\n              H_{out} = \\left\\lfloor\\frac{H_{in}  + 2 \\times \\text{padding}[0] - \\text{dilation}[0]\n                        \\times (\\text{kernel\\_size}[0] - 1) - 1}{\\text{stride}[0]} + 1\\right\\rfloor\n\n          .. math::\n              W_{out} = \\left\\lfloor\\frac{W_{in}  + 2 \\times \\text{padding}[1] - \\text{dilation}[1]\n                        \\times (\\text{kernel\\_size}[1] - 1) - 1}{\\text{stride}[1]} + 1\\right\\rfloor\n\n    Attributes:\n        weight (Tensor): the learnable weights of the module of shape\n            :math:`(\\text{out\\_channels}, \\frac{\\text{in\\_channels}}{\\text{groups}},`\n            :math:`\\text{kernel\\_size[0]}, \\text{kernel\\_size[1]})`.\n            The values of these weights are sampled from\n            :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n        bias (Tensor):   the learnable bias of the module of shape\n            (out_channels). If :attr:`bias` is ``True``,\n            then the values of these weights are\n            sampled from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n\n    Examples:\n\n        >>> # With square kernels and equal stride\n        >>> m = nn.Conv2d(16, 33, 3, stride=2)\n        >>> # non-square kernels and unequal stride and with padding\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2))\n        >>> # non-square kernels and unequal stride and with padding and dilation\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2), dilation=(3, 1))\n        >>> input = torch.randn(20, 16, 50, 100)\n        >>> output = m(input)\n\n    .. _cross-correlation:\n        https://en.wikipedia.org/wiki/Cross-correlation\n\n    .. _link:\n        https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md\n    ",
     "class_name": "Conv2d",
     "class_qualname": "torch.nn.modules.conv.Conv2d",
@@ -14932,7 +14932,7 @@
     "num_recursive_params": 2,
     "num_recursive_params_frozen": 0,
     "num_recursive_params_trainable": 2,
-    "ops": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "ops": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "out": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -14981,14 +14981,14 @@
      }
     ],
     "param_memory": "<measured>",
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_param_addresses": [
      "conv.weight",
      "conv.bias"
     ],
-    "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
+    "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1824,
@@ -15025,7 +15025,7 @@
     "backward_hooks": [],
     "backward_pre_hooks": [],
     "buffer_layers": [],
-    "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [
      "conv"
     ],
@@ -15049,7 +15049,7 @@
      "__ref__": "ModuleCall",
      "label": "self"
     },
-    "calls": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
     "class_name": "PlainCNN",
     "class_qualname": "capture_oracle._models.PlainCNN",
@@ -15148,7 +15148,7 @@
     "num_recursive_params": 2,
     "num_recursive_params_frozen": 0,
     "num_recursive_params_trainable": 2,
-    "ops": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "ops": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "out": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -15197,14 +15197,14 @@
      }
     ],
     "param_memory": "<measured>",
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_param_addresses": [
      "conv.weight",
      "conv.bias"
     ],
-    "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
+    "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1888,
@@ -15288,10 +15288,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -15337,10 +15337,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
@@ -15422,7 +15422,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -15465,7 +15465,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 1, 4, 4])"
     ],
@@ -15627,7 +15627,7 @@
       2
      ]
     ],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "input_1"
@@ -15741,10 +15741,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -15773,10 +15773,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
@@ -15816,7 +15816,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -15844,7 +15844,7 @@
     "input_containers": [],
     "input_dtypes": [],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [],
     "input_to_module_calls": [
      "conv:1"
@@ -15972,7 +15972,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {},
      "\"kwargs\"": {}
@@ -16079,10 +16079,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -16109,10 +16109,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [],
@@ -16167,7 +16167,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -16210,7 +16210,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 2, 4, 4])"
     ],
@@ -16332,7 +16332,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "relu_1_2"
@@ -16461,10 +16461,10 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -16502,10 +16502,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
@@ -16562,7 +16562,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -16605,7 +16605,7 @@
      "torch.float32"
     ],
     "input_memory": "<measured>",
-    "input_ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "input_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "input_shapes": [
      "torch.Size([1, 2, 4, 4])"
     ],
@@ -16726,7 +16726,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "conv2d_1_1"
@@ -16828,12 +16828,12 @@
     ],
     "device_ref": null,
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
     "grad_shape": null,
     "gradient_memory": "<measured>",
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -16895,7 +16895,7 @@
       2
      ]
     },
-    "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
+    "value_basis": "<torchlens._data_classes.param.ParamValueBasis>"
    },
    "conv.weight": {
     "_derived_grad_record_path": null,
@@ -16913,12 +16913,12 @@
     ],
     "device_ref": null,
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
     "grad_shape": null,
     "gradient_memory": "<measured>",
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -16989,7 +16989,7 @@
       3
      ]
     },
-    "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
+    "value_basis": "<torchlens._data_classes.param.ParamValueBasis>"
    }
   },
   "trace": {
@@ -17211,7 +17211,7 @@
    "backward_events": [],
    "backward_memory_backend": "<measured>",
    "backward_pass_logs": {},
-   "backward_passes": "<torchlens.data_classes.backward_pass.BackwardPassAccessor>",
+   "backward_passes": "<torchlens._data_classes.backward_pass.BackwardPassAccessor>",
    "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
    "backward_ready": false,
@@ -17222,7 +17222,7 @@
    "buffer_num_calls": {},
    "buffer_read_ops": [],
    "buffer_write_ops": [],
-   "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
    "by_pass": {
     "1": [
      0,
@@ -17280,15 +17280,15 @@
     "\"unknown\"": 0,
     "\"zero_by_rule\"": 0
    },
-   "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "compute_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {},
    "conditional_branch_edges": [],
    "conditional_edge_call_indices": {},
    "conditional_records": [],
-   "conditionals": "<torchlens.data_classes.trace.ConditionalAccessor>",
+   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
    "decoded_output": null,
-   "derived_grads": "<torchlens.data_classes.derived_grad.DerivedGradAccessor>",
+   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
    "detach_saved_activations": false,
    "distributed_scope": null,
    "edges": "<raises SelectionError>",
@@ -17301,7 +17301,7 @@
    "escape_detector_mode": "off",
    "escape_detector_verified": null,
    "escape_diagnostics": [],
-   "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
+   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": "<torchlens.semantic.facets.FacetRegistrySnapshot>",
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
@@ -17337,12 +17337,12 @@
    "forward_source_line": 67,
    "forward_source_location": "<repo>/tests/capture_oracle/_models.py:67",
    "func_calls_duration": "<measured>",
-   "grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
+   "grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
    "grad_fn_fire_timings": "<measured>",
    "grad_fn_logs": {},
    "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_fns": "<torchlens.data_classes.grad_fn.GradFnAccessor>",
+   "grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
    "grad_transform": null,
    "grad_transform_repr": null,
    "graph_shape_hash": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
@@ -17379,14 +17379,14 @@
     "input_1"
    ],
    "input_object_id": "<measured>",
-   "input_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "input_preprocessor": null,
    "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
    "input_structure": "<raises AttributeError>",
-   "intermediate_derived_grads": "<torchlens.data_classes.derived_grad.IntermediateDerivedGradAccessor>",
-   "internal_sink_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "intermediate_derived_grads": "<torchlens._data_classes.derived_grad.IntermediateDerivedGradAccessor>",
+   "internal_sink_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_sink_ops": [],
-   "internal_source_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "internal_source_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
@@ -17593,7 +17593,7 @@
     "\"relu_1_2\"": 1
    },
    "layer_visualizers": null,
-   "layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
    "layers_with_params": {
     "\"conv2d_1_1\"": [
@@ -17652,8 +17652,8 @@
      "label": "output_1:1"
     }
    ],
-   "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
-   "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "model_profile": "<torchlens._data_classes._trace_profile.ModelProfile>",
+   "module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "module_collapse_order": [
     [
      "conv",
@@ -17666,8 +17666,8 @@
    ],
    "module_filter": null,
    "module_identity_mode": "torch_module",
-   "modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
+   "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
    "num_backward_edges": null,
@@ -17754,10 +17754,10 @@
     "relu_1_2:1",
     "output_1:1"
    ],
-   "ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
-   "ops_with_params": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "orphans": "<torchlens.data_classes._trace_accessors.OrphanAccessor>",
+   "orphans": "<torchlens._data_classes._trace_accessors.OrphanAccessor>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -17765,14 +17765,14 @@
     "output_1"
    ],
    "output_num_classes": null,
-   "output_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "output_postprocessor": null,
    "overhead_duration": "<measured>",
    "param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
    "param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_logs": "<torchlens.data_classes.param.ParamAccessor>",
+   "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "param_source": "native-module",
-   "params": "<torchlens.data_classes.param.ParamAccessor>",
+   "params": "<torchlens._data_classes.param.ParamAccessor>",
    "parent_run": "<callable ReferenceType>",
    "parent_trace": {
     "__ref__": "Trace",
@@ -17788,7 +17788,7 @@
    "readiness": null,
    "recording_kept": true,
    "recurrence_detection": true,
-   "recurrent_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "recurrent_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "relationship_evidence": {
     "\"graph\"": "unknown",
     "\"input\"": "unknown",
@@ -17819,17 +17819,17 @@
    "save_rng_states": "<measured>",
    "save_visualizations": false,
    "saved_activation_memory": "<measured>",
-   "saved_grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "saved_grad_fns": "<torchlens.data_classes.grad_fn.GradFnAccessor>",
-   "saved_grad_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "saved_grad_module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
-   "saved_grad_modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "saved_grad_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "saved_grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
+   "saved_grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
+   "saved_grad_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "saved_gradient_memory": "<measured>",
-   "saved_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "saved_module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
-   "saved_modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "saved_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "saved_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "saved_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "saved_modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
    "source_snapshots": [],
@@ -17964,9 +17964,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "conv2d_param_000001_param_000002conv",
     "equivalent_ops": {
@@ -18085,7 +18085,7 @@
     "op_labels": [
      "conv2d_1_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 1,
     "out": {
      "__tensor__": true,
@@ -18125,7 +18125,7 @@
       2
      ]
     ],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "input_1"
@@ -18259,9 +18259,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "input_1_1_4_4_torch.float32",
     "equivalent_ops": {
@@ -18363,7 +18363,7 @@
     "op_labels": [
      "input_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 0,
     "out": {
      "__tensor__": true,
@@ -18383,7 +18383,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {},
      "\"kwargs\"": {}
@@ -18499,9 +18499,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "output_1_1_2_4_4_torch.float32",
     "equivalent_ops": {
@@ -18603,7 +18603,7 @@
     "op_labels": [
      "output_1:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 3,
     "out": {
      "__tensor__": true,
@@ -18623,7 +18623,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "relu_1_2"
@@ -18769,9 +18769,9 @@
     ],
     "conditional_then_children": [],
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edges_vary_across_ops": false,
     "equivalence_class": "relu_43c01414e3d13308",
     "equivalent_ops": {
@@ -18872,7 +18872,7 @@
     "op_labels": [
      "relu_1_2:1"
     ],
-    "ops": "<torchlens.data_classes.layer.OpAccessor>",
+    "ops": "<torchlens._data_classes.layer.OpAccessor>",
     "ordinal_index": 2,
     "out": {
      "__tensor__": true,
@@ -18892,7 +18892,7 @@
     "param_dtypes": [],
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "conv2d_1_1"
@@ -19288,7 +19288,7 @@
     "backward_hooks": [],
     "backward_pre_hooks": [],
     "buffer_layers": [],
-    "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
     "call_children_addresses": [],
     "call_children_modules": [],
@@ -19306,7 +19306,7 @@
      "__ref__": "ModuleCall",
      "label": "conv"
     },
-    "calls": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies a 2D convolution over an input signal composed of several input\n    planes.\n\n    In the simplest case, the output value of the layer with input size\n    :math:`(N, C_{\\text{in}}, H, W)` and output :math:`(N, C_{\\text{out}}, H_{\\text{out}}, W_{\\text{out}})`\n    can be precisely described as:\n\n    .. math::\n        \\text{out}(N_i, C_{\\text{out}_j}) = \\text{bias}(C_{\\text{out}_j}) +\n        \\sum_{k = 0}^{C_{\\text{in}} - 1} \\text{weight}(C_{\\text{out}_j}, k) \\star \\text{input}(N_i, k)\n\n\n    where :math:`\\star` is the valid 2D `cross-correlation`_ operator,\n    :math:`N` is a batch size, :math:`C_{\\text{in}}` and :math:`C_{\\text{out}}` correspond to\n    :attr:`in_channels` and :attr:`out_channels` respectively,\n    :math:`H` and :math:`W` are the input height and width in pixels.\n    See the Shape section below for how :math:`H_{\\text{out}}` and :math:`W_{\\text{out}}`\n    are derived from :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, and :attr:`dilation`.\n    \n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    * :attr:`stride` controls the stride for the cross-correlation, a single\n      number or a tuple.\n\n    * :attr:`padding` controls the amount of padding applied to the input. It\n      can be either a string {'valid', 'same'} or an int / a tuple of ints giving the\n      amount of implicit padding applied on both sides.\n\n    * :attr:`dilation` controls the spacing between the kernel points; also\n      known as the \u00e0 trous algorithm. It is harder to describe, but this `link`_\n      has a nice visualization of what :attr:`dilation` does.\n\n\n    * :attr:`groups` controls the connections between inputs and outputs.\n      :attr:`in_channels` and :attr:`out_channels` must both be divisible by\n      :attr:`groups`. For example,\n\n        * At groups=1, all inputs are convolved to all outputs.\n        * At groups=2, the operation becomes equivalent to having two conv\n          layers side by side, each seeing half the input channels\n          and producing half the output channels, and both subsequently\n          concatenated.\n        * At groups= :attr:`in_channels`, each input channel is convolved with\n          its own set of filters (of size\n          :math:`\\frac{\\text{out\\_channels}}{\\text{in\\_channels}}`).\n\n    The parameters :attr:`kernel_size`, :attr:`stride`, :attr:`padding`, :attr:`dilation` can either be:\n\n        - a single ``int`` -- in which case the same value is used for the height and width dimension\n        - a ``tuple`` of two ints -- in which case, the first `int` is used for the height dimension,\n          and the second `int` for the width dimension\n\n    Note:\n        When `groups == in_channels` and `out_channels == K * in_channels`,\n        where `K` is a positive integer, this operation is also known as a \"depthwise convolution\".\n\n        In other words, for an input of size :math:`(N, C_{in}, L_{in})`,\n        a depthwise convolution with a depthwise multiplier `K` can be performed with the arguments\n        :math:`(C_\\text{in}=C_\\text{in}, C_\\text{out}=C_\\text{in} \\times \\text{K}, ..., \\text{groups}=C_\\text{in})`.\n\n    Note:\n        In some circumstances when given tensors on a CUDA device and using CuDNN, this operator may select a nondeterministic algorithm to increase performance. If this is undesirable, you can try to make the operation deterministic (potentially at a performance cost) by setting ``torch.backends.cudnn.deterministic = True``. See :doc:`/notes/randomness` for more information.\n\n    Note:\n        ``padding='valid'`` is the same as no padding. ``padding='same'`` pads\n        the input so the output has the shape as the input. However, this mode\n        doesn't support any stride values other than 1.\n\n    Note:\n        This module supports complex data types i.e. ``complex32, complex64, complex128``.\n\n    Args:\n        in_channels (int): Number of channels in the input image\n        out_channels (int): Number of channels produced by the convolution\n        kernel_size (int or tuple): Size of the convolving kernel\n        stride (int or tuple, optional): Stride of the convolution. Default: 1\n        padding (int, tuple or str, optional): Padding added to all four sides of\n            the input. Default: 0\n        dilation (int or tuple, optional): Spacing between kernel elements. Default: 1\n        groups (int, optional): Number of blocked connections from input\n            channels to output channels. Default: 1\n        bias (bool, optional): If ``True``, adds a learnable bias to the\n            output. Default: ``True``\n        padding_mode (str, optional): ``'zeros'``, ``'reflect'``,\n            ``'replicate'`` or ``'circular'``. Default: ``'zeros'``\n    \n\n    Shape:\n        - Input: :math:`(N, C_{in}, H_{in}, W_{in})` or :math:`(C_{in}, H_{in}, W_{in})`\n        - Output: :math:`(N, C_{out}, H_{out}, W_{out})` or :math:`(C_{out}, H_{out}, W_{out})`, where\n\n          .. math::\n              H_{out} = \\left\\lfloor\\frac{H_{in}  + 2 \\times \\text{padding}[0] - \\text{dilation}[0]\n                        \\times (\\text{kernel\\_size}[0] - 1) - 1}{\\text{stride}[0]} + 1\\right\\rfloor\n\n          .. math::\n              W_{out} = \\left\\lfloor\\frac{W_{in}  + 2 \\times \\text{padding}[1] - \\text{dilation}[1]\n                        \\times (\\text{kernel\\_size}[1] - 1) - 1}{\\text{stride}[1]} + 1\\right\\rfloor\n\n    Attributes:\n        weight (Tensor): the learnable weights of the module of shape\n            :math:`(\\text{out\\_channels}, \\frac{\\text{in\\_channels}}{\\text{groups}},`\n            :math:`\\text{kernel\\_size[0]}, \\text{kernel\\_size[1]})`.\n            The values of these weights are sampled from\n            :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n        bias (Tensor):   the learnable bias of the module of shape\n            (out_channels). If :attr:`bias` is ``True``,\n            then the values of these weights are\n            sampled from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n            :math:`k = \\frac{groups}{C_\\text{in} * \\prod_{i=0}^{1}\\text{kernel\\_size}[i]}`\n\n    Examples:\n\n        >>> # With square kernels and equal stride\n        >>> m = nn.Conv2d(16, 33, 3, stride=2)\n        >>> # non-square kernels and unequal stride and with padding\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2))\n        >>> # non-square kernels and unequal stride and with padding and dilation\n        >>> m = nn.Conv2d(16, 33, (3, 5), stride=(2, 1), padding=(4, 2), dilation=(3, 1))\n        >>> input = torch.randn(20, 16, 50, 100)\n        >>> output = m(input)\n\n    .. _cross-correlation:\n        https://en.wikipedia.org/wiki/Cross-correlation\n\n    .. _link:\n        https://github.com/vdumoulin/conv_arithmetic/blob/master/README.md\n    ",
     "class_name": "Conv2d",
     "class_qualname": "torch.nn.modules.conv.Conv2d",
@@ -19413,7 +19413,7 @@
     "num_recursive_params": 2,
     "num_recursive_params_frozen": 0,
     "num_recursive_params_trainable": 2,
-    "ops": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "ops": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "out": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -19462,14 +19462,14 @@
      }
     ],
     "param_memory": "<measured>",
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_param_addresses": [
      "conv.weight",
      "conv.bias"
     ],
-    "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
+    "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1824,
@@ -19506,7 +19506,7 @@
     "backward_hooks": [],
     "backward_pre_hooks": [],
     "buffer_layers": [],
-    "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+    "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [
      "conv"
     ],
@@ -19530,7 +19530,7 @@
      "__ref__": "ModuleCall",
      "label": "self"
     },
-    "calls": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Small convolutional network for ordinary feed-forward capture.",
     "class_name": "PlainCNN",
     "class_qualname": "capture_oracle._models.PlainCNN",
@@ -19629,7 +19629,7 @@
     "num_recursive_params": 2,
     "num_recursive_params_frozen": 0,
     "num_recursive_params_trainable": 2,
-    "ops": "<torchlens.data_classes.module.ModuleCallAccessor>",
+    "ops": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "out": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -19678,14 +19678,14 @@
      }
     ],
     "param_memory": "<measured>",
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "recursive_param_addresses": [
      "conv.weight",
      "conv.bias"
     ],
-    "recursive_params": "<torchlens.data_classes.param.ParamAccessor>",
+    "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
     "total_flops": 1888,
@@ -19810,10 +19810,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
@@ -19895,7 +19895,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -20080,7 +20080,7 @@
       2
      ]
     ],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "input_1"
@@ -20226,10 +20226,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
@@ -20269,7 +20269,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -20422,7 +20422,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {},
      "\"kwargs\"": {}
@@ -20559,10 +20559,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [],
@@ -20617,7 +20617,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -20762,7 +20762,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "relu_1_2"
@@ -20917,10 +20917,10 @@
     "containers": [],
     "derived_grad": null,
     "detach_saved_activations": false,
-    "device_ref": "<torchlens.ir.refs.DeviceRef>",
+    "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
@@ -20977,7 +20977,7 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens.data_classes.op.GradientRecordAccessor>",
+    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -21121,7 +21121,7 @@
     "param_memory": "<measured>",
     "param_names": [],
     "param_shapes": [],
-    "params": "<torchlens.data_classes.param.ParamAccessor>",
+    "params": "<torchlens._data_classes.param.ParamAccessor>",
     "parent_arg_positions": {
      "\"args\"": {
       "0": "conv2d_1_1"
@@ -21223,7 +21223,7 @@
     ],
     "device_ref": null,
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
     "grad_shape": null,
@@ -21260,7 +21260,7 @@
      "conv2d_1_1:1"
     ],
     "value": null,
-    "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
+    "value_basis": "<torchlens._data_classes.param.ParamValueBasis>"
    },
    "conv.weight": {
     "_derived_grad_record_path": null,
@@ -21278,7 +21278,7 @@
     ],
     "device_ref": null,
     "dtype": "torch.float32",
-    "dtype_ref": "<torchlens.ir.refs.DtypeRef>",
+    "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
     "grad_shape": null,
@@ -21318,7 +21318,7 @@
      "conv2d_1_1:1"
     ],
     "value": null,
-    "value_basis": "<torchlens.data_classes.param.ParamValueBasis>"
+    "value_basis": "<torchlens._data_classes.param.ParamValueBasis>"
    }
   },
   "trace": {
@@ -21540,7 +21540,7 @@
    "backward_events": [],
    "backward_memory_backend": "<measured>",
    "backward_pass_logs": {},
-   "backward_passes": "<torchlens.data_classes.backward_pass.BackwardPassAccessor>",
+   "backward_passes": "<torchlens._data_classes.backward_pass.BackwardPassAccessor>",
    "backward_peak_memory": "<measured>",
    "backward_peak_memory_reason": "<measured>",
    "backward_ready": false,
@@ -21551,7 +21551,7 @@
    "buffer_num_calls": {},
    "buffer_read_ops": [],
    "buffer_write_ops": [],
-   "buffers": "<torchlens.data_classes.buffer.BufferAccessor>",
+   "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
    "by_pass": {
     "1": [
      0,
@@ -21603,15 +21603,15 @@
     "\"unknown\"": 0,
     "\"zero_by_rule\"": 0
    },
-   "compute_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "compute_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "compute_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "compute_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "conditional_arm_entry_edges": {},
    "conditional_branch_edges": [],
    "conditional_edge_call_indices": {},
    "conditional_records": [],
-   "conditionals": "<torchlens.data_classes.trace.ConditionalAccessor>",
+   "conditionals": "<torchlens._data_classes.trace.ConditionalAccessor>",
    "decoded_output": null,
-   "derived_grads": "<torchlens.data_classes.derived_grad.DerivedGradAccessor>",
+   "derived_grads": "<torchlens._data_classes.derived_grad.DerivedGradAccessor>",
    "detach_saved_activations": false,
    "distributed_scope": null,
    "edges": "<raises SelectionError>",
@@ -21624,7 +21624,7 @@
    "escape_detector_mode": null,
    "escape_detector_verified": null,
    "escape_diagnostics": [],
-   "event_stream": "<torchlens.ir.capture_events.CaptureEvents>",
+   "event_stream": "<torchlens._ir.capture_events.CaptureEvents>",
    "facet_registry_snapshot": null,
    "factcore": "<torchlens.report._factcore.FactCore>",
    "flops_by_op_type": {
@@ -21660,12 +21660,12 @@
    "forward_source_line": 67,
    "forward_source_location": "_models.py:67",
    "func_calls_duration": "<measured>",
-   "grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
+   "grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
    "grad_fn_fire_timings": "<measured>",
    "grad_fn_logs": {},
    "grad_fn_order": [],
    "grad_fn_site_summary": {},
-   "grad_fns": "<torchlens.data_classes.grad_fn.GradFnAccessor>",
+   "grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
    "grad_transform": null,
    "grad_transform_repr": null,
    "graph_shape_hash": "2e9a3fba26b03648c8d9cb7fae47d5efe482c5ca390f06d84d1fa99eb69c4c4d",
@@ -21702,14 +21702,14 @@
     "input_1"
    ],
    "input_object_id": "<measured>",
-   "input_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "input_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "input_preprocessor": null,
    "input_signature_hash": "1b99d1b42576c7811524d854ea3d01d15a9ffe2795cc5de819f7cfc16b3b1bab",
    "input_structure": null,
-   "intermediate_derived_grads": "<torchlens.data_classes.derived_grad.IntermediateDerivedGradAccessor>",
-   "internal_sink_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "intermediate_derived_grads": "<torchlens._data_classes.derived_grad.IntermediateDerivedGradAccessor>",
+   "internal_sink_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_sink_ops": [],
-   "internal_source_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "internal_source_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "internal_source_ops": [],
    "internally_terminated_bool_ops": [],
    "intervention_audit": [],
@@ -21916,7 +21916,7 @@
     "\"relu_1_2\"": 1
    },
    "layer_visualizers": null,
-   "layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "layers_to_save": "all",
    "layers_with_params": {
     "\"conv2d_1_1\"": [
@@ -21975,8 +21975,8 @@
      "label": "output_1:1"
     }
    ],
-   "model_profile": "<torchlens.data_classes._trace_profile.ModelProfile>",
-   "module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "model_profile": "<torchlens._data_classes._trace_profile.ModelProfile>",
+   "module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
    "module_collapse_order": [
     [
      "conv",
@@ -21989,8 +21989,8 @@
    ],
    "module_filter": null,
    "module_identity_mode": "torch_module",
-   "modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "nonfinite_coverage": "<torchlens.data_classes._nonfinite.NonfiniteCoverage>",
+   "modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "nonfinite_coverage": "<torchlens._data_classes._nonfinite.NonfiniteCoverage>",
    "nonfinite_ops": [],
    "nonfinite_verdict": "checked_and_clean",
    "num_backward_edges": null,
@@ -22077,10 +22077,10 @@
     "relu_1_2:1",
     "output_1:1"
    ],
-   "ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
-   "ops_with_params": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
+   "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
-   "orphans": "<torchlens.data_classes._trace_accessors.OrphanAccessor>",
+   "orphans": "<torchlens._data_classes._trace_accessors.OrphanAccessor>",
    "outcome": "<torchlens.capture.outcome.CaptureOutcome>",
    "output_device": "same",
    "output_id2label": null,
@@ -22088,14 +22088,14 @@
     "output_1"
    ],
    "output_num_classes": null,
-   "output_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "output_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "output_postprocessor": null,
    "overhead_duration": "<measured>",
    "param_hash_full": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
    "param_hash_quick": "c79b89b5caa55070b4e1badbe73871bd0a143be693cbea99f14af2aad19961fe",
-   "param_logs": "<torchlens.data_classes.param.ParamAccessor>",
+   "param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "param_source": "native-module",
-   "params": "<torchlens.data_classes.param.ParamAccessor>",
+   "params": "<torchlens._data_classes.param.ParamAccessor>",
    "parent_run": null,
    "parent_trace": null,
    "pinned_autograd_memory": "<measured>",
@@ -22108,7 +22108,7 @@
    "readiness": "<torchlens._runnable.ReadinessReport>",
    "recording_kept": true,
    "recurrence_detection": true,
-   "recurrent_layers": "<torchlens.data_classes.layer.LayerAccessor>",
+   "recurrent_layers": "<torchlens._data_classes.layer.LayerAccessor>",
    "relationship_evidence": {
     "\"graph\"": "unknown",
     "\"input\"": "unknown",
@@ -22136,17 +22136,17 @@
    "save_rng_states": "<measured>",
    "save_visualizations": false,
    "saved_activation_memory": "<measured>",
-   "saved_grad_fn_calls": "<torchlens.data_classes._trace_accessors.TraceGradFnCallAccessor>",
-   "saved_grad_fns": "<torchlens.data_classes.grad_fn.GradFnAccessor>",
-   "saved_grad_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "saved_grad_module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
-   "saved_grad_modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "saved_grad_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "saved_grad_fn_calls": "<torchlens._data_classes._trace_accessors.TraceGradFnCallAccessor>",
+   "saved_grad_fns": "<torchlens._data_classes.grad_fn.GradFnAccessor>",
+   "saved_grad_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "saved_grad_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "saved_grad_modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "saved_grad_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "saved_gradient_memory": "<measured>",
-   "saved_layers": "<torchlens.data_classes.layer.LayerAccessor>",
-   "saved_module_calls": "<torchlens.data_classes._trace_accessors.TraceModuleCallAccessor>",
-   "saved_modules": "<torchlens.data_classes.module.ModuleAccessor>",
-   "saved_ops": "<torchlens.data_classes._trace_accessors.TraceOpAccessor>",
+   "saved_layers": "<torchlens._data_classes.layer.LayerAccessor>",
+   "saved_module_calls": "<torchlens._data_classes._trace_accessors.TraceModuleCallAccessor>",
+   "saved_modules": "<torchlens._data_classes.module.ModuleAccessor>",
+   "saved_ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "setup_duration": "<measured>",
    "sibling_events": [],
    "source_snapshots": [],

@@ -109,7 +109,7 @@
 - `export/`, `report/`, `stats/`, `debug/` - export bridges, human reports,
   summary stats, power-user diagnostics (lazy; `debug` deliberately not in
   `__all__`).
-- `partial/` - failed-capture recovery (`tl.partial.from_failed_capture`).
+- `partial/` - failed-capture recovery (`tl._partial.from_failed_capture`).
 - `accessors/`, `semantic/`, `observers`, `io/` - accessor protocols, facet
   recipes, public observers, and the `torchlens.io` save/load facade.
 - `bridge/`, `compat/`, `callbacks/` - optional integrations and migration facades.

@@ -111,7 +111,7 @@ def test_control_flow_summary_has_no_escape_bytes() -> None:
 def test_memory_footer_reports_measured_peak(small_log: tl.Trace) -> None:
     """The memory footer prints the measured peak + backend, never 'not tracked' (A7)."""
 
-    from torchlens.observe import pass_peak_facts
+    from torchlens._observe import pass_peak_facts
 
     text = str(small_log.summary())
     assert "not tracked" not in text

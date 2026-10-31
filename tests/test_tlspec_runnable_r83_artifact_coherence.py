@@ -323,7 +323,7 @@ def test_cached_repeat_capture_still_replays_verified(tmp_path: Path) -> None:
 def test_pending_live_fire_records_is_registered() -> None:
     """The field must be in the catalog, so the tripwire stays armed for others."""
 
-    from torchlens.data_classes.trace import FieldPolicy, Trace
+    from torchlens._data_classes.trace import FieldPolicy, Trace
 
     spec: dict[str, Any] = Trace._PORTABLE_STATE_SPEC
     assert spec["_pending_live_fire_records"] is FieldPolicy.DROP

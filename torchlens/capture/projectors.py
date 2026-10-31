@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 from weakref import WeakKeyDictionary
 
-from ..constants import LAYER_PASS_LOG_FIELD_ORDER
-from ..ir.capture_events import _clone_op_event_for_replay
-from ..ir.events import OpEvent
+from .._constants import LAYER_PASS_LOG_FIELD_ORDER
+from .._ir.capture_events import _clone_op_event_for_replay
+from .._ir.events import OpEvent
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
@@ -312,7 +312,7 @@ class RefreshProjector:
                 f"{preview}{suffix}. "
                 "The computational graph may have changed between ops."
             )
-        from ..data_classes._state_adapter import state_items
+        from .._data_classes._state_adapter import state_items
 
         preserved_states = [dict(state_items(layer)) for layer in self.target.layer_list]
         if not self.target._refresh_matching_rerun_state_from(refreshed):
@@ -415,7 +415,7 @@ class RefreshProjector:
         ``tests/test_run_until_projection_cost.py`` pins the equivalence.
         """
 
-        from ..data_classes._state_adapter import state_items
+        from .._data_classes._state_adapter import state_items
 
         held = {name for name, _value in state_items(layer)}
         new_state = dict(state_items(new_layer))
@@ -443,7 +443,7 @@ class RefreshProjector:
     def _graph_change_error(refreshed: Any, detail: str | None = None) -> ValueError:
         """Build the legacy graph-change exception with partial-capture metadata."""
 
-        from ..partial import PartialTrace
+        from .._partial import PartialTrace
 
         detail_suffix = "" if detail is None else f" Detail: {detail}."
         error = ValueError(f"{_GRAPH_CHANGE_MESSAGE}{detail_suffix}")
@@ -468,9 +468,9 @@ class RefreshProjector:
         "computational graph changed" term, so historical callers survive.
         """
 
+        from .._partial import PartialTrace
         from .._runnable import RunnableErrorCode
         from ..errors.runnable import BufferSinkRoutingError
-        from ..partial import PartialTrace
 
         error = BufferSinkRoutingError(
             f"{_GRAPH_CHANGE_MESSAGE} Detail: {detail}. "
@@ -799,8 +799,8 @@ class RefreshProjector:
         re-acquires the redundant duplicate the byte model charged.
         """
 
-        from ..postprocess.graph_traversal import output_payload_aliases_parent
-        from ..utils.tensor_utils import safe_copy
+        from .._postprocess.graph_traversal import output_payload_aliases_parent
+        from .._utils.tensor_utils import safe_copy
 
         for output_label in self.target.output_layers:
             output = self.target.layer_dict_all_keys[output_label]

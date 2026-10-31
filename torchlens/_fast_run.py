@@ -15,6 +15,7 @@ from torch import nn
 
 from . import _state
 from ._call_fingerprint import fingerprinting, install_module_token_hooks
+from ._data_classes._trace_accessors import boundary_label_rows
 from ._fast_live_plans import (
     _FastOutputPlan,
     _pair_output_leaves,
@@ -39,6 +40,7 @@ from ._fast_live_until import (
     truncate_after,
 )
 from ._fast_sparse_state import _state_mutating_call_ids
+from ._ir.container import ContainerSpec, rebuild_container_from_spec
 from ._runnable import (
     ContractCheck,
     DivergencePolicy,
@@ -105,11 +107,9 @@ from ._runnable_execution import (
     run_loaded_sparse_trace,
 )
 from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
-from .data_classes._trace_accessors import boundary_label_rows
+from ._utils._torch_compat import tensor_has_named_dims
+from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError
-from .ir.container import ContainerSpec, rebuild_container_from_spec
-from .utils._torch_compat import tensor_has_named_dims
-from .utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 
 
 @dataclass(frozen=True, slots=True)
@@ -834,7 +834,7 @@ class _FastSparseSession:
                 )
         call_outputs: dict[str, Any] = {}
         checks: list[ContractCheck] = list(input_checks)
-        from .utils._torch_compat import autocast_is_enabled
+        from ._utils._torch_compat import autocast_is_enabled
 
         enabled_autocast = tuple(
             device for device in self.disabled_autocast_devices if bool(autocast_is_enabled(device))

@@ -9,8 +9,8 @@ from torch import nn
 
 import torchlens
 import torchlens as tl
-from torchlens.data_classes import FuncCallLocation
-from torchlens.utils import introspection
+from torchlens._data_classes import FuncCallLocation
+from torchlens._utils import introspection
 
 
 class RecursiveStackModel(nn.Module):

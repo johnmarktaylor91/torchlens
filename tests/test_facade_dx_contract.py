@@ -17,12 +17,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import constants as tl_constants
-from torchlens.data_classes.layer import Layer
-from torchlens.data_classes.module import Module, ModuleCall
-from torchlens.data_classes.op import Op
-from torchlens.data_classes.param import Param
-from torchlens.data_classes.trace import Trace
+from torchlens import _constants as tl_constants
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.module import Module, ModuleCall
+from torchlens._data_classes.op import Op
+from torchlens._data_classes.param import Param
+from torchlens._data_classes.trace import Trace
 
 
 class _DxModel(nn.Module):

@@ -103,7 +103,7 @@ class TensorStats:
         exists to serve. Never raises (the line renderer is pure).
         """
 
-        from ..utils.fail_open import fail_open
+        from .._utils.fail_open import fail_open
         from ._stats_render import render_core_line
 
         return fail_open(

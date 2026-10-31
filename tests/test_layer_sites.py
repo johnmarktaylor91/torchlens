@@ -10,11 +10,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._errors import InvalidArgumentError
-from torchlens.data_classes._layer_sites import (
+from torchlens._data_classes._layer_sites import (
     SHAPE_SUMMARY_CHARACTER_CLASS,
     layer_shape_summary,
 )
+from torchlens._errors import InvalidArgumentError
 
 
 class _Tied(nn.Module):

@@ -8,6 +8,7 @@ import torch
 from torch import nn
 
 from torchlens import _state
+from torchlens._data_classes.trace import Trace
 from torchlens.backends.torch.model_prep import (
     _cleanup_model_session,
     _ensure_model_prepared,
@@ -15,7 +16,6 @@ from torchlens.backends.torch.model_prep import (
 )
 from torchlens.backends.torch.sources import log_source_tensor
 from torchlens.capture.projections import RecordingState, active_recording_state
-from torchlens.data_classes.trace import Trace
 from torchlens.fastlog.options import RecordingOptions
 from torchlens.fastlog.types import CaptureSpec, Recording
 

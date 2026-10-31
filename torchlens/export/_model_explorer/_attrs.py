@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ...utils.display import format_flops, human_readable_size
+from ..._utils.display import format_flops, human_readable_size
 
 __tl_layer__ = "L8"
 

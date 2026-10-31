@@ -242,7 +242,7 @@ def test_registered_aux_is_type_strict():
         value: Any
         mode: Any
 
-    tl.register_container(
+    tl.types.register_container(
         _Wrap,
         lambda wrap: ((wrap.value,), wrap.mode),
         lambda children, aux: _Wrap(children[0], aux),

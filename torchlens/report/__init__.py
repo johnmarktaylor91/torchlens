@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
-from ..debug._first_bad import amp_scaled_grads_hint
-from ..debug._flops_vs_dispatch import flops_vs_dispatch
+from .._debug._compile_counter import count_compiles
+from .._debug._cost import hot_path, hot_path_rows
+from .._debug._first_bad import FirstBadThing, amp_scaled_grads_hint
+from .._debug._flops_vs_dispatch import flops_vs_dispatch
+from .._debug._grad_fn_walk import GradFnNode, GradFnSketch, sketch_grad_fn, walk_grad_fn
+from .._debug._graph import LineageReport, first_divergence, lineage
+from .._debug._graph_breaks import graph_breaks
+from .._debug._infer_input_shape import GuessInputShapeReport, guess_input_shape
+from .._debug._nan import BisectNanReport, bisect_nan
+from .._debug._nan_backward import BackwardNanReport, BackwardTransition, bisect_nan_backward
+from .._debug._precision import BisectPrecisionReport, bisect_precision
+from .._debug._recompute import recompute_candidates
 from ._compute_truth import ComputeAggregation, ComputeRow, RatioFact, compute_aggregation
 from ._cost_backward import (
     BACKWARD_STATES,
@@ -197,4 +207,26 @@ __all__ = [
     "roofline",
     "time_clean_step",
     "which_do_i_use",
+    "BackwardNanReport",
+    "BackwardTransition",
+    "bisect_nan",
+    "bisect_nan_backward",
+    "bisect_precision",
+    "BisectNanReport",
+    "BisectPrecisionReport",
+    "count_compiles",
+    "first_divergence",
+    "FirstBadThing",
+    "GradFnNode",
+    "GradFnSketch",
+    "graph_breaks",
+    "hot_path",
+    "hot_path_rows",
+    "guess_input_shape",
+    "GuessInputShapeReport",
+    "lineage",
+    "LineageReport",
+    "recompute_candidates",
+    "sketch_grad_fn",
+    "walk_grad_fn",
 ]

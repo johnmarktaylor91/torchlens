@@ -7,8 +7,8 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .invariants import (
         _EQUIVALENT_OPS_UNAVAILABLE,
         _RAW_LABEL_BEARING_DICT_FIELDS,
@@ -680,7 +680,7 @@ def _check_call_site_contract_post_hoc(
     ``call_site_contract_unchecked`` instead of passing silently.
     """
 
-    from ..postprocess._call_site_contract import (
+    from .._postprocess._call_site_contract import (
         CallSiteEntry,
         call_site_classes_for,
         call_site_contract_violation,

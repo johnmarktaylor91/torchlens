@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 from ..errors.episode import BundleExperimentError
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 __all__ = ["head_ablation_candidates"]
 

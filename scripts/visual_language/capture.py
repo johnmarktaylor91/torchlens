@@ -271,7 +271,7 @@ def _facade(panel: Panel, outpath: Path) -> str:
     model, inputs = ALL_FIXTURES[panel.fixture]()
     if panel.call == "summary":
         return _summary_dot(str(tl.summary(model, inputs)))
-    from torchlens.quickstart import render
+    from torchlens._quickstart import render
 
     result = render(model, inputs, file=str(outpath.with_suffix(".svg")), format="svg")
     return str(result.dot)
@@ -292,7 +292,7 @@ def probe_export(raw: Path) -> dict[str, str]:
     import inspect
     import re
 
-    from torchlens.data_classes._trace_viz import TraceVisualizationMixin
+    from torchlens._data_classes._trace_viz import TraceVisualizationMixin
 
     defaults = inspect.signature(TraceVisualizationMixin.draw).parameters
     model, inputs = FIXTURES["Flow"]()

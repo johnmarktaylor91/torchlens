@@ -12,7 +12,7 @@ sweep's name table, line up row for row:
 - ``member:<module>:<Class>.<name>``: a public member of a reached TorchLens class, one
   row per defining class; stored fields declared only in the class's ``FIELD_POLICY``
   table count, and carry ``field_tables``, the module constants that list the field
-  order (``torchlens.constants:MODEL_LOG_FIELD_ORDER``);
+  order (``torchlens._constants:MODEL_LOG_FIELD_ORDER``);
 - ``param:<name>``: a keyword name, grouped over every reached signature (variadic and
   underscore names included, so their renames and removals are seen).
 

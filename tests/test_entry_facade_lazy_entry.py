@@ -21,8 +21,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable_state import snapshot_capture_state
+from torchlens._utils.lazy_state import has_uninitialized_lazy_state, pending_lazy_state
 from torchlens.errors import CaptureContextError
-from torchlens.utils.lazy_state import has_uninitialized_lazy_state, pending_lazy_state
 
 
 def _lazy_mlp() -> nn.Sequential:

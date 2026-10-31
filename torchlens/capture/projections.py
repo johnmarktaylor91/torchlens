@@ -14,6 +14,20 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
 
+from .._ir.events import (
+    ArgTemplateRef,
+    FunctionCallRef,
+    ModuleFrame,
+    OpEvent,
+    OutputRef,
+    ParentEdge,
+)
+from .._ir.predicate import EventKind, coerce_deferred_value
+from .._ir.refs import DeviceRef, DtypeRef, TensorRef
+from .._ir.semantics import BackendSemantics, CapturePolicy
+from .._utils._torch_compat import tensor_version_or_none
+from .._utils._torch_symbols import torch_attr
+from .._utils.tensor_utils import get_memory_amount_from_metadata
 from ..fastlog.exceptions import PredicateError
 from ..fastlog.types import (
     ActivationRecord,
@@ -25,25 +39,11 @@ from ..fastlog.types import (
     Recording,
     StorageIntent,
 )
-from ..ir.events import (
-    ArgTemplateRef,
-    FunctionCallRef,
-    ModuleFrame,
-    OpEvent,
-    OutputRef,
-    ParentEdge,
-)
-from ..ir.predicate import EventKind, coerce_deferred_value
-from ..ir.refs import DeviceRef, DtypeRef, TensorRef
-from ..ir.semantics import BackendSemantics, CapturePolicy
-from ..utils._torch_compat import tensor_version_or_none
-from ..utils._torch_symbols import torch_attr
-from ..utils.tensor_utils import get_memory_amount_from_metadata
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
+    from .._ir.op_record import OpRecord
     from ..fastlog.options import RecordingOptions
-    from ..ir.op_record import OpRecord
 
 _active_recording_state: RecordingState | None = None
 
@@ -750,7 +750,7 @@ def _record_from_record_context(
     constructs unconditionally).
     """
 
-    from ..ir.op_record import (
+    from .._ir.op_record import (
         AnnotationsFacet,
         ControlFacet,
         GraphFacet,
@@ -956,7 +956,7 @@ def append_projected_event(
     """Append one lightweight predicate record to ``trace.capture_events``."""
 
     if not hasattr(trace, "capture_events"):
-        from ..ir import CaptureEvents
+        from .._ir import CaptureEvents
 
         trace.capture_events = CaptureEvents()
     label_raw = ctx.raw_label or ctx.label
@@ -1445,8 +1445,8 @@ def sync_recording_grad_records_from_sidecar(state: RecordingState) -> None:
         ``state.recording.grad_records`` and its lookup indexes are replaced.
     """
 
+    from .._ir.events import GradFnFired, OpGradObserved
     from ..fastlog.types import GradientRecord
-    from ..ir.events import GradFnFired, OpGradObserved
 
     trace = state.runtime_trace
     if trace is None:

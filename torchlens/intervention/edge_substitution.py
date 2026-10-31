@@ -60,7 +60,7 @@ from .masked_edit import _validate_edited
 from .types import Edit
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 __all__ = ["apply_edge_substitution_do"]
 

@@ -26,7 +26,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.postprocess import _call_site_contract as contract, loop_detection
+from torchlens._postprocess import _call_site_contract as contract, loop_detection
 from torchlens.validation import MetadataInvariantError, check_metadata_invariants
 from torchlens.validation.diagnostics import get_validation_diagnostics
 

@@ -21,9 +21,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir.container import ContainerSpec, DictKey, HFKey, TupleIndex, declared_leaf_slots
 from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens.errors import PathDivergenceError
-from torchlens.ir.container import ContainerSpec, DictKey, HFKey, TupleIndex, declared_leaf_slots
 from torchlens.options import CaptureOptions
 
 
@@ -168,7 +168,7 @@ def test_rebuild_arity_error_names_the_dry_slot() -> None:
     """H1 opaque-leaf arm in the codec: running dry names the declared slot and the
     opaque-leaf cause instead of the bare historical message."""
 
-    from torchlens.ir.container import rebuild_container_from_spec
+    from torchlens._ir.container import rebuild_container_from_spec
 
     spec = ContainerSpec(kind="hf_model_output", length=2, keys=("logits", "past_key_values"))
     with pytest.raises(ValueError, match="Not enough leaves") as excinfo:

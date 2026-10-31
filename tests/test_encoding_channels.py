@@ -21,8 +21,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes._layer_spec import _LAYER_MIRROR_SPEC, _LAYER_STATE_ORDER
-from torchlens.data_classes.layer import Layer
+from torchlens._data_classes._layer_spec import _LAYER_MIRROR_SPEC, _LAYER_STATE_ORDER
+from torchlens._data_classes.layer import Layer
 from torchlens.visualization._encoding import (
     DARK_RAMP,
     LAYER_SOURCE_ROWS,
@@ -602,7 +602,7 @@ def test_mirrored_per_call_enumeration_matches_live_mirror_spec() -> None:
     assert {"raw_index", "step_index", "ordinal_index", "grad_fn_object_id", "buffer_pass"} <= (
         stored_members
     ), "the sol r4 MAJOR-1 correction regressed"
-    from torchlens.postprocess.finalization import (
+    from torchlens._postprocess.finalization import (
         _MULTIPASS_BYTES_FIELDS,
         _MULTIPASS_FLOPS_FIELDS,
         _MULTIPASS_SHAPE_FIELDS,
@@ -619,7 +619,7 @@ def test_unclassified_source_on_rolled_refuses(varying_log: tl.Trace, tmp_path: 
 
     # 'num_inputs' is a NUMERIC Op-schema field (legal at option validation,
     # encodable on single-pass nodes) with no declared Layer rolled row.
-    from torchlens.constants import LAYER_PASS_LOG_FIELD_ORDER
+    from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER
 
     assert "num_inputs" in LAYER_PASS_LOG_FIELD_ORDER
     assert "num_inputs" not in LAYER_SOURCE_ROWS

@@ -27,8 +27,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.field_policy import FieldPolicy
 from torchlens.capture.trace import _SEMANTIC_OUTPUT_TRANSIENT_FIELDS
-from torchlens.data_classes.field_policy import FieldPolicy
 
 
 class _Tokenizer:
@@ -174,7 +174,7 @@ def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
 def test_all_four_fields_are_declared_drop_on_trace() -> None:
     """Declared, so the runtime-declaration lockstep gate can see them."""
 
-    from torchlens.constants import MODEL_LOG_FIELD_ORDER
+    from torchlens._constants import MODEL_LOG_FIELD_ORDER
 
     policy = tl.Trace.FIELD_POLICY
     for name in _SEMANTIC_OUTPUT_TRANSIENT_FIELDS:

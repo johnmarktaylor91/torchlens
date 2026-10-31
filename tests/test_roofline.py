@@ -12,8 +12,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import constants
-from torchlens.quantities import Bytes
+from torchlens import _constants as constants
+from torchlens._quantities import Bytes
 
 
 class _ViewModel(nn.Module):

@@ -45,11 +45,11 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
-from ..constants import RAW_LABEL_SUFFIX
-from ..utils._exception_notes import annotate_guarded
+from .._constants import RAW_LABEL_SUFFIX
+from .._utils._exception_notes import annotate_guarded
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 #: Closed status vocabulary for resolved public labels.
 LABEL_STATUS_FINAL = "final"

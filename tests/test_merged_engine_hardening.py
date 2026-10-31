@@ -18,15 +18,10 @@ from test_merged_engine import (
     trace_for_boundaries,
 )
 
-from torchlens.merged import (
-    BoundaryConsistency,
-    MergeAlignment,
-    MergedErrorCode,
-    MergeValueStatus,
-    derive_merge,
-)
-from torchlens.merged._errors import MergeInputError
-from torchlens.merged._evidence import extract_rank_evidence
+from torchlens._merged import BoundaryConsistency, MergedErrorCode, derive_merge
+from torchlens._merged._errors import MergeInputError
+from torchlens._merged._evidence import extract_rank_evidence
+from torchlens.types import MergeAlignment, MergeValueStatus
 
 
 def _hex64(char: str) -> str:
@@ -93,7 +88,7 @@ class TestOpLabelBackReferenceForgery:
     def test_fabricated_label_refuses_typed_at_join_ops_access(self):
         """The access-time half of the residual: resolution is fail-closed."""
 
-        from torchlens.merged._presenter import MergedTrace, _RankHandle
+        from torchlens._merged._presenter import MergedTrace, _RankHandle
 
         class _UnresolvingCore:
             _raw_to_final_op_labels: dict = {}
@@ -561,7 +556,7 @@ class TestMemberOutcomeGate:
         return trace
 
     def _assert_refuses(self, cores) -> None:
-        from torchlens.merged import merge_ranks
+        from torchlens._merged import merge_ranks
 
         with pytest.raises(MergeInputError) as excinfo:
             merge_ranks(cores)
@@ -585,8 +580,8 @@ class TestMemberOutcomeGate:
         self._assert_refuses([self._core(0, CaptureStatus.UNKNOWN), self._core(1)])
 
     def test_merge_report_shares_the_gate(self):
+        from torchlens._merged import merge_report
         from torchlens.capture.outcome import CaptureStatus
-        from torchlens.merged import merge_report
 
         with pytest.raises(MergeInputError) as excinfo:
             merge_report([self._core(0, CaptureStatus.FAILED), self._core(1)])
@@ -611,8 +606,8 @@ class TestMemberOutcomeGate:
         return [core(0, status0), core(1, status1)]
 
     def test_halted_member_merges_with_disclosure_never_silent_attested_complete(self):
+        from torchlens._merged import merge_ranks
         from torchlens.capture.outcome import CaptureStatus
-        from torchlens.merged import merge_ranks
 
         merged = merge_ranks(self._attested_pair(CaptureStatus.HALTED, CaptureStatus.COMPLETE))
         assert merged.value_status is MergeValueStatus.ATTESTED_COMPLETE
@@ -623,8 +618,8 @@ class TestMemberOutcomeGate:
         assert summary.index("halted") < summary.index("attested_complete")
 
     def test_unattested_member_merges_with_disclosure(self):
+        from torchlens._merged import merge_ranks
         from torchlens.capture.outcome import CaptureStatus
-        from torchlens.merged import merge_ranks
 
         merged = merge_ranks(self._attested_pair(CaptureStatus.COMPLETE, CaptureStatus.UNATTESTED))
         assert merged.member_outcomes[1] == "unattested"
@@ -632,8 +627,8 @@ class TestMemberOutcomeGate:
 
     @pytest.mark.smoke
     def test_disclosure_survives_release(self):
+        from torchlens._merged import merge_ranks
         from torchlens.capture.outcome import CaptureStatus
-        from torchlens.merged import merge_ranks
 
         merged = merge_ranks(self._attested_pair(CaptureStatus.HALTED, CaptureStatus.COMPLETE))
         merged.release()
@@ -642,15 +637,15 @@ class TestMemberOutcomeGate:
 
     @pytest.mark.smoke
     def test_members_without_outcome_sidecar_make_no_claim(self):
-        from torchlens.merged import merge_ranks
+        from torchlens._merged import merge_ranks
 
         merged = merge_ranks([self._core(0), self._core(1)])
         assert merged.member_outcomes == {}
         assert "member capture outcomes" not in merged.summary()
 
     def test_complete_members_carry_no_disclosure_line(self):
+        from torchlens._merged import merge_ranks
         from torchlens.capture.outcome import CaptureStatus
-        from torchlens.merged import merge_ranks
 
         merged = merge_ranks(self._attested_pair(CaptureStatus.COMPLETE, CaptureStatus.COMPLETE))
         assert merged.member_outcomes == {0: "complete", 1: "complete"}
@@ -660,8 +655,8 @@ class TestMemberOutcomeGate:
         """Path inputs load through resolve_rank_inputs' one chokepoint."""
 
         import torchlens._io.bundle as bundle_module
+        from torchlens._merged import merge_ranks
         from torchlens.capture.outcome import CaptureStatus
-        from torchlens.merged import merge_ranks
 
         failed = self._core(0, CaptureStatus.FAILED)
         monkeypatch.setattr(bundle_module, "load", lambda path: failed)
@@ -674,8 +669,8 @@ class TestMemberOutcomeGate:
     @pytest.mark.smoke
     def test_path_supplied_halted_member_is_disclosed(self, monkeypatch, tmp_path):
         import torchlens._io.bundle as bundle_module
+        from torchlens._merged import merge_ranks
         from torchlens.capture.outcome import CaptureStatus
-        from torchlens.merged import merge_ranks
 
         cores = {
             str(tmp_path / "rank0.tlspec"): self._attested_pair(
@@ -729,8 +724,8 @@ class TestHaltedMemberArtifactRoundTrip:
         return log
 
     def test_halted_member_round_trip_keeps_disclosure(self, tmp_path):
-        from torchlens.merged import merge_ranks
-        from torchlens.merged._artifact import load_merged
+        from torchlens._merged import merge_ranks
+        from torchlens._merged._artifact import load_merged
 
         merged = merge_ranks([self._real_core(0, halted=True), self._real_core(1, halted=False)])
         assert merged.member_outcomes == {0: "halted", 1: "complete"}
@@ -751,8 +746,8 @@ class TestModuleLevelSaveRefusesTyped:
         # The module-level bundle save used to reach the runnable poison gate
         # and die as a bare AttributeError ('MergedTrace' has no '_runnable');
         # the contract (2.5) promises every merged export surface refuses typed.
-        from torchlens.merged._errors import MergedSurfaceUnsupportedError
-        from torchlens.merged._presenter import MergedTrace, _RankHandle
+        from torchlens._merged._errors import MergedSurfaceUnsupportedError
+        from torchlens._merged._presenter import MergedTrace, _RankHandle
 
         derivation = derive_merge(
             {0: evidence(0, [boundary(0, 0)]), 1: evidence(1, [boundary(1, 0)])}

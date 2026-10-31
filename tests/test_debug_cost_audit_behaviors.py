@@ -11,8 +11,8 @@ from torch import nn
 pd = pytest.importorskip("pandas")
 
 import torchlens as tl  # noqa: E402
-from torchlens.debug import audit_trace, count_compiles, hot_path  # noqa: E402
-from torchlens.debug._cost import theoretical_op_bytes  # noqa: E402
+from torchlens._debug import audit_trace, count_compiles, hot_path  # noqa: E402
+from torchlens._debug._cost import theoretical_op_bytes  # noqa: E402
 
 
 class _TwoLineModel(nn.Module):
@@ -121,7 +121,7 @@ def test_audit_trace_on_failed_partial_reports_exception_with_context() -> None:
     with pytest.raises(RuntimeError, match="midway boom") as excinfo:
         tl.trace(_MidwayFailModel(), torch.ones(2, 3))
 
-    partial = tl.partial.from_failed_capture(excinfo.value)
+    partial = tl._partial.from_failed_capture(excinfo.value)
     audit = audit_trace(partial)
 
     by_check = {finding.check: finding for finding in audit.findings}

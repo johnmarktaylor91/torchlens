@@ -791,7 +791,7 @@ trace.save(sys.argv[1], level="runnable")
 
 _CORR2_3_CONSUME = """
 import sys, torch, torchlens as tl
-from torchlens.utils._torch_compat import get_current_function_mode_stack
+from torchlens._utils._torch_compat import get_current_function_mode_stack
 
 before = get_current_function_mode_stack()
 assert before == [], before
@@ -1316,8 +1316,8 @@ class TestOutputCapabilityMetaGates:
         import re
         import typing
 
-        from torchlens.ir import container as container_module
-        from torchlens.ir.container import CONTAINER_KIND_CAPABILITIES, ContainerSpec
+        from torchlens._ir import container as container_module
+        from torchlens._ir.container import CONTAINER_KIND_CAPABILITIES, ContainerSpec
 
         declared = set(typing.get_args(ContainerSpec.__dataclass_fields__["kind"].type))
         table = set(CONTAINER_KIND_CAPABILITIES)
@@ -1356,8 +1356,8 @@ class TestOutputCapabilityMetaGates:
     def test_forged_namedtuple_flag_cannot_suppress_recompute(self) -> None:
         """secB_1 adversarial pin: a hand-edited lossy_reconstruction=False is impotent."""
 
+        from torchlens._ir.container import ContainerSpec
         from torchlens._runnable_execution import _spec_node_reconstruction_lossy
-        from torchlens.ir.container import ContainerSpec
 
         forged = ContainerSpec(
             kind="namedtuple",
@@ -1370,8 +1370,8 @@ class TestOutputCapabilityMetaGates:
         assert _spec_node_reconstruction_lossy(forged) is True
 
     def test_plain_namedtuple_spec_recompute_stays_lossless(self) -> None:
+        from torchlens._ir.container import ContainerSpec
         from torchlens._runnable_execution import _spec_node_reconstruction_lossy
-        from torchlens.ir.container import ContainerSpec
 
         plain = ContainerSpec(
             kind="namedtuple",
@@ -1388,7 +1388,7 @@ class TestOutputCapabilityMetaGates:
     ) -> None:
         """3-ADJ-3: undeclared registrations refuse instances with extra state."""
 
-        from torchlens.ir.container import _CONTAINER_REGISTRY, register_container
+        from torchlens._ir.container import _CONTAINER_REGISTRY, register_container
 
         class _Holder:
             def __init__(self, a: torch.Tensor, b: torch.Tensor) -> None:
@@ -1444,7 +1444,7 @@ class TestAliasEngineUnit:
 
     @staticmethod
     def _relation(left: torch.Tensor, right: torch.Tensor) -> str:
-        from torchlens.utils.alias_footprint import touched_bytes_relation
+        from torchlens._utils.alias_footprint import touched_bytes_relation
 
         return touched_bytes_relation(left, right)
 
@@ -1484,7 +1484,7 @@ class TestAliasEngineUnit:
         assert self._relation(base[:0], base) == "disjoint"
 
     def test_over_cap_intersecting_is_unknown_never_disjoint(self) -> None:
-        from torchlens.utils.alias_footprint import ALIAS_ENUMERATION_ELEMENT_CAP
+        from torchlens._utils.alias_footprint import ALIAS_ENUMERATION_ELEMENT_CAP
 
         big = torch.zeros(ALIAS_ENUMERATION_ELEMENT_CAP + 2, 2)
         # Incongruent element grids inside one storage with intersecting bounds and

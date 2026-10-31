@@ -1,0 +1,490 @@
+"""Persistent buffer entities and dict-like accessors."""
+
+from __future__ import annotations
+
+import weakref
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, cast
+
+from .._constants import BUFFER_LOG_FIELD_ORDER
+from .._errors import AmbiguousOpLookupError
+from .._io import TLSPEC_VERSION, FieldPolicy, default_fill_state, read_tlspec_version
+from ._accessor_base import Accessor
+from ._runtime_handles import runtime_handle_from_trace
+from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+    from .op import Op
+    from .trace import Trace
+
+
+# Buffer fields deliberately omitted from Buffer.to_pandas() / BufferAccessor
+# .to_pandas() columns. Every field in BUFFER_LOG_FIELD_ORDER must either
+# appear as a dataframe column or be listed here -- tests/test_to_pandas_
+# field_coverage.py enforces this so new Buffer fields (or fields whose
+# FIELD_ORDER entry is later removed) can never silently drop out of the
+# buffer table again (the ``initial_value`` regression this guards against).
+_TO_PANDAS_EXCLUDED_BUFFER_FIELDS: frozenset[str] = frozenset(
+    {
+        # List of live Op child records, not a scalar table cell -- same
+        # "list of child records" exclusion category as BackwardPass
+        # .grad_fn_calls / GradFn.calls / Module.ops. Per-version scalars are
+        # already flattened into sibling columns (buffer_pass, shape, dtype,
+        # etc.) via the most recent version.
+        "versions",
+    }
+)
+
+
+def _buffer_log_to_row(buffer_log: Buffer) -> dict[str, Any]:
+    """Convert a Buffer into one DataFrame row.
+
+    Parameters
+    ----------
+    buffer_log:
+        Buffer metadata entry to export.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Mapping from canonical field name to exported value, excluding the
+        fields in ``_TO_PANDAS_EXCLUDED_BUFFER_FIELDS``.
+    """
+
+    return {
+        field: getattr(buffer_log, field)
+        for field in BUFFER_LOG_FIELD_ORDER
+        if field not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
+    }
+
+
+class Buffer:
+    """Persistent metadata entity for one registered buffer address."""
+
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "address": FieldPolicy.KEEP,
+        "module_address": FieldPolicy.KEEP,
+        "versions": FieldPolicy.KEEP,
+        "_initial_value": FieldPolicy.KEEP,
+        "_source_ref": FieldPolicy.WEAKREF_STRIP,
+    }
+    FIELD_POLICY = build_record_field_policy_table(
+        BUFFER_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="buffer"
+    )
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+
+    def __init__(
+        self,
+        address: str,
+        versions: Sequence[Op],
+        initial_value: Any | None = None,
+        source_trace: Trace | None = None,
+    ) -> None:
+        """Initialize a buffer entity from graph version nodes.
+
+        Parameters
+        ----------
+        address:
+            Registered buffer address.
+        versions:
+            Ordered graph nodes representing observed buffer versions.
+        source_trace:
+            Trace that owns the graph nodes.
+        """
+
+        self.address = address
+        self.module_address = address.rsplit(".", 1)[0] if "." in address else ""
+        self.versions = list(versions)
+        self._initial_value = initial_value
+        self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
+
+    def __tl_state_items__(self) -> Any:
+        """Yield live state pairs from the backing row (M8 facade hook)."""
+
+        from .._trace_core.record_rows import record_state_items
+
+        return record_state_items(self)
+
+    def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
+        """Install a state mapping through the cell descriptors (M8 hook)."""
+
+        from .._trace_core.record_rows import record_state_restore
+
+        record_state_restore(self, mapping)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return pickle state with the non-picklable weakref stripped.
+
+        ``_source_ref`` is a live ``weakref.ref`` to the owning ``Trace``
+        whenever a ``source_trace`` was supplied (the normal case), and
+        ``weakref`` objects cannot be pickled. Null it here, mirroring every
+        sibling record class (``Op``/``Layer``/``Param``/...), so standalone
+        ``pickle.dumps(buffer)`` does not crash.
+        """
+
+        from ._state_adapter import state_items
+
+        state = dict(state_items(self))
+        state["_source_ref"] = None
+        state["tlspec_version"] = TLSPEC_VERSION
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore pickle state without reviving the source-trace weakref."""
+
+        read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
+        default_fill_state(
+            state,
+            defaults={
+                "_source_ref": None,
+                "_initial_value": None,
+                "versions": [],
+            },
+        )
+        from .._io.state_keys import refuse_callable_shadowing_state_keys
+
+        refuse_callable_shadowing_state_keys(type(self), state)
+        from .._trace_core.record_rows import record_state_restore
+
+        record_state_restore(self, state)
+
+    @property
+    def source_trace(self) -> Trace | None:
+        """Return the owning trace if it is still alive."""
+
+        if self._source_ref is None:
+            return None
+        return self._source_ref()
+
+    @property
+    def trace(self) -> Trace | None:
+        """Compatibility alias for ``source_trace``."""
+
+        return self.source_trace
+
+    @property
+    def handle(self) -> Any | None:
+        """Return the live registered buffer tensor when reachable.
+
+        Returns
+        -------
+        Any | None
+            Live torch buffer object from the source model, or ``None`` when
+            this computed runtime handle is unavailable or non-portable.
+        """
+
+        return runtime_handle_from_trace(
+            self.source_trace,
+            lambda model: dict(model.named_buffers()).get(self.address),
+        )
+
+    @property
+    def name(self) -> str:
+        """Buffer name, the final component of ``address``."""
+
+        return self.address.rsplit(".", 1)[-1]
+
+    @property
+    def all_addresses(self) -> list[str]:
+        """Return all registered addresses represented by this entity."""
+
+        return [self.address]
+
+    @property
+    def has_multiple_addresses(self) -> bool:
+        """Return whether this entity represents shared registered addresses."""
+
+        return len(self.all_addresses) > 1
+
+    @property
+    def initial_value(self) -> Any:
+        """Initial observed buffer value."""
+
+        if self._initial_value is not None:
+            return self._initial_value
+        return None if not self.versions else self.versions[0].out
+
+    @property
+    def final_value(self) -> Any:
+        """Final observed buffer value."""
+
+        return None if not self.versions else self.versions[-1].out
+
+    @property
+    def num_overwrites(self) -> int:
+        """Number of write events recorded for this buffer address."""
+
+        return sum(1 for version in self.versions if version.buffer_write_kind is not None)
+
+    @property
+    def is_overwritten(self) -> bool:
+        """Return whether the buffer was written during the forward pass."""
+
+        return self.num_overwrites > 0
+
+    @property
+    def write_versions(self) -> list[Op]:
+        """Return versions produced by writes, excluding static initial reads."""
+
+        return [version for version in self.versions if version.buffer_write_kind is not None]
+
+    @property
+    def buffer_overwrite_index(self) -> int | None:
+        """Return the most recent version's overwrite index."""
+
+        return self.buffer_pass
+
+    @property
+    def buffer_pass(self) -> int | None:
+        """Return the most recent graph version pass index."""
+
+        return None if not self.versions else self.versions[-1].buffer_pass
+
+    @property
+    def call_index(self) -> int | None:
+        """Return the most recent graph version call index."""
+
+        return self.buffer_pass
+
+    @property
+    def layer_label(self) -> str | None:
+        """Return the most recent graph version layer label."""
+
+        return None if not self.versions else self.versions[-1].layer_label
+
+    @property
+    def shape(self) -> Any:
+        """Return the final observed buffer shape."""
+
+        return None if not self.versions else self.versions[-1].shape
+
+    @property
+    def dtype(self) -> Any:
+        """Return the final observed buffer dtype."""
+
+        return None if not self.versions else self.versions[-1].dtype
+
+    @property
+    def activation_memory(self) -> Any:
+        """Return final observed buffer activation memory."""
+
+        return None if not self.versions else self.versions[-1].activation_memory
+
+    @property
+    def has_saved_activation(self) -> bool:
+        """Return whether the final version has a saved activation."""
+
+        return bool(self.versions and self.versions[-1].has_saved_activation)
+
+    @property
+    def has_grad(self) -> bool:
+        """Return whether the final version has a saved gradient."""
+
+        return bool(self.versions and self.versions[-1].has_grad)
+
+    @property
+    def grad_shape(self) -> Any:
+        """Return final observed gradient shape."""
+
+        return None if not self.versions else self.versions[-1].grad_shape
+
+    @property
+    def grad_dtype(self) -> Any:
+        """Return final observed gradient dtype."""
+
+        return None if not self.versions else self.versions[-1].grad_dtype
+
+    @property
+    def gradient_memory(self) -> Any:
+        """Return final observed gradient memory."""
+
+        return None if not self.versions else self.versions[-1].gradient_memory
+
+    @property
+    def buffer_source(self) -> str | None:
+        """Return the most recent write producer label, if any."""
+
+        for version in reversed(self.versions):
+            if version.buffer_source is not None:
+                return cast(str, version.buffer_source)
+        return None
+
+    @property
+    def module(self) -> Any:
+        """Return the final graph version's module field."""
+
+        return None if not self.versions else self.versions[-1].module
+
+    @property
+    def modules(self) -> Any:
+        """Return the final graph version's module stack."""
+
+        return [] if not self.versions else self.versions[-1].modules
+
+    def value_at(self, version_index: int) -> Any:
+        """Return the value at a 1-based buffer version index."""
+
+        return self.versions[version_index - 1].out
+
+    def value_after(self, overwrite_index: int) -> Any:
+        """Return the value after a 1-based overwrite index."""
+
+        writes = self.write_versions
+        return writes[overwrite_index - 1].out
+
+    def to_pandas(self) -> pd.DataFrame:
+        """Export this Buffer as a one-row pandas DataFrame.
+
+        Driven by ``BUFFER_LOG_FIELD_ORDER`` minus the documented, genuinely
+        non-tabular exclusions in ``_TO_PANDAS_EXCLUDED_BUFFER_FIELDS``.
+        """
+
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        columns = [
+            field
+            for field in BUFFER_LOG_FIELD_ORDER
+            if field not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
+        ]
+        return pd.DataFrame([_buffer_log_to_row(self)], columns=columns)
+
+    def __repr__(self) -> str:
+        """One envelope+core line with the explicit value basis (F10).
+
+        The core is computed from the capture-time snapshot when one was
+        retained (basis ``snapshot at capture``); otherwise metadata only.
+        Never raises.
+        """
+
+        from .._utils.fail_open import fail_open
+        from ._value_repr import buffer_repr_line
+
+        return fail_open(
+            lambda: buffer_repr_line(self),
+            lambda _error: f"<Buffer {getattr(self, 'address', '<unbound>')}: repr degraded>",
+        )
+
+    def __str__(self) -> str:
+        """Bounded Buffer card: module path + version facts (F10)."""
+
+        from .._utils.fail_open import fail_open
+        from ._value_repr import buffer_card
+
+        return fail_open(lambda: buffer_card(self), lambda _error: self.__repr__())
+
+
+# The M8 facade: the five declared stored fields become row-cell
+# descriptors; the instance dict keeps only the store binding + user extras.
+_BUFFER_STORED_FIELDS: tuple[str, ...] = (
+    "address",
+    "module_address",
+    "versions",
+    "_initial_value",
+    "_source_ref",
+)
+
+
+def _install_buffer_facade() -> None:
+    """Install the Buffer row-cell descriptors (import-time, collision-safe)."""
+
+    from .._trace_core.record_rows import install_record_facade
+
+    install_record_facade(Buffer, _BUFFER_STORED_FIELDS)
+
+
+_install_buffer_facade()
+
+
+class BufferAccessor(Accessor["Buffer"]):
+    """Dict-like accessor for persistent Buffer entities."""
+
+    _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
+        "_dict": FieldPolicy.KEEP,
+        "_list": FieldPolicy.KEEP,
+        "_source_ref": FieldPolicy.WEAKREF_STRIP,
+    }
+
+    def __init__(
+        self,
+        buffer_dict: dict[str, Buffer],
+        source_trace: Trace | None = None,
+    ) -> None:
+        """Initialize the accessor from address-keyed buffer entities."""
+
+        source_ref = weakref.ref(source_trace) if source_trace is not None else None
+        super().__init__(buffer_dict, source_ref=source_ref)
+
+    def _resolve_substring(self, key: str) -> Buffer | None:
+        """Resolve an unambiguous buffer short name."""
+
+        matches = [bl for bl in self._list if bl.name == key]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            # Name the bounded candidate set (R65) like the merged-presenter
+            # sibling, instead of telling the user to guess the full address.
+            candidates = ", ".join(match.address for match in matches)
+            raise AmbiguousOpLookupError(
+                f"Ambiguous short name '{key}' -- use a full address: {candidates}",
+                candidates=tuple(match.address for match in matches),
+            )
+        return None
+
+    def _resolve_pass_qualified(self, key: str) -> Buffer | None:
+        """Resolve pass-qualified notation to the parent Buffer."""
+
+        base, _, pass_str = key.rpartition(":")
+        try:
+            int(pass_str)
+        except ValueError:
+            return None
+        if base in self._dict:
+            return self._dict[base]
+        return self._resolve_substring(base)
+
+    def __contains__(self, key: object) -> bool:
+        """Check membership by full address or short name."""
+
+        try:
+            self[key]  # type: ignore[index]
+        except (KeyError, TypeError, IndexError, ValueError):
+            return False
+        return True
+
+    def _composition_note(self) -> str | None:
+        """Composition breakdown: overwritten vs read-only buffers (F10)."""
+
+        overwritten = sum(1 for bl in self._list if bl.is_overwritten)
+        if not overwritten:
+            return None
+        return f"{overwritten} overwritten"
+
+    def to_pandas(self) -> pd.DataFrame:
+        """Export buffer metadata as a pandas DataFrame.
+
+        Driven by ``BUFFER_LOG_FIELD_ORDER`` minus the documented, genuinely
+        non-tabular exclusions in ``_TO_PANDAS_EXCLUDED_BUFFER_FIELDS`` -- see
+        ``Buffer.to_pandas`` for the per-row column derivation.
+        """
+
+        try:
+            import pandas as pd
+        except ImportError as e:
+            raise ImportError(
+                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+            ) from e
+
+        columns = [
+            field
+            for field in BUFFER_LOG_FIELD_ORDER
+            if field not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
+        ]
+        rows = [_buffer_log_to_row(buffer_log) for buffer_log in self._list]
+        return pd.DataFrame(rows, columns=columns)

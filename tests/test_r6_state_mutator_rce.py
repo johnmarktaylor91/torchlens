@@ -41,11 +41,11 @@ from torch import nn
 import torchlens as tl
 from torchlens._io._safe_unpickle import _safe_getattr
 from torchlens._runnable import PathFaithfulness
+from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_function_registry_key
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-from torchlens.utils._callable_safety import is_pure_forward_callable
 
 _CAP = CaptureOptions(
     intervention_ready=True,

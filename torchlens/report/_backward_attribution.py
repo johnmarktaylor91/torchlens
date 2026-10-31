@@ -37,8 +37,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from .._utils import _torch_compat
 from ..capture.flops import DISPATCH_COUNTING_CONVENTION
-from ..utils import _torch_compat
 
 #: Closed key set of the persisted per-pass record (SCHEMA-REQUESTS row 15).
 EXECUTED_FLOPS_RECORD_KEYS: frozenset[str] = frozenset(

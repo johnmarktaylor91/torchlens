@@ -135,7 +135,7 @@ def test_replay_table_untouched_by_this_model() -> None:
     table goes red here.
     """
 
-    from torchlens.utils.tensor_utils import _tolerances_for_dtype
+    from torchlens._utils.tensor_utils import _tolerances_for_dtype
 
     rtol, atol = _tolerances_for_dtype(torch.float32)
     finfo = torch.finfo(torch.float32)

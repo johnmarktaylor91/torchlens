@@ -18,7 +18,7 @@ contract until the correlation-ID Kineto join passes its acceptance gate
 separately, remainder named).
 
 What ships today: the **correlation-ID join door**
-(`torchlens.observability.native_profile` — one save-nothing execution under
+(`torchlens._observability.native_profile` — one save-nothing execution under
 one owned profiler session; device kernel time lands on your named ops via
 runtime correlation IDs, never name matching), **NVTX named ranges for
 Nsight** (visual correlation only), the analytic cost surfaces

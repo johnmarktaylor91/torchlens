@@ -23,7 +23,7 @@ from ._typography import DEFAULT_TYPOGRAPHY
 from .collapse_plan import OpSegment
 
 if TYPE_CHECKING:
-    from ..data_classes.trace import Trace
+    from .._data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
 
 

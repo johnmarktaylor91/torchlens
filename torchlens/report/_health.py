@@ -159,7 +159,7 @@ def _parse_persisted(payload: Any, revision: str) -> HealthFacts:
 def _derive(trace: Any) -> HealthFacts:
     """Derive HealthFacts from the strongest basis in hand."""
 
-    from ..data_classes._nonfinite import nonfinite_coverage, nonfinite_op_labels
+    from .._data_classes._nonfinite import nonfinite_coverage, nonfinite_op_labels
     from ._factcore import capture_fingerprint
 
     revision = capture_fingerprint(trace)
@@ -216,7 +216,7 @@ def health_facts(trace: Any, *, allow_scan: bool = True) -> HealthFacts:
         if persisted.basis != "persisted_invalid" and persisted.capture_revision == revision:
             return persisted
     if not allow_scan:
-        from ..data_classes._nonfinite import has_scan_evidence
+        from .._data_classes._nonfinite import has_scan_evidence
 
         if not has_scan_evidence(trace):
             from ._factcore import capture_fingerprint

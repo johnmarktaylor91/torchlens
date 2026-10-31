@@ -29,24 +29,22 @@ from torchlens.transforms import (
     TransformPipeline,
     TransformSpec,
     axis_for_role,
-    canonical_json,
     cast,
     chain,
-    coerce_transform,
-    coerce_transform_mapping,
     flatten,
     lookup_transform,
     magnitude,
-    pipeline_from_record,
-    pipeline_record,
     reduce,
     register_transform,
     registered_transform_names,
     take_index,
     unit_norm,
-    wants_context,
     with_context,
 )
+from torchlens.transforms._coerce import coerce_transform, coerce_transform_mapping
+from torchlens.transforms._context import wants_context
+from torchlens.transforms._pipeline import pipeline_from_record, pipeline_record
+from torchlens.transforms._spec import canonical_json
 
 # --- canonical JSON: the one byte form -------------------------------------
 

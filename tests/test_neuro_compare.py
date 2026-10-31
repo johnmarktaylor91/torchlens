@@ -9,7 +9,7 @@ Pins:
   leave-one-out refits.
 - Activations are read once: the model is never re-run.
 - A target equal to a site's own activations scores 1.0 under RSA and CKA.
-- ``n_resamples`` adds seeded ScoreIntervals; ``disagreement()`` and
+- ``num_resamples`` adds seeded ScoreIntervals; ``disagreement()`` and
   ``table()`` read the same scores; invalid settings refuse.
 """
 
@@ -146,8 +146,8 @@ def test_resamples_add_seeded_intervals_and_disagreement_reads_them() -> None:
     rng = np.random.default_rng(6)
     source = {"a": rng.normal(size=(16, 5)), "b": rng.normal(size=(16, 5))}
     target = source["a"] + 0.3 * rng.normal(size=(16, 5))
-    first = tl.neuro.compare(source, target, n_resamples=50, seed=9)
-    again = tl.neuro.compare(source, target, n_resamples=50, seed=9)
+    first = tl.neuro.compare(source, target, num_resamples=50, seed=9)
+    again = tl.neuro.compare(source, target, num_resamples=50, seed=9)
     assert first.intervals == again.intervals
     for name in ANALYSES:
         for site in ("a", "b"):
@@ -159,7 +159,7 @@ def test_resamples_add_seeded_intervals_and_disagreement_reads_them() -> None:
     assert report.metrics == ANALYSES and report.intervals
     assert "[" in first.table()
     data = first.to_dict()
-    assert data["intervals"]["rsa"]["a"]["n_resamples"] == 50
+    assert data["intervals"]["rsa"]["a"]["num_resamples"] == 50
 
 
 def test_table_lists_every_site_and_analysis() -> None:

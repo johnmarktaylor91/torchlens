@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
-from ..utils.tensor_utils import layer_grad_tolerances_for_dtype
+from .._utils.tensor_utils import layer_grad_tolerances_for_dtype
 from ._errors import (
     AmbiguousCallError,
     AmbiguousInputError,
@@ -27,7 +27,7 @@ from ._rules import (
     rules as _registered_rules,
 )
 from ._types import (
-    GradientReceptiveField,
+    GradReceptiveField,
     GridLayout,
     ReceptiveField,
     ReceptiveFieldAlignment,
@@ -53,8 +53,8 @@ rules = _registered_rules
 
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 @dataclass(frozen=True)
@@ -220,7 +220,7 @@ def _empirical_adjoint_checks(
                 else:
                     # A single source selects a single field, never the role mapping.
                     receptive_probe = cast(
-                        GradientReceptiveField,
+                        GradReceptiveField,
                         gradient_for_unit(
                             target,
                             target_unit,
@@ -245,8 +245,8 @@ def _empirical_adjoint_checks(
                     )
                 )
                 continue
-            if not isinstance(projective, GradientReceptiveField) or not isinstance(
-                receptive_probe, GradientReceptiveField
+            if not isinstance(projective, GradReceptiveField) or not isinstance(
+                receptive_probe, GradReceptiveField
             ):
                 checks.append(
                     EmpiricalAdjointCheck(
@@ -395,7 +395,7 @@ __all__ = [
     "AmbiguousPassError",
     "BackendUnsupportedError",
     "EmpiricalAdjointCheck",
-    "GradientReceptiveField",
+    "GradReceptiveField",
     "GridLayout",
     "ReceptiveField",
     "ReceptiveFieldAlignment",

@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.data_classes.func_call_location import FuncCallLocation
+from torchlens._data_classes.func_call_location import FuncCallLocation
 
 
 class _ContextModel(nn.Module):

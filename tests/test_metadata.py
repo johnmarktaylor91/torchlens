@@ -16,11 +16,11 @@ import torch.nn as nn
 import torchlens
 import torchlens as tl
 from torchlens import trace as trace_fn
+from torchlens._data_classes import FuncCallLocation
 from torchlens.capture.flops import (
     compute_backward_flops,
     compute_forward_flops,
 )
-from torchlens.data_classes import FuncCallLocation
 
 
 class _SharedMultiOutputModel(nn.Module):
@@ -139,7 +139,7 @@ def test_tensor_info_fields(small_input):
     assert mh.num_tensors > 0
     assert isinstance(mh.total_activation_memory, (int, float))
     assert mh.total_activation_memory > 0
-    assert isinstance(mh.total_activation_memory, torchlens.Bytes)
+    assert isinstance(mh.total_activation_memory, torchlens.types.Bytes)
     assert len(str(mh.total_activation_memory)) > 0
 
 
@@ -165,7 +165,7 @@ def test_forward_peak_memory_is_populated(small_input):
         assert mh.forward_memory_backend == "cpu"
         assert "measure_host_peak_memory=True" in mh.forward_peak_memory_reason
     else:
-        assert isinstance(mh.forward_peak_memory, torchlens.Bytes)
+        assert isinstance(mh.forward_peak_memory, torchlens.types.Bytes)
         assert int(mh.forward_peak_memory) >= 0
         assert mh.forward_peak_memory_reason is None
     assert mh.forward_memory_backend in {"cpu", "cuda", "mps"}
@@ -193,7 +193,7 @@ def test_measure_python_peak_memory_opt_in_reports_positive_peak(small_input):
         ),
     )
     assert measured.measure_python_peak_memory is True
-    assert isinstance(measured.forward_peak_memory, torchlens.Bytes)
+    assert isinstance(measured.forward_peak_memory, torchlens.types.Bytes)
     assert int(measured.forward_peak_memory) > 0
     assert measured.forward_memory_backend in {"cpu", "cuda", "mps"}
     assert [op.layer_label for op in measured.ops] == [op.layer_label for op in baseline.ops]

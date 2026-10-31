@@ -11,7 +11,7 @@ import pytest
 import torch
 
 import torchlens.trackers as trk
-from torchlens.observability import EventStream, ObserverEvent
+from torchlens._observability import EventStream, ObserverEvent
 
 
 def _mlp() -> tuple[torch.nn.Module, torch.optim.Optimizer]:

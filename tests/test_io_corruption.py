@@ -16,10 +16,10 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import load
+from torchlens._data_classes.trace import Trace
 from torchlens._io import TorchLensIOError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._io.manifest import sha256_of_file
-from torchlens.data_classes.trace import Trace
 
 
 class _CorruptionModel(nn.Module):

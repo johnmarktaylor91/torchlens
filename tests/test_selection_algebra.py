@@ -666,7 +666,7 @@ def test_facet_lift_and_refusal_rows(log):
 
 
 def test_gradient_rf_lift():
-    """GradientReceptiveField lifts as an exact-set empirical term."""
+    """GradReceptiveField lifts as an exact-set empirical term."""
 
     torch.manual_seed(0)
     model = _TwoConv()

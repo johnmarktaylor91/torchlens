@@ -14,7 +14,7 @@ against one trace:
   at least one directed source-to-sink path, endpoints included. The same
   region, presented as a graph view with an explicit boundary instead of a
   Selection, is ``trace.between(sources, sinks)`` (one idea, two binding
-  modes — see :mod:`torchlens.trace_slice`).
+  modes — see :mod:`torchlens._trace_slice`).
 
 THE GENERAL GRAPH-QUERY SUBSTRATE: both producers are thin pure functions
 over :class:`_TraceGraph`, a frozen queryable view of one trace's executed

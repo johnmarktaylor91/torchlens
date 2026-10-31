@@ -14,16 +14,16 @@ import pytest
 import torch
 
 import torchlens
-from torchlens._registry.kernel import kernel_universe_rows
-from torchlens.observability import (
+from torchlens._observability import (
     ProfilerSessionError,
     SpanError,
     SpanRegistry,
     region,
     session,
 )
-from torchlens.observability._session import active_session
-from torchlens.observability._spans import MAX_LABEL_LENGTH, escape_label
+from torchlens._observability._session import active_session
+from torchlens._observability._spans import MAX_LABEL_LENGTH, escape_label
+from torchlens._registry.kernel import kernel_universe_rows
 
 _PACKAGE_ROOT = Path(torchlens.__file__).resolve().parent
 
@@ -32,7 +32,7 @@ _PACKAGE_ROOT = Path(torchlens.__file__).resolve().parent
 #: through the session engine and the chrome-file join path is deleted.
 #: Adding ANY row here requires a lane-report-visible justification.
 _PROFILER_DOOR_ALLOWLIST = {
-    "observability/_session.py": 1,
+    "_observability/_session.py": 1,
 }
 
 
@@ -68,7 +68,7 @@ class TestOneProfilerDoor:
         assert sites == _PROFILER_DOOR_ALLOWLIST, (
             "New torch.profiler.profile construction site(s) found: "
             f"{sorted(set(sites) - set(_PROFILER_DOOR_ALLOWLIST))}. There is ONE "
-            "profiler session engine (torchlens.observability.session); route "
+            "profiler session engine (torchlens._observability.session); route "
             "through it instead of opening a second door."
         )
 

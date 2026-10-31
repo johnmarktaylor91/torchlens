@@ -17,6 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import Trace, func, load, trace as trace_fn
+from torchlens._data_classes.trace import ResolvedPostprocessing
 from torchlens._io import (
     MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
@@ -30,7 +31,6 @@ from torchlens._io.payload_codec import (
     _raise_for_unsupported_array_dtype,
     _unsupported_array_dtype_reason,
 )
-from torchlens.data_classes.trace import ResolvedPostprocessing
 from torchlens.io import cleanup_tmp, detect_tlspec_format
 
 

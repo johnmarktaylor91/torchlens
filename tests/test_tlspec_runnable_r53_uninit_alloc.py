@@ -428,7 +428,7 @@ def test_uninit_family_table_matches_live_aten_registry() -> None:
     aten name that is neither in the family table nor in the justified
     non-family allowlist below FAILS this test on any torch upgrade."""
 
-    from torchlens.utils.rng import (
+    from torchlens._utils.rng import (
         _UNINIT_ALLOC_FACTORY_TAILS,
         _UNINIT_ALLOC_RESIZE_TAILS,
     )
@@ -480,7 +480,7 @@ def test_uninit_family_python_tensor_method_surface() -> None:
     resize, or SIZE-GATED) or justified non-family below -- a future
     ``Tensor.<x>()`` uninit factory with no aten name FAILS this test."""
 
-    from torchlens.utils.rng import (
+    from torchlens._utils.rng import (
         _UNINIT_ALLOC_FACTORY_TAILS,
         _UNINIT_ALLOC_RESIZE_TAILS,
         _UNINIT_ALLOC_SIZE_GATED_TAILS,
@@ -526,7 +526,7 @@ def test_size_gated_new_recognition_and_arg_form() -> None:
 
     import numpy as np
 
-    from torchlens.utils.rng import (
+    from torchlens._utils.rng import (
         qualname_is_uninit_size_gated_alloc,
         qualname_is_uninitialized_alloc,
         uninit_new_call_is_size_form,

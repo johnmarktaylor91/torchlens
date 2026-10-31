@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from _pickle_compare_allowlist import allowed_pickle_diff_fields
 
-from torchlens.data_classes._state_adapter import state_items
+from torchlens._data_classes._state_adapter import state_items
 
 
 def _tensor_equal(a: torch.Tensor, b: torch.Tensor) -> bool:

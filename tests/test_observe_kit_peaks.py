@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.observe import format_pass_peak, pass_peak_facts
+from torchlens._observe import format_pass_peak, pass_peak_facts
 
 TORCHLENS_DIR = Path(tl.__file__).resolve().parent
 
@@ -18,7 +18,7 @@ _DISPLAY_PACKAGES = ("report", "export", "visualization", "notebook", "bridge", 
 
 #: Files sanctioned to read the raw fields inside display packages: the gate
 #: itself.
-_GATE_MODULE = "observe/_peaks.py"
+_GATE_MODULE = "_observe/_peaks.py"
 
 
 class _FakeTrace:
@@ -88,7 +88,7 @@ def test_lint_display_surfaces_read_peaks_only_through_the_gate() -> None:
 
     A new print site that interpolates ``forward_peak_memory`` /
     ``backward_peak_memory`` without routing through
-    ``torchlens.observe._peaks`` fails here with the teaching message.
+    ``torchlens._observe._peaks`` fails here with the teaching message.
     """
 
     offenders: list[str] = []
@@ -109,6 +109,6 @@ def test_lint_display_surfaces_read_peaks_only_through_the_gate() -> None:
                 offenders.append(relative)
     assert not offenders, (
         "display surfaces reading pass-level peaks without the publication "
-        "gate (route through torchlens.observe._peaks.format_pass_peak / "
+        "gate (route through torchlens._observe._peaks.format_pass_peak / "
         f"pass_peak_facts -- the basis must always be named): {offenders}"
     )

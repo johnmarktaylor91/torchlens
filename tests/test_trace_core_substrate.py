@@ -15,6 +15,7 @@ import gc
 import pytest
 import torch
 
+from torchlens._data_classes.op import Bytes
 from torchlens._trace_core import (
     ColumnBuilder,
     EdgeTable,
@@ -25,7 +26,6 @@ from torchlens._trace_core import (
     Transaction,
 )
 from torchlens._trace_core.pools import ClosurePool
-from torchlens.data_classes.op import Bytes
 
 
 @pytest.mark.smoke
@@ -783,9 +783,9 @@ def test_rehydrate_mixed_ownership_aborts_with_zero_mutations() -> None:
     from unittest import mock
 
     import torchlens as tl
+    from torchlens._data_classes import _trace_rehydrate
+    from torchlens._data_classes.op import _OP_STORE_LAYOUT
     from torchlens._trace_core.op_store import DetachedOpStore, OpRowStore
-    from torchlens.data_classes import _trace_rehydrate
-    from torchlens.data_classes.op import _OP_STORE_LAYOUT
 
     model = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.ReLU())
     trace = tl.trace(model, torch.randn(1, 3))
@@ -890,7 +890,7 @@ def test_loaded_partial_capture_stays_staging() -> None:
     from unittest import mock
 
     import torchlens as tl
-    import torchlens.postprocess as postprocess
+    import torchlens._postprocess as postprocess
     from torchlens._trace_core.op_store import DetachedOpStore
 
     model = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.ReLU())
@@ -900,7 +900,7 @@ def test_loaded_partial_capture_stays_staging() -> None:
     with mock.patch.object(postprocess, "_build_module_logs", side_effect=RuntimeError("boom")):
         with pytest.raises(Exception) as exc_info:
             tl.trace(model, torch.randn(1, 3))
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     assert partial is not None
     source = partial.trace
     assert source.__dict__.get("_tracing_finished") is False

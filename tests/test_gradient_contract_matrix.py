@@ -169,7 +169,7 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
         _cut(torch.zeros_like),
         "refused",
     ),
-    "splice_module": (lambda: splice_module(_SPLICE, input="out"), _SPLICE, "coord"),
+    "splice_module": (lambda: splice_module(_SPLICE, input_route="out"), _SPLICE, "coord"),
     "patch_from": (
         lambda: patch_from(_source_trace()),
         _cut(lambda out: _source_value()),

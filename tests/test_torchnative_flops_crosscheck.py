@@ -27,9 +27,9 @@ import torch.nn.functional as F
 from torch.utils.flop_counter import FlopCounterMode
 
 import torchlens as tl
+from torchlens._utils._torch_compat import HAS_NN_ATTENTION_MODULE
 from torchlens.errors import TorchLensError
 from torchlens.report import flops_vs_dispatch
-from torchlens.utils._torch_compat import HAS_NN_ATTENTION_MODULE
 
 if HAS_NN_ATTENTION_MODULE:
     from torch.nn.attention import SDPBackend, sdpa_kernel

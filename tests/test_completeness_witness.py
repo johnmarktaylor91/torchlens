@@ -18,6 +18,8 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._errors import TorchLensCaptureGapWarning
+from torchlens._utils._torch_compat import HAS_FUNCTORCH_LEVEL_API
+from torchlens._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT
 from torchlens.backends.torch import completeness_witness as cw, rescue
 from torchlens.backends.torch._completeness_types import _DispatchEvent
 from torchlens.backends.torch.completeness_witness import (
@@ -26,8 +28,6 @@ from torchlens.backends.torch.completeness_witness import (
 )
 from torchlens.backends.torch.escape_detection import ExpectedOriginalToken
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-from torchlens.utils._torch_compat import HAS_FUNCTORCH_LEVEL_API
-from torchlens.utils.introspection import INPUT_SEARCH_DEPTH_LIMIT
 
 
 def _observer_patch_ast() -> ast.FunctionDef:

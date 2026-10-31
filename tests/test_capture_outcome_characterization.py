@@ -20,7 +20,7 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
-import torchlens.postprocess as pp
+import torchlens._postprocess as pp
 from torchlens.fastlog import Recorder
 from torchlens.fastlog._halt import HaltSignal
 
@@ -72,7 +72,7 @@ def test_tracing_finished_writer_inventory_is_exact() -> None:
     new region through the settlement authority.
     """
 
-    # The sanctioned writers: postprocess/finalization.py::_set_tracing_finished
+    # The sanctioned writers: _postprocess/finalization.py::_set_tracing_finished
     # (torch step 17 + the no-layers early return), the shared preview finalize
     # (both finish_before_module_logs arms), and JAX's own finalize path.
     writer_files: dict[str, int] = {}
@@ -88,7 +88,7 @@ def test_tracing_finished_writer_inventory_is_exact() -> None:
         if hits:
             writer_files[str(path.relative_to(TORCHLENS_DIR))] = len(hits)
     assert writer_files == {
-        "postprocess/finalization.py": 1,
+        "_postprocess/finalization.py": 1,
         "backends/_finalize.py": 2,
         "backends/jax/backend.py": 1,
     }, (
@@ -114,7 +114,7 @@ def test_planted_step1_failure_survives_with_partial_log(monkeypatch) -> None:
     with pytest.raises(ValueError, match="planted step1") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
     assert hasattr(exc_info.value, "partial_log")
-    partial = tl.partial.from_failed_capture(exc_info.value)
+    partial = tl._partial.from_failed_capture(exc_info.value)
     assert partial.trace.__dict__.get("_tracing_finished") is False
 
 
@@ -140,7 +140,7 @@ def test_planted_freeze_failure_propagates_original(monkeypatch) -> None:
 def test_planted_step20_failure_propagates_original(monkeypatch) -> None:
     """FLIPPED (F5): a step-20 failure propagates the original error."""
 
-    from torchlens.data_classes.trace import Trace
+    from torchlens._data_classes.trace import Trace
 
     def _boom(self: object, **kwargs: object) -> None:
         raise ValueError("planted step20")
@@ -386,7 +386,7 @@ def test_failed_partial_pickle_loads_coreless() -> None:
                 torch.ones(1, 3),
             )
     except RuntimeError as exc:
-        partial = tl.partial.from_failed_capture(exc)
+        partial = tl._partial.from_failed_capture(exc)
     source = partial.trace
     assert source.__dict__.get("_tracing_finished") is False
     clone = pickle.loads(pickle.dumps(source))

@@ -11,9 +11,8 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 import torch
 
 from .._errors import InvalidArgumentError
-from .._trace_state import TraceState
-from ..ir import CaptureEvents
-from ..ir.container import (
+from .._ir import CaptureEvents
+from .._ir.container import (
     DataclassField,
     DictKey,
     HFKey,
@@ -21,10 +20,11 @@ from ..ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
+from .._quantities import Bytes
+from .._trace_state import TraceState
+from .._utils.display import progress_bar
+from .._utils.rng import execute_with_restored_rng_autocast
 from ..options import ReplayOptions, merge_replay_options
-from ..quantities import Bytes
-from ..utils.display import progress_bar
-from ..utils.rng import execute_with_restored_rng_autocast
 from ._param_fingerprint import (
     CHANGED_PARAMS_RUN_KEY,
     changed_param_scope,
@@ -65,8 +65,8 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from ..data_classes.op import Op
-    from ..data_classes.trace import Trace
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from .selectors import SelectorLike
 
 
@@ -1363,7 +1363,7 @@ def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:
         Replacement out.
     """
 
-    from ..data_classes.op import _set_saved_out_metadata
+    from .._data_classes.op import _set_saved_out_metadata
 
     site._internal_set("out", tensor)
     site._internal_set("transformed_out", None)
