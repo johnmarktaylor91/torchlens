@@ -1,7 +1,7 @@
 """M0 measurement probes for the trace-core columnar re-plumbing.
 
 Measures the evidence items the converged design gates on
-(docs/reference/trace_core_design.md sections 4 and 7, wave M0):
+(docs/internal/reference/trace_core_design.md sections 4 and 7, wave M0):
 
 - A2: retained journal bytes vs semantic-graph bytes on a large capture
   (journal-columnarization reopening condition: journal > 2x semantic store).

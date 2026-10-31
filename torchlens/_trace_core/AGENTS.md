@@ -2,7 +2,7 @@
 
 Private per-trace columnar store substrate. Nothing in this package is public API; public
 classes (`Trace`, `Op`, ...) present rows from here as facades. The architecture of record is
-`docs/reference/trace_core_design.md` - read it first; this file only names entry points.
+`docs/internal/reference/trace_core_design.md` - read it first; this file only names entry points.
 
 ## core.py
 - `TraceCore` is the one per-trace store: the op store, per-kind row tables (`kind_rows`),

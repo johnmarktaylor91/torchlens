@@ -1,7 +1,7 @@
 """M4: standalone unit suite for the _trace_core substrate.
 
 Zero production consumers yet — these tests prove the substrate honors the
-converged semantic contracts (docs/reference/trace_core_design.md section
+converged semantic contracts (docs/internal/reference/trace_core_design.md section
 3.2/3.5) before the M5 Op seam, including executable prototypes of every
 hard seam: pool injectivity, parallel-edge order, payload identity, overlay
 COW + transactional rollback, core-level fork isolation, and facade

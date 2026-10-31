@@ -72,7 +72,7 @@
   standalone compaction passes are folded into the core freeze seam
   (`data_classes/_compaction.py`); `TraceCore.transaction()` checkpoints
   every mutation surface atomically. Architecture of record:
-  `docs/reference/trace_core_design.md`.
+  `docs/internal/reference/trace_core_design.md`.
 - `backends/torch/` - torch function wrapping, explicit wrap/unwrap, module prep.
 - `recording/` - sparse predicate recording with RAM/disk storage and recovery.
 - `postprocess/` - graph cleanup, conditionals, loop detection, labeling, finalization.

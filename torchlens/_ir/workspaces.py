@@ -7,7 +7,7 @@ seam (``_drop_transient_capture_state``). No workspace is portable state:
 every field is ``FieldPolicy.DROP``, absent on loaded traces, and never
 survives pickling.
 
-Ownership map (docs/reference/trace_core_design.md section 3.7):
+Ownership map (docs/internal/reference/trace_core_design.md section 3.7):
 
 * ``RawGraphWorkspace`` — owned by the capture ingress and postprocess
   steps 0-11: the raw op registry the graph passes rewrite until final
