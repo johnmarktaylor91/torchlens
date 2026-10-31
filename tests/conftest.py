@@ -1020,14 +1020,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
     apply_xfail_marks(items)
 
-    if not __debug__:
-        skip_no_assertions = pytest.mark.skip(
-            reason="requires assertions; the postprocess audit cannot run under python -O"
-        )
-        for item in items:
-            if item.get_closest_marker("requires_assertions") is not None:
-                item.add_marker(skip_no_assertions)
-
     collect_usage_stats = _is_full_usage_stats_run(config)
     _state._collect_usage_stats = collect_usage_stats
     if collect_usage_stats:
