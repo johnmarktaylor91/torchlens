@@ -40,7 +40,7 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
         "path": str(tmp_path / "graph"),
         **kwargs,
     }
-    return log.draw(**draw_kwargs)
+    return log.draw(**draw_kwargs).dot
 
 
 def test_default_mode_unchanged_from_phase1(tmp_path: Path) -> None:

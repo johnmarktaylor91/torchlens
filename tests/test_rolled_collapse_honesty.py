@@ -63,7 +63,7 @@ def _dot(trace: tl.Trace, **kwargs: object) -> str:
         file_format="dot",
         path=f"{out}/g",
         **kwargs,
-    )
+    ).dot
 
 
 @pytest.fixture(scope="module")

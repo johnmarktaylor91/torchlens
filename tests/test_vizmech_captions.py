@@ -68,7 +68,7 @@ def _draw(tmp_path: Path, name: str, model: nn.Module, direction: str = "bottomu
         direction=direction,  # type: ignore[arg-type]
         file_format="svg",
         path=str(tmp_path / name),
-    )
+    ).dot
 
 
 def test_caption_attrs_swap_where_dot_flips() -> None:

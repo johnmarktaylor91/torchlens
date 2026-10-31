@@ -57,7 +57,7 @@ def _draw(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor, **kwargs
         file_format="svg",
         path=str(tmp_path / name),
         **kwargs,
-    )
+    ).dot
 
 
 def test_arrowhead_oracle_known_bad(tmp_path: Path) -> None:

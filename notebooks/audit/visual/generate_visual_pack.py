@@ -744,7 +744,7 @@ NA_AXES: dict[str, str] = {
     "html_repr": "Trace._repr_html_() is a bespoke HTML identity card (layers/ops/"
     "save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz "
     "render, so it cannot appear in this PDF.",
-    "animate_ops": "Trace.animate_ops() returns an HTML play/pause widget for "
+    "animate_ops": "trace.draw(animate=site) returns an HTML play/pause Drawing for "
     "repeated-pass ops; interactive HTML, out of scope for a static PDF.",
     "code_panel:callable": "code_panel=<callable> reuses the same panel box styling "
     "as the string modes; only the text source differs.",
@@ -2442,7 +2442,10 @@ def _render_panel(page: Page, panel: Panel, idx: int) -> tuple[str, pathlib.Path
 
             fn = functools.partial(tl.viz.bundle_diff, trace)
         else:
-            fn = getattr(trace, panel.method)
+            if panel.method in ("draw_backward", "draw_combined"):
+                fn = functools.partial(trace.draw, graph=panel.method.removeprefix("draw_"))
+            else:
+                fn = getattr(trace, panel.method)
         fn(path=str(stem), file_format="png", **kwargs)
         png = pathlib.Path(str(stem) + ".png")
         if not png.exists():

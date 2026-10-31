@@ -72,7 +72,7 @@ def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def test_opt_in_adds_rows_and_default_stays_clean(tmp_path: Path) -> None:

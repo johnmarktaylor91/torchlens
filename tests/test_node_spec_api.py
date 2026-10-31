@@ -24,7 +24,7 @@ def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def test_default_nodespec_for_conv2d_includes_args(tmp_path: Any) -> None:

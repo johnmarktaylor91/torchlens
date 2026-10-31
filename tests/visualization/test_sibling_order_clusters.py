@@ -405,7 +405,7 @@ def test_root_level_chain_moves_into_the_branches_parent_cluster(tmp_path: Path)
 
     log = tl.trace(_InceptionToy(), torch.randn(2, 4))
     try:
-        dot_source = str(log.draw(path=str(tmp_path / "inception"), file_format="pdf"))
+        dot_source = str(log.draw(path=str(tmp_path / "inception"), file_format="pdf").dot)
         decision = log._last_sibling_ordering_decision
     finally:
         log.cleanup()

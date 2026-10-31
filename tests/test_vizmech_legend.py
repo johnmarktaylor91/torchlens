@@ -47,7 +47,7 @@ def _draw_dot(tmp_path: Path, name: str, **kwargs: object) -> str:
         file_format="svg",
         path=str(tmp_path / name),
         **kwargs,
-    )
+    ).dot
 
 
 def _graph_label(dot: str) -> str:

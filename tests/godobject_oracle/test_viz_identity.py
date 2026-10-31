@@ -108,7 +108,7 @@ def _dot(trace: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 #: The ``graphviz`` python package is the direct DOT emitter for these

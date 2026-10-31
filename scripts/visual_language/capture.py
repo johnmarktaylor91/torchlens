@@ -171,7 +171,7 @@ def draw_kwargs(panel: Panel) -> dict[str, Any]:
         merged.pop("font_size", None)
         merged.pop("collapse", None)
         merged.pop("node_label_fields", None)
-        merged["vis_direction"] = "leftright"
+        merged["direction"] = "leftright"
     if panel.call == "lens":
         # A lens chooses its own rows; the deck's two-row convention would override it.
         merged.pop("node_label_fields", None)
@@ -189,9 +189,9 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
     if panel.call == "draw":
         return str(trace.draw(**kwargs))
     if panel.call == "draw_backward":
-        return str(trace.draw_backward(**kwargs))
+        return str(trace.draw(graph="backward", **kwargs))
     if panel.call == "draw_combined":
-        return str(trace.draw_combined(**kwargs))
+        return str(trace.draw(graph="combined", **kwargs))
     if panel.call == "lens":
         lens = kwargs.pop("lens")
         return str(lenses.draw_with_lens(trace, lens, **kwargs))

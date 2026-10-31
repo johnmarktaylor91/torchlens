@@ -158,7 +158,7 @@ def _render_dot(log: Trace, tmp_path: Path, show_buffer_layers: str | bool) -> s
         path=str(tmp_path / f"buffer_visibility_{show_buffer_layers}"),
         show_buffers=show_buffer_layers,
         layout="dot",
-    )
+    ).dot
 
 
 def _render_collapsed_module(
@@ -188,7 +188,7 @@ def _render_collapsed_module(
         path=str(tmp_path / f"collapsed_{node_placement}"),
         collapse_fn=_collapse_batchnorm,
         layout=node_placement,
-    )
+    ).dot
 
 
 def _collapse_batchnorm(module: object) -> bool:

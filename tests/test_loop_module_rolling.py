@@ -614,7 +614,7 @@ def _render_source(
         file_format=file_format,
         path=str(tmp_path / name),
         **kwargs,
-    )
+    ).dot
 
 
 def _dot_self_edge_attrs(dot: str) -> list[str]:

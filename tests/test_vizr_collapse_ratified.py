@@ -33,7 +33,7 @@ class _SharedCell(nn.Module):
 
 def _draw(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     """Render to DOT and return the source."""
-    return trace.draw(path=str(tmp_path / name), file_format="dot", **kwargs)
+    return trace.draw(path=str(tmp_path / name), file_format="dot", **kwargs).dot
 
 
 def test_collapse5_overview_discloses_reuse_and_never_switches(tmp_path: Path) -> None:

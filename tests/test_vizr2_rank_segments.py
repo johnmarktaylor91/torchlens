@@ -24,7 +24,7 @@ _SEGMENT_NODE = re.compile(r'^\s*"?(\S+__segment__[^"\s\[]+)"?\s*\[[^\]]*label='
 
 
 def _source(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
-    return str(trace.draw(path=str(tmp_path / name), file_format="svg", **kwargs))
+    return str(trace.draw(path=str(tmp_path / name), file_format="svg", **kwargs).dot)
 
 
 @pytest.mark.parametrize(

@@ -169,7 +169,7 @@ def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _state(log: tl.Trace) -> Any:

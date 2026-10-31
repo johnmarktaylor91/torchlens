@@ -116,7 +116,7 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _render_svg_output(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
