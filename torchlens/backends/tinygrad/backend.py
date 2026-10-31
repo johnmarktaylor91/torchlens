@@ -1623,9 +1623,20 @@ class TinygradBackend:
             Realized tinygrad Tensor copy detached from the source UOp lineage.
         """
 
-        from tinygrad import Tensor
+        from tinygrad import Device, Tensor
 
-        return Tensor(value.tolist(), dtype=value.dtype, device=value.device).realize()
+        device = value.device
+        try:
+            return Tensor(value.tolist(), dtype=value.dtype, device=device).realize()
+        except NotImplementedError:
+            # A closure constant the forward never realized (``Tensor(ndarray)``
+            # captured from an enclosing scope) is still a host-side source
+            # buffer whose device cannot be allocated to ("need copyin"); its
+            # payload copy lands on the capture device, where every other
+            # payload lives.
+            if device == Device.DEFAULT:
+                raise
+            return Tensor(value.tolist(), dtype=value.dtype, device=Device.DEFAULT).realize()
 
     def _assert_runtime_supported(self) -> None:
         """Reject tinygrad runtimes outside the S0.G-proven live-payload envelope.
