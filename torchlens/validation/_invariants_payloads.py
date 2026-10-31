@@ -138,7 +138,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
     for layer in ml.layer_list:
         layer_label = getattr(layer, "layer_label", type(layer).__name__)
         for record in getattr(layer, "_edge_uses", ()) or ():
-            edge_use = getattr(record, "_edge_use", None)
+            edge_use = getattr(record, "edge_use", None)
             if edge_use not in valid_edge_uses:
                 raise MetadataInvariantError(
                     name,

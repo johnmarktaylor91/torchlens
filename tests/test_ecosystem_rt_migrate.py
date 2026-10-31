@@ -10,19 +10,16 @@ must leave the source bytes intact.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import tarfile
 from pathlib import Path
 
 import pytest
-from _oracle_env import expect_bundle_minor_version_mismatch
 from _refuses_as_2x import assert_refuses_as_2x
 
-import torchlens as tl
 from torchlens._ecosystem import migrate
 from torchlens._ecosystem.migrate import _ABSENT_FAMILIES_BY_TARGET
-from torchlens._io import ArtifactError
+from torchlens._io import ArtifactError, ArtifactTooOldError
 from torchlens._io.compat_ledger import MIGRATION_WITNESS_FILENAME, read_migration_witness
 
 GOLDENS_DIR = Path(__file__).parent / "release_goldens"
@@ -168,54 +165,22 @@ def test_failure_injection_leaves_source_intact(
 
 
 @pytest.mark.smoke
-def test_publish_failure_restores_source(
-    corpus_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A final-rename failure restores the source in place, typed."""
+def test_pre_floor_source_refuses_as_saved_by_2x(corpus_dir: Path, tmp_path: Path) -> None:
+    """Migration of a file saved by torchlens 2.x refuses with the one 2.x error.
+
+    The reader floor is the current format, so there is no source a migration could
+    start from: a tlspec-6 artifact refuses typed before any staging, witness or publish
+    step runs, and the source is left exactly as it was.
+    """
 
     path = _working_copy(corpus_dir, tmp_path, "art_v2.31.0_portable")
-    real_rename = os.rename
-    calls = {"n": 0}
-
-    def _second_rename_fails(src: object, dst: object) -> None:
-        calls["n"] += 1
-        if calls["n"] == 2:
-            raise OSError("injected publish failure")
-        real_rename(src, dst)
-
-    monkeypatch.setattr(os, "rename", _second_rename_fails)
-    with pytest.raises(ArtifactError) as excinfo:
+    before = sorted(p.relative_to(path) for p in path.rglob("*"))
+    with pytest.raises(ArtifactTooOldError) as excinfo:
         migrate(path)
-    assert excinfo.value.fields["code"] == "migration_staging_failed"
-    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["tlspec_version"] == 6  # restored
-
-
-@pytest.mark.smoke
-def test_tampered_witness_refuses_at_load(corpus_dir: Path, tmp_path: Path) -> None:
-    """A witness beside a mismatching manifest is a typed refusal, not a gap."""
-
-    path = _working_copy(corpus_dir, tmp_path, "art_v2.31.0_portable")
-    migrate(path)
-    witness_path = path / MIGRATION_WITNESS_FILENAME
-    witness = json.loads(witness_path.read_text(encoding="utf-8"))
-    witness["final_manifest_sha256"] = "0" * 64
-    witness_path.write_text(json.dumps(witness), encoding="utf-8")
-    with expect_bundle_minor_version_mismatch(), pytest.raises(ArtifactError) as excinfo:
-        tl.load(str(path))
-    # The digest cross-check fails the witness door, so the pair refuses.
-    assert excinfo.value.fields["code"] == "artifact_producer_pair_ungoverned"
-
-
-@pytest.mark.smoke
-def test_broken_witness_refuses_typed(corpus_dir: Path, tmp_path: Path) -> None:
-    """A structurally broken witness refuses migration_witness_invalid."""
-
-    path = _working_copy(corpus_dir, tmp_path, "art_v2.31.0_portable")
-    (path / MIGRATION_WITNESS_FILENAME).write_text('{"witness_schema": "bogus"}', encoding="utf-8")
-    with pytest.raises(ArtifactError) as excinfo:
-        migrate(path)
-    assert excinfo.value.fields["code"] == "migration_witness_invalid"
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert "saved by torchlens 2.x" in str(excinfo.value)
+    assert not (path / MIGRATION_WITNESS_FILENAME).exists()
+    assert sorted(p.relative_to(path) for p in path.rglob("*")) == before
 
 
 def test_every_v1_step_declares_manifest_level() -> None:

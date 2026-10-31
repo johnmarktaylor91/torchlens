@@ -320,4 +320,4 @@ def test_non_intervention_ready_capture_leaves_templates_empty_and_edges_persist
     assert edge_layers
     for layer in edge_layers:
         assert {edge.parent_label for edge in layer._edge_uses} == set(layer.parents)
-        assert {edge._edge_use for edge in layer._edge_uses} <= {"arg", "kwarg"}
+        assert {edge.edge_use for edge in layer._edge_uses} <= {"arg", "kwarg"}

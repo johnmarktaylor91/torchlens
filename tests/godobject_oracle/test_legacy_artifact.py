@@ -39,4 +39,5 @@ def test_legacy_artifact_refuses_with_the_2x_remedy(artifact: Path) -> None:
     assert "save it again with torchlens 2.36.x" in message
     assert "capture the model again" in message
     assert excinfo.value.fields["code"] == "artifact_version_below_floor"
-    assert excinfo.value.fields["observed"].startswith("module_path=torchlens.")
+    # The manifest stamp refuses first: the floor is the current format.
+    assert excinfo.value.fields["observed"].startswith("tlspec_version=")

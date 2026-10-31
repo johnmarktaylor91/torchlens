@@ -42,7 +42,6 @@ def _manifest(path: Path) -> dict:
     return json.loads((path / "manifest.json").read_text(encoding="utf-8"))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("family", sorted(_FAMILIES))
 def test_family_refuses_as_2x(family: str) -> None:
     """The artifact exists, is the family it claims, and refuses with the one 2.x error."""

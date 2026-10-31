@@ -163,8 +163,8 @@ def test_compat_window_report_shape() -> None:
     """compat_window() renders runtime identity, promise status, and rows."""
 
     report = compat_window()
-    assert report.runtime["floor_tlspec_version"] == 6
-    assert report.runtime["producer_floor_writer"] == "2.31.0"
+    assert report.runtime["floor_tlspec_version"] == 11
+    assert report.runtime["producer_floor_writer"] == "3.0.0"
     assert len(report.runtime["writer_contract_digest"]) == 64
     assert report.promise["window_status"] == "pending FORK F1 adjudication"
     writers = {row.writer_release for row in report.rows}

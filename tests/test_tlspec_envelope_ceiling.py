@@ -103,7 +103,9 @@ def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
     from torchlens._io.manifest import Manifest, enforce_version_policy
     from torchlens.errors import TorchLensWarning
 
-    base = _reference_manifest_dict()
+    # The reference manifest predates the current format and would refuse as a 2.x
+    # file at the stamp; the torch minor drift under test is independent of it.
+    base = {**_reference_manifest_dict(), "tlspec_version": TLSPEC_VERSION}
     runtime = torch.__version__.split("+", 1)[0]
     major, minor, *_ = runtime.split(".")
     drifted = f"{major}.{int(minor) + 1}.0+cu130"
