@@ -575,8 +575,6 @@ docs-md	docs/agent-reference/critical-invariants.md	18.
 docs-md	docs/agent-reference/critical-invariants.md	19
 docs-md	docs/agent-reference/critical-invariants.md	19.
 docs-md	docs/agent-reference/critical-invariants.md	2.16
-docs-md	docs/agent-reference/critical-invariants.md	2.32.4
-docs-md	docs/agent-reference/critical-invariants.md	2.33
 docs-md	docs/agent-reference/critical-invariants.md	260
 docs-md	docs/agent-reference/critical-invariants.md	30
 docs-md	docs/agent-reference/critical-invariants.md	33
@@ -608,7 +606,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	18
 docs-md	docs/agent-reference/current-2-x-surface.md	2.0
 docs-md	docs/agent-reference/current-2-x-surface.md	2.16
 docs-md	docs/agent-reference/current-2-x-surface.md	2.3.22
-docs-md	docs/agent-reference/current-2-x-surface.md	2.32.4
 docs-md	docs/agent-reference/current-2-x-surface.md	2.33.0
 docs-md	docs/agent-reference/current-2-x-surface.md	2.34.1
 docs-md	docs/agent-reference/current-2-x-surface.md	2.5
@@ -1926,7 +1923,6 @@ error-strings	torchlens/_data_classes/_trace_stats.py	1.0
 error-strings	torchlens/debug/_precision.py	64
 error-strings	torchlens/distributed/_ledger.py	256
 error-strings	torchlens/distributed/_recognizer.py	10
-error-strings	torchlens/_ecosystem/migrate.py	3.6
 error-strings	torchlens/fastlog/options.py	1024
 error-strings	torchlens/_ir/summary_role.py	64
 error-strings	torchlens/_merged/_artifact.py	10
@@ -2226,7 +2222,6 @@ package-docstrings	torchlens/_io/forgery_validation.py	64
 package-docstrings	torchlens/_io/format_contract.py	17
 package-docstrings	torchlens/_io/format_contract.py	3.2
 package-docstrings	torchlens/_io/format_contract.py	3.3
-package-docstrings	torchlens/_io/format_contract.py	65
 package-docstrings	torchlens/_io/format_errors.py	2.31.0
 package-docstrings	torchlens/_io/format_errors.py	3.1
 package-docstrings	torchlens/_io/format_errors.py	3.2
@@ -3207,7 +3202,6 @@ package-docstrings	torchlens/_data_classes/_trace_intervention.py	41
 package-docstrings	torchlens/_data_classes/_trace_intervention.py	42
 package-docstrings	torchlens/_data_classes/_trace_intervention.py	44
 package-docstrings	torchlens/_data_classes/_trace_intervention.py	60
-package-docstrings	torchlens/_data_classes/_trace_legacy_state.py	3.3
 package-docstrings	torchlens/_data_classes/_trace_narrate.py	28,
 package-docstrings	torchlens/_data_classes/_trace_stats.py	1.0
 package-docstrings	torchlens/_data_classes/_trace_stats.py	1.1
@@ -6342,7 +6336,6 @@ test-docstrings	tests/test_recurrent_ops_pooling.py	12
 test-docstrings	tests/test_recurrent_ops_pooling.py	2026
 test-docstrings	tests/test_reentrant_trace.py	55
 test-docstrings	tests/test_rehydration_floor.py	10,
-test-docstrings	tests/test_rehydration_floor.py	15
 test-docstrings	tests/test_rehydration_floor.py	2.16
 test-docstrings	tests/test_rehydration_floor.py	2.16_
 test-docstrings	tests/test_rehydration_floor.py	2.31.0

@@ -212,11 +212,6 @@ ParamAccessor.numel_by_path	int	quantity	num_params_by_path	green	tests/oracles/
 ParamAccessor.numel	int	quantity	num_params_executed	green	tests/test_numbers_truth_params.py::test_declared_executed_unexecuted_split_named (I2)	-
 Trace.num_params_frozen	int	quantity	num_params_frozen	green	tests/test_param_log.py::TestTrainableFrozenTallies::test_mh_mixed (I2)	-
 Trace.num_params_trainable	int	quantity	num_params_trainable	green	tests/test_bug_fixes_phase14.py::test_functional_parameter_view_does_not_inflate_param_counts (I1)	-
-Trace.num_saved_grad_fn_calls	int	quantity	num_saved_grad_fn_calls	green	tests/oracles/test_legacy_graph_counts.py::test_saved_gradient_counts (I2)	-
-Trace.num_saved_grad_fns	int	quantity	num_saved_grad_fns	green	tests/oracles/test_legacy_graph_counts.py::test_saved_gradient_counts (I2)	-
-Trace.num_saved_layers	int	quantity	num_saved_layers	green	tests/oracles/test_legacy_graph_counts.py::test_saved_activation_scope_counts (I2)	-
-Trace.num_saved_module_calls	int	quantity	num_saved_module_calls	green	tests/oracles/test_legacy_graph_counts.py::test_saved_activation_scope_counts (I2)	-
-Trace.num_saved_ops	int	quantity	num_saved_ops	green	tests/backend_parity/test_b10_torch_characterization.py::test_selective_layers_to_save_uses_fast_pass_save_new_outs (I2)	-
 Trace.num_uncalled_modules	int	quantity	num_uncalled_modules	green	tests/oracles/test_legacy_graph_counts.py::test_module_call_and_param_use_counts (I2)	-
 TraceCost.overhead_duration	Duration	quantity	overhead_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.pinned_autograd_memory	Bytes	quantity	pinned_autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-

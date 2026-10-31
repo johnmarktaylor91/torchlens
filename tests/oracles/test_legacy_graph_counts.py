@@ -315,11 +315,11 @@ def test_saved_activation_scope_counts(graph_trace, mixed_trace) -> None:
     # (each call's output Ops are saved) and every called module counts.
     trace = graph_trace
     assert len(trace.saved_layers) == G_LAYERS
-    assert int(trace.num_saved_module_calls) == 3  # self:1, fc:1, fc:2
+    assert len(trace.saved_module_calls) == 3  # self:1, fc:1, fc:2
     assert int(len(trace.saved_modules)) == 2  # self, fc
     trace = mixed_trace
     assert len(trace.saved_layers) == 6
-    assert int(trace.num_saved_module_calls) == 4  # self:1, wide:1, tied:1, tied:2
+    assert len(trace.saved_module_calls) == 4  # self:1, wide:1, tied:1, tied:2
     assert int(len(trace.saved_modules)) == 3  # self, wide, tied
 
 
@@ -335,7 +335,7 @@ def test_saved_gradient_counts(grad_trace) -> None:
     # The backward nodes of the three captured differentiable ops (addmm,
     # relu, addmm) keep their gradients; two backward passes call each once.
     assert len(trace.autograd.saved_grad_fns) == 3
-    assert int(trace.num_saved_grad_fn_calls) == 2 * 3
+    assert len(trace.autograd.saved_grad_fn_calls) == 2 * 3
 
 
 @pytest.mark.parametrize("axis", ["train_batchnorm", "in_place", "plain_cnn"])
