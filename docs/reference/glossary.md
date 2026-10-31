@@ -1684,13 +1684,6 @@ S2-gated*
   `structure_only_refuted_hypothesis`, `structure_only_discharge_precondition`,
   `structure_only_type_invalid`.
 
-**tl.ir.ModuleCaptureWorkspace.root_forward_args** — *unstable — no deprecation shim owed*
-: The root call's `(args, kwargs)`, kept on a capture's module workspace while the capture
-  runs: the root forward is never decorated, so the per-module forward-argument table has no
-  entry for it. Set at capture entry, read when finalization builds the root module pass, then
-  cleared with the other temporary build state (`None` outside a capture). The
-  `ModuleCaptureWorkspace(..., root_forward_args=...)` keyword sets the same field.
-
 **tl.ir.RawGraphWorkspace.buffer_version_keys** — *unstable — no deprecation shim owed*
 : Raw buffer label to the buffer version it was logged from: the tensor's object id, storage
   key and version counter, or `None` when the storage or counter cannot be read. Recorded when a

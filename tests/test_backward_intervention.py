@@ -23,7 +23,7 @@ from torchlens.intervention.helpers import _helper_spec
 from torchlens.intervention.hooks import normalize_hook_plan
 from torchlens.intervention.resolver import _selector_resolution_direction
 from torchlens.intervention.types import FireRecord, InterventionSpec, TargetSpec
-from torchlens.ir import CaptureEvents
+from torchlens.ir.capture_events import CaptureEvents
 from torchlens.ir.selector_eval import selector_from_spec
 
 

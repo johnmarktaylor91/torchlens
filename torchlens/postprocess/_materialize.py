@@ -15,7 +15,7 @@ from torch import nn
 
 from torchlens._io import BlobRef as PortableBlobRef
 from torchlens.intervention.types import EdgeUseRecord
-from torchlens.ir import CaptureEvents
+from torchlens.ir.capture_events import CaptureEvents
 from torchlens.ir.events import (
     ModuleEnterEvent,
     ModuleExitEvent,
