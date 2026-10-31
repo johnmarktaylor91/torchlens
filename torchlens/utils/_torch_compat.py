@@ -52,7 +52,6 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
-from ._torch_compat_table import CAPABILITY_ROWS
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
 __all__ = [
@@ -638,81 +637,79 @@ def _import_module_attr_or_none(module_name: str, attr_name: str) -> Any | None:
     return getattr(module, attr_name, None)
 
 
+_ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
+    "HAS_VARIABLE_FUNCTIONS": ("torch:_C._VariableFunctions",),
+    "HAS_TORCH_VF": ("torch:_VF",),
+    "HAS_TORCH_FUNC": ("torch:func",),
+    "HAS_FUNCTORCH_LEVEL_API": ("torch:_C._functorch.maybe_current_level",),
+    "HAS_FUNCTORCH_WRAPPED_TENSOR_API": ("torch:_C._functorch.is_functorch_wrapped_tensor",),
+    "HAS_JIT_BUILTIN_TABLE": ("torch.jit._builtins:_builtin_table",),
+    "HAS_JIT_BOOLEAN_DISPATCH_TABLE": ("torch._jit_internal:boolean_dispatched",),
+    "HAS_JIT_OVERLOAD_RESOLVER": ("torch.jit._script:_get_overloads",),
+    "HAS_DEVICE_CONTEXT_DISPATCH": (
+        "torch.utils._device:DeviceContext",
+        "torch.overrides:_get_current_function_mode_stack",
+        "torch.overrides:_len_torch_function_stack",
+    ),
+    "HAS_DEVICE_CONSTRUCTORS": ("torch.utils._device:_device_constructors",),
+    "HAS_ACCUMULATE_GRAD_CLASS": ("torch:_C._functions.AccumulateGrad",),
+    "HAS_CURRENT_GRAPH_TASK_ID": ("torch:_C._current_graph_task_id",),
+    "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
+    "HAS_FX_GRAPH_MODULE": ("torch:fx.GraphModule",),
+    "HAS_NAMED_TENSOR_API": (
+        "torch:Tensor.names",
+        "torch:Tensor.has_names",
+        "torch:Tensor.refine_names",
+    ),
+    "HAS_GENERATOR_CLONE_STATE": ("torch:Generator.clone_state",),
+    "HAS_GENERATOR_GRAPHSAFE_GET_STATE": ("torch:Generator.graphsafe_get_state",),
+    "HAS_GENERATOR_GRAPHSAFE_SET_STATE": ("torch:Generator.graphsafe_set_state",),
+    "HAS_GENERATOR_PHILOX_STATE": ("torch:Generator.philox_state",),
+    "HAS_NODE_PREHOOK": ("torch.autograd.graph:Node.register_prehook",),
+    "HAS_FP32_PRECISION_CONTROLS": ("torch:backends.fp32_precision",),
+    "HAS_AMP_GRADSCALER": ("torch.amp:GradScaler",),
+    "HAS_RMSNORM_MODULE": ("torch:nn.RMSNorm",),
+}
+"""Declarative presence probes: flag -> ``"module:dotted.attr"`` paths that must all resolve.
+
+One line per flag replaces a probe function while keeping feature detection: a
+torch release that drops a surface still flips its flag. Measured availability
+per flag lives in the data-only ``_torch_compat_table`` (never imported here, so
+the capture stack's import closure does not grow).
+"""
+
+
 def _split_attribute_path(spec: str) -> tuple[str, tuple[str, ...]]:
-    """Split a ``"module:dotted.attr"`` table path into the module and its attribute segments."""
+    """Split a ``"module:dotted.attr"`` probe path into the module and its attribute segments."""
     module_name, _, attr_path = spec.partition(":")
     return module_name, tuple(attr_path.split("."))
 
 
-_SPLIT_TABLE_PATHS: dict[str, tuple[str, tuple[str, ...]]] = {
-    path: _split_attribute_path(path)
-    for row in CAPABILITY_ROWS.values()
-    for path in row.attribute_paths
+_SPLIT_PROBE_PATHS: dict[str, tuple[str, tuple[str, ...]]] = {
+    path: _split_attribute_path(path) for paths in _ATTRIBUTE_PROBES.values() for path in paths
 }
-"""Every table path split once at import: two table getters run on every wrapped op."""
+"""Every probe path split once at import: two of the getters run on every wrapped op."""
 
 
 def _resolve_attribute_path(spec: str) -> Any | None:
-    """Resolve one ``"module:dotted.attr"`` capability-table path.
-
-    Parameters
-    ----------
-    spec:
-        Module to import (``"torch"`` reads the already-imported root), a
-        colon, then the attribute chain to traverse from it.
-
-    Returns
-    -------
-    Any | None
-        Resolved object, or ``None`` when the module or any segment is absent.
-    """
-
-    module_name, attrs = _SPLIT_TABLE_PATHS.get(spec) or _split_attribute_path(spec)
+    """Resolve one probe path, or return ``None`` when the module or any segment is absent."""
+    module_name, attrs = _SPLIT_PROBE_PATHS.get(spec) or _split_attribute_path(spec)
     if module_name == "torch":
         return _nested_getattr_or_none(torch, attrs)
     resolved = _import_module_attr_or_none(module_name, attrs[0])
     return _nested_getattr_or_none(resolved, attrs[1:]) if resolved is not None else None
 
 
-def _probe_table_row(flag: str) -> bool:
-    """Return whether every attribute path of ``flag``'s capability-table row resolves.
-
-    Parameters
-    ----------
-    flag:
-        ``HAS_*`` flag whose row in ``_torch_compat_table`` declares
-        ``attribute_paths``.
-
-    Returns
-    -------
-    bool
-        ``True`` when all declared paths resolve to non-``None`` objects.
-    """
-
-    paths = CAPABILITY_ROWS[flag].attribute_paths
-    if not paths:
-        raise ValueError(f"capability row {flag} declares no attribute paths")
-    return all(_resolve_attribute_path(path) is not None for path in paths)
+def _probe_attribute_paths(flag: str) -> bool:
+    """Return whether every :data:`_ATTRIBUTE_PROBES` path declared for ``flag`` resolves."""
+    if flag not in _ATTRIBUTE_PROBES:
+        raise ValueError(f"capability flag {flag} declares no attribute paths")
+    return all(_resolve_attribute_path(path) is not None for path in _ATTRIBUTE_PROBES[flag])
 
 
 def _resolve_or_mark_missing(flag: str, detail: str) -> Any | None:
-    """Resolve ``flag``'s first table path, flipping the flag off when it is absent.
-
-    Parameters
-    ----------
-    flag:
-        ``HAS_*`` flag whose row declares the surface the getter returns first.
-    detail:
-        User-facing degradation detail passed to
-        :func:`mark_torch_capability_missing`.
-
-    Returns
-    -------
-    Any | None
-        The resolved object, or ``None`` after the flag is marked missing.
-    """
-
-    resolved = _resolve_attribute_path(CAPABILITY_ROWS[flag].attribute_paths[0])
+    """Resolve ``flag``'s first probe path; when absent, mark it missing with ``detail``."""
+    resolved = _resolve_attribute_path(_ATTRIBUTE_PROBES[flag][0])
     if resolved is None:
         mark_torch_capability_missing(flag, detail)
     return resolved
@@ -1670,30 +1667,34 @@ def _probe_meta_item_guard() -> bool:
     return False
 
 
-HAS_VARIABLE_FUNCTIONS: bool = _probe_table_row("HAS_VARIABLE_FUNCTIONS")
-HAS_TORCH_VF: bool = _probe_table_row("HAS_TORCH_VF")
-HAS_TORCH_FUNC: bool = _probe_table_row("HAS_TORCH_FUNC")
+HAS_VARIABLE_FUNCTIONS: bool = _probe_attribute_paths("HAS_VARIABLE_FUNCTIONS")
+HAS_TORCH_VF: bool = _probe_attribute_paths("HAS_TORCH_VF")
+HAS_TORCH_FUNC: bool = _probe_attribute_paths("HAS_TORCH_FUNC")
 HAS_FUNCTORCH_APIS: bool = _probe_functorch_apis()
-HAS_FUNCTORCH_LEVEL_API: bool = _probe_table_row("HAS_FUNCTORCH_LEVEL_API")
-HAS_FUNCTORCH_WRAPPED_TENSOR_API: bool = _probe_table_row("HAS_FUNCTORCH_WRAPPED_TENSOR_API")
-HAS_JIT_BUILTIN_TABLE: bool = _probe_table_row("HAS_JIT_BUILTIN_TABLE")
-HAS_JIT_BOOLEAN_DISPATCH_TABLE: bool = _probe_table_row("HAS_JIT_BOOLEAN_DISPATCH_TABLE")
-HAS_JIT_OVERLOAD_RESOLVER: bool = _probe_table_row("HAS_JIT_OVERLOAD_RESOLVER")
-HAS_DEVICE_CONTEXT_DISPATCH: bool = _probe_table_row("HAS_DEVICE_CONTEXT_DISPATCH")
-HAS_DEVICE_CONSTRUCTORS: bool = _probe_table_row("HAS_DEVICE_CONSTRUCTORS")
-HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_table_row("HAS_ACCUMULATE_GRAD_CLASS")
-HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_table_row("HAS_CURRENT_GRAPH_TASK_ID")
-HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_table_row("HAS_CURRENT_AUTOGRAD_NODE")
-HAS_FX_GRAPH_MODULE: bool = _probe_table_row("HAS_FX_GRAPH_MODULE")
-HAS_NAMED_TENSOR_API: bool = _probe_table_row("HAS_NAMED_TENSOR_API")
+HAS_FUNCTORCH_LEVEL_API: bool = _probe_attribute_paths("HAS_FUNCTORCH_LEVEL_API")
+HAS_FUNCTORCH_WRAPPED_TENSOR_API: bool = _probe_attribute_paths("HAS_FUNCTORCH_WRAPPED_TENSOR_API")
+HAS_JIT_BUILTIN_TABLE: bool = _probe_attribute_paths("HAS_JIT_BUILTIN_TABLE")
+HAS_JIT_BOOLEAN_DISPATCH_TABLE: bool = _probe_attribute_paths("HAS_JIT_BOOLEAN_DISPATCH_TABLE")
+HAS_JIT_OVERLOAD_RESOLVER: bool = _probe_attribute_paths("HAS_JIT_OVERLOAD_RESOLVER")
+HAS_DEVICE_CONTEXT_DISPATCH: bool = _probe_attribute_paths("HAS_DEVICE_CONTEXT_DISPATCH")
+HAS_DEVICE_CONSTRUCTORS: bool = _probe_attribute_paths("HAS_DEVICE_CONSTRUCTORS")
+HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_attribute_paths("HAS_ACCUMULATE_GRAD_CLASS")
+HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK_ID")
+HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
+HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
+HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
 HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
 HAS_DYNAMO_ORIG_CALLABLE_MARKER: bool = False
 HAS_DYNAMO_EXPLAIN: bool = _probe_dynamo_explain_module()
-HAS_GENERATOR_CLONE_STATE: bool = _probe_table_row("HAS_GENERATOR_CLONE_STATE")
-HAS_GENERATOR_GRAPHSAFE_GET_STATE: bool = _probe_table_row("HAS_GENERATOR_GRAPHSAFE_GET_STATE")
-HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = _probe_table_row("HAS_GENERATOR_GRAPHSAFE_SET_STATE")
-HAS_GENERATOR_PHILOX_STATE: bool = _probe_table_row("HAS_GENERATOR_PHILOX_STATE")
+HAS_GENERATOR_CLONE_STATE: bool = _probe_attribute_paths("HAS_GENERATOR_CLONE_STATE")
+HAS_GENERATOR_GRAPHSAFE_GET_STATE: bool = _probe_attribute_paths(
+    "HAS_GENERATOR_GRAPHSAFE_GET_STATE"
+)
+HAS_GENERATOR_GRAPHSAFE_SET_STATE: bool = _probe_attribute_paths(
+    "HAS_GENERATOR_GRAPHSAFE_SET_STATE"
+)
+HAS_GENERATOR_PHILOX_STATE: bool = _probe_attribute_paths("HAS_GENERATOR_PHILOX_STATE")
 HAS_SAFE_WEIGHTS_ONLY_LOAD: bool = _probe_safe_weights_only_load()
 HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 # Legacy ``torch.<dtype>Tensor`` constructor capture (``backends/torch/legacy_ctors.py``).
@@ -1715,12 +1716,12 @@ HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
 HAS_DISABLED_TORCH_FUNCTION_IMPL: bool = _probe_disabled_torch_function_impl()
 HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
-HAS_NODE_PREHOOK: bool = _probe_table_row("HAS_NODE_PREHOOK")
+HAS_NODE_PREHOOK: bool = _probe_attribute_paths("HAS_NODE_PREHOOK")
 HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
-HAS_FP32_PRECISION_CONTROLS: bool = _probe_table_row("HAS_FP32_PRECISION_CONTROLS")
-HAS_AMP_GRADSCALER: bool = _probe_table_row("HAS_AMP_GRADSCALER")
+HAS_FP32_PRECISION_CONTROLS: bool = _probe_attribute_paths("HAS_FP32_PRECISION_CONTROLS")
+HAS_AMP_GRADSCALER: bool = _probe_attribute_paths("HAS_AMP_GRADSCALER")
 HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
-HAS_RMSNORM_MODULE: bool = _probe_table_row("HAS_RMSNORM_MODULE")
+HAS_RMSNORM_MODULE: bool = _probe_attribute_paths("HAS_RMSNORM_MODULE")
 HAS_MHA_FASTPATH_SWITCH: bool = False
 _MHA_FASTPATH_SWITCH_PROBED: bool = False
 HAS_REDUCE_TUPLE_DIM: bool = False

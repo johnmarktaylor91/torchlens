@@ -1,4 +1,4 @@
-"""The per-flag torch capability table and its declarative attribute probes."""
+"""The measured per-flag torch capability table and the declarative attribute probes."""
 
 from __future__ import annotations
 
@@ -33,13 +33,26 @@ def test_absent_on_lists_only_measured_versions_in_order() -> None:
 
 
 @pytest.mark.smoke
-def test_table_probed_flags_agree_with_the_live_probe() -> None:
-    """A flag probed from its row reads what its declared paths resolve to now."""
+def test_attribute_probed_flags_agree_with_the_live_probe() -> None:
+    """A flag probed from its declared paths reads what those paths resolve to now."""
 
-    table_probed = [row.flag for row in CAPABILITY_ROWS.values() if row.attribute_paths]
-    assert table_probed, "no declaratively probed rows"
-    for flag in table_probed:
-        assert getattr(tc, flag) is tc._probe_table_row(flag), flag
+    assert set(tc._ATTRIBUTE_PROBES) <= set(CAPABILITY_ROWS)
+    for flag in tc._ATTRIBUTE_PROBES:
+        assert getattr(tc, flag) is tc._probe_attribute_paths(flag), flag
+
+
+@pytest.mark.smoke
+def test_the_compat_module_does_not_import_the_table() -> None:
+    """The measured table is tooling data, kept out of the capture stack's import closure."""
+
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(tc))
+    imported = {
+        node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert "_torch_compat_table" not in imported
 
 
 @pytest.mark.smoke
@@ -65,19 +78,19 @@ def test_attribute_path_resolution_returns_none_for_absent_surfaces() -> None:
 
 
 @pytest.mark.smoke
-def test_probe_table_row_refuses_rows_without_paths() -> None:
-    """A bespoke-probe row cannot be evaluated declaratively by mistake."""
+def test_attribute_probe_refuses_flags_without_paths() -> None:
+    """A bespoke-probe flag cannot be evaluated declaratively by mistake."""
 
-    bespoke = next(row.flag for row in CAPABILITY_ROWS.values() if not row.attribute_paths)
+    bespoke = next(flag for flag in CAPABILITY_ROWS if flag not in tc._ATTRIBUTE_PROBES)
     with pytest.raises(ValueError, match="declares no attribute paths"):
-        tc._probe_table_row(bespoke)
+        tc._probe_attribute_paths(bespoke)
 
 
 @pytest.mark.smoke
 def test_table_getter_flips_its_flag_when_the_surface_disappears(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A getter routed through the table still marks the capability missing."""
+    """A getter routed through its declared path still marks the capability missing."""
 
     monkeypatch.setattr(tc, "HAS_DEVICE_CONSTRUCTORS", True)
     monkeypatch.setattr(tc, "_resolve_attribute_path", lambda _spec: None)
