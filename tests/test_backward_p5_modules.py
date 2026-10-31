@@ -219,14 +219,14 @@ def test_multi_pass_module_grad_fns_keep_layer_label_and_hooks_see_their_own_pas
     )
     seen: list[tuple[str, Any, Any]] = []
 
-    def _probe(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def _probe(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Record the GradFn and the pass its hook context describes."""
 
         seen.append(
             (
-                hook.kwargs["grad_fn_handle"].label,
-                hook.op["label"],
-                hook.op["pass_index"],
+                ctx.kwargs["grad_fn_handle"].label,
+                ctx.op["label"],
+                ctx.op["pass_index"],
             )
         )
         return grad

@@ -178,10 +178,10 @@ def test_activation_patch_head_cell_matches_manual_patch() -> None:
     )
     clean_head = clean_log.modules["block.attn"].facets.head(0).result.detach().clone()
 
-    def _manual_patch(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def _manual_patch(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Return the clean head activation."""
 
-        del out, hook
+        del out, ctx
         return clean_head
 
     manual = corrupted_log.fork("manual_head_patch")

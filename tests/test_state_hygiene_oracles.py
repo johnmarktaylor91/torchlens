@@ -698,7 +698,7 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
         handle.remove()
     elif door == "failing_capture":
 
-        def boom(_out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        def boom(_out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             raise ValueError("boom")
 
         with pytest.raises(ValueError):
@@ -712,7 +712,7 @@ def test_interrupted_capture_record_and_bind_leave_no_runtime_state(mlp) -> None
 
     model, x, _ = mlp
 
-    def interrupt(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def interrupt(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         raise KeyboardInterrupt
 
     for call in (

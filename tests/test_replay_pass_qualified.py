@@ -175,8 +175,8 @@ def test_hook_fires_only_at_targeted_pass(recurrent):
     fork = trace.fork()
     fired: list[str] = []
 
-    def spy_hook(out: torch.Tensor, *, hook) -> torch.Tensor:
-        fired.append(str(hook.op.get("label")))
+    def spy_hook(out: torch.Tensor, *, ctx) -> torch.Tensor:
+        fired.append(str(ctx.op.get("label")))
         return torch.zeros_like(out)
 
     fork.do("relu_1_2:1", spy_hook)
@@ -251,7 +251,7 @@ def test_differentiable_replay_multipass_frontier_keys_are_per_pass(recurrent):
     replayed = fork.push(
         replay=tl.options.ReplayOptions(
             differentiable=True,
-            hooks={tl.label("relu_1_2:1"): lambda out, *, hook: torch.zeros_like(out)},
+            hooks={tl.label("relu_1_2:1"): lambda out, *, ctx: torch.zeros_like(out)},
         ),
     )
     assert replayed is not fork
@@ -296,7 +296,7 @@ def test_bare_multipass_label_refuses_in_do_and_resolve_sites(recurrent):
 
     fork = trace.fork()
     with pytest.raises(AmbiguousSiteError) as do_excinfo:
-        fork.do("relu_1_2", lambda out, *, hook: torch.zeros_like(out))
+        fork.do("relu_1_2", lambda out, *, ctx: torch.zeros_like(out))
     assert do_excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"
 
     with pytest.raises(AmbiguousSiteError) as label_excinfo:
@@ -327,7 +327,7 @@ def test_single_pass_bare_label_still_accepted(single_pass):
     with torch.no_grad():
         expected = torch.zeros_like(torch.relu(model.cell(x)))
     fork = trace.fork()
-    fork.do("relu_1_2", lambda out, *, hook: torch.zeros_like(out))
+    fork.do("relu_1_2", lambda out, *, ctx: torch.zeros_like(out))
     assert torch.equal(fork.layer_dict_all_keys["relu_1_2:1"].out, expected)
 
 

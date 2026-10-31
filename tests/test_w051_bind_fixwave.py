@@ -122,7 +122,7 @@ def _seeded(
     return cls().eval(), torch.randn(*shape)
 
 
-def _sae_like(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
     """Multi-call injected computation."""
 
     z = torch.relu(out @ torch.eye(out.shape[-1]))
@@ -167,7 +167,7 @@ def test_inplace_injected_ops_attest_on_honest_capture() -> None:
 
     model, x = _seeded(_MLP)
 
-    def inplace_hook(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def inplace_hook(out: torch.Tensor, *, ctx) -> torch.Tensor:
         y = out.clone()
         y.mul_(0.5)
         torch.relu_(y)
@@ -193,7 +193,7 @@ def test_functional_inplace_kwarg_injected_op_attests() -> None:
 
     model, x = _seeded(_MLP)
 
-    def hook(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def hook(out: torch.Tensor, *, ctx) -> torch.Tensor:
         y = out.clone() - 0.5
         return torch.nn.functional.relu(y, inplace=True)
 
@@ -213,7 +213,7 @@ def test_nan_output_injected_op_attests_and_value_mismatch_still_diverges() -> N
 
     model, x = _seeded(_MLP)
 
-    def nan_hook(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def nan_hook(out: torch.Tensor, *, ctx) -> torch.Tensor:
         torch.log(out - 100.0)  # NaN wherever out < 100 (every element here)
         return out * 0.5
 
@@ -386,7 +386,7 @@ def test_bind_identity_hook_reads_replaced_false() -> None:
     """An identity hook fired but replaced nothing."""
 
     model, x = _seeded(_MLP)
-    bound = tl.when(tl.func("relu"), lambda out, *, hook: out).bind(model)
+    bound = tl.when(tl.func("relu"), lambda out, *, ctx: out).bind(model)
     bound(x)
     (record,) = bound.last_report.fire_records
     (fire,) = bound.last_report.fires
@@ -404,7 +404,7 @@ def test_bind_module_boundary_identity_hook_reads_replaced_false() -> None:
     """Boundary fires derive replaced by identity too."""
 
     model, x = _seeded(_MLP)
-    bound = tl.when(tl.module("fc1"), lambda out, *, hook: out).bind(model)
+    bound = tl.when(tl.module("fc1"), lambda out, *, ctx: out).bind(model)
     bound(x)
     assert bound.last_report.fire_records[0].replaced is False
     assert bound.last_report.fires[0]["replaced"] is False
@@ -449,7 +449,7 @@ def test_region_edit_shape_change_refuses_typed(chain_fork) -> None:
     fork = log.fork()
     target = fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region()
     with pytest.raises(Exception) as excinfo:
-        fork.do(target, lambda out, *, hook: out[:1])
+        fork.do(target, lambda out, *, ctx: out[:1])
     assert excinfo.value.fields["code"] == "intervention_replacement_invalid"
 
 
@@ -460,7 +460,7 @@ def test_region_edit_dtype_change_refuses_typed(chain_fork) -> None:
     fork = log.fork()
     target = fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region()
     with pytest.raises(Exception) as excinfo:
-        fork.do(target, lambda out, *, hook: out.double())
+        fork.do(target, lambda out, *, ctx: out.double())
     assert excinfo.value.fields["code"] == "intervention_replacement_invalid"
 
 

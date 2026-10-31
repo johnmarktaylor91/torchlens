@@ -276,7 +276,7 @@ def apply_edge_substitution_do(
                 args=(consumed,),
                 kwargs={},
             )
-            substituted = hook_callable(consumed, hook=context)
+            substituted = hook_callable(consumed, ctx=context)
             substituted = _validate_edited(substituted, consumed, record.child_label)
 
             new_out = _reexecute_child_with_substitution(

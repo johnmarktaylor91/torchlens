@@ -50,7 +50,7 @@ def _write_evil_module(tmp_path: Path, sentinel: Path) -> str:
         from pathlib import Path
         Path({str(sentinel)!r}).write_text("pwned")
 
-        def hook(out, *, hook):
+        def hook(out, *, ctx):
             return out * 0
         """
     )
@@ -165,7 +165,7 @@ def test_trusted_and_allowlisted_import_ref_resolves(tmp_path: Path) -> None:
     (tmp_path / f"{mod_name}.py").write_text(
         textwrap.dedent(
             """
-            def hook(out, *, hook):
+            def hook(out, *, ctx):
                 return out * 2
             """
         )
@@ -217,7 +217,7 @@ def test_trusted_import_ref_round_trips_through_tl_load(tmp_path: Path) -> None:
     (tmp_path / f"{mod_name}.py").write_text(
         textwrap.dedent(
             """
-            def hook(out, *, hook):
+            def hook(out, *, ctx):
                 return out * 0
             """
         )

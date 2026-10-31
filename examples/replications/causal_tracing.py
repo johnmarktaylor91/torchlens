@@ -274,10 +274,10 @@ def _average(pooled: dict[str, list[float]]) -> dict[str, float]:
 def _restore_hook(clean_out: torch.Tensor, positions: list[int], rows: int) -> Any:
     """A hook writing the clean value into each block's own position."""
 
-    def restore(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def restore(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Write the clean value into each block's own position."""
 
-        del hook
+        del ctx
         patched = out.clone()
         for index, position in enumerate(positions):
             patched[index * rows : (index + 1) * rows, position] = clean_out[0, position]

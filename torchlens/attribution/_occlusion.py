@@ -97,10 +97,10 @@ def _blur_edit(kernel_size: int) -> Callable[..., Tensor]:
         scatters only selected elements from that replacement.
     """
 
-    def blur(out: Tensor, *, hook: Any) -> Tensor:
+    def blur(out: Tensor, *, ctx: Any) -> Tensor:
         """Return a same-shaped spatially blurred activation."""
 
-        del hook
+        del ctx
         if out.ndim != 4 or not (out.is_floating_point() or out.is_complex()):
             raise AttributionError(
                 "baseline='blur' requires a floating or complex N,C,H,W activation"

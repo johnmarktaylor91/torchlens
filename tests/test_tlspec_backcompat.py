@@ -241,8 +241,8 @@ def _assert_intervention_matches(
     assert isinstance(live_helper, Edit)
     out = torch.randn(2, 3)
     assert torch.equal(
-        fixture_helper()(out, hook=None),
-        live_helper()(out, hook=None),
+        fixture_helper()(out, ctx=None),
+        live_helper()(out, ctx=None),
     )
 
     compat = check_spec_compat(fixture_spec, live_log)

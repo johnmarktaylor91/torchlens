@@ -98,15 +98,15 @@ MAGNITUDE = 8.0
 scores = []
 
 
-def read_condition(activation, *, hook):
+def read_condition(activation, *, ctx):
     value = score(activation)
     scores.append(value)
-    hook.run_ctx["condition_passed"] = value > threshold
+    ctx.run_ctx["condition_passed"] = value > threshold
     return activation
 
 
-def gated_steer(activation, *, hook):
-    if not hook.run_ctx.get("condition_passed", False):
+def gated_steer(activation, *, ctx):
+    if not ctx.run_ctx.get("condition_passed", False):
         return activation
     return activation + MAGNITUDE * behaviour
 

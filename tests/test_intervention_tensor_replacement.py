@@ -79,17 +79,17 @@ class _DiscardedInplaceReturnModel(torch.nn.Module):
         return y + 1
 
 
-def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: tl.HookContext) -> torch.Tensor:
     """Return a zero replacement for a TorchLens live hook."""
 
-    del hook
+    del ctx
     return torch.zeros_like(out)
 
 
-def _quantize_dequantize_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+def _quantize_dequantize_hook(out: torch.Tensor, *, ctx: tl.HookContext) -> torch.Tensor:
     """Return a tiny fake-quantized replacement tensor."""
 
-    del hook
+    del ctx
     scale = out.detach().abs().max().clamp_min(torch.tensor(1e-6, device=out.device)) / 127
     return torch.round(out / scale).clamp(-128, 127) * scale
 

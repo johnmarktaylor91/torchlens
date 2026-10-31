@@ -1019,10 +1019,10 @@ def test_bwd_hook_fires_and_can_replace_gradient(selector: Any) -> None:
 
     calls: list[torch.Tensor] = []
 
-    def _zero_hook(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def _zero_hook(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Record and zero a tensor gradient."""
 
-        del hook
+        del ctx
         calls.append(grad.detach().clone())
         return torch.zeros_like(grad)
 
@@ -1127,7 +1127,7 @@ class _GuidedCNN(nn.Module):
 def _guided_backprop_via_torchlens(model: nn.Module, x: torch.Tensor, target: int) -> torch.Tensor:
     """Return the guided-backprop input gradient using the one-off recipe."""
 
-    guided = tl.when(tl.func("relu"), tl.hook_grad(lambda g, *, hook: g.clamp(min=0)))
+    guided = tl.when(tl.func("relu"), tl.hook_grad(lambda g, *, ctx: g.clamp(min=0)))
     trace = tl.trace(
         model,
         x.clone().requires_grad_(True),

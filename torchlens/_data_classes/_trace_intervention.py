@@ -207,10 +207,10 @@ class TraceInterventionMixin(_TraceMixinBase):
             )
         if direction in {"backward", "both"}:
 
-            def _backward_set_hook(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+            def _backward_set_hook(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
                 """Return a static or callable gradient replacement."""
 
-                del hook
+                del ctx
                 if callable(value):
                     return cast(torch.Tensor, value(grad))
                 return cast(torch.Tensor, value)
@@ -236,7 +236,7 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         if is_facet_target(site):
 
-            def _facet_replacement_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+            def _facet_replacement_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
                 """Return a static or callable facet replacement slice.
 
                 Parameters
@@ -252,7 +252,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                     Replacement facet slice.
                 """
 
-                del hook
+                del ctx
                 if callable(value):
                     return cast(torch.Tensor, value(out))
                 return cast(torch.Tensor, value)
@@ -1639,7 +1639,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 args=(saved,),
                 kwargs={},
             )
-            applied = hook_callable(saved, hook=context)
+            applied = hook_callable(saved, ctx=context)
             if not isinstance(applied, torch.Tensor):
                 raise _apply_invalid(
                     "not_maskable",

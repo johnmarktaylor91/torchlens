@@ -220,7 +220,7 @@ def test_resolver_legit_foreign_trusted_callable_still_resolves(tmp_path: Path) 
     """A genuinely foreign (non-torch) trusted callable is NOT purity-gated (no regression)."""
 
     mod_name = "r27_resolver_trusted_mod"
-    (tmp_path / f"{mod_name}.py").write_text("def hook(out, *, hook):\n    return out * 2\n")
+    (tmp_path / f"{mod_name}.py").write_text("def hook(out, *, ctx):\n    return out * 2\n")
     sys.path.insert(0, str(tmp_path))
     try:
         mod = importlib.import_module(mod_name)

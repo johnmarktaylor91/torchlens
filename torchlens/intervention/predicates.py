@@ -103,10 +103,10 @@ def add(delta: torch.Tensor | float | int, *, allow_shape_change: bool = False) 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for additive intervention."""
 
-        def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             """Add the configured delta to the out."""
 
-            del hook
+            del ctx
             if isinstance(delta, torch.Tensor):
                 return out + delta.to(device=out.device, dtype=out.dtype)
             return out + cast(float | int, delta)
@@ -146,10 +146,10 @@ def replace_with(
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for fixed replacement."""
 
-        def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             """Return the configured replacement tensor."""
 
-            del hook
+            del ctx
             replacement = value() if callable(value) else value
             converted = replacement.to(device=out.device, dtype=out.dtype)
             if converted is replacement:

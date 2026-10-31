@@ -46,7 +46,7 @@ def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
             Hook callable that replaces an out with zeros.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return zeros with the same metadata as the out."""
 
             return torch.zeros_like(out)
@@ -131,7 +131,7 @@ def mean_ablate(
             Hook callable that fills an out from the configured source mean.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return an out-shaped tensor filled with the source mean."""
 
             source_tensor = _source_tensor_or_out(source, out)
@@ -224,7 +224,7 @@ def scramble_elements(
 
         generator = _make_generator(seed)
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return sampled values reshaped to the out."""
 
             source_tensor = _source_tensor_or_out(source_value, out).to(
@@ -234,7 +234,7 @@ def scramble_elements(
             if flat_source.numel() == 0:
                 raise HookValueError("scramble_elements source tensor is empty")
             if seed is None:
-                _enqueue_nondeterminism_note(hook, "scramble_elements")
+                _enqueue_nondeterminism_note(ctx, "scramble_elements")
                 indices = torch.randint(flat_source.numel(), out.shape, device=out.device)
             else:
                 # Generator is CPU-bound; sample on CPU then move to target device
@@ -300,7 +300,7 @@ def steer(
             Hook callable that adds the configured steering direction.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Add the steering vector to the out."""
 
             aligned = _align_direction(direction, out, dim=dim)
@@ -347,7 +347,7 @@ def scale(factor: float, *, allow_shape_change: bool = False) -> Edit:
             Hook callable that multiplies an out by ``factor``.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Scale the out."""
 
             return out * factor
@@ -399,7 +399,7 @@ def clamp(
             Hook callable that clamps out values.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Clamp the out."""
 
             return torch.clamp(out, min=low, max=high)
@@ -450,11 +450,11 @@ def add_noise(
 
         generator = _make_generator(seed)
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Add Gaussian noise to the out."""
 
             if seed is None:
-                _enqueue_nondeterminism_note(hook, "add_noise")
+                _enqueue_nondeterminism_note(ctx, "add_noise")
                 sample = torch.randn(out.shape, device=out.device, dtype=out.dtype)
             else:
                 # Generator is CPU-bound; sample on CPU then move to target device
@@ -511,7 +511,7 @@ def project_onto(
             Hook callable that projects an out onto ``direction``.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Project out onto the direction."""
 
             aligned = _align_direction(direction, out, dim=dim).to(
@@ -579,10 +579,10 @@ def project_out(
 
         onto_hook = onto_spec()
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Remove the projected component from the out."""
 
-            return cast(torch.Tensor, out - onto_hook(out, hook=hook))
+            return cast(torch.Tensor, out - onto_hook(out, ctx=ctx))
 
         return _hook
 
@@ -649,10 +649,10 @@ def swap_with(
             Hook callable that resolves and returns the configured replacement.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return the resolved replacement tensor."""
 
-            del hook
+            del ctx
             replacement = _resolve_swap_value(other_label)
             if not isinstance(replacement, torch.Tensor):
                 raise HookValueError(
@@ -724,15 +724,15 @@ def splice_module(
             Hook callable that forwards the out through ``module``.
         """
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Call the spliced module and validate dtype/device."""
 
             if input_route == "in":
-                if not hook.args and not hook.kwargs:
+                if not ctx.args and not ctx.kwargs:
                     raise HookValueError(
                         "splice_module input routing requires captured call inputs"
                     )
-                result = module(*hook.args, **dict(hook.kwargs))
+                result = module(*ctx.args, **dict(ctx.kwargs))
             else:
                 result = module(out)
             if not isinstance(result, torch.Tensor):
@@ -827,7 +827,7 @@ def zero_grad(*, allow_shape_change: bool = False) -> Edit:
             Hook callable that replaces a grad with zeros.
         """
 
-        def _hook(g: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(g: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return a zero grad."""
 
             return torch.zeros_like(g)
@@ -871,7 +871,7 @@ def scale_grad(factor: float, *, allow_shape_change: bool = False) -> Edit:
             Hook callable that multiplies a grad by ``factor``.
         """
 
-        def _hook(g: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(g: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Scale the grad."""
 
             return g * factor
@@ -1484,7 +1484,7 @@ def _make_generator(seed: int | None) -> torch.Generator | None:
     return generator
 
 
-def _enqueue_nondeterminism_note(hook: HookContext, helper_name: str) -> None:
+def _enqueue_nondeterminism_note(ctx: HookContext, helper_name: str) -> None:
     """Record that an unseeded stochastic helper consumed global RNG.
 
     Parameters
@@ -1499,13 +1499,13 @@ def _enqueue_nondeterminism_note(hook: HookContext, helper_name: str) -> None:
     # live door only the internal raw label exists (its ordinal need not match
     # the final label, so suffix-stripping would name the WRONG site); the
     # FireRecord's attachment op carries the location either way.
-    site = hook.op.get("label") or hook.op.get("layer_label")
+    site = ctx.op.get("label") or ctx.op.get("layer_label")
     if isinstance(site, str) and site and not site.endswith("_raw"):
         note = f"{helper_name} used unseeded stochastic RNG at {site}"
     else:
         note = f"{helper_name} used unseeded stochastic RNG"
-    hook.run_ctx.setdefault("ledger_notes", []).append(note)
-    state_history = hook.run_ctx.get("state_history")
+    ctx.run_ctx.setdefault("ledger_notes", []).append(note)
+    state_history = ctx.run_ctx.get("state_history")
     if isinstance(state_history, list):
         state_history.append(note)
 
@@ -1894,7 +1894,7 @@ def patch_from(
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook binding source values at fire time."""
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return the source trace's recorded value for this site, at
             this site's PASS.
 
@@ -1909,7 +1909,7 @@ def patch_from(
             from .errors import HookValueError
 
             if source_site is None:
-                site_label, donor_op = _resolve_patch_donor_site(source, hook.op)
+                site_label, donor_op = _resolve_patch_donor_site(source, ctx.op)
             else:
                 site_label, donor_op = resolve_source_site(source, source_site)
             value = donor_op.out

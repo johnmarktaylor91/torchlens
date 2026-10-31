@@ -524,7 +524,7 @@ def _adapt_tensor_backward_hook(
     Parameters
     ----------
     hook_callable:
-        Callable accepting one gradient tensor and ``hook=HookContext``.
+        Callable accepting one gradient tensor and ``ctx=HookContext``.
     helper_spec:
         Helper spec used for display metadata.
 
@@ -565,7 +565,7 @@ def _adapt_tensor_backward_hook(
                     "tuple_index": index,
                 },
             )
-            result = hook_callable(grad, hook=context)
+            result = hook_callable(grad, ctx=context)
             if result is None:
                 updated.append(grad)
                 continue
@@ -829,7 +829,7 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
         def _set_value_hook(
             out: torch.Tensor,
             *,
-            hook: HookContext,
+            ctx: HookContext,
             replacement: Any = value,
         ) -> torch.Tensor:
             """Return a static or one-shot callable replacement.
@@ -849,7 +849,7 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
                 Replacement out.
             """
 
-            del hook
+            del ctx
             if callable(replacement):
                 return cast(torch.Tensor, replacement(out))
             return cast(torch.Tensor, replacement)
@@ -971,7 +971,7 @@ def _hook_like_from_spec(spec: InterventionSpec) -> HookInput | None:
     if spec.value is not None:
         value = spec.value
 
-        def _value_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _value_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Return a fixed replacement value from an intervention spec.
 
             Parameters
@@ -987,7 +987,7 @@ def _hook_like_from_spec(spec: InterventionSpec) -> HookInput | None:
                 Replacement tensor.
             """
 
-            del out, hook
+            del out, ctx
             if callable(value):
                 return cast(torch.Tensor, value())
             return cast(torch.Tensor, value)
@@ -1526,7 +1526,7 @@ def _facet_scatter_hook(
         Hook with the standard whole-output TorchLens contract.
     """
 
-    def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Apply a user hook to a facet slice and scatter it into ``out``.
 
         Parameters
@@ -1545,8 +1545,8 @@ def _facet_scatter_hook(
         from .runtime import validate_hook_output
 
         facet_slice = spec.apply_transforms(out)
-        edited_slice = user_hook(facet_slice, hook=hook)
-        checked_slice = validate_hook_output(edited_slice, facet_slice, hook_context=hook)
+        edited_slice = user_hook(facet_slice, ctx=ctx)
+        checked_slice = validate_hook_output(edited_slice, facet_slice, hook_context=ctx)
         return spec.scatter_update(out, checked_slice, mode="replace")
 
     _hook.__name__ = f"facet_{facet_name}_scatter_hook"
@@ -1781,7 +1781,7 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
     Raises
     ------
     HookSignatureError
-        If the callable cannot be called as ``fn(out, *, hook=ctx)``.
+        If the callable cannot be called as ``fn(out, *, ctx=context)``.
         Backward hooks receive a grad as the first positional argument; the
         parameter name is conventional only, so ``g`` or any other name is
         accepted.
@@ -1801,7 +1801,7 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
     has_var_positional = any(
         parameter.kind == inspect.Parameter.VAR_POSITIONAL for parameter in parameters
     )
-    hook_param = signature.parameters.get("hook")
+    ctx_param = signature.parameters.get("ctx")
     has_var_keyword = any(
         parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters
     )
@@ -1812,10 +1812,10 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
         {"grad_output", "grad_fn_handle", "call_index", "run_ctx"} & set(signature.parameters)
     ):
         return
-    if hook_param is None and not has_var_keyword:
-        raise HookSignatureError("hook must accept required keyword-only argument 'hook'")
-    if hook_param is not None and hook_param.kind is not inspect.Parameter.KEYWORD_ONLY:
-        raise HookSignatureError("'hook' must be a keyword-only parameter")
+    if ctx_param is None and not has_var_keyword:
+        raise HookSignatureError("hook must accept required keyword-only argument 'ctx'")
+    if ctx_param is not None and ctx_param.kind is not inspect.Parameter.KEYWORD_ONLY:
+        raise HookSignatureError("'ctx' must be a keyword-only parameter")
 
 
 def _snapshot_layer_log(layer_log: Any | None) -> dict[str, Any]:

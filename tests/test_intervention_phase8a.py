@@ -17,7 +17,7 @@ from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
 
 
-def _identity_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _identity_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return the out unchanged.
 
     Parameters
@@ -33,7 +33,7 @@ def _identity_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
         Original out.
     """
 
-    del hook
+    del ctx
     return out
 
 

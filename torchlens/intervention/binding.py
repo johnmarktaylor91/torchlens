@@ -340,7 +340,7 @@ def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
             "carries no executable hook payload; the capture-free lane can only "
             "run value-replacing actions",
             "use a value-replacing action (tl.scale, tl.add_noise, tl.replace_with, "
-            "or a callable taking (out, *, hook))",
+            "or a callable taking (out, *, ctx))",
         )
     hook = decision.hook
     edits_gradients = decision.direction in ("backward", "both") or (

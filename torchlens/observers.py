@@ -89,7 +89,7 @@ class TapObserver:
     direction: Literal["forward", "backward", "both"] = "forward"
     records: list[TapRecord] = field(default_factory=list)
 
-    def __call__(self, out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def __call__(self, out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Record an out and return it unchanged.
 
         Parameters
@@ -114,9 +114,9 @@ class TapObserver:
                 span_names=span_names,
                 timestamp=time.monotonic(),
                 direction="forward",
-                _raw_site_label=_hook_layer_label(hook.op),
+                _raw_site_label=_hook_layer_label(ctx.op),
                 _trace_ref=_active_trace_ref(),
-                selection_mask=self._selection_mask_for(hook.op, value),
+                selection_mask=self._selection_mask_for(ctx.op, value),
             )
         )
         return out

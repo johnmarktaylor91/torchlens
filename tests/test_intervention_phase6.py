@@ -21,7 +21,7 @@ from torchlens.io import TraceState
 replay_mod = importlib.import_module("torchlens.intervention.replay")
 
 
-def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return a zero ablation for hook tests.
 
     Parameters
@@ -40,7 +40,7 @@ def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
     return out * 0
 
 
-def _identity_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _identity_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return an unchanged out.
 
     Parameters
@@ -229,7 +229,7 @@ def test_differentiable_replay_patching_captures_backward_grads() -> None:
     clean_relu = _first_func(clean, "relu")
     patch = clean_relu.out
 
-    def patch_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def patch_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Replace the replayed activation with a tensor from another run.
 
         Parameters
@@ -245,7 +245,7 @@ def test_differentiable_replay_patching_captures_backward_grads() -> None:
             Activation from the clean source run.
         """
 
-        del out, hook
+        del out, ctx
         return patch
 
     replayed = corrupt.push(

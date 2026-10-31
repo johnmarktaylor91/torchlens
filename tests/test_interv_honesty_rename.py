@@ -64,8 +64,8 @@ def test_seeded_draws_are_reproducible() -> None:
     source = torch.arange(12.0)
     out = torch.zeros(2, 3)
 
-    first = scramble_elements(source, seed=7).factory()(out, hook=None)
-    second = scramble_elements(source, seed=7).factory()(out, hook=None)
+    first = scramble_elements(source, seed=7).factory()(out, ctx=None)
+    second = scramble_elements(source, seed=7).factory()(out, ctx=None)
     assert torch.equal(first, second)
     assert set(first.flatten().tolist()) <= set(source.tolist())
 
@@ -76,7 +76,7 @@ def test_serialized_specs_load_under_the_new_name() -> None:
     spec = rebuild_builtin_helper("scramble_elements", (torch.ones(3),), {"seed": 3})
     assert spec.helper_name == "scramble_elements"
     hook = spec.factory()
-    sampled = hook(torch.zeros(4), hook=None)
+    sampled = hook(torch.zeros(4), ctx=None)
     assert torch.equal(sampled, torch.ones(4))
 
 
@@ -141,4 +141,4 @@ def test_empty_source_refusal_names_the_honest_helper() -> None:
 
     hook = scramble_elements(torch.ones(0), seed=1).factory()
     with pytest.raises(HookValueError, match="scramble_elements"):
-        hook(torch.zeros(3), hook=None)
+        hook(torch.zeros(3), ctx=None)

@@ -37,7 +37,7 @@ class _Chain(nn.Module):
         return torch.tanh(self.fc2(torch.relu(self.fc1(x))))
 
 
-def _sae_like(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
     """SAE-style injected computation (multiple recordable calls)."""
 
     z = torch.relu(out @ torch.eye(out.shape[-1]))

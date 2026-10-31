@@ -295,13 +295,13 @@ def activation_patch_residual_stream(
                 def _patch_position(
                     out: torch.Tensor,
                     *,
-                    hook: Any,
+                    ctx: Any,
                     position: Any = position,
                     clean_value: torch.Tensor = clean_value,
                 ) -> torch.Tensor:
                     """Return ``out`` with one position replaced by the clean activation."""
 
-                    del hook
+                    del ctx
                     patched = out.clone(memory_format=torch.preserve_format)
                     target = patched.select(normalized_axis, position)
                     source = clean_value.select(normalized_axis, position)
@@ -733,11 +733,11 @@ def _activation_patch_by_module(
         clean_value = _facet_tensor(clean_log.modules[address].facets[facet_name]).detach().clone()
 
         def _patch_whole(
-            out: torch.Tensor, *, hook: Any, clean_value: torch.Tensor = clean_value
+            out: torch.Tensor, *, ctx: Any, clean_value: torch.Tensor = clean_value
         ) -> torch.Tensor:
             """Return the clean activation for this facet slice."""
 
-            del out, hook
+            del out, ctx
             return clean_value
 
         patched_log = _run_patch(
@@ -793,11 +793,11 @@ def _activation_patch_heads(
             )
 
             def _patch_head(
-                out: torch.Tensor, *, hook: Any, clean_value: torch.Tensor = clean_value
+                out: torch.Tensor, *, ctx: Any, clean_value: torch.Tensor = clean_value
             ) -> torch.Tensor:
                 """Return the clean activation for this head facet slice."""
 
-                del out, hook
+                del out, ctx
                 return clean_value
 
             patched_log = _run_patch(
@@ -880,11 +880,11 @@ def _run_patch(
         return patched_log
 
     def _tracked_hook(
-        out: torch.Tensor, *, hook: Any, _inner: Callable[..., torch.Tensor] = hook
+        out: torch.Tensor, *, ctx: Any, _inner: Callable[..., torch.Tensor] = hook
     ) -> torch.Tensor:
         """Run the patch hook while counting fires and value-identical fires."""
 
-        result = _inner(out, hook=hook)
+        result = _inner(out, ctx=ctx)
         fire_ledger["fires"] += 1
         if _replaced_identical(result, out):
             fire_ledger["identical"] += 1
@@ -941,7 +941,7 @@ def _run_input_patch(
     def _tracked_input_patch(leaf: torch.Tensor) -> torch.Tensor:
         """Apply the patch to an input leaf while feeding the fire ledger."""
 
-        result = hook(leaf.detach().clone(), hook=None)
+        result = hook(leaf.detach().clone(), ctx=None)
         fire_ledger["fires"] += 1
         if _replaced_identical(result, leaf):
             fire_ledger["identical"] += 1

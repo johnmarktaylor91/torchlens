@@ -253,7 +253,7 @@ def _substituted_value(
         args=(consumed,),
         kwargs={},
     )
-    substituted = hook_callable(consumed, hook=context)
+    substituted = hook_callable(consumed, ctx=context)
     substituted = _validate_edited(substituted, consumed, site_label)
     return substituted, helper_spec, helper_name
 

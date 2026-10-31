@@ -71,10 +71,10 @@ def _double(grad: torch.Tensor) -> torch.Tensor:
     return grad * 2.0
 
 
-def _zero_hook(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _zero_hook(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """User ``bwd_hook`` callable zeroing the gradient."""
 
-    del hook
+    del ctx
     return torch.zeros_like(grad)
 
 

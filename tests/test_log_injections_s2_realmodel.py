@@ -20,7 +20,7 @@ transformers = pytest.importorskip("transformers")
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 
 
-def _sae_like(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
     """SAE-style encode/gate/decode on the hooked activation."""
 
     z = torch.relu(out @ torch.eye(out.shape[-1]))
@@ -65,7 +65,7 @@ def test_torchvision_block_splice_injection_persists_and_attests(tmp_path) -> No
     model = torchvision.models.resnet18(weights=None).eval()
     x = torch.randn(1, 3, 64, 64)
 
-    def block_splice(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def block_splice(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Splice a channel-recombination into the block output."""
 
         pooled = torch.mean(out, dim=1, keepdim=True)

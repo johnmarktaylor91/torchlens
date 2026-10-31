@@ -40,7 +40,7 @@ class _TinyReluModel(torch.nn.Module):
         return self.latest
 
 
-def _bad_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+def _bad_hook(out: torch.Tensor, *, ctx: tl.HookContext) -> torch.Tensor:
     """Raise from a live hook.
 
     Parameters

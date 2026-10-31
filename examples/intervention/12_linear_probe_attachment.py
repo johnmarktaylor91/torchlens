@@ -46,10 +46,10 @@ def main() -> None:
     probe = nn.Linear(8, 1, bias=False).eval()
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
 
-    def readout(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def readout(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Store probe scores and leave the out unchanged."""
 
-        hook.run_ctx.setdefault("probe_scores", []).append(probe(out).detach())
+        ctx.run_ctx.setdefault("probe_scores", []).append(probe(out).detach())
         return out
 
     edited = log.fork("probe")

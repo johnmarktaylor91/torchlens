@@ -71,7 +71,7 @@ class WrongModel(torch.nn.Module):
         return self.fc(x)
 
 
-def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return zeros matching the incoming out.
 
     Parameters
@@ -87,7 +87,7 @@ def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
         Zero out.
     """
 
-    del hook
+    del ctx
     return out * 0
 
 
