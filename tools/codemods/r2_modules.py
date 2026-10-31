@@ -103,6 +103,7 @@ DOTTED = re.compile(rf"(?<![\w.])(torchlens|tl)\.({ALT})\b")
 PATHED = re.compile(rf"(?<![\w/])torchlens/({ALT})(?!\w)")
 RELPATH = re.compile(rf"(?<=[\"'\s(])({ALT})/((?:\w+/)*(?:\w+\.py\b|_\w+))")
 DOCPATH = re.compile(rf"(?<![\w/.-])({ALT})/((?:\w+/)*\w+\.py)\b")
+TOMLPATH = re.compile(rf'(?<=")({ALT})/(?=[\w*])')
 REL_FROM = re.compile(rf"^(\s*from\s+)(\.+)({ALT})\b", re.M)
 REL_BARE = re.compile(r"^(\s*from\s+)(\.+)(\s+import\s+)(\(?)([^\n#]*)", re.M)
 ABS_BARE = re.compile(r"^(\s*from\s+)(torchlens)(\s+import\s+)(\(?)([^\n#]*)", re.M)
@@ -209,6 +210,8 @@ def rewrite_text(text: str, path: Path, repo: Path) -> str:
         text = RELPATH.sub(lambda m: f"{MAPPING[m.group(1)]}/{m.group(2)}", text)
     if path.suffix in {".md", ".rst", ".txt", ".ipynb", ".py"}:
         text = DOCPATH.sub(lambda m: f"{MAPPING[m.group(1)]}/{m.group(2)}", text)
+    if path.name == "pyproject.toml":
+        text = TOMLPATH.sub(lambda m: f"{MAPPING[m.group(1)]}/", text)
     text = ABS_BARE.sub(lambda m: _rewrite_bare(m, path, repo), text)
     if path.suffix == ".py" and path.relative_to(repo).parts[0] == "torchlens":
         text = REL_FROM.sub(
