@@ -904,26 +904,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             input_synthesis=_input_synthesis,
         )
 
-    def provenance(self: "Trace") -> str:
-        """The capture-provenance block (the relocated summary preamble).
-
-        Returns the historical discoverability preamble BYTE-FOR-BYTE
-        (summary memo 3.6): agent/MCP consumers that parsed it out of the
-        old summary text keep an exact source after the preamble left the
-        default view.
-
-        Returns
-        -------
-        str
-            Multi-section capture/provenance text.
-        """
-
-        from ..visualization._summary_internal._discoverability import (
-            format_discoverability_summary,
-        )
-
-        return format_discoverability_summary(self)
-
     def render_dagua_graph(
         self: "Trace",
         vis_mode: str = "unrolled",

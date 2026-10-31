@@ -14,7 +14,15 @@ if TYPE_CHECKING:
     from ..report._explain import ExplainReport
     from ..report._profile import ProfileReport
     from ..visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
-    from ._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceSource
+    from ._trace_groups import (
+        TraceAutograd,
+        TraceCost,
+        TraceGraph,
+        TraceHealth,
+        TraceOptions,
+        TraceProvenance,
+        TraceSource,
+    )
     from .buffer import BufferAccessor
     from .layer import LayerAccessor
     from .module import Module, ModuleCall
@@ -158,6 +166,30 @@ class TraceStatsMixin(_TraceMixinBase):
         from ._trace_groups import TraceSource
 
         return TraceSource(self)
+
+    @property
+    def provenance(self: "Trace") -> "TraceProvenance":
+        """How, when and from what this Trace was captured."""
+
+        from ._trace_groups import TraceProvenance
+
+        return TraceProvenance(self)
+
+    @property
+    def options(self: "Trace") -> "TraceOptions":
+        """The capture options this Trace ran with (the stored snapshot)."""
+
+        from ._trace_groups import TraceOptions
+
+        return TraceOptions(self)
+
+    @property
+    def health(self: "Trace") -> "TraceHealth":
+        """Honesty diagnostics of the capture: witness and escape-detector facts."""
+
+        from ._trace_groups import TraceHealth
+
+        return TraceHealth(self)
 
     @property
     def _graph_is_recurrent(self: "Trace") -> bool:
