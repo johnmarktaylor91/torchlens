@@ -136,6 +136,10 @@ def _traces() -> Iterator[Any]:
 def _instances(trace: Any) -> Iterator[tuple[str, Any]]:
     report = trace.summary()
     yield "Trace", trace
+    yield "TraceCost", trace.cost
+    yield "TraceGraph", trace.graph
+    yield "TraceAutograd", trace.autograd
+    yield "ParamAccessor", trace.params
     yield "SummaryReport", report
     yield "SummaryTotals", report.totals
     yield "CaptureFacts", report.capture

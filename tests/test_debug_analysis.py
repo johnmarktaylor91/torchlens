@@ -95,6 +95,12 @@ class RaisingGradTrace:
     """Minimal non-torch-like object for backend gate coverage."""
 
     @property
+    def autograd(self) -> RaisingGradTrace:
+        """Serve ``trace.autograd.backward_passes`` from the stand-in itself."""
+
+        return self
+
+    @property
     def backward_passes(self) -> Any:
         """Raise like non-torch trace backward accessors."""
 
