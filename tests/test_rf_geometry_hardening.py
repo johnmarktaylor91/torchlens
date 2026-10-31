@@ -786,7 +786,7 @@ def test_multi_target_projective_raises_target_error() -> None:
 
     trace = tl.trace(TwoOut(), torch.randn(1, 3))
     source = sole_input(trace)
-    for accessor in ("status", "axes", "size", "jump", "center0", "layout"):
+    for accessor in ("status", "axes", "size", "jump", "center0", "axis_roles"):
         with pytest.raises(AmbiguousTargetError, match="target") as exc_info:
             getattr(source.projective_field, accessor)
         assert not isinstance(exc_info.value, AmbiguousInputError)

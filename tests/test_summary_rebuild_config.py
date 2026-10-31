@@ -126,7 +126,7 @@ def test_fma1_renders_from_the_two_term_record(toy_trace) -> None:
 def test_one_call_only_kwargs_refuse_on_trace_summary(toy_trace) -> None:
     """input_size/execution_mode/grad_mode are one-call-only spellings."""
 
-    for kwargs in ({"input_size": (2, 8)}, {"execution_mode": "eval"}, {"grad_mode": "off"}):
+    for kwargs in ({"input_shape": (2, 8)}, {"execution_mode": "eval"}, {"grad_mode": "off"}):
         with pytest.raises(InvalidArgumentError) as excinfo:
             toy_trace.summary(**kwargs)
         assert excinfo.value.fields["code"] == "summary_one_call_only"

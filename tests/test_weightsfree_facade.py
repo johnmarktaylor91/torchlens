@@ -69,7 +69,7 @@ def test_bare_facade_refuses_rather_than_guessing() -> None:
     with pytest.raises(Exception) as excinfo:
         tl.summary(_meta_model())
     assert excinfo.value.fields["code"] == "weightsfree_facade_input_evidence_required"
-    assert "input_size" in str(excinfo.value)
+    assert "input_shape" in str(excinfo.value)
 
 
 @pytest.mark.smoke

@@ -2560,13 +2560,13 @@ def _free_uses(fn: ast.AST, name: str) -> Iterator[ast.Name]:
             else:
                 stack.append(node.body)
             continue
-        if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
-            if any(
-                isinstance(n, ast.Name) and n.id == name
-                for g in node.generators
-                for n in ast.walk(g.target)
-            ):
-                continue
+        comprehensions = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+        if isinstance(node, comprehensions) and any(
+            isinstance(n, ast.Name) and n.id == name
+            for g in node.generators
+            for n in ast.walk(g.target)
+        ):
+            continue  # the comprehension rebinds the name
         if isinstance(node, ast.Name) and node.id == name:
             yield node
         stack.extend(ast.iter_child_nodes(node))

@@ -52,7 +52,7 @@ AUTOROUTE_EXEMPT_PARAMS = {
     # _trace_via_ladder before the autoroute branch, so autoroute only ever
     # runs with input_shape=None (the ladder re-enters trace() with a real
     # input, which forwards normally)
-    "input_size",
+    "input_shape",
 }
 
 

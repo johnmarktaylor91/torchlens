@@ -168,7 +168,7 @@ class TestClipBoundaryRider:
         assert result.found is False
         assert result.reason == "multi_input_required"
         assert "NoneType" in result.message
-        assert "input_size" in result.message
+        assert "input_shape" in result.message
 
     @pytest.mark.slow
     def test_mapping_form_reaches_clip_with_correct_recipes(self, clip: nn.Module) -> None:

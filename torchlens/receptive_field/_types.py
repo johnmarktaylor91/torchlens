@@ -183,7 +183,7 @@ class ReceptiveField:
         "io_role",
         "input_op_label",
         "input_shape",
-        "layout",
+        "axis_roles",
         "axes",
         "status",
         "alignment",
