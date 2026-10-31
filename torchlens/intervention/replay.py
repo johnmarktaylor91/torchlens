@@ -1180,7 +1180,7 @@ def _apply_replay_hooks(
         context = make_hook_context(
             name=_hook_name(entry),
             timing="post",
-            direction="forward",
+            signal="forward",
             op=site,
             run_context=run_ctx,
             args=(current,),

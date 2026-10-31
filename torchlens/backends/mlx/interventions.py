@@ -332,7 +332,7 @@ def _resolve_callable_applier(hook: Callable[..., Any]) -> MLXHookApplier:
         context = make_hook_context(
             name=identity,
             timing="post",
-            direction="forward",
+            signal="forward",
         )
         return normalized(out, ctx=context)
 

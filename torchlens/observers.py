@@ -33,8 +33,8 @@ class TapRecord:
         Active span names when the tap fired.
     timestamp:
         Monotonic timestamp.
-    direction:
-        Direction in which the tap fired.
+    signal:
+        Signal on which the tap fired, ``"forward"`` or ``"backward"``.
     grad_kind:
         Gradient payload kind for backward records.
     backward_call_index:
@@ -44,7 +44,7 @@ class TapRecord:
     value: torch.Tensor
     span_names: tuple[str, ...]
     timestamp: float
-    direction: Literal["forward", "backward"]
+    signal: Literal["forward", "backward"]
     grad_kind: Literal["grad_input", "grad_output"] | None = None
     backward_call_index: int | None = None
     _raw_site_label: str | None = None
@@ -81,12 +81,12 @@ class TapObserver:
     ----------
     site:
         Selector-like site where this tap should be registered.
-    direction:
-        Direction in which this tap should fire.
+    signal:
+        Signal on which this tap should fire.
     """
 
     site: Any
-    direction: Literal["forward", "backward", "both"] = "forward"
+    signal: Literal["forward", "backward", "both"] = "forward"
     records: list[TapRecord] = field(default_factory=list)
 
     def __call__(self, out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -113,7 +113,7 @@ class TapObserver:
                 value=value,
                 span_names=span_names,
                 timestamp=time.monotonic(),
-                direction="forward",
+                signal="forward",
                 _raw_site_label=_hook_layer_label(ctx.op),
                 _trace_ref=_active_trace_ref(),
                 selection_mask=self._selection_mask_for(ctx.op, value),
@@ -191,7 +191,7 @@ class TapObserver:
                 value=value,
                 span_names=span_names,
                 timestamp=time.monotonic(),
-                direction="backward",
+                signal="backward",
                 grad_kind=grad_kind,
                 backward_call_index=call_index,
                 _raw_site_label=getattr(grad_fn_handle, "label", None),
@@ -324,7 +324,7 @@ def _hook_layer_label(layer_log: Any) -> str | None:
 def tap(
     site: Any,
     *,
-    direction: Literal["forward", "backward", "both"] = "forward",
+    signal: Literal["forward", "backward", "both"] = "forward",
 ) -> TapObserver:
     """Create a tap observer for a site.
 
@@ -332,8 +332,8 @@ def tap(
     ----------
     site:
         Selector-like site to observe.
-    direction:
-        Direction in which the tap should fire.
+    signal:
+        Signal on which the tap should fire.
 
     Returns
     -------
@@ -341,9 +341,9 @@ def tap(
         Callable observer with ``records`` and ``values()`` accessors.
     """
 
-    if direction not in {"forward", "backward", "both"}:
-        raise ValueError("direction must be 'forward', 'backward', or 'both'.")
-    return TapObserver(site=site, direction=direction)
+    if signal not in {"forward", "backward", "both"}:
+        raise ValueError("signal must be 'forward', 'backward', or 'both'.")
+    return TapObserver(site=site, signal=signal)
 
 
 @contextmanager

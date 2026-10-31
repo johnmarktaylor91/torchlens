@@ -282,7 +282,7 @@ def test_grad_fn_hook_inplace_mutation_records_replaced() -> None:
         grad_input[0].mul_(0)
         return None
 
-    mutate_in_place.direction = "backward"
+    mutate_in_place.signal = "backward"
     _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), mutate_in_place)
     hook = _make_grad_fn_hook(trace_stub, 1)
 
@@ -318,7 +318,7 @@ def test_grad_fn_hook_data_alias_mutation_records_replaced() -> None:
         grad_input[0].data.mul_(0)
         return None
 
-    mutate_via_data_alias.direction = "backward"
+    mutate_via_data_alias.signal = "backward"
     _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), mutate_via_data_alias)
     hook = _make_grad_fn_hook(trace_stub, 1)
 
@@ -557,7 +557,7 @@ def test_backward_in_place_none_return_helper_records_gradient_effect() -> None:
             grad_input[0].mul_(0)
         return None
 
-    zero_in_place.direction = "backward"  # type: ignore[attr-defined]
+    zero_in_place.signal = "backward"  # type: ignore[attr-defined]
     x = torch.ones(2, 3, requires_grad=True)
     trace = tl.trace(
         _EncoderModel(),
@@ -875,7 +875,7 @@ def test_backward_intervention_replacement_registers_higher_order_terminal() -> 
         del grad_output, grad_fn_handle, call_index, run_ctx
         return tuple(None if grad is None else grad * 2 for grad in grad_input)
 
-    scale_grad.direction = "backward"  # type: ignore[attr-defined]
+    scale_grad.signal = "backward"  # type: ignore[attr-defined]
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(
         _PowModel(),

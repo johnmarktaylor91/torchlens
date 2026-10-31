@@ -274,7 +274,7 @@ def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookConte
         callback and the context is a forward one; otherwise returns.
     """
 
-    if hook_context.direction != "forward":
+    if hook_context.signal != "forward":
         return
     try:
         parameters = inspect.signature(hook_callable).parameters
@@ -508,7 +508,7 @@ def _apply_live_hooks(
         hook_context = make_hook_context(
             name=_hook_display_name(normalized_entry),
             timing="post",
-            direction="forward",
+            signal="forward",
             op=site,
             run_context=_live_run_ctx(),
             args=hook_args or (current_out,),

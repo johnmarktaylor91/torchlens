@@ -683,7 +683,7 @@ def _consider_op(
         hook_ctx = make_hook_context(
             name=plan.display_name,
             timing="post",
-            direction="forward",
+            signal="forward",
             op={
                 "label": raw_label,
                 "layer_type": layer_type,
@@ -911,7 +911,7 @@ def _make_boundary_hook(
             hook_ctx = make_hook_context(
                 name=plan.display_name,
                 timing="post",
-                direction="forward",
+                signal="forward",
                 op={
                     "label": f"{address}:{pass_index}",
                     "module_address": address,

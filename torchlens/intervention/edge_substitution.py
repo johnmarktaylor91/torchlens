@@ -270,7 +270,7 @@ def apply_edge_substitution_do(
             context = hooks_module.make_hook_context(
                 name=helper_name,
                 timing="post",
-                direction="forward",
+                signal="forward",
                 op=child_op,
                 run_context={},
                 args=(consumed,),

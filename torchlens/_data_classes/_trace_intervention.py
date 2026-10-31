@@ -1633,7 +1633,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             context = make_hook_context(
                 name=helper_name,
                 timing="post",
-                direction="forward",
+                signal="forward",
                 op=op,
                 run_context={},
                 args=(saved,),

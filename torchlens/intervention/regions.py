@@ -707,7 +707,7 @@ def _evaluate_instance(
         splice_context = make_hook_context(
             name="splice_module",
             timing="post",
-            direction="forward",
+            signal="forward",
             op=graph.ops[instance.exit_labels[0]],
             run_context={"region": region_target.region_digest, "instance": instance.index},
         )
@@ -721,7 +721,7 @@ def _evaluate_instance(
         context = make_hook_context(
             name=helper_name,
             timing="post",
-            direction="forward",
+            signal="forward",
             op=graph.ops[label],
             run_context={"region": region_target.region_digest, "instance": instance.index},
         )
@@ -745,7 +745,7 @@ def _evaluate_instance(
     context = make_hook_context(
         name=getattr(edit, "__name__", "region_edit"),
         timing="post",
-        direction="forward",
+        signal="forward",
         op=graph.ops[instance.exit_labels[0]],
         run_context={"region": region_target.region_digest, "instance": instance.index},
     )

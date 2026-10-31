@@ -57,7 +57,7 @@ def as_intervention_decision(
         resolved_direction = direction or action.direction or action.kind
         return InterventionDecision(action="add_hook", hook=action, direction=resolved_direction)
     if callable(action):
-        callable_direction = direction or getattr(action, "direction", "forward")
+        callable_direction = direction or getattr(action, "signal", "forward")
         if callable_direction not in {"forward", "backward", "both"}:
             # TypeError lineage since the 2.16 intervention era: the live
             # capture-path callers catch TypeError to convert a bad predicate

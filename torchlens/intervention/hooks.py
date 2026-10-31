@@ -83,7 +83,7 @@ class HookContext:
         Display name of the hook.
     timing:
         Hook timing, either ``"pre"`` or ``"post"``.
-    direction:
+    signal:
         ``"forward"`` for outs or ``"backward"`` for grads.
     layer_log:
         Mapping proxy over selected layer metadata, never a live Op.
@@ -103,7 +103,7 @@ class HookContext:
 
     name: str
     timing: HookTiming
-    direction: HookDirection
+    signal: HookDirection
     op: Mapping[str, Any]
     ctx: dict[str, Any]
     run_ctx: dict[str, Any]
@@ -127,7 +127,7 @@ def make_hook_context(
     *,
     name: str,
     timing: HookTiming = "post",
-    direction: HookDirection = "forward",
+    signal: HookDirection = "forward",
     op: Any | None = None,
     ctx: dict[str, Any] | None = None,
     run_context: dict[str, Any] | None = None,
@@ -144,8 +144,8 @@ def make_hook_context(
         Display name of the hook.
     timing:
         Hook timing.
-    direction:
-        Hook direction.
+    signal:
+        Hook signal, ``"forward"`` or ``"backward"``.
     op:
         Optional Op-like object or mapping to snapshot.
     ctx:
@@ -170,7 +170,7 @@ def make_hook_context(
     return HookContext(
         name=name,
         timing=timing,
-        direction=direction,
+        signal=signal,
         op=MappingProxyType(_snapshot_layer_log(op)),
         ctx={} if ctx is None else ctx,
         run_ctx={} if run_context is None else run_context,
@@ -429,11 +429,11 @@ def _hook_directions(
         return (cast(HookDirection, helper_spec.direction),)
     if helper_spec is not None:
         return (helper_spec.kind,)
-    direction = getattr(hook_like, "direction", "forward")
-    if direction == "both":
+    signal = getattr(hook_like, "signal", "forward")
+    if signal == "both":
         return ("forward", "backward")
-    if direction in {"forward", "backward"}:
-        return (cast(HookDirection, direction),)
+    if signal in {"forward", "backward"}:
+        return (cast(HookDirection, signal),)
     raise HookSignatureError("hook direction must be 'forward', 'backward', or 'both'")
 
 
@@ -554,7 +554,7 @@ def _adapt_tensor_backward_hook(
                 continue
             context = make_hook_context(
                 name=helper_name,
-                direction="backward",
+                signal="backward",
                 op=_backward_context_op(grad_fn_handle),
                 run_context=run_ctx,
                 args=(grad,),

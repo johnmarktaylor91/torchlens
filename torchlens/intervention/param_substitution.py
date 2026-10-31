@@ -247,7 +247,7 @@ def _substituted_value(
     context = hooks_module.make_hook_context(
         name=helper_name,
         timing="post",
-        direction="forward",
+        signal="forward",
         op=None,
         run_context={},
         args=(consumed,),
