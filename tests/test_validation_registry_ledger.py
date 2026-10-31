@@ -281,6 +281,20 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
         ),
     ),
     StructuralPositionExemption(
+        func_name="resize_as_",
+        positions=frozenset({1}),
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "Tensor.resize_as_(the_template) is self.resize_(the_template.size()): arg 1 "
+            "is consumed for its SHAPE only, never its elements"
+        ),
+        refuses=(
+            "arg 0, the receiver, whose element prefix is the output's values, including "
+            "when the same parent also fills arg 1 (b.resize_as_(b))"
+        ),
+    ),
+    StructuralPositionExemption(
         func_name="type_as",
         positions=frozenset({1}),
         contract=_C2,
@@ -889,6 +903,7 @@ STRUCTURAL_KWARG_ALIAS_LEDGER: dict[str, dict[int, frozenset[str]]] = {
     "reshapeas": {1: frozenset({"other"})},
     "view_as": {1: frozenset({"other"})},
     "viewas": {1: frozenset({"other"})},
+    "resize_as_": {1: frozenset({"the_template"})},
     # torchvision coordinate args (b1p2 D2 narrowing): keyword spellings of
     # the SAME audited positions above, nothing wider.
     "nms": {0: frozenset({"boxes"})},
