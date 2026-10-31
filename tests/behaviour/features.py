@@ -319,8 +319,13 @@ def _after_multipass(cell: Cell) -> None:
 
 def _after_record(cell: Cell) -> None:
     _no_stochastic(cell)
+    # Record a freshly built model: the reference (``cell.facts``) is a capture of
+    # an unrun model, and by now the cell's plain ``model(x)`` has advanced the
+    # cell's own model (a first-call cache or init flag skips ops from then on),
+    # which no capture, trace or record, can see past.
+    model, _ = cell.case.build()
     torch.manual_seed(SEED)
-    recording = tl.record(cell.model, cell.fresh_inputs(), default_op=True)
+    recording = tl.record(model, cell.fresh_inputs(), default_op=True)
     cooked = recording.to_trace()
     from tests.behaviour.harness import execution_order
 

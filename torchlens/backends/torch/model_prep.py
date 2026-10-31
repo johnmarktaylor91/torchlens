@@ -613,6 +613,8 @@ def _prepare_model_session(
             trace._module_capture_ws.mod_exited[mod_id] = []
     if trace.capture_mode != "predicate":
         _create_session_param_logs(trace, model, optimizer)
+    else:
+        _register_predicate_session_params(model)
     prepare_buffer_tensors(trace, model)
     # Pre-forward ownership snapshot for the R16 module-entry adoption
     # disclosure: tensors reachable NOW (nested caches, forward globals) are
@@ -741,6 +743,30 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     trace._param_log_by_pid = param_id_to_address
     trace._session_param_inventory = stamped_params
     trace.param_logs = ParamAccessor(param_logs)
+
+
+def _register_predicate_session_params(model: nn.Module) -> None:
+    """Register the model's own Parameters for this predicate pass.
+
+    Predicate capture skips ``_create_session_param_logs`` (no ``Param`` logs, no
+    stamps), which left a Parameter write unable to tell prepared model state
+    from a Parameter the forward created. Registering identities (weakly, with
+    the lazy-at-prep flag) lets ``parameter_mutation_output_for_logging`` keep a
+    prepared ``param.data = rhs`` rebind and a lazy module's in-forward
+    initialization out of the op graph, exactly as exhaustive capture does.
+    """
+
+    from ...capture.projections import active_recording_state_or_none
+
+    state = active_recording_state_or_none()
+    if state is None:
+        return
+    registry: dict[int, tuple[weakref.ref[torch.nn.Parameter], bool]] = {}
+    for module in model.modules():
+        for param in module._parameters.values():
+            if param is not None and id(param) not in registry:
+                registry[id(param)] = (weakref.ref(param), _is_uninitialized_param(param))
+    state.prepared_params = registry
 
 
 def _add_shared_module_aliases(
