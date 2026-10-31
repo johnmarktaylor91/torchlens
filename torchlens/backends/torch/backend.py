@@ -773,7 +773,7 @@ class TorchBackend:
 
         return (
             torch.no_grad()
-            if getattr(session, "inference_only", False)
+            if getattr(session, "_options_inference_only", False)
             else contextlib.nullcontext()
         )
 
@@ -1236,7 +1236,7 @@ class TorchBackend:
         # after an output-attribution failure (R16-2 for the failed-primary
         # trigger). Only an exhaustive session arms the tracker, so only there
         # is an empty journal proof of "no writes".
-        if getattr(session, "capture_mode", None) == "exhaustive":
+        if getattr(session, "_options_mode", None) == "exhaustive":
             events = getattr(getattr(session, "capture_events", None), "buffer_write_events", None)
             if events is not None:
                 with contextlib.suppress(Exception):
@@ -1246,7 +1246,7 @@ class TorchBackend:
                         if getattr(event, "value_changed", None) is not False
                     )
 
-        if getattr(session, "capture_mode", None) == "predicate":
+        if getattr(session, "_options_mode", None) == "predicate":
             from torchlens._ir.capture_events import CaptureEvents
 
             events = getattr(session, "capture_events", None)

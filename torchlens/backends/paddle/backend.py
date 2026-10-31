@@ -1481,8 +1481,10 @@ class PaddleBackend:
                 transformed_tensor=None,
                 has_saved_activation=policy.save_payload,
                 output_device="same",
-                activation_transform=getattr(session, "activation_transform", None),
-                detach_saved_activations=bool(getattr(session, "detach_saved_activations", False)),
+                activation_transform=getattr(session, "_options_activation_transform", None),
+                detach_saved_activations=bool(
+                    getattr(session, "_options_detach_saved_activations", False)
+                ),
                 visualizer_path=None,
                 multi_output_index=None,
                 in_multi_output=False,
