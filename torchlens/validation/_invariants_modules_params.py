@@ -54,7 +54,7 @@ def _check_module_call_boundary_and_tree(
         output structure references are inconsistent.
     """
 
-    call_label = getattr(module_call, "label", None)
+    call_label = getattr(module_call, "call_label", None)
     address = getattr(module_call, "address", None)
     call_index = getattr(module_call, "call_index", None)
     expected_call_label = f"{address}:{call_index}"
@@ -112,7 +112,7 @@ def _check_module_call_tree_links(ml: Trace, module_call: object, name: str) -> 
         inconsistent child stack prefix.
     """
 
-    call_label = getattr(module_call, "label", "")
+    call_label = getattr(module_call, "call_label", "")
     call_accessor = getattr(ml, "module_calls", {})
     call_parent = getattr(module_call, "call_parent", None)
     if call_parent is not None:

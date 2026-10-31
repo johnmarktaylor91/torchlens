@@ -43,11 +43,11 @@ from ..observability import (
     CommittedBlock,
     OpTierCollector,
     OverheadMeasurement,
-    RefusalPredicate,
     WatchSettings,
     measure_overhead,
 )
 from ..observability._collector import StepTruth
+from ..observability._overhead import RefusalPredicate
 from ._errors import WatchConfigError
 
 if TYPE_CHECKING:

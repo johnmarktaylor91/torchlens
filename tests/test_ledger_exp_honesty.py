@@ -89,13 +89,13 @@ def test_add_refuses_string_member_typed() -> None:
 
 def test_apply_passes_member_name_to_two_arg_callable() -> None:
     bundle = _pair()
-    result = bundle.apply(lambda log, name: name)
+    result = bundle.map(lambda log, name: name)
     assert result == {"baseline": "baseline", "changed": "changed"}
 
 
 def test_apply_single_arg_contract_unchanged() -> None:
     bundle = _pair()
-    result = bundle.apply(lambda log: type(log).__name__)
+    result = bundle.map(lambda log: type(log).__name__)
     assert set(result.values()) == {"Trace"}
 
 
@@ -105,13 +105,13 @@ def test_apply_var_positional_receives_name() -> None:
     def collect(*args: object) -> int:
         return len(args)
 
-    assert set(bundle.apply(collect).values()) == {2}
+    assert set(bundle.map(collect).values()) == {2}
 
 
 def test_apply_uninspectable_callable_falls_back_single_arg() -> None:
     bundle = _pair()
     # repr is (obj, /): one positional parameter -> single-arg call.
-    result = bundle.apply(repr)
+    result = bundle.map(repr)
     assert all(isinstance(value, str) for value in result.values())
 
 

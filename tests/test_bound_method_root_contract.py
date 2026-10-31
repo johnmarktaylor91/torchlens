@@ -70,8 +70,8 @@ def test_synthetic_root_reads_owner_identity_never_method() -> None:
     model = _mlp()
     log = tl.trace(model.forward, torch.randn(2, 4))
     assert log.model_class_name == "Sequential"
-    assert log.model_name == "Sequential"
-    assert "method" not in (log.model_class_name, log.model_name)
+    assert log.model_label == "Sequential"
+    assert "method" not in (log.model_class_name, log.model_label)
     assert log.model_class_qualname == "torch.nn.modules.container.Sequential"
     assert log.root_entry_point == ("bound_method:torch.nn.modules.container.Sequential.forward")
 

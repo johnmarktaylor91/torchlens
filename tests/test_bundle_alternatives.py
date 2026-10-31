@@ -86,7 +86,7 @@ def _code(excinfo: pytest.ExceptionInfo[BaseException]) -> str:
 
 
 def _state(bundle: Bundle) -> tuple[Any, ...]:
-    return (tuple(bundle.names), bundle.relations, bundle.operations)
+    return (tuple(bundle.names), bundle.relations, bundle.history)
 
 
 def test_steering_the_draft_reaches_critique_and_revise() -> None:
@@ -107,8 +107,8 @@ def test_steering_the_draft_reaches_critique_and_revise() -> None:
     pairs = [(r.kind, r.from_member, r.to_member) for r in b.relations]
     assert ("alternative_of", "cf_draft", "draft") in pairs
     assert ("fed_by", "cf_critique", "cf_draft") in pairs
-    assert b.operations[-1].kind == "add"
-    statuses = {c["call"]: c["status"] for c in b.operations[-1].params["alternative"]["calls"]}
+    assert b.history[-1].kind == "add"
+    statuses = {c["call"]: c["status"] for c in b.history[-1].params["alternative"]["calls"]}
     assert statuses == {row.call: row.status for row in report.calls}
     assert "draft" in report.table() and "steered" in report.table()
 
@@ -251,7 +251,7 @@ def test_merged_bundle_round_trips(tmp_path: Path) -> None:
     b.save(tmp_path / "harness.tlspec")
     loaded = tl.load(tmp_path / "harness.tlspec")
     assert loaded.relations == b.relations
-    assert loaded.operations[-1].params == b.operations[-1].params
+    assert loaded.history[-1].params == b.history[-1].params
     assert loaded.token_divergence("critique", "cf_critique") == b.token_divergence(
         "critique", "cf_critique"
     )

@@ -365,7 +365,7 @@ def test_structural_site_key_mismatch_refuses():
     subject = tl.trace(_A(), torch.randn(1, 4))
     reference = tl.trace(_C(), torch.randn(1, 4))
     try:
-        assert subject["linear_1_1"].key != reference["linear_1_1"].key
+        assert subject["linear_1_1"].site_key != reference["linear_1_1"].site_key
         with pytest.raises(SelectionError) as excinfo:
             tl.changed(reference, "linear_1_1").resolve(subject)
         # Since leverage B4 the guarded join is the pairing authority: the
@@ -415,7 +415,7 @@ def test_changed_composes_with_the_algebra(log, log_b):
 def test_repr_stability_pins(log_b):
     """The constructor-shaped disclosures are pinned (readable AST spellings)."""
 
-    label = log_b.name
+    label = log_b.trace_label
     assert repr(tl.changed(log_b)) == (
         f"Selection[ACT](changed(vs={label!r}, above=0.0, below=None, by='abs', "
         "within=saved_sites))"

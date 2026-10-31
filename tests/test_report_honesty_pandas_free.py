@@ -105,7 +105,7 @@ def test_dataframe_views_teach_the_tabular_extra(grad_trace: tl.Trace) -> None:
         with pytest.raises(ImportError, match=r"torchlens\[tabular\]"):
             view(grad_trace)
     with pytest.raises(ImportError, match=r"torchlens\[tabular\]"):
-        dbg.compare(grad_trace, grad_trace)
+        tl.report.compare(grad_trace, grad_trace)
 
 
 def test_view_attrs_match_core_attrs(grad_trace: tl.Trace) -> None:

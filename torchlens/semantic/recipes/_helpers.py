@@ -459,7 +459,7 @@ def fused_sdpa_facet(module: Any, facet: ReconstructionFacet, recipe_id: str) ->
 def fused_sdpa_pattern(module: Any) -> Any:
     """Return a reconstructed fused attention pattern or an absence reason."""
 
-    label = getattr(module.calls[0], "label", getattr(module, "address", "<unknown>"))
+    label = getattr(module.calls[0], "call_label", getattr(module, "address", "<unknown>"))
     value = fused_sdpa_facet(module, "pattern", "attention_reconstruction")
     if not isinstance(value, AbsenceReason):
         return value

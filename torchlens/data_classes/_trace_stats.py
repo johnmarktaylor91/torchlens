@@ -1057,7 +1057,7 @@ class TraceStatsMixin(_TraceMixinBase):
         calls: OrderedDict[str, Any] = OrderedDict()
         for module in self._module_logs:
             for call in module.calls.values():
-                calls[call.label] = call
+                calls[call.call_label] = call
         accessor = TraceModuleCallAccessor(calls)
         self.__dict__[_TRACE_MODULE_CALL_ACCESSOR_ATTR] = accessor
         return accessor

@@ -38,8 +38,8 @@ def _display_call_label(call: "ModuleCall", show_call_index: bool) -> str:
     """
 
     if show_call_index:
-        return call.label
-    return call.label.rsplit(":", 1)[0]
+        return call.call_label
+    return call.call_label.rsplit(":", 1)[0]
 
 
 def _module_call_summary(call: "ModuleCall") -> str:

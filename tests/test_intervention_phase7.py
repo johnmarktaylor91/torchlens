@@ -531,7 +531,7 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     new_log = _capture(ReluAdd(), x + 1)
     spec = InterventionSpec(targets=[TargetSpec("func", "relu")], hook=_zero_hook)
     history: list[Any] = [{"engine": "before"}]
-    log.name = "kept"
+    log.trace_label = "kept"
     log.parent_run = "parent-sentinel"  # type: ignore[assignment]
     log._intervention_spec = spec
     log.state_history = history
@@ -549,7 +549,7 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
 
     log.replace_state_from(new_log)
 
-    assert log.name == "kept"
+    assert log.trace_label == "kept"
     assert log.parent_run == "parent-sentinel"
     assert log._intervention_spec is spec
     assert log.state_history is history

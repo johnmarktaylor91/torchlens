@@ -649,7 +649,7 @@ class TFBackend:
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
-        trace.name = name
+        trace.trace_label = name
         trace.backend = cast(BackendName, self.name)
         trace.model_class_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
         # Root entry-point identity fact (C07X item (iv)): the TF entry

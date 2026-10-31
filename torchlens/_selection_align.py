@@ -239,7 +239,7 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
             kind=resolved.kind,
         )
     _require_same_policy(resolved, target)
-    source_label = str(getattr(resolved._trace, "name", "") or "source trace")
+    source_label = str(getattr(resolved._trace, "trace_label", "") or "source trace")
     entries = []
     for entry in resolved:
         op = _target_op_for_entry(entry, target, resolved._trace)

@@ -171,7 +171,7 @@ class Session:
                 name=f"session_{index}",
             ),
         )
-        metadata = {"index": index, "name": log.name}
+        metadata = {"index": index, "name": log.trace_label}
         setattr(log, "session_invocation", metadata)
         self.traces.append(log)
         self.invocations.append(metadata)
@@ -189,9 +189,9 @@ class Session:
             ``torchlens.Bundle`` keyed by invocation name.
         """
 
-        import torchlens
+        from ..bundle import Bundle
 
-        return torchlens.Bundle(
+        return Bundle(
             {str(metadata["name"]): log for metadata, log in zip(self.invocations, self.traces)}
         )
 

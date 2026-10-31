@@ -34,7 +34,7 @@ class _Spy:
             self.calls.append((dict(candidates), bundle.effects()))
             return bundle
 
-        monkeypatch.setattr(experiment, "site_sweep", _sweep)
+        monkeypatch.setattr(experiment, "sweep_sites", _sweep)
 
 
 def _members(effects: Any) -> list[Any]:

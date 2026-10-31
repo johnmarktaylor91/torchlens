@@ -53,7 +53,7 @@ class TestSiteGrainRanking:
         trace = _trace()
         table = _site_table(trace)
         resolved = tl.top_k(k=2, by=table).resolve(trace)
-        selected = {entry.site_key for entry in resolved if entry.num_selected}
+        selected = {entry.key for entry in resolved if entry.num_selected}
         # Contract tie-break: stable sort by score, ties resolve by CANONICAL
         # SITE ORDER (alias twins share a score; the earlier site wins).
         rows = list(table.rows())
@@ -84,7 +84,7 @@ class TestSiteGrainRanking:
         table = _site_table(trace)
         cut = sorted(row.score for row in table.rows())[1]
         resolved = tl.threshold(above=cut, by=table).resolve(trace)
-        assert {entry.site_key for entry in resolved} == {
+        assert {entry.key for entry in resolved} == {
             row.address for row in table.rows() if row.score > cut
         }
 

@@ -2009,7 +2009,7 @@ def _run_model_and_save_specified_outs(
         )
         if intervention_spec is not None:
             trace._intervention_spec = intervention_spec
-        trace.name = name
+        trace.trace_label = name
         trace.code_context = _get_code_context(
             num_context_lines,
             source_loading_enabled=save_code_context,

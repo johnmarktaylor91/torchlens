@@ -1539,7 +1539,7 @@ class Bundle:
             Callable receiving one member log. A callable that accepts a
             second positional parameter additionally receives the member's
             NAME (the per-member idiom the ledger memo item 0 unblocks:
-            ``bundle.apply(lambda log, name: ...)``); single-parameter
+            ``bundle.map(lambda log, name: ...)``); single-parameter
             callables keep the historical contract unchanged.
 
         Returns
@@ -1735,7 +1735,7 @@ class Bundle:
         scored.sort(key=lambda row: row[1], reverse=True)
         return scored[:top_k]
 
-    def compare(self, a: Any, b: Any) -> Any:
+    def diff_pair(self, a: Any, b: Any) -> Any:
         """Return out differences between two members or at one site.
 
         Parameters
@@ -2120,7 +2120,7 @@ class Bundle:
 
         if name is not None:
             return str(name)
-        log_name = getattr(log, "name", None)
+        log_name = getattr(log, "trace_label", None)
         if log_name:
             return str(log_name)
         return f"member_{index}"

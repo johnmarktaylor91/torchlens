@@ -59,7 +59,7 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
         )
     scores: dict[str, int] = {}
     for entry in overlay:
-        layer_label = entry.site_key[0]
+        layer_label = entry.key[0]
         scores[layer_label] = scores.get(layer_label, 0) + int(entry._mask._dense_ro().sum())
     return scores
 

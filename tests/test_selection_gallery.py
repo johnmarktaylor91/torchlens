@@ -187,7 +187,7 @@ def test_a3_union_magnitudes_reported_and_cardinality_theorem(gallery):
         report[name].update({"d_u1": deltas[0], "d_u2": deltas[1], "d_out": deltas[2]})
     print(f"GALLERY A3 REPORT: {report}")
     assert report["inter"]["elements"] <= report["union"]["elements"]
-    assert resolved_inter.empty is False
+    assert resolved_inter.is_empty is False
 
 
 def test_a4_control_is_size_matched_by_construction(gallery):

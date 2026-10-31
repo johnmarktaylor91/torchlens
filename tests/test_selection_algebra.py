@@ -92,7 +92,7 @@ def test_metaplan_flagship_expression(log):
     assert isinstance(union, Selector) and isinstance(inter, Selector)
     resolved_union = union.resolve(log)
     resolved_inter = inter.resolve(log)
-    assert resolved_inter.empty is False
+    assert resolved_inter.is_empty is False
     assert _elements(resolved_inter) <= _elements(resolved_union)
     # Overlapping late-layer RF boxes at the input site: one shared ACT site.
     assert len(resolved_union) == 1
@@ -185,7 +185,7 @@ def test_bool_refusal_pair(log):
 
     resolved = query.resolve(log)
     assert bool(resolved) is True
-    assert resolved.empty is False
+    assert resolved.is_empty is False
     element_empty = resolved - resolved
     assert bool(element_empty) is False
     assert element_empty.empty is True
@@ -222,7 +222,7 @@ def test_law_table(log):
     assert (a & a) == a
     # A - A == element-empty over fam(A), NOT the no-sites selection
     minus_self = a - a
-    assert minus_self.empty and _family(minus_self) == _family(a)
+    assert minus_self.is_empty and _family(minus_self) == _family(a)
     # involution THROUGH the element-empty intermediate
     full_site = log["relu_1_2"].__selection__().resolve(log)
     complemented = ~full_site
@@ -274,7 +274,7 @@ def test_complement_empty_cells(log):
     element_empty = a - a
     restored = ~element_empty
     assert _family(restored) == _family(a)
-    assert not restored.empty
+    assert not restored.is_empty
     assert restored[0].num_selected == restored[0].mask.numel()  # FULL masks
 
 
@@ -573,7 +573,7 @@ def test_empty_selection_legal_end_to_end(log):
 
     resolved = tl.label("no_such_layer_anywhere").__selection__().resolve(log)
     assert len(resolved) == 0
-    assert resolved.empty is True
+    assert resolved.is_empty is True
     assert bool(resolved) is False
 
 
@@ -737,7 +737,7 @@ def test_random_selection_totality(log):
     assert _elements(first) == 3  # |result| == |like|
     # sampled inside within: no overlap with `like`
     overlap = first & like.resolve(log)
-    assert overlap.empty
+    assert overlap.is_empty
     assert first.kind == "ACT"  # result kind = within's kind
 
 

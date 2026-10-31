@@ -15,7 +15,7 @@ def test_session_invoke_and_bundle() -> None:
 
     first = session.invoke(torch.ones(1, 2))
     second = session.invoke(torch.zeros(1, 2))
-    bundle = session.bundle()
+    bundle = session.to_bundle()
 
     assert first.session_invocation["index"] == 0
     assert second.session_invocation["index"] == 1

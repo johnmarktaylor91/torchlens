@@ -230,7 +230,7 @@ def test_ordinary_bundle_activation_reads_do_not_trigger() -> None:
     view = bundle.node("relu_1_2")
     assert tuple(view.compare().shape) == (2, 2)
     assert view.aggregate("mean").shape == view.members["a"].out.shape
-    assert bundle.compare("a", "b")
+    assert bundle.diff_pair("a", "b")
 
 
 def test_version_row_still_orders_members(ckpt_bundle: Any) -> None:

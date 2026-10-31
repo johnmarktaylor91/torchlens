@@ -4,7 +4,6 @@
 # grandfathered L6+ root names (contraction at next major); the ban on NEW L6+
 # root names is immediate (tests/test_arch_spine_surface.py).
 canonical_path	home_module	implementation_layer	product_role	in_all	legacy_top_level
-torchlens.ActivationLookup	torchlens.captured_run	L3	core	1	0
 torchlens.AmbiguousOpLookupError	torchlens._errors	L0	core	1	0
 torchlens.AtenOp	torchlens.data_classes.aten_op	L1	core	1	0
 torchlens.Bundle	torchlens.intervention	L4	core	1	0
@@ -36,7 +35,6 @@ torchlens.backends	torchlens.backends	L2	core	0	0
 torchlens.between	torchlens._selection_graph	L4	core	1	0
 torchlens.brainpipe	torchlens.brainpipe	FACADE	facade	0	0
 torchlens.bridge	torchlens.bridge	L8	bridge	0	1
-torchlens.bundle	torchlens	FACADE	facade	1	0
 torchlens.bwd_hook	torchlens.intervention	L4	core	1	0
 torchlens.callbacks	torchlens.callbacks	L8	bridge	0	1
 torchlens.captured_run	torchlens.captured_run	L3	core	0	0
@@ -68,7 +66,6 @@ torchlens.func_transform	torchlens.intervention	L4	core	1	0
 torchlens.grad_clamp	torchlens.intervention	L4	core	1	0
 torchlens.grad_clip	torchlens.intervention	L4	core	1	0
 torchlens.grad_fn	torchlens.intervention	L4	core	1	0
-torchlens.grad_fn_label	torchlens.intervention	L4	core	1	0
 torchlens.grad_input	torchlens.intervention	L4	core	1	0
 torchlens.grad_noise	torchlens.intervention	L4	core	1	0
 torchlens.grad_output	torchlens.intervention	L4	core	1	0
@@ -98,13 +95,14 @@ torchlens.notebook	torchlens.notebook	L6	appliance	0	1
 torchlens.observers	torchlens.observers	L2	core	0	0
 torchlens.options	torchlens.options	L2	core	1	0
 torchlens.model_output	torchlens.intervention	L4	core	1	0
-torchlens.output_at	torchlens.intervention	L4	core	1	0
 torchlens.param	torchlens._selection	L4	core	1	0
 torchlens.partial	torchlens.partial	L3	core	0	0
 torchlens.pass_variance	torchlens._selection_compare	L4	core	1	0
 torchlens.patch_from	torchlens.intervention	L4	core	1	0
 torchlens.pluck	torchlens	FACADE	facade	1	0
 torchlens.preceded_by	torchlens.intervention	L4	core	1	0
+torchlens.site	torchlens.intervention.selectors	L4	core	1	0
+torchlens.at_step	torchlens.intervention.selectors	L4	core	1	0
 torchlens.project_off	torchlens.intervention	L4	core	1	0
 torchlens.project_onto	torchlens.intervention	L4	core	1	0
 torchlens.push	torchlens.intervention	L4	core	1	0
@@ -125,7 +123,6 @@ torchlens.run	torchlens.intervention	L4	core	1	0
 torchlens.saturated	torchlens._selection_values	L4	core	1	0
 torchlens.save	torchlens._io.bundle	L3	core	1	0
 torchlens.scale	torchlens.intervention	L4	core	1	0
-torchlens.show_bundle_graph	torchlens.user_funcs	FACADE	facade	1	0
 torchlens.sign	torchlens._selection_values	L4	core	1	0
 torchlens.span	torchlens.observers	L2	core	1	0
 torchlens.splice_module	torchlens.intervention	L4	core	1	0

@@ -505,7 +505,7 @@ def _preflight_retention(
         ),
         ceiling_bytes=int(retain_ceiling_bytes),
         current_bytes=per_candidate_bytes,  # the baseline member itself
-        operation="sweep_sites",
+        operation="site_sweep",
     )
 
 
@@ -650,7 +650,7 @@ def _record_sweep_operation(state: _SweepState) -> Any:
 
     released = sum(1 for r in state.rows if r.status == "released")
     operation = state.bundle._record_bundle_operation(
-        "sweep_sites",
+        "site_sweep",
         member_names=tuple(state.bundle._members),
         params={
             "lane": state.lane,
@@ -766,7 +766,7 @@ def sweep_sites(
     from ._ledger import active_ledger
 
     armed = active_ledger()
-    step_id = armed.begin_step("sweep_sites") if armed is not None else None
+    step_id = armed.begin_step("site_sweep") if armed is not None else None
 
     # ---- preflight (once, before any candidate runs) ----------------------
     pairs = _candidate_pairs(candidates)
@@ -1016,7 +1016,7 @@ def _chain_keyed_values(bundle: Bundle, values: Mapping[str, Any]) -> dict[str, 
 
     from ..bundle._lineage import validate_operation_chain
 
-    operations = bundle.operations
+    operations = bundle.history
     validate_operation_chain(operations)
     by_id = {operation.operation_id: operation for operation in operations}
     construction = bundle.member_construction

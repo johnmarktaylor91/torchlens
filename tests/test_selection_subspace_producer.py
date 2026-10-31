@@ -197,7 +197,7 @@ def test_provenance_record_fields_and_repr(log):
     selection = tl.subspace(_RELU, _sparse_direction(), origin="repr test", method="manual")
     record = selection._node.provenance
     assert isinstance(record, BasisProvenance)
-    assert (record.num_vectors, record.space_dim, record.dim, record.tol) == (1, _D, -1, 0.0)
+    assert (record.num_vectors, record.space_dim, record.dim, record.atol) == (1, _D, -1, 0.0)
     assert record.origin == "repr test"
     assert len(record.sha256) == 64
     assert "origin='repr test'" in repr(selection)

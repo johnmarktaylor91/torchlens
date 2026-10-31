@@ -81,9 +81,9 @@ ARTIFACT_VOLATILE_MANIFEST_FIELDS: tuple[str, ...] = (
 
 MODEL_LOG_FIELD_ORDER = [
     # General info
-    "name",
+    "trace_label",
     "model_class_name",
-    "model_name",
+    "model_label",
     "tlspec_version",
     "_tracing_finished",
     "backend",
@@ -774,7 +774,7 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "class_qualname",
     "cls",
     "call_index",
-    "label",
+    "call_label",
     "ordinal_index",
     "ops",
     "num_ops",
@@ -928,7 +928,7 @@ GRAD_FN_PASS_LOG_FIELD_ORDER = [
     "call_index",
     "ordinal",
     "backward_pass_index",
-    "label",
+    "call_label",
     "backward_duration",
     "grad_inputs",
     "grad_outputs",

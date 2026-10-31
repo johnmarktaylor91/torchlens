@@ -1815,7 +1815,7 @@ def _fold_fired_events(
             call_index=ordinal,
             ordinal=ordinal,
             backward_pass_index=event.pass_index,
-            grad_fn_label=grad_fn_record.label,
+            label=grad_fn_record.label,
             grad_inputs=event.grad_input_refs,
             grad_outputs=event.grad_output_refs,
             intervention_fire_ref=event.intervention_fire_ref,

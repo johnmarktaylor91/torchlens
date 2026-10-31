@@ -291,7 +291,7 @@ def test_module_call_and_grad_fn_call_indexes_match_scan() -> None:
         grad_fn_calls = trace.grad_fn_calls
         assert len(grad_fn_calls) > 0
         grad_fn_keys = [getattr(call, "label", None) for call in grad_fn_calls]
-        grad_fn_keys += [getattr(call, "label", None) for call in grad_fn_calls]
+        grad_fn_keys += [getattr(call, "call_label", None) for call in grad_fn_calls]
         grad_fn_keys += ["nope", "AddBackward0"]
         ambiguous_grad_fns = 0
         for key in dict.fromkeys(k for k in grad_fn_keys if isinstance(k, str)):

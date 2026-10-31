@@ -116,7 +116,7 @@ def _selection_for_kind_state(trace: tl.Trace, kind: str, state: str) -> Any:
 def _selection_family(selection: Any) -> frozenset[Any]:
     """Return the touched-site family of one resolved selection."""
 
-    return frozenset(entry.site_key for entry in selection)
+    return frozenset(entry.key for entry in selection)
 
 
 @pytest.mark.parametrize("operator", ["or", "and", "sub"])

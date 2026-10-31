@@ -307,7 +307,7 @@ def _make_trace_pickleable(trace: Any) -> None:
     if hasattr(trace, "class_source_line"):
         trace.class_source_line = None
     if hasattr(trace, "name"):
-        trace.name = "capture_events_parity"
+        trace.trace_label = "capture_events_parity"
     _drop_capture_scratch(trace)
 
 

@@ -155,7 +155,7 @@ def _swept_scores(
     edit: Any,
     score: Callable[[Any], float],
 ) -> dict[tuple[int, ...], float]:
-    """Ablate every unit alone in one ``site_sweep``; return the completed scores.
+    """Ablate every unit alone in one ``sweep_sites``; return the completed scores.
 
     Each unit is one candidate (its selection: a site label or
     ``tl.units(site, mask)``), so the sweep's effect table holds one member per

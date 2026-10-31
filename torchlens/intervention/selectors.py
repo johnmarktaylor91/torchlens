@@ -45,6 +45,16 @@ SelectorKind: TypeAlias = Literal[
 ]
 
 
+#: Public ``tl.*`` spelling of each selector kind whose stored value predates its rename
+#: (the stored ``selector_kind`` stays, so persisted specs keep loading).
+_KIND_SPELLINGS: dict[str, str] = {
+    "contains": "label_contains",
+    "input_at": "model_input",
+    "output": "model_output",
+    "regex": "label_matches",
+}
+
+
 @dataclass(frozen=True)
 class BaseSelector:
     """Base class for typed TorchLens site selectors."""
@@ -220,7 +230,8 @@ class BaseSelector:
             Repr containing the selector kind and payload.
         """
 
-        return f"tl.{self.selector_kind}({self.selector_value!r})"
+        spelling = _KIND_SPELLINGS.get(self.selector_kind, self.selector_kind)
+        return f"tl.{spelling}({self.selector_value!r})"
 
     def __call__(self, ctx: Any) -> bool:
         """Return whether this selector matches a predicate record context.

@@ -403,7 +403,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
         *modules,
         _proof_section(trace),
     )
-    title = str(getattr(trace, "name", None) or getattr(trace, "model_name", "Trace"))
+    title = str(getattr(trace, "trace_label", None) or getattr(trace, "model_label", "Trace"))
     status = getattr(getattr(trace, "outcome", None), "status", None)
     return Card(
         title=f"TorchLens Trace: {title}",

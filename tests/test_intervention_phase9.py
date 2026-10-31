@@ -61,8 +61,8 @@ def test_bundle_construction_shapes_and_member_indexing() -> None:
 
     log_a = _log()
     log_b = _log()
-    log_a.name = "auto_a"
-    log_b.name = "auto_b"
+    log_a.trace_label = "auto_a"
+    log_b.trace_label = "auto_b"
 
     from_dict = tl.Bundle({"a": log_a, "b": log_b})
     assert len(from_dict) == 2
@@ -97,7 +97,7 @@ def test_bundle_getitem_returns_modellog_and_nodeview_accessor() -> None:
 
     node = bundle.node(tl.func("relu"))
     assert set(node.members) == {"a", "b"}
-    assert set(node.traces) == {"a", "b"}
+    assert set(node.names) == {"a", "b"}
     assert node.absent_names == set()
     assert node.label
     assert bundle._supergraph is not None
@@ -108,7 +108,7 @@ def test_metric_and_joint_metric_contracts() -> None:
 
     bundle = tl.Bundle({"a": _log(), "b": _log()})
 
-    assert bundle.apply(lambda member: len(member.layer_list)) == {
+    assert bundle.map(lambda member: len(member.layer_list)) == {
         "a": len(bundle["a"].layer_list),
         "b": len(bundle["b"].layer_list),
     }
@@ -147,9 +147,9 @@ def test_relationship_matrix_gates_node_operations() -> None:
     with pytest.raises(BundleRelationshipError, match="node"):
         bundle.node(tl.func("relu"))
 
-    assert bundle.apply(lambda member: member.name) == {
-        "good": good.name,
-        "different": different.name,
+    assert bundle.map(lambda member: member.trace_label) == {
+        "good": good.trace_label,
+        "different": different.trace_label,
     }
 
 

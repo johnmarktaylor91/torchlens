@@ -1248,11 +1248,11 @@ def new_preview_function_trace(
         layer_visualizers=None,
         save_visualizations=False,
     )
-    trace.name = name
+    trace.trace_label = name
     trace.backend = cast(BackendName, backend_name)
     trace.module_identity_mode = "function_root"
     trace.param_source = cast("Literal['native-module', 'pytree-derived', 'none']", param_source)
-    trace.model_name = trace.model_class_name
+    trace.model_label = trace.model_class_name
     trace.model_class_qualname = getattr(model, "__qualname__", trace.model_class_name)
     # Root entry-point identity fact (C07X item (iv)): preview backends
     # capture a function/module-like root under module_identity_mode

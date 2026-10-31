@@ -803,7 +803,7 @@ def _label_spellings(op: Any) -> tuple[str, ...]:
 def _call_display(call: Any) -> str:
     """Display label for one module call (address:pass spelling kept)."""
 
-    return str(getattr(call, "label", "?"))
+    return str(getattr(call, "call_label", "?"))
 
 
 def format_cost_tree(tree: CostTree) -> str:

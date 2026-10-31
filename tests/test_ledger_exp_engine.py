@@ -272,7 +272,7 @@ def test_measure_members_reports_unmeasured_and_orders_by_the_chain() -> None:
     chained = bundle.measure_members(metric=_output_metric, order="chain")
     assert chained["order"] == "chain"
     assert chained["values"] == bundle.measure_members(metric=_output_metric)["values"]
-    (operation,) = bundle.operations
+    (operation,) = bundle.history
     (retained,) = [name for name in bundle.names if name != "baseline"]
     assert chained["chain"] == [
         {

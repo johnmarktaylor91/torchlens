@@ -483,7 +483,7 @@ class PaddleBackend:
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
-        trace.name = name
+        trace.trace_label = name
         trace.backend = cast(BackendName, self.name)
         # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module
         # root, backends/_finalize.py new_preview_function_trace's for a function root.

@@ -231,7 +231,7 @@ def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
 
     with pytest.raises(BundleRelationshipError) as excinfo:
-        bundle.compare("turn1", "turn2")
+        bundle.diff_pair("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
 
     path = tmp_path / "chain.tlspec"
@@ -239,7 +239,7 @@ def test_topology_refusal_survives_bundle_round_trip(tmp_path: Path) -> None:
     loaded = tl.load(str(path))
 
     with pytest.raises(BundleRelationshipError) as excinfo:
-        loaded.compare("turn1", "turn2")
+        loaded.diff_pair("turn1", "turn2")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"
     assert excinfo.value.fields["ordering_path"] == ["successor_of"]
 
@@ -264,8 +264,8 @@ def test_scoped_pair_read_works_after_bundle_round_trip(tmp_path: Path) -> None:
     bundle.save(str(path))
     loaded = tl.load(str(path))
 
-    rows = loaded.compare("a", "b")
+    rows = loaded.diff_pair("a", "b")
     assert isinstance(rows, list)
     with pytest.raises(BundleRelationshipError) as excinfo:
-        loaded.compare("b", "next")
+        loaded.diff_pair("b", "next")
     assert excinfo.value.fields["code"] == "bundle_gate_ordering_topology"

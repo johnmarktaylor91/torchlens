@@ -74,14 +74,14 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
         return handle.ops[0]
 
     if isinstance(handle, ModuleCall):
-        _require_trace_owner(trace, handle._source_trace, handle.label)
+        _require_trace_owner(trace, handle._source_trace, handle.call_label)
         if len(handle.output_ops) != 1:
             candidates = ", ".join(
                 f"module_call.output_ops[{index}]={label!r}"
                 for index, label in enumerate(handle.output_ops)
             )
             raise MultiOutputModuleError(
-                f"ModuleCall {handle.label!r} has {len(handle.output_ops)} output ops; "
+                f"ModuleCall {handle.call_label!r} has {len(handle.output_ops)} output ops; "
                 f"select one candidate explicitly: {candidates or 'none'}."
             )
         return resolve_graph_point(trace, handle.output_ops[0])

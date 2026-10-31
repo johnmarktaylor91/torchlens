@@ -130,7 +130,7 @@ class _EdgesPlan(_SitesPlan):
     def unit_scores(self) -> dict[tuple[int, ...], float]:
         """Score every edge patched alone, one ``patch_edges`` fork each.
 
-        ``site_sweep`` takes one edit for every candidate; each edge's patch
+        ``sweep_sites`` takes one edit for every candidate; each edge's patch
         writes its own value, so the edges are not swept.
         """
 

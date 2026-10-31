@@ -1175,9 +1175,9 @@ class Trace(
     PORTABLE_STATE_ALIASES: ClassVar[frozenset[str]] = TRACE_PORTABLE_STATE_ALIASES
 
     PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
-        "name": FieldPolicy.KEEP,
+        "trace_label": FieldPolicy.KEEP,
         "model_class_name": FieldPolicy.KEEP,
-        "model_name": FieldPolicy.KEEP,
+        "model_label": FieldPolicy.KEEP,
         "backend": FieldPolicy.KEEP,
         "backend_runtime_config": FieldPolicy.KEEP,
         "backend_runtime_device_summary": FieldPolicy.KEEP,
@@ -1772,9 +1772,9 @@ class Trace(
         # Callables are effectively immutable - deepcopy is unnecessary.
 
         # General info
-        self.name: str | None = None
+        self.trace_label: str | None = None
         self.model_class_name = model_class_name
-        self.model_name = model_class_name
+        self.model_label = model_class_name
         self.backend: BackendName = "torch"
         self.backend_runtime_config: dict[str, Any] | None = None
         self.backend_runtime_device_summary: dict[str, Any] | None = None

@@ -177,7 +177,7 @@ def test_disclosure_fires_with_both_counts(episode_log: tl.Trace) -> None:
     # Compo memo D3: a disclosure attaches to a USABLE result — the resolve
     # still lands one entry per window pass of the site.
     entries = list(resolved)
-    assert [entry.site_key for entry in entries] == [(label, 1), (label, 2)]
+    assert [entry.key for entry in entries] == [(label, 1), (label, 2)]
 
 
 @pytest.mark.smoke

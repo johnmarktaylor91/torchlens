@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.captured_run import _ActivationLookup
 from torchlens.validation.invariants import (
     _check_special_layer_lists,
     _check_trace_self_consistency,
@@ -106,7 +107,7 @@ def _structure(trace: tl.Trace) -> list[tuple[str, str, tuple[str, ...], tuple[s
 
 
 def test_recording_and_trace_are_captured_run_activation_lookup_siblings() -> None:
-    """Recording and Trace subclass CapturedRun and satisfy ActivationLookup."""
+    """Recording and Trace subclass CapturedRun and satisfy the activation lookup protocol."""
 
     model = ConvReluAdd()
     x = torch.randn(1, 1, 4, 4)
@@ -119,8 +120,8 @@ def test_recording_and_trace_are_captured_run_activation_lookup_siblings() -> No
     assert issubclass(type(recording), tl.CapturedRun)
     assert issubclass(type(trace), tl.CapturedRun)
     assert not issubclass(type(trace), type(recording))
-    assert isinstance(recording, tl.ActivationLookup)
-    assert isinstance(trace, tl.ActivationLookup)
+    assert isinstance(recording, _ActivationLookup)
+    assert isinstance(trace, _ActivationLookup)
 
 
 def test_recording_to_trace_matches_trace_structure_and_unsaved_out_fails() -> None:
