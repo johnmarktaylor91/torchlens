@@ -65,6 +65,15 @@ CHECK_PRECONDITION = "precondition_refusal"
 #: actually needs. ``get_validation_failure(trace)`` returned ``None`` for a
 #: ``False`` result, the bare-``repr(False)`` menagerie's ``convit_*`` rows hit.
 CHECK_RETRACE_MISMATCH = "retrace_mismatch"
+#: ``validate_backward_pass`` verdicts. Every False it returns carries one
+#: record under this check; ``extra["reason"]`` names the refusal or mismatch
+#: (``non_leaf_parameter``, ``appended_trace``, ``pristine_oracle_unavailable``,
+#: ``backward_coverage_gap``, ``module_output_grads``,
+#: ``no_module_output_evidence``, ``no_parameter_gradients``,
+#: ``degenerate_parameter_gradients``, ``parameter_census_mismatch``,
+#: ``parameter_grad_mismatch``). Before this the backward path only warned, so
+#: ``last_validation_failure()`` was None after a False backward verdict.
+CHECK_BACKWARD = "backward"
 
 
 @dataclass
@@ -249,7 +258,8 @@ def last_validation_failure() -> ValidationFailure | None:
     -------
     ValidationFailure | None
         The structured first mismatch of the last ``validate_saved_outs`` /
-        ``tl.validate`` run, or ``None`` when it passed (or never ran).
+        ``tl.validate`` run (any scope; a False backward verdict records one
+        under ``CHECK_BACKWARD``), or ``None`` when it passed (or never ran).
     """
 
     return _LAST_RUN_FAILURE[0] if _LAST_RUN_FAILURE else None
