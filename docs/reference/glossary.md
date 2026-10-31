@@ -2853,3 +2853,65 @@ deprecation shim owed*
   `slug` and `scan` characters and the file size (`neuronpedia_upload_argument_invalid`).
   HTTP failures raise `neuronpedia_upload_http_error`, answers without their fields
   `neuronpedia_upload_response_invalid`.
+
+### Debugging tools and report results
+
+**DTypeRangeReport (`tl.debug.DTypeRangeReport`)** — *unstable — no deprecation shim owed*
+: Coverage-bounded dtype range audit result.
+
+**dtype_range (`tl.debug.dtype_range`)** — *unstable — no deprecation shim owed*
+: Audit saved activations for numeric-range and precision hazards.
+
+**nonfinite_origin (`tl.debug.nonfinite_origin`)** — *unstable — no deprecation shim owed*
+: One-call NaN forensics.
+
+**param_health (`tl.debug.param_health`)** — *unstable — no deprecation shim owed*
+: Audit parameter/buffer space for numeric-health findings.
+
+**ExplainReport (`tl.report.ExplainReport`)** — *unstable — no deprecation shim owed*
+: The plain-language report trace.explain() returns: a str of multi-section prose.
+
+**FlopsCrossCheck (`tl.report.FlopsCrossCheck`)** — *unstable — no deprecation shim owed*
+: Side-by-side dispatch-formula evidence (never an oracle).
+
+**MfuReport (`tl.report.MfuReport`)** — *unstable — no deprecation shim owed*
+: The mode-split time-normalized MFU facts.
+
+**OverheadReport (`tl.report.OverheadReport`)** — *unstable — no deprecation shim owed*
+: Measured capture costs on the USER'S model and host.
+
+**RooflineReport (`tl.report.RooflineReport`)** — *unstable — no deprecation shim owed*
+: The roofline map: rows, sum/sum aggregate, coverage by reason.
+
+**measure_clean_step (`tl.report.measure_clean_step`)** — *unstable — no deprecation shim owed*
+: Measure an UNINSTRUMENTED forward wall time (the MFU denominator).
+
+**overhead (`tl.report.overhead`)** — *unstable — no deprecation shim owed*
+: Measure requested capture tiers on the user's own model/host.
+
+**profile (`tl.report.profile`)** — *unstable — no deprecation shim owed*
+: Build a unified op, module, or invocation resource profile.
+
+**DTypeRangeReport fields** — *unstable — no deprecation shim owed*
+: `DTypeRangeReport.findings`, `DTypeRangeReport.n_ops_audited`, `DTypeRangeReport.n_ops_total`.
+
+**HealthReport fields** — *unstable — no deprecation shim owed*
+: `HealthReport.checks_run`, `HealthReport.findings`, `HealthReport.skipped`.
+
+**MfuReport fields** — *unstable — no deprecation shim owed*
+: `MfuReport.denominator_scope`, `MfuReport.ideal_seconds`, `MfuReport.mfu`, `MfuReport.mode_terms`, `MfuReport.peaks_source`, `MfuReport.step_seconds`.
+
+**NonfiniteReport fields** — *unstable — no deprecation shim owed*
+: `NonfiniteReport.amp_disclosure`, `NonfiniteReport.capture_status`, `NonfiniteReport.cost_tier`, `NonfiniteReport.coverage_basis`, `NonfiniteReport.defer_recipe`, `NonfiniteReport.found`, `NonfiniteReport.nonfinite_labels`, `NonfiniteReport.origin_label`, `NonfiniteReport.phase`, `NonfiniteReport.scope_note`, `NonfiniteReport.tensor_role`, `NonfiniteReport.uncertainty_zone`.
+
+**OverheadReport fields** — *unstable — no deprecation shim owed*
+: `OverheadReport.n_forwards_run`, `OverheadReport.tiers`.
+
+**ParamHealthReport fields** — *unstable — no deprecation shim owed*
+: `ParamHealthReport.checks_run`, `ParamHealthReport.findings`, `ParamHealthReport.schema_version`, `ParamHealthReport.skipped`, `ParamHealthReport.to_json`.
+
+**ProfileReport fields** — *unstable — no deprecation shim owed*
+: `ProfileReport.capture_status`, `ProfileReport.capture_verified`, `ProfileReport.column_additivity`, `ProfileReport.frame`, `ProfileReport.honesty`, `ProfileReport.partition_total`, `ProfileReport.tree`, `ProfileReport.unknown_events`.
+
+**RooflineReport fields** — *unstable — no deprecation shim owed*
+: `RooflineReport.aggregate_intensity`, `RooflineReport.coverage_by_reason`, `RooflineReport.excluded_cache_resident`, `RooflineReport.headline_compute_bound`, `RooflineReport.headline_memory_bound`, `RooflineReport.ridge_intensity`.

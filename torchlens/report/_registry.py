@@ -150,7 +150,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         example="tl.report.cost_tree(trace)",
     ),
     SurfaceEntry(
-        key="flops_report",
+        key="flops",
         spelling="tl.report.flops(trace_or_model, ...)",
         subject="RUN-RESOURCES",
         register="SHAPE",
@@ -270,7 +270,7 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
         example="tl.report.roofline(trace)",
     ),
     SurfaceEntry(
-        key="cost_report",
+        key="overhead",
         spelling="tl.report.overhead(model, x)",
         subject="RUN-RESOURCES",
         register="SHAPE",
