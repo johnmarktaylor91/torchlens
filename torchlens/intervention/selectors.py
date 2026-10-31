@@ -1339,12 +1339,12 @@ def func_transform(kind: str | None = None) -> FuncTransformSelector:
     return FuncTransformSelector(kind)
 
 
-def followed_by(inner: SelectorLike) -> FollowedBySelector:
+def followed_by(selector: SelectorLike, /) -> FollowedBySelector:
     """Create a retroactive successor selector.
 
     Parameters
     ----------
-    inner:
+    selector:
         Predicate that must match a later successor op.
 
     Returns
@@ -1353,15 +1353,15 @@ def followed_by(inner: SelectorLike) -> FollowedBySelector:
         Selector interpreted by capture-time save predicates.
     """
 
-    return FollowedBySelector(inner)
+    return FollowedBySelector(selector)
 
 
-def preceded_by(inner: SelectorLike) -> PrecededBySelector:
+def preceded_by(selector: SelectorLike, /) -> PrecededBySelector:
     """Create a lookback predecessor selector.
 
     Parameters
     ----------
-    inner:
+    selector:
         Predicate that must match a retained predecessor op.
 
     Returns
@@ -1370,7 +1370,7 @@ def preceded_by(inner: SelectorLike) -> PrecededBySelector:
         Selector matching current ops with a retained predecessor.
     """
 
-    return PrecededBySelector(inner)
+    return PrecededBySelector(selector)
 
 
 def output(target: int | str) -> OutputSelector:
