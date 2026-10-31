@@ -421,7 +421,7 @@ TorchLens unknown cells, and a native ZERO can be a registry-coverage fact
 `tl.debug.hot_path(trace, by="flops")` aggregates forward FLOPs, activation memory, or
 duration by source line. `by` is one of `"flops"`, `"memory"`, `"duration"`, or
 `"device_time"` (joined Kineto device nanoseconds; refuses typed
-`device_time_unavailable` without a joined `torchlens._observability`
+`device_time_unavailable` without a joined observability
 session); use
 [`recompute_candidates`](#recompute_candidates) when the question is activation-memory
 tradeoffs instead.
