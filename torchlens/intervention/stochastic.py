@@ -1435,9 +1435,9 @@ def set_direction_mean(
     ----------
     direction:
         1-D direction vector ``v`` (finite, nonzero norm).
-    ref:
+    reference:
         Tensor-membered population supplying the coefficient evidence.
-    feature_axis:
+    dim:
         Explicit axis of the site value that ``direction`` lives on (the
         D24/D25 axis law: never guessed from rank).
     """

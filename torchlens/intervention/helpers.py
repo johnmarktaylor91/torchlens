@@ -28,7 +28,7 @@ def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
 
     Parameters
     ----------
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -94,7 +94,7 @@ def mean_ablate(
         only implemented policy. Unknown tokens refuse typed
         (``intervention_over_invalid``); axis-aware reductions are not
         implemented and are never silently accepted as audit-only labels.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for execution.
 
     Returns
@@ -193,7 +193,7 @@ def scramble_elements(
         (``intervention_source_conflict``); the two spellings name one slot.
     seed:
         Optional hook-local RNG seed.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -273,14 +273,14 @@ def steer(
     ----------
     direction:
         Direction tensor.
-    magnitude:
+    strength:
         Scalar multiplier.
     coef:
-        PLAN.md alias for ``magnitude``.
-    feature_axis:
+        PLAN.md alias for ``strength``.
+    dim:
         Required when a vector direction must be aligned with an out
         axis, avoiding silent batch/position assumptions.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -329,7 +329,7 @@ def scale(factor: float, *, allow_shape_change: bool = False) -> Edit:
     ----------
     factor:
         Multiplicative factor.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -378,7 +378,7 @@ def clamp(
         Optional lower bound.
     max:
         Optional upper bound.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -430,7 +430,7 @@ def add_noise(
     seed:
         Optional hook-local seed. Seeded helpers use a private generator and do
         not consume global RNG.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -491,9 +491,9 @@ def project_onto(
     ----------
     direction:
         Projection direction.
-    feature_axis:
+    dim:
         Required when aligning a vector with a higher-rank out.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -551,9 +551,9 @@ def project_out(
     ----------
     direction:
         Direction to remove.
-    feature_axis:
+    dim:
         Required when aligning a vector with a higher-rank out.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -610,7 +610,7 @@ def swap_with(
         ``out`` tensor (e.g. ``other_log['layer_x']`` from a separate,
         already-completed capture). A bare string label is **not**
         supported: see the Raises section.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -701,7 +701,7 @@ def splice_module(
         site's output to ``module`` (an SAE on its site).
     output:
         Output routing policy. Only ``"out"`` is supported.
-    force_shape_change:
+    allow_shape_change:
         Stored escape hatch allowing output metadata changes.
 
     Returns
@@ -803,7 +803,7 @@ def zero_grad(*, allow_shape_change: bool = False) -> Edit:
 
     Parameters
     ----------
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -847,7 +847,7 @@ def scale_grad(factor: float, *, allow_shape_change: bool = False) -> Edit:
     ----------
     factor:
         Multiplicative grad factor.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns

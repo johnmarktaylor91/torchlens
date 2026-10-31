@@ -15,6 +15,19 @@
   spec takes the guarded fast rerun (about 2x a plain hook per generation step, exact, including
   a stock HF forward that returns its KV cache; `last_run["fast_refused"]` names a fallback's
   reason).
+- Intervention nouns (spellings DOCUMENTED-UNSTABLE): `tl.Recipe` is the immutable multi-clause
+  spec (`tl.when(...)` builds one; `Recipe.merge` or `&` joins them); each clause in
+  `Recipe.rules` is a `tl.intervention.Rule` (`target`, `edit`, `direction`);
+  `spec.bind(model)` returns a `tl.intervention.BoundModel`, whose `.recipe` is the bound spec.
+  `tl.intervention.population(source, *, origin, ...)` builds the provenance-stamped donor
+  population (`origin=` is required).
+- Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. Gradient helpers:
+  `tl.hook_grad` (live or rerun backward hook), `tl.zero_grad`, `tl.scale_grad`, `tl.clamp_grad`,
+  `tl.clip_grad` and `tl.add_grad_noise` edit gradients during the backward pass.
+- Report and statistics additions: `tl.report.amp_scaled_grads_hint` returns the GradScaler
+  loss-scale disclosure text; `tl.report.flops_vs_dispatch` runs the two-way FLOP cross-check;
+  `tl.stats.cosine_distance`, `tl.stats.relative_l1` and `tl.stats.relative_l2` are the 0-d
+  output-difference metrics (relative metrics anchored on the first argument).
 - Relation accessors on FINISHED traces return IMMUTABLE views (authorized public type
   break, decided 2026-08-12): label sequences (`op.parents`, `op.children`, `op.modules`,
   `op.module_call_stack`, conditional child lists, `Layer.parents`/`Layer.children`, ...)

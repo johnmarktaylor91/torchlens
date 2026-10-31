@@ -239,8 +239,8 @@ def normalize_hook_plan(
     for order, (raw_site_target, hook_like) in enumerate(pairs):
         site_target = lower_record_site_target(raw_site_target)
         helper_spec = hook_like if isinstance(hook_like, Edit) else None
-        # The escape hatch is requested by the helper's own force_shape_change
-        # kwarg (e.g. tl.replace_with(t, force_shape_change=True)); it rides
+        # The escape hatch is requested by the helper's own allow_shape_change
+        # kwarg (e.g. tl.replace_with(t, allow_shape_change=True)); it rides
         # entry metadata so a helper-requested shape change reaches
         # validate_hook_output, mirroring the append-safety check in rerun.py.
         entry_force_shape_change = helper_spec is not None and bool(

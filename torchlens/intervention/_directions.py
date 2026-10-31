@@ -92,17 +92,17 @@ class Direction:
         )
 
     def steer(self, strength: float = 1.0) -> Edit:
-        """Return the edit that adds ``magnitude * vector`` on the trailing axis.
+        """Return the edit that adds ``strength * vector`` on the trailing axis.
 
         Parameters
         ----------
-        magnitude:
+        strength:
             Scalar multiplier.
 
         Returns
         -------
         Edit
-            ``torchlens.steer(vector, magnitude, feature_axis=-1)``; place it
+            ``torchlens.steer(vector, strength, dim=-1)``; place it
             with ``tl.when(tl.module(direction.site), ...)``.
         """
 

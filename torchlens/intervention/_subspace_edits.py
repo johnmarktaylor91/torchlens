@@ -106,9 +106,9 @@ def _validate_feature_axis(feature_axis: Any, helper_name: str) -> int:
 
     if isinstance(feature_axis, bool) or not isinstance(feature_axis, int):
         raise InvalidArgumentError(
-            f"{helper_name} feature_axis= must be an int axis index; got {feature_axis!r}",
+            f"{helper_name} dim= must be an int axis index; got {feature_axis!r}",
             code="subspace_basis_invalid",
-            remedy="name the axis the basis indexes, e.g. feature_axis=-1",
+            remedy="name the axis the basis indexes, e.g. dim=-1",
             argument="dim",
         )
     return int(feature_axis)
@@ -132,7 +132,7 @@ def subspace_ablate(
         ``"zero"`` removes the component; ``"mean"`` replaces it with the
         component of ``mean``; ``"resample"`` replaces it with another batch
         row's component under a seeded permutation.
-    feature_axis:
+    dim:
         Axis of the site value the basis indexes (default the trailing axis).
     mean:
         Mean activation (broadcastable to the site value) for ``mode="mean"``.
@@ -226,7 +226,7 @@ def subspace_interchange(
         ``[k, d]`` rows spanning the subspace.
     source:
         Source trace supplying the donor value at each edited site.
-    feature_axis:
+    dim:
         Axis of the site value the basis indexes.
 
     Returns

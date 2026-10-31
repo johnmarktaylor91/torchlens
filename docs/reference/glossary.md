@@ -454,7 +454,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   can select its predecessors.
 
 **Save mode**
-: The activation-retention policy: `copy` isolates the retained value, `population` preserves the
+: The activation-retention policy: `copy` isolates the retained value, `reference` preserves the
   live autograd-capable object, and `view` intentionally leaves aliasing visible.
 
 **Streaming storage**
@@ -497,7 +497,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   whatever the knob says.
 
 **Bound intervention executor** *(spelling documented-unstable)*
-: `spec.bind(model)` pairs an `Recipe` with a base model as a capture-free callable.
+: `spec.bind(model)` pairs a `tl.Recipe` with a base model as a capture-free callable and
+  returns a `tl.intervention.BoundModel`; its read-only `BoundModel.recipe` is the bound
+  `tl.Recipe` and `BoundModel.model` the base model.
   It runs the model with the spec's edits held live, returns the model's own output, records
   only a firing report (`.last_report`), and supports HF `generate` with the KV cache on or off.
   It is not an `nn.Module` and bindings never nest; a rule that never fires is recorded on
@@ -508,6 +510,29 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   refuses `episode_step_selector_without_episode`. Gradient edits (`tl.zero_grad`,
   `tl.scale_grad`, `tl.hook_grad`, ...) refuse `bind_rule_unsupported`: the lane replaces forward
   values only; edit gradients on a `backward_ready` trace and call `trace.backward(loss)`.
+
+**Recipe and Rule** *(spelling documented-unstable)*
+: `tl.Recipe` is the immutable multi-clause intervention spec that `tl.when(...)` builds and every
+  intervention door accepts. `Recipe.rules` is the tuple of its clauses, each a
+  `tl.intervention.Rule` with `target` (the selector or predicate), `edit` (the helper or
+  callable) and `direction` (`"forward"`, `"backward"`, `"both"` or `None`). `Recipe.merge(*others)`
+  (also `recipe_a & recipe_b`) returns one `tl.Recipe` joining the clauses; a duplicate clause
+  refuses `spec_rules_duplicate`.
+
+**Trace.recipe and Trace.clear_edits**
+: `Trace.recipe` is a frozen snapshot of the trace's current intervention recipe.
+  `Trace.clear_edits(site=None, handle=None, *, strict=False, confirm_mutation=False)` removes the
+  sticky edits attached with `attach_hooks` by site or by handle, marks the recipe stale and
+  returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
+
+**Region instances** *(spellings documented-unstable)*
+: A region edit's admissible region is partitioned into pass instances. `RegionTarget.labels`
+  lists the region's pass-qualified member op labels in execution order; each `RegionInstance`
+  carries `RegionInstance.labels` (that instance's member labels) and
+  `RegionInstance.exit_labels` (its exit op labels, in the order the replacement function must
+  return its tensors; the `labels=` and `exit_labels=` constructor fields). A replacement
+  returning several exits returns a tuple of
+  `len(exit_labels)` tensors.
 
 **allow_changed_params** (`InterventionOptions`, `ReplayOptions`) *(spelling documented-unstable)*
 : A replay template holds the live `nn.Parameter` each call consumed, and capture records its
@@ -1025,6 +1050,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.project_out` (keep or remove the component along a direction), and
   `tl.splice_module` (call a module as a black-box forward splice). Availability outside
   the torch backend is narrower; see the per-backend rosters in the backends guide.
+  The value helpers take the keyword-only `allow_shape_change=` (default `False`), which
+  allows the edit to change the site's output shape; by default the edit must preserve it. `tl.steer`
+  also takes `strength=` (its second argument, default `1.0`), the multiplier applied to the
+  steering direction.
   Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`, `tl.project_out`)
   keep the caller's tensor by reference. Each staged entry records a
   full-content digest of those tensors when it is staged; a rerun and `save_intervention`
@@ -1037,7 +1066,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Backward helpers**
 : `tl.hook_grad` builds a live/rerun-only backward hook; `tl.zero_grad`, `tl.scale_grad`,
   `tl.clamp_grad`, `tl.clip_grad`, and `tl.add_grad_noise` edit gradient tensors during the
-  backward pass.
+  backward pass. `tl.zero_grad` and `tl.scale_grad` also take `allow_shape_change=`, with the
+  same meaning as on the value helpers.
 
 **Replay verbs**
 : `Trace.do` applies a one-shot intervention to a captured log; `Trace.push` pushes an edit
@@ -1352,6 +1382,20 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `tl.AmbiguousOpLookupError` is raised when a bare Op lookup matches multiple
   pass-qualified Ops; `tl.ReentrantTraceError` when a trace is started while another
   trace is active.
+
+**Report disclosure helpers** *(spellings documented-unstable)*
+: `tl.report.amp_scaled_grads_hint(*, all_nonfinite=False)` returns the shared text that names a
+  possible `torch.amp.GradScaler` loss scale behind large or non-finite gradients and the
+  `grad_scale=` remedy; it edits no rows or verdicts. `tl.report.flops_vs_dispatch(model,
+  input_args=None, input_kwargs=None, *, sdpa_backend=None, **trace_kwargs)` runs the detached
+  two-way FLOP cross-check on one model and input and returns a `FlopsCrossCheck` holding both
+  totals, the per-overload native ledger and the coverage notes.
+
+**Output-difference metrics**
+: `tl.stats.cosine_distance(a, b)` is `1 - cosine_similarity` of the two flattened tensors;
+  `tl.stats.relative_l2(a, b)` is `norm(a - b) / max(norm(a), eps)`; `tl.stats.relative_l1(a, b)`
+  is `|a - b| / max(|a|, eps)`, the scalar fallback. Each returns a 0-d tensor; `relative_l1` and
+  `relative_l2` are anchored on `a`, and mismatched element counts refuse typed.
 
 ## Distributed capture and cross-rank merging
 

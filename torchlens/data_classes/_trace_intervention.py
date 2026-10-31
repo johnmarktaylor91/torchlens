@@ -537,7 +537,7 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         if site is None and handle is None:
             if strict:
-                raise SpecMutationError("detach_hooks requires a site or handle in strict mode.")
+                raise SpecMutationError("clear_edits requires a site or handle in strict mode.")
             return self
 
         target_spec = None
@@ -555,7 +555,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 handle=handle_value,
             )
         if removed == 0 and strict:
-            raise SpecMutationError("detach_hooks did not match any sticky hooks.")
+            raise SpecMutationError("clear_edits did not match any sticky hooks.")
         if removed > 0:
             self._mark_intervention_spec_mutated()
         self._record_operation(

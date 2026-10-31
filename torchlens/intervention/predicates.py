@@ -91,7 +91,7 @@ def add(delta: torch.Tensor | float | int, *, allow_shape_change: bool = False) 
     ----------
     delta:
         Scalar or tensor value to add to the current out.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns
@@ -134,7 +134,7 @@ def replace_with(
     ----------
     value:
         Tensor or zero-argument callable returning a tensor.
-    force_shape_change:
+    allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
     Returns

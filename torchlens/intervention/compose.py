@@ -111,7 +111,7 @@ def _validate_leaves(leaves: list[Edit]) -> None:
                 "change; v1 refuses ANY shape-changing leaf (the "
                 "next-leaf-declares-contract rule is the documented relaxation)",
                 code="compose_shape_change_unsupported",
-                remedy="drop force_shape_change= inside a chain, or apply the "
+                remedy="drop allow_shape_change= inside a chain, or apply the "
                 "shape-changing edit alone",
                 argument="edits",
             )
