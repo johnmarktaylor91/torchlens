@@ -410,6 +410,9 @@ def _install_tensor_grad_hook(
         registered on ``t``'s current version.
     """
 
+    # Essential complexity: the fire-time closure's ownership, probe, fork and
+    # policy gates moved here unchanged from ``_add_tensor_backward_hook``
+    # (cognitive 46 before the split); they form one fire-time decision.
     hooked_tensors = trace.__dict__.setdefault("_tl_backward_hooked_tensor_keys", set())
     hook_key = (tensor_label, id(t))
     grad_hook_owners = trace.__dict__.setdefault("_tl_grad_hook_owner_by_label", {})
