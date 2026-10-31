@@ -1476,7 +1476,7 @@ def smoothgrad(
         num_samples=num_samples,
         stdevs=noise_level,
         seed=seed,
-        aggregation="mean",
+        reduce="mean",
     )
     return Attribution(
         method="smoothgrad",
