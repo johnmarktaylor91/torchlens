@@ -3274,7 +3274,7 @@ The sections above describe each surface in depth.
 | `tl.errors.LiveIndexWindowError` | Raised when a live-index query targets an unavailable raw label |
 | `tl.errors.MLXValueUnavailableError` | Raised when MLX lazy evaluation makes a predicate value unavailable |
 | `tl.errors.MergeConflictError` | The presented rank cores structurally contradict each other |
-| `tl.errors.MergeInputError` | A merge input is unusable: not a rank capture, duplicate rank, missing distributed evidence, or an out-of-scope (C1) boundary |
+| `tl.errors.MergeInputError` | A merge input is unusable: not a rank capture, duplicate rank, missing distributed evidence, or an out-of-scope boundary |
 | `tl.errors.MergedArtifactError` | Merged artifact save/load failure: schema, integrity, or tamper |
 | `tl.errors.MergedSurfaceUnsupportedError` | A refused surface on a merged trace (run/export/validate/selectors) |
 | `tl.errors.MergedTraceError` | Base class for merged-trace errors; `fields["code"]` is frozen |
