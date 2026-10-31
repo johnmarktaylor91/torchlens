@@ -22,10 +22,20 @@ Usage::
 
 The passed-ids file holds one ``<classname>::<name>`` per line (pytest junit
 identity); blank lines and ``#`` comments are ignored.
+
+Each workflow calls this once, after its test jobs, in directory mode::
+
+    python scripts/check_ci_executed_tests.py --legs <dir>
+
+Every ``*.floor`` file under ``<dir>`` declares its job's legs, one per line,
+in the single-leg argument form above with the junit path relative to the
+floor file. Every leg is checked; any failed leg, or a directory with no
+floor file at all, fails the run.
 """
 
 from __future__ import annotations
 
+import shlex
 import sys
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
@@ -202,5 +212,29 @@ def main(argv: list[str]) -> int:
     return 0
 
 
+def check_legs(legs_dir: Path) -> int:
+    """Check every leg declared by the ``*.floor`` files under ``legs_dir``."""
+
+    floor_files = sorted(legs_dir.rglob("*.floor"))
+    if not floor_files:
+        print(f"executed-test check FAILED: no *.floor file under {legs_dir}.", file=sys.stderr)
+        return 1
+    failed = 0
+    for floor_file in floor_files:
+        for line in floor_file.read_text().splitlines():
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            leg = shlex.split(line)
+            leg[0] = str(floor_file.parent / leg[0])
+            print(f"== {floor_file.relative_to(legs_dir)}: {line.strip()}")
+            failed += main(leg) != 0
+    if failed:
+        print(f"executed-test check FAILED: {failed} leg(s) below floor.", file=sys.stderr)
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--legs"] and len(sys.argv) == 3:
+        raise SystemExit(check_legs(Path(sys.argv[2])))
     raise SystemExit(main(sys.argv[1:]))

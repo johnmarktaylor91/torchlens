@@ -393,7 +393,7 @@ def test_mutation_workflow_rotation_contract() -> None:
     """r7 cluster 19: the rotation contract f9964208 claimed but never pinned.
 
     The scheduled leg's slot selection and family routing live in shell
-    inside ``mutation.yml``; nothing else checks that the families it names
+    inside weekly.yml's ``mutation`` job; nothing else checks that the families it names
     exist in the driver, that the rotation can only produce shards 1..4 of
     4, or that step outputs stay routed through ``env:`` (the zizmor
     template-injection class). Pin all three so a workflow edit that breaks
@@ -403,7 +403,14 @@ def test_mutation_workflow_rotation_contract() -> None:
 
     import re
 
-    workflow = (_REPO_ROOT / ".github" / "workflows" / "mutation.yml").read_text(encoding="utf-8")
+    weekly = (_REPO_ROOT / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
+
+    def _job_text(text: str, job: str) -> str:
+        match = re.search(rf"^  {job}:\n.*?(?=^  [a-z0-9-]+:\n|\Z)", text, re.M | re.S)
+        assert match is not None, f"weekly.yml lost its {job} job"
+        return match.group(0)
+
+    workflow = _job_text(weekly, "mutation")
     driver = _load_driver_module()
 
     # Every family literal the workflow can route exists in the driver's
@@ -453,7 +460,7 @@ def test_mutation_workflow_rotation_contract() -> None:
     # unrelated upstream event makes historical verdicts incomparable.
     # Scoped to each leg's canonical-env install step (weekly.yml carries
     # other, unrelated torch pins for its floor-matrix jobs).
-    weekly = (_REPO_ROOT / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
+    margin = _job_text(weekly, "mutation-margin")
 
     def _canonical_env_step(text: str, source: str) -> str:
         match = re.search(
@@ -467,12 +474,12 @@ def test_mutation_workflow_rotation_contract() -> None:
     for package in ("torch", "torchvision"):
         pins = {
             name: set(re.findall(rf'"{package}==([0-9][^"]*)"', _canonical_env_step(text, name)))
-            for name, text in (("mutation.yml", workflow), ("weekly.yml", weekly))
+            for name, text in (("mutation", workflow), ("mutation-margin", margin))
         }
         assert all(len(v) == 1 for v in pins.values()), (
             f"each mutation leg needs exactly one {package} pin in its canonical env step: {pins}"
         )
-        assert pins["mutation.yml"] == pins["weekly.yml"], (
+        assert pins["mutation"] == pins["mutation-margin"], (
             f"the mutation legs disagree on {package}: {pins} -- both must "
             "install the canonical pinned CPU pair"
         )
