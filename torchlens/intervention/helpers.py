@@ -1246,7 +1246,7 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
         # Projection-valued subspace edit (a learned rotation's rows travel here).
         "subspace_edit": rebuild_subspace_edit,
         # Its source verb (LoReFT's W h + b); saved only inside subspace_edit.
-        "affine_source": set_affine_coordinates,
+        "set_affine_coordinates": set_affine_coordinates,
     }
 
 
@@ -1650,6 +1650,7 @@ _RENAMED_HELPER_NAMES: dict[str, str] = {
     "grad_zero": "zero_grad",
     "noise": "add_noise",
     "project_off": "project_out",
+    "affine_source": "set_affine_coordinates",
 }
 
 

@@ -98,7 +98,7 @@
 - `intervention/_topology/` - internal bundle supergraph and topology diff support.
 - `merged/` - cross-rank merging (C1): `tl.merge_ranks`/`tl.merge_report`, the
   `MergedTrace` presenter, frozen merge vocabularies, and the merged-directory
-  artifact (routes 2 of the 116 `__all__` names; own AGENTS.md).
+  artifact (routes 2 of the 112 `__all__` names; own AGENTS.md).
 - `distributed/` - explicit-collective capture support: `tl.distributed.arm()`,
   group-lifecycle ledger, membership-lineage audit (own AGENTS.md).
 - `bundle/` - the intervention `Bundle` product and its aligned Super* views.

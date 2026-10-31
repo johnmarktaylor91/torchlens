@@ -114,7 +114,7 @@ _TWO_PROCESS_SCRIPT = textwrap.dedent(
     import torch
     from torch import nn
     import torchlens as tl
-    from torchlens.intervention import reference, sample_from
+    from torchlens.intervention import population, sample_from
     from torchlens.intervention.stochastic import sampling_records
 
     class TwoBlock(nn.Module):
@@ -135,7 +135,7 @@ _TWO_PROCESS_SCRIPT = textwrap.dedent(
     subject = capture(model, 100)
     donors = [capture(model, seed) for seed in (1, 2, 3)]
     for digest in (False, True):
-        ref = reference(donors, origin="d", digest_population=digest)
+        ref = population(donors, origin="d", digest_population=digest)
         plan = sample_from(ref, seed=3)
         fork = subject.fork()
         fork.do(tl.label("relu_1_2"), tl.patch_from(plan))

@@ -1717,7 +1717,7 @@ def _build_selection_do_plan(
     # A bare tl.subspace(...) target is projection-valued: the edit acts on
     # the component along the basis (resolve() still reports the support).
     projection = subspace_projection_of(selection_like)
-    if projection is None and getattr(edit, "helper_name", None) == "affine_source":
+    if projection is None and getattr(edit, "helper_name", None) == "set_affine_coordinates":
         from .intervention._affine_source import needs_subspace
 
         # Refuse at do(), before anything is staged: a [k, d] map needs a basis.

@@ -109,7 +109,7 @@ def test_saved_affine_source_applies_bit_identically(tmp_path: Path, rank: int) 
     helper = loaded.hook_specs[0].helper
     assert helper.helper_name == "subspace_edit" and helper.portability == "builtin"
     inner = helper.args[0]
-    assert inner.helper_name == "affine_source"
+    assert inner.helper_name == "set_affine_coordinates"
     assert torch.equal(inner.args[0], _W[:rank]) and torch.equal(
         dict(inner.kwargs)["bias"], _B[:rank]
     )
@@ -119,7 +119,7 @@ def test_saved_affine_source_applies_bit_identically(tmp_path: Path, rank: int) 
 def test_bias_absent_default_fills_and_applies_without_a_bias() -> None:
     """An older payload with no ``bias`` keyword rebuilds with ``bias=None``."""
 
-    rebuilt = rebuild_builtin_helper("affine_source", (_W[:2],), {})
+    rebuilt = rebuild_builtin_helper("set_affine_coordinates", (_W[:2],), {})
     assert dict(rebuilt.kwargs)["bias"] is None
     fork = _ready().fork()
     fork.do(tl.subspace(_SITE, _R[:, :2].T, origin=_ORIGIN), rebuilt)
@@ -192,7 +192,7 @@ def test_malformed_argument_refuses_at_construction_and_at_load(case: str) -> No
     assert excinfo.value.fields["code"] == "affine_source_invalid"
     assert excinfo.value.fields["argument"] == argument
     with pytest.raises(InvalidArgumentError) as loaded:
-        rebuild_builtin_helper("affine_source", args(), kwargs)
+        rebuild_builtin_helper("set_affine_coordinates", args(), kwargs)
     assert loaded.value.fields["code"] == "affine_source_invalid"
     _remedy_runs(excinfo.value)
 
