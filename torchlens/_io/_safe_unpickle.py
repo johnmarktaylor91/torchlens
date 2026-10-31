@@ -70,12 +70,16 @@ Allowlist policy (fail-closed):
   *safe* wrapper that restricts the target object to the enumerated torch C
   callable-holder classes, which structurally blocks the classic
   ``getattr(obj, "__globals__")`` pivot to ``eval`` / ``exec``.
-* ``torch.storage._load_from_bytes`` reconstructs tensors embedded by legacy
-  metadata (current bundles route every tensor through manifest-bound blobs) but
-  internally calls ``torch.load`` with the *unsafe* default, i.e. a nested
-  unrestricted unpickler. It is admitted only through a wrapper that forces
-  ``weights_only=True`` so the nested load routes through torch's own restricted
-  unpickler.
+* ``torch.storage._load_from_bytes`` (the storage leg of torch's default tensor
+  reduction) runs a nested ``torch.load`` over bytes taken from the file. It is
+  REFUSED by name: no file bytes ever reach torch's unpickler. A plain tensor that
+  genuinely lives in metadata (an annotation value, a small raw input/output) is
+  written by the canonical metadata pickler through the TorchLens-owned inline
+  reduction ``_inline_tensor.rebuild_inline_tensor`` (raw bytes, dtype, shape,
+  ``requires_grad``, device), admitted here by exact pair; it allocates exactly the
+  bytes present in the stream into a non-resizable storage. A file written by an
+  earlier TorchLens that embedded a tensor storage refuses typed, with a re-save
+  remedy.
 
 If a future legitimate class is not yet covered, loading it fails closed with a
 clear error; we NEVER admit a code-exec gadget to make a load succeed.
@@ -93,9 +97,9 @@ CONSTRUCTION from pickle-supplied args is DENIED. Two layers enforce it:
 which torch's OWN baseline hands back as the real, constructable classes, and every
 legacy ``torch.<dtype>Storage``). Constructing a storage allocates raw memory
 (``UntypedStorage(N)`` -> a multi-GiB alloc DoS), and current ``.tlspec`` metadata
-never needs one -- tensor payloads travel as ``BlobRef``s. A legacy embedded storage
-routes through the wrapped ``("torch.storage", "_load_from_bytes")`` path (a separate
-nested ``weights_only`` VM). (2) ``SafeBundleUnpickler`` is a pure-Python
+never needs one -- tensor payloads travel as ``BlobRef``s, and an inline metadata
+tensor arrives through ``rebuild_inline_tensor`` as a finished tensor over a
+non-resizable storage. (2) ``SafeBundleUnpickler`` is a pure-Python
 ``pickle._Unpickler`` whose rebuilt opcode ``dispatch`` gates BUILD / REDUCE / NEWOBJ /
 NEWOBJ_EX to baseline discipline: a BUILD may not apply a ``__setstate__`` /
 storage-rebind to a torch Tensor / Storage / Parameter (the ``find_class``-invisible
@@ -118,9 +122,7 @@ construction is denied).
 
 from __future__ import annotations
 
-import io
 import pickle
-import warnings
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from types import ModuleType
@@ -135,6 +137,7 @@ from .._utils._callable_safety import (
     _STDLIB_AND_BUILTIN_TOP_LEVEL as _CALLABLE_STDLIB_AND_BUILTIN_TOP_LEVEL,
     is_denied_stdlib_or_builtin_module,
 )
+from ._inline_tensor import INLINE_TENSOR_GLOBAL, rebuild_inline_tensor
 from ._pre3_module_paths import refuse_pre_3_module_path
 from .format_errors import ArtifactTooOldError
 
@@ -307,9 +310,9 @@ def _torch_type_denied(pickled_module: str, pickled_name: str, obj: type) -> boo
 # real ``torch.storage.{Typed,Untyped}Storage`` classes, so denying them here makes
 # this unpickler a documented STRICT SUBSET of that baseline. No legitimate ``.tlspec``
 # metadata references a storage type in the outer stream: tensor payloads are
-# ``BlobRef``s, and any embedded storage is reconstructed by the wrapped
-# ``_safe_load_from_bytes`` path (a separate nested ``weights_only`` load), never by an
-# outer storage global. The set is built from ``torch._storage_classes`` (all 31
+# ``BlobRef``s, and an inline metadata tensor is rebuilt whole by
+# ``rebuild_inline_tensor`` over a non-resizable storage, never by an outer storage
+# global. The set is built from ``torch._storage_classes`` (all 31
 # typed/untyped classes) plus the canonical ``TypedStorage`` / ``UntypedStorage``, and
 # an ``issubclass`` belt covers any future storage subclass (e.g. a legacy typed
 # ``FloatStorage`` is a ``TypedStorage`` subclass).
@@ -1144,178 +1147,6 @@ def _safe_getattr(obj: Any, name: Any) -> Any:
     return resolved
 
 
-def _safe_load_from_bytes(data: bytes) -> Any:
-    """Restricted replacement for ``torch.storage._load_from_bytes``.
-
-    The stock helper reconstructs an embedded tensor storage by calling
-    ``torch.load`` with the *unsafe* legacy default (an unrestricted nested
-    unpickler == RCE). This wrapper forces ``weights_only=True`` so the nested
-    load routes through torch's own restricted unpickler; a malicious embedded
-    payload therefore fails closed instead of executing.
-
-    Parameters
-    ----------
-    data:
-        Serialized tensor-storage bytes from the pickle stream.
-
-    Returns
-    -------
-    Any
-        The reconstructed storage/tensor from a weights-only nested load.
-
-    Raises
-    ------
-    pickle.UnpicklingError
-        If the running torch is affected by CVE-2025-32434 (so even
-        ``weights_only=True`` is a working RCE), or if the nested weights-only load
-        fails (including because it refused a disallowed global).
-    """
-
-    # CVE-2025-32434: on torch <= 2.5.1, ``torch.load(..., weights_only=True)`` is
-    # ITSELF a remote-code-execution -- the pre-2.6 weights-only unpickler could be
-    # bypassed -- so forwarding attacker bytes into it is not a safe restricted
-    # load at all. Fail closed on any runtime that lacks the 2.6.0 fix (feature-
-    # detected via the named ``HAS_SAFE_WEIGHTS_ONLY_LOAD`` capability, surfaced in
-    # ``tl.compat.report()`` / ``doctor()``). Imported lazily to keep this early
-    # security front door free of import-order coupling (mirrors ``_safe_getattr``).
-    from .._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
-
-    if not HAS_SAFE_WEIGHTS_ONLY_LOAD:
-        raise pickle.UnpicklingError(
-            "Refusing to reconstruct an embedded tensor during bundle metadata "
-            "unpickle: the running torch is affected by CVE-2025-32434 "
-            "(torch.load(weights_only=True) remote-code-execution, fixed in torch "
-            "2.6.0). Upgrade torch to >= 2.6 to load bundles that embed tensor "
-            "storages."
-        )
-    try:
-        loaded = torch.load(io.BytesIO(data), weights_only=True)
-    except Exception as exc:  # noqa: BLE001 -- fail closed, never re-exec unsafely
-        raise pickle.UnpicklingError(
-            "Blocked unsafe embedded-tensor load during bundle metadata unpickle."
-        ) from exc
-    return _freeze_embedded_storage(loaded)
-
-
-def _frozen_untyped_storage(storage: Any) -> Any:
-    """Return a NON-resizable ``UntypedStorage`` holding the same bytes as ``storage``.
-
-    ``torch.frombuffer`` over a host ``bytearray`` produces a storage whose allocator
-    cannot reallocate, so ``resizable()`` is ``False`` and torch's own ``set_`` refuses to
-    grow it. The copy is bounded by ``storage`` -- itself bounded by the embedded blob
-    already present in the pickle stream -- so it is strictly proportional.
-
-    Parameters
-    ----------
-    storage:
-        Host (CPU) untyped storage to copy.
-
-    Returns
-    -------
-    Any
-        A non-resizable untyped storage with identical bytes.
-    """
-
-    return torch.frombuffer(bytearray(bytes(storage)), dtype=torch.uint8).untyped_storage()
-
-
-def _freeze_embedded_storage(loaded: Any) -> Any:
-    """Make an embedded-blob result NON-RESIZABLE so it cannot be amplified (r6).
-
-    The nested ``weights_only`` load bounds the embedded payload by the bytes present in
-    the stream, but it does not bound what a LATER opcode may grow that payload into. When
-    the embedded blob uses the LEGACY (non-zipfile) ``torch.save`` format the reconstructed
-    storage is RESIZABLE, and the vetted ``torch._utils._rebuild*`` reconstructors -- which
-    must stay REDUCE-invocable, they are the legitimate tensor path -- accept a
-    pickle-supplied ``size``/``stride`` and call ``set_``, which RESIZES the storage
-    upward. Measured: a 354-byte pickle chaining
-    ``_rebuild_tensor_v2(_load_from_bytes(<4-byte legacy blob>), 0, (100_000_000,), (1,),
-    False, None)`` yielded a 100 MB tensor -- roughly 282,000x amplification, unbounded in
-    the requested size, and reached through a callable the belt deliberately allows.
-
-    Bounding this at the CONSUMER would mean re-deriving the byte extent for every
-    ``_rebuild*`` signature and keeping that in step with torch. Bounding it at the SOURCE
-    is signature-independent and enforced by torch itself: a non-resizable storage makes
-    ``set_`` raise ``RuntimeError("Trying to resize storage that is not resizable")`` for
-    EVERY present and future consumer, while an exact-fit view -- the only thing an honest
-    stream asks for -- still succeeds unchanged.
-
-    A resizable storage on a non-CPU device cannot be frozen (torch exposes no
-    same-device non-resizable allocation), so it fails closed. That refuses nothing real:
-    a genuine torchlens bundle never emits ``_load_from_bytes`` at all (asserted by
-    ``tests/test_r4_metadata_unpickle_rce.py``), and the modern zipfile ``torch.save``
-    format -- what every current writer produces -- already yields a non-resizable storage
-    and is returned untouched.
-
-    Parameters
-    ----------
-    loaded:
-        Object returned by the nested weights-only load.
-
-    Returns
-    -------
-    Any
-        ``loaded`` itself when already non-resizable, else a frozen equivalent.
-
-    Raises
-    ------
-    pickle.UnpicklingError
-        If a resizable storage cannot be frozen (non-CPU device, or a failed copy).
-    """
-
-    typed_storage_type = getattr(torch.storage, "TypedStorage", ())
-    storage: Any
-    if isinstance(loaded, torch.Tensor):
-        storage = loaded.untyped_storage()
-    elif isinstance(loaded, torch.UntypedStorage):
-        storage = loaded
-    elif typed_storage_type and isinstance(loaded, typed_storage_type):
-        # ``TypedStorage.untyped()`` emits torch's TypedStorage-removal ``UserWarning``;
-        # the private attribute it delegates to is the same object and stays quiet, so a
-        # security load never spends a warning the caller cannot act on.
-        storage = getattr(loaded, "_untyped_storage", None)
-        if storage is None:  # pragma: no cover - torch layout drift.
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", UserWarning)
-                storage = loaded.untyped()
-    else:
-        # Not a storage-backed result; nothing a ``_rebuild*`` can grow.
-        return loaded
-
-    try:
-        if not storage.resizable():
-            return loaded
-    except Exception:  # pragma: no cover - defensive; exotic storage without the predicate.
-        pass
-
-    if str(getattr(storage, "device", "cpu")) != "cpu":
-        raise pickle.UnpicklingError(
-            "Blocked a RESIZABLE non-CPU embedded tensor storage during bundle metadata "
-            "unpickle: it can be grown by a following _rebuild* REDUCE into an "
-            "attacker-sized allocation, and torch exposes no same-device non-resizable "
-            "allocation to bound it. Re-save the artifact with the modern (zipfile) "
-            "torch.save format, which yields a non-resizable storage."
-        )
-
-    try:
-        frozen = _frozen_untyped_storage(storage)
-        if isinstance(loaded, torch.Tensor):
-            rebuilt = torch.empty(0, dtype=loaded.dtype, device=loaded.device)
-            rebuilt.set_(frozen, loaded.storage_offset(), loaded.size(), loaded.stride())
-            if loaded.requires_grad:
-                rebuilt.requires_grad_(True)
-            return rebuilt
-        if isinstance(loaded, torch.UntypedStorage):
-            return frozen
-        return torch.storage.TypedStorage(wrap_storage=frozen, dtype=loaded.dtype, _internal=True)
-    except Exception as exc:  # noqa: BLE001 -- fail closed, never hand back a growable storage
-        raise pickle.UnpicklingError(
-            "Blocked an embedded tensor storage during bundle metadata unpickle: it is "
-            "RESIZABLE (legacy torch.save format) and could not be frozen, so a following "
-            "_rebuild* REDUCE could grow it into an attacker-sized allocation."
-        ) from exc
-
-
 # Base pure-Python opcode handlers, captured from the dispatch table. typeshed does
 # NOT expose ``load_build`` / ``load_reduce`` / ``load_newobj`` / ``load_newobj_ex`` as
 # named methods on ``pickle._Unpickler``, so the Layer-2 overrides delegate to these
@@ -1541,12 +1372,27 @@ class SafeBundleUnpickler(pickle._Unpickler):
         refuse_pre_3_module_path(module)
         module, name = self._rename_map.get((module, name), (module, name))
 
-        # Safe wrappers for the two legitimately-needed but individually-dangerous
-        # callables.
+        # Safe wrapper for the one legitimately-needed but individually-dangerous
+        # callable.
         if (module, name) == ("builtins", "getattr"):
             return _safe_getattr
+        # The storage leg of torch's default tensor reduction is a nested
+        # ``torch.load`` over file bytes. Refused by name, before anything else
+        # resolves: no byte from the file ever reaches torch's unpickler.
         if (module, name) == ("torch.storage", "_load_from_bytes"):
-            return _safe_load_from_bytes
+            raise pickle.UnpicklingError(
+                "Blocked torch.storage._load_from_bytes during bundle metadata "
+                "unpickle: an embedded tensor storage would be reconstructed by a "
+                "nested torch.load over file bytes, which TorchLens no longer "
+                "performs. A genuine artifact written by an earlier TorchLens that "
+                "embedded a tensor in its metadata must be re-saved with the current "
+                "release (tl.load the trace there, then tl.save); otherwise the file "
+                "is hostile or corrupt."
+            )
+        # The TorchLens-owned inline tensor reduction: validated arguments, an exact
+        # byte-length check and a non-resizable buffer-backed storage.
+        if (module, name) == INLINE_TENSOR_GLOBAL:
+            return rebuild_inline_tensor
 
         # Exact-pair allowlist of inert data/value types and tensor reconstructors.
         if (module, name) in _SAFE_EXPLICIT_GLOBALS:
@@ -1628,16 +1474,16 @@ class SafeBundleUnpickler(pickle._Unpickler):
                 # could rebind onto a tensor. torch's own ``weights_only`` baseline
                 # lists the real ``torch.storage.{Typed,Untyped}Storage`` classes, so
                 # denying them makes this unpickler a STRICT SUBSET of that baseline.
-                # ``.tlspec`` never needs one (payloads are BlobRefs; embedded storages
-                # route through the wrapped ``_safe_load_from_bytes`` nested load).
+                # ``.tlspec`` never needs one (payloads are BlobRefs; inline metadata
+                # tensors arrive whole through ``rebuild_inline_tensor``).
                 if _is_torch_storage_type(obj):
                     raise pickle.UnpicklingError(
                         "Blocked torch storage constructor during bundle metadata "
                         f"unpickle: {module}.{name} (constructing a storage allocates "
                         "raw memory -- an UntypedStorage(N) out-of-memory DoS and the "
                         "source of an uninitialized-heap tensor; .tlspec tensor "
-                        "payloads are BlobRefs and embedded storages load through the "
-                        "wrapped weights_only _load_from_bytes path)."
+                        "payloads are BlobRefs and inline metadata tensors arrive "
+                        "whole through the TorchLens inline tensor reduction)."
                     )
                 if _torch_type_denied(module, name, obj):
                     raise pickle.UnpicklingError(
