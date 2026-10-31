@@ -238,7 +238,7 @@ class TestModuleLogFields:
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         assert len(ml.layers) > 0
-        assert ml.num_layers == len(ml.layers)
+        assert len(ml.layer_labels) == len(ml.layers)
 
     def test_params_accessor(self):
         log = trace_fn(_make_simple_model(), _simple_input())
@@ -567,18 +567,18 @@ class TestModuleLogIntegration:
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         df = ml.to_pandas()
-        assert len(df) == ml.num_layers
+        assert len(df) == len(ml.layer_labels)
 
     def test_module_log_iter(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
         entries = list(ml)
-        assert len(entries) == ml.num_layers
+        assert len(entries) == len(ml.layer_labels)
 
     def test_module_log_getitem(self):
         log = trace_fn(_make_simple_model(), _simple_input())
         ml = log.modules["0"]
-        if ml.num_layers > 0:
+        if len(ml.layer_labels) > 0:
             entry = ml[0]
             assert entry.layer_label == ml.layer_labels[0]
 
@@ -600,7 +600,7 @@ class TestModuleLogIntegration:
         log = trace_fn(model, torch.randn(1, 3, 8, 8))
 
         block_layers = [log.modules[f"blocks.{idx}"].layer_labels for idx in range(4)]
-        block_counts = [log.modules[f"blocks.{idx}"].num_layers for idx in range(4)]
+        block_counts = [len(log.modules[f"blocks.{idx}"].layer_labels) for idx in range(4)]
         batchnorm_counts = [len(log.modules[f"blocks.{idx}.bn"].layer_labels) for idx in range(4)]
 
         assert block_counts == [7, 7, 7, 7]

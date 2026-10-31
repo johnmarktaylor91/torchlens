@@ -531,14 +531,8 @@ class ModuleCall:
 
     @property
     def num_layers(self) -> int:
-        """Number of distinct Layers among this call's Ops (``num_ops`` counts each pass)."""
+        """Number of distinct Layers among this call's Ops (``len(ops)`` counts each pass)."""
         return len({str(op_label).rsplit(":", 1)[0] for op_label in self.ops})
-
-    @property
-    def num_ops(self) -> int:
-        """Number of Ops in this module call."""
-
-        return len(self.ops)
 
     @property
     def name(self) -> str:
@@ -1595,11 +1589,6 @@ class Module:
         return len(self.all_addresses) > 1
 
     @property
-    def num_layers(self) -> int:
-        """Number of unique layers in this module."""
-        return len(self.layer_labels)
-
-    @property
     def layers(self) -> list[Any]:
         """Layer records belonging to this Module."""
 
@@ -2150,12 +2139,6 @@ class Module:
                 show_call_index=show_call_index,
                 file=file,
             )
-
-    @property
-    def num_param_tensors(self) -> int:
-        """Number of parameter tensors owned by this Module (the root owns all)."""
-
-        return len(self.params)
 
     @property
     def num_param_tensors_trainable(self) -> int:

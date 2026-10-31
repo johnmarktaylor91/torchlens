@@ -330,11 +330,13 @@ def _check_module_layer_containment(ml: Trace) -> None:
                     f"Module '{addr}' layers contains '{lbl}' not in trace.layer_logs",
                 )
 
-        if mod_log.num_layers != len(mod_log.layer_labels):
+        # len(layer_labels) is the Module's layer count: it is honest only
+        # when no Layer is listed twice.
+        if len(mod_log.layer_labels) != len(set(mod_log.layer_labels)):
             raise MetadataInvariantError(
                 name,
-                f"Module '{addr}': num_layers={mod_log.num_layers} != "
-                f"len(layer_labels)={len(mod_log.layer_labels)}",
+                f"Module '{addr}': len(layer_labels)={len(mod_log.layer_labels)} != "
+                f"distinct layer labels={len(set(mod_log.layer_labels))}",
             )
 
         # ModuleCall checks
@@ -349,9 +351,11 @@ def _check_module_layer_containment(ml: Trace) -> None:
                         f"'{lbl}' not in op_labels or layer_labels",
                     )
 
-            # num_ops is len(ops); num_layers counts the distinct Layers the
-            # ops resolve to through the trace (an unresolvable op is itself
-            # the problem). One raise site for the check.
+            # len(ops) is the call's op count, honest only when no
+            # pass-qualified op is listed twice; num_layers counts the distinct
+            # Layers the ops resolve to through the trace (an unresolvable op
+            # is itself the problem). One raise site for the check.
+            qualified_ops = [lbl for lbl in mpl.ops if ":" in str(lbl)]
             resolved = [
                 getattr(ml.layer_dict_all_keys.get(lbl), "layer_label", None) for lbl in mpl.ops
             ]
@@ -361,8 +365,11 @@ def _check_module_layer_containment(ml: Trace) -> None:
                 if not isinstance(layer, str)
             ]
             count_problem = None
-            if mpl.num_ops != len(mpl.ops):
-                count_problem = f"num_ops={mpl.num_ops} != len(ops)={len(mpl.ops)}"
+            if len(qualified_ops) != len(set(qualified_ops)):
+                count_problem = (
+                    f"len(ops) counts a pass-qualified op twice "
+                    f"({len(qualified_ops)} listed, {len(set(qualified_ops))} distinct)"
+                )
             elif unresolved:
                 count_problem = f"op '{unresolved[0]}' resolves to no Layer"
             elif mpl.num_layers != len(set(resolved)):
