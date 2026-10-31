@@ -273,19 +273,26 @@ def _plain_leaves(cell: Cell) -> list[Any]:
 
 
 def _after_record(cell: Cell) -> None:
-    """``tl.record(...).to_trace()`` reproduces the traced op sequence, functions and shapes."""
+    """``tl.record(...).to_trace()`` reproduces the traced op sequence: functions and shapes.
 
-    _base_after("record")(cell)
+    Records a freshly built model, as the base row does: by now the cell's own model
+    has run, and a first-call cache would skip ops that the reference capture saw.
+    """
+
+    from tests.behaviour.features import _no_stochastic
+
+    _no_stochastic(cell)
     model, _ = cell.case.build()
     torch.manual_seed(SEED)
     cooked = tl.record(model, cell.fresh_inputs(), default_op=True).to_trace()
     cell.expect(
         cooked.outcome.status is CaptureStatus.COMPLETE, f"record outcome {cooked.outcome.status!r}"
     )
-    plain = cell.facts.plain
+    got, want = _sequence(cooked), _sequence(cell.facts.plain)
     cell.expect(
-        _sequence(cooked) == _sequence(plain),
-        f"record shapes differ from trace: {_first_difference(_sequence(cooked), _sequence(plain))}",
+        got == want,
+        f"record.to_trace() gives {len(got)} ops against {len(want)} traced; "
+        f"{_first_difference(got, want)}",
     )
 
 
@@ -314,7 +321,7 @@ def _after_fast_run(cell: Cell) -> None:
     for _ in range(2):
         torch.manual_seed(SEED)
         result = trace.run(inputs=cell.fresh_inputs(), fast=True)
-        cell.expect(not result.poisoned, f"fast run poisoned: {result.report!r}")
+        cell.expect(not result.report.is_poisoned, f"fast run poisoned: {result.report!r}")
         runs.append(
             [
                 leaf.detach() if isinstance(leaf, torch.Tensor) else leaf
