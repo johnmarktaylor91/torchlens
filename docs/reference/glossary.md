@@ -3412,14 +3412,10 @@ describe each surface in depth.
 | --- | --- |
 | `RecordingOptions.default_module` | Capture decision for module events the predicate does not decide |
 | `RecordingOptions.default_op` | Capture decision for operation events the predicate does not decide |
-| `RecordingOptions.echo` | Normalized live-narration options, or `None` |
 | `RecordingOptions.history_size` | Number of earlier events kept for predicate history; 0 to 1024 |
 | `RecordingOptions.include_source_events` | Whether source events appear in the predicate lookback of recent ops |
-| `RecordingOptions.lookback` | Number of earlier events exposed to predicates as lookback; 0 to 1024 |
-| `RecordingOptions.lookback_payload_policy` | How lookback events carry tensor payloads; default `"metadata_only"` |
 | `RecordingOptions.max_predicate_failures` | Maximum number of predicate failures stored on the recording; further ones are counted as overflow |
 | `RecordingOptions.on_predicate_error` | Predicate error handling: `"auto"`, `"accumulate"` or `"fail-fast"` |
-| `RecordingOptions.streaming` | Storage options for streaming retained records to disk, or `None` |
 
 ### Keywords
 | Spelling | Meaning |
