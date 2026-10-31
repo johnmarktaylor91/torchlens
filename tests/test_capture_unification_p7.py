@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 from torchlens.captured_run import _ActivationLookup
 from torchlens.validation.invariants import (
     _check_special_layer_lists,
@@ -97,7 +98,7 @@ def _structure(trace: tl.Trace) -> list[tuple[str, str, tuple[str, ...], tuple[s
 
     return [
         (
-            op.layer_type,
+            record_type(op),
             op.layer_label,
             tuple(op.parents),
             tuple(op.children),
@@ -139,9 +140,9 @@ def test_recording_to_trace_matches_trace_structure_and_unsaved_out_fails() -> N
     assert getattr(full, "_cooked_from", None) is None
     saved = [op for op in cooked._layer_list if op.has_saved_activation]
     assert saved
-    assert {op.layer_type for op in saved} == {"conv2d"}
+    assert {record_type(op) for op in saved} == {"conv2d"}
 
-    unsaved = next(op for op in cooked._layer_list if op.layer_type == "relu")
+    unsaved = next(op for op in cooked._layer_list if op.type == "relu")
     with pytest.raises(ValueError, match="no saved payload.*save="):
         _ = unsaved.out
 

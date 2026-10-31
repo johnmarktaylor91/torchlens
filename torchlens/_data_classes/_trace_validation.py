@@ -109,7 +109,7 @@ def _apply_run_save_selection(result: Any, selected: Any) -> Any:
     from ..capture.projectors import RefreshProjector
 
     for layer in result.trace._layer_list:
-        if layer.layer_type in ("input", "output"):
+        if layer.type in ("input", "output"):
             continue
         if layer.layer_label in selected:
             continue

@@ -168,7 +168,7 @@ def test_lazy_linear_graph_stays_clean() -> None:
     )
     try:
         assert log.num_ops == 2
-        labels = [lay.layer_type for lay in log._layer_list]
+        labels = [lay.type for lay in log._layer_list]
         assert labels == ["input", "linear", "relu", "output"]
     finally:
         log.cleanup()

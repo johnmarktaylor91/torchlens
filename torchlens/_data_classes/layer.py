@@ -1154,19 +1154,6 @@ class Layer(_SelectionOperand):
         return self.ops[0].projective_field
 
     @property
-    def site_key(self) -> str:
-        """Single structural site key, or a typed refusal on spanning/legacy.
-
-        Site-uniformity and pass-uniformity are DIFFERENT axes: a multi-pass
-        reused-module layer has ONE key; a within-call recurrence group
-        spans several (read those via ``.ops[k].site_key``).
-        """
-
-        from ._layer_sites import layer_site_key
-
-        return layer_site_key(self)
-
-    @property
     def site_peers(self) -> tuple["Layer", ...]:
         """Layers sharing any of this layer's site keys (live index)."""
 

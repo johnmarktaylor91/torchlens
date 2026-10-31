@@ -198,7 +198,7 @@ class TestAggregateFields:
         """Aggregate fields on Layer match the corresponding first-pass values."""
         for layer_log in simple_log._layer_logs.values():
             fp = layer_log.ops[0]
-            assert layer_log.layer_type == fp.layer_type
+            assert layer_log.layer_type == fp.type
             assert layer_log.func_name == fp.func_name
             assert layer_log.shape == fp.shape
             assert layer_log.dtype == fp.dtype

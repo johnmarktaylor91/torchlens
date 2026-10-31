@@ -22,6 +22,7 @@ from typing import Any
 
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._io._json import loads_bounded
+from .._record_type import record_type
 from .._utils.display import atomic_write_text
 from ..capture.structure_only import (
     require_structure_only_capability as _require_structure_only_capability,
@@ -881,7 +882,7 @@ def _layer_display_name(layer: Any) -> str:
     """
 
     label = str(getattr(layer, "layer_label", ""))
-    func_name = str(getattr(layer, "func_name", "") or getattr(layer, "layer_type", ""))
+    func_name = str(getattr(layer, "func_name", "") or record_type(layer, ""))
     return f"{label} ({func_name})" if func_name and func_name != label else label
 
 

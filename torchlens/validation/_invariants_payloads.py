@@ -212,7 +212,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
     # Each op record carries its own row and its own pass-exact
     # parents/parent_arg_positions staging.
     for layer in getattr(ml, "_layer_list", ()) or ():
-        for op in getattr(layer, "ops", ()) or ():
+        for op in getattr(layer, "ops", None) or (layer,):
             row = getattr(op, "_row", None)
             if row is None:
                 continue

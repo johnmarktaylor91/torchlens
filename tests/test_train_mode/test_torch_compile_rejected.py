@@ -48,7 +48,7 @@ def _op_structure(trace: tl.Trace) -> list[tuple[str, str | None]]:
         Operation type and function-name pairs in execution order.
     """
 
-    return [(op.layer_type, op.func_name) for op in trace._layer_list]
+    return [(op.type, op.func_name) for op in trace._layer_list]
 
 
 def test_trace_unwraps_torch_compile_once(

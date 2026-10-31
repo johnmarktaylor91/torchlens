@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Optional
 from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
+from .._record_type import record_type
 from ._accessor_base import Accessor, attach_source_honesty
 
 if TYPE_CHECKING:
@@ -300,11 +301,11 @@ class LayerAccessor(Accessor["Layer"]):
             return [
                 layer.layer_label
                 for layer in self._list
-                if (layer.func_name or layer.layer_type) == operator
+                if (layer.func_name or record_type(layer)) == operator
             ]
         counts: dict[str, int] = {}
         for layer in self._list:
-            key = str(layer.func_name or layer.layer_type)
+            key = str(layer.func_name or record_type(layer))
             counts[key] = counts.get(key, 0) + 1
         return counts
 
@@ -359,11 +360,11 @@ class LayerAccessor(Accessor["Layer"]):
                 layer.layer_label
                 for layer in self._list
                 if (layer.module == module or module in getattr(layer, "modules", []))
-                and (layer.func_name or layer.layer_type) == operator
+                and (layer.func_name or record_type(layer)) == operator
             ]
         counts: dict[tuple[str, str], int] = {}
         for layer in self._list:
-            key = (str(layer.module or "self"), str(layer.func_name or layer.layer_type))
+            key = (str(layer.module or "self"), str(layer.func_name or record_type(layer)))
             counts[key] = counts.get(key, 0) + 1
         return counts
 

@@ -1939,9 +1939,9 @@ def _path_component_to_name(component: OutputPathComponent) -> str | None:
     if isinstance(component, TupleIndex):
         return str(component.index)
     if isinstance(component, NamedField | DataclassField):
-        return component.name
+        return component._name
     if isinstance(component, DictKey | HFKey):
-        return str(component.key)
+        return str(component._key)
     if isinstance(component, int):
         return str(component)
     if isinstance(component, str):

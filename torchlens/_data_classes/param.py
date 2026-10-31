@@ -13,7 +13,7 @@ equal to the model's lifetime.  The ``cleanup()`` method on Trace
 deletes all Param references.
 
 **Lazy grad properties**: Gradient metadata (has_grad, grad_shape, grad_dtype,
-gradient_memory) is computed lazily on first access via ``_check_param_grad()``.
+grad_memory) is computed lazily on first access via ``_check_param_grad()``.
 This allows grads computed after ``trace()`` returns (e.g.
 after a ``loss.backward()`` call) to be reflected without re-logging.
 The check is one-shot: once ``_has_grad`` is True, no further checks are made.
@@ -721,7 +721,7 @@ class Param:
         self._grad_dtype = value
 
     @property
-    def gradient_memory(self) -> Bytes:
+    def grad_memory(self) -> Bytes:
         """Return the grad tensor size in bytes.
 
         Returns
@@ -732,8 +732,8 @@ class Param:
         self._check_param_grad()
         return self._grad_memory
 
-    @gradient_memory.setter
-    def gradient_memory(self, value: int) -> None:
+    @grad_memory.setter
+    def grad_memory(self, value: int) -> None:
         """Set cached grad tensor size in bytes.
 
         Parameters

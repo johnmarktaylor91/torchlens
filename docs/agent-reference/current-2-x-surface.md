@@ -99,7 +99,7 @@
   checkpointing are labeled `recompute_flops` on their row (unknown under `create_graph`).
   `tl.report.cost_tree(trace)` rows gain `self_forward_mac_flops`, `self_backward_flops`
   and `self_forward_backward_flops` (one convention). The count is saved with the pass
-  (`BackwardPass.executed_flops_record`), so a loaded trace reads it; a pass that raised has
+  (a private persisted record on `BackwardPass`), so a loaded trace reads it; a pass that raised has
   no count. All DOCUMENTED-UNSTABLE. `tl.report.backward_estimate(trace)` stays hypothetical.
   Trace-side failed captures expose `exc.partial_log`, recoverable with
   `tl._partial.from_failed_capture(exc)`.
@@ -132,7 +132,7 @@
   chokepoint with stable codes on `tl.errors.CaptureOutcomeError.fields["code"]`:
   N1 (failed/aborted/unknown exports refuse), N2 (validation ENTRY refusal only
   — tripwire bodies untouched, UNATTESTED enters), N3 (replay/backward), N4
-  (halted runnable save, code `"halted_capture_not_runnable"`), N5
+  (halted runnable save, code `"stopped_capture_unsupported"`), N5
   (halted LIVE-provider replay refuses — loaded-sparse `run()` stays allowed).
   A swallowed halt/nonfinite signal (broad `except:` in user code) raises
   `tl.errors.StopSignalSwallowedError` at the capture boundary and settles
@@ -543,7 +543,7 @@
   session-time witness knob (`FieldPolicy.DROP`; `"payload"` reserved for C1). Typed refusals:
   `ambiguous_group_lifetime` (unprovable pre-arming group lifetime),
   `uncaptured_collective_op` (arm-time recognizer set-inequality or dispatcher schema-scan hit),
-  `wildcard_recv_unsupported`, and `collective_boundary_runnable_unsupported` (runnable save +
+  `wildcard_recv_unsupported`, and `collective_boundary_unsupported` (runnable save +
   forward-replay validation refuse on collective-crossing traces; metadata invariants run in
   full). The pre-join membership-lineage audit over per-rank ledgers lives in
   `torchlens.distributed.verify_membership_lineages` and is run by the C1 merge engine. Arming
@@ -700,9 +700,8 @@
   keys across instances). It is a BRIDGING relation (cross-capture joins on
   position, never proven source identity: per-call-instance cardinality guard
   + source-location witness + corroborated/positional/refused verdict tiers,
-  internal until S2). `Layer.site_key` returns the single shared key or
-  refuses typed `layer_site_ambiguous` (within-call recurrence groups span
-  sites); `Layer.site_peers` indexes same-site layers live; keyless legacy
+  internal until S2). Per-pass keys read as `layer.ops[k].site_key`
+  (within-call recurrence groups span sites); `Layer.site_peers` indexes same-site layers live; keyless legacy
   artifacts refuse `site_key_unavailable`. `Layer.shape_summary` is the
   derived across-pass shape string ("2->4" monotone / "2-4" min-max /
   first->last full shapes; contains `->`, escape at render). The

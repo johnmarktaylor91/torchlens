@@ -17,6 +17,7 @@ import torchlens
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._data_classes import FuncCallLocation
+from torchlens._record_type import record_type
 from torchlens.capture.flops import (
     compute_backward_flops,
     compute_forward_flops,
@@ -274,7 +275,7 @@ def test_label_fields(small_input):
     mh = trace_fn(model, small_input)
     entry = mh[0]
     assert isinstance(entry.layer_label, str)
-    assert isinstance(entry.layer_type, str)
+    assert isinstance(record_type(entry), str)
     assert isinstance(entry.pass_index, int)
     assert isinstance(entry.lookup_keys, list)
     assert len(entry.lookup_keys) > 0

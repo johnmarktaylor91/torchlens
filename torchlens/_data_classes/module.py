@@ -531,14 +531,8 @@ class ModuleCall:
 
     @property
     def num_layers(self) -> int:
-        """Number of distinct Layers among this call's Ops (``num_ops`` counts each pass)."""
+        """Number of distinct Layers among this call's Ops (``len(ops)`` counts each pass)."""
         return len({str(op_label).rsplit(":", 1)[0] for op_label in self.ops})
-
-    @property
-    def num_ops(self) -> int:
-        """Number of Ops in this module call."""
-
-        return len(self.ops)
 
     @property
     def name(self) -> str:
@@ -564,7 +558,7 @@ class ModuleCall:
         return self.forward_args is not None or self.forward_kwargs is not None
 
     @property
-    def had_pre_hook_input_change(self) -> bool | None:
+    def has_pre_hook_input_change(self) -> bool | None:
         """Return whether any user pre-hook changed effective module inputs.
 
         This public name is provisional pending the TorchLens human naming
@@ -574,9 +568,9 @@ class ModuleCall:
         case an empty effects tuple cannot honestly establish ``False``.
         """
 
-        if any(effect.changed is True for effect in self.forward_pre_hook_effects):
+        if any(effect.has_changes is True for effect in self.forward_pre_hook_effects):
             return True
-        if any(effect.changed is None for effect in self.forward_pre_hook_effects):
+        if any(effect.has_changes is None for effect in self.forward_pre_hook_effects):
             return None
         if not self.forward_pre_hook_effects:
             snapshots = (self.inputs_before_pre_hooks, self.inputs_after_pre_hooks)
@@ -1595,11 +1589,6 @@ class Module:
         return len(self.all_addresses) > 1
 
     @property
-    def num_layers(self) -> int:
-        """Number of unique layers in this module."""
-        return len(self.layer_labels)
-
-    @property
     def layers(self) -> list[Any]:
         """Layer records belonging to this Module."""
 
@@ -2150,12 +2139,6 @@ class Module:
                 show_call_index=show_call_index,
                 file=file,
             )
-
-    @property
-    def num_param_tensors(self) -> int:
-        """Number of parameter tensors owned by this Module (the root owns all)."""
-
-        return len(self.params)
 
     @property
     def num_param_tensors_trainable(self) -> int:

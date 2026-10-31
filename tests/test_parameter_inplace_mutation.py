@@ -456,8 +456,8 @@ def test_keyword_receiver_is_captured_like_a_positional_one() -> None:
         assert torch.equal(value, eager_state[key]), key
 
     positional = tl.trace(_KeywordReceiver("positional"), x)
-    assert [layer.layer_type for layer in trace._layer_list] == [
-        layer.layer_type for layer in positional._layer_list
+    assert [layer.type for layer in trace._layer_list] == [
+        layer.type for layer in positional._layer_list
     ]
     assert tl.validate(copy.deepcopy(keyword_model), x, scope="forward") is True
 
@@ -531,7 +531,7 @@ def test_lazy_materialization_is_not_a_parameter_mutation() -> None:
     """Lazy init writes stay out of the graph; an initialized Parameter's write is logged."""
 
     trace = tl.trace(_LazyThenMutate(), torch.randn(3, 4))
-    assert sorted(layer.layer_type for layer in trace._layer_list) == [
+    assert sorted(layer.type for layer in trace._layer_list) == [
         "clamp",
         "input",
         "linear",

@@ -5,7 +5,7 @@ A trace taken once must support training a backbone through ``trace.run``:
 - ``run(until=...)`` runs on BatchNorm models in eval mode (the prefix
   buffer-sink evidence used to compare as ORDERED tuples, and the halted
   refresh discovers its sinks from the stop frontier rather than the output,
-  so equal evidence in a different order refused ``buffer_sink_routing_mutable``).
+  so equal evidence in a different order refused ``buffer_sink_routing_unsupported``).
 - ``backward()`` through a default (``carry_state=False``) run's activations
   works: the declared-state restore used to ``copy_`` every slot back, bumping
   the version counter of parameters and eval-mode running statistics autograd

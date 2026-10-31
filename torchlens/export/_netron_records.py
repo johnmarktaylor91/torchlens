@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .._record_type import record_type
 from ._common import _iter_layers, _repeated_layer_labels
 from ._netron_fields import (
     build_leaf_attrs,
@@ -248,7 +249,7 @@ def value_info_for(entry: Any, name: str) -> NetronValueInfo:
     shape = getattr(entry, "shape", None)
     dims: tuple[Any, ...] | None = None if shape is None else tuple(shape)
     elem_type = onnx_elem_type(getattr(entry, "dtype", None))
-    doc = f"{getattr(entry, 'layer_type', '')} output"
+    doc = f"{record_type(entry, '')} output"
     return NetronValueInfo(name=name, elem_type=elem_type, dims=dims, doc=doc)
 
 
@@ -368,7 +369,7 @@ def project_op(log: Any, show_buffers: str) -> NetronProjection:
         inputs = _visible_inputs(entry, classified, projection)
         node = NetronNode(
             name=node_id,
-            op_type=str(getattr(entry, "layer_type", None) or getattr(entry, "func_name", "")),
+            op_type=str(record_type(entry, None) or getattr(entry, "func_name", "")),
             domain=NETRON_OP_DOMAIN,
             inputs=inputs,
             outputs=[node_id],
@@ -474,8 +475,7 @@ def project_rolled(log: Any, show_buffers: str) -> NetronProjection:
         node = NetronNode(
             name=rolled_id,
             op_type=str(
-                getattr(representative, "layer_type", None)
-                or getattr(representative, "func_name", "")
+                record_type(representative, None) or getattr(representative, "func_name", "")
             ),
             domain=NETRON_OP_DOMAIN,
             inputs=inputs,

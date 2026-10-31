@@ -191,7 +191,7 @@ def test_e1_corpus_via_func_config_values(tmp_path: Path) -> None:
         f"s5_e1_key_{i}": _sentineled(i, member)
         for i, member in enumerate(TRANSFORMABLE_CORPUS + ESCAPE_INVARIANT_CORPUS)
     }
-    target = next(layer for layer in log._layer_list if layer.layer_type == "linear")
+    target = next(layer for layer in log._layer_list if layer.type == "linear")
     target.func_config = {**(target.func_config or {}), **injected}
 
     dot = _render_dot(log, tmp_path)

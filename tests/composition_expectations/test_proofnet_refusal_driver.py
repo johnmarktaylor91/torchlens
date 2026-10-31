@@ -107,7 +107,7 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
     ),
     RefusalRow(
         "RF-halted-runnable-save",
-        "halted_capture_not_runnable",
+        "stopped_capture_unsupported",
         "HALTED",
         lambda: (
             _tl()

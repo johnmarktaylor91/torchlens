@@ -2157,9 +2157,9 @@ def _container_component_role(component: OutputPathComponent) -> str:
     if isinstance(component, TupleIndex):
         return str(component.index)
     if isinstance(component, (DictKey, HFKey)):
-        return str(component.key)
+        return str(component._key)
     if isinstance(component, (NamedField, DataclassField)):
-        return component.name
+        return component._name
     return str(component)
 
 

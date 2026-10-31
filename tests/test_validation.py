@@ -8587,7 +8587,7 @@ def test_corruption_arm_graph_topology_parent_side_reciprocity() -> None:
 
     log = trace_fn(_DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
-        ops = [op for lay in log._layer_list for op in lay.ops]
+        ops = list(log._layer_list)
         parent = next(op for op in ops if len(op.children) >= 2)
         victim = parent.children[0]
         parent.children = tuple(c for c in parent.children if c != victim)
@@ -8602,7 +8602,7 @@ def test_corruption_arm_graph_topology_slot_names_non_parent() -> None:
 
     log = trace_fn(_DiamondFanout(), torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     try:
-        ops = [op for lay in log._layer_list for op in lay.ops]
+        ops = list(log._layer_list)
         relu_op = next(op for op in ops if op.label.startswith("relu"))
         tanh_op = next(op for op in ops if op.label.startswith("tanh"))
         positions = relu_op.parent_arg_positions["args"]

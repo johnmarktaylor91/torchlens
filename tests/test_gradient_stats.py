@@ -96,7 +96,7 @@ def test_aggregate_grad_basic_norms() -> None:
         )
         loss = _mse_loss(trace[trace.output_layers[-1]].out, targets)
         trace.log_backward(loss)
-        grad = next(layer.grad for layer in trace._layer_list if layer.layer_type == "relu")
+        grad = next(layer.grad for layer in trace._layer_list if layer.type == "relu")
         expected_norms.append(float(torch.linalg.vector_norm(grad.reshape(-1)).item()))
         trace.cleanup()
 

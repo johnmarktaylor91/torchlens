@@ -117,7 +117,7 @@ class TraceSlice(_SelectionOperand):
     # Membership --------------------------------------------------------------
 
     @property
-    def source_trace(self) -> Any:
+    def _source_trace(self) -> Any:
         """Return the trace this slice views (the single truth; never copied)."""
 
         return self._trace

@@ -44,6 +44,8 @@ import re
 import string
 from typing import Any
 
+from .._record_type import record_type
+
 _BARCODE_ALPHABET = string.ascii_letters + string.digits
 
 # Dedicated, process-private RNG for internal tensor barcodes. Drawing from a
@@ -169,10 +171,10 @@ def _hashable_path_component(component: Any) -> Any:
     component_type = type(component).__name__
     if component_type == "TupleIndex" and hasattr(component, "index"):
         return {"type": type(component).__name__, "index": component.index}
-    if component_type in {"DictKey", "HFKey"} and hasattr(component, "key"):
-        return {"type": type(component).__name__, "key": repr(component.key)}
-    if component_type in {"NamedField", "DataclassField"} and hasattr(component, "name"):
-        return {"type": type(component).__name__, "name": component.name}
+    if component_type in {"DictKey", "HFKey"} and hasattr(component, "_key"):
+        return {"type": type(component).__name__, "key": repr(component._key)}
+    if component_type in {"NamedField", "DataclassField"} and hasattr(component, "_name"):
+        return {"type": type(component).__name__, "name": component._name}
     return {"type": type(component).__name__, "value": repr(component)}
 
 
@@ -301,7 +303,7 @@ def compute_graph_shape_hash(
         records.append(
             {
                 "index": index,
-                "layer_type": getattr(layer, "layer_type", None),
+                "layer_type": record_type(layer, None),
                 "func_name": str(getattr(layer, "func_name", None)),
                 "parent_indices": parent_indices,
                 "_address_normalized": hash_address,
@@ -336,7 +338,7 @@ def _replacement_layer_fold_target(
     parent's shape and dtype folds.
     """
 
-    if getattr(layer, "layer_type", None) != "interventionreplacement":
+    if record_type(layer, None) != "interventionreplacement":
         return None
     parents = list(getattr(layer, "parents", ()) or ())
     if len(parents) != 1 or parents[0] not in order_by_label:

@@ -1226,6 +1226,8 @@ def _layer_metadata(
         Site identity, axis semantics, dtype, layout, and device per key.
     """
 
+    from .._data_classes._layer_sites import layer_site_key
+    from .._data_classes.layer import Layer
     from ..errors._base import TorchLensError
 
     trimmed: set[str] = run_state.get("trimmed_keys", set())
@@ -1243,7 +1245,11 @@ def _layer_metadata(
             site_key: str | None
             site_key_unavailable: str | None
             try:
-                site_key = str(layer.site_key)
+                # A Layer view reads its single site key (typed refusal on
+                # spanning or keyless layers); an Op view carries its own key.
+                site_key = str(
+                    layer_site_key(layer) if isinstance(layer, Layer) else layer.site_key
+                )
                 site_key_unavailable = None
             except TorchLensError as exc:
                 site_key = None

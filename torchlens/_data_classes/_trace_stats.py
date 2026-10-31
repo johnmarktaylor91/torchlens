@@ -380,7 +380,7 @@ class TraceStatsMixin(_TraceMixinBase):
         result: dict[str, dict[str, int | Flops]] = {}
         rows_by_label = {row.label: row for row in compute_aggregation(self).rows}
         for entry in self._layer_list:
-            lt = entry.layer_type
+            lt = entry.type
             if lt not in result:
                 result[lt] = {"forward": Flops(0), "backward": Flops(0), "count": 0}
             result[lt]["count"] += 1
@@ -550,7 +550,7 @@ class TraceStatsMixin(_TraceMixinBase):
         result: dict[str, dict[str, int | Macs | None]] = {}
         rows_by_label = {row.label: row for row in compute_aggregation(self).rows}
         for entry in self._layer_list:
-            lt = entry.layer_type
+            lt = entry.type
             if lt not in result:
                 result[lt] = {"forward": Macs(0), "backward": None, "count": 0}
             bucket = result[lt]
@@ -1337,7 +1337,7 @@ class TraceStatsMixin(_TraceMixinBase):
         calls: OrderedDict[str, Any] = OrderedDict()
         for grad_fn_handle in self.autograd.grad_fns:
             for call_index, call in grad_fn_handle.calls.items():
-                call.source_trace = self
+                call._source_trace = self
                 calls[f"{grad_fn_handle.label}:{call_index}"] = call
         return TraceGradFnCallAccessor(calls)
 

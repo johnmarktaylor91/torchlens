@@ -338,7 +338,7 @@ def test_to_pandas_exports_conditional_columns() -> None:
         capture=tl.options.CaptureOptions(layers_to_save="all"),
     )
     target_layer = next(
-        layer for layer in trace._layer_list if layer.layer_type not in {"input", "output"}
+        layer for layer in trace._layer_list if layer.type not in {"input", "output"}
     )
     target_layer.func_config = {"alpha": 1}
     target_layer.is_terminal_conditional_bool = True

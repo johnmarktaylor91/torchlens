@@ -14,6 +14,7 @@ import pytest
 import torchlens as tl
 from torchlens._data_classes._compaction import _COMPACTED_TRACES
 from torchlens._postprocess.graph_traversal import _remove_orphan_nodes
+from torchlens._record_type import record_type
 from torchlens.backends.jax.backend import (
     _control_parent_labels,
     _data_parent_arg_positions,
@@ -1119,8 +1120,8 @@ def test_jax_dynamic_while_over_cap_imports_unverified_region() -> None:
         if "jax_capture_kind" in op.annotations
     }
 
-    assert len([op for op in region_ops if op.layer_type == "jax_region"]) == 1
-    assert len([op for op in region_ops if op.layer_type == "jax_region_out"]) == 2
+    assert len([op for op in region_ops if record_type(op) == "jax_region"]) == 1
+    assert len([op for op in region_ops if record_type(op) == "jax_region_out"]) == 2
     assert "while_decision" not in replay_kinds
     assert trace.validate_forward_pass([]).state == "unverified"
 
@@ -1158,8 +1159,8 @@ def test_jax_custom_vjp_forward_imports_unverified_region() -> None:
     )
     region_ops = _jax_region_ops(trace, "custom_vjp_call")
 
-    assert len([op for op in region_ops if op.layer_type == "jax_region"]) == 1
-    assert len([op for op in region_ops if op.layer_type == "jax_region_out"]) == 1
+    assert len([op for op in region_ops if record_type(op) == "jax_region"]) == 1
+    assert len([op for op in region_ops if record_type(op) == "jax_region_out"]) == 1
     assert trace.validate_forward_pass([]).state == "unverified"
 
 
@@ -1177,7 +1178,7 @@ def test_jax_region_boundary_corruption_is_caught() -> None:
         ({}, jnp.ones((5,), dtype=jnp.float32)),
         jax_max_control_flow_unroll=2,
     )
-    boundary = next(op for op in _jax_region_ops(trace, "scan") if op.layer_type == "jax_region")
+    boundary = next(op for op in _jax_region_ops(trace, "scan") if op.type == "jax_region")
     corrupted = (boundary.out[0] + 10.0, *boundary.out[1:])
     boundary._internal_set("out", corrupted)
 

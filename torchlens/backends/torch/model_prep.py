@@ -1931,7 +1931,7 @@ def _make_user_forward_hook_wrapper(
                 # replace that op's own computation. The durable
                 # ``is_edited`` stamp above stays as the
                 # intervened-capture disclosure (runnable save keys its
-                # user_intervention_not_replayable refusal on it), but NO
+                # user_intervention_unsupported refusal on it), but NO
                 # trace-level replacement-event ledger entry is minted here:
                 # that ledger corroboration is what exempts FUNCTIONLESS
                 # ``intervention_replacement`` ops from validation, and a

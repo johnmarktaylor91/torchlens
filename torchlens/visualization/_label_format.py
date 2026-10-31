@@ -7,6 +7,7 @@ from typing import Any, Final
 
 from .._errors import InvalidArgumentError
 from .._quantities import Duration
+from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._utils.display import human_readable_size
 from ..capture.flops import append_attention_note
@@ -454,7 +455,7 @@ def compute_selected_node_lines(
         if field_name in {"label", "name"}:
             rows.append(str(getattr(layer_log, "layer_label", "")))
         elif field_name in {"type", "op", "operation"}:
-            rows.append(str(getattr(layer_log, "func_name", None) or layer_log.layer_type))
+            rows.append(str(getattr(layer_log, "func_name", None) or record_type(layer_log)))
         elif field_name == "shape":
             rows.append(format_shape(layer_log.shape))
         elif field_name == "shape_summary":

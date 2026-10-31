@@ -209,7 +209,7 @@ def test_op_repr_degrades_under_predicate_save() -> None:
     text = repr(trace._layer_list)
     assert text
     unsaved = next(op for op in trace._layer_list if not op.has_saved_activation)
-    unsaved_text = f"{unsaved.ops[0]}"
+    unsaved_text = f"{unsaved}"
     assert "not saved" in unsaved_text
     saved = trace["relu_1_2"]
     assert "not saved" not in f"{saved.ops[0]}"

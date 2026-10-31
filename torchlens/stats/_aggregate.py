@@ -19,6 +19,7 @@ from ..intervention.errors import MultiMatchWarning
 
 __tl_layer__ = "L5"
 
+from .._record_type import record_type
 from ._streaming import (
     StreamingStat,
 )
@@ -275,7 +276,7 @@ def _trace_reference_stream(log: Any) -> tuple[tuple[_StreamEntry, ...], dict[st
                     )
                 else:
                     return None
-            layer_type = op.layer_type
+            layer_type = record_type(op)
             if not isinstance(layer_type, str) or not layer_type:
                 return None
             entries.append((layer_type, tuple(parents)))

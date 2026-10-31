@@ -180,13 +180,13 @@ class RunningStatsResult:
     never claimed exact across merges (D8).
     """
 
-    count_total: int
-    count_finite: int
-    count_zero: int
-    count_negative: int
-    count_nan: int
-    count_posinf: int
-    count_neginf: int
+    numel: int
+    num_finite: int
+    num_zero: int
+    num_negative: int
+    num_nan: int
+    num_posinf: int
+    num_neginf: int
     finite_min: float | None
     finite_max: float | None
     finite_absmax: float | None
@@ -201,13 +201,13 @@ class RunningStatsResult:
         """Return the exact integer count fields as one mapping."""
 
         return {
-            "total": self.count_total,
-            "finite": self.count_finite,
-            "zero": self.count_zero,
-            "negative": self.count_negative,
-            "nan": self.count_nan,
-            "posinf": self.count_posinf,
-            "neginf": self.count_neginf,
+            "total": self.numel,
+            "finite": self.num_finite,
+            "zero": self.num_zero,
+            "negative": self.num_negative,
+            "nan": self.num_nan,
+            "posinf": self.num_posinf,
+            "neginf": self.num_neginf,
         }
 
 
@@ -358,18 +358,18 @@ class RunningStats:
             self._mean += delta * (n_b / total)
             self._m2 += other._m2 + delta * delta * (n_a * n_b / total)
 
-    def result(self) -> RunningStatsResult:
+    def compute(self) -> RunningStatsResult:
         """Return the finalized spine statistics."""
 
         has_finite = self._count_finite > 0
         return RunningStatsResult(
-            count_total=self._count_total,
-            count_finite=self._count_finite,
-            count_zero=self._count_zero,
-            count_negative=self._count_negative,
-            count_nan=self._count_nan,
-            count_posinf=self._count_posinf,
-            count_neginf=self._count_neginf,
+            numel=self._count_total,
+            num_finite=self._count_finite,
+            num_zero=self._count_zero,
+            num_negative=self._count_negative,
+            num_nan=self._count_nan,
+            num_posinf=self._count_posinf,
+            num_neginf=self._count_neginf,
             finite_min=self._finite_min,
             finite_max=self._finite_max,
             finite_absmax=self._finite_absmax,
@@ -680,13 +680,13 @@ def spine_result_from_vector(vector: torch.Tensor, reduction_dtype: str) -> Runn
     n_finite = int(cells[_SLOT_FINITE])
     has_finite = n_finite > 0
     return RunningStatsResult(
-        count_total=int(cells[_SLOT_TOTAL]),
-        count_finite=n_finite,
-        count_zero=int(cells[_SLOT_ZERO]),
-        count_negative=int(cells[_SLOT_NEG]),
-        count_nan=int(cells[_SLOT_NAN]),
-        count_posinf=int(cells[_SLOT_POSINF]),
-        count_neginf=int(cells[_SLOT_NEGINF]),
+        numel=int(cells[_SLOT_TOTAL]),
+        num_finite=n_finite,
+        num_zero=int(cells[_SLOT_ZERO]),
+        num_negative=int(cells[_SLOT_NEG]),
+        num_nan=int(cells[_SLOT_NAN]),
+        num_posinf=int(cells[_SLOT_POSINF]),
+        num_neginf=int(cells[_SLOT_NEGINF]),
         finite_min=cells[_SLOT_MIN] if has_finite else None,
         finite_max=cells[_SLOT_MAX] if has_finite else None,
         finite_absmax=cells[_SLOT_ABSMAX] if has_finite else None,

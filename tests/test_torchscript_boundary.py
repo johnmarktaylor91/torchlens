@@ -20,6 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._errors import CaptureGapWarning
+from torchlens._record_type import record_type
 from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.backends.torch._script_boundary import (
     SCRIPT_FUNCTION_FUNC_NAME,
@@ -205,9 +206,9 @@ def test_scripted_helper_is_one_boundary_op_and_validates() -> None:
     assert op.transform_config["source"].startswith(__file__)
     assert op.transform_fn_qualname == "scripted_gate"
     assert is_script_function_recorder(op.func)
-    assert [trace[label].layer_type for label in op.parents] == ["linear"]
-    assert [trace[label].layer_type for label in op.children] == ["relu"]
-    assert not any(other.layer_type in {"sin", "ge", "__ge__"} for other in trace._layer_list)
+    assert [record_type(trace[label]) for label in op.parents] == ["linear"]
+    assert [record_type(trace[label]) for label in op.children] == ["relu"]
+    assert not any(other.type in {"sin", "ge", "__ge__"} for other in trace._layer_list)
     torch.testing.assert_close(op.out, scripted_gate(model.fc(x), 0.1))
     _assert_validates_clean(model, x)
 
@@ -259,7 +260,7 @@ def test_scripted_helper_inside_an_autograd_function() -> None:
     trace = _trace_with_disclosure(model, x)
 
     (op,) = _boundary_ops(trace)
-    assert [trace[label].layer_type for label in op.parents] == ["linear"]
+    assert [record_type(trace[label]) for label in op.parents] == ["linear"]
     assert not any(other.func_name == "autogradfunction" for other in trace._layer_list)
     _assert_validates_clean(model, x)
 
@@ -290,7 +291,7 @@ def test_pytorch_jit_disabled_gives_the_op_by_op_graph() -> None:
         warnings.simplefilter("error", TorchLensWarning)
         trace = tl.trace(model, x)
     assert _boundary_ops(trace) == []
-    assert "sin" in {op.layer_type for op in trace._layer_list}
+    assert "sin" in {op.type for op in trace._layer_list}
     _assert_validates_clean(model, x)
 
 

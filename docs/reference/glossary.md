@@ -1142,7 +1142,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
   never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`). Through
   `run(inputs=..., fast=True)` a run that applies staged edits reports `unverifiable`, never
-  `verified` (diagnostic `user_intervention_not_replayable`, stage `hooked_run_unverified`):
+  `verified` (diagnostic `user_intervention_unsupported`, stage `hooked_run_unverified`):
   it is an edited forward, and no hook-aware check exists yet. Output leaves (the model's and each saved module's) are paired
   with the captured output ops by container path through capture's own output walker, so a
   stock Hugging Face forward returning a `DynamicCache` of per-layer key/value tensors reruns
@@ -1380,6 +1380,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Module and call counts**
 : `len(ModuleCall.ops)` counts the call's pass-qualified Ops (the root call included: a Layer it
   runs twice counts twice) and `ModuleCall.num_layers` the distinct Layers among them.
+  `len(Module.layer_labels)` counts a Module's distinct Layers and `len(Module.params)` the
+  parameter tensors it owns.
   `Trace.num_buffer_layers` counts distinct buffer Layers, not their passes. `Param.num_calls` is
   the number of Ops that consumed the parameter (0 for a never-called module's parameters).
   `Trace.num_uncalled_modules` is recorded when the capture finishes, so it survives the source
@@ -1618,15 +1620,6 @@ shims, by declared contract. Each carries the same tag at its definition.
   SAME program, never a program diff. The `"s1"` prefix makes any future
   re-keying a visible schema event. Persists as of tlspec v8 with
   byte-exact recomputation at load; older artifacts are wholly keyless.
-
-**Layer.site_key** — *unstable — no deprecation shim owed*
-: The layer's single site key iff every op in the layer shares exactly one.
-  A site-SPANNING layer (a loop inside one module call, including
-  root-context loops) refuses typed
-  `layer_site_ambiguous` — read per-pass keys via `.ops[k].site_key`.
-  Site-uniformity and pass-uniformity are DIFFERENT axes: a reused-module
-  multi-pass layer has one key. Legacy pre-site-key artifacts refuse typed
-  `site_key_unavailable`, never a `None` read.
 
 **Layer.site_peers** — *unstable — no deprecation shim owed*
 : Layers sharing any of this layer's site keys within the trace (the
@@ -2503,15 +2496,15 @@ shim owed*
   `flops_by_op()` sums rows per forward op. `None` when the pass has no
   census on this object; a pass that raised has `executed_flops` `None`.
 
-**BackwardPass.executed_flops_record** — *unstable — no deprecation shim owed*
+**Persisted backward FLOPs record (`BackwardPass`)** — *unstable — no deprecation shim owed*
 : The pass's counted executed backward and its attribution as a closed
   record (`convention`, `executed_flops`, `uncounted_ops`, `rows`,
   `unattributed`; ints, `None` and short strings only), written when the
-  trace is saved (tlspec v10) so a loaded trace reads the counted answer
-  through `flops_attribution` and `tl.report.backward_status`. `None` on a
-  live pass and on artifacts saved before the field, which read unknown
-  (record keyword `executed_flops_record=`). A
-  malformed record refuses at load with
+  trace is saved so a loaded trace reads the counted answer through
+  `flops_attribution` and `tl.report.backward_status`. The record is the
+  private persisted field `_executed_flops_record` (stored key
+  `_executed_flops_record` as of tlspec v11), not a public read; it is `None`
+  on a live pass. A malformed record refuses at load with
   `artifact_executed_flops_record_invalid`.
 
 **BackwardStatus.flops_attributions / unattributed_flops / recompute_flops** — *unstable — no deprecation shim owed*
@@ -3148,14 +3141,15 @@ describe each surface in depth.
 | `ReadRow.is_frozen_resolved` | field of `ReadRow` |
 | `ReadRow.is_rescorable` | ``False`` on loaded tables (the runtime registry is not serialized) |
 | `ReadTable.is_rescorable` | Whether the table can be re-scored against its live trace |
+| `RunningStats.compute` | Return the finalized spine statistics (`RunningStatsResult`) |
 | `RunningStats.merge` | Fold another spine into this one |
-| `RunningStatsResult.count_finite` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_nan` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_negative` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_neginf` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_posinf` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_total` | field of `RunningStatsResult` |
-| `RunningStatsResult.count_zero` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_finite` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_nan` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_negative` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_neginf` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_posinf` | field of `RunningStatsResult` |
+| `RunningStatsResult.numel` | field of `RunningStatsResult` |
+| `RunningStatsResult.num_zero` | field of `RunningStatsResult` |
 | `RunningStatsResult.finite_absmax` | field of `RunningStatsResult` |
 | `RunningStatsResult.finite_max` | field of `RunningStatsResult` |
 | `RunningStatsResult.finite_min` | field of `RunningStatsResult` |
@@ -3512,11 +3506,15 @@ The sections above describe each surface in depth.
 | `MergedFinding.from_dict` | Rebuild a finding from `to_payload` output |
 | `MergedTrace.at` | Return the SPMD fan: the ops matching `label` on every rank |
 | `MergedTrace.degradations` | Environment degradations recorded at load (empty on a live merge) |
+| `ModuleCall.has_pre_hook_input_change` | Whether a user forward pre-hook changed the call's effective inputs (`None` when evidence is incomplete) |
+| `ModuleInputSnapshot.is_capture_complete` | Whether all supported mutation evidence was available for the snapshot |
 | `ModuleCall.parent_label` | Label of the parent ModuleCall in the dynamic call tree |
 | `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
 | `Op.edits` | The FireRecords of every edit that fired at this op, in fire order (was `interventions`) |
 | `Op.is_edited` | Whether a user edit replaced this op's output |
+| `Op.type` | The op's normalized operation type token (for example `"linear"`); `Layer.layer_type` is the Layer's spelling |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
+| `PreHookEffect.has_changes` | `True`/`False` when the pre-hook's mutation evidence is complete, otherwise `None` |
 | `PreprocessingComparison.applied_source` | How the applied side was obtained: `"resolution"` / `"declaration"` / `"parsed_transform"` / `"undeclared"` / `"opaque_transform"` |
 | `PreprocessingComparison.authority_status` | The authority's standing (`authoritative` / `unverified_fallback` / `unknown`); a non-authoritative reference caps the verdict below `verified` |
 | `PreprocessingComparison.mismatched_fields` | Names of every mismatched field, in field order |
@@ -3563,6 +3561,8 @@ The sections above describe each surface in depth.
 | `Super.absent_names` | Return bundle member names not represented by this view |
 | `Super.is_complete` | Return whether every bundle member is represented |
 | `Trace.input` | The original user input before `input_transform` was applied (was `raw_input`) |
+| `TensorInputObservation.mutation_version` | Captured PyTorch version counter of the input tensor (diagnostic, not portable) |
+| `TensorInputObservation.python_object_id` | In-process Python object identity of the input tensor (diagnostic, not portable) |
 | `Trace.is_replayable` | Whether the capture kept what replay and edits need (set by `replayable=True`) |
 | `Trace.is_stopped` | Whether the capture stopped early (`until=`/`stop_after=`); a stopped trace is partial (was `halted`) |
 | `Trace.random_seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
@@ -3661,7 +3661,7 @@ Members of classes whose public home changed, one entry per class.
 : One immutable narration record. `NarrationEvent.extra_labels`: extra (key, value) labels; `NarrationEvent.late`: ordinal distance disclosed on a buffered release; `NarrationEvent.module_depth`: nesting depth of the module; `NarrationEvent.module_type`: class name of the module, or `None`; `NarrationEvent.ordinal`: position of the event in the narration; `NarrationEvent.output_index`: index of the output, or `None`; `NarrationEvent.source_location`: the source location, or `None`; `NarrationEvent.step_index`: the step index, or `None`.
 
 **`tl.types.TraceSlice`**
-: Frozen presenter over one trace's executed sub-DAG. `TraceSlice.as_region`: derive an admissible region that is operated on as one unit; `TraceSlice.source_trace`: the trace this slice views (never copied).
+: Frozen presenter over one trace's executed sub-DAG. `TraceSlice.as_region`: derive an admissible region that is operated on as one unit; the slice views its trace without copying it.
 
 **`tl.transformer.Annotation`**
 : One typed annotation attached to an attention picture. `Annotation.legend`: the kind legend line.

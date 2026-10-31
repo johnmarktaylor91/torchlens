@@ -39,6 +39,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 from torchlens.errors import BufferSinkRoutingError
 from torchlens.options import CaptureOptions
 from torchlens.types import AttributeWrite
@@ -364,7 +365,7 @@ def test_d18_still_refuses_unproven_train_mode_evidence():
     log = tl.trace(model, torch.randn(2, 3, 8, 8))
     for label in log.internal_sink_ops:
         layer = log._layer_dict_all_keys[label]
-        if layer.layer_type == "buffer":
+        if record_type(layer) == "buffer":
             layer._internal_set("buffer_value_changed", None)
     with pytest.raises(BufferSinkRoutingError, match="unproven"):
         log.run(inputs=torch.randn(2, 3, 8, 8))

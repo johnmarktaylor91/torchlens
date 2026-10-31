@@ -236,7 +236,7 @@ def test_rebindable_stale_reference_captures_in_one_forward(
 
     assert forward_runs(trace, model) == 1
     assert "gelu" in [op.func_name for op in trace.ops]
-    assert "internalsource" not in [layer.layer_type for layer in trace._layer_list]
+    assert "internalsource" not in [layer.type for layer in trace._layer_list]
     assert trace._rescue_rerun is None
     assert trace.capture_verified is not False
 
@@ -256,7 +256,7 @@ def test_unrebindable_stale_reference_is_disclosed_and_rescued(
     # pre-capture attributes, so the record holds ONE forward's write.
     assert forward_runs(trace, model) == 1
     assert "gelu" in [op.func_name for op in trace.ops]
-    assert "internalsource" not in [layer.layer_type for layer in trace._layer_list]
+    assert "internalsource" not in [layer.type for layer in trace._layer_list]
     assert trace._rescue_rerun is not None and trace._rescue_rerun["recovered"] is True
     assert trace._rescue_rerun["forward_runs"] == 2
     assert trace.capture_verified is False

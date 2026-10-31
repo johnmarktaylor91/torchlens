@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
+from ..._record_type import record_type
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -141,7 +142,7 @@ def _token_predicate(token: str) -> Callable[[Any], bool]:
     """Return the membership predicate for one closed token."""
 
     if token == "reshapes":
-        return lambda layer: str(getattr(layer, "layer_type", "")) in _RESHAPE_FAMILY
+        return lambda layer: str(record_type(layer, "")) in _RESHAPE_FAMILY
     if token == "constants":
         return lambda layer: (
             bool(getattr(layer, "is_internally_initialized", False))

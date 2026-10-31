@@ -29,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .._record_type import record_type
 from ._errors import SinkProtocolError
 
 __tl_layer__ = "L8"
@@ -159,7 +160,7 @@ def build_graph_ir(trace: Any, *, include_timing: bool = True) -> GraphIR:
         nodes.append(
             GraphNodeIR(
                 name=names[label],
-                op=str(getattr(layer, "func_name", "") or getattr(layer, "layer_type", "op")),
+                op=str(getattr(layer, "func_name", "") or record_type(layer, "op")),
                 inputs=tuple(
                     names[str(parent)]
                     for parent in (getattr(layer, "parents", ()) or ())

@@ -982,7 +982,7 @@ class HistoryCollector:
                 sketch = histogram_result_from_vector(self._block_sketches[key], self.descriptor)
             site = self._sites_by_id[site_id]
             numel = site.numel or 0
-            estimated = stream == "param_delta" and numel > spine.count_total
+            estimated = stream == "param_delta" and numel > spine.numel
             observations.append(
                 ObservationRecord(
                     global_step=step,
@@ -994,7 +994,7 @@ class HistoryCollector:
                     sketch=sketch,
                     grad_scale=self._block_grad_scale.get(key),
                     estimated=estimated,
-                    sample_size=spine.count_total if stream == "param_delta" else None,
+                    sample_size=spine.numel if stream == "param_delta" else None,
                 )
             )
         committed = CommittedBlock(

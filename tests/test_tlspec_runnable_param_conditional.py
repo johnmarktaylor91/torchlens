@@ -118,7 +118,7 @@ def test_sparse_core_tensor_tripwire_still_fires() -> None:
     # A stray tensor in an ordinary field.
     with pytest.raises(SparseCorePayloadError, match="Sparse core tensor payload") as caught:
         assert_sparse_core_has_no_tensor_payload({"field": {"nested": torch.randn(3)}})
-    assert caught.value.fields["code"] == "sparse_core_tensor_payload"
+    assert caught.value.fields["code"] == "sparse_core_payload_invalid"
     assert caught.value.fields["payload_path"] == "field.nested"
     assert isinstance(caught.value, AssertionError)
 

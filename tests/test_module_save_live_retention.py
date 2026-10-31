@@ -172,7 +172,7 @@ def test_module_save_copies_only_ops_inside_matching_passes(
     expected |= {
         op.layer_label
         for op in full_log._layer_list
-        if op.layer_type == "output" and any(parent in expected for parent in op.parents)
+        if op.type == "output" and any(parent in expected for parent in op.parents)
     }
 
     with _counting(monkeypatch) as counts:

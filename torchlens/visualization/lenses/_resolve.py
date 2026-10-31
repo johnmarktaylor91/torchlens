@@ -30,6 +30,7 @@ from dataclasses import dataclass, field as dataclass_field
 from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
+from ..._record_type import record_type
 from ...errors._base import TorchLensWarning
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
 from ._budget import BudgetResolution, resolve_budget
@@ -159,7 +160,7 @@ def _has_attention_subject(trace: Trace) -> bool:
     if _module_facets_say_attention(trace):
         return True
     for op in trace._layer_list:
-        if str(getattr(op, "layer_type", "")) in _ATTENTION_OP_TYPES:
+        if str(record_type(op, "")) in _ATTENTION_OP_TYPES:
             return True
         for address in getattr(op, "modules", ()) or ():
             tail = str(address).split(":", 1)[0].rsplit(".", 1)[-1].lower()
@@ -324,7 +325,7 @@ def _attention_role_spec_fn() -> Any:
     def _apply(layer: Any, spec: Any) -> Any:
         """Append the observed attention-role row for recognized layers."""
 
-        layer_type = str(getattr(layer, "layer_type", ""))
+        layer_type = str(record_type(layer, ""))
         if layer_type in _ATTENTION_OP_TYPES:
             spec.lines.append("attention: scaled dot-product (observed)")
             return spec

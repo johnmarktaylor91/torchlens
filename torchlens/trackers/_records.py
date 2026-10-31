@@ -248,19 +248,19 @@ class TagGrammar:
 def running_stats_scalars(running_stats: RunningStatsResult) -> dict[str, float]:
     """Derive the portable scalar statistics from one spine record.
 
-    ``std`` comes from the stable Chan moments (``m2 / count_finite``);
+    ``std`` comes from the stable Chan moments (``m2 / num_finite``);
     ``norm`` is the L2 norm from ``sum_squares``. Absent floats (empty
     finite population) are simply omitted -- missing is never zero (D6).
     """
 
-    out: dict[str, float] = {"count": float(running_stats.count_finite)}
-    if running_stats.count_finite > 0:
-        total = float(running_stats.count_total)
-        out["zero_fraction"] = running_stats.count_zero / total if total else 0.0
+    out: dict[str, float] = {"count": float(running_stats.num_finite)}
+    if running_stats.num_finite > 0:
+        total = float(running_stats.numel)
+        out["zero_fraction"] = running_stats.num_zero / total if total else 0.0
         if running_stats.mean is not None:
             out["mean"] = running_stats.mean
-        if running_stats.m2 is not None and running_stats.count_finite > 1:
-            out["std"] = math.sqrt(max(running_stats.m2, 0.0) / running_stats.count_finite)
+        if running_stats.m2 is not None and running_stats.num_finite > 1:
+            out["std"] = math.sqrt(max(running_stats.m2, 0.0) / running_stats.num_finite)
         if running_stats.sum_squares is not None:
             out["norm"] = math.sqrt(max(running_stats.sum_squares, 0.0))
         if running_stats.finite_min is not None:
@@ -274,9 +274,9 @@ def nonfinite_scalars(spine: RunningStatsResult) -> dict[str, float]:
     """The nonfinite-family series: NaN / +-inf counts, exact integers."""
 
     return {
-        "nan": float(spine.count_nan),
-        "posinf": float(spine.count_posinf),
-        "neginf": float(spine.count_neginf),
+        "nan": float(spine.num_nan),
+        "posinf": float(spine.num_posinf),
+        "neginf": float(spine.num_neginf),
     }
 
 
@@ -308,7 +308,7 @@ def histogram_points(sketch: HistogramResult) -> tuple[tuple[int, ...], tuple[fl
 def _histogram_summary(spine: RunningStatsResult) -> dict[str, float]:
     """The TB histogram-proto summary fields, from the paired spine."""
 
-    summary: dict[str, float] = {"num": float(spine.count_finite)}
+    summary: dict[str, float] = {"num": float(spine.num_finite)}
     if spine.finite_min is not None:
         summary["min"] = spine.finite_min
     if spine.finite_max is not None:

@@ -14,6 +14,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._postprocess.graph_traversal import output_payload_aliases_parent
+from torchlens._record_type import record_type
 from torchlens.validation import check_metadata_invariants
 
 # =============================================================================
@@ -239,7 +240,7 @@ def test_save_new_outs_resnet_rejects_buffer_sink_refresh() -> None:
     log = trace_fn(model, x, capture=tl.options.CaptureOptions(seed=42))
     try:
         assert any(
-            log._layer_dict_all_keys[label].layer_type == "buffer"
+            record_type(log._layer_dict_all_keys[label]) == "buffer"
             for label in log.internal_sink_ops
         )
         x2 = torch.randn(1, 3, 224, 224)
@@ -249,7 +250,7 @@ def test_save_new_outs_resnet_rejects_buffer_sink_refresh() -> None:
             fresh_by_label = {layer.layer_label: layer for layer in fresh._layer_list}
             compared = 0
             for layer in log._layer_list:
-                if layer.layer_type != "batchnorm" or layer.out is None:
+                if layer.type != "batchnorm" or layer.out is None:
                     continue
                 fresh_out = fresh_by_label[layer.layer_label].out
                 assert torch.allclose(layer.out, fresh_out, rtol=1e-4, atol=1e-5)
@@ -570,8 +571,8 @@ class TestGraphConsistencyValidation:
         try:
             log.save_new_outs(model, x2)
             fresh_log = trace_fn(model, x2, capture=tl.options.CaptureOptions(save_args=True))
-            refreshed_sub = next(op for op in log._layer_list if op.layer_type == "sub")
-            fresh_sub = next(op for op in fresh_log._layer_list if op.layer_type == "sub")
+            refreshed_sub = next(op for op in log._layer_list if op.type == "sub")
+            fresh_sub = next(op for op in fresh_log._layer_list if op.type == "sub")
             assert refreshed_sub.parents == fresh_sub.parents
             assert refreshed_sub.parent_arg_positions == fresh_sub.parent_arg_positions
             assert refreshed_sub.out is not None
@@ -591,7 +592,7 @@ class TestGraphConsistencyValidation:
 # contradiction belt, the refreshed rerun's own journal as the O1 write
 # tripwire, and target-vs-refreshed evidence equality as the O2 widening.
 # Every refusal is the TYPED BufferSinkRoutingError carrying the frozen
-# ``buffer_sink_routing_mutable`` code and the pinned "computational graph
+# ``buffer_sink_routing_unsupported`` code and the pinned "computational graph
 # changed" message term.
 #
 # O3 (honesty rule): the train-mode refusal tests below are PINNED FOREVER --
@@ -629,7 +630,7 @@ def _buffer_sinks(log):
     return [
         log._layer_dict_all_keys[label]
         for label in log.internal_sink_ops
-        if log._layer_dict_all_keys[label].layer_type == "buffer"
+        if record_type(log._layer_dict_all_keys[label]) == "buffer"
     ]
 
 
@@ -666,8 +667,8 @@ def test_eval_mode_batchnorm_refresh_allowed_default_path():
         log.save_new_outs(model, x2, seed=1)
         fresh = trace_fn(model, x2, capture=tl.options.CaptureOptions(seed=1))
         try:
-            refreshed_bn = next(op for op in log._layer_list if op.layer_type == "batchnorm")
-            fresh_bn = next(op for op in fresh._layer_list if op.layer_type == "batchnorm")
+            refreshed_bn = next(op for op in log._layer_list if op.type == "batchnorm")
+            fresh_bn = next(op for op in fresh._layer_list if op.type == "batchnorm")
             assert torch.allclose(refreshed_bn.out, fresh_bn.out)
         finally:
             fresh.cleanup()

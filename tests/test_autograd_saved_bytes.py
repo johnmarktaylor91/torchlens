@@ -64,11 +64,7 @@ def _log_sequential(requires_grad: bool = True) -> Trace:
 
 def _non_source_ops(trace: Trace) -> list[Op]:
     """Return operation logs, excluding synthetic source and output nodes."""
-    return [
-        layer
-        for layer in trace._layer_list
-        if layer.layer_type not in {"input", "buffer", "output"}
-    ]
+    return [layer for layer in trace._layer_list if layer.type not in {"input", "buffer", "output"}]
 
 
 def _single_layer_log_for_pass(trace: Trace, pass_log: Op) -> Layer:
@@ -92,8 +88,8 @@ def test_autograd_memory_basic_shape_model() -> None:
     """Linear and ReLU ops should report autograd saved tensor memory."""
     trace = _log_sequential(requires_grad=True)
 
-    linear_ops = [layer for layer in trace._layer_list if layer.layer_type == "linear"]
-    relu_ops = [layer for layer in trace._layer_list if layer.layer_type == "relu"]
+    linear_ops = [layer for layer in trace._layer_list if layer.type == "linear"]
+    relu_ops = [layer for layer in trace._layer_list if layer.type == "relu"]
 
     assert linear_ops
     assert relu_ops
@@ -113,7 +109,7 @@ def test_add_op_reports_zero_autograd_memory() -> None:
     x = torch.ones(2, 3, requires_grad=True)
     y = torch.ones(2, 3, requires_grad=True)
     trace = tl.trace(model, (x, y), capture=tl.options.CaptureOptions(layers_to_save="all"))
-    add_pass = next(layer for layer in trace._layer_list if layer.layer_type == "add")
+    add_pass = next(layer for layer in trace._layer_list if layer.type == "add")
 
     assert add_pass.grad_fn_object_id is not None
     assert add_pass.autograd_memory == 0

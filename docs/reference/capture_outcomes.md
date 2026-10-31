@@ -103,7 +103,7 @@ Enforced through the ONE chokepoint
 |---|---|---|---|---|---|
 | validation entry (N2) | allow | allow (halted output block skipped, as always) | refuse N2 | **allow** — the tripwire stays armed | refuse N2 |
 | `Trace.save` analysis (N1) | allow | allow | refuse N1 | allow (no upgrade) | refuse N1 |
-| `trace.save(path, level="runnable")` (N4) | allow | refuse N4 (runnable vocabulary: `halted_capture_not_runnable`) | refuse N1 | allow-scoped (existing preflights gate) | refuse N1 |
+| `trace.save(path, level="runnable")` (N4) | allow | refuse N4 (runnable vocabulary: `stopped_capture_unsupported`) | refuse N1 | allow-scoped (existing preflights gate) | refuse N1 |
 | live replay: refresh / `save_new_outs` / push / replay / rerun / live `run()` / `fast=True` (N5/N3) | allow | refuse N5 | refuse N3 | allow | refuse N3 |
 | loaded-sparse `run()` | allow | **allow** — executes exactly the recorded prefix DAG | refuse N3 | allow | refuse N3 |
 | `log_backward` / `backward` / `capture_backward` (N3) | allow | allow — the autograd graph IS the captured prefix | refuse N3 | allow | refuse N3 |

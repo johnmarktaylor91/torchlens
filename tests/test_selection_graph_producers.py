@@ -437,7 +437,7 @@ def test_slice_save_refuses_typed(log, tmp_path) -> None:
     with pytest.raises(SelectionError) as excinfo:
         _save_bundle(view, str(tmp_path / "slice_bundle"))
     assert excinfo.value.fields["code"] == "slice_save_unsupported"
-    assert "source_trace" in str(excinfo.value)
+    assert "trace.save(path)" in str(excinfo.value)
 
 
 def test_slice_lifts_back_into_the_algebra(log, loopy_log) -> None:

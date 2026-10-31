@@ -377,7 +377,7 @@ class GradFn:
             self.calls._label = self.label
         for call in self.calls.values():
             call.label = self.label
-            call.source_trace = self.trace
+            call._source_trace = self.trace
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with weakrefs stripped and an IO format marker.
@@ -497,7 +497,7 @@ class GradFn:
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
         for call in self.calls.values():
-            call.source_trace = value
+            call._source_trace = value
 
     @property
     def op(self) -> Layer | None:

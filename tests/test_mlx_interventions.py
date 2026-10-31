@@ -71,7 +71,7 @@ def test_mlx_zero_ablate_substitutes_downstream_and_validates() -> None:
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
     )
 
-    relu_op = next(op for op in ablated._layer_list if op.layer_type == "relu")
+    relu_op = next(op for op in ablated._layer_list if op.type == "relu")
     assert relu_op.is_edited is True
     assert np.allclose(np.asarray(relu_op.out), 0.0)
 
@@ -83,9 +83,7 @@ def test_mlx_zero_ablate_substitutes_downstream_and_validates() -> None:
     assert np.allclose(final_ablated, bias, atol=1e-5)
     assert not np.allclose(final_ablated, final_baseline)
 
-    non_intervened = [
-        op for op in ablated._layer_list if op.layer_type != "relu" and not op.is_input
-    ]
+    non_intervened = [op for op in ablated._layer_list if op.type != "relu" and not op.is_input]
     assert all(not op.is_edited for op in non_intervened)
 
     assert MLXBackend().validate_trace(ablated) is True
@@ -97,12 +95,10 @@ def test_mlx_scale_and_callable_transform_apply() -> None:
     model = _TwoLayerMLP()
     x = _input()
     baseline = tl.trace(model, x, backend="mlx")
-    relu_baseline = np.asarray(
-        next(op for op in baseline._layer_list if op.layer_type == "relu").out
-    )
+    relu_baseline = np.asarray(next(op for op in baseline._layer_list if op.type == "relu").out)
 
     scaled = tl.trace(model, x, backend="mlx", intervene=tl.when(tl.func("relu"), tl.scale(0.5)))
-    relu_scaled = np.asarray(next(op for op in scaled._layer_list if op.layer_type == "relu").out)
+    relu_scaled = np.asarray(next(op for op in scaled._layer_list if op.type == "relu").out)
     assert np.allclose(relu_scaled, relu_baseline * 0.5, atol=1e-5)
     assert MLXBackend().validate_trace(scaled) is True
 
@@ -113,7 +109,7 @@ def test_mlx_scale_and_callable_transform_apply() -> None:
         return out * -1.0
 
     negated = tl.trace(model, x, backend="mlx", intervene=tl.when(tl.func("relu"), _negate))
-    relu_negated = np.asarray(next(op for op in negated._layer_list if op.layer_type == "relu").out)
+    relu_negated = np.asarray(next(op for op in negated._layer_list if op.type == "relu").out)
     assert np.allclose(relu_negated, -relu_baseline, atol=1e-5)
     assert MLXBackend().validate_trace(negated) is True
 
@@ -307,9 +303,9 @@ def test_mlx_in_module_intervention_site() -> None:
         backend="mlx",
         intervene=tl.when(tl.in_module("encoder") & tl.func("linear"), tl.zero_ablate()),
     )
-    encoder_op = next(op for op in trace._layer_list if op.layer_type == "linear")
+    encoder_op = next(op for op in trace._layer_list if op.type == "linear")
     assert encoder_op.is_edited is True
     assert np.allclose(np.asarray(encoder_op.out), 0.0)
-    head_ops = [op for op in trace._layer_list if op.layer_type == "linear"]
+    head_ops = [op for op in trace._layer_list if op.type == "linear"]
     assert not head_ops[-1].is_edited
     assert MLXBackend().validate_trace(trace) is True

@@ -526,7 +526,7 @@ def test_intervention_ready_composes_with_deferred_selective_grads() -> None:
         ),
     )
     trace[trace.output_layers[0]].out.sum().backward()
-    assert {op.layer_type for op in trace._layer_list if op.has_grad} == {"relu"}
+    assert {op.type for op in trace._layer_list if op.has_grad} == {"relu"}
 
 
 def test_splice_module_device_error_raised_for_device_mismatch() -> None:

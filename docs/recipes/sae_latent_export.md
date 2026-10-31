@@ -101,7 +101,7 @@ first, then the lowest example, then the lowest position):
 # recipe-test: tool=torchlens expected=(True, True)
 from safetensors.numpy import load_file
 
-relu = next(op.layer_label for op in tl.trace(model, tokens[:1]).ops if op.layer_type == "relu")
+relu = next(op.layer_label for op in tl.trace(model, tokens[:1]).ops if op.type == "relu")
 stat = tl.stats.TopK(k=3, unit_axis=-1, encoder=sae.encode, name="latents")
 batches = [tokens[0:3], tokens[3:6], tokens[6:8]]
 top = tl.stats.aggregate(model, batches, metrics={relu: tl.stats.Aggregator(stat)})[relu]["latents"]

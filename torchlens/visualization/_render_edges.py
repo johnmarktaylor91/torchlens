@@ -2,6 +2,7 @@
 
 # ruff: noqa: F403, F405
 
+from .._record_type import record_type
 from ._buffer_visibility import (
     _buffer_name_segment,
     _is_buffer_visible,
@@ -1642,7 +1643,7 @@ def _should_mark_arguments_on_edge(
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     # Commutative ops: argument order doesn't matter, skip labels.
-    if child_node.layer_type in COMMUTE_FUNCS:
+    if record_type(child_node) in COMMUTE_FUNCS:
         return False
 
     return _visible_parent_count(self, child_node, show_buffer_layers, rolled_maps) > 1

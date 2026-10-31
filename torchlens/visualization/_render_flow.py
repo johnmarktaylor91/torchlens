@@ -1436,13 +1436,13 @@ def _arg_path_key(arg_path: Iterable[Any]) -> tuple[Any, ...]:
         if isinstance(component, TupleIndex):
             key.append(("tuple", component.index))
         elif isinstance(component, DictKey):
-            key.append(("dict", component.key))
+            key.append(("dict", component._key))
         elif isinstance(component, NamedField):
-            key.append(("field", component.name))
+            key.append(("field", component._name))
         elif isinstance(component, HFKey):
-            key.append(("hf", component.key))
+            key.append(("hf", component._key))
         elif isinstance(component, DataclassField):
-            key.append(("dataclass", component.name))
+            key.append(("dataclass", component._name))
         elif isinstance(component, OutputPathComponent):
             key.append((component.__class__.__name__, repr(component)))
         else:
@@ -1469,13 +1469,13 @@ def _arg_path_label_value(arg_path: Iterable[Any]) -> str:
         if isinstance(component, TupleIndex):
             values.append(component.index)
         elif isinstance(component, DictKey):
-            values.append(component.key)
+            values.append(component._key)
         elif isinstance(component, NamedField):
-            values.append(component.name)
+            values.append(component._name)
         elif isinstance(component, HFKey):
-            values.append(component.key)
+            values.append(component._key)
         elif isinstance(component, DataclassField):
-            values.append(component.name)
+            values.append(component._name)
         else:
             values.append(component)
     if len(values) == 1:

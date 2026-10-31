@@ -328,10 +328,10 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "ContainerSpec.aux_data": R_JOURNAL,
     "ContainerSpec.lossy_reconstruction": "F",
     # ---- container path keys (reachable via ContainerSpec) ------------------
-    "DataclassField.name": "F",
-    "DictKey.key": "F",
-    "HFKey.key": "F",
-    "NamedField.name": "F",
+    "DataclassField._name": "F",
+    "DictKey._key": "F",
+    "HFKey._key": "F",
+    "NamedField._name": "F",
     "TupleIndex.index": "F",
     # ---- BlobRef -----------------------------------------------------------
     "BlobRef.uri": "F",

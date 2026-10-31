@@ -353,7 +353,7 @@ def test_r71b_semantic_slice_component_refuses_typed_at_save(name: str, tmp_path
     with pytest.raises(RunnablePreflightError) as excinfo:
         _b_save(_b_capture(_SliceInput(), [x, slice(0, value)]), tmp_path / f"b_{name}.tlspec")
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "missing_input_container_contract" in diagnostics
+    assert "input_container_contract_missing" in diagnostics
     assert "semantic_scalar_type" in diagnostics
 
 

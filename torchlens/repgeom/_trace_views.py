@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from .._record_type import first_op
 from ..intervention.errors import MultiMatchWarning
 from ._annotation_gate import (
     _VERB_VOCABULARY,
@@ -484,7 +485,7 @@ def _single_pass_layer_mds_site(
     if not bool(getattr(layer, "has_saved_activation", False)):
         _raise_unsaved_activation(layer_label, verb=verb)
     payload, kind = _saved_payload_with_kind(layer, layer_label, verb=verb)
-    return f"layer:{layer_label}", layer.ops[0], payload, kind
+    return f"layer:{layer_label}", first_op(layer), payload, kind
 
 
 def _op_mds_site(op: Any, *, verb: str = "mds_evolution") -> tuple[str, Any, Any, str]:

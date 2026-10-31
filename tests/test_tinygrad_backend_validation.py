@@ -63,7 +63,7 @@ def _first_op(trace: Any, layer_type: str) -> Any:
         Matching operation.
     """
 
-    return next(op for op in trace._layer_list if op.layer_type == layer_type)
+    return next(op for op in trace._layer_list if op.type == layer_type)
 
 
 def test_tinygrad_validate_entry_and_trace_return_honest_bool() -> None:

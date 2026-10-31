@@ -109,7 +109,7 @@ are inert value types with no callables or imports, so they round-trip exactly t
 `LiteralSlice` node and the `none`/`ellipsis` `LiteralAtom` kinds -- including inside the tuple key
 `__getitem__` produces for multi-axis indexing (`LiteralSequence` of kind `tuple`). Bytes, complex
 values, sets, arbitrary objects, tensors, callables, classes, import references, pickles, and
-opaque reprs are outside the grammar and fail preflight with `unsupported_literal`.
+opaque reprs are outside the grammar and fail preflight with `literal_unsupported`.
 
 Scalar admission is decided by ONE closed type-class classifier (r69 B,
 `torchlens._input_walk.classify_scalar`), consumed by snapshotting, literal encoding, runtime
@@ -130,7 +130,7 @@ CLASSIFIER-FIRST at `_encode_literal`, so no recipe path can launder a semantic 
   family: `IntEnum`, `IntFlag`, `StrEnum`, float-Enum, plain `Enum`) and every other
   `int`/`float`/`str` or non-stock NumPy scalar subclass -- carry application semantics in
   their TYPE identity that no persisted value fact can witness. A semantic-typed scalar VALUE
-  leaf at any depth refuses the runnable save typed (`missing_input_container_contract`, reason
+  leaf at any depth refuses the runnable save typed (`input_container_contract_missing`, reason
   `semantic_scalar_type`); no import-bearing type recipe is persisted. Symmetrically, an
   admitted builtin/stock-wrapper capture replayed with a same-value semantic type DIVERGES
   (both admitted lanes, both directions); a semantic runtime value can never verify or attest.
@@ -171,7 +171,7 @@ autocast dtype apply) route through the same helper for the `torch` module root;
 (`torch.Tensor` / `_VariableFunctions` / `torch._C`), the proxying `torch._VF` module, `torch.backends`,
 and literal-name `getattr(torch, "...")` module-layout constants -- which carry no lazy-import hazard --
 stay out of the helper's scope. A malformed `torch.device(...)` literal
-payload raises a typed `RunPreconditionError` (`unsupported_literal`) at decode (r41 secC -- never a
+payload raises a typed `RunPreconditionError` (`literal_unsupported`) at decode (r41 secC -- never a
 raw torch error); a malformed device qualname additionally refuses at descriptor parse, degrading the
 load to analysis-only with the typed diagnostic intact per the corr2_3 disposition.
 
@@ -185,7 +185,7 @@ Rung 1 retains the existing `FunctionRegistryKey` shape exactly:
 | `qualname` | `str` | qualified name below the namespace |
 | `dispatch_kind` | `function | method | dunder | namespace_alias` | receiver/dispatch contract |
 | `version` | `int` | must equal `1` |
-| `import_path` | `str | null` | null for the fixed namespaces; on `custom`, any path outside the section 6 rung-1 exact forms is `untrusted_custom_import` and is never imported |
+| `import_path` | `str | null` | null for the fixed namespaces; on `custom`, any path outside the section 6 rung-1 exact forms is `custom_import_untrusted` and is never imported |
 
 `callable_registry` deduplicates keys as `CallableRegistryEntry(registry_id: str,
 key: FunctionRegistryKey)`. IDs are unique; every computational call names one; unused entries are
@@ -520,7 +520,7 @@ execution context: `cudnn.benchmark=true`, or a documented CUDA-nondeterministic
 transpose-conv atomicAdd family and the documented index/scatter accumulation set) running on a
 CUDA device without `use_deterministic_algorithms(True)`. Such a capture can replay and verify
 its path, but byte-exact numeric attestation is `not_applicable` -- fail-safe, never a false
-`attested` and never a spurious `numeric_attestation_failed`. Users who want transpose-conv
+`attested` and never a spurious `replay_value_mismatch`. Users who want transpose-conv
 attestation on CUDA should capture (and replay) under `torch.use_deterministic_algorithms(True)`.
 
 `CallExecutionContext` (one REQUIRED per call descriptor) records the per-device autocast state
@@ -746,10 +746,10 @@ rungs unchanged; the persistent-buffer slot universe falls back to the capture-b
 snapshot + cooked `Param` addresses + the capture-time alias-topology snapshot when the weak
 model reference is dead. Before r75, `tl.trace(Model(), x)` (caller holding no model reference)
 followed by a `gc.collect()` before `save(level="runnable")` nondeterministically refused
-`unsupported_tensor_constant` (two same-shape+dtype BN params, identity chain dead) or
-`state_unexpected_key` (never-forward-used persistent buffers dropped from the declared
+`tensor_constant_unsupported` (two same-shape+dtype BN params, identity chain dead) or
+`state_key_unknown` (never-forward-used persistent buffers dropped from the declared
 universe) -- an honest-save over-refusal, never a wrong verdict, now closed. A
-genuinely-unmatched tensor constant still refuses `unsupported_tensor_constant`.
+genuinely-unmatched tensor constant still refuses `tensor_constant_unsupported`.
 
 **The recorded buffer address is AUTHORITATIVE (r83).** Postprocess resolves a source
 buffer's address from the address the CAPTURE recorded for that event; the
@@ -763,7 +763,7 @@ the `address not in buffer_names` refusal, and was bound to the WRONG state at r
 constant registered and one a plain attribute sufficed). It also corrupted plain,
 save-free public metadata: `trace[...].address` reported a name that was not that tensor's.
 A recorded address that is not a registered buffer now reaches the honest
-`unsupported_tensor_constant` refusal, which is the correct outcome -- a non-registered
+`tensor_constant_unsupported` refusal, which is the correct outcome -- a non-registered
 constant is not part of the declared state model. Registered buffers, including nested ones
 and the BatchNorm running-stat / `num_batches_tracked` pre-assignments, resolve to their own
 dotted addresses exactly as before. r77 F2
@@ -829,7 +829,7 @@ under-declaration.
    identical captured input), and it requires exactly one match. Opaque/non-grammar keys,
    semantic-typed scalar VALUE leaves (section 2, reason `semantic_scalar_type`), and
    undeclared per-instance container state REFUSE at runnable save through the EXISTING
-   `missing_input_container_contract` (no new enum), with the SYMMETRIC bind-side check
+   `input_container_contract_missing` (no new enum), with the SYMMETRIC bind-side check
    refusing runtime-added undeclared state. A `dict`-backed mapping whose `items()`
    protocol view disagrees with the physical `dict.__len__` storage (a lying
    `items()`/`keys()` override hiding or padding entries) refuses through the same
@@ -893,7 +893,7 @@ under-declaration.
 11. The model output has ZERO tensor slots (r37, `zero_tensor_slot_output`): an all-literal tree,
     a literal root, or empty containers pass the losslessness proof but leave no output Op to
     carry the root `ContainerSpec`, so a loaded run would reconstruct `None`. Unrepresentable
-    means refuse at save with `missing_output_container_contract`, uniformly with every other
+    means refuse at save with `output_container_contract_missing`, uniformly with every other
     output refusal.
 12. The captured forward READ physical state metadata that transport normalizes away (r63,
     escape-gated; r65 extends the net to the FULL input-accessor mirror; r67 C3/C6 gates
@@ -979,7 +979,7 @@ paths. Runnable model-output traversal never relies on the generic BFS fallback,
 leaf that merely *contains* tensors is not reconstructable. Sets, frozensets, their subclasses,
 and unordered/opaque containers are unsupported runnable outputs at every depth and cardinality
 (including zero and one tensor) and are uniformly refused at save with
-`missing_output_container_contract`. Ordinary analysis capture is unaffected. Proof failure is a
+`output_container_contract_missing`. Ordinary analysis capture is unaffected. Proof failure is a
 typed producer refusal -- refuse-unless-proved, never accept-unless-flagged.
 
 r37 adds ONE per-kind reconstruction capability table (`CONTAINER_KIND_CAPABILITIES` in
@@ -1091,7 +1091,7 @@ The torch ladder is fixed:
    and execute under `pause_logging()`.
 
 No custom import, `eval`, arbitrary walk, pickle tier, or artifact code is permitted. Non-torch
-backends report `unsupported_backend_replay`; analysis load still succeeds. Attachment is
+backends report `backend_replay_unsupported`; analysis load still succeeds. Attachment is
 `O(unique callable refs)`.
 
 `ResolverRecord` is exactly `registry_id: str`, `status: ResolverStatus`,
@@ -1105,28 +1105,28 @@ The exact `RunnableErrorCode` values are:
 ```text
 run_capability_unavailable
 sparse_preflight_failed
-sparse_core_tensor_payload
-unsupported_literal
-unsupported_tensor_constant
-missing_tensor_slot
-missing_input_container_contract
-missing_output_container_contract
-missing_control_classification
-missing_callable_ref
-unsupported_backend_replay
-unsupported_ref_schema
-unresolved_qualname
-ambiguous_qualname
-callable_moved_or_renamed
-callable_removed
+sparse_core_payload_invalid
+literal_unsupported
+tensor_constant_unsupported
+tensor_slot_missing
+input_container_contract_missing
+output_container_contract_missing
+control_classification_missing
+callable_ref_missing
+backend_replay_unsupported
+ref_schema_unsupported
+qualname_unresolved
+qualname_ambiguous
+callable_unresolved
+callable_unavailable
 private_api_unavailable
-signature_drift
-runtime_signature_drift
-semantic_drift
-wrapper_shadowed
-untrusted_custom_import
-state_missing_key
-state_unexpected_key
+signature_mismatch
+runtime_signature_mismatch
+semantic_mismatch
+callable_wrapper_mismatch
+custom_import_untrusted
+state_key_missing
+state_key_unknown
 state_shape_mismatch
 state_dtype_mismatch
 state_role_mismatch
@@ -1137,35 +1137,35 @@ input_tree_mismatch
 input_shape_mismatch
 input_dtype_mismatch
 call_arity_mismatch
-input_arity_extra
+input_arity_mismatch
 call_structure_mismatch
 output_structure_mismatch
 output_shape_mismatch
 output_dtype_mismatch
 slot_production_mismatch
 mutation_version_mismatch
-scalar_bool_divergence
-conditional_arm_divergence
-loop_predicate_divergence
+scalar_bool_mismatch
+conditional_arm_mismatch
+loop_predicate_mismatch
 input_alias_topology_unresolved
 state_alias_topology_unsupported
 execution_context_unavailable
 context_field_invalid
-numeric_attestation_failed
-poisoned_run_refused
-collective_boundary_runnable_unsupported
-halted_capture_not_runnable
-user_intervention_not_replayable
-buffer_sink_routing_mutable
+replay_value_mismatch
+poisoned_run_unsupported
+collective_boundary_unsupported
+stopped_capture_unsupported
+user_intervention_unsupported
+buffer_sink_routing_unsupported
 ```
 
-`halted_capture_not_runnable` (early-stopping unification, N4) is the SAVE-time runnable
+`stopped_capture_unsupported` (early-stopping unification, N4) is the SAVE-time runnable
 preflight refusal for a HALTED capture: the taken-path DAG ends at the halt frontier, so a
 runnable descriptor would replay a truncated program while claiming faithfulness to the full
 forward. Analysis-level saves of halted captures remain allowed; the refusal surfaces as
 `RunnablePreflightError` at `trace.save(path, level="runnable")` entry.
 
-`user_intervention_not_replayable` is also the RUN-time ceiling diagnostic (stage
+`user_intervention_unsupported` is also the RUN-time ceiling diagnostic (stage
 `hooked_run_unverified`, details `pristine=false`) of a hooked run: `trace.run(inputs=...,
 fast=True)` on a live trace that applies its staged hooks or value replacements returns an
 edited forward, not the model's own, and no hook-aware check exists yet, so the report settles
@@ -1173,7 +1173,7 @@ edited forward, not the model's own, and no hook-aware check exists yet, so the 
 nothing staged keeps its verdict; the ordinary `run(inputs=)` keeps refusing staged edits it
 would not apply (`run_staged_spec_unapplied`).
 
-`user_intervention_not_replayable` is the SAVE-time producer refusal (stage
+`user_intervention_unsupported` is the SAVE-time producer refusal (stage
 `producer_user_intervention`) for a capture whose taken path carries at least one
 user-intervention-replaced op (`trace(intervene=...)`, `set`, or a raw forward hook that
 substituted a value). The replacement value has no traceable function, so a sparse runnable
@@ -1183,7 +1183,7 @@ diagnostic names every replaced op label. An armed selector that fired on zero s
 the capture unreplaced and runnable; analysis-level saves of intervened captures remain
 allowed, and the intervention spec itself stays separately saveable.
 
-`buffer_sink_routing_mutable` (D18; PROVISIONAL SPELLING, documented-unstable pending
+`buffer_sink_routing_unsupported` (D18; PROVISIONAL SPELLING, documented-unstable pending
 naming ratification) is the LIVE refresh projector's mode-aware buffer-sink routing
 refusal (`BufferSinkRoutingError`, stage `refresh_buffer_sink_routing`), raised on the
 default `run()` / `save_new_outs` path by all four typed arms of one closed rule --
@@ -1205,14 +1205,14 @@ graph changed" term. The generic (untyped) graph-signature arm is unchanged and
 carries no D18 obligation. The fast tier's mode-aware `fast_state_static_guard` and
 the loaded-sparse buffer-write attestation downgrade are untouched by this code.
 
-`collective_boundary_runnable_unsupported` (merge-ranks tier b) is both a SAVE-time producer
+`collective_boundary_unsupported` (merge-ranks tier b) is both a SAVE-time producer
 refusal (stage `producer_collective_boundary`) and the forward-replay validation refusal
 (`CollectiveBoundaryReplayError`) for a rank-local trace whose taken path crosses a collective
 boundary node: a collective cannot be replayed single-device -- re-issuing it outside its
 communicator hangs or fabricates peer-dependent values. Metadata invariants remain available on
 such traces; cross-rank merging (merge-ranks tier c) is the supported replay story.
 
-`input_arity_extra` (r43, corr1_1) is raised when a loaded sparse `.run()` call carries MORE
+`input_arity_mismatch` (r43, corr1_1) is raised when a loaded sparse `.run()` call carries MORE
 top-level positional/keyword input sites than the capture recorded: the descriptor encodes a
 finite concrete site set (even for Python variadic signatures), so an extra runtime argument is
 outside the recorded taken path and must never report `verified`.
@@ -1355,7 +1355,7 @@ only newly materialized tensors are charged -- by construction, not an op/view l
 output storage is charged (fail-closed: an unreadable materializer never masquerades as a view). A
 call whose numeric literal drives a coupled-shape validation (`fold` `output_size`) fails the
 projection open, but the real op raises its own consistency check before allocating -- caught as
-`runtime_signature_drift`, never an allocation bomb. The allocation invariant
+`runtime_signature_mismatch`, never an allocation bomb. The allocation invariant
 thus covers literal sizes, tensor slots, output slots, and staged state uniformly, before allocation:
 the fake-tensor projection is the primary per-call layer and the run-preparation output-slot bound is
 its fail-open fallback.
@@ -1407,7 +1407,7 @@ strictly less than the real op, so a projection that cannot even fake-project is
 call's identical prelude dies too, and failing open just runs the death twice. Every OTHER projection
 failure keeps today's fail-open. Symmetrically, an allocation-classed exception from the REAL call
 raises `run_capability_unavailable` at detection stage `op_allocation_execution` (never a misleading
-`runtime_signature_drift`) -- an allocator death is a capability fact, not signature drift. Both are
+`runtime_signature_mismatch`) -- an allocator death is a capability fact, not signature drift. Both are
 re-typings of already-failing paths; neither can refuse a completable run. Together these gates close
 the allocation-DoS class as a WHOLE -- output-count blindness (r58 free_1), the re-materialization /
 bind-clone seam (r58 free_2), and the honest-slot accumulation seam are all CLOSED, not patched
@@ -1418,10 +1418,10 @@ frame before the first `__torch_dispatch__`); it cannot allocate past the gates 
 in a typed refusal, so cumulative-projected-bytes, projection-step, and wall-clock bounds are
 DIAGNOSTIC-ONLY and never hard refusals (a legit deep model or slow-CI host would otherwise false-refuse).
 
-`callable_moved_or_renamed` is a successful alias diagnostic. `runtime_signature_drift` rolls back
-but is compatibility failure, not path divergence. `semantic_drift` comes only from the independent
+`callable_unresolved` is a successful alias diagnostic. `runtime_signature_mismatch` rolls back
+but is compatibility failure, not path divergence. `semantic_mismatch` comes only from the independent
 live-model oracle and never rebaselines an artifact. A malformed `torch.device(...)` literal
-payload raises `RunPreconditionError` (`unsupported_literal`) at decode -- every branch of the
+payload raises `RunPreconditionError` (`literal_unsupported`) at decode -- every branch of the
 torch-symbol decoder is typed (r41 secC); a malformed device qualname additionally refuses at
 descriptor parse and degrades the load to analysis-only per the corr2_3 disposition.
 
@@ -1475,7 +1475,7 @@ compatibility surface.
 
 `SparseCorePayloadError` (r25-2) is the value-free sparse-core tripwire class raised by
 `assert_sparse_core_has_no_tensor_payload` with
-`fields["code"] == "sparse_core_tensor_payload"` and the dotted payload path on
+`fields["code"] == "sparse_core_payload_invalid"` and the dotted payload path on
 `fields["payload_path"]`. `AssertionError` stays in its MRO deliberately: the tripwire's
 historical raise class was a bare `AssertionError`, so existing `except AssertionError`
 callers keep working while new callers branch on the stable code.
@@ -1691,7 +1691,7 @@ capture-selected retained `out`/`transformed_out` payloads plus slot membership 
 Load exposes immutable records through `Trace.archived_activations` for offline inspection. The
 scheduler never reads them. Original-input runs with embedded or byte-equivalent staged capture
 state compare freshly recomputed raw saved slots against the archive before exposure and report
-`attested`; first mismatch is `numeric_attestation_failed` and rolls back. Changed-input,
+`attested`; first mismatch is `replay_value_mismatch` and rolls back. Changed-input,
 random-state, and non-equivalent-state runs report `not_applicable`.
 
 ## 10. N1-a initializer and seed
@@ -1768,7 +1768,7 @@ returns a permanently, monotonically poisoned result/Trace. Contradiction is div
 proof is unverifiable; both have `poisoned=true`. The mark cannot be cleared by another run.
 
 Validation, runnable export, faithful comparison, path-assuming intervention chaining, and any
-model-faithful presentation reject poison with `PoisonedRunError`/`poisoned_run_refused`. The LIVE
+model-faithful presentation reject poison with `PoisonedRunError`/`poisoned_run_unsupported`. The LIVE
 refresh provider finalizes through the SAME spine as the sparse provider (r37 corr2-5): the
 monotonic Trace path-status mark, the shared divergence-policy enforcement (with `on_divergence`
 threaded from the public `run` surface), and the one report finalizer whose `poisoned` flag is
@@ -1779,10 +1779,10 @@ There are exactly two independent reproduction oracles:
 
 1. Load original state, supply original input, and compare sparse output/intermediates to a separate
    live-model run. References are runtime/test inputs, never sparse payload. Contract-compatible
-   disagreement is `semantic_drift`.
+   disagreement is `semantic_mismatch`.
 2. When activation payload exists, original-input plus embedded/equivalent real state compares every
    saved selected activation byte-exactly before exposure. First mismatch is
-   `numeric_attestation_failed`, identifies slot/call/digest, and rolls back. Blobs never seed run.
+   `replay_value_mismatch`, identifies slot/call/digest, and rolls back. Blobs never seed run.
 
 Changed-input/random-state activation runs and sparse-only runs are `not_applicable`; no sparse run
 silently claims a numeric pass. Unsaved slots have no numeric claim. Sparse-only promises
@@ -2312,8 +2312,8 @@ arm, loop predicate, tensor-derived scalar witness) whose source is tainted ceil
 `unverifiable` -- including a family op whose control-driving chain was orphan-pruned from the
 descriptor, which the producer records through the pruned-nondeterministic-control side table;
 an archived activation or output slot reached by taint makes numeric attestation
-`not_applicable` upfront (never a contradictory `numeric_attestation_failed`); a byte mismatch
-on an UNTAINTED slot still raises `numeric_attestation_failed`. A tainted value that reaches
+`not_applicable` upfront (never a contradictory `replay_value_mismatch`); a byte mismatch
+on an UNTAINTED slot still raises `replay_value_mismatch`. A tainted value that reaches
 only the model output leaves path faithfulness `verified` (path-only) and is declared through
 `RunReport.nondeterministic_sources`. Escape attribution treats `uninitialized_alloc` origins
 as unattributable (fail-closed), like raw seeded-RNG output.
@@ -2486,7 +2486,7 @@ contract); environment identity (CPU ISA dispatch, library builds, GPU architect
 allocator) -- attestation is same-environment by contract; CUDA stream identity (inert for a
 serially replayed DAG); and autotuner cache state (subsumed by the `cudnn.benchmark` positive
 ineligibility marking). Where one of these residuals changes bytes, the byte-exact attestation
-tripwire fails loud (`numeric_attestation_failed`), never falsely `attested`.
+tripwire fails loud (`replay_value_mismatch`), never falsely `attested`.
 
 ### Threat-model scope: coherent reauthoring is out of contract scope (r71)
 
@@ -2524,9 +2524,9 @@ and reported `verified` with different numbers while three other persisted field
 records for the same op, INSIDE the resolver's success sink -- so it fires ONLY for a registry
 key that resolves to a real, signature-compatible callable (the threat: a swap between two
 valid ops that would otherwise silently run), and a definite disagreement refuses
-`semantic_drift` (analysis-only, diagnostic intact, aggregate `ReattachError` on `.run()`). An
+`semantic_mismatch` (analysis-only, diagnostic intact, aggregate `ReattachError` on `.run()`). An
 UNRESOLVABLE or signature-incompatible key never reaches the reconciliation -- it keeps the
-resolver's own richer `unresolved_qualname`/`callable_removed`/`signature_drift` readiness and
+resolver's own richer `qualname_unresolved`/`callable_unavailable`/`signature_mismatch` readiness and
 `ReattachError`, undisturbed. This is defence in depth against artifact CORRUPTION and partial
 rewrites -- an attacker gains nothing, since capturing the wrong program honestly is the
 in-scope coherent-reauthoring endpoint above. The attestation
@@ -2629,7 +2629,7 @@ authority -- moves embedded capture state, staged user state, and required non-p
 buffers to their recorded slot devices, once per shared value (alias groups keep one allocation),
 preserving dtype and `requires_grad`, publishing nothing on failure. A post-staging
 in-transaction `state_device` tripwire catches a broken staging hook typed -- never a mid-call
-`runtime_signature_drift`. Defensive run clones MIRROR fidelity: runtime input clones restore
+`runtime_signature_mismatch`. Defensive run clones MIRROR fidelity: runtime input clones restore
 the live leaf's `requires_grad` (the recorded grad context stays semantically live and the exact
 original input remains attestation-eligible; an intentionally changed flag stays a physical
 input change -> `not_applicable`), while state clones restore the RECORDED per-slot trainable
@@ -2998,7 +2998,7 @@ run completes and its output contract is lossless. Inexecutable input divergence
   `set`/`frozenset`/custom container (which yields the same "one leaf, no spec, no path" signature)
   is therefore NOT blessed a bare tensor: it returns the best-effort value with a failed
   `live_output_reconstruction` check -> `unverifiable` + poison, never `verified`. The sparse
-  producer refuses the same outputs at save (`missing_output_container_contract`); the parity
+  producer refuses the same outputs at save (`output_container_contract_missing`); the parity
   matrix asserts an identical verdict CLASS across both providers.
 - **Descriptorless payload degradation (corr2_3).** ONE structural disposition governs every
   runnable payload family (weights, non-persistent buffers, archived activations, and any future
@@ -3138,7 +3138,7 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
   verifies). Classified by the one closed `classify_scalar` lattice (section 2).
 - **semantic-typed scalar** (r69) -- a scalar whose TYPE identity is application semantics: any
   `enum.Enum` member or any `int`/`float`/`str`/non-stock-NumPy scalar subclass. Refuses runnable
-  save typed as `semantic_scalar_type` (through `missing_input_container_contract`); a same-value
+  save typed as `semantic_scalar_type` (through `input_container_contract_missing`); a same-value
   semantic runtime replacement for an admitted capture diverges in both directions. Never
   persisted as a type recipe.
 - **canonical mapping-key token** (r69) -- the `str | int` component produced by the ONE
@@ -3177,9 +3177,9 @@ legacy dtype-constructor and `Variable` family below), and nothing broader is ex
 
 - `FunctionRegistryKey("torch.Tensor", "__new__", "method")`, the legacy `torch.Tensor(...)`
   constructor called inside `forward`. Observable behavior: runnable save refuses typed at the
-  producer (`unsupported_literal`, detection stage `producer_literal`), because the constructor's
+  producer (`literal_unsupported`, detection stage `producer_literal`), because the constructor's
   class argument is outside the section 2 literal grammar; the resolver also keeps the raw callable
-  `unavailable` (`untrusted_custom_import`, provenance `nonforward_callable_denied`), because its
+  `unavailable` (`custom_import_untrusted`, provenance `nonforward_callable_denied`), because its
   hidden `cdata=` overload wraps a raw pointer as a tensor and would be a memory-safety hole for an
   untrusted bundle. Bound: only forwards that call the legacy constructor; analysis saves and loads
   are unaffected, and `torch.tensor(...)` / `Tensor.new(...)` stay runnable. The remedy is a

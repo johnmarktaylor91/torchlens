@@ -3,7 +3,7 @@
 ``trace.run(inputs=..., fast=True)`` applies the trace's staged edits at real module
 boundaries, so its output is an edited forward, not the model's own. No hook-aware
 check exists yet, so the run settles ``unverifiable`` with a typed
-``user_intervention_not_replayable`` diagnostic (detection stage
+``user_intervention_unsupported`` diagnostic (detection stage
 ``hooked_run_unverified``) and the trace is no longer pristine. The plain run keeps
 its verdict, and the plain ``run(inputs=)`` keeps refusing staged edits it would not
 apply.

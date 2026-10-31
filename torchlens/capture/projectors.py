@@ -14,6 +14,7 @@ from weakref import WeakKeyDictionary
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
+from .._record_type import record_type
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
@@ -363,11 +364,9 @@ class RefreshProjector:
         target_prefix = [
             layer
             for layer in self.target._layer_list
-            if layer.layer_type != "output" and layer._layer_label_raw in executed
+            if layer.type != "output" and layer._layer_label_raw in executed
         ]
-        refreshed_prefix = [
-            layer for layer in refreshed._layer_list if layer.layer_type != "output"
-        ]
+        refreshed_prefix = [layer for layer in refreshed._layer_list if layer.type != "output"]
 
         def _prefix_signature(layers: list[Any]) -> tuple[tuple[Any, ...], ...]:
             """Return the structural (label, type, parents) prefix signature."""
@@ -375,7 +374,7 @@ class RefreshProjector:
             return tuple(
                 (
                     layer._layer_label_raw,
-                    layer.layer_type,
+                    layer.type,
                     tuple(layer.parents),
                     _normalized_parent_arg_positions(layer.parent_arg_positions),
                 )
@@ -398,7 +397,7 @@ class RefreshProjector:
         # payloads are cleared at fork-finalization so omission never reads as
         # a fresh value.
         for layer in self.target._layer_list:
-            if layer.layer_type == "output" or layer._layer_label_raw not in executed:
+            if layer.type == "output" or layer._layer_label_raw not in executed:
                 self._clear_payload(layer)
         self.target.__dict__["_run_truncation_skipped_raw_labels"] = tuple(plan.skipped_raw_labels)
         self.target._layer_nums_to_save = self.layer_nums_to_save
@@ -497,7 +496,7 @@ class RefreshProjector:
         rows: list[tuple[str, Any, Any]] = []
         for label in getattr(trace, "internal_sink_ops", ()):
             layer = trace._layer_dict_all_keys[label]
-            if layer.layer_type != "buffer":
+            if record_type(layer) != "buffer":
                 continue
             rows.append(
                 (
@@ -621,7 +620,7 @@ class RefreshProjector:
         target_sinks = [
             self.target._layer_dict_all_keys[label]
             for label in getattr(self.target, "internal_sink_ops", ())
-            if self.target._layer_dict_all_keys[label].layer_type == "buffer"
+            if record_type(self.target._layer_dict_all_keys[label]) == "buffer"
             and (
                 executed_raw_labels is None
                 or self.target._layer_dict_all_keys[label]._layer_label_raw in executed_raw_labels
@@ -737,11 +736,11 @@ class RefreshProjector:
                     f"expected {target_layer._layer_label_raw!r}, "
                     f"got {refreshed_layer._layer_label_raw!r}"
                 )
-            if target_layer.layer_type != refreshed_layer.layer_type:
+            if record_type(target_layer) != record_type(refreshed_layer):
                 return (
                     f"layer_type changed for {target_layer._layer_label_raw!r}: "
-                    f"expected {target_layer.layer_type!r}, "
-                    f"got {refreshed_layer.layer_type!r}"
+                    f"expected {record_type(target_layer)!r}, "
+                    f"got {record_type(refreshed_layer)!r}"
                 )
             expected_parents = tuple(target_layer.parents)
             actual_parents = tuple(refreshed_layer.parents)
@@ -857,7 +856,7 @@ class RefreshProjector:
         return tuple(
             (
                 layer._layer_label_raw,
-                layer.layer_type,
+                record_type(layer),
                 tuple(layer.parents),
                 _normalized_parent_arg_positions(layer.parent_arg_positions),
             )

@@ -77,7 +77,7 @@ def _batches(data: torch.Tensor, batch_size: int) -> list[torch.Tensor]:
 def _relu_label(model: nn.Module, x: torch.Tensor) -> str:
     log = tl.trace(model, x)
     try:
-        return next(str(op.layer_label) for op in log._layer_list if op.layer_type == "relu")
+        return next(str(op.layer_label) for op in log._layer_list if op.type == "relu")
     finally:
         log.cleanup()
 

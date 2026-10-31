@@ -44,40 +44,60 @@ class TupleIndex:
     index: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class DictKey:
     """Key component for dict output paths."""
 
-    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"key": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"_key": FieldPolicy.KEEP}
 
-    key: Any
+    _key: Any
+
+    def __repr__(self) -> str:
+        """Keep the pre-v11 display spelling ``DictKey(key=...)``."""
+
+        return f"DictKey(key={self._key!r})"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class NamedField:
     """Field-name component for namedtuple output paths."""
 
-    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"name": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"_name": FieldPolicy.KEEP}
 
-    name: str
+    _name: str
+
+    def __repr__(self) -> str:
+        """Keep the pre-v11 display spelling ``NamedField(name=...)``."""
+
+        return f"NamedField(name={self._name!r})"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class DataclassField:
     """Field-name component for dataclass output paths."""
 
-    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"name": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"_name": FieldPolicy.KEEP}
 
-    name: str
+    _name: str
+
+    def __repr__(self) -> str:
+        """Keep the pre-v11 display spelling ``DataclassField(name=...)``."""
+
+        return f"DataclassField(name={self._name!r})"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class HFKey:
     """Key component for HuggingFace ``ModelOutput`` output paths."""
 
-    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"key": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"_key": FieldPolicy.KEEP}
 
-    key: Any
+    _key: Any
+
+    def __repr__(self) -> str:
+        """Keep the pre-v11 display spelling ``HFKey(key=...)``."""
+
+        return f"HFKey(key={self._key!r})"
 
 
 OutputPathComponent: TypeAlias = (
@@ -250,7 +270,7 @@ def _validate_container_spec(spec: ContainerSpec) -> None:
             )
         key_component = DictKey if kind == "dict" else HFKey
         for component in components:
-            if not isinstance(component, key_component) or component.key not in spec.keys:
+            if not isinstance(component, key_component) or component._key not in spec.keys:
                 raise ContainerReconstructionError(
                     f"ContainerSpec kind {kind!r} child component {component!r} is not among "
                     "the declared keys."
@@ -263,7 +283,7 @@ def _validate_container_spec(spec: ContainerSpec) -> None:
             )
         field_component = NamedField if kind == "namedtuple" else DataclassField
         for component in components:
-            if not isinstance(component, field_component) or component.name not in spec.fields:
+            if not isinstance(component, field_component) or component._name not in spec.fields:
                 raise ContainerReconstructionError(
                     f"ContainerSpec kind {kind!r} child component {component!r} is not among "
                     "the declared fields."

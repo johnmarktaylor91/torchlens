@@ -76,7 +76,7 @@ def _save(trace: tl.Trace, path: Path) -> Path:
 
 def _assert_semantic_refusal(excinfo, *extra_needles: str) -> None:
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "missing_input_container_contract" in diagnostics
+    assert "input_container_contract_missing" in diagnostics
     for needle in extra_needles:
         assert needle in diagnostics, needle
 

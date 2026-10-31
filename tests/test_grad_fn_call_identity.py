@@ -85,8 +85,8 @@ def test_ordinal_index_survives_like_labeled_tensor_payload_twins():
 
     left, right = _twin_calls()
     trace = _TraceStandIn([left, right])
-    left.source_trace = trace
-    right.source_trace = trace
+    left._source_trace = trace
+    right._source_trace = trace
     assert left.ordinal_index == 0
     assert right.ordinal_index == 1
 
@@ -128,7 +128,7 @@ def test_ordinal_index_sweep_is_linear_not_quadratic():
     ]
     trace = _TraceStandIn(calls)
     for call in calls:
-        call.source_trace = trace
+        call._source_trace = trace
 
     builds = 0
     original = _TraceStandIn.grad_fn_calls.fget

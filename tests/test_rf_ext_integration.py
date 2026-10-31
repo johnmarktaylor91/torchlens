@@ -52,7 +52,7 @@ def _ops(trace: object, name: str, *, field: str = "func_name") -> list[object]:
     always the canonical op name: tinygrad elementwise ops are reconstructed
     from the UOp DAG and carry the lambda wrapper's own name (``"<lambda>"``)
     as ``func_name``, with the semantic op name (``"add"``, ``"mul"``, ...)
-    only on ``layer_type`` instead. Pass ``field="layer_type"`` for those.
+    only on ``type`` instead. Pass ``field="type"`` for those.
     """
 
     return [op for op in trace._layer_list if getattr(op, field) == name]  # type: ignore[union-attr]
@@ -431,7 +431,7 @@ def test_non_torch_backend_keeps_geometry_and_gates_both_gradients() -> None:
 
     trace = tl.trace(add_one, tinygrad.Tensor([1.0, 2.0, 3.0]), backend="tinygrad")
     source = trace.input_ops[0]
-    target = _ops(trace, "add", field="layer_type")[-1]
+    target = _ops(trace, "add", field="type")[-1]
     receptive = next(iter(target.receptive_field.per_input.values()))
     projective = next(iter(source.projective_field.per_input.values()))
 

@@ -1141,7 +1141,7 @@ def test_witness_divergence_raises_and_rolls_back_by_default(honesty_artifact: P
         loaded.run(inputs=-torch.ones(2), seed=19)
 
     mismatch = captured.value.fields["first_mismatch"]
-    assert mismatch.code.value == "loop_predicate_divergence"
+    assert mismatch.code.value == "loop_predicate_mismatch"
     assert mismatch.affected_op_labels
     _assert_outs_equal(loaded, source_outs)
     assert not bool(loaded._runnable.poisoned)

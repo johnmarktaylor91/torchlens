@@ -10,7 +10,7 @@ capture that requests no backward never enters the window and pays nothing.
 
 The records are session-time facts held weakly per trace, one tuple per
 backward pass; a saved and reloaded trace carries none of them, only each
-pass's counted total and attribution (``BackwardPass.executed_flops_record``).
+pass's counted total and attribution (``BackwardPass._executed_flops_record``).
 Each record names the GradFn call of the node autograd reports as executing
 when the call dispatched (``_backward_markers.executing_grad_fn_ref``, the
 resolver the ATen recorder and the checkpoint unpack evidence share). Calls TorchLens makes

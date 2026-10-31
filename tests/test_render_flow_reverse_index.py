@@ -11,6 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
+from torchlens._record_type import record_type
 from torchlens.visualization import _render_flow
 
 
@@ -38,7 +39,7 @@ class _SkipChain(nn.Module):
 def _skip_activations(layer: Any) -> bool:
     """Return whether a layer is one of the consecutive test activations."""
 
-    return layer.layer_type in {"relu", "sigmoid"}
+    return record_type(layer) in {"relu", "sigmoid"}
 
 
 def test_render_pass_reuses_layer_label_reverse_indexes(

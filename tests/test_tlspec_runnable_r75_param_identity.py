@@ -6,10 +6,10 @@ through live references (``Param._param_ref``, released by postprocess ->
 ``_source_model_ref`` -> ``named_parameters()``), so a caller that never held the model
 plus one ``gc.collect()`` between trace and save killed the whole chain. BN-like models
 with two same-shape+dtype ``(C,)`` params then had NO identity rung left and refused
-``unsupported_tensor_constant`` -- and, one stage further, the persistent-buffer slot
+``tensor_constant_unsupported`` -- and, one stage further, the persistent-buffer slot
 enumeration silently returned on the dead model, dropping never-forward-used buffers
 (``num_batches_tracked``) from the declared universe so the embedded snapshot failed
-strict binding with ``state_unexpected_key``. User-facing spelling:
+strict binding with ``state_key_unknown``. User-facing spelling:
 ``tl.trace(Model(), x).save(level="runnable")`` refused nondeterministically for any
 BN-carrying model. Fail-closed (over-refusal), never a wrong verdict -- but a red gate.
 
@@ -92,7 +92,7 @@ def test_r75_inline_model_gc_full_save_load_run(tmp_path: Path) -> None:
 
     Pins the second leg too: ``num_batches_tracked`` (never used by the eval forward, so
     absent from the graph) must still be declared, or the embedded snapshot refuses with
-    ``state_unexpected_key``.
+    ``state_key_unknown``.
     """
 
     x = _x()

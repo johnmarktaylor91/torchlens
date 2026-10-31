@@ -5,6 +5,7 @@
 import re as _re
 
 from .._errors import InvalidArgumentError
+from .._record_type import record_type
 from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
 from ._render_common import *
 from ._render_edges import *
@@ -2048,10 +2049,12 @@ def compute_default_node_lines(
         # un-lookup-able label (linear_1_3:2 for what is really linear_1_1:2), so
         # users copying the displayed name got a "not found" ValueError.
         title = f"{layer_log.layer_label}:{layer_log.pass_index}"
-    elif layer_log.layer_type in ["input", "output", "buffer"]:
-        title = f"{layer_log.layer_type}_{layer_log.type_index}{call_label}"
+    elif record_type(layer_log) in ["input", "output", "buffer"]:
+        title = f"{record_type(layer_log)}_{layer_log.type_index}{call_label}"
     else:
-        title = f"{layer_log.layer_type}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
+        title = (
+            f"{record_type(layer_log)}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
+        )
 
     lines: list[str] = []
     if layer_log.is_terminal_bool:

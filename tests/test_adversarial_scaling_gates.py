@@ -47,6 +47,7 @@ from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens.errors import CaptureAttemptFailedWarning
 
 N_STREAMS = 300
@@ -255,7 +256,7 @@ def test_deep_recurrence_site_key_stable_across_passes(deep_capture) -> None:
     log = deep_capture
     keys = {log[f"linear_1_1:{p}"].site_key for p in range(1, N_PASSES + 1)}
     assert len(keys) == 1
-    assert log["linear_1_1"].site_key == keys.pop()
+    assert layer_site_key(log["linear_1_1"]) == keys.pop()
 
 
 @pytest.mark.heavy

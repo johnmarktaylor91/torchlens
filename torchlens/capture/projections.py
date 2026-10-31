@@ -25,6 +25,7 @@ from .._ir.events import (
 from .._ir.predicate import EventKind, coerce_deferred_value
 from .._ir.refs import DeviceRef, DtypeRef, TensorRef
 from .._ir.semantics import BackendSemantics, CapturePolicy
+from .._record_type import record_type
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils._torch_symbols import torch_attr
 from .._utils.tensor_utils import get_memory_amount_from_metadata
@@ -1584,7 +1585,7 @@ def _grad_record_context_from_op_grad_event(
     return GradRecordContext(
         label=event.op_label,
         grad_fn_class_name=getattr(op, "grad_fn_class_name", None) or "",
-        kind=getattr(op, "layer_type", None) or "op",
+        kind=record_type(op, None) or "op",
         backward_call_index=event.pass_index,
         grad_kind="grad_output",
         grad_output_index=0,

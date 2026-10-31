@@ -307,13 +307,13 @@ def merge_spine_results(a: RunningStatsResult, b: RunningStatsResult) -> Running
     result's floating fields are documented approximate across merges (D8).
     """
 
-    if a.count_finite == 0:
+    if a.num_finite == 0:
         base_floats = b
-    elif b.count_finite == 0:
+    elif b.num_finite == 0:
         base_floats = a
     else:
         base_floats = None
-    n_a, n_b = a.count_finite, b.count_finite
+    n_a, n_b = a.num_finite, b.num_finite
     total_finite = n_a + n_b
     if base_floats is not None:
         mean, m2 = base_floats.mean, base_floats.m2
@@ -338,13 +338,13 @@ def merge_spine_results(a: RunningStatsResult, b: RunningStatsResult) -> Running
         "float64" if "float64" in (a.reduction_dtype, b.reduction_dtype) else a.reduction_dtype
     )
     return RunningStatsResult(
-        count_total=a.count_total + b.count_total,
-        count_finite=total_finite,
-        count_zero=a.count_zero + b.count_zero,
-        count_negative=a.count_negative + b.count_negative,
-        count_nan=a.count_nan + b.count_nan,
-        count_posinf=a.count_posinf + b.count_posinf,
-        count_neginf=a.count_neginf + b.count_neginf,
+        numel=a.numel + b.numel,
+        num_finite=total_finite,
+        num_zero=a.num_zero + b.num_zero,
+        num_negative=a.num_negative + b.num_negative,
+        num_nan=a.num_nan + b.num_nan,
+        num_posinf=a.num_posinf + b.num_posinf,
+        num_neginf=a.num_neginf + b.num_neginf,
         finite_min=finite_min,
         finite_max=finite_max,
         finite_absmax=finite_absmax,

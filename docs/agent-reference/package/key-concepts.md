@@ -63,7 +63,7 @@ Used non-persistent buffers always ship in the REQUIRED `runnable_nonpersistent_
 `InputAttestationFingerprint` eligibility records. Loaded values are available through
 `Trace.archived_activations` for inspection and eligible byte-exact attestation only; the sparse
 scheduler never consumes them. Original-input, capture-equivalent real-state runs report
-`attested` or fail transactionally with `numeric_attestation_failed`; changed-input (logical or
+`attested` or fail transactionally with `replay_value_mismatch`; changed-input (logical or
 physical), random-state, and nondeterministic-capture-context runs report `not_applicable`, and
 `attested` always implies `verified`.
 The frozen `ReadinessStatus`, `RunProvider`, `StateSource`, `PathFaithfulness`, `DivergencePolicy`,
@@ -72,7 +72,7 @@ documented exhaustively in `docs/reference/runnable_tlspec_contract.md`. r37 add
 `state_alias_topology_unsupported` (save-time state-topology refusal; tied live-identity state
 stages as one alias-group allocation) and `context_field_invalid` (parse-time closed-vocabulary
 context refusal); zero-tensor-leaf and instance-stateful container outputs refuse at save with
-`missing_output_container_contract` via the one per-kind capability table.
+`output_container_contract_missing` via the one per-kind capability table.
 Non-torch preview backends use `payload_policy="array_payloads"` when their codecs can materialize
 payloads; Paddle bf16 payloads carry logical dtype metadata because NumPy transports them as
 `uint16`. TensorFlow preview payloads also use `array_payloads` for dense numeric/bool forward

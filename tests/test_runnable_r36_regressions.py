@@ -14,7 +14,7 @@ Each test pins the AGREED post-r37 contract (round-37 cross-lab plan):
   staging + readiness, scoped default-device restore, requires_grad-preserving
   clones, phase-0 subclass admission, inference-mode capture.
 * secB_1/corr1_1 -- INV-3 output capability table + zero-tensor-slot save refusal
-  (``missing_output_container_contract``).
+  (``output_container_contract_missing``).
 * INV-4 -- closed-vocabulary context parsing (``context_field_invalid``).
 
 Fail-closed pins land red on b1a18687 and green after the staged fixes; the
@@ -384,7 +384,7 @@ class TestCorr21EventLedgerExhaustive:
         """Pre-closed adjacent: the non-mutating twin bakes an unlabelled constant.
 
         Fail-closed either way: the unattributed product feeding a traced call may be
-        refused at SAVE (``unsupported_tensor_constant``), and when an artifact does
+        refused at SAVE (``tensor_constant_unsupported``), and when an artifact does
         save, the ``unmodeled_tensor_return`` ledger fact must ceiling it INCOMPLETE
         and never VERIFIED.
         """
@@ -400,7 +400,7 @@ class TestCorr21EventLedgerExhaustive:
         try:
             trace.save(path, level="runnable", include_weights=True)
         except RunnablePreflightError as exc:
-            assert "unsupported_tensor_constant" in str(exc.fields.get("diagnostics", ""))
+            assert "tensor_constant_unsupported" in str(exc.fields.get("diagnostics", ""))
             return
         loaded = tl.load(path)
         descriptor = loaded._sparse_run_descriptor
@@ -1093,13 +1093,13 @@ class TestOutputCapabilityTable:
         trace = tl.trace(model_cls(), torch.tensor([1.0]), capture=_CAPTURE)
         with pytest.raises(RunnablePreflightError) as excinfo:
             trace.save(tmp_path / "literal.tlspec", level="runnable")
-        assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+        assert "output_container_contract_missing" in str(excinfo.value.fields.get("diagnostics"))
 
     def test_stateful_namedtuple_subclass_refuses_at_save(self, tmp_path: Path) -> None:
         trace = tl.trace(_nt_model(_StatefulNT), torch.tensor([1.0, 2.0]), capture=_CAPTURE)
         with pytest.raises(RunnablePreflightError) as excinfo:
             trace.save(tmp_path / "stateful_nt.tlspec", level="runnable")
-        assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+        assert "output_container_contract_missing" in str(excinfo.value.fields.get("diagnostics"))
         assert "namedtuple_instance_state" in str(excinfo.value.fields.get("diagnostics"))
 
     @pytest.mark.parametrize(

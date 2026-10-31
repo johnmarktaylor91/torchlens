@@ -370,7 +370,7 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
     if len(log.layer_labels) > 2:
         # Find a layer type that matches exactly one key in the lookup dict
         for entry in log._layer_list:
-            candidate = entry.layer_type
+            candidate = entry.type
             if candidate in ("input",):
                 continue  # too generic
             all_key_matches = [k for k in log._layer_dict_all_keys if candidate in str(k)]
@@ -544,8 +544,8 @@ def _capture_model_outputs(name: str, model, x, description: str) -> str:
                     out.write(_capture("has_grad", pl.has_grad))
                     out.write(_capture("grad_shape", pl.grad_shape))
                     out.write(_capture("grad_dtype", pl.grad_dtype))
-                    out.write(_capture("gradient_memory", pl.gradient_memory))
-                    out.write(_capture("gradient_memory", str(pl.gradient_memory)))
+                    out.write(_capture("grad_memory", pl.grad_memory))
+                    out.write(_capture("grad_memory", str(pl.grad_memory)))
                     break
 
             # Show frozen param without grad (if applicable)

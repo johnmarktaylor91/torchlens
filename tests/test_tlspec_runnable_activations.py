@@ -485,12 +485,12 @@ def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -
 
     mismatch = caught.value.fields["first_mismatch"]
     details = dict(mismatch.details)
-    assert caught.value.fields["code"] == "numeric_attestation_failed"
+    assert caught.value.fields["code"] == "replay_value_mismatch"
     assert (
         caught.value.fields["numeric_attestation"]
         is NumericAttestationStatus.NUMERIC_ATTESTATION_FAILED
     )
-    assert mismatch.code.value == "numeric_attestation_failed"
+    assert mismatch.code.value == "replay_value_mismatch"
     assert details["slot_id"] == first_member.slot_id
     assert details["expected_digest"] == "0" * 64
     assert details["archived_digest"] != details["expected_digest"]

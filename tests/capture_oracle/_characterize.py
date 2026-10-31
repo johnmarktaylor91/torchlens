@@ -21,6 +21,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import Recording
 from torchlens._ir.events import OpEvent
+from torchlens._record_type import record_type
 
 from ._models import build_model_case, side_effect_count
 
@@ -820,7 +821,7 @@ def _final_op_projection(product: Any) -> list[dict[str, Any]]:
             {
                 "label": getattr(op, "layer_label", getattr(op, "_label_raw", None)),
                 "label_raw": getattr(op, "_label_raw", None),
-                "layer_type": getattr(op, "layer_type", None),
+                "layer_type": record_type(op, None),
                 "func_name": getattr(op, "func_name", None),
                 "parents": list(getattr(op, "parents", ()) or ()),
                 "children": list(getattr(op, "children", ()) or ()),

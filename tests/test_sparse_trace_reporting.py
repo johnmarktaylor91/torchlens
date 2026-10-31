@@ -258,9 +258,7 @@ def test_activation_footprint_fields_are_populated() -> None:
     # are already inside total. Still an exact pin: any drift in either
     # accounting, or a returning redundant copy, trips it.
     output_rows = [
-        layer
-        for layer in full._layer_list
-        if layer.layer_type == "output" and layer.has_saved_activation
+        layer for layer in full._layer_list if layer.type == "output" and layer.has_saved_activation
     ]
     assert output_rows and all(int(layer.activation_memory) > 0 for layer in output_rows)
     for layer in output_rows:

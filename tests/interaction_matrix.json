@@ -230,7 +230,7 @@
    "status": "asymmetry",
    "asymmetry": "A03",
    "confidence": "medium",
-   "note": "Fast rerun and runnable replay are torch only; preview backends report unsupported_backend_replay."
+   "note": "Fast rerun and runnable replay are torch only; preview backends report backend_replay_unsupported."
   },
   {
    "a": "backend",
@@ -303,7 +303,7 @@
    "status": "asymmetry",
    "asymmetry": "A08",
    "confidence": "medium",
-   "note": "Trace.run and runnable replay are torch only; a loaded non-torch artifact reports unsupported_backend_replay."
+   "note": "Trace.run and runnable replay are torch only; a loaded non-torch artifact reports backend_replay_unsupported."
   },
   {
    "a": "backend",
@@ -1418,7 +1418,7 @@
    "status": "composes",
    "evidence": "tests/test_trace_halt.py::test_trace_halt_supports_selective_layers_to_save",
    "confidence": "high",
-   "note": "Analysis-level save works on a halted trace; runnable save refuses halted_capture_not_runnable."
+   "note": "Analysis-level save works on a halted trace; runnable save refuses stopped_capture_unsupported."
   },
   {
    "a": "halt",
@@ -1800,7 +1800,7 @@
     "backend",
     "fast_run"
    ],
-   "summary": "run(inputs=, fast=True) and runnable replay work on torch; preview backends and loaded non-torch artifacts report unsupported_backend_replay.",
+   "summary": "run(inputs=, fast=True) and runnable replay work on torch; preview backends and loaded non-torch artifacts report backend_replay_unsupported.",
    "evidence": "docs/reference/runnable_tlspec_contract.md",
    "recommendation": "document",
    "ruling": "pending"

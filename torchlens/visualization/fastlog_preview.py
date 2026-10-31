@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, cast
 
+from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from ..capture.predicates import _normalize_capture_decision
 from ..capture.projections import _build_record_context
@@ -95,7 +96,7 @@ def _context_from_layer(
     module_stack = _module_stack_from_layer(op_log)
     module_frame = module_stack[-1] if module_stack else None
     raw_label = getattr(op_log, "_label_raw", None)
-    layer_type = getattr(op_log, "layer_type", None)
+    layer_type = record_type(op_log, None)
     if isinstance(layer_type, str):
         op_counts[layer_type] = op_counts.get(layer_type, 0) + 1
     return _build_record_context(

@@ -93,7 +93,7 @@ def _hand_topk(latents: torch.Tensor, unit: int, k: int) -> list[tuple[int, int,
 
 def _dataset_topk(model, sae, tokens, k):
     trace = tl.trace(model, tokens[:1])
-    label = next(op.layer_label for op in trace._layer_list if op.layer_type == "relu")
+    label = next(op.layer_label for op in trace._layer_list if op.type == "relu")
     stat = tl.stats.TopK(k=k, unit_axis=-1, encoder=sae.encode, name="latents")
     batches = [tokens[0:3], tokens[3:6], tokens[6:8]]
     return tl.stats.aggregate(model, batches, metrics={label: tl.stats.Aggregator(stat)})[label][

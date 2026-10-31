@@ -95,7 +95,7 @@ class TrajectoryStats:
                 remedy=f"use one of them, for example result.compute_stats({self.statistics[0]!r})",
                 statistic=statistic,
             )
-        return {layer: spine.result() for layer, spine in self.running_stats[statistic].items()}
+        return {layer: spine.compute() for layer, spine in self.running_stats[statistic].items()}
 
     def __repr__(self) -> str:
         """Bounded identity card: never dump the tensors."""

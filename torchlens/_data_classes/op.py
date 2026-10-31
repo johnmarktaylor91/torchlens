@@ -549,7 +549,7 @@ _OUTPUT_NODE_REPLACED_FIELDS = frozenset(
         "is_module_output",
         "is_output",
         "is_transform",
-        "layer_type",
+        "type",
         "module",
         "module_call_stack",
         "modules",
@@ -2140,18 +2140,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         set_(self, "_row", row)
 
     @property
-    def layer_type(self) -> str:
-        """Return the operation type token used by existing internal callers."""
-
-        return cast(str, self.type)
-
-    @layer_type.setter
-    def layer_type(self, value: str) -> None:
-        """Set the operation type token through the legacy internal name."""
-
-        self.type = value
-
-    @property
     def compute_record(self) -> Any | None:
         """Two-term compute record (fma_macs / other_flops), derived on read.
 
@@ -3053,18 +3041,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         """
 
         return bool(self.has_grad)
-
-    @property
-    def ops(self) -> tuple["Op", ...]:
-        """Tuple containing this pass for aggregate-compatible iteration.
-
-        Returns
-        -------
-        tuple[Op, ...]
-            Single-entry tuple containing this pass log.
-        """
-
-        return (self,)
 
     @property
     def _streaming_label(self) -> str:

@@ -998,7 +998,7 @@ def mirror_param_derived_grads(trace: Trace, records: Any) -> None:
         param.has_grad = True
         param.grad_shape = tuple(getattr(record.grad, "shape", ()))
         param.grad_dtype = cast(Any, str(getattr(record.grad, "dtype", "")))
-        param.gradient_memory = value_nbytes(record.grad) or 0
+        param.grad_memory = value_nbytes(record.grad) or 0
 
 
 def normalize_op_module_calls(value: Any) -> tuple[tuple[str, int], ...]:

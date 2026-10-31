@@ -147,7 +147,7 @@ def test_opaque_enum_key_subtree_is_unverifiable_not_skipped(tmp_path: Path) -> 
 
     r67 C2 supersedes the former save-then-UNVERIFIABLE downgrade lane: the agreed
     disposition matrix refuses opaque (non-grammar) mapping keys at producer preflight
-    through the EXISTING ``missing_input_container_contract`` (positive per-site
+    through the EXISTING ``input_container_contract_missing`` (positive per-site
     structure proof), so no artifact exists that could ever replay the subtree at all
     -- strictly stronger than the old ceiling, and never a silent skip.
     """
@@ -157,7 +157,7 @@ def test_opaque_enum_key_subtree_is_unverifiable_not_skipped(tmp_path: Path) -> 
     with pytest.raises(tl.errors.RunnablePreflightError) as excinfo:
         _save_runnable(model, [x, {_EnumKey.FAST: 0}], tmp_path / "enum_key.tlspec")
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "missing_input_container_contract" in diagnostics
+    assert "input_container_contract_missing" in diagnostics
     assert "opaque_mapping_key" in diagnostics
 
 

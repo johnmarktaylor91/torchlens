@@ -28,6 +28,8 @@ from typing import TYPE_CHECKING, Any, cast
 from torchlens._errors import _actionable_message, _ActionableErrorMixin
 from torchlens.errors._base import ConfigurationError
 
+from ._record_type import record_type
+
 if TYPE_CHECKING:
     from torch import nn
 
@@ -341,7 +343,7 @@ def sites_of_trace(trace: Any) -> SiteInventory:
     layers = [
         layer
         for layer in trace._layer_list
-        if getattr(layer, "layer_type", None) not in {"input", "output", "buffer"}
+        if record_type(layer, None) not in {"input", "output", "buffer"}
     ]
     for layer in layers:
         outputs_of = tuple(getattr(layer, "output_of_modules", ()) or ())

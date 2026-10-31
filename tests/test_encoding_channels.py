@@ -23,6 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes._layer_spec import _LAYER_MIRROR_SPEC, _LAYER_STATE_ORDER
 from torchlens._data_classes.layer import Layer
+from torchlens._record_type import record_type
 from torchlens.visualization._encoding import (
     DARK_RAMP,
     LAYER_SOURCE_ROWS,
@@ -281,7 +282,7 @@ def test_callable_raise_chains_typed(mlp_log: tl.Trace, tmp_path: Path) -> None:
 
 def test_non_finite_degrades_to_unencoded(mlp_log: tl.Trace, tmp_path: Path) -> None:
     def source(node: Any) -> float:
-        return float("nan") if node.layer_type == "relu" else float(node.raw_index)
+        return float("nan") if record_type(node) == "relu" else float(node.raw_index)
 
     _draw(mlp_log, tmp_path, color_by=source)
     state = _state(mlp_log)
@@ -683,13 +684,13 @@ def test_annotation_image_node_excluded_from_channel_and_domain(tmp_path: Path) 
     from PIL import Image
 
     Image.new("RGB", (8, 8), "red").save(image_path)
-    target = next(layer for layer in log._layer_list if layer.layer_type == "relu")
+    target = next(layer for layer in log._layer_list if layer.type == "relu")
     log.annotate(target.layer_label, image=str(image_path))
 
     def source(node: Any) -> float:
         # An extreme value: if the image node leaked into the domain, every
         # other node's normalized color would move.
-        return 1e9 if node.layer_type == "relu" else float(node.raw_index)
+        return 1e9 if record_type(node) == "relu" else float(node.raw_index)
 
     _draw(log, tmp_path, color_by=source)
     state = _state(log)
@@ -705,7 +706,7 @@ def test_visualizer_path_node_excluded(tmp_path: Path) -> None:
     from PIL import Image
 
     Image.new("RGB", (8, 8), "blue").save(image_path)
-    target = next(layer for layer in log._layer_list if layer.layer_type == "relu")
+    target = next(layer for layer in log._layer_list if layer.type == "relu")
     target.visualizer_path = str(image_path)
 
     _draw(log, tmp_path, color_by=lambda node: float(node.raw_index))

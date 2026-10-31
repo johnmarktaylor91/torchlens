@@ -71,12 +71,12 @@ def _assert_matches(fork, truth):
 def test_do_op_record_edits_exactly_its_pass(loop) -> None:
     model, x, trace = loop
     fork = trace.fork()
-    fork.do(trace["relu_1_2:2"].ops[0], tl.zero_ablate())
+    fork.do(trace["relu_1_2:2"], tl.zero_ablate())
     _assert_matches(fork, _truth(model, x, {2}))
     assert torch.equal(fork["relu_1_2:1"].out, trace["relu_1_2:1"].out)
-    fires = fork["relu_1_2:2"].ops[0].edits
+    fires = fork["relu_1_2:2"].edits
     assert fires and all(r.call_label == "relu_1_2:2" for r in fires)
-    assert not fork["relu_1_2:3"].ops[0].edits
+    assert not fork["relu_1_2:3"].edits
 
 
 def test_do_single_pass_getitem_record(loop) -> None:
@@ -106,7 +106,7 @@ def test_do_single_pass_layer_record(loop) -> None:
 def test_attach_hooks_op_record_then_push(loop) -> None:
     model, x, trace = loop
     fork = trace.fork()
-    fork.attach_hooks(trace["relu_1_2:2"].ops[0], tl.zero_ablate())
+    fork.attach_hooks(trace["relu_1_2:2"], tl.zero_ablate())
     fork.push()
     _assert_matches(fork, _truth(model, x, {2}))
 
@@ -114,7 +114,7 @@ def test_attach_hooks_op_record_then_push(loop) -> None:
 def test_spec_target_is_pass_qualified(loop) -> None:
     _model, _x, trace = loop
     fork = trace.fork()
-    fork.do(trace["relu_1_2:2"].ops[0], tl.zero_ablate())
+    fork.do(trace["relu_1_2:2"], tl.zero_ablate())
     spec = fork._ensure_intervention_spec()
     values = [
         (spec_hook.site_target.selector_kind, spec_hook.site_target.selector_value)
@@ -126,7 +126,7 @@ def test_spec_target_is_pass_qualified(loop) -> None:
 
 def test_lower_record_site_target_shapes(loop) -> None:
     _model, _x, trace = loop
-    op_lowered = lower_record_site_target(trace["relu_1_2:2"].ops[0])
+    op_lowered = lower_record_site_target(trace["relu_1_2:2"])
     assert isinstance(op_lowered, LabelSelector) and op_lowered.selector_value == "relu_1_2:2"
     layer_lowered = lower_record_site_target(trace["relu_1_2"])
     assert isinstance(layer_lowered, CompositeSelector) and layer_lowered.operator == "or"

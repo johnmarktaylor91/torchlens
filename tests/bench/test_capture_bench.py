@@ -497,7 +497,7 @@ def test_gradient_selector_deferred_retention_peak_memory(
             ),
         )
         trace[trace.output_layers[0]].out.sum().backward()
-        assert any(op.has_grad and op.layer_type == "linear" for op in trace._layer_list)
+        assert any(op.has_grad and op.type == "linear" for op in trace._layer_list)
         model.zero_grad(set_to_none=True)
         trace.cleanup()
 

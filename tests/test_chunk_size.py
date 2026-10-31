@@ -11,6 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 from torchlens.backends import BackendCapabilities, BackendSpec
 from torchlens.errors import BackendUnsupportedError
 from torchlens.intervention.errors import AmbiguousBatchInputError, ChunkedForwardConfigError
@@ -223,9 +224,9 @@ def test_chunk_size_with_layers_to_save_keeps_selective_scope() -> None:
     assert trace.layers_to_save != "all"
     assert "relu_1_2:1" in trace.layers_to_save
     saved_types = {
-        op.layer_type
+        record_type(op)
         for op in trace._layer_list
-        if op.has_saved_activation and op.layer_type not in {"input", "output"}
+        if op.has_saved_activation and op.type not in {"input", "output"}
     }
     assert saved_types == {"relu", "linear"}
     with pytest.raises(ValueError, match="was not saved"):

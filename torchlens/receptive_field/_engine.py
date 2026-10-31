@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from .._record_type import record_type
 from ..backends import TORCH_BACKEND_NAME
 from ..capture.arg_positions import (
     VARIADIC_TENSOR_ARG_FUNCS,
@@ -512,7 +513,7 @@ def _rule_result_uncached(op: Op) -> tuple[_RuleResult, str]:
         # RF rules keyed by canonical op name (e.g. "add") still dispatch for
         # those ops; this only ever widens dispatch (torch/mlx/tf/jax/paddle
         # already resolve on the first, unchanged lookup).
-        fallback_name = _normalize_func_name(str(getattr(op, "layer_type", "") or ""))
+        fallback_name = _normalize_func_name(str(record_type(op, "") or ""))
         if fallback_name != name:
             fallback_rule = _RF_RULES.get(fallback_name)
             if fallback_rule is not None:

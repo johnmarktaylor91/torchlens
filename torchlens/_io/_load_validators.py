@@ -476,7 +476,7 @@ def _validate_executed_flops_records(trace: Trace) -> None:
     from ..report._backward_attribution import executed_flops_record_problem
 
     for record in (getattr(trace, "_backward_pass_logs", None) or {}).values():
-        value = getattr(record, "executed_flops_record", None)
+        value = getattr(record, "_executed_flops_record", None)
         if value is None:
             continue
         problem = executed_flops_record_problem(value)
@@ -485,7 +485,7 @@ def _validate_executed_flops_records(trace: Trace) -> None:
             _refuse(
                 f"backward pass {getattr(record, 'pass_index', '?')}: {message}",
                 code="artifact_executed_flops_record_invalid",
-                field="BackwardPass.executed_flops_record",
+                field="BackwardPass._executed_flops_record",
                 reason=reason,
                 remedy=(
                     "re-save the artifact from its source capture; do not hand-edit "

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._record_type import first_op
 from ._access import CopyRoot, resolve_copy_root
 from ._axis_labels import sdpa_attention_hint
 from ._grid import GridBudgets, array_grid_html
@@ -316,7 +317,7 @@ def layer_card(layer: Any, *, root: str | None = None) -> Card:
     if num_passes <= 1:
         # ``OpAccessor`` indexes by 0-based POSITION (its repr teaches the
         # basis); the single pass is position 0.
-        return op_card(layer.ops[0], root=root, kind="layer")
+        return op_card(first_op(layer), root=root, kind="layer")
     resolved_root = _root_for(layer, root)
     rows: list[CardNode] = []
     for pass_index in range(1, num_passes + 1):

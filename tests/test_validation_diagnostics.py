@@ -60,7 +60,7 @@ def _patch_op_func_to_diverge(trace: Any, func_name: str, delta: float = 1.0) ->
     """
 
     for layer in trace._layer_list:
-        op = layer.ops[1] if hasattr(layer.ops, "_list") else layer
+        op = layer.ops[1] if hasattr(getattr(layer, "ops", None), "_list") else layer
         if getattr(op, "func_name", None) == func_name:
             original = op.func
 

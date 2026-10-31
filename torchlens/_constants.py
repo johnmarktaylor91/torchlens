@@ -726,7 +726,7 @@ PARAM_LOG_FIELD_ORDER = [
     "has_grad",
     "grad_shape",
     "grad_dtype",
-    "gradient_memory",
+    "grad_memory",
     "_derived_grad_record_path",
 ]
 
@@ -735,8 +735,7 @@ BUFFER_LOG_FIELD_ORDER = [
     "address",
     "module_address",
     "name",
-    "buffer_overwrite_index",
-    "buffer_pass",
+    "overwrite_index",
     "layer_label",
     "call_index",
     "versions",
@@ -748,8 +747,8 @@ BUFFER_LOG_FIELD_ORDER = [
     "has_grad",
     "grad_shape",
     "grad_dtype",
-    "gradient_memory",
-    "buffer_source",
+    "grad_memory",
+    "writer_label",
     "module",
     "modules",
 ]
@@ -767,7 +766,6 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "call_label",
     "ordinal_index",
     "ops",
-    "num_ops",
     "input_ops",
     "input_layers",
     "output_ops",
@@ -788,7 +786,7 @@ MODULE_PASS_LOG_FIELD_ORDER = [
     "inputs_before_pre_hooks",
     "inputs_after_pre_hooks",
     "forward_pre_hook_effects",
-    "had_pre_hook_input_change",
+    "has_pre_hook_input_change",
     "forward_duration",
     "backward_duration",
     "output_activation_memory",
@@ -852,7 +850,6 @@ MODULE_LOG_FIELD_ORDER = [
     # Layers
     "layer_labels",
     "layers",
-    "num_layers",
     "input_ops",
     "input_layers",
     "output_ops",
@@ -863,7 +860,6 @@ MODULE_LOG_FIELD_ORDER = [
     "num_params",
     "num_params_trainable",
     "num_params_frozen",
-    "num_param_tensors",
     "num_param_tensors_trainable",
     "num_param_tensors_frozen",
     "recursive_params",
@@ -1000,7 +996,7 @@ BACKWARD_PASS_FIELD_ORDER = [
     "status",
     "order_attribution_coverage",
     "grad_fn_calls",
-    "executed_flops_record",
+    "_executed_flops_record",
 ]
 
 PRIMITIVE_OP_FIELD_ORDER = [

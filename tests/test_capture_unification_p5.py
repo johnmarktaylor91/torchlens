@@ -100,13 +100,13 @@ def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
 def _linear_op(log: tl.Trace) -> tl.Op:
     """Return the first linear op in a trace."""
 
-    return next(op for op in log._layer_list if op.layer_type == "linear")
+    return next(op for op in log._layer_list if op.type == "linear")
 
 
 def _relu_op(log: tl.Trace) -> tl.Op:
     """Return the first relu op in a trace."""
 
-    return next(op for op in log._layer_list if op.layer_type == "relu")
+    return next(op for op in log._layer_list if op.type == "relu")
 
 
 def _save_only_mul(ctx: RecordContext) -> bool:
