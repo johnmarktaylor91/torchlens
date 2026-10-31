@@ -109,6 +109,7 @@ from .runnable import (
     mark_trace_path_status,
 )
 from .utils._torch_compat import tensor_has_named_dims
+from .utils.arg_handling import normalize_input_args
 from .utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 
 
@@ -1331,10 +1332,10 @@ class _FastLiveSession:
         truncation = None
         with self.activated(), self.steer_plan.context(), fingerprinting() as fingerprint:
             try:
-                if isinstance(input_args, list):
-                    output = model(*input_args, **dict(input_kwargs))
-                else:
-                    output = model(input_args, **dict(input_kwargs))
+                # Bind positional inputs exactly as capture and the ordinary live
+                # run do (a tuple or list spreads; a one-parameter forward takes a
+                # multi-element sequence whole), so one input tree means one call.
+                output = model(*normalize_input_args(input_args, model), **dict(input_kwargs))
             except FastUntilReached:
                 output = None
                 truncation = until
