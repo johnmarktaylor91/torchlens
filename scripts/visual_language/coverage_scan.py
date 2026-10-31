@@ -403,7 +403,7 @@ def _collapse_token_templates(path: Path) -> Iterator[tuple[str, int]]:
 def label_template_universe() -> tuple[SourceItem, ...]:
     """Label-template prefixes from the label and edge-label builders, first location each."""
 
-    vis = PACKAGE_ROOT / "visualization"
+    vis = PACKAGE_ROOT / "_visualization"
     first: dict[str, str] = {}
     for name, wanted in LABEL_SOURCES.items():
         path = (vis / name).resolve()
@@ -470,7 +470,7 @@ def emission_site_universe(files: Iterable[Path] | None = None) -> tuple[Emissio
 def encoding_legend_texts() -> list[LegendText]:
     """Encoding-legend line prefixes: ``NOTE_*`` constants and the legend-row builders."""
 
-    path = (PACKAGE_ROOT / "visualization" / "_encoding.py").resolve()
+    path = (PACKAGE_ROOT / "_visualization" / "_encoding.py").resolve()
     out: list[LegendText] = []
     for node in _tree(path).body:
         if (

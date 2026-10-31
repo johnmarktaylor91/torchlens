@@ -95,7 +95,7 @@ _TORCH_FAMILIES = (
 # the preview acceptance leg).
 _SITE_FAMILIES: dict[tuple[str, str], str] = {
     ("_ops_retention.py", "_replace_event_with_retained_payload"): "lookback_retention",
-    ("user_funcs.py", "_register_live_tensor_connection"): "graph_edge_insertion",
+    ("_user_funcs.py", "_register_live_tensor_connection"): "graph_edge_insertion",
     ("model_prep.py", "_record_module_exit_metadata"): "module_exit_intervention",
     (
         "model_prep.py",
@@ -544,7 +544,7 @@ def test_static_ast_guard_no_expansion_no_conditional_kwargs() -> None:
     package_root = Path(tl.__file__).parent
     relative_files = (
         "backends/torch/_ops_retention.py",
-        "user_funcs.py",
+        "_user_funcs.py",
         "backends/torch/model_prep.py",
         "backends/torch/backend.py",
         "_postprocess/graph_traversal.py",

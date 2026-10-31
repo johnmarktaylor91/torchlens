@@ -432,7 +432,7 @@ def test_preview_backends_stamp_at_return_boundary() -> None:
         # backends also import StopRequest on the same line, so pin the
         # module path and the imported name rather than one exact spelling).
         assert re.search(
-            r"from \.\.\.capture\.outcome import [^\n]*\bstamp_backend_finalized\b", source
+            r"from \.\.\._capture\.outcome import [^\n]*\bstamp_backend_finalized\b", source
         ), backend
 
 

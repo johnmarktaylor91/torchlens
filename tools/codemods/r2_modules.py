@@ -117,19 +117,19 @@ ROOT_EDITS = (
     ('    "fastlog",\n', '    "recording",\n'),
     (
         '    "draw_backward": "use torchlens._visualization.draw_backward",',
-        '    "draw_backward": "use trace.draw_backward()",',
+        '    "draw_backward": "use torchlens.Trace.draw_backward (trace.draw_backward())",',
     ),
     (
         '    "draw_combined": "use torchlens._visualization.draw_combined",',
-        '    "draw_combined": "use trace.draw_combined()",',
+        '    "draw_combined": "use torchlens.Trace.draw_combined (trace.draw_combined())",',
     ),
     (
         '"use torchlens._visualization.show_model_graph, or trace.draw()"',
-        '"use trace.draw()"',
+        '"use torchlens.Trace.draw (trace.draw())"',
     ),
     (
         '    "show_model_graph": "use torchlens._visualization.show_model_graph",',
-        '    "show_model_graph": "use trace.draw()",',
+        '    "show_model_graph": "use torchlens.Trace.draw (trace.draw())",',
     ),
     (
         '"import torchlens._semantic, then use torchlens._semantic.logit_lens and its siblings'
@@ -138,6 +138,145 @@ ROOT_EDITS = (
         ' -- the semantic package is private"',
     ),
 )
+#: Files that key a table by package name (layer map, ledgers, baselines): every quoted
+#: ``"name"`` or ``"name.module"`` token of a moved package is renamed to the new package.
+KEYED_FILES = (
+    "torchlens/_architecture.py",
+    "tests/test_arch_tail_vocab_lint.py",
+    "tests/test_no_string_private_getattr.py",
+)
+#: Tab-separated baselines keyed by dotted module path at the start of a line (re-sorted).
+KEYED_TSV = ("tests/test_arch_spine_layer_baseline.tsv",)
+#: Exact-text edits to pins whose expected value or path part names a moved package.
+PIN_EDITS: dict[str, tuple[tuple[str, str], ...]] = {
+    "tests/test_w051_gate_facade_redirects.py": (
+        (
+            "mechinterp, semantic and transformer instead of root module rows)",
+            "mechinterp and transformer instead of root module rows)",
+        ),
+        (
+            "names.4: exactly mechinterp, semantic and transformer teach at the root.",
+            "names.4: exactly mechinterp and transformer teach at the root.",
+        ),
+        (
+            '_SUBPACKAGE_ROWS == ["mechinterp", "semantic", "transformer"]',
+            '_SUBPACKAGE_ROWS == ["mechinterp", "transformer"]',
+        ),
+    ),
+    "tests/test_train_mode/test_no_bare_detach.py": (
+        ('REPO_ROOT / "torchlens" / "capture"', 'REPO_ROOT / "torchlens" / "_capture"'),
+        ('REPO_ROOT / "torchlens" / "fastlog"', 'REPO_ROOT / "torchlens" / "recording"'),
+    ),
+    "tests/test_capture_outcome_matrix.py": (
+        ('path.parent.name == "capture"', 'path.parent.name == "_capture"'),
+    ),
+    "tests/test_structure_only_capabilities.py": (
+        ('path.parent.name == "capture"', 'path.parent.name == "_capture"'),
+    ),
+    "tests/test_capture_outcome_preview_halt.py": (
+        ('TORCHLENS_DIR / "capture" / "outcome.py"', 'TORCHLENS_DIR / "_capture" / "outcome.py"'),
+    ),
+    "tests/test_observe_kit_labels.py": (
+        (
+            'TORCHLENS_DIR / "capture" / "_nonfinite_prefix.py"',
+            'TORCHLENS_DIR / "_capture" / "_nonfinite_prefix.py"',
+        ),
+    ),
+    "tests/test_r58_capture_cache_rce.py": (
+        ('        "user_funcs.py",', '        "_user_funcs.py",'),
+    ),
+    "tests/test_trace_autoroute_kwarg_forwarding.py": (
+        ('PACKAGE_ROOT / "user_funcs.py"', 'PACKAGE_ROOT / "_user_funcs.py"'),
+        ("not found in user_funcs.py", "not found in _user_funcs.py"),
+    ),
+    "tests/test_s5_escaping_pack.py": (
+        ('/ "torchlens" / "visualization"', '/ "torchlens" / "_visualization"'),
+    ),
+    "tests/test_no_legacy_tl_attrs.py": (
+        (
+            'if "visualization" not in path.relative_to(SOURCE_ROOT).parts:',
+            'if "_visualization" not in path.relative_to(SOURCE_ROOT).parts:',
+        ),
+    ),
+    "tests/test_observe_kit_peaks.py": (
+        (
+            '("report", "export", "visualization", "notebook", "bridge", "observe")',
+            '("report", "export", "_visualization", "notebook", "bridge", "observe")',
+        ),
+    ),
+    "tests/test_encoding_size.py": (
+        (
+            'scopes = ["visualization", "viz", "repgeom"]',
+            'scopes = ["_visualization", "viz", "repgeom"]',
+        ),
+    ),
+    "tests/test_api_surface.py": (('    "fastlog",\n', '    "recording",\n'),),
+    "tests/test_capture_settlement.py": (
+        (r"from \.\.\.capture\.outcome import", r"from \.\.\._capture\.outcome import"),
+    ),
+    "tests/test_arch_tail_seam_census.py": (
+        (
+            "from ..semantic.facets import FacetView",
+            "from .._semantic.facets import FacetView",
+        ),
+        ("from ..semantic import FacetView", "from .._semantic import FacetView"),
+    ),
+    "tests/test_ecosystem_rt_migrate.py": (
+        (
+            '("from ..capture", "from ..backends", "from ..semantic", "import torch\\n")',
+            '("from .._capture", "from ..backends", "from .._semantic", "import torch\\n")',
+        ),
+    ),
+    "docs/migration/from_bertviz_ecco.md": (
+        ("torchlens.semantic.logit_lens", "torchlens._semantic.logit_lens"),
+    ),
+    "tests/test_arch_spine_surface.py": (
+        ("assert len(rows) == 114, (", "assert len(rows) == 111, ("),
+        ("(frozen budget 114: ", "(frozen budget 111: "),
+        (
+            '"the table regenerated, the root holds 114 rows. "',
+            '"the table regenerated, the root held 114 rows; round 2 then moved "\n'
+            '        "the captured_run, user_funcs and visualization namespaces to private packages "\n'
+            '        "(-3), so the root holds 111 rows. "',
+        ),
+        ("assert int(result.stdout.strip()) >= 112", "assert int(result.stdout.strip()) >= 111"),
+    ),
+    "tests/test_arch_tail_surface_audit.py": (
+        (
+            "#: only go down through a decided surface change.\nDEEP_WALK_FLOOR = 975",
+            "#: only go down through a decided surface change. Round 2 (module moves) took it\n"
+            "#: from 975 to 968: the private visualization (5 names) and semantic (2 names)\n"
+            "#: packages no longer count.\nDEEP_WALK_FLOOR = 968",
+        ),
+    ),
+    "tests/support/proofnet/realism_registry.tsv": (
+        ("\nfastlog\ttoy\treferenced\tF36-freeze\n", "\nrecording\ttoy\treferenced\tF36-freeze\n"),
+    ),
+    "tests/producer_parity/test_p4_completeness.py": (
+        (
+            '("user_funcs.py", "_register_live_tensor_connection")',
+            '("_user_funcs.py", "_register_live_tensor_connection")',
+        ),
+        ('        "user_funcs.py",\n', '        "_user_funcs.py",\n'),
+    ),
+    "scripts/visual_language/coverage_scan.py": (
+        ('PACKAGE_ROOT / "visualization"', 'PACKAGE_ROOT / "_visualization"'),
+    ),
+    "tests/test_import_hygiene.py": (
+        ('    ("fastlog", "DryRun"),\n', '    ("recording", "DryRun"),\n'),
+        ('    ("user_funcs", "trace"),\n', ""),
+        ('    if facade_name == "fastlog":', '    if facade_name == "recording":'),
+        ('    "captured_run": [],\n', ""),
+        (
+            '    "fastlog": ["dry_run", "recover"], "intervention"',
+            '    "recording": ["dry_run", "recover"], "intervention"',
+        ),
+        (
+            '    "types": [], "user_funcs": [],\n    "validation": [], "visualization": [],\n',
+            '    "types": [],\n    "validation": [],\n',
+        ),
+    ),
+}
 PRE_3_NAMES = ("capture", "captured_run", "fastlog", "semantic", "user_funcs", "visualization")
 
 
@@ -260,6 +399,48 @@ def iter_files(repo: Path):
             yield path
 
 
+_KEYED = re.compile(rf"([\"'])({ALT})([./][\w./]*)?\1")
+
+
+def _rewrite_keyed(text: str) -> str:
+    return _KEYED.sub(lambda m: f"{m[1]}{MAPPING[m[2]]}{m[3] or ''}{m[1]}", text)
+
+
+def _rewrite_tsv(text: str) -> str:
+    """Rename the leading module key of each data row, keeping header lines in place."""
+    pattern = re.compile(rf"^({ALT})(?=[.\t])", re.M)
+    lines = text.splitlines()
+    head = [ln for ln in lines if ln.startswith("#") or ln == "module\tcount"]
+    rows = [pattern.sub(lambda m: MAPPING[m[1]], ln) for ln in lines if ln not in head]
+    return "\n".join(head + sorted(rows)) + ("\n" if text.endswith("\n") else "")
+
+
+def apply_pins(repo: Path, dry: bool) -> list[Path]:
+    """Rewrite the keyed pin tables and the exact-text pin edits; return the files changed."""
+    changed: list[Path] = []
+    jobs: list[tuple[str, object]] = [(rel, _rewrite_keyed) for rel in KEYED_FILES]
+    jobs += [(rel, _rewrite_tsv) for rel in KEYED_TSV]
+    for rel, edits in PIN_EDITS.items():
+        jobs.append((rel, lambda text, edits=edits: _apply_exact(text, edits)))
+    for rel, func in jobs:
+        path = repo / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        new = func(text)  # type: ignore[operator]
+        if new != text:
+            changed.append(path)
+            if not dry:
+                path.write_text(new, encoding="utf-8")
+    return changed
+
+
+def _apply_exact(text: str, edits: tuple[tuple[str, str], ...]) -> str:
+    for old, new in edits:
+        text = text.replace(old, new)
+    return text
+
+
 def move_packages(repo: Path, dry: bool) -> list[str]:
     done = []
     for old, new in MAPPING.items():
@@ -311,8 +492,13 @@ def main(argv: list[str]) -> int:
         if new != text:
             changed += 1
             touched.append(path)
-            if not dry:
+            if dry:
+                print("would change", rel)
+            else:
                 path.write_text(new, encoding="utf-8")
+    for path in apply_pins(repo, dry):
+        changed += 1
+        touched.append(path)
     pre3 = repo / "torchlens/_io/_pre3_module_paths.py"
     if pre3.is_file():
         text = pre3.read_text(encoding="utf-8")

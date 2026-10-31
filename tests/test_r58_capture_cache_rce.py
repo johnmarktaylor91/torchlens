@@ -380,7 +380,7 @@ def test_no_bare_pickle_read_in_the_package() -> None:
         # The authenticated capture-cache reader: verifies an HMAC tag over the exact
         # bytes BEFORE unpickling, and refuses a non-private cache directory. See this
         # module's docstring for why the SafeBundleUnpickler allowlist cannot apply.
-        "user_funcs.py",
+        "_user_funcs.py",
     }
     package_root = Path(tl.__file__).resolve().parent
     offenders: list[str] = []

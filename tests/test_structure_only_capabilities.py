@@ -51,7 +51,7 @@ def _structure_trace():
 
 def test_nobody_reads_the_capability_table_but_the_chokepoint() -> None:
     for path in TORCHLENS_DIR.rglob("*.py"):
-        if path.name == "structure_only.py" and path.parent.name == "capture":
+        if path.name == "structure_only.py" and path.parent.name == "_capture":
             continue
         text = path.read_text(encoding="utf-8")
         assert "STRUCTURE_ONLY_CAPABILITIES[" not in text, str(path)

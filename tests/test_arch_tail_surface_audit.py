@@ -30,8 +30,10 @@ TABLE = Path(__file__).with_name("test_arch_spine_surface_table.tsv")
 
 #: Floor on the deep walk's denominator. Re-keyed 31 Oct 2026 to the decided
 #: round-1 surface (lazy namespaces plus public non-lazy submodules); it may
-#: only go down through a decided surface change.
-DEEP_WALK_FLOOR = 975
+#: only go down through a decided surface change. Round 2 (module moves) took it
+#: from 975 to 968: the private visualization (5 names) and semantic (2 names)
+#: packages no longer count.
+DEEP_WALK_FLOOR = 968
 
 _HEADER = (
     "canonical_path\thome_module\timplementation_layer\tproduct_role\tin_all\tlegacy_top_level"

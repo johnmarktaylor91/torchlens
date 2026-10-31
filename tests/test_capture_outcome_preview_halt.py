@@ -138,7 +138,7 @@ def test_preview_stamp_reads_the_structural_halt_fields() -> None:
     preview backend at once, including ones that gain ``halt=`` later.
     """
 
-    source = (TORCHLENS_DIR / "capture" / "outcome.py").read_text(encoding="utf-8")
+    source = (TORCHLENS_DIR / "_capture" / "outcome.py").read_text(encoding="utf-8")
     body = source.split("def stamp_backend_finalized(", 1)[1]
     body = body.split("\ndef ", 1)[0]
     assert 'getattr(trace, "halted"' in body
@@ -273,7 +273,7 @@ def test_halt_capable_preview_backend_latches_stop_request_before_raising(backen
 def test_preview_stamp_source_checks_the_stop_latch() -> None:
     """Source lockstep: the one preview stamp consumes and checks the latch."""
 
-    source = (TORCHLENS_DIR / "capture" / "outcome.py").read_text(encoding="utf-8")
+    source = (TORCHLENS_DIR / "_capture" / "outcome.py").read_text(encoding="utf-8")
     body = source.split("def stamp_backend_finalized(", 1)[1]
     body = body.split("\ndef ", 1)[0]
     assert '"_stop_requested"' in body

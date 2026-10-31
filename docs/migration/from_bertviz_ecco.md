@@ -28,7 +28,7 @@ its footer.
 | `lm = ecco.from_pretrained(name)` | Load the model with transformers, then `tl.trace(model, ids)` | Any PyTorch model, not a fixed list. |
 | `output = lm.generate(text, generate=n)` | `model.generate(...)`, then trace the prompt plus the tokens you want to explain | Episode capture records a whole generation run (`docs/reference/episode_capture.md`). |
 | `output.saliency()` (input saliency for a generated token) | `tl.attribution.text(model, tokenizer, text, target=" Paris").show()` | Integrated gradients for one target token. |
-| `output.layer_predictions(position=...)` (logit lens) | `torchlens.semantic.logit_lens.logit_lens_predictions(trace)`, then `tviz.prediction_trajectory(...)` and `tviz.render_prediction_ribbon(...)` | |
+| `output.layer_predictions(position=...)` (logit lens) | `torchlens._semantic.logit_lens.logit_lens_predictions(trace)`, then `tviz.prediction_trajectory(...)` and `tviz.render_prediction_ribbon(...)` | |
 | `output.run_nmf(...)` (neuron factors) | The NMF recipe in `docs/reference/tviz.md`: factorize a named activation matrix with scikit-learn and draw it with TorchLens's token strips | NMF stays your code by design. |
 
 Neither BertViz nor Ecco is executed here (Ecco targets transformers 4). The TorchLens
@@ -43,7 +43,7 @@ import torch
 import transformers
 import torchlens as tl
 import torchlens.transformer as tviz
-from torchlens.semantic.logit_lens import logit_lens_predictions
+from torchlens._semantic.logit_lens import logit_lens_predictions
 
 torch.manual_seed(0)
 config = transformers.GPT2Config(n_layer=2, n_embd=32, n_head=2, vocab_size=64, n_positions=16)

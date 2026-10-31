@@ -579,7 +579,7 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
     """
 
     package_root = Path(tl.__file__).parent
-    scopes = ["visualization", "viz", "repgeom"]
+    scopes = ["_visualization", "viz", "repgeom"]
     key_pattern = re.compile(r"[\"'](width|height|fixedsize)[\"']\s*:")
     subscript_pattern = re.compile(r"\[[\"'](width|height|fixedsize)[\"']\]\s*=")
     found: dict[str, int] = {}

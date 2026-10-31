@@ -13,7 +13,7 @@ TARGET_ALL = [
     "clear_cache",
     "export",
     "fingerprint",
-    "fastlog",
+    "recording",
     "facets",
     "record",
     "Recording",

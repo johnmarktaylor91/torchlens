@@ -59,11 +59,11 @@ AUTOROUTE_EXEMPT_PARAMS = {
 def _trace_function_def() -> ast.FunctionDef:
     """The public ``trace`` FunctionDef from the parsed package corpus."""
 
-    tree = package_ast(PACKAGE_ROOT / "user_funcs.py")
+    tree = package_ast(PACKAGE_ROOT / "_user_funcs.py")
     candidates = [
         node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "trace"
     ]
-    assert candidates, "public trace() not found in user_funcs.py"
+    assert candidates, "public trace() not found in _user_funcs.py"
     return candidates[-1]
 
 

@@ -4,6 +4,8 @@
 # TORCHLENS_REGEN_LAYER_BASELINE=1 and review the diff.
 module	count
 _autoroute._builtin_input	1
+_capture.predicates	3
+_capture.trace	1
 _capture_fingerprint	1
 _chunked_capture_helpers	3
 _chunking	2
@@ -64,17 +66,15 @@ backends.torch.completeness_witness	2
 backends.torch.ops	17
 backends.torch.sources	1
 backends.torch.tensor_tracking	1
-capture.predicates	3
-capture.trace	1
 export	5
 facets	1
-fastlog._record_one_shot	1
-fastlog._recorder	3
-fastlog._storage_resolver	1
-fastlog.options	1
-fastlog.types	5
 fingerprint	2
 receptive_field._viz	1
+recording._record_one_shot	1
+recording._recorder	3
+recording._storage_resolver	1
+recording.options	1
+recording.types	5
 repgeom._node_visuals	3
 validation	1
 validation.backward	1

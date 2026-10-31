@@ -36,7 +36,7 @@ _AUDIT_NAMED_SHIMS = (
 _DOTTED = re.compile(r"use (torchlens(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 
 #: Rows naming a torchlens subpackage (forks ruling names.4: teaching rows for
-#: mechinterp, semantic and transformer instead of root module rows). Importing a
+#: mechinterp and transformer instead of root module rows). Importing a
 #: subpackage binds it on the package, and attribute lookup then never reaches
 #: ``__getattr__``, so these rows teach only until the subpackage is imported.
 #: In-process state depends on what ran before, so they are pinned in a fresh
@@ -109,9 +109,9 @@ print("ok")
 
 
 def test_subpackage_rows_are_the_ruled_three() -> None:
-    """names.4: exactly mechinterp, semantic and transformer teach at the root."""
+    """names.4: exactly mechinterp and transformer teach at the root."""
 
-    assert _SUBPACKAGE_ROWS == ["mechinterp", "semantic", "transformer"]
+    assert _SUBPACKAGE_ROWS == ["mechinterp", "transformer"]
     assert not set(_SUBPACKAGE_ROWS) & (set(tl._LAZY_ATTRS) | set(tl.__all__))
 
 

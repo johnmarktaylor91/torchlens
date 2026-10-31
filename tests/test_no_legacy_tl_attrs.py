@@ -84,7 +84,7 @@ def _is_docstring_constant(node: ast.Constant, parent: ast.AST | None) -> bool:
 
 def _is_allowed_visualization_name(path: Path, name: str) -> bool:
     """Return whether a legacy-shaped name is an allowed visualization identifier."""
-    if "visualization" not in path.relative_to(SOURCE_ROOT).parts:
+    if "_visualization" not in path.relative_to(SOURCE_ROOT).parts:
         return False
     return any(allowed in name for allowed in VISUALIZATION_ALLOWLIST)
 

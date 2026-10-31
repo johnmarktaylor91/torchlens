@@ -220,7 +220,7 @@ def test_gated_entries_consult_the_chokepoint() -> None:
     # No inline second authority: nothing outside the authority module reads
     # the capability table directly.
     for path in TORCHLENS_DIR.rglob("*.py"):
-        if path.name == "outcome.py" and path.parent.name == "capture":
+        if path.name == "outcome.py" and path.parent.name == "_capture":
             continue
         text = path.read_text(encoding="utf-8")
         assert "CAPTURE_OUTCOME_CAPABILITIES[" not in text, str(path)

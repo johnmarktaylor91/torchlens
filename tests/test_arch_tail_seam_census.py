@@ -77,7 +77,7 @@ SEAM_DISPOSITIONS: dict[str, tuple[str, str]] = {
     ),
     "facet_deletability_contract": (
         "OPEN",
-        "Module.facets defers `from ..semantic import FacetView`: engine-absent "
+        "Module.facets defers `from .._semantic import FacetView`: engine-absent "
         "access raises ImportError today instead of returning typed-empty",
     ),
 }
@@ -147,7 +147,7 @@ def test_open_row_facet_settlement_triggers() -> None:
     """Armed flip triggers for the two facet-settlement OPEN rows."""
 
     module_source = (PACKAGE_ROOT / "_data_classes/module.py").read_text()
-    assert "from ..semantic.facets import FacetView" in module_source, (
+    assert "from .._semantic.facets import FacetView" in module_source, (
         "Module.facets no longer defers into semantic/ -- settlement part 1 "
         "(vocabulary relocation) or the deletability contract landed; flip the "
         "facet census rows and add the typed-empty engine-absent probe here"

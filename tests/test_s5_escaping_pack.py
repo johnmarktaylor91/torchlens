@@ -222,7 +222,7 @@ def test_e2_escaper_equivalence() -> None:
 # E3: extra_attrs discipline — the power valve stays a power valve.
 # --------------------------------------------------------------------------
 
-_VIZ_ROOT = Path(__file__).parent.parent / "torchlens" / "visualization"
+_VIZ_ROOT = Path(__file__).parent.parent / "torchlens" / "_visualization"
 
 #: Internal write sites allowed to place a ``label`` key through extra_attrs.
 #: Today: NONE. Intervention-hook helpers emit literal constants through

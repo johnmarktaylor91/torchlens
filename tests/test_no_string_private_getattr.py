@@ -165,7 +165,7 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # peak-memory sites converted to direct private reads guarded by
     # try/except AttributeError, net -2 after the new episode/peak-memory
     # additions.
-    "capture": 21,
+    "_capture": 21,
     # 25 -> 27 (2026-08-14 fix-wave reconcile, 7f90a885 fix/walkers): the
     # linear ordinal_index cache keys its per-trace memo on the session-time
     # `_backward_projection_revision` counter in grad_fn_call.py (x2); absent
@@ -192,7 +192,7 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # by try/except AttributeError.
     "_data_classes": 25,
     "experimental": 1,
-    "fastlog": 2,
+    "recording": 2,
     # 43 -> 44 (2026-08-17 privprobes reconcile, d4a2b8a6 one-shot-warning
     # consolidation): the replay.py refresh scrub discards one key from the
     # consolidated `_warned_once` set; absent on traces that never warned, so
@@ -248,7 +248,7 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # _render_nodes.py sites.
     # 23 -> 22 (2026-08-14 fix-wave reconcile, fix/vizr2 2d1371ac): one
     # reach-in discharged with the imagepath-out-of-saved-DOT rework.
-    "visualization": 22,
+    "_visualization": 22,
     # 2 -> 1 (2026-08-14 fixwave-2 reconcile): one reach-in discharged upstream.
     "viz": 1,
 }
