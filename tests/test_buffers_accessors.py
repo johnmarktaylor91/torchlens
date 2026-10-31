@@ -42,7 +42,7 @@ def test_buffer_source_and_sink_accessor_counts() -> None:
     trace = tl.trace(
         BufferWriteModel(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
     buffer_sources = [
         op.label for op in trace.layer_list if op.is_buffer and op.buffer_write_kind is None

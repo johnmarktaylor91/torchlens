@@ -178,7 +178,7 @@ def test_hard_crash_temp_debris_is_swept_age_gated(tmp_path) -> None:
     # touches the secret file.
     stale.write_bytes(b"debris-again")
     os.utime(stale, (two_hours_ago, two_hours_ago))
-    removed = tl.clear_capture_cache(tmp_path / "cache")
+    removed = tl.clear_cache(tmp_path / "cache")
     assert removed >= 1
     assert not stale.exists()
     assert fresh.exists()

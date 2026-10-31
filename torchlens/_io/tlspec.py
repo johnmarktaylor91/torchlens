@@ -19,7 +19,7 @@ from safetensors.torch import save_file
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._errors import InvalidArgumentError
-from ..backends import get_backend_spec
+from ..backends.registry import get_backend_spec
 from . import TLSPEC_VERSION, TorchLensIOError
 from ._durability import fsync_dir, fsync_tree
 from .manifest import Manifest, TensorEntry, sha256_of_file

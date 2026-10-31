@@ -12,7 +12,7 @@ from torchlens.options import (
     InterventionOptions,
     ReplayOptions,
     SaveOptions,
-    StreamingOptions,
+    StorageOptions,
     VisualizationOptions,
     merge_streaming_options,
 )
@@ -23,7 +23,7 @@ _OPTION_CLASSES = [
     VisualizationOptions,
     ReplayOptions,
     InterventionOptions,
-    StreamingOptions,
+    StorageOptions,
 ]
 
 

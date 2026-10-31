@@ -16,11 +16,7 @@ from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._io.tlspec import _TlSpecWriter
-from torchlens.backends import (
-    BackendRuntimeCompatibilityError,
-    BackendUnsupportedError,
-    get_backend_spec,
-)
+from torchlens.backends import BackendRuntimeCompatibilityError, BackendUnsupportedError
 from torchlens.backends.tinygrad import GradOptions, TinygradBackend, capabilities
 
 tinygrad = pytest.importorskip("tinygrad")
@@ -442,7 +438,7 @@ def _first_saved_op(trace: Any) -> Any:
 def test_tinygrad_spec_registered() -> None:
     """Assert the built-in tinygrad spec exposes the G1 capability split."""
 
-    spec = get_backend_spec("tinygrad")
+    spec = tl.backends.spec("tinygrad")
     assert spec.capabilities.backward_capture is False
     assert spec.capabilities.validation_replay is True
     assert spec.capabilities.fastlog is False
@@ -489,7 +485,7 @@ def test_tinygrad_preview_rejects_random_seed() -> None:
             _tiny_block,
             Tensor([1.0, -2.0, 3.0]),
             backend="tinygrad",
-            capture=tl.options.CaptureOptions(random_seed=123),
+            capture=tl.options.CaptureOptions(seed=123),
         )
 
 

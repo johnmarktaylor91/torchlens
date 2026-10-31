@@ -104,9 +104,7 @@ class _DeviceHop(nn.Module):
 def _validate(model: nn.Module, x: torch.Tensor, output_device: str = "same") -> bool:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return bool(
-            tl.validate(model, x, scope="forward", random_seed=0, output_device=output_device)
-        )
+        return bool(tl.validate(model, x, scope="forward", seed=0, output_device=output_device))
 
 
 def _validation_capture(
@@ -443,7 +441,7 @@ def test_a_user_trace_keeps_saved_arguments_on_each_ops_device() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=True, output_device="cpu"),
+        capture=CaptureOptions(layers_to_save="all", save_args=True, output_device="cpu"),
     )
     saved = _saved_arg_tensors(trace)
     assert saved and {t.device.type for t in saved} == {_ACCEL}
@@ -604,6 +602,6 @@ def test_parameter_aliases_alone_do_not_trip_the_validation_budget() -> None:
         warnings.simplefilter("ignore")
         assert tl.validate(model, x, scope="forward", output_device="cpu", save_budget=budget)
         assert tl.validate(model, x, scope="forward", output_device="same", save_budget=budget)
-        capture = CaptureOptions(layers_to_save="all", save_arg_values=True, save_budget=budget)
+        capture = CaptureOptions(layers_to_save="all", save_args=True, save_budget=budget)
         with pytest.raises(SaveBudgetExceededError):
             tl.trace(model, x, capture=capture)

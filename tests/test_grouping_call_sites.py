@@ -1307,7 +1307,7 @@ def test_row73_layer_over_varying_weights_lists_every_weight() -> None:
     ]
     assert matmul.num_params == 48
     assert matmul.annotations["varying_across_passes"]["params"] == [["ws.0"], ["ws.1"], ["ws.2"]]
-    assert tl.validate(model, _x(), scope="forward", random_seed=0, validate_metadata=True)
+    assert tl.validate(model, _x(), scope="forward", seed=0, validate_metadata=True)
 
 
 def _buffer_passes(build: Callable[[], nn.Module]) -> list[int]:

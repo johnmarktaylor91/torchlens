@@ -46,7 +46,7 @@ class _TinyImageNet(nn.Module):
 def _trace_with(transform: Any, model: nn.Module | None = None) -> Any:
     model = model or _TinyImageNet().eval()
     image = torch.rand(1, 3, 256, 256)
-    return tl.trace(model, image, capture=tl.options.CaptureOptions(transform=transform))
+    return tl.trace(model, image, capture=tl.options.CaptureOptions(input_transform=transform))
 
 
 def _codes(caught: list[warnings.WarningMessage]) -> list[str]:
@@ -61,8 +61,8 @@ def test_attached_torchvision_weights_are_discovered() -> None:
     assert tlp.attach_authority(model, _V1) is model
 
     resolution = tlp.resolve(model=model)
-    assert resolution.record.source == "torchvision_weights"
-    assert resolution.record.config["resolution_method"] == "model_metadata"
+    assert resolution.preprocessing.source == "torchvision_weights"
+    assert resolution.preprocessing.config["resolution_method"] == "model_metadata"
     assert resolution.status == tlp.STATUS_AUTHORITATIVE
     assert resolution.declared is not None and resolution.declared.resize_size == 256
     # Attaching records metadata only: the module tree is unchanged.
@@ -100,8 +100,8 @@ def test_open_clip_model_resolves_its_own_preprocess_cfg() -> None:
 
     resolution = tlp.resolve(model=model)
 
-    assert resolution.record.source == "open_clip_preprocess_cfg"
-    assert resolution.record.config["resolution_method"] == "model_metadata"
+    assert resolution.preprocessing.source == "open_clip_preprocess_cfg"
+    assert resolution.preprocessing.config["resolution_method"] == "model_metadata"
     assert resolution.status == tlp.STATUS_AUTHORITATIVE
     declared = resolution.declared
     assert declared is not None

@@ -50,14 +50,14 @@ def test_preview_stamp_settles_halted_when_trace_is_halted() -> None:
 
     trace = _halted_trace()
     outcome = stamp_backend_finalized(trace)
-    assert outcome.status is CaptureStatus.HALTED
+    assert outcome.status is CaptureStatus.STOPPED
     # An attested stamp, not a structural derivation.
-    assert outcome.derived is False
-    assert outcome.partial is True
-    assert outcome.reason == trace.halt_reason
+    assert outcome.is_derived is False
+    assert outcome.is_partial is True
+    assert outcome.reason == trace.stop_reason
     assert outcome.boundary_label == trace.halt_frontier
     assert outcome.frontier_labels == tuple(trace.output_layers)
-    assert outcome.n_ops_committed is not None
+    assert outcome.num_committed_ops is not None
     # The stamp is the trace's settled outcome, in both homes.
     assert outcome_for(trace) is outcome
     assert trace.outcome is outcome
@@ -70,8 +70,8 @@ def test_preview_stamp_still_settles_complete_when_not_halted() -> None:
     assert bool(getattr(trace, "halted", False)) is False
     outcome = stamp_backend_finalized(trace)
     assert outcome.status is CaptureStatus.COMPLETE
-    assert outcome.derived is False
-    assert outcome.partial is False
+    assert outcome.is_derived is False
+    assert outcome.is_partial is False
     assert outcome.reason is None
     assert outcome.frontier_labels is None
 
@@ -90,9 +90,9 @@ def test_preview_halted_stamp_is_coherent_and_survives_save_load(tmp_path) -> No
     path = tmp_path / "preview_halted.tlspec"
     tl.save(trace, str(path))
     loaded = tl.load(str(path))
-    assert loaded.halted is True
+    assert loaded.is_stopped is True
     assert loaded.outcome is not None
-    assert loaded.outcome.status is CaptureStatus.HALTED
+    assert loaded.outcome.status is CaptureStatus.STOPPED
     # N1: a non-degraded halted artifact re-saves.
     tl.save(loaded, str(tmp_path / "preview_halted_again.tlspec"))
 
@@ -142,7 +142,7 @@ def test_preview_stamp_reads_the_structural_halt_fields() -> None:
     body = source.split("def stamp_backend_finalized(", 1)[1]
     body = body.split("\ndef ", 1)[0]
     assert 'getattr(trace, "halted"' in body
-    assert "CaptureStatus.HALTED" in body
+    assert "CaptureStatus.STOPPED" in body
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +171,7 @@ def test_mlx_halted_capture_settles_halted() -> None:
     )
     assert trace.halted is True
     assert trace.outcome is not None
-    assert trace.outcome.status is CaptureStatus.HALTED
+    assert trace.outcome.status is CaptureStatus.STOPPED
 
 
 def test_paddle_halted_capture_settles_halted() -> None:
@@ -195,7 +195,7 @@ def test_paddle_halted_capture_settles_halted() -> None:
     )
     assert trace.halted is True
     assert trace.outcome is not None
-    assert trace.outcome.status is CaptureStatus.HALTED
+    assert trace.outcome.status is CaptureStatus.STOPPED
 
 
 # ---------------------------------------------------------------------------
@@ -240,11 +240,11 @@ def test_preview_stamp_consumes_latch_on_the_normal_halted_arm() -> None:
     trace = _halted_trace()
     trace.__dict__["_stop_requested"] = StopRequest(
         kind="halt",
-        reason=trace.halt_reason,
+        reason=trace.stop_reason,
         boundary_label=trace.halt_frontier,
     )
     outcome = stamp_backend_finalized(trace)
-    assert outcome.status is CaptureStatus.HALTED
+    assert outcome.status is CaptureStatus.STOPPED
     assert "_stop_requested" not in trace.__dict__
 
 

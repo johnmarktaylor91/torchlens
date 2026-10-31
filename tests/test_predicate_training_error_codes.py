@@ -76,7 +76,7 @@ def test_keep_grad_integer_dtype_carries_predicate_storage_conflict() -> None:
         tl.record(
             _model(),
             _x(),
-            default_op=CaptureSpec(keep_grad=True, dtype=torch.int32),
+            default_op=CaptureSpec(save_grad=True, dtype=torch.int32),
             on_predicate_error="fail-fast",
         )
     assert exc_info.value.fields["code"] == "predicate_storage_conflict"

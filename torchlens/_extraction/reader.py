@@ -1141,7 +1141,7 @@ def _merge_ragged(carriers: list[RaggedBatch]) -> RaggedBatch:
     cursor = 0
     position = 0
     for carrier in carriers:
-        for i in range(carrier.row_count):
+        for i in range(carrier.num_rows):
             cursor += int(carrier.offsets[i + 1] - carrier.offsets[i])
             position += 1
             offsets[position] = cursor

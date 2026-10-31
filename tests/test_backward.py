@@ -294,7 +294,7 @@ def test_recording_backward_context_manager() -> None:
     """recording_backward accumulates multiple backward calls."""
     _model, _x, trace = _logged_model()
     loss = _output_loss(trace)
-    with trace.recording_backward():
+    with trace.capture_backward():
         loss.backward(retain_graph=True)
         (loss * 2).backward()
     assert trace.num_backward_passes == 2
@@ -386,7 +386,7 @@ def test_backward_reprojection_folds_incrementally() -> None:
         real_impl(trace_arg, events, stream=stream)
 
     with mock.patch.object(backward_mod, "_materialize_backward_projections_impl", counting_impl):
-        with trace.recording_backward():
+        with trace.capture_backward():
             loss.backward(retain_graph=True)
             loss.backward(retain_graph=True)
             loss.backward()
@@ -784,7 +784,7 @@ def test_backward_entrypoints_finalize_streaming_on_exception(
             trace.log_backward(_output_loss(trace))
     else:
         with pytest.raises(RuntimeError, match="injected block failure"):
-            with trace.recording_backward():
+            with trace.capture_backward():
                 raise RuntimeError("injected block failure")
 
     assert finalized == [trace]
@@ -914,7 +914,7 @@ def test_recording_backward_delegates_foreign_graphs() -> None:
     _model, _x, trace = _logged_model()
     loss = _output_loss(trace)
     foreign = torch.randn(3, 3, requires_grad=True)
-    with trace.recording_backward():
+    with trace.capture_backward():
         (foreign * 2).sum().backward()
         loss.backward()
     assert foreign.grad is not None
@@ -922,7 +922,7 @@ def test_recording_backward_delegates_foreign_graphs() -> None:
 
     control_model, _control_x, control_trace = _logged_model()
     control_loss = _output_loss(control_trace)
-    with control_trace.recording_backward():
+    with control_trace.capture_backward():
         control_loss.backward()
     trace_labels = sorted(grad_fn.label for grad_fn in trace.grad_fn_logs.values())
     control_labels = sorted(grad_fn.label for grad_fn in control_trace.grad_fn_logs.values())
@@ -935,7 +935,7 @@ def test_recording_backward_foreign_only_block_stays_empty() -> None:
     foreign = torch.randn(2, 2, requires_grad=True)
     with warnings.catch_warnings(record=True) as warning_records:
         warnings.simplefilter("always")
-        with trace.recording_backward():
+        with trace.capture_backward():
             (foreign * foreign).sum().backward()
             (foreign * 2.0).sum().backward()
     unmatched_warnings = [
@@ -957,7 +957,7 @@ def test_recording_backward_exit_preserves_interleaved_patch() -> None:
     def interloper_backward(tensor_self: torch.Tensor, *args: object, **kwargs: object) -> None:
         raise AssertionError("interloper should never run in this test")
 
-    context = trace.recording_backward()
+    context = trace.capture_backward()
     context.__enter__()
     try:
         torch.Tensor.backward = interloper_backward  # type: ignore[assignment, method-assign]
@@ -1170,7 +1170,7 @@ def test_validate_backward_default_detects_corrupted_captured_op_grad(
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    assert not tl_validation.validate_backward_pass(model, x, random_seed=42)
+    assert not tl_validation.validate_backward_pass(model, x, seed=42)
     assert corrupted_labels
 
 
@@ -1183,7 +1183,7 @@ def test_validate_backward_pass_random_seed_kwarg_public_wrapper() -> None:
         "torchlens.validation.consolidated.validate_backward_pass",
         wraps=consolidated_validation.validate_backward_pass,
     ) as validator:
-        assert tl.validate(model, x, scope="backward", random_seed=42)
+        assert tl.validate(model, x, scope="backward", seed=42)
     assert validator.call_args is not None
     assert validator.call_args.kwargs["random_seed"] == 42
 
@@ -1197,7 +1197,7 @@ def test_validation_validate_backward_pass_random_seed_kwarg_user_funcs_path() -
         "torchlens.validation.backward.validate_backward_pass",
         wraps=backward_validation.validate_backward_pass,
     ) as validator:
-        assert tl_validation.validate_backward_pass(model, x, random_seed=42)
+        assert tl_validation.validate_backward_pass(model, x, seed=42)
     assert validator.call_args is not None
     assert validator.call_args.kwargs["random_seed"] == 42
 
@@ -1208,8 +1208,8 @@ def test_validate_backward_random_seed_deterministic() -> None:
     torch.manual_seed(0)
     model = _DropoutBackwardModel().train()
     x = torch.randn(6, 3, requires_grad=True)
-    first = tl_validation.validate_backward_pass(model, x, random_seed=42)
-    second = tl_validation.validate_backward_pass(model, x, random_seed=42)
+    first = tl_validation.validate_backward_pass(model, x, seed=42)
+    second = tl_validation.validate_backward_pass(model, x, seed=42)
     assert first is True
     assert second is first
 
@@ -1229,7 +1229,7 @@ def test_validate_backward_zero_grad_between_passes() -> None:
         original_zero_grad(set_to_none=set_to_none)
 
     model.zero_grad = MethodType(counted_zero_grad, model)
-    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, seed=42)
     assert calls == [True, True, True]
 
 
@@ -1239,7 +1239,7 @@ def test_validate_backward_dropout_train_mode_reproducible() -> None:
     torch.manual_seed(0)
     model = _DropoutBackwardModel().train()
     x = torch.randn(6, 3, requires_grad=True)
-    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, seed=42)
 
 
 def test_validate_backward_batchnorm_train_mode_state_restored() -> None:
@@ -1251,7 +1251,7 @@ def test_validate_backward_batchnorm_train_mode_state_restored() -> None:
     running_mean = model.bn.running_mean.detach().clone()
     running_var = model.bn.running_var.detach().clone()
 
-    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, seed=42)
     assert torch.equal(model.bn.running_mean, running_mean)
     assert torch.equal(model.bn.running_var, running_var)
 
@@ -1263,7 +1263,7 @@ def test_validate_backward_train_mode_audit() -> None:
     x = torch.randn(2, 3, requires_grad=True)
     for training in (True, False):
         model.train(training)
-        assert tl_validation.validate_backward_pass(model, x, random_seed=42)
+        assert tl_validation.validate_backward_pass(model, x, seed=42)
         assert model.training is training
 
 
@@ -1273,7 +1273,7 @@ def test_validate_backward_multipass_weight_tied() -> None:
     torch.manual_seed(0)
     model = _WeightTiedModel()
     x = torch.randn(2, 3, requires_grad=True)
-    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, seed=42)
 
 
 def test_validate_backward_custom_autograd_function() -> None:
@@ -1282,7 +1282,7 @@ def test_validate_backward_custom_autograd_function() -> None:
     torch.manual_seed(0)
     model = _CustomParamModel()
     x = torch.randn(2, 3, requires_grad=True)
-    assert tl_validation.validate_backward_pass(model, x, random_seed=42)
+    assert tl_validation.validate_backward_pass(model, x, seed=42)
 
 
 def test_validate_backward_hygiene_data_parallel() -> None:
@@ -1291,7 +1291,7 @@ def test_validate_backward_hygiene_data_parallel() -> None:
     model = nn.DataParallel(_TinyBackwardModel())
     model.module.cpu()
     x = torch.randn(2, 3, requires_grad=True)
-    assert backward_validation.validate_backward_pass(model, x, random_seed=42)
+    assert backward_validation.validate_backward_pass(model, x, seed=42)
 
 
 def test_validate_backward_hygiene_opaque_wrapper() -> None:
@@ -1300,7 +1300,7 @@ def test_validate_backward_hygiene_opaque_wrapper() -> None:
     model = torch.jit.trace(_TinyBackwardModel(), torch.randn(2, 3))
     x = torch.randn(2, 3, requires_grad=True)
     with pytest.raises(RuntimeError, match="torch.jit"):
-        backward_validation.validate_backward_pass(model, x, random_seed=42)
+        backward_validation.validate_backward_pass(model, x, seed=42)
 
 
 def test_accumulategrad_labels_deterministic_across_captures() -> None:
@@ -1309,7 +1309,7 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     torch.manual_seed(0)
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace1 = tl.trace(model, x, capture=CaptureOptions(save_grads="all", random_seed=42))
+    trace1 = tl.trace(model, x, capture=CaptureOptions(save_grads="all", seed=42))
     trace1.log_backward(_output_loss(trace1))
     labels1 = {
         grad_fn_handle.label
@@ -1318,7 +1318,7 @@ def test_accumulategrad_labels_deterministic_across_captures() -> None:
     }
     trace1.cleanup()
 
-    trace2 = tl.trace(model, x, capture=CaptureOptions(save_grads="all", random_seed=42))
+    trace2 = tl.trace(model, x, capture=CaptureOptions(save_grads="all", seed=42))
     trace2.log_backward(_output_loss(trace2))
     labels2 = {
         grad_fn_handle.label
@@ -1371,7 +1371,7 @@ def test_param_grad_records_rebuild_from_event_spine() -> None:
 
     _model, _x, trace = _logged_model()
     loss = _output_loss(trace)
-    with trace.recording_backward():
+    with trace.capture_backward():
         loss.backward(retain_graph=True)
         loss.backward()
 
@@ -1415,7 +1415,7 @@ def test_param_grad_incremental_fold_matches_scratch_rebuild() -> None:
 
     _model, _x, trace = _logged_model()
     loss = _output_loss(trace)
-    with trace.recording_backward():
+    with trace.capture_backward():
         loss.backward(retain_graph=True)
         loss.backward(retain_graph=True)
         loss.backward()
@@ -1547,7 +1547,7 @@ def test_pass_brackets_reject_partial_interleaving() -> None:
 
     _model, _x, trace = _logged_model()
     loss = _output_loss(trace)
-    with trace.recording_backward():
+    with trace.capture_backward():
         loss.backward(retain_graph=True)
         loss.backward()
     events = _ensure_backward_event_stream(trace).backward_events
@@ -2151,7 +2151,7 @@ def test_aliased_label_registrations_emit_one_grad_event_per_pass() -> None:
     trace = tl.trace(
         IdentityWrapper(),
         torch.randn(2, 3),
-        capture=CaptureOptions(layers_to_save="all", save_grads="all", random_seed=42),
+        capture=CaptureOptions(layers_to_save="all", save_grads="all", seed=42),
     )
     # Arming proof for the owner rule itself: the identity label is owned by
     # exactly one hooked tensor even though two registrations happened.
@@ -2253,7 +2253,7 @@ def test_validate_backward_fails_closed_on_coverage_gaps() -> None:
             model,
             x,
             loss_fn=lambda output: output.sum(),
-            random_seed=11,
+            seed=11,
         )
     assert passed is False
 
@@ -2284,7 +2284,7 @@ def test_foreach_inplace_live_member_owns_its_gradient() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_grads="all", random_seed=4),
+        capture=CaptureOptions(layers_to_save="all", save_grads="all", seed=4),
     )
     layer = next(op for op in trace.layer_list if "_foreach_add_" in str(op.func_name))
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
@@ -2330,9 +2330,9 @@ def test_refresh_projection_with_inplace_op_keeps_one_grad_owner_per_label() -> 
     trace = tl.trace(
         model,
         torch.randn(2, 3, requires_grad=True),
-        capture=CaptureOptions(layers_to_save="all", save_grads="all", random_seed=0),
+        capture=CaptureOptions(layers_to_save="all", save_grads="all", seed=0),
     )
-    trace.save_new_outs(model, torch.randn(2, 3, requires_grad=True), random_seed=1)
+    trace.save_new_outs(model, torch.randn(2, 3, requires_grad=True), seed=1)
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
     pass_index = trace.num_backward_passes
@@ -2376,7 +2376,7 @@ def test_backward_validation_nan_bearing_grads_do_not_false_fail() -> None:
 
     model = _NaNGradParamModel().eval()
     x = torch.randn(2, 4)
-    assert backward_validation.validate_backward_pass(model, (x,), random_seed=0) is True
+    assert backward_validation.validate_backward_pass(model, (x,), seed=0) is True
 
 
 def test_gradient_validation_tolerances_are_named_constants() -> None:

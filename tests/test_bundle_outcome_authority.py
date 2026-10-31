@@ -43,7 +43,7 @@ from torchlens.errors import InvalidArgumentError
 SEVERITY_ORDER = [
     CaptureStatus.COMPLETE,
     CaptureStatus.UNATTESTED,
-    CaptureStatus.HALTED,
+    CaptureStatus.STOPPED,
     CaptureStatus.ABORTED_NONFINITE,
     CaptureStatus.FAILED,
     CaptureStatus.UNKNOWN,
@@ -101,8 +101,8 @@ def test_fold_all_complete_is_complete() -> None:
         [("a", _outcome(CaptureStatus.COMPLETE)), ("b", _outcome(CaptureStatus.COMPLETE))]
     )
     assert folded.status is CaptureStatus.COMPLETE
-    assert folded.derived is True
-    assert "worst-of-members" in (folded.settlement_note or "")
+    assert folded.is_derived is True
+    assert "worst-of-members" in (folded.note or "")
 
 
 @pytest.mark.parametrize("status", [s for s in SEVERITY_ORDER if s is not CaptureStatus.COMPLETE])
@@ -133,7 +133,7 @@ def test_fold_unsettled_member_is_unknown_fail_closed() -> None:
 
     folded = _fold_member_outcomes([("a", _outcome(CaptureStatus.COMPLETE)), ("b", None)])
     assert folded.status is CaptureStatus.UNKNOWN
-    assert "no settled outcome" in (folded.settlement_note or "")
+    assert "no settled outcome" in (folded.note or "")
 
 
 def test_fold_empty_domain_is_unknown_fail_closed() -> None:
@@ -141,7 +141,7 @@ def test_fold_empty_domain_is_unknown_fail_closed() -> None:
 
     folded = _fold_member_outcomes([])
     assert folded.status is CaptureStatus.UNKNOWN
-    assert folded.derived is True
+    assert folded.is_derived is True
 
 
 def test_fold_note_names_driving_member() -> None:
@@ -151,7 +151,7 @@ def test_fold_note_names_driving_member() -> None:
             ("bad", _outcome(CaptureStatus.FAILED)),
         ]
     )
-    note = folded.settlement_note or ""
+    note = folded.note or ""
     assert "'bad'" in note
     assert "failed" in note
 
@@ -171,7 +171,7 @@ def test_outcome_for_bundle_returns_fold_not_none(complete_pair: Bundle) -> None
     settled = outcome_for(complete_pair)
     assert settled is not None
     assert settled.status is CaptureStatus.COMPLETE
-    assert settled.derived is True
+    assert settled.is_derived is True
     assert complete_pair.outcome.status is CaptureStatus.COMPLETE
 
 
@@ -218,14 +218,14 @@ def test_both_doors_save_a_halted_bundle(tmp_path) -> None:
         complete = tl.trace(ThreeStageModel(), torch.ones(1, 3))
         halted = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     mixed = tl.bundle({"complete": complete, "halted": halted})
-    assert mixed.outcome.status is CaptureStatus.HALTED
+    assert mixed.outcome.status is CaptureStatus.STOPPED
 
     tl.save(mixed, tmp_path / "tl_door.tlspec")
     mixed.save(tmp_path / "method_door.tlspec")
     loaded = tl.load(tmp_path / "tl_door.tlspec")
     settled = outcome_for(loaded)
     assert settled is not None
-    assert settled.status is CaptureStatus.HALTED
+    assert settled.status is CaptureStatus.STOPPED
 
 
 def test_refuted_hypothesis_pin_failed_member_refuses_both_doors(tmp_path) -> None:

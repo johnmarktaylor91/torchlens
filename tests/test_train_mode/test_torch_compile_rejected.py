@@ -89,7 +89,7 @@ def test_save_new_outs_unwraps_torch_compile(
     trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(random_seed=0),
+        capture=tl.options.CaptureOptions(seed=0),
     )
     compiled_model = _compile_model(two_layer_mlp)
 
@@ -99,7 +99,7 @@ def test_save_new_outs_unwraps_torch_compile(
             compiled_model,
             torch.randn(3, 4, requires_grad=True),
             backward_ready=True,
-            random_seed=0,
+            seed=0,
         )
     trace.cleanup()
 

@@ -53,7 +53,7 @@ def gpt2_logs(gpt2_pair):
     tokenizer, eager, sdpa = gpt2_pair
     input_ids = tokenizer(PROMPT, return_tensors="pt").input_ids
     log_eager = tl.trace(eager, input_ids)
-    log_sdpa = tl.trace(sdpa, input_ids, capture=tl.options.CaptureOptions(save_arg_values=True))
+    log_sdpa = tl.trace(sdpa, input_ids, capture=tl.options.CaptureOptions(save_args=True))
     try:
         yield tokenizer, input_ids, log_eager, log_sdpa
     finally:

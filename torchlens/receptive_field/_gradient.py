@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, cast
 import torch
 
 from .. import _state
-from ..backends import BackendUnsupportedError, get_backend_spec
+from ..backends.registry import BackendUnsupportedError, get_backend_spec
 from ..utils._torch_compat import tensor_any_over_dims
 from . import _engine, _rules
 from ._errors import (

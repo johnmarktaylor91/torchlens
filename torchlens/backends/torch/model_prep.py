@@ -29,7 +29,7 @@ from ...data_classes._module_role_hints import multi_output_role_from_path, role
 from ...data_classes.func_call_location import FuncCallLocation
 from ...data_classes.module import HookInfo
 from ...data_classes.param import Param, ParamAccessor
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from ...ir import (
     CaptureEvents,
     ModuleEnterEvent,
@@ -1209,7 +1209,7 @@ def _record_module_entry_metadata(
         trace._code_context_cache = code_context_cache
     code_context = _get_code_context(
         num_context_lines=trace.num_context_lines,
-        source_loading_enabled=trace.save_code_context,
+        source_loading_enabled=trace.save_source_context,
         context_cache=code_context_cache,
     )
     trace._module_capture_ws.module_build_data.setdefault("module_code_contexts", {})[
@@ -2398,7 +2398,7 @@ def module_forward_decorator(
                         predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
                     )
                     _evaluate_halt(enter_ctx, state.options)
-            except HaltSignal:
+            except StopSignal:
                 _mstack.pop_frame(state.module_stack, frame)
                 raise
             except Exception as exc:
@@ -2486,7 +2486,7 @@ def module_forward_decorator(
                             predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                         )
                         _evaluate_halt(exit_ctx, state.options, frontier_output=out)
-                except HaltSignal:
+                except StopSignal:
                     if active_model_exc is None:
                         raise
                 except Exception as exc:

@@ -463,7 +463,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     torch.manual_seed(11)
     ff = TinyFeedForward().eval()
     x_ff = torch.randn(2, 4)
-    full_capture = CaptureOptions(layers_to_save="all", save_arg_values=True)
+    full_capture = CaptureOptions(layers_to_save="all", save_args=True)
     ff_trace = tl.trace(ff, x_ff, capture=full_capture)
 
     torch.manual_seed(12)
@@ -479,8 +479,8 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         x_recurrent,
         capture=CaptureOptions(
             layers_to_save="all",
-            save_arg_values=True,
-            random_seed=13,
+            save_args=True,
+            seed=13,
         ),
     )
 
@@ -510,7 +510,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     partial_trace = tl.trace(
         partial_save,
         x_partial,
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=False),
+        capture=CaptureOptions(layers_to_save="all", save_args=False),
     )
 
     torch.manual_seed(19)
@@ -520,7 +520,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         selective_save,
         x_selective,
         save=_save_only_mul,
-        capture=CaptureOptions(save_arg_values=False),
+        capture=CaptureOptions(save_args=False),
     )
 
     torch.manual_seed(18)

@@ -125,7 +125,7 @@ _ECHO_FIELDS: Final[tuple[str, ...]] = (
 
 
 @dataclass(frozen=True, init=False)
-class EchoOptions:
+class NarrationOptions:
     """Grouped live-narration options for ``echo=`` (lane F28, snoop memo D1).
 
     ``echo=`` on ``tl.trace``, ``tl.record``, and ``fastlog.Recorder``
@@ -133,7 +133,7 @@ class EchoOptions:
     observer slot. Narration and retention are fully independent: "narrate
     everything, keep nothing" is legal and is the fast path. All spellings
     are DOCUMENTED-UNSTABLE pending the naming sprint. The public spelling
-    stays ``tl.options.EchoOptions``; the class lives beside the frozen-group
+    stays ``tl.options.NarrationOptions``; the class lives beside the frozen-group
     kit it is built on.
 
     Parameters
@@ -229,7 +229,7 @@ class EchoOptions:
         cls,
         values: Mapping[str, Any],
         specified_fields: frozenset[str],
-    ) -> EchoOptions:
+    ) -> NarrationOptions:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)

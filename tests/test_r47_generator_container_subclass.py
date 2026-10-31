@@ -228,7 +228,7 @@ def preexisting_worker() -> Any:
 
 
 def _roundtrip(model: nn.Module, x: torch.Tensor, tmp: Path) -> tl.RunResult:
-    trace = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    trace = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
     path = tmp / "r47cont.tlspec"
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True, include_activations=True)

@@ -534,24 +534,24 @@ def _recording_from_records(
         by_address={},
         orphan_records=list(metadata.get("orphan_records", [])),
         bundle_path=bundle_path,
-        n_ops=int(metadata.get("n_passes", metadata.get("n_ops", 1))),
+        num_ops=int(metadata.get("n_passes", metadata.get("n_ops", 1))),
         start_times=list(metadata.get("start_times", [])),
         end_times=list(metadata.get("end_times", [])),
         predicate_failures=[],
         predicate_failure_overflow_count=int(metadata.get("predicate_failure_overflow_count", 0)),
-        halted=halted,
-        halt_reason=metadata.get("halt_reason"),
-        halts_by_pass={
+        is_stopped=halted,
+        stop_reason=metadata.get("halt_reason"),
+        stops_by_pass={
             int(pass_index): str(reason)
             for pass_index, reason in dict(metadata.get("halts_by_pass", {})).items()
         },
         keep_op_repr=metadata.get("keep_op_repr"),
         history_size=int(metadata.get("history_size", 0)),
         _activation_transform_repr=metadata.get("_activation_transform_repr"),
-        recovered=recovered,
+        is_recovered=recovered,
         status=status,
         recovery_warnings=recovery_warnings,
-        failed=abort_reason is not None,
+        is_failed=abort_reason is not None,
         error_repr=(None if abort_reason is None else f"recovered aborted bundle: {abort_reason}"),
     )
 

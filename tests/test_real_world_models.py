@@ -1176,12 +1176,12 @@ def test_audio_hubert_base():
         model,
         model_input,
         view="unrolled",
-        random_seed=1,
+        seed=1,
         visualization=tl.options.VisualizationOptions(
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "torchaudio", "audio_hubert_base")
         ),
     )
-    assert validate_forward_pass(model, model_input, random_seed=1)
+    assert validate_forward_pass(model, model_input, seed=1)
 
 
 @pytest.mark.slow
@@ -1479,14 +1479,14 @@ def test_stable_diffusion():
     show_model_graph(
         model,
         model_inputs,
-        random_seed=1,
+        seed=1,
         view="unrolled",
         visualization=tl.options.VisualizationOptions(
             save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "multimodal-models", "stable_diffusion"),
         ),
     )
-    assert validate_forward_pass(model, model_inputs, random_seed=1)
+    assert validate_forward_pass(model, model_inputs, seed=1)
 
 
 def test_styletts():
@@ -1505,7 +1505,7 @@ def test_styletts():
         show_model_graph(
             model,
             model_inputs,
-            random_seed=1,
+            seed=1,
             view="unrolled",
             visualization=tl.options.VisualizationOptions(
                 save_only=True,
@@ -1513,7 +1513,7 @@ def test_styletts():
             ),
         )
     with pytest.warns(UserWarning, match="no graph/source provenance"):
-        assert validate_forward_pass(model, model_inputs, random_seed=1)
+        assert validate_forward_pass(model, model_inputs, seed=1)
 
 
 def test_qml():
@@ -1597,13 +1597,13 @@ def test_clip():
         model,
         [],
         model_inputs,
-        random_seed=1,
+        seed=1,
         view="unrolled",
         visualization=tl.options.VisualizationOptions(
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "multimodal-models", "clip")
         ),
     )
-    assert validate_forward_pass(model, [], model_inputs, random_seed=1)
+    assert validate_forward_pass(model, [], model_inputs, seed=1)
 
 
 @pytest.mark.slow
@@ -1619,13 +1619,13 @@ def test_blip_base():
         model,
         [],
         model_inputs,
-        random_seed=1,
+        seed=1,
         view="unrolled",
         visualization=tl.options.VisualizationOptions(
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "multimodal-models", "blip_base")
         ),
     )
-    assert validate_forward_pass(model, [], model_inputs, random_seed=1)
+    assert validate_forward_pass(model, [], model_inputs, seed=1)
 
 
 @pytest.mark.slow
@@ -1638,13 +1638,13 @@ def test_vit_mae():
         model,
         [],
         model_kwargs,
-        random_seed=1,
+        seed=1,
         view="unrolled",
         visualization=tl.options.VisualizationOptions(
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "torchvision-main", "vit_mae")
         ),
     )
-    assert validate_forward_pass(model, [], model_kwargs, random_seed=1)
+    assert validate_forward_pass(model, [], model_kwargs, seed=1)
 
 
 # =============================================================================
@@ -1861,13 +1861,13 @@ def test_autoencoder_vit_mae():
         model,
         [],
         model_kwargs,
-        random_seed=1,
+        seed=1,
         view="unrolled",
         visualization=tl.options.VisualizationOptions(
             save_only=True, container_path=opj(VIS_OUTPUT_DIR, "autoencoders", "vit_mae_pretrain")
         ),
     )
-    assert validate_forward_pass(model, [], model_kwargs, random_seed=1)
+    assert validate_forward_pass(model, [], model_kwargs, seed=1)
 
 
 # =============================================================================
@@ -2023,7 +2023,7 @@ def test_fcos_resnet50_train(default_input1, default_input2):
         model,
         model_inputs,
         view="unrolled",
-        random_seed=1,
+        seed=1,
         visualization=tl.options.VisualizationOptions(
             save_only=True,
             container_path=opj(
@@ -2033,7 +2033,7 @@ def test_fcos_resnet50_train(default_input1, default_input2):
             ),
         ),
     )
-    assert validate_forward_pass(model, model_inputs, random_seed=1)
+    assert validate_forward_pass(model, model_inputs, seed=1)
 
 
 @pytest.mark.slow
@@ -2310,14 +2310,14 @@ def test_opticflow_raftlarge():
     show_model_graph(
         model,
         model_input,
-        random_seed=1,
+        seed=1,
         view="unrolled",
         visualization=tl.options.VisualizationOptions(
             save_only=True,
             container_path=opj(VIS_OUTPUT_DIR, "torchvision-opticflow", "opticflow_raftlarge"),
         ),
     )
-    assert validate_forward_pass(model, model_input, random_seed=1)
+    assert validate_forward_pass(model, model_input, seed=1)
 
 
 # =============================================================================

@@ -337,7 +337,7 @@ def _collate_to_envelope(
         envelope = BatchEnvelope(
             args=(raw,),
             kwargs={},
-            row_count=int(raw.shape[0]),
+            num_rows=int(raw.shape[0]),
             mask=None,
             disclosure={"kind": "tensor_slice"},
         )
@@ -1572,14 +1572,14 @@ def _process_one_batch(
     )
     batch_outputs, layer_views = _capture_outputs(plan, envelope, run_state, batch_index)
     ids_slice = (
-        tuple(plan.stimulus_ids[row_start : row_start + envelope.row_count])
+        tuple(plan.stimulus_ids[row_start : row_start + envelope.num_rows])
         if plan.stimulus_ids is not None
         else None
     )
     context = BatchContext(
         batch_index=batch_index,
         row_start=row_start,
-        row_count=envelope.row_count,
+        num_rows=envelope.num_rows,
         stimulus_ids=ids_slice,
         mask=envelope.mask,
         row_extents=(
@@ -1687,7 +1687,7 @@ def run_in_memory(plan: _RunPlan) -> dict[str, torch.Tensor]:
                 if isinstance(stored, RaggedBatch):
                     continue  # unreachable: memory mode refuses ragged='trim' at entry
                 accumulator.setdefault(key, []).append(stored)
-            row_start += _ctx.row_count
+            row_start += _ctx.num_rows
     return {label: torch.cat(tensors, dim=0) for label, tensors in accumulator.items()}
 
 
@@ -1808,7 +1808,7 @@ def _shard_row_facts(
     key_facts, input_digest = batch_facts
     row_facts: dict[str, Any] = {
         "keys": key_facts,
-        "ids_range_digest": _ids_range_digest(plan, context.row_start, context.row_count),
+        "ids_range_digest": _ids_range_digest(plan, context.row_start, context.num_rows),
         "input_digest": input_digest,
         "position_ids_source": context.position_ids_source,
     }
@@ -1891,7 +1891,7 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
             row = writer.commit_shard(
                 index=batch_index,
                 row_start=row_start,
-                n_rows=context.row_count,
+                n_rows=context.num_rows,
                 save_payload=functools.partial(
                     write_shard, payload=processed, shard_format=plan.shard_format or "safetensors"
                 ),
@@ -1899,7 +1899,7 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
             )
             _run_post_store_hooks(context, row)
             container_paths.append(container_path / str(row["file"]))
-            row_start += context.row_count
+            row_start += context.num_rows
             n_committed += 1
 
     _check_ids_complete(plan, row_start)

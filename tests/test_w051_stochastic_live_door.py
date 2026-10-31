@@ -50,7 +50,7 @@ def test_live_door_matches_replay_door() -> None:
     model = _TwoBlock()
     torch.manual_seed(100)
     x = torch.randn(5, 4)
-    options = tl.options.CaptureOptions(intervention_ready=True, random_seed=100)
+    options = tl.options.CaptureOptions(intervention_ready=True, seed=100)
     log = tl.trace(model, x, capture=options)
     baseline = log["relu_1_2"].out
     donors = reference(torch.stack([baseline + k for k in range(1, 6)]), origin="d")
@@ -92,7 +92,7 @@ def test_live_coordinate_is_stable_under_unrelated_upstream_op() -> None:
     x = torch.randn(5, 4)
     donors = reference(torch.randn(5, 5, 4), origin="d")
     plan = sample_from(donors, seed=3)
-    options = tl.options.CaptureOptions(random_seed=100)
+    options = tl.options.CaptureOptions(seed=100)
     live_plain = tl.trace(
         plain, x, capture=options, intervene=tl.when(tl.func("relu"), tl.patch_from(plan))
     )

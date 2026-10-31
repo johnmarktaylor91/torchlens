@@ -228,7 +228,7 @@ def test_image_node_attrs_are_visualizer_relative(tmp_path: Path) -> None:
     trace = tl.trace(
         _Net(),
         images,
-        capture=tl.options.CaptureOptions(transform=_to_batch, save_raw_input=True),
+        capture=tl.options.CaptureOptions(input_transform=_to_batch, save_raw_input=True),
     )
     trace.draw(
         vis_save_only=True,

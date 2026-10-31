@@ -149,7 +149,7 @@ def _capture_cnn(seed: int, *, intervention_ready: bool = False) -> tl.Trace:
         capture=CaptureOptions(
             intervention_ready=intervention_ready,
             layers_to_save="all",
-            random_seed=0,
+            seed=0,
         ),
     )
 
@@ -172,7 +172,7 @@ def _capture_transformer(seed: int) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", random_seed=0),
+        capture=CaptureOptions(layers_to_save="all", seed=0),
     )
 
 

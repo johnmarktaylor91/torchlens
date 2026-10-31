@@ -126,9 +126,9 @@ def test_mask_shaped_from_batch_zero_stores_trimmed_and_reads_every_row(tmp_path
     reader = open_extraction(tmp_path)
     carrier = reader.materialize()["h"]
     assert isinstance(carrier, RaggedBatch)
-    assert carrier.row_count == len(_SEQS) == reader.n_stimuli
+    assert carrier.num_rows == len(_SEQS) == reader.n_stimuli
     loaded = load_extraction(tmp_path).activations["h"]
-    assert isinstance(loaded, RaggedBatch) and loaded.row_count == len(_SEQS)
+    assert isinstance(loaded, RaggedBatch) and loaded.num_rows == len(_SEQS)
 
 
 def test_reader_refuses_manifest_layout_contradicting_the_ledger(tmp_path: Path) -> None:
@@ -317,7 +317,7 @@ def test_resume_continues_a_trimmed_key_trimmed(tmp_path: Path) -> None:
     assert [row["keys"]["h"]["layout"] for row in ledger] == ["trimmed"] * 3
     reader = open_extraction(tmp_path)
     carrier = reader.materialize()["h"]
-    assert isinstance(carrier, RaggedBatch) and carrier.row_count == len(_SEQS)
+    assert isinstance(carrier, RaggedBatch) and carrier.num_rows == len(_SEQS)
     # Row-exact against a clean, uninterrupted trim run.
     clean_dir = tmp_path / "clean"
     extract_dataset(

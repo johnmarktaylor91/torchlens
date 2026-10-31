@@ -107,7 +107,7 @@ refusal (`worst_element`).
   adds nothing (measured on GPT-2 small in the circuit section below).
 
 Fused attention (torch SDPA) needs
-`capture=CaptureOptions(save_arg_values=True)` for reconstructed
+`capture=CaptureOptions(save_args=True)` for reconstructed
 pattern/z/result reads; the facets stay READ-only -- edits are the lowered
 counterfactual's job, or an eager recapture.
 

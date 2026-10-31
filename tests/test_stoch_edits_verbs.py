@@ -195,7 +195,7 @@ def test_derived_seed_is_rederivable_from_recorded_facts() -> None:
 
 
 def test_seed_is_required_and_auto_derives_from_trace_seed() -> None:
-    """D4/D5: seed=None refuses; 'auto' canonicalizes against trace.random_seed."""
+    """D4/D5: seed=None refuses; 'auto' canonicalizes against trace.seed."""
 
     with pytest.raises(Exception) as excinfo:
         permute_batch(seed=None, axis=0)  # type: ignore[arg-type]

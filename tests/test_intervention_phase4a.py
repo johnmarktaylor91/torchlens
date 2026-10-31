@@ -47,7 +47,7 @@ def test_intervention_ready_sets_relationship_evidence() -> None:
     assert log.param_hash_full == log.param_hash_quick
     assert log.input_object_id == id(x)
     assert log.input_signature_hash is not None
-    assert log.save_arg_values is False
+    assert log.save_args is False
 
 
 def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:

@@ -275,7 +275,7 @@ def _make_layer_log_entry(
                     predicate_ctx,
                     activation_transform,
                 )
-    if predicate_spec is not None and self.save_arg_values and not fields_dict["has_saved_args"]:
+    if predicate_spec is not None and self.save_args and not fields_dict["has_saved_args"]:
         # Admit BEFORE the clones allocate (r8 R34, sol 2).
         arg_reservations = _admit_saved_args_budget(self, fields_dict, t_args, t_kwargs)
         fields_dict["has_saved_args"] = True

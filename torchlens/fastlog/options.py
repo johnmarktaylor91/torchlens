@@ -10,7 +10,7 @@ from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError
 from ..intervention.predicates import InterventionPredicate
 from ..ir.predicate import RetroactiveCaptureDecision
-from ..options import StreamingOptions
+from ..options import StorageOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from .types import CaptureSpec, GradRecordContext, RecordContext
 
@@ -93,7 +93,7 @@ class RecordingOptions:
     max_predicate_failures: int
     on_predicate_error: PredicateErrorMode
     on_forward_error: ForwardErrorMode
-    streaming: StreamingOptions | None
+    streaming: StorageOptions | None
     random_seed: int | None
     activation_transform: ActivationPostfunc | None
     save_raw_activations: bool
@@ -101,7 +101,7 @@ class RecordingOptions:
     default_grad: bool | CaptureSpec
     grad_transform: GradientPostfunc | None
     save_raw_gradients: bool
-    #: Normalized live-narration options (``torchlens.options.EchoOptions``)
+    #: Normalized live-narration options (``torchlens.options.NarrationOptions``)
     #: or ``None``; typed ``Any`` here because fastlog (L2) never imports
     #: the narration engine -- seams read the armed session off the trace.
     echo: Any | None
@@ -134,15 +134,15 @@ class RecordingOptions:
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         on_forward_error: ForwardErrorMode | MissingType = MISSING,
-        streaming: StreamingOptions | None | MissingType = MISSING,
-        random_seed: int | None | MissingType = MISSING,
+        streaming: StorageOptions | None | MissingType = MISSING,
+        seed: int | None | MissingType = MISSING,
         activation_transform: ActivationPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
         save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         grad_transform: GradientPostfunc | None | MissingType = MISSING,
-        save_raw_gradients: bool | MissingType = MISSING,
-        echo: Any | None | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
+        narrate: Any | None | MissingType = MISSING,
         detach_saved_activations: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
@@ -181,9 +181,7 @@ class RecordingOptions:
                 "on_forward_error", on_forward_error, "raise", specified_fields
             ),
             "streaming": _resolve_recording_option("streaming", streaming, None, specified_fields),
-            "random_seed": _resolve_recording_option(
-                "random_seed", random_seed, None, specified_fields
-            ),
+            "random_seed": _resolve_recording_option("random_seed", seed, None, specified_fields),
             "activation_transform": _resolve_recording_option(
                 "activation_transform", activation_transform, None, specified_fields
             ),
@@ -200,9 +198,9 @@ class RecordingOptions:
                 "grad_transform", grad_transform, None, specified_fields
             ),
             "save_raw_gradients": _resolve_recording_option(
-                "save_raw_gradients", save_raw_gradients, True, specified_fields
+                "save_raw_gradients", save_raw_grads, True, specified_fields
             ),
-            "echo": _resolve_recording_option("echo", echo, None, specified_fields),
+            "echo": _resolve_recording_option("echo", narrate, None, specified_fields),
             "detach_saved_activations": _resolve_recording_option(
                 "detach_saved_activations", detach_saved_activations, True, specified_fields
             ),
@@ -391,7 +389,7 @@ def merge_recording_options(
     max_predicate_failures: int | MissingType = MISSING,
     on_predicate_error: PredicateErrorMode | MissingType = MISSING,
     on_forward_error: ForwardErrorMode | MissingType = MISSING,
-    streaming: StreamingOptions | None | MissingType = MISSING,
+    streaming: StorageOptions | None | MissingType = MISSING,
     random_seed: int | None | MissingType = MISSING,
     activation_transform: ActivationPostfunc | None | MissingType = MISSING,
     save_raw_activations: bool | MissingType = MISSING,

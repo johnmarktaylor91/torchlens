@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.options import EchoOptions
+from torchlens.options import NarrationOptions
 
 
 class TwoBlock(nn.Module):
@@ -44,7 +44,9 @@ def test_record_echo_true_narrates_and_keeps_nothing() -> None:
     """ "Narrate everything, keep nothing" is legal and is the fast path."""
 
     sink = io.StringIO()
-    recording = tl.record(TwoBlock(), torch.randn(2, 4), echo=EchoOptions(select=True, sink=sink))
+    recording = tl.record(
+        TwoBlock(), torch.randn(2, 4), narrate=NarrationOptions(select=True, sink=sink)
+    )
     lines = _transcript(sink)
     assert recording.records == []
     op_lines = [line for line in lines if line.lstrip().startswith("#")]
@@ -62,7 +64,7 @@ def test_exactly_once_per_event_with_saves_nothing_narrator() -> None:
     tl.record(
         TwoBlock(),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=seen.append),
+        narrate=NarrationOptions(select=True, sink=seen.append),
     )
     op_lines = [line for line in seen if line.lstrip().startswith("#")]
     labels = [line.split()[1] for line in op_lines]
@@ -79,8 +81,8 @@ def test_tier_parity_transcripts_are_byte_identical() -> None:
     model = TwoBlock()
     x = torch.randn(2, 4)
     trace_sink, record_sink = io.StringIO(), io.StringIO()
-    tl.trace(model, x, echo=EchoOptions(select=True, sink=trace_sink))
-    tl.record(model, x, echo=EchoOptions(select=True, sink=record_sink))
+    tl.trace(model, x, narrate=NarrationOptions(select=True, sink=trace_sink))
+    tl.record(model, x, narrate=NarrationOptions(select=True, sink=record_sink))
     assert trace_sink.getvalue() == record_sink.getvalue()
 
 
@@ -91,7 +93,7 @@ def test_selector_scope_with_held_ancestors() -> None:
     tl.trace(
         TwoBlock(),
         torch.randn(2, 4),
-        echo=EchoOptions(select=tl.in_module("fc2"), sink=sink),
+        narrate=NarrationOptions(select=tl.in_module("fc2"), sink=sink),
     )
     lines = _transcript(sink)
     body = [line for line in lines if not line.startswith("-- echo:")]
@@ -108,7 +110,7 @@ def test_save_scope_and_echo_scope_are_independent() -> None:
         TwoBlock(),
         torch.randn(2, 4),
         save=tl.func("relu"),
-        echo=EchoOptions(select=tl.in_module("fc2"), sink=sink),
+        narrate=NarrationOptions(select=tl.in_module("fc2"), sink=sink),
     )
     lines = _transcript(sink)
     assert any("linear_2" in line for line in lines)
@@ -120,7 +122,7 @@ def test_echo_modules_is_structure_only() -> None:
     """echo='modules' is the cheap flight recorder: structure lines only."""
 
     sink = io.StringIO()
-    tl.trace(TwoBlock(), torch.randn(2, 4), echo=EchoOptions(select="modules", sink=sink))
+    tl.trace(TwoBlock(), torch.randn(2, 4), narrate=NarrationOptions(select="modules", sink=sink))
     body = [line for line in _transcript(sink) if not line.startswith("-- echo:")]
     assert body
     assert all(line.lstrip().startswith((">", "<")) for line in body)
@@ -140,7 +142,7 @@ def test_multi_output_op_narrates_one_line_per_output() -> None:
             return a + b
 
     sink = io.StringIO()
-    tl.record(Splitter(), torch.randn(2, 4), echo=EchoOptions(select=True, sink=sink))
+    tl.record(Splitter(), torch.randn(2, 4), narrate=NarrationOptions(select=True, sink=sink))
     split_lines = [line for line in _transcript(sink) if "split" in line]
     assert len(split_lines) == 2
     assert any("out=1" in line for line in split_lines)
@@ -154,7 +156,9 @@ def test_followed_by_releases_are_marked_late() -> None:
     tl.record(
         TwoBlock(),
         torch.randn(2, 4),
-        echo=EchoOptions(select=tl.func("linear") & tl.followed_by(tl.func("relu")), sink=sink),
+        narrate=NarrationOptions(
+            select=tl.func("linear") & tl.followed_by(tl.func("relu")), sink=sink
+        ),
         lookback=4,
     )
     lines = _transcript(sink)
@@ -168,7 +172,7 @@ def test_recorder_resets_per_pass_and_marks_passes() -> None:
 
     sink = io.StringIO()
     model = TwoBlock()
-    with tl.fastlog.Recorder(model, echo=EchoOptions(select=True, sink=sink)) as recorder:
+    with tl.fastlog.Recorder(model, narrate=NarrationOptions(select=True, sink=sink)) as recorder:
         recorder.log(torch.randn(2, 4))
         recorder.log(torch.randn(2, 4))
     lines = _transcript(sink)

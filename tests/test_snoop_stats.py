@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.options import EchoOptions
+from torchlens.options import NarrationOptions
 from torchlens.snoop import EchoStatsError
 from torchlens.snoop._stats import exact_stats, reuse_stats, sampled_stats
 
@@ -83,7 +83,7 @@ def test_exact_budget_refusal_fails_the_capture_typed() -> None:
                 tl.trace(
                     nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
                     torch.randn(2, 4),
-                    echo=EchoOptions(select=True, sink=io.StringIO(), stats="exact"),
+                    narrate=NarrationOptions(select=True, sink=io.StringIO(), stats="exact"),
                 )
     finally:
         stats_module.EXACT_NUMEL_BUDGET = original
@@ -97,14 +97,14 @@ def test_reuse_rung_prints_only_paid_for_facts() -> None:
     tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink, stats="reuse"),
+        narrate=NarrationOptions(select=True, sink=sink, stats="reuse"),
     )
     assert "|" not in sink.getvalue()
     sink_armed = io.StringIO()
     tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink_armed, stats="reuse"),
+        narrate=NarrationOptions(select=True, sink=sink_armed, stats="reuse"),
         capture=tl.options.CaptureOptions(track_nonfinite=True),
     )
     armed_lines = [line for line in sink_armed.getvalue().split("\n") if "relu" in line]
@@ -224,7 +224,7 @@ def test_metadata_echo_reads_no_payload() -> None:
     log = tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink, stats="off"),
+        narrate=NarrationOptions(select=True, sink=sink, stats="off"),
     )
     del log, reads, SpyTensor
     transcript = sink.getvalue()

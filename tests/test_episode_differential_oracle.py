@@ -208,7 +208,7 @@ def test_escalation_reruns_whole_episode_and_verifies_tokens():
 
     model = TinyLM()
     spec = EpisodeSpec(stepped_module=model, n_steps=N_STEPS)
-    capture = tl.options.CaptureOptions(random_seed=777)
+    capture = tl.options.CaptureOptions(seed=777)
     producer = tl.trace(SampledRunner(model, N_STEPS), _prompt(), episode=spec, capture=capture)
     producer_ledger = episode_ledger_for(producer)
     assert producer_ledger is not None
@@ -219,7 +219,7 @@ def test_escalation_reruns_whole_episode_and_verifies_tokens():
         SampledRunner(model, N_STEPS),
         _prompt(),
         episode=esc_spec,
-        capture=tl.options.CaptureOptions(random_seed=producer.random_seed),
+        capture=tl.options.CaptureOptions(seed=producer.seed),
     )
     ledger = episode_ledger_for(escalated)
     assert ledger is not None
@@ -244,14 +244,14 @@ def test_escalation_divergence_is_disclosed_never_settled():
         SampledRunner(model, N_STEPS),
         _prompt(),
         episode=spec,
-        capture=tl.options.CaptureOptions(random_seed=777),
+        capture=tl.options.CaptureOptions(seed=777),
     )
     esc_spec = escalation_spec(producer, stepped_module=model, reason="divergence")
     escalated = tl.trace(
         SampledRunner(model, N_STEPS),
         _prompt(),
         episode=esc_spec,
-        capture=tl.options.CaptureOptions(random_seed=778),  # different stream
+        capture=tl.options.CaptureOptions(seed=778),  # different stream
     )
     ledger = episode_ledger_for(escalated)
     assert ledger is not None

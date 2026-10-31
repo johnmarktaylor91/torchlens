@@ -347,7 +347,7 @@ core flow runs without downloading external model weights.
 - `tl.autoroute.output.unregister(...)`
 - `tl.autoroute.output.list()`
 - `tl.autoroute.output.info(...)`
-- `tl.trace(..., capture=CaptureOptions(transform=..., save_raw_input=..., batch_render=...))`
+- `tl.trace(..., capture=CaptureOptions(input_transform=..., save_raw_input=..., batch_render=...))`
 - `Trace.raw_input`
 - `Trace.input_preprocessor`
 - `Trace.draw(show_input_transform_summary=True)`

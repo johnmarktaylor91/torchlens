@@ -209,7 +209,7 @@ def narrate_recording(
         header = f"!! forward failed: {recording.error_repr}"
         footer.append("-- the raising call is not in the record: it produced no output to log --")
     elif getattr(recording, "halted", False):
-        footer.append(f"-- capture halted (not failed): {recording.halt_reason} --")
+        footer.append(f"-- capture halted (not failed): {recording.stop_reason} --")
     return _render_block(_select_rows(rows, select), last=last, header=header, footer_lines=footer)
 
 

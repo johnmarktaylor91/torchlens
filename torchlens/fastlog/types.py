@@ -169,7 +169,7 @@ class CaptureSpec:
 
     save_out: bool = True
     save_metadata: bool = True
-    keep_grad: bool = False
+    save_grad: bool = False
     device: torch.device | str | None = None
     dtype: torch.dtype | None = None
     save_mode: SaveMode = "copy"
@@ -187,7 +187,7 @@ class CaptureSpec:
                 remedy="set save_mode to 'copy', 'reference', 'view', or 'cpu_async'",
                 argument="save_mode",
             )
-        if self.save_mode == "view" and not self.keep_grad:
+        if self.save_mode == "view" and not self.save_grad:
             object.__setattr__(self, "keep_grad", True)
 
 
@@ -240,7 +240,7 @@ class ActivationRecord:
     transformed_ram_payload: torch.Tensor | None = None
     transformed_disk_payload: torch.Tensor | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    recorded_at: float = field(default_factory=time.time)
+    recorded_time: float = field(default_factory=time.time)
 
     def __repr__(self) -> str:
         """Return a bounded one-line record summary.
@@ -294,7 +294,7 @@ class GradRecordContext:
 
     label: str
     grad_fn_class_name: str
-    type: str
+    kind: str
     backward_call_index: int
     grad_kind: Literal["grad_input", "grad_output"]
     grad_input_index: int | None = None
@@ -319,7 +319,7 @@ class GradRecordContext:
 
 
 @dataclass(frozen=True, slots=True)
-class GradientRecord:
+class GradRecord:
     """One retained fastlog gradient event."""
 
     ctx: GradRecordContext
@@ -329,7 +329,7 @@ class GradientRecord:
     transformed_ram_payload: torch.Tensor | None = None
     transformed_disk_payload: torch.Tensor | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    recorded_at: float = field(default_factory=time.time)
+    recorded_time: float = field(default_factory=time.time)
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,7 +343,7 @@ class PredicateFailure:
 
 
 @dataclass(frozen=True, slots=True)
-class RecordingTrace:
+class DryRun:
     """Predicate dry-run trace without retained tensor payloads."""
 
     contexts: tuple[RecordContext, ...]
@@ -394,7 +394,7 @@ class RecordingTrace:
     def repredicate(
         self,
         other_keep_op: Callable[[RecordContext], PredicateDecision] | None = None,
-    ) -> RecordingTrace:
+    ) -> DryRun:
         """Return a new trace with decisions from a new op predicate.
 
         Parameters
@@ -420,7 +420,7 @@ class RecordingTrace:
                 decisions.append(True)
                 continue
             decisions.append(spec.save_out or spec.save_metadata)
-        return RecordingTrace(
+        return DryRun(
             contexts=self.contexts,
             decisions=tuple(decisions),
             predicate_failures=self.predicate_failures,
@@ -487,7 +487,7 @@ class Recording(CapturedRun):
     by_label: dict[str, list[tuple[int, int]]]
     by_address: dict[str, list[int]]
     bundle_path: Path | None
-    n_ops: int
+    num_ops: int
     start_times: list[float]
     end_times: list[float]
     predicate_failures: list[PredicateFailure]
@@ -495,33 +495,33 @@ class Recording(CapturedRun):
     keep_op_repr: str | None
     history_size: int
     orphan_records: list[dict[str, Any]] = field(default_factory=list)
-    halted: bool = False
+    is_stopped: bool = False
     status: Literal["complete", "halted", "partial_error", "recovered"] = "complete"
-    failed: bool = False
+    is_failed: bool = False
     error_repr: str | None = None
     error_traceback: str | None = None
-    n_ops_completed: int = 0
+    num_committed_ops: int = 0
     last_successful_op_label: str | None = None
     last_event_label: str | None = None
     last_event_func: str | None = None
     last_event_source_line: str | None = None
     last_event_input_meta: str | None = None
-    halt_reason: str | None = None
-    halts_by_pass: dict[int, str] = field(default_factory=dict)
-    grad_records: list[GradientRecord] = field(default_factory=list)
+    stop_reason: str | None = None
+    stops_by_pass: dict[int, str] = field(default_factory=dict)
+    grad_records: list[GradRecord] = field(default_factory=list)
     grad_by_pass: dict[int, list[int]] = field(default_factory=dict)
     grad_by_label: dict[str, list[int]] = field(default_factory=dict)
     grad_by_grad_fn_label: dict[str, list[int]] = field(default_factory=dict)
     save_grads_repr: str | None = None
     _grad_transform_repr: str | None = None
     _activation_transform_repr: str | None = None
-    recovered: bool = False
+    is_recovered: bool = False
     recovery_warnings: list[str] = field(default_factory=list)
     _capture_events: Any | None = field(default=None, repr=False, compare=False)
     _output_tensors: list[torch.Tensor] = field(default_factory=list, repr=False, compare=False)
     _output_tensor_addresses: list[str] = field(default_factory=list, repr=False, compare=False)
     _records_built: bool = field(default=True, repr=False, compare=False)
-    _recording_trace: RecordingTrace | None = field(default=None, repr=False, compare=False)
+    _recording_trace: DryRun | None = field(default=None, repr=False, compare=False)
     _recording_state: Any | None = field(default=None, repr=False, compare=False)
     _captured_run_cores: tuple[CapturedRunCore, ...] = field(default=(), repr=False, compare=False)
     # Settled capture outcome stamped by the recorder settlement adapter
@@ -561,17 +561,17 @@ class Recording(CapturedRun):
             try:
                 return parse_outcome_payload(stamped.to_payload())
             except Exception:  # noqa: BLE001 - fail closed on hostile payloads
-                return CaptureOutcome(status=CaptureStatus.UNKNOWN, derived=True)
+                return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_derived=True)
         status = self.status
         if status == "partial_error":
             return CaptureOutcome(
                 status=CaptureStatus.FAILED,
                 origin=FailureOrigin.UNKNOWN,
                 reason=self.error_repr,
-                n_ops_committed=self.n_ops_completed,
-                derived=True,
+                num_committed_ops=self.num_committed_ops,
+                is_derived=True,
             )
-        if status == "recovered" and self.failed:
+        if status == "recovered" and self.is_failed:
             # WT1 A-IV item 21 (lane A08): recover() used to rebuild aborted
             # bundles (PARTIAL sentinel + REASON.txt debris) with
             # ``failed=False`` and no error evidence -- laundering the failure
@@ -581,30 +581,30 @@ class Recording(CapturedRun):
                 status=CaptureStatus.FAILED,
                 origin=FailureOrigin.UNKNOWN,
                 reason=self.error_repr,
-                n_ops_committed=self.n_ops_completed,
-                recovered=True,
-                derived=True,
+                num_committed_ops=self.num_committed_ops,
+                is_recovered=True,
+                is_derived=True,
             )
-        if status == "halted" or (status == "recovered" and self.halted):
+        if status == "halted" or (status == "recovered" and self.is_stopped):
             return CaptureOutcome(
-                status=CaptureStatus.HALTED,
-                reason=self.halt_reason,
-                boundary_label=self.halt_reason,
-                recovered=status == "recovered",
-                derived=True,
+                status=CaptureStatus.STOPPED,
+                reason=self.stop_reason,
+                boundary_label=self.stop_reason,
+                is_recovered=status == "recovered",
+                is_derived=True,
             )
         if status == "recovered":
             return CaptureOutcome(
                 status=CaptureStatus.UNKNOWN,
-                recovered=True,
-                derived=True,
+                is_recovered=True,
+                is_derived=True,
             )
         if status == "complete":
-            return CaptureOutcome(status=CaptureStatus.UNATTESTED, derived=True)
-        return CaptureOutcome(status=CaptureStatus.UNKNOWN, derived=True)
+            return CaptureOutcome(status=CaptureStatus.UNATTESTED, is_derived=True)
+        return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_derived=True)
 
     @property
-    def n_passes(self) -> int:
+    def num_passes(self) -> int:
         """Return the number of model-call passes captured by this recording.
 
         Returns
@@ -613,7 +613,7 @@ class Recording(CapturedRun):
             Number of explicit ``record()`` or ``Recorder.log()`` forward passes.
         """
 
-        return self.n_ops
+        return self.num_ops
 
     def __repr__(self) -> str:
         """Return an O(1) identity/status card.
@@ -629,7 +629,7 @@ class Recording(CapturedRun):
         grads = len(self.grad_records)
         return (
             f"Recording(status={self.status}, records={records}, "
-            f"passes={self.n_passes}, grad_records={grads}, "
+            f"passes={self.num_passes}, grad_records={grads}, "
             f"bundle={str(self.bundle_path) if self.bundle_path else 'none'})"
         )
 
@@ -650,15 +650,15 @@ class Recording(CapturedRun):
                 lines.append(f"  (+{len(pass_rows) - 16} more passes)")
         else:
             lines.append("  records: lazy (materialized on first read)")
-        if self.halted:
-            lines.append(f"  halted: {self.halt_reason or 'halt predicate fired'}")
-        if self.failed:
-            lines.append(f"  FAILED after {self.n_ops_completed} ops: {self.error_repr}")
+        if self.is_stopped:
+            lines.append(f"  halted: {self.stop_reason or 'halt predicate fired'}")
+        if self.is_failed:
+            lines.append(f"  FAILED after {self.num_committed_ops} ops: {self.error_repr}")
             if self.last_event_label is not None:
                 lines.append(
                     f"  last event: {self.last_event_label} ({self.last_event_func or '?'})"
                 )
-        if self.recovered:
+        if self.is_recovered:
             lines.append("  recovered: from a persisted partial bundle")
         return "\n".join(lines[:24])
 
@@ -754,7 +754,7 @@ class Recording(CapturedRun):
         object.__setattr__(self, "_records_built", True)
 
     @property
-    def recording_trace(self) -> RecordingTrace:
+    def lazy_trace(self) -> DryRun:
         """Return a lazy trace projection over all capture events."""
 
         if self._recording_trace is None:
@@ -768,7 +768,7 @@ class Recording(CapturedRun):
             object.__setattr__(
                 self,
                 "_recording_trace",
-                RecordingTrace(
+                DryRun(
                     contexts=contexts,
                     decisions=tuple(
                         bool(getattr(event, "predicate_matched", False))
@@ -826,7 +826,7 @@ class Recording(CapturedRun):
         self._ensure_records()
         retained_keys = {(record.ctx.pass_index, record.ctx.event_index) for record in self.records}
         rows: list[dict[str, Any]] = []
-        for ctx in self.recording_trace.contexts:
+        for ctx in self.lazy_trace.contexts:
             row = {name: getattr(ctx, name) for name in _RAW_METADATA_FIELDS}
             row["retained"] = (ctx.pass_index, ctx.event_index) in retained_keys
             rows.append(row)
@@ -850,7 +850,7 @@ class Recording(CapturedRun):
 
         return self._grad_transform_repr
 
-    def add_grad_record(self, record: GradientRecord) -> None:
+    def add_grad_record(self, record: GradRecord) -> None:
         """Append one retained gradient record and update indexes."""
 
         index = len(self.grad_records)
@@ -862,7 +862,7 @@ class Recording(CapturedRun):
         self.grad_by_label.setdefault(record.ctx.label, []).append(index)
         self.grad_by_grad_fn_label.setdefault(record.ctx.label, []).append(index)
 
-    def log_backward(
+    def backward(
         self,
         loss: torch.Tensor,
         *,
@@ -905,7 +905,7 @@ class Recording(CapturedRun):
         # output to root the backward walk -- the same capability boundary
         # that refuses halted-no-payload ``to_trace()``. Documented in
         # docs/reference/capture_outcomes.md.
-        if self.failed:
+        if self.is_failed:
             from .exceptions import RecorderStateError
 
             raise RecorderStateError(
@@ -916,11 +916,11 @@ class Recording(CapturedRun):
                 capability="backward",
                 status="failed",
             )
-        if self.halted:
+        if self.is_stopped:
             from .exceptions import RecorderStateError
 
             raise RecorderStateError(
-                f"Cannot call log_backward on halted Recording (halt_reason={self.halt_reason!r}).",
+                f"Cannot call log_backward on halted Recording (halt_reason={self.stop_reason!r}).",
                 code="recording_backward_halted",
                 capability="backward",
                 status="halted",
@@ -986,7 +986,7 @@ class Recording(CapturedRun):
         self._ensure_records()
         return len(self.records)
 
-    def iter_pass(self, call_index: int) -> Iterator[ActivationRecord]:
+    def records_in_pass(self, call_index: int) -> Iterator[ActivationRecord]:
         """Iterate over records retained for one pass."""
 
         self._ensure_records()
@@ -1022,17 +1022,17 @@ class Recording(CapturedRun):
     def summary(self) -> str:
         """Return a concise human-readable recording summary."""
 
-        if self.failed:
+        if self.is_failed:
             return (
-                f"Recording(status={self.status!r}, n_passes={self.n_passes}, "
-                f"n_records={len(self)}, n_ops_completed={self.n_ops_completed}, "
+                f"Recording(status={self.status!r}, n_passes={self.num_passes}, "
+                f"n_records={len(self)}, n_ops_completed={self.num_committed_ops}, "
                 "caveat='n_ops_completed counts op-kind events across completed "
                 "passes in this recorder; user-op failures exclude the failing "
                 "call; TL-side capture failures may include a skipped/partial "
                 "current-call event.')"
             )
         return (
-            f"Recording(n_passes={self.n_passes}, n_records={len(self)}, "
+            f"Recording(n_passes={self.num_passes}, n_records={len(self)}, "
             f"n_grad_records={len(self.grad_records)})"
         )
 
@@ -1127,7 +1127,7 @@ class Recording(CapturedRun):
             raw activation payload to bind as the output frontier.
         """
 
-        if self.failed:
+        if self.is_failed:
             raise CaptureContextError(
                 "Recording.to_trace() cannot materialize a failed partial Recording because "
                 "the topology is incomplete; user-op failures exclude the failing call; "
@@ -1142,7 +1142,7 @@ class Recording(CapturedRun):
                 code="recording_events_not_retained",
                 remedy="convert the in-session Recording rather than a disk-recovered one",
             )
-        if self.n_passes > 1:
+        if self.num_passes > 1:
             raise CaptureContextError(
                 "Recording.to_trace() does not support multi-pass Recordings because "
                 "replaying multiple Recorder.log() passes into one Trace is not yet "
@@ -1200,12 +1200,12 @@ class Recording(CapturedRun):
         # the tensor is the recording's own retained raw activation).
         halt_output_tensors = list(projection.output_tensors)
         halt_output_addresses = list(projection.output_tensor_addresses)
-        if self.halted:
+        if self.is_stopped:
             frontier_label, frontier_tensor = self._recover_halt_frontier()
             projection.bind_halt_frontier(frontier_tensor, frontier_label)
             trace.halted = True
-            trace.halt_reason = self.halt_reason
-            trace.halt_frontier = self.halt_reason
+            trace.stop_reason = self.stop_reason
+            trace.halt_frontier = self.stop_reason
             trace.raw_output = None
             trace.output_layers = [frontier_label]
             halt_output_tensors = [frontier_tensor]
@@ -1226,7 +1226,7 @@ class Recording(CapturedRun):
         cooked_reason = None
         cooked_boundary = None
         cooked_boundary_kind = None
-        if self.halted:
+        if self.is_stopped:
             output_labels = list(getattr(trace, "output_layers", ()))
             cooked_frontier = str(output_labels[0]) if output_labels else None
             # R06: the halted postprocess remapped the persisted halt fields to
@@ -1237,7 +1237,7 @@ class Recording(CapturedRun):
             # fallback when the remap did not run.
             remapped_reason = getattr(trace, "halt_reason", None)
             cooked_reason = (
-                remapped_reason if isinstance(remapped_reason, str) else self.halt_reason
+                remapped_reason if isinstance(remapped_reason, str) else self.stop_reason
             )
             remapped_frontier = getattr(trace, "halt_frontier", None)
             cooked_boundary = (
@@ -1246,7 +1246,7 @@ class Recording(CapturedRun):
             cooked_boundary_kind = getattr(self.outcome, "boundary_kind", None)
         stamp_cooked(
             trace,
-            halted=self.halted,
+            halted=self.is_stopped,
             reason=cooked_reason,
             boundary_kind=cooked_boundary_kind,
             boundary_label=cooked_boundary,
@@ -1259,7 +1259,7 @@ class Recording(CapturedRun):
 
         Mirrors ``_finalize_halted_trace``'s frontier recovery
         (``torchlens/capture/trace.py``): prefer the halting op itself
-        (``self.halt_reason`` is the frontier op's raw label), otherwise fall
+        (``self.stop_reason`` is the frontier op's raw label), otherwise fall
         back to the last captured op that retained a raw activation payload.
         The exhaustive path raises when no tensor frontier can be identified;
         match that contract here rather than fabricating a placeholder tensor.
@@ -1287,7 +1287,7 @@ class Recording(CapturedRun):
                 payload_by_label_raw[label_raw] = payload
 
         # Primary: the halt frontier op, when its activation was retained.
-        halt_label = self.halt_reason
+        halt_label = self.stop_reason
         if halt_label and halt_label in payload_by_label_raw:
             return halt_label, payload_by_label_raw[halt_label]
 
@@ -1324,8 +1324,8 @@ def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -
         User-supplied halt reason. Empty string means no reason was provided.
     """
 
-    recording.halts_by_pass.setdefault(pass_index, reason)
-    if recording.halted:
+    recording.stops_by_pass.setdefault(pass_index, reason)
+    if recording.is_stopped:
         return
     object.__setattr__(recording, "halted", True)
     object.__setattr__(recording, "status", "halted")

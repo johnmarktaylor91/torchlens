@@ -79,7 +79,7 @@ log.to_pandas(include_decoded_output_summary=True)
 input_log = tl.trace(
     model,
     raw_text,
-    capture=tl.options.CaptureOptions(transform=text_to_tensor, save_raw_input="small"),
+    capture=tl.options.CaptureOptions(input_transform=text_to_tensor, save_raw_input="small"),
 )
 input_log.draw(show_input_transform_summary=True)
 

@@ -44,7 +44,7 @@ _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache"
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
-    return tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+    return tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
 
 
 def _roundtrip(model: nn.Module, x: torch.Tensor, tmp: Path) -> tuple[tl.Trace, tl.RunResult]:

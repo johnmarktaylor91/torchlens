@@ -32,7 +32,7 @@ from ._literals import (
     VisRendererLiteral,
 )
 from ._option_receipt import (
-    EchoOptions,
+    NarrationOptions,
     OptionReceiptEntry,
     _explicit_fields,
     _field_is_explicit,
@@ -70,17 +70,17 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "output_transform",
     "output_style",
     "output_head",
-    "save_raw_output",
+    "save_transformed_output",
     "layer_visualizers",
     "save_visualizations",
     "keep_orphans",
     "output_device",
-    "save_arg_values",
+    "save_args",
     "save_grads",
     "capture_tensor_grad_hooks",
-    "save_code_context",
-    "save_rng_states",
-    "random_seed",
+    "save_source_context",
+    "save_rng",
+    "seed",
     "source_context_lines",
     "optimizer",
     "compute_input_output_distances",
@@ -176,7 +176,7 @@ _INTERVENTION_FIELDS: Final[tuple[str, ...]] = (
 _STREAMING_FIELDS: Final[tuple[str, ...]] = (
     "bundle_path",
     "retain_in_memory",
-    "out_callback",
+    "on_save",
     "include_custom_attributes",
     "include_buffer_values",
     "async_writes",
@@ -190,17 +190,17 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "output_transform": "output_transform",
     "output_style": "output_style",
     "output_head": "output_head",
-    "save_raw_output": "save_raw_output",
+    "save_transformed_output": "save_raw_output",
     "layer_visualizers": "layer_visualizers",
     "save_visualizations": "save_visualizations",
     "keep_orphans": "keep_orphans",
     "output_device": "output_device",
-    "save_arg_values": "save_arg_values",
+    "save_args": "save_arg_values",
     "save_grads": "save_grads",
     "capture_tensor_grad_hooks": "capture_tensor_grad_hooks",
-    "save_code_context": "save_code_context",
-    "save_rng_states": "save_rng_states",
-    "random_seed": "random_seed",
+    "save_source_context": "save_code_context",
+    "save_rng": "save_rng_states",
+    "seed": "random_seed",
     "source_context_lines": "source_context_lines",
     "optimizer": "optimizer",
     "compute_input_output_distances": "compute_input_output_distances",
@@ -260,7 +260,7 @@ _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
 _STREAMING_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "bundle_path": "bundle_path",
     "retain_in_memory": "retain_in_memory",
-    "out_callback": "out_callback",
+    "out_callback": "on_save",
 }
 
 
@@ -481,7 +481,7 @@ class CaptureOptions:
         the global ``random`` engine, so ``torch.manual_seed(k)`` before an
         unseeded capture does NOT make the capture reproducible; pass
         ``random_seed=`` explicitly for that. The seed used is recorded on
-        ``trace.random_seed``.
+        ``trace.seed``.
     source_context_lines:
         Number of source-context lines to store.
     optimizer:
@@ -543,7 +543,7 @@ class CaptureOptions:
         module hooks, inputs, and the capture configuration; closure cells,
         globals referenced by ``forward``, and the interior state of opaque
         attribute objects remain outside the key (documented boundary).
-        ``torchlens.clear_capture_cache()`` empties the cache.
+        ``torchlens.clear_cache()`` empties the cache.
     cache_dir:
         Optional directory for content-hash cache entries.
     module_filter:
@@ -681,23 +681,23 @@ class CaptureOptions:
     """
 
     layers_to_save: str | list[Any] | None = "all"
-    transform: Callable[[Any], Any] | None = None
+    input_transform: Callable[[Any], Any] | None = None
     save_raw_input: str | bool = "small"
     batch_render: str = "auto"
     output_transform: Callable[[Any], Any] | None = None
     output_style: str | None = None
     output_head: str | None = None
-    save_raw_output: str | bool = "small"
+    save_transformed_output: str | bool = "small"
     layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None
     save_visualizations: bool = False
     keep_orphans: bool = False
     output_device: OutputDeviceLiteral = "same"
-    save_arg_values: bool = False
+    save_args: bool = False
     save_grads: bool | str | list[Any] | Callable[[Any], Any] | None = None
     capture_tensor_grad_hooks: bool = True
-    save_code_context: bool = False
-    save_rng_states: bool = False
-    random_seed: int | None = None
+    save_source_context: bool = False
+    save_rng: bool = False
+    seed: int | None = None
     source_context_lines: int = 7
     optimizer: Any = None
     compute_input_output_distances: bool = True
@@ -736,23 +736,23 @@ class CaptureOptions:
     def __init__(
         self,
         layers_to_save: str | list[Any] | None | MissingType = MISSING,
-        transform: Callable[[Any], Any] | None | MissingType = MISSING,
+        input_transform: Callable[[Any], Any] | None | MissingType = MISSING,
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
         output_style: str | None | MissingType = MISSING,
         output_head: str | None | MissingType = MISSING,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: Mapping[Any, Callable[..., Any]] | None | MissingType = MISSING,
         save_visualizations: bool | MissingType = MISSING,
         keep_orphans: bool | MissingType = MISSING,
         output_device: OutputDeviceLiteral | MissingType = MISSING,
-        save_arg_values: bool | MissingType = MISSING,
+        save_args: bool | MissingType = MISSING,
         save_grads: bool | str | list[Any] | Callable[[Any], Any] | None | MissingType = MISSING,
         capture_tensor_grad_hooks: bool | MissingType = MISSING,
-        save_code_context: bool | MissingType = MISSING,
-        save_rng_states: bool | MissingType = MISSING,
-        random_seed: int | None | MissingType = MISSING,
+        save_source_context: bool | MissingType = MISSING,
+        save_rng: bool | MissingType = MISSING,
+        seed: int | None | MissingType = MISSING,
         source_context_lines: int | MissingType = MISSING,
         optimizer: Any | MissingType = MISSING,
         compute_input_output_distances: bool | MissingType = MISSING,
@@ -795,7 +795,9 @@ class CaptureOptions:
             "layers_to_save": _resolve_option_value(
                 "layers_to_save", layers_to_save, "all", specified_fields
             ),
-            "transform": _resolve_option_value("transform", transform, None, specified_fields),
+            "transform": _resolve_option_value(
+                "transform", input_transform, None, specified_fields
+            ),
             "save_raw_input": _resolve_option_value(
                 "save_raw_input", save_raw_input, "small", specified_fields
             ),
@@ -812,7 +814,7 @@ class CaptureOptions:
                 "output_head", output_head, None, specified_fields
             ),
             "save_raw_output": _resolve_option_value(
-                "save_raw_output", save_raw_output, "small", specified_fields
+                "save_raw_output", save_transformed_output, "small", specified_fields
             ),
             "layer_visualizers": _resolve_option_value(
                 "layer_visualizers", layer_visualizers, None, specified_fields
@@ -827,7 +829,7 @@ class CaptureOptions:
                 "output_device", output_device, "same", specified_fields
             ),
             "save_arg_values": _resolve_option_value(
-                "save_arg_values", save_arg_values, False, specified_fields
+                "save_arg_values", save_args, False, specified_fields
             ),
             "save_grads": _resolve_option_value("save_grads", save_grads, None, specified_fields),
             "capture_tensor_grad_hooks": _resolve_option_value(
@@ -837,14 +839,12 @@ class CaptureOptions:
                 specified_fields,
             ),
             "save_code_context": _resolve_option_value(
-                "save_code_context", save_code_context, False, specified_fields
+                "save_code_context", save_source_context, False, specified_fields
             ),
             "save_rng_states": _resolve_option_value(
-                "save_rng_states", save_rng_states, False, specified_fields
+                "save_rng_states", save_rng, False, specified_fields
             ),
-            "random_seed": _resolve_option_value(
-                "random_seed", random_seed, None, specified_fields
-            ),
+            "random_seed": _resolve_option_value("random_seed", seed, None, specified_fields),
             "source_context_lines": _resolve_option_value(
                 "source_context_lines", source_context_lines, 7, specified_fields
             ),
@@ -1013,7 +1013,7 @@ class SaveOptions:
         activation_transform: ActivationPostfunc | None | MissingType = MISSING,
         grad_transform: GradientPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
-        save_raw_gradients: bool | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen save option bundle."""
 
@@ -1029,7 +1029,7 @@ class SaveOptions:
                 "save_raw_activations", save_raw_activations, True, specified_fields
             ),
             "save_raw_gradients": _resolve_option_value(
-                "save_raw_gradients", save_raw_gradients, True, specified_fields
+                "save_raw_gradients", save_raw_grads, True, specified_fields
             ),
         }
         _set_frozen_fields(self, _SAVE_FIELDS, values)
@@ -1548,7 +1548,7 @@ class InterventionOptions:
 
 
 @dataclass(frozen=True, init=False)
-class StreamingOptions:
+class StorageOptions:
     """Grouped streaming-save options for ``trace``.
 
     Parameters
@@ -1557,7 +1557,7 @@ class StreamingOptions:
         Portable bundle directory for streamed out saves.
     retain_in_memory:
         Whether streamed outs remain in memory.
-    out_callback:
+    on_save:
         Callback invoked with ``(label, tensor)`` for each saved out.
     include_custom_attributes:
         Whether harvested module attributes (``Module.custom_attributes``)
@@ -1596,7 +1596,7 @@ class StreamingOptions:
 
     bundle_path: str | Path | None = None
     retain_in_memory: bool = True
-    out_callback: Callable[[str, torch.Tensor], None] | None = None
+    on_save: Callable[[str, torch.Tensor], None] | None = None
     include_custom_attributes: bool = True
     include_buffer_values: bool = True
     async_writes: bool | None = None
@@ -1607,7 +1607,7 @@ class StreamingOptions:
         self,
         bundle_path: str | Path | None | MissingType = MISSING,
         retain_in_memory: bool | MissingType = MISSING,
-        out_callback: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
+        on_save: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
         *,
         include_custom_attributes: bool | MissingType = MISSING,
         include_buffer_values: bool | MissingType = MISSING,
@@ -1624,9 +1624,7 @@ class StreamingOptions:
             "retain_in_memory": _resolve_option_value(
                 "retain_in_memory", retain_in_memory, True, specified_fields
             ),
-            "out_callback": _resolve_option_value(
-                "out_callback", out_callback, None, specified_fields
-            ),
+            "on_save": _resolve_option_value("on_save", on_save, None, specified_fields),
             "include_custom_attributes": _resolve_option_value(
                 "include_custom_attributes", include_custom_attributes, True, specified_fields
             ),
@@ -1658,7 +1656,7 @@ class StreamingOptions:
         cls,
         values: Mapping[str, Any],
         specified_fields: frozenset[str],
-    ) -> StreamingOptions:
+    ) -> StorageOptions:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
@@ -1675,7 +1673,7 @@ def to_disk(
     include_buffer_values: bool = True,
     async_writes: bool | None = None,
     max_pending_bytes: int | None = None,
-) -> StreamingOptions:
+) -> StorageOptions:
     """Return storage options that stream selected payloads to a bundle.
 
     Parameters
@@ -1714,7 +1712,7 @@ def to_disk(
         ``record(..., streaming=...)``.
     """
 
-    return StreamingOptions(
+    return StorageOptions(
         bundle_path=path,
         retain_in_memory=retain_in_memory,
         include_custom_attributes=include_custom_attributes,
@@ -1862,16 +1860,16 @@ def merge_intervention_options(
 
 def merge_streaming_options(
     *,
-    streaming: StreamingOptions | None,
+    streaming: StorageOptions | None,
     **flat_values: Any,
-) -> StreamingOptions:
+) -> StorageOptions:
     """Merge individual streaming kwargs into a grouped options object."""
 
     return cast(
-        StreamingOptions,
+        StorageOptions,
         _merge_grouped_options(
             option=streaming,
-            option_factory=StreamingOptions,
+            option_factory=StorageOptions,
             flat_to_group=_STREAMING_FLAT_TO_GROUP,
             flat_values=flat_values,
             group_name="streaming",
@@ -1952,13 +1950,13 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
 
 __all__ = [
     "CaptureOptions",
-    "EchoOptions",
+    "NarrationOptions",
     "EpisodeSpec",
     "InterventionOptions",
     "OptionReceiptEntry",
     "ReplayOptions",
     "SaveOptions",
-    "StreamingOptions",
+    "StorageOptions",
     "option_receipt",
     "to_disk",
     "VisualizationOptions",

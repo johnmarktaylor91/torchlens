@@ -332,7 +332,7 @@ def _edge_fork() -> tl.Trace:
     trace = tl.trace(
         _EdgeNet(),
         torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
     edge = next(e for e in trace.edges if e.parent_label == "relu_1_2")
     fork = trace.fork()

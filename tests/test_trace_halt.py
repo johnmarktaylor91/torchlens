@@ -46,9 +46,9 @@ def test_trace_halt_op_returns_partial_trace_after_save_decision() -> None:
     trace = tl.trace(_ThreeStageModel(), torch.ones(1, 3), halt=_halt_on_relu)
 
     assert trace.halted is True
-    assert trace.halt_frontier == trace.halt_reason
-    assert trace.halt_reason is not None
-    assert "relu" in trace.halt_reason
+    assert trace.halt_frontier == trace.stop_reason
+    assert trace.stop_reason is not None
+    assert "relu" in trace.stop_reason
     assert any(
         layer.func_name == "relu" and layer.has_saved_activation for layer in trace.layer_list
     )
@@ -65,7 +65,7 @@ def test_trace_halt_module_exit_stops_after_module_output() -> None:
     )
 
     assert trace.halted is True
-    assert trace.halt_reason == "linear:exit:1"
+    assert trace.stop_reason == "linear:exit:1"
     assert any(layer.func_name == "linear" for layer in trace.layer_list)
     assert not any(layer.func_name == "relu" for layer in trace.layer_list)
 
@@ -100,7 +100,7 @@ def test_halted_trace_validation_skips_full_model_output_only() -> None:
         model,
         torch.ones(1, 3),
         halt=_halt_on_relu,
-        capture=CaptureOptions(save_arg_values=True),
+        capture=CaptureOptions(save_args=True),
     )
 
     assert trace.validate_forward_pass([torch.full((1, 3), 123.0)]) is True

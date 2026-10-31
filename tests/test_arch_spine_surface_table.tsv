@@ -42,7 +42,7 @@ torchlens.callbacks	torchlens.callbacks	L8	bridge	0	1
 torchlens.captured_run	torchlens.captured_run	L3	core	0	0
 torchlens.changed	torchlens.selection_compare	L4	core	1	0
 torchlens.clamp	torchlens.intervention	L4	core	1	0
-torchlens.clear_capture_cache	torchlens.user_funcs	FACADE	facade	1	0
+torchlens.clear_cache	torchlens.user_funcs	FACADE	facade	1	0
 torchlens.compat	torchlens.compat	L3	core	0	0
 torchlens.contains	torchlens.intervention	L4	core	1	0
 torchlens.data_classes	torchlens.data_classes	L1	core	0	0

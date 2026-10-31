@@ -161,7 +161,7 @@ def _profile_model(name, model, input_tensor, description):
     # random_seed routes through capture=CaptureOptions(...); trace() itself
     # has no random_seed kwarg (unrecognized model-input keywords refuse
     # typed -- they are routed to the model's own forward() call instead).
-    log, lfp_time = _time_fn(trace_fn, model, input_tensor, capture=CaptureOptions(random_seed=42))
+    log, lfp_time = _time_fn(trace_fn, model, input_tensor, capture=CaptureOptions(seed=42))
 
     # save_new_outs requires the computational graph to match the
     # original trace exactly.  For some models (e.g. AlexNet) this

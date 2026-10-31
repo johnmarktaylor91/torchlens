@@ -434,7 +434,7 @@ def test_param_refs_release_but_pid_lookup_remains_for_backward() -> None:
 
     model = nn.Linear(3, 2)
     x = torch.randn(1, 3)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=123))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=123))
     param_log = trace.params["weight"]
 
     assert param_log._param_ref is None
@@ -448,9 +448,7 @@ def test_released_param_grad_refetches_after_manual_backward() -> None:
 
     model = nn.Linear(3, 1)
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(random_seed=123, backward_ready=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=123, backward_ready=True))
     param_log = trace.params["weight"]
 
     assert param_log._param_ref is None
@@ -467,7 +465,7 @@ def test_released_param_dead_model_raises_clear_error() -> None:
 
     model = nn.Linear(3, 1)
     model_ref = weakref.ref(model)
-    trace = tl.trace(model, torch.randn(2, 3), capture=tl.options.CaptureOptions(random_seed=123))
+    trace = tl.trace(model, torch.randn(2, 3), capture=tl.options.CaptureOptions(seed=123))
     param_log = trace.params["weight"]
 
     assert param_log._param_ref is None
@@ -484,7 +482,7 @@ def test_walk_detects_accumulategrad_via_type_name() -> None:
 
     model = nn.Linear(3, 1)
     x = torch.randn(2, 3)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(random_seed=123, save_grads=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=123, save_grads=True))
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
     assert trace._grad_fn_param_refs

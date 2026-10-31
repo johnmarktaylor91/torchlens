@@ -37,7 +37,7 @@ def _write_bundle(path: Path) -> tl.fastlog.Recording:
         PersistenceModel(),
         torch.ones(1, 3),
         default_op=True,
-        streaming=tl.options.StreamingOptions(bundle_path=path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=path, retain_in_memory=False),
     )
 
 
@@ -71,8 +71,8 @@ def test_finalized_bundle_loads_and_recover_returns_identical_not_recovered(
     loaded = tl.fastlog.load(bundle_path)
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert loaded.recovered is False
-    assert recovered.recovered is False
+    assert loaded.is_recovered is False
+    assert recovered.is_recovered is False
     assert _labels(loaded) == _labels(original)
     assert _labels(recovered) == _labels(loaded)
     assert list(recovered.records)
@@ -120,7 +120,7 @@ def test_recover_with_missing_manifest_walks_jsonl(tmp_path: Path) -> None:
 
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert len(recovered.records) > 0
 
 
@@ -134,7 +134,7 @@ def test_recover_with_malformed_manifest_uses_jsonl(tmp_path: Path) -> None:
 
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert len(recovered.records) > 0
 
 
@@ -230,7 +230,7 @@ def test_load_rejects_hash_mismatch_in_finalized_bundle(tmp_path: Path) -> None:
 
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert recovered.status == "recovered"
     assert any("hash mismatch" in warning for warning in recovered.recovery_warnings)
     assert list(recovered.records)
@@ -255,7 +255,7 @@ def test_load_rejects_incomplete_blob_metadata_in_finalized_bundle(tmp_path: Pat
 
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert recovered.status == "recovered"
     assert any("incomplete blob metadata" in warning for warning in recovered.recovery_warnings)
     assert list(recovered.records)
@@ -335,7 +335,7 @@ def test_recover_depth_bomb_metadata_degrades_to_empty_metadata(tmp_path: Path) 
 
     recovered = tl.fastlog.recover(bundle_path)
 
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert len(recovered.records) > 0
 
 
@@ -376,7 +376,7 @@ def test_disk_roundtrip_label_index_deduplicates_same_raw_label(tmp_path: Path) 
         PersistenceModel(),
         torch.ones(1, 3),
         save=tl.func("relu"),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
 
     label = recording.records[0].ctx.label
@@ -437,7 +437,7 @@ def test_disk_finalize_baseexception_marks_partial(
             PersistenceModel(),
             torch.ones(1, 3),
             default_op=True,
-            streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
 
     assert not bundle_path.exists()
@@ -467,7 +467,7 @@ def test_disk_finalize_refuses_concurrently_created_target(
             PersistenceModel(),
             torch.ones(1, 3),
             default_op=True,
-            streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+            streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
         )
 
     assert list(bundle_path.iterdir()) == []

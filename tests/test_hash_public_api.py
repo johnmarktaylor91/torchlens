@@ -185,7 +185,7 @@ def test_structural_hash_is_capture_option_invariant_for_metadata_options() -> N
     code_context = tl.trace(
         model,
         _input(),
-        capture=CaptureOptions(layers_to_save=None, save_code_context=True),
+        capture=CaptureOptions(layers_to_save=None, save_source_context=True),
     )
 
     assert tl.hash.trace(all_layers) == tl.hash.trace(metadata_only) == tl.hash.trace(code_context)

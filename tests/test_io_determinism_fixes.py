@@ -137,7 +137,7 @@ def _save_seeded_trace(path: Path, *, random_seed: int) -> tl.Trace:
     trace = tl.trace(
         _LinearModel(),
         torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(random_seed=random_seed),
+        capture=tl.options.CaptureOptions(seed=random_seed),
     )
     tl.save(trace, path)
     return tl.load(path)

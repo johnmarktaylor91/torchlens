@@ -37,7 +37,7 @@ from torch import get_default_dtype, nn
 from .. import _state
 from .._capture_state_helpers import CompiledCapturePrep, prepare_compiled_capture
 from .._runnable_seam import runnable_trace_state
-from ..backends import (
+from ..backends.registry import (
     TORCH_BACKEND_NAME,
     BackendName,
     BackendUnsupportedError,
@@ -45,7 +45,7 @@ from ..backends import (
     get_backend_spec,
     resolve_backend_spec,
 )
-from ..fastlog._halt import HaltSignal
+from ..fastlog._halt import StopSignal
 from ..ir.container_registry import ModelSite, Phase, Role, walk_container
 from ..quantities import Bytes, Duration
 from . import peak_memory
@@ -92,7 +92,7 @@ restore bracket (breaking byte-exact RNG neutrality for a seeded host
 process) or, if the draw were bracketed too, made consecutive auto-seeded
 captures reuse one identical seed (silently correlating dropout patterns
 across runs). A private stream preserves both guarantees; the chosen seed is
-always disclosed on ``trace.random_seed``.
+always disclosed on ``trace.seed``.
 """
 
 
@@ -501,7 +501,7 @@ def _run_predicate_forward_with_root_frame(
                 predicate_matched=enter_spec.save_out or enter_spec.save_metadata,
             )
             evaluate_halt_stop(trace, enter_ctx, state.options)
-    except HaltSignal:
+    except StopSignal:
         raise
     except Exception as exc:
         state.handle_predicate_exception(enter_ctx, exc)
@@ -554,7 +554,7 @@ def _run_predicate_forward_with_root_frame(
                     predicate_matched=exit_spec.save_out or exit_spec.save_metadata,
                 )
                 evaluate_halt_stop(trace, exit_ctx, state.options, frontier_output=outputs)
-        except HaltSignal:
+        except StopSignal:
             if active_model_exc is None:
                 raise
         except Exception as exc:
@@ -639,7 +639,7 @@ def save_new_outs(
                 input_kwargs=input_kwargs,
                 layers_to_save=layers_to_save,
                 grad_layers_to_save=grad_layers_to_save,
-                random_seed=random_seed,
+                seed=random_seed,
                 backward_ready=None,
                 _run_until_plan=_run_until_plan,
             )
@@ -656,7 +656,7 @@ def save_new_outs(
     save_grads_policy = getattr(self, "save_grads", None)
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
     grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
-    refresh_seed = self.random_seed if random_seed is None else random_seed
+    refresh_seed = self.seed if random_seed is None else random_seed
     resolved_layer_nums: tuple[int, ...] | None = None
     if layer_nums_to_save != "all":
         expanded_layer_nums = set(cast(list[int], layer_nums_to_save))
@@ -763,7 +763,7 @@ def save_new_outs(
     # proof (``bare_tensor_root``), not the stale capture-time one. Missing/malformed fresh
     # proof leaves the field absent -> the live reconstructor fails closed (not faithful).
     self._runnable.output_losslessness = refreshed._runnable.output_losslessness
-    if self.save_arg_values:
+    if self.save_args:
         self._replay_arg_version_data_complete = True
 
 
@@ -1413,7 +1413,7 @@ def _settle_interrupted_halted_arm(
     trace: "Trace",
     capture_session: Any,
     interrupt_exc: BaseException,
-    halt_exc: HaltSignal,
+    halt_exc: StopSignal,
 ) -> None:
     """Stamp an interrupt that escaped the halted arm, never masking it.
 
@@ -1429,7 +1429,7 @@ def _settle_interrupted_halted_arm(
             capture_session,
             interrupt_exc,
             interrupted=True,
-            settlement_note=(
+            note=(
                 "interrupted during halted finalization after halt at "
                 f"{getattr(halt_exc, 'reason', '')!r}"
             ),
@@ -1450,7 +1450,7 @@ def _settle_interrupted_halted_arm(
 def _finalize_halted_trace(
     self: "Trace",
     backend: CaptureBackend,
-    halt_exc: HaltSignal,
+    halt_exc: StopSignal,
     model: object,
     input_tensors: list[Any],
     postprocess: bool,
@@ -1499,8 +1499,8 @@ def _finalize_halted_trace(
             "trace(halt=...) could not identify a tensor frontier for the halted partial graph."
         ) from halt_exc
 
-    self.halted = True
-    self.halt_reason = halt_exc.reason
+    self.is_stopped = True
+    self.stop_reason = halt_exc.reason
     self.halt_frontier = halt_exc.reason
     self.raw_output = None
     if not postprocess:
@@ -1563,7 +1563,7 @@ def run_and_log_inputs_through_model(
         # The private stream keeps both properties: byte-exact global-engine
         # neutrality AND fresh seeds per capture.
         random_seed = _AUTO_SEED_ENTROPY.randint(1, 4294967294)
-    self.random_seed = random_seed  # type: ignore[assignment]
+    self.seed = random_seed  # type: ignore[assignment]
     # The per-capture code-context cache (and the call-site anchor stored
     # inside it) is only valid for the stack of ONE capture run: the anchor
     # frame is proven alive by identity for the duration of a single capture,
@@ -2102,7 +2102,7 @@ def run_and_log_inputs_through_model(
         _publish_streamed_bundle_at_settlement(self)
         return outputs
 
-    except HaltSignal as halt_exc:
+    except StopSignal as halt_exc:
         compiled_unwrap_exception = sys.exc_info()
         options = getattr(self, "_predicate_save_options", None)
         if (
@@ -2130,7 +2130,7 @@ def run_and_log_inputs_through_model(
                     self,
                     capture_session,
                     secondary_exc,
-                    settlement_note=(
+                    note=(
                         "halted finalization failed after halt at "
                         f"{getattr(halt_exc, 'reason', '')!r}"
                     ),
@@ -2164,7 +2164,7 @@ def run_and_log_inputs_through_model(
                     capture_session.snapshot_recording_projection(self)
                     self._fastlog_captured_run_core = capture_session.seal()
             finally:
-                backend.cleanup_halted_forward_session(
+                backend.cleanup_stopped_forward_session(
                     self, (model, input_tensors, (input_args, input_kwargs))
                 )
         except Exception as secondary_exc:
@@ -2173,9 +2173,7 @@ def run_and_log_inputs_through_model(
                 self,
                 capture_session,
                 secondary_exc,
-                settlement_note=(
-                    f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"
-                ),
+                note=(f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"),
             )
             _scrub_failed_capture_transients(self)
             raise
@@ -2254,7 +2252,7 @@ def run_and_log_inputs_through_model(
             # pre-settlement arms. The transient scrub runs after settlement
             # (R11/R32: the escaping partial must not pin live input tensors
             # or the payload-bearing event stream).
-            settle_failed(self, capture_session, e, n_ops_committed=committed_ops)
+            settle_failed(self, capture_session, e, num_committed_ops=committed_ops)
             _scrub_failed_capture_transients(self)
         raise e
 
@@ -2294,7 +2292,7 @@ def run_and_log_inputs_through_model(
                     capture_session,
                     interrupt_exc,
                     interrupted=True,
-                    n_ops_committed=committed_ops,
+                    num_committed_ops=committed_ops,
                 )
                 _scrub_failed_capture_transients(self)
             except Exception as settle_exc:

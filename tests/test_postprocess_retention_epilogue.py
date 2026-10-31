@@ -70,7 +70,7 @@ def test_successful_postprocess_releases_the_hot_tier() -> None:
     tl.trace(
         _Conditional().eval(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
     assert _hot_tier_files() == []
 
@@ -94,7 +94,7 @@ def test_failed_postprocess_still_releases_the_hot_tier(monkeypatch) -> None:
         tl.trace(
             _Conditional().eval(),
             torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(save_code_context=True),
+            capture=tl.options.CaptureOptions(save_source_context=True),
         )
     assert _hot_tier_files() == []
 
@@ -113,7 +113,7 @@ def test_repeated_postprocess_failures_do_not_accumulate_hot_tiers(monkeypatch) 
             tl.trace(
                 _Conditional().eval(),
                 torch.ones(1, 3),
-                capture=tl.options.CaptureOptions(save_code_context=True),
+                capture=tl.options.CaptureOptions(save_source_context=True),
             )
     assert _hot_tier_files() == []
 
@@ -148,7 +148,7 @@ def test_released_hot_tier_still_answers_lazy_source_queries() -> None:
     trace = tl.trace(
         _Conditional().eval(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
     assert _hot_tier_files() == []
     # Exercise the lazy re-parse path on every op that has one.
@@ -232,7 +232,7 @@ def test_audited_capture_still_runs_clean_end_to_end(monkeypatch) -> None:
     trace = tl.trace(
         _Conditional().eval(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
     )
     assert trace.num_ops > 0
     assert _audit_registry_sizes() == before

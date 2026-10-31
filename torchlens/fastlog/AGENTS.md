@@ -9,13 +9,13 @@ predicate (plus `default_op=`/`default_module=` defaults).
 ## Public Surface
 - `record()` - one-shot sparse recording.
 - `Recorder` - context manager for repeated rollouts.
-- `Recording` / `ActivationRecord` / `RecordingTrace` - returned data structures.
+- `Recording` / `ActivationRecord` / `DryRun` - returned data structures.
 - `CaptureSpec` - per-predicate keep/save/metadata decision.
 - `RecordingOptions` - grouped fastlog options.
 - `dry_run()` - predicate trace without payload retention.
 - `preview()` - visualization overlay from `visualization.fastlog_preview`.
 - `load()`, `recover()`, `cleanup_partial()` - disk bundle management.
-- `halt()` / `HaltSignal` - user-invoked early-stop from inside a predicate
+- `halt()` / `StopSignal` - user-invoked early-stop from inside a predicate
   (defined in `_halt.py`, surfaced top-level as `tl.halt`).
 
 ## Files
@@ -27,7 +27,7 @@ predicate (plus `default_op=`/`default_module=` defaults).
 | `_record_one_shot.py` | Public `record()` implementation |
 | `_recorder.py` | Public `Recorder` context manager and repeated rollout orchestration |
 | `_storage_resolver.py` | Tensor copy/detach/RAM/disk routing |
-| `_halt.py` | The public `halt()` entry point + `HaltSignal`, plus halt outcome helpers shared by one-shot and repeated recording |
+| `_halt.py` | The public `halt()` entry point + `StopSignal`, plus halt outcome helpers shared by one-shot and repeated recording |
 | `_indexes.py` | Recording index helpers |
 | `_validation.py` | Option validation |
 | `storage_ram.py` | In-memory backend |
@@ -54,9 +54,9 @@ Forward exceptions are opt-in partials. The default is the historical
 partial; with `return_output=True` the output slot is `None`, and manual `Recorder.log()`
 returns `None` while `recorder.recording` holds the partial. Failed partials set
 `status="partial_error"`, `failed=True`, `error_repr`, `error_traceback`,
-`n_ops_completed`, `last_successful_op_label`, and best-effort `last_event_*` fields.
+`num_committed_ops`, `last_successful_op_label`, and best-effort `last_event_*` fields.
 user-op failures exclude the failing call; TL-side capture failures may include a
-skipped/partial current-call event. `Recording.to_trace()` and `Recording.log_backward()`
+skipped/partial current-call event. `Recording.to_trace()` and `Recording.backward()`
 reject failed partials because the topology is incomplete.
 
 Trace has a separate failed-capture diagnostic: failed `tl.trace(...)` exceptions carry

@@ -97,9 +97,9 @@ def _assert_failed_partial(recording: Recording) -> None:
     """Assert common failed partial metadata."""
 
     assert isinstance(recording, Recording)
-    assert recording.failed is True
+    assert recording.is_failed is True
     assert recording.status == "partial_error"
-    assert recording.n_ops_completed > 0
+    assert recording.num_committed_ops > 0
     assert recording.error_repr is not None
     assert recording.error_traceback is not None
     assert "boom" in recording.error_traceback
@@ -119,7 +119,7 @@ def _assert_subsequent_record_works() -> None:
 
     recording = tl.record(HealthyModel(), torch.tensor(1.0), save=_save_ops)
     assert isinstance(recording, Recording)
-    assert recording.failed is False
+    assert recording.is_failed is False
     assert len(recording) > 0
 
 
@@ -129,13 +129,13 @@ def test_successful_recording_failure_fields_default_complete() -> None:
     recording = tl.record(HealthyModel(), torch.tensor(1.0), save=_save_ops)
 
     assert recording.status == "complete"
-    assert recording.failed is False
+    assert recording.is_failed is False
     assert recording.error_repr is None
     assert recording.error_traceback is None
-    assert recording.n_ops_completed == 0
+    assert recording.num_committed_ops == 0
     assert recording.last_successful_op_label is None
     assert recording.summary() == (
-        f"Recording(n_passes={recording.n_passes}, n_records={len(recording)}, "
+        f"Recording(n_passes={recording.num_passes}, n_records={len(recording)}, "
         f"n_grad_records={len(recording.grad_records)})"
     )
     assert "status=" not in recording.summary()
@@ -254,7 +254,7 @@ def test_failed_recording_rejects_to_trace_and_log_backward() -> None:
     with pytest.raises(RuntimeError, match="failed partial Recording"):
         recording.to_trace()
     with pytest.raises(RecorderStateError, match="failed partial Recording"):
-        recording.log_backward(torch.tensor(1.0, requires_grad=True))
+        recording.backward(torch.tensor(1.0, requires_grad=True))
 
 
 def test_partial_build_double_fault_reraises_original(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -465,7 +465,7 @@ def test_disk_partial_bundle_path_points_to_recoverable_temp_dir(tmp_path: Path)
     assert recording.bundle_path.name.startswith("recoverable.tlfast.tmp.")
     assert (recording.bundle_path / "fastlog_index.jsonl").exists()
     recovered = tl.fastlog.recover(recording.bundle_path)
-    assert recovered.recovered is True
+    assert recovered.is_recovered is True
     assert recovered.status == "recovered"
     assert len(recovered) > 0
 
@@ -523,7 +523,7 @@ def test_failed_recording_log_backward_refusal_carries_n3_code() -> None:
         on_forward_error="return_partial",
     )
     with pytest.raises(RecorderStateError) as exc_info:
-        recording.log_backward(torch.tensor(1.0, requires_grad=True))
+        recording.backward(torch.tensor(1.0, requires_grad=True))
     assert exc_info.value.fields["code"] == "N3"
     assert exc_info.value.fields["capability"] == "backward"
     assert exc_info.value.fields["status"] == "failed"

@@ -685,7 +685,7 @@ class TestNestedTupleArgs:
         """
         model = _NestedListArgModel()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+        log = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True))
 
         stack_entry = None
         for label in log.layer_labels:

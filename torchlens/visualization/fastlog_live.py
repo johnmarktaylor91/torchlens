@@ -10,7 +10,7 @@ from typing import Any, cast
 
 import graphviz
 
-from ..fastlog.types import RecordContext, RecordingTrace
+from ..fastlog.types import DryRun, RecordContext
 from . import _render_utils
 from ._render_common import GraphvizRenderError
 
@@ -42,7 +42,7 @@ def _dtype_text(ctx: RecordContext) -> str:
     return str(ctx.dtype).replace("torch.", "")
 
 
-def _event_kept(trace: RecordingTrace, index: int) -> bool:
+def _event_kept(trace: DryRun, index: int) -> bool:
     """Return whether a trace event was selected by the predicate."""
 
     if index >= len(trace.decisions):
@@ -68,7 +68,7 @@ def _module_color(address: str, color_map: dict[str, str]) -> str:
     return color_map[address]
 
 
-def print_tree(trace: RecordingTrace) -> str:
+def print_tree(trace: DryRun) -> str:
     """Return a unicode-indented tree of dry-run events.
 
     Parameters
@@ -93,7 +93,7 @@ def print_tree(trace: RecordingTrace) -> str:
     return "\n".join(rows)
 
 
-def to_pandas(trace: RecordingTrace) -> Any:
+def to_pandas(trace: DryRun) -> Any:
     """Return a pandas DataFrame with one row per trace event."""
 
     try:
@@ -154,7 +154,7 @@ def _graph_label(ctx: RecordContext, kept: bool, rail_color: str) -> str:
 
 
 def draw(
-    trace: RecordingTrace,
+    trace: DryRun,
     *,
     vis_outpath: str | None = None,
     vis_save_only: bool = True,
@@ -249,7 +249,7 @@ def _render_dry_run_graph(
         _render_utils._open_file_quietly(rendered_path)
 
 
-def summary(trace: RecordingTrace) -> str:
+def summary(trace: DryRun) -> str:
     """Return counts for a dry-run trace."""
 
     by_kind = Counter(ctx.kind for ctx in trace.events)
@@ -265,7 +265,7 @@ def summary(trace: RecordingTrace) -> str:
     return "\n".join(lines)
 
 
-def timeline_html(trace: RecordingTrace) -> Any:
+def timeline_html(trace: DryRun) -> Any:
     """Return a horizontal module-row timeline as ``IPython.display.HTML``."""
 
     try:

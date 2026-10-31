@@ -1755,7 +1755,7 @@ def torch_func_decorator(
             return func(*args, **kwargs)
 
         # Snapshot args before the call in case in-place ops mutate them.
-        if trace.save_arg_values:
+        if trace.save_args:
             from ._ops_retention import _copy_saved_arg_tree
 
             arg_copies = tuple([_copy_saved_arg_tree(arg) for arg in args])

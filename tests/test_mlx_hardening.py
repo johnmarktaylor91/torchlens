@@ -27,7 +27,6 @@ import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
 from torchlens.backends import (  # noqa: E402
     BackendRuntimeCompatibilityError,
     BackendUnsupportedError,
-    get_backend_spec,
 )
 from torchlens.backends.mlx import GradOptions  # noqa: E402
 
@@ -778,7 +777,7 @@ def test_mlx_static_save_rejects_unsupported_selector_kinds(
 def test_mlx_capability_flags_match_materialized_contract() -> None:
     """MLX capability exports should advertise materialized array payloads."""
 
-    spec = get_backend_spec("mlx")
+    spec = tl.backends.spec("mlx")
 
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.intermediate_derived_grads is True

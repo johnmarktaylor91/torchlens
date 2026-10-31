@@ -246,7 +246,7 @@ def _promote_layers_to_save_output_parent(
     spec = CaptureSpec(
         save_out=True,
         save_metadata=True,
-        keep_grad=False,
+        save_grad=False,
         device=output_device,
         save_mode=cast(Any, getattr(trace, "save_mode", "copy")),
     )
@@ -1174,7 +1174,7 @@ class TorchBackend:
         """Run torch post-forward reconciliation before output extraction."""
         reconcile_buffer_writes(cast("Trace", session), trace_state)
 
-    def cleanup_halted_forward_session(self, session: object, prepared_model: object) -> None:
+    def cleanup_stopped_forward_session(self, session: object, prepared_model: object) -> None:
         """Clean up torch metadata after a halted forward capture."""
         self.cleanup_model_session(session, prepared_model)
         # F5: the raw-graph workspace may already be gone when the halt fired

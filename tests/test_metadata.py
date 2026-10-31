@@ -670,8 +670,8 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
 
 def test_saved_args_populated(small_input):
     model = example_models.SimpleFF()
-    mh = trace_fn(model, small_input, capture=tl.options.CaptureOptions(save_arg_values=True))
-    assert mh.save_arg_values is True
+    mh = trace_fn(model, small_input, capture=tl.options.CaptureOptions(save_args=True))
+    assert mh.save_args is True
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
@@ -684,7 +684,7 @@ def test_saved_args_populated(small_input):
 def test_saved_args_not_populated(small_input):
     model = example_models.SimpleFF()
     mh = trace_fn(model, small_input)
-    assert mh.save_arg_values is False
+    assert mh.save_args is False
 
 
 # =============================================================================
@@ -1227,7 +1227,7 @@ def _get_code_context_with_flag(small_input, save_code_context: bool):
     mh = trace_fn(
         model,
         small_input,
-        capture=tl.options.CaptureOptions(save_code_context=save_code_context),
+        capture=tl.options.CaptureOptions(save_source_context=save_code_context),
     )
     for label in mh.layer_labels:
         entry = mh[label]
@@ -1438,7 +1438,7 @@ def test_custom_num_context_lines(small_input):
     mh = trace_fn(
         model,
         small_input,
-        capture=tl.options.CaptureOptions(source_context_lines=3, save_code_context=True),
+        capture=tl.options.CaptureOptions(source_context_lines=3, save_source_context=True),
     )
     for label in mh.layer_labels:
         entry = mh[label]
@@ -1496,7 +1496,7 @@ def valid_mh_and_ground_truth():
     mh = trace_fn(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     ground_truth = [mh[label].out.clone() for label in mh.output_layers]
     return mh, ground_truth
@@ -1633,7 +1633,7 @@ class TestConditionalBranchDetection:
     @staticmethod
     def _log(model, x, save_code_context=False):
         return trace_fn(
-            model, x, capture=tl.options.CaptureOptions(save_code_context=save_code_context)
+            model, x, capture=tl.options.CaptureOptions(save_source_context=save_code_context)
         )
 
     @staticmethod
@@ -1846,7 +1846,7 @@ class TestConditionalBranchDetection:
 
         model = example_models.ConditionalBranching()
         x = self._pos_input()
-        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_code_context=True))
+        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_source_context=True))
         with tempfile.TemporaryDirectory() as tmpdir:
             outpath = os.path.join(tmpdir, "cond_then_test")
             mh.draw(
@@ -1932,7 +1932,7 @@ def test_transpose_positional_args_expose_salient_dims():
     trace = tl.trace(
         _TransposeModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     op = next(o for o in trace.layer_list if "transpose" in o.func_name)
     assert op.func_config.get("dim0") == 0

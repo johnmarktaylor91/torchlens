@@ -13,7 +13,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : A sparse, torch-only event stream returned by `tl.record(model, inputs, save=...)`.
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
   by `save=` fails explicitly. `tl.record` installs gradient hooks only when `backward_ready=True`,
-  `save_grads=` or `default_grad=` is given; without one, `Recording.log_backward()` refuses with
+  `save_grads=` or `default_grad=` is given; without one, `Recording.backward()` refuses with
   code `recording_backward_not_requested`.
 
 **Saved-activation autograd history** *(knob spellings documented-unstable)*
@@ -25,7 +25,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `tl.record(..., detach_saved_activations=False)` (also `tl.fastlog.Recorder` and
   `RecordingOptions.detach_saved_activations`) attach on request; both keep their detached
   default, and `tl.record` refuses an explicit `True` with `backward_ready=True`
-  (`backward_ready_conflict`). A per-site `CaptureSpec(keep_grad=True)` stays attached either
+  (`backward_ready_conflict`). A per-site `CaptureSpec(save_grad=True)` stays attached either
   way, and disk payloads are always detached. An escrowed deferred-selector payload spilled to
   temporary disk comes back detached, with a `RuntimeWarning` naming the count.
   `Trace.pinned_autograd_memory` discloses what the attached payloads keep alive: the bytes of
@@ -42,8 +42,8 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 : A `Recording` with `status="partial_error"` and `failed=True`. Use
   `on_forward_error="attach_partial"` to attach it as `exc.partial_recording`, or
   `on_forward_error="return_partial"` to return it. It carries string-only error metadata,
-  `n_ops_completed`, and best-effort `last_event_*` fields. It cannot be passed to
-  `Recording.to_trace()` or `Recording.log_backward()`.
+  `num_committed_ops`, and best-effort `last_event_*` fields. It cannot be passed to
+  `Recording.to_trace()` or `Recording.backward()`.
 
 **Generation recording** *(spellings documented-unstable)*
 : `tl.record(model, input_ids, save=..., generate_kwargs={...})` runs the model's own Hugging Face
@@ -56,7 +56,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `.sequences`, `.prompt_length`, `.settings` (the settings that decide the tokens, the torch seed
   and an RNG-state digest), `.not_recorded` (cache tensors, the sampling between forwards, the
   last token's own position), `.n_steps`, `.records_at(step)` and `.step_of_position(position)`
-  (both refuse a missing step with `record_generation_step_missing`). `random_seed=` seeds once
+  (both refuse a missing step with `record_generation_step_missing`). `seed=` seeds once
   for the whole generation. Beam search, more than one return sequence, batched prompts, assisted
   decoding, encoder-decoder models, `use_cache=False`, a generate that runs decode steps without a
   cache, `intervene=`, `halt=` and partial forward-error modes refuse with
@@ -64,7 +64,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **Capture outcome**
 : The frozen `Trace.outcome`, `Recording.outcome`, or `PartialTrace.outcome`. Its status is one of
-  `COMPLETE`, `HALTED`, `ABORTED_NONFINITE`, `FAILED`, `UNATTESTED`, or `UNKNOWN`; failed outcomes
+  `COMPLETE`, `STOPPED`, `ABORTED_NONFINITE`, `FAILED`, `UNATTESTED`, or `UNKNOWN`; failed outcomes
   also identify the phase. See [Capture outcomes](capture_outcomes.md).
 
 **Inference-only capture**
@@ -473,7 +473,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   tensor content (including device and `requires_grad`), training flags, module tree and
   `forward` code, plain instance attributes, user-registered module hooks, inputs, and capture
   configuration to all match. Entries are HMAC-authenticated, bounded by entry count and bytes,
-  and `tl.clear_capture_cache()` empties the cache while preserving its secret.
+  and `tl.clear_cache()` empties the cache while preserving its secret.
 
 ## Replay and intervention
 
@@ -1196,7 +1196,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   traced model and normalizes plain attributes holding torch functions from the other wrap
   epoch, so whole-model pickle / `torch.save` survive later wrap-state changes (a capture
   itself leaves no TorchLens callable on the model: submodule `forward` wrappers are
-  session-scoped); `tl.clear_capture_cache`
+  session-scoped); `tl.clear_cache`
   empties the capture cache; `tl.io.list_logs` / `tl.io.reset_naming_counter` manage log
   bookkeeping.
 
@@ -1221,7 +1221,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Options**
 : `tl.options` groups the public option dataclasses: `CaptureOptions`, `SaveOptions`,
-  `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StreamingOptions`.
+  `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StorageOptions`.
 
 **Structural hash**
 : `tl.hash` is the provisional structural-hash namespace; `tl.assert_unchanged` asserts
@@ -1639,10 +1639,10 @@ vocabulary*
   call-site grouping, `grouper_v1` for the structural grouper that serves
   captures without call-site evidence, `unknown` when grouping did not run),
   `effective`, and
-  `settlement_note`. Loads validate against the exact writer key set, closed
+  `note`. Loads validate against the exact writer key set, closed
   vocabularies, and coherence rules C1–C8; parse failure or incoherence
   warns once and settles to THE canonical degraded representation
-  (`policy="unknown"`, `settlement_note="grouping_stamp_<reason>"`), which
+  (`policy="unknown"`, `note="grouping_stamp_<reason>"`), which
   round-trips byte-stable and stays degraded — verdicts only worsen across
   persistence. Legacy pre-stamp artifacts settle silently to
   `grouping_stamp_legacy`; degraded stamps refuse stamp-consuming
@@ -2207,7 +2207,7 @@ shim owed*
 **torchlens.preprocessing.imagenet_default()** — *unstable — no deprecation shim owed*
 : The explicit opt-in to the TorchLens-authored ImageNet recipe (resize 256,
   center-crop 224, ImageNet mean/std), passed as
-  `CaptureOptions(transform=torchlens.preprocessing.imagenet_default())`. A PIL image
+  `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`. A PIL image
   whose model resolves no preprocessing authority (torchvision weights
   handle, timm data config, HF image processor) refuses typed
   `preprocessing_unresolved` instead of receiving this recipe silently. The

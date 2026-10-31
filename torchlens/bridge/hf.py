@@ -666,7 +666,7 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
     from torchlens import preprocessing as _preprocessing
 
     resolution = _preprocessing.resolve(model=model)
-    record = resolution.record
+    record = resolution.preprocessing
     if resolution.transform is not None and record.source != "unknown":
         if record.source == "hf_image_processor":
             # Legacy source token for the model-discovered HF tier (pinned by

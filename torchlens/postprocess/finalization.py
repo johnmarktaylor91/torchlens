@@ -1683,8 +1683,8 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
             self,
             include_outs=True,
             include_grads=_has_retained_gradient_payloads(self),
-            include_saved_args=self.save_arg_values,
-            include_rng_states=self.save_rng_states,
+            include_saved_args=self.save_args,
+            include_rng_states=self.save_rng,
             include_custom_attributes=getattr(writer, "include_custom_attributes", True),
             include_buffer_values=getattr(writer, "include_buffer_values", True),
         )

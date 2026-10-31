@@ -87,7 +87,7 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(save_arg_values=True),
+        capture=CaptureOptions(save_args=True),
         save=SaveOptions(activation_transform=lambda t: t.float().mean()),
     )
 
@@ -116,7 +116,7 @@ def test_successful_capture_cleans_deeply_nested_saved_args() -> None:
     trace = tl.trace(
         _NestedSavedArgsModel(),
         torch.ones(2),
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=CaptureOptions(layers_to_save="all", save_args=True),
     )
 
     foreach_ops = [op for op in trace.ops if op.func_name == "_foreach_add"]

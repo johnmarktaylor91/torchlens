@@ -21,7 +21,7 @@ from torchlens.visualization.surgery_visuals import surgery_census
 
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True)
+_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
 
 _REPLAY_WORDING = "exit values were substituted; the interior was not replayed"
 _LIVE_WORDING = "the original op ran; edited values replaced its output after execution"

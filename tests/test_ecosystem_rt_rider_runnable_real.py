@@ -142,7 +142,7 @@ def test_gpt2_loaded_log_backward_refuses_before_mutation(tmp_path, gpt2_and_inp
     assert len(getattr(loaded, "backward_passes", []) or []) == 0
     assert len(loaded.grad_fns) == 0
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
-        loaded.recording_backward()
+        loaded.capture_backward()
 
 
 def test_gpt2_recording_outcome_gate_reads_complete(gpt2_and_inputs):

@@ -224,7 +224,7 @@ def test_w32_genuine_intervene_capture_keeps_exemption() -> None:
         model,
         x,
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     replaced_ops = [op for op in trace.layer_list if getattr(op, "intervention_replaced", False)]
     assert replaced_ops, "zero_ablate must stamp its site"
@@ -273,7 +273,7 @@ def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
         trace = tl.trace(
             model,
             torch.randn(3, 4),
-            capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+            capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
         )
     finally:
         handle.remove()
@@ -518,7 +518,7 @@ def test_w34_dropped_aten_op_trace_method_now_fails(monkeypatch: pytest.MonkeyPa
         trace = tl.trace(
             model,
             x,
-            capture=CaptureOptions(layers_to_save="all", save_arg_values=True),
+            capture=CaptureOptions(layers_to_save="all", save_args=True),
         )
     assert "relu_1_1" in trace.layer_labels and len(trace.layer_labels) == 3
 
@@ -1686,7 +1686,7 @@ def test_saturated_softmax_validates_for_the_unlucky_ci_seed() -> None:
     model, x = _saturated_softmax_case()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        assert validate_forward_pass(model, x, random_seed=2165740343) is True
+        assert validate_forward_pass(model, x, seed=2165740343) is True
 
 
 def test_uniform_steps_are_null_for_softmax_and_the_lift_is_not() -> None:

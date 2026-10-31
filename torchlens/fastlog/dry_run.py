@@ -9,7 +9,7 @@ from torch import nn
 from .._input_coerce import _coerce_input_args
 from ._recorder import Recorder
 from .options import PredicateFn
-from .types import RecordingTrace
+from .types import DryRun
 
 
 def dry_run(
@@ -20,8 +20,8 @@ def dry_run(
     save: PredicateFn | None = None,
     history_size: int = 8,
     include_source_events: bool = False,
-    random_seed: int | None = None,
-) -> RecordingTrace:
+    seed: int | None = None,
+) -> DryRun:
     """Run predicates over one forward pass without retaining tensor payloads.
 
     Parameters
@@ -48,7 +48,7 @@ def dry_run(
         "include_source_events": include_source_events,
         "on_predicate_error": "fail-fast",
         "streaming": None,
-        "random_seed": random_seed,
+        "random_seed": seed,
     }
     recorder_cm = Recorder(
         model,
@@ -68,4 +68,4 @@ def dry_run(
             for event in recorder._capture_events.op_events  # noqa: SLF001
         )
         failures = tuple(recorder._state.predicate_failures)  # noqa: SLF001
-    return RecordingTrace(contexts=contexts, decisions=decisions, predicate_failures=failures)
+    return DryRun(contexts=contexts, decisions=decisions, predicate_failures=failures)

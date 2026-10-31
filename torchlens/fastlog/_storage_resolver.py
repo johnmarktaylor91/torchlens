@@ -150,7 +150,7 @@ def _resolve_storage(
         grad-capable tensor connected to the autograd graph.
     """
 
-    if spec.keep_grad and intent.on_disk and not intent.in_ram:
+    if spec.save_grad and intent.on_disk and not intent.in_ram:
         message = (
             f"keep_grad=True is not valid for disk-only {kind} storage. "
             "Remedy: set retain_in_memory=True or drop keep_grad=True."
@@ -158,7 +158,7 @@ def _resolve_storage(
         if kind == "grad":
             raise InvalidStorageError(message, code="predicate_storage_conflict")
         raise PredicateError(message, code="predicate_storage_conflict")
-    if spec.keep_grad and (tensor.dtype in _INTEGER_DTYPES or spec.dtype in _INTEGER_DTYPES):
+    if spec.save_grad and (tensor.dtype in _INTEGER_DTYPES or spec.dtype in _INTEGER_DTYPES):
         raise PredicateError(
             "keep_grad=True is not valid for integer or bool tensors. "
             "Remedy: drop keep_grad=True or keep the payload in a floating dtype.",
@@ -172,11 +172,11 @@ def _resolve_storage(
         )
     if spec.save_mode == "reference":
         _warn_reference_save_mode_once()
-    if spec.save_mode == "view" and not spec.keep_grad:
+    if spec.save_mode == "view" and not spec.save_grad:
         spec = CaptureSpec(
             save_out=spec.save_out,
             save_metadata=spec.save_metadata,
-            keep_grad=True,
+            save_grad=True,
             device=spec.device,
             dtype=spec.dtype,
             save_mode=spec.save_mode,
@@ -207,7 +207,7 @@ def _resolve_storage(
             spec,
             target="ram",
             reduce_only=reduce_only,
-            detach=not (spec.keep_grad or attach_unkept),
+            detach=not (spec.save_grad or attach_unkept),
         )
         if transform is not None:
             transformed_ram = _invoke_transform(
@@ -220,7 +220,7 @@ def _resolve_storage(
             )
             if reduce_only:
                 transformed_ram = ensure_summary_output_owns_storage(transformed_ram, tensor)
-            if spec.keep_grad:
+            if spec.save_grad:
                 _validate_train_mode_transformed(
                     raw_ram,
                     transformed_ram,
@@ -334,14 +334,14 @@ def _transform_error_message(
     if ctx is None:
         return (
             "activation_transform raised while resolving a fastlog payload "
-            f"(storage_target={storage_target}, keep_grad={spec.keep_grad})."
+            f"(storage_target={storage_target}, keep_grad={spec.save_grad})."
         )
     return (
         f"activation_transform raised for fastlog event "
         f"label={ctx.label!r} kind={ctx.kind} func={ctx.func_name} "
         f"shape={tuple(ctx.shape) if ctx.shape is not None else None} "
         f"dtype={ctx.dtype} storage_target={storage_target} "
-        f"keep_grad={spec.keep_grad}."
+        f"keep_grad={spec.save_grad}."
     )
 
 

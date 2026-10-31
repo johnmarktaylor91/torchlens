@@ -951,7 +951,7 @@ def _log_model(
         model,
         x,
         capture=tl.options.CaptureOptions(
-            save_code_context=save_code_context, layers_to_save=layers_to_save
+            save_source_context=save_code_context, layers_to_save=layers_to_save
         ),
     )
 

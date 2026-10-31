@@ -439,7 +439,7 @@ def test_gpt2_class_mapping_batch_derivation_is_exact() -> None:
     envelope = BatchEnvelope(
         args=(),
         kwargs={"input_ids": ids, "attention_mask": mask},
-        row_count=2,
+        num_rows=2,
         mask=mask,
         disclosure={"kind": "test"},
     )

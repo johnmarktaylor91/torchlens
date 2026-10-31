@@ -255,7 +255,7 @@ These derived gradients are not true backward capture, and `op.grads` /
 MLX supports static-label live interventions and halt. `trace(intervene=tl.when(static_selector,
 action))` substitutes matched output arrays at the wrapper boundary — the replacement genuinely
 flows into downstream ops — and `trace(halt=static_selector)` finalizes an honest partial trace at
-the matched frontier (`trace.halted`, `trace.halt_reason`; parameter accounting is restricted to
+the matched frontier (`trace.halted`, `trace.stop_reason`; parameter accounting is restricted to
 the captured ops). Static selectors are `tl.func`, `tl.label`, `tl.module`, `tl.in_module`,
 `tl.contains`, and boolean composites. Supported actions are `tl.zero_ablate()`, `tl.scale(...)`,
 `tl.add(scalar | mx.array)`, `tl.clamp(...)`, `tl.mean_ablate()` (self form), `tl.replace_with(...)`,

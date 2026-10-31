@@ -601,7 +601,7 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=_SEED),
+                capture=tl.options.CaptureOptions(layers_to_save="all", seed=_SEED),
             ),
             None,
             None,
@@ -612,7 +612,7 @@ def _run_capture(
                 model,
                 input_tensor,
                 save=_save_all_ops,
-                capture=tl.options.CaptureOptions(random_seed=_SEED),
+                capture=tl.options.CaptureOptions(seed=_SEED),
             ),
             None,
             None,
@@ -623,7 +623,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             include_source_events=True,
-            random_seed=_SEED,
+            seed=_SEED,
         )
         return recording, None, None
     if config == "two_pass_negative":
@@ -631,7 +631,7 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save=[-1], random_seed=_SEED),
+                capture=tl.options.CaptureOptions(layers_to_save=[-1], seed=_SEED),
             ),
             None,
             None,
@@ -641,7 +641,7 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save=[1, -1], random_seed=_SEED),
+                capture=tl.options.CaptureOptions(layers_to_save=[1, -1], seed=_SEED),
             ),
             None,
             None,
@@ -654,7 +654,7 @@ def _run_capture(
             save=selector,
             lookback=4,
             lookback_payload_policy="detached_raw",
-            capture=tl.options.CaptureOptions(random_seed=_SEED),
+            capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return trace, None, None
     if config == "intervene_trace":
@@ -663,7 +663,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             intervene=tl.when(tl.func("relu"), tl.add(0.0)),
-            capture=tl.options.CaptureOptions(random_seed=_SEED),
+            capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return trace, None, None
     if config == "intervene_record":
@@ -673,7 +673,7 @@ def _run_capture(
             save=_save_all_ops,
             intervene=tl.when(tl.func("relu"), tl.add(0.0)),
             include_source_events=True,
-            random_seed=_SEED,
+            seed=_SEED,
         )
         return recording, None, None
     if config == "halt_trace":
@@ -682,7 +682,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             halt=_halt_on_relu,
-            capture=tl.options.CaptureOptions(random_seed=_SEED),
+            capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return trace, None, None
     if config == "halt_record":
@@ -692,7 +692,7 @@ def _run_capture(
             save=_save_all_ops,
             halt=_halt_on_relu,
             include_source_events=True,
-            random_seed=_SEED,
+            seed=_SEED,
         )
         return recording, None, None
     if config == "backward_trace":
@@ -700,7 +700,7 @@ def _run_capture(
             model,
             input_tensor.requires_grad_(True),
             capture=tl.options.CaptureOptions(
-                layers_to_save="all", save_grads="all", backward_ready=True, random_seed=_SEED
+                layers_to_save="all", save_grads="all", backward_ready=True, seed=_SEED
             ),
         )
         output_op = trace[trace.output_layers[0]]
@@ -719,17 +719,17 @@ def _run_capture(
                 backward_ready=True,
                 include_source_events=True,
                 return_output=True,
-                random_seed=_SEED,
+                seed=_SEED,
             ),
         )
-        recording.log_backward(output.sum(), save_grads=True)
+        recording.backward(output.sum(), save_grads=True)
         return recording, None, output
     if config == "disk_exhaustive":
         trace = tl.trace(
             model,
             input_tensor,
             storage=tl.to_disk(disk_path, retain_in_memory=True),
-            capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=_SEED),
+            capture=tl.options.CaptureOptions(layers_to_save="all", seed=_SEED),
         )
         return trace, None, None
     if config == "disk_predicate":
@@ -738,7 +738,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             storage=tl.to_disk(disk_path, retain_in_memory=True),
-            capture=tl.options.CaptureOptions(random_seed=_SEED),
+            capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return trace, None, None
     if config == "disk_record":
@@ -748,7 +748,7 @@ def _run_capture(
             save=_save_all_ops,
             storage=tl.to_disk(disk_path, retain_in_memory=True),
             include_source_events=True,
-            random_seed=_SEED,
+            seed=_SEED,
         )
         return recording, None, None
     if config == "failed_record":
@@ -758,7 +758,7 @@ def _run_capture(
             save=_save_all_ops,
             include_source_events=True,
             on_forward_error="return_partial",
-            random_seed=_SEED,
+            seed=_SEED,
         )
         return recording, RuntimeError("capture-oracle intentional forward failure"), None
     if config == "failed_trace":
@@ -766,7 +766,7 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=_SEED),
+                capture=tl.options.CaptureOptions(layers_to_save="all", seed=_SEED),
             )
         except RuntimeError as exc:
             return tl.partial.from_failed_capture(exc), exc, None
@@ -944,8 +944,8 @@ def _outcome_projection(product: Any, exception: BaseException | None) -> dict[s
             "status": product.status,
             "failed": product.failed,
             "halted": product.halted,
-            "halt_reason": product.halt_reason,
-            "n_ops_completed": product.n_ops_completed,
+            "halt_reason": product.stop_reason,
+            "n_ops_completed": product.num_committed_ops,
             "last_successful_op_label": product.last_successful_op_label,
             "last_event_label": product.last_event_label,
             "last_event_func": product.last_event_func,

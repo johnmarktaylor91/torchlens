@@ -21,12 +21,12 @@ from .registry import (
     BackendUnsupportedError,
     SerializationPolicy,
     UnknownBackendError,
-    get_backend_spec,
-    register_backend_spec,
-    registered_backend_specs,
+    get_backend_spec as spec,
+    register_backend_spec as register,
+    registered_backend_specs as specs,
     require_capability_implementation,
-    resolve_backend_spec,
-    unregister_backend_spec,
+    resolve_backend_spec as resolve,
+    unregister_backend_spec as unregister,
 )
 
 __all__ = [
@@ -43,10 +43,10 @@ __all__ = [
     "CaptureBackend",
     "SerializationPolicy",
     "UnknownBackendError",
-    "get_backend_spec",
-    "registered_backend_specs",
-    "register_backend_spec",
+    "spec",
+    "specs",
+    "register",
     "require_capability_implementation",
-    "resolve_backend_spec",
-    "unregister_backend_spec",
+    "resolve",
+    "unregister",
 ]

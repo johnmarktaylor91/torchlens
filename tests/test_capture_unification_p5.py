@@ -266,7 +266,7 @@ def test_save_new_outs_rebuilds_child_versions_and_validates_alias_mutation() ->
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
 
     log.save_new_outs(model, new_x, layers_to_save="all")
@@ -285,7 +285,7 @@ def test_selective_fast_save_rebuilds_versions_without_unsaved_out_postprocess()
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_args=True),
     )
 
     assert log._replay_arg_version_data_complete
@@ -306,7 +306,7 @@ def test_selective_fast_save_without_arg_values_marks_replay_versions_incomplete
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_arg_values=False),
+        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_args=False),
     )
 
     assert not log._replay_arg_version_data_complete

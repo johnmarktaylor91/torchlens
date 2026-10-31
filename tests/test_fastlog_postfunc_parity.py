@@ -156,7 +156,7 @@ def test_disk_only_mode_persists_transformed_blob(tmp_path: Path) -> None:
         torch.ones(1, 3),
         default_op=True,
         activation_transform=lambda t: t.float() * 2,
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
 
     records = _disk_out_records(recording)
@@ -194,7 +194,7 @@ def test_ram_disk_mirror_populates_both_transformed_payloads(tmp_path: Path) -> 
         torch.ones(1, 3),
         default_op=True,
         activation_transform=lambda t: t.float() * 3,
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=True),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=True),
     )
 
     records = _out_records(recording)
@@ -230,7 +230,7 @@ def test_ram_disk_mirror_invokes_transform_once_per_selected_event(tmp_path: Pat
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op" and ctx.func_name == "relu",
         activation_transform=counting_transform,
-        streaming=tl.options.StreamingOptions(
+        streaming=tl.options.StorageOptions(
             bundle_path=tmp_path / "mirror_once.tlfast", retain_in_memory=True
         ),
     )
@@ -252,12 +252,12 @@ def test_train_mode_well_behaved_transform_keeps_graph_connected_payload() -> No
     recording = tl.fastlog.record(
         model,
         torch.ones(1, 3),
-        default_op=CaptureSpec(keep_grad=True),
+        default_op=CaptureSpec(save_grad=True),
         activation_transform=lambda t: t * 2,
     )
 
     records = _out_records(recording)
-    grad_records = [record for record in records if record.spec.keep_grad]
+    grad_records = [record for record in records if record.spec.save_grad]
     assert grad_records, "expected at least one keep_grad record"
     for record in grad_records:
         assert record.transformed_ram_payload is not None
@@ -274,7 +274,7 @@ def test_train_mode_detaching_transform_rejected() -> None:
         tl.fastlog.record(
             _PostfuncModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(keep_grad=True),
+            default_op=CaptureSpec(save_grad=True),
             activation_transform=lambda t: t.detach(),
         )
 
@@ -286,7 +286,7 @@ def test_train_mode_integer_transform_rejected() -> None:
         tl.fastlog.record(
             _PostfuncModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(keep_grad=True),
+            default_op=CaptureSpec(save_grad=True),
             activation_transform=lambda t: t.to(torch.int64),
         )
 
@@ -414,7 +414,7 @@ def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> Non
         torch.ones(1, 3),
         default_op=True,
         activation_transform=named_transform,
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
     metadata = json.loads((bundle_path / "metadata.json").read_text(encoding="utf-8"))
     assert metadata.get("_activation_transform_repr") is not None
@@ -432,7 +432,7 @@ def test_transform_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
         torch.ones(1, 3),
         default_op=True,
         activation_transform=lambda t: t.float() * 2,
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path, retain_in_memory=False),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path, retain_in_memory=False),
     )
 
     loaded = tl.fastlog.load(bundle_path)

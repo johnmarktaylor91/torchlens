@@ -42,9 +42,7 @@ def test_mlx_validation_healthy_two_layer_mlp_passes() -> None:
 def test_mlx_validation_registered_spec_dispatches() -> None:
     """The registered spec routes to the real oracle, not the old refusal."""
 
-    from torchlens.backends import get_backend_spec
-
-    spec = get_backend_spec("mlx")
+    spec = tl.backends.spec("mlx")
     assert spec.capabilities.validation_replay is True
     assert spec.validate_trace(_healthy_trace()) is True
 
@@ -173,9 +171,9 @@ def test_mlx_end_to_end_bare_streaming_flip_refuses_typed() -> None:
     the option. (Interventions are genuinely lifted on MLX now, so the probe
     uses streaming, which remains gated.)"""
 
-    from torchlens.backends import BackendCapabilityConformanceError, get_backend_spec
+    from torchlens.backends import BackendCapabilityConformanceError
 
-    spec = get_backend_spec("mlx")
+    spec = tl.backends.spec("mlx")
     object.__setattr__(spec.capabilities, "streaming", True)
     try:
         with pytest.raises(BackendCapabilityConformanceError):

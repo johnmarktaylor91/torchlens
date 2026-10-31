@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     import torch
 
     from ..ir.predicate import RecordContext
-    from ..options import EchoOptions
+    from ..options import NarrationOptions
 
 __tl_layer__ = "L5"
 
@@ -133,7 +133,7 @@ class EchoSession:
         are field-identical across tiers by construction (tier parity gate).
     """
 
-    def __init__(self, options: EchoOptions, tier: str) -> None:
+    def __init__(self, options: NarrationOptions, tier: str) -> None:
         """Resolve the sink, the scope, and the per-pass counters."""
 
         from ..intervention.selectors import BaseSelector

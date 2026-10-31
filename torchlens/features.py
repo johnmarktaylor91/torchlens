@@ -181,7 +181,7 @@ class SiteMatrix:
     """
 
     matrix: torch.Tensor
-    record: ShapingRecord
+    shaping: ShapingRecord
     site: str
     row_ids: list[str] | None
     input_preprocessing: dict[str, Any] | None
@@ -205,7 +205,7 @@ def _matrix_from_trace(trace: Any, site: str) -> SiteMatrix:
     matrix, record = as_matrix(out.detach().cpu())
     return SiteMatrix(
         matrix=matrix,
-        record=record,
+        shaping=record,
         site=site,
         row_ids=None,
         input_preprocessing=None,
@@ -249,7 +249,7 @@ def _matrix_from_extraction(loaded: Any, site: str) -> SiteMatrix:
 
     return SiteMatrix(
         matrix=matrix,
-        record=record,
+        shaping=record,
         site=site,
         row_ids=ids,
         input_preprocessing=input_preprocessing_of(loaded.manifest),

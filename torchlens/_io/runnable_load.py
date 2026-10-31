@@ -2227,7 +2227,7 @@ def preflight_sparse_run_descriptor(
                     recorded_func_names=recorded_func_names,
                 )
 
-    records = tuple(resolution.record for resolution in resolutions.values())
+    records = tuple(resolution.preprocessing for resolution in resolutions.values())
     diagnostics = [*version_diagnostics, *structural_diagnostics]
     diagnostics.extend(diagnostic for record in records for diagnostic in record.diagnostics)
     ready = (

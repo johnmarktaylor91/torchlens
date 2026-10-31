@@ -7,7 +7,7 @@ per event, with the last lines before a crash -- plus the post-hoc
 Narration is a DISPLAY of capture events, never a new kind of capture: the
 package holds one read-only observer slot, one line grammar, and two crash
 tails. All spellings are DOCUMENTED-UNSTABLE pending the naming sprint; the
-grouped option class lives at ``tl.options.EchoOptions``.
+grouped option class lives at ``tl.options.NarrationOptions``.
 
 Rely on the partial (``exc.partial_log.narrate(20)``) when you expect an
 exception; turn narration on (``echo=``) when you expect the process to DIE

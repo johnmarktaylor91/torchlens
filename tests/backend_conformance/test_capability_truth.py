@@ -30,9 +30,6 @@ from torchlens.backends import (
     BackendCapabilities,
     BackendCapabilityConformanceError,
     BackendUnsupportedError,
-    get_backend_spec,
-    register_backend_spec,
-    registered_backend_specs,
     require_capability_implementation,
 )
 from torchlens.backends._options import (
@@ -175,7 +172,7 @@ def test_every_capability_flag_has_a_production_consumer() -> None:
 def _spec_with_flag(name: str, flag: str, *, implementation: bool) -> Any:
     """Return the registered spec with ``flag`` flipped True, optionally bound."""
 
-    original = get_backend_spec(name)
+    original = tl.backends.spec(name)
     implementations = dict(original.capability_implementations or {})
     if implementation:
         implementations[flag] = lambda: object()
@@ -195,7 +192,7 @@ def test_extra_kwarg_gates_are_fail_closed_biconditional(name: str) -> None:
     with OR without a binding — the preview capture path never dispatches it,
     so a bound-but-unconsumed implementation must not admit the option."""
 
-    spec = get_backend_spec(name)
+    spec = tl.backends.spec(name)
     policy = _EXTRA_POLICIES[name]
     sentinel = object()
     for option, flag in (
@@ -229,7 +226,7 @@ def test_option_policy_gates_are_fail_closed_biconditional(name: str) -> None:
     """save_grads/backward_ready/save_rng_states refuse in every flag state:
     False via the policy message, True via the undispatched-binding refusal."""
 
-    spec = get_backend_spec(name)
+    spec = tl.backends.spec(name)
     policy = _OPTION_POLICIES[name]
     cases = [("save_grads", "backward_capture"), ("backward_ready", "backward_capture")]
     if "save_rng_states" in (policy.rejected_truthy_messages or {}):
@@ -253,19 +250,19 @@ def test_registration_refuses_bare_capability_flips() -> None:
 
     for name in _PREVIEW_NAMES:
         for flag in sorted(GATED_CAPABILITY_FLAGS):
-            original_value = getattr(get_backend_spec(name).capabilities, flag)
+            original_value = getattr(tl.backends.spec(name).capabilities, flag)
             with pytest.raises(BackendCapabilityConformanceError):
-                register_backend_spec(
+                tl.backends.register(
                     _spec_with_flag(name, flag, implementation=False), replace=True
                 )
             # The refused registration must leave the registered truth intact.
-            assert getattr(get_backend_spec(name).capabilities, flag) == original_value
+            assert getattr(tl.backends.spec(name).capabilities, flag) == original_value
 
 
 def test_in_place_capability_flip_refuses_end_to_end() -> None:
     """Review probe: mutating the frozen table in place must refuse typed at trace()."""
 
-    spec = get_backend_spec("mlx")
+    spec = tl.backends.spec("mlx")
     object.__setattr__(spec.capabilities, "streaming", True)
     try:
         with pytest.raises(BackendCapabilityConformanceError):
@@ -280,7 +277,7 @@ def test_record_gate_reads_the_capability_table() -> None:
     model = nn.Linear(2, 2)
     inputs = torch.randn(1, 2)
     for name in _PREVIEW_NAMES:
-        assert not get_backend_spec(name).capabilities.fastlog
+        assert not tl.backends.spec(name).capabilities.fastlog
         with pytest.raises(BackendUnsupportedError, match="torch-only"):
             tl.record(model, inputs, backend=name)
 
@@ -291,7 +288,7 @@ def test_record_bare_fastlog_flip_never_runs_torch_recorder() -> None:
 
     model = nn.Linear(2, 2)
     inputs = torch.randn(1, 2)
-    spec = get_backend_spec("tinygrad")
+    spec = tl.backends.spec("tinygrad")
     object.__setattr__(spec.capabilities, "fastlog", True)
     try:
         with pytest.raises(BackendCapabilityConformanceError):
@@ -308,14 +305,14 @@ def test_record_foreign_fastlog_implementation_refuses() -> None:
 
     model = nn.Linear(2, 2)
     inputs = torch.randn(1, 2)
-    original = get_backend_spec("tinygrad")
+    original = tl.backends.spec("tinygrad")
     opened = _spec_with_flag("tinygrad", "fastlog", implementation=True)
-    register_backend_spec(opened, replace=True)
+    tl.backends.register(opened, replace=True)
     try:
         with pytest.raises(BackendUnsupportedError, match="no non-torch dispatch path"):
             tl.record(model, inputs, backend="tinygrad")
     finally:
-        register_backend_spec(original, replace=True)
+        tl.backends.register(original, replace=True)
         tl.release_model(model)
 
 
@@ -323,7 +320,7 @@ def test_record_foreign_fastlog_implementation_refuses() -> None:
 def test_torch_capability_bindings_resolve() -> None:
     """Torch's declared True flags all resolve to real implementing surfaces."""
 
-    spec = get_backend_spec("torch")
+    spec = tl.backends.spec("torch")
     for flag in sorted(GATED_CAPABILITY_FLAGS):
         assert getattr(spec.capabilities, flag), flag
         assert require_capability_implementation(spec, flag) is not None
@@ -336,9 +333,9 @@ def test_runnable_producer_gate_reads_save_levels() -> None:
     from torchlens._io.runnable import build_sparse_run_descriptor
     from torchlens.runnable import RunnableErrorCode
 
-    assert "runnable" in get_backend_spec("torch").capabilities.save_levels
+    assert "runnable" in tl.backends.spec("torch").capabilities.save_levels
     for name in _PREVIEW_NAMES:
-        assert "runnable" not in get_backend_spec(name).capabilities.save_levels
+        assert "runnable" not in tl.backends.spec(name).capabilities.save_levels
 
     model = nn.Linear(2, 2)
     trace = tl.trace(model, torch.randn(1, 2))
@@ -382,7 +379,7 @@ def test_backward_accessor_guard_without_derived_surface_has_no_redirect(
 
     from torchlens.data_classes import _backend_capability_guards as guards
 
-    original = get_backend_spec("tf")
+    original = tl.backends.spec("tf")
     flipped = dataclasses.replace(
         original,
         capabilities=dataclasses.replace(original.capabilities, intermediate_derived_grads=False),
@@ -429,8 +426,8 @@ def test_backward_accessors_raise_for_all_non_backward_backends() -> None:
     ("flag", "trace_kwargs"),
     [
         ("interventions", {"intervene": "PREDICATE"}),
-        ("rng_replay", {"capture": tl.options.CaptureOptions(random_seed=0)}),
-        ("rng_replay", {"capture": tl.options.CaptureOptions(save_rng_states=True)}),
+        ("rng_replay", {"capture": tl.options.CaptureOptions(seed=0)}),
+        ("rng_replay", {"capture": tl.options.CaptureOptions(save_rng=True)}),
         ("backward_capture", {"capture": tl.options.CaptureOptions(backward_ready=True)}),
         ("backward_capture", {"capture": tl.options.CaptureOptions(save_grads="all")}),
         ("streaming", {"storage": "STORAGE"}),
@@ -451,7 +448,7 @@ def test_torch_flag_false_refuses_the_surface(flag: str, trace_kwargs: dict) -> 
             resolved_kwargs[key] = object()
         else:
             resolved_kwargs[key] = value
-    spec = get_backend_spec("torch")
+    spec = tl.backends.spec("torch")
     object.__setattr__(spec.capabilities, flag, False)
     try:
         with pytest.raises(BackendUnsupportedError, match=f"{flag}=False"):
@@ -467,7 +464,7 @@ def test_torch_flag_false_refuses_capture_options_spelling() -> None:
 
     model = nn.Linear(2, 2)
     inputs = torch.randn(1, 2)
-    spec = get_backend_spec("torch")
+    spec = tl.backends.spec("torch")
     object.__setattr__(spec.capabilities, "backward_capture", False)
     try:
         with pytest.raises(BackendUnsupportedError, match="backward_capture=False"):
@@ -482,7 +479,7 @@ def test_torch_fastlog_flag_false_refuses_record() -> None:
 
     model = nn.Linear(2, 2)
     inputs = torch.randn(1, 2)
-    spec = get_backend_spec("torch")
+    spec = tl.backends.spec("torch")
     object.__setattr__(spec.capabilities, "fastlog", False)
     try:
         with pytest.raises(BackendUnsupportedError, match="fastlog=False"):
@@ -500,7 +497,7 @@ def test_registered_capability_tables_match_declared_matrix() -> None:
     flip fails here.
     """
 
-    for spec in registered_backend_specs():
+    for spec in tl.backends.specs():
         expected = EXPECTED_GATED_CAPABILITIES[str(spec.name)]
         for flag in sorted(GATED_CAPABILITY_FLAGS):
             assert getattr(spec.capabilities, flag) == expected[flag], (

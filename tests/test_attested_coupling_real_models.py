@@ -106,7 +106,7 @@ def _coupled_trace(runner: nn.Module, intervene, **kwargs) -> tl.Trace:
         _prompt(),
         episode=EpisodeSpec(stepped_module=runner.model, n_steps=runner.n_steps),
         intervene=intervene,
-        capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
+        capture=tl.options.CaptureOptions(seed=CAPTURE_SEED),
         **kwargs,
     )
 
@@ -146,7 +146,7 @@ def _baseline_and_coupled():
         runner,
         _prompt(),
         episode=EpisodeSpec(stepped_module=runner.model, n_steps=N_STEPS),
-        capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
+        capture=tl.options.CaptureOptions(seed=CAPTURE_SEED),
     )
     runner2 = _Generate(build_distilgpt2("eager"), N_STEPS)
     # Zeroing every layer_norm zeroes ln_f, so the bias-free lm_head emits all-zero
@@ -246,7 +246,7 @@ def test_distilgpt2_declared_crossing_scopes_facts_per_segment():
         _prompt(),
         episode=EpisodeSpec(stepped_module=runner.model, n_steps=N_STEPS, crossings=(1,)),
         intervene=tl.when(tl.func("softmax"), tl.scale(0.5)),
-        capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
+        capture=tl.options.CaptureOptions(seed=CAPTURE_SEED),
     )
     header = _header(log)
     envelope = header["step_join"]
@@ -285,7 +285,7 @@ def test_distilgpt2_feed_closed_strict_arm_halts_coupled_capture():
             _prompt(),
             episode=EpisodeSpec(stepped_module=runner.model, n_steps=N_STEPS, feed="closed"),
             intervene=tl.when(tl.func("softmax"), tl.scale(0.5)),
-            capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
+            capture=tl.options.CaptureOptions(seed=CAPTURE_SEED),
         )
     assert excinfo.value.fields["code"] == "episode_feed_closed_violation"
 
@@ -312,7 +312,7 @@ def test_diffusion_shaped_perturbed_episode():
         torch.randn(1, 6),
         episode=EpisodeSpec(stepped_module=runner.model, n_steps=4, step_output_kind="digest"),
         intervene=tl.when(tl.func("linear") & at_step(2), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(random_seed=CAPTURE_SEED),
+        capture=tl.options.CaptureOptions(seed=CAPTURE_SEED),
     )
     assert _fire_counts(log) == [0, 0, 1, 0]
     header = _header(log)

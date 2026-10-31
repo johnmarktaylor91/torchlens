@@ -312,7 +312,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     # ---- CaptureSpec -------------------------------------------------------
     "CaptureSpec.save_out": "F",
     "CaptureSpec.save_metadata": "F",
-    "CaptureSpec.keep_grad": "F",
+    "CaptureSpec.save_grad": "F",
     "CaptureSpec.device": "F",
     "CaptureSpec.dtype": "F",
     "CaptureSpec.save_mode": "F",

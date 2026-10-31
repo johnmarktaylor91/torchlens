@@ -166,7 +166,7 @@ def _log_model(
     return trace_fn(
         model,
         x,
-        capture=CaptureOptions(save_code_context=save_code_context),
+        capture=CaptureOptions(save_source_context=save_code_context),
     )
 
 

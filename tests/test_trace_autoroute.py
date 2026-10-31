@@ -109,7 +109,7 @@ def test_explicit_transform_overrides_autoroute(monkeypatch: pytest.MonkeyPatch)
         _HFLikeTensorModel(),
         "text",
         capture=tl.options.CaptureOptions(
-            transform=lambda value: torch.ones(1), layers_to_save="none"
+            input_transform=lambda value: torch.ones(1), layers_to_save="none"
         ),
     )
 

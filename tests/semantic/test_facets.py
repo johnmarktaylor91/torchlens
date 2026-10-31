@@ -755,7 +755,7 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
     clean = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     clean_out = _trace_output(clean).clone()
 
@@ -786,7 +786,7 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
     clean = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     clean_out = _trace_output(clean).clone()
 
@@ -823,9 +823,7 @@ def test_gqa_kv_aliasing_write_refuses_but_read_and_grad_work() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads="all", save_arg_values=True
-        ),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all", save_args=True),
     )
     log.log_backward(_trace_output(log).sum())
     k_head = log.modules["attn"].facets.head(3).k
@@ -847,7 +845,7 @@ def test_computed_facet_write_refuses() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
 
     with pytest.raises(RuntimeError, match="computed facets are read-only"):
@@ -882,7 +880,7 @@ def test_in_place_or_view_version_facet_write_refuses() -> None:
     log = tl.trace(
         Tiny(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
 
     with pytest.raises(RuntimeError, match="not intervention-safe"):
@@ -898,7 +896,7 @@ def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
     clean = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     clean_out = _trace_output(clean).clone()
 

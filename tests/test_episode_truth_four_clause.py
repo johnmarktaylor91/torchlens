@@ -71,7 +71,7 @@ def _seeded_capture(declare_episode: bool) -> tuple[tl.Trace, torch.Tensor]:
 
     torch.manual_seed(123)
     model = _SampledRunner()
-    kwargs = {"capture": CaptureOptions(random_seed=777)}
+    kwargs = {"capture": CaptureOptions(seed=777)}
     if declare_episode:
         kwargs["episode"] = EpisodeSpec(stepped_module=model.step, n_steps=N_STEPS)
     trace = tl.trace(model, torch.tensor([[1]]), **kwargs)

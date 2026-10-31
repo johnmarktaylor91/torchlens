@@ -29,10 +29,10 @@ from ..capture.trace import _extract_and_mark_outputs
 from ..data_classes.trace import Trace
 from ..intervention.predicates import InterventionPredicate
 from ..ir import CaptureEvents
-from ..options import StreamingOptions
+from ..options import StorageOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from ..utils._torch_compat import get_fsdp_wrapper_type
-from ._halt import HaltSignal
+from ._halt import StopSignal
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
@@ -48,8 +48,8 @@ from .types import CaptureSpec, Recording, _mark_recording_halted
 
 
 def _rank_prefixed_streaming_options(
-    streaming: StreamingOptions | None | MissingType,
-) -> StreamingOptions | None | MissingType:
+    streaming: StorageOptions | None | MissingType,
+) -> StorageOptions | None | MissingType:
     """Return streaming options with a rank-local directory prefix.
 
     Parameters
@@ -73,10 +73,10 @@ def _rank_prefixed_streaming_options(
     # Rewrite ONLY bundle_path: rebuilding from defaults silently dropped the
     # R62 include_* opt-outs (and now the async-write routing) for rank-split
     # recordings.
-    return StreamingOptions(
+    return StorageOptions(
         bundle_path=bundle_path.parent / f"rank_{rank:02d}" / bundle_path.name,
         retain_in_memory=streaming.retain_in_memory,
-        out_callback=streaming.out_callback,
+        on_save=streaming.on_save,
         include_custom_attributes=streaming.include_custom_attributes,
         include_buffer_values=streaming.include_buffer_values,
         async_writes=streaming.async_writes,
@@ -129,8 +129,8 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
 
 def _unwrap_ddp_for_fastlog(
     model: nn.Module,
-    streaming: StreamingOptions | None | MissingType,
-) -> tuple[nn.Module, StreamingOptions | None | MissingType]:
+    streaming: StorageOptions | None | MissingType,
+) -> tuple[nn.Module, StorageOptions | None | MissingType]:
     """Unwrap DDP/DataParallel wrappers for rank-local fastlog capture.
 
     Parameters
@@ -179,7 +179,7 @@ def _resolve_train_mode_default(
     """Resolve one default capture option for train-mode sugar."""
 
     if backward_ready and value is MISSING:
-        return CaptureSpec(keep_grad=True, save_out=True, save_metadata=True)
+        return CaptureSpec(save_grad=True, save_out=True, save_metadata=True)
     if not backward_ready or value is MISSING or value is False:
         return value
     if value is True:
@@ -217,17 +217,17 @@ class Recorder:
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         on_forward_error: ForwardErrorMode | MissingType = MISSING,
-        storage: StreamingOptions | None | MissingType = MISSING,
-        streaming: StreamingOptions | None | MissingType = MISSING,
-        random_seed: int | None | MissingType = MISSING,
+        storage: StorageOptions | None | MissingType = MISSING,
+        streaming: StorageOptions | None | MissingType = MISSING,
+        seed: int | None | MissingType = MISSING,
         activation_transform: ActivationPostfunc | None | MissingType = MISSING,
         save_raw_activations: bool | MissingType = MISSING,
         save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
         grad_transform: GradientPostfunc | None | MissingType = MISSING,
-        save_raw_gradients: bool | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
         backward_ready: bool = False,
-        echo: Any | None | MissingType = MISSING,
+        narrate: Any | None | MissingType = MISSING,
         detach_saved_activations: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
@@ -318,12 +318,12 @@ class Recorder:
         )
         # echo= normalization runs at construction so the typed refusals
         # (bad spellings, finalized-label selectors) fire BEFORE any forward.
-        if echo is MISSING or echo is None or echo is False:
+        if narrate is MISSING or narrate is None or narrate is False:
             echo_normalized = None
         else:
             from ..snoop import normalize_echo
 
-            echo_normalized = normalize_echo(echo)
+            echo_normalized = normalize_echo(narrate)
         self.options = merge_recording_options(
             recording=None,
             keep_op=save,
@@ -339,13 +339,13 @@ class Recorder:
             on_predicate_error=on_predicate_error,
             on_forward_error=on_forward_error,
             streaming=streaming,
-            random_seed=random_seed,
+            random_seed=seed,
             activation_transform=activation_transform,
             save_raw_activations=save_raw_activations,
             save_grads=save_grads,
             default_grad=default_grad,
             grad_transform=grad_transform,
-            save_raw_gradients=save_raw_gradients,
+            save_raw_gradients=save_raw_grads,
             echo=echo_normalized if echo_normalized is not None else MISSING,
             detach_saved_activations=detach_saved_activations,
         )
@@ -429,11 +429,11 @@ class Recorder:
             if getattr(self._recording, "_outcome", None) is None:
                 recording = self._recording
                 inference_only = bool(getattr(self._state.runtime_trace, "inference_only", False))
-                if recording.halted:
+                if recording.is_stopped:
                     stamped = CaptureOutcome(
-                        status=CaptureStatus.HALTED,
-                        reason=recording.halt_reason,
-                        boundary_label=recording.halt_reason,
+                        status=CaptureStatus.STOPPED,
+                        reason=recording.stop_reason,
+                        boundary_label=recording.stop_reason,
                         inference_only=inference_only,
                     )
                 else:
@@ -448,7 +448,7 @@ class Recorder:
         if exc_value is None:
             if self._echo_session is not None:
                 recording = self._state.recording
-                self._echo_session.finish("halted" if recording.halted else "complete")
+                self._echo_session.finish("halted" if recording.is_stopped else "complete")
             _warn_zero_match_capture_selectors(self._state)
             self._state.raise_accumulated_predicate_error()
         elif self._echo_session is not None:
@@ -516,7 +516,7 @@ class Recorder:
             # grad_transform and save_raw_gradients on every Recorder /
             # record() backward (explorer rider: Recorder backward coverage).
             grad_transform=self.options.grad_transform,
-            save_raw_gradients=self.options.save_raw_gradients,
+            save_raw_grads=self.options.save_raw_gradients,
             detach_saved_activations=False,
             capture_tensor_grad_hooks=self._backward_requested,
             backward_ready=True,
@@ -536,7 +536,7 @@ class Recorder:
             capture_mode="predicate",
             layers_to_save=[],
             grad_layers_to_save=[],
-            random_seed=self.options.random_seed,
+            random_seed=self.options.seed,
             postprocess=False,
             stop=trace._stop_directive,
         )
@@ -561,11 +561,11 @@ class Recorder:
                     input_kwargs,
                     layers_to_save=[],
                     grad_layers_to_save=[],
-                    random_seed=self.options.random_seed,
+                    random_seed=self.options.seed,
                     postprocess=False,
                     reservation_resume=reservation_token,
                 )
-        except HaltSignal as halt_exc:
+        except StopSignal as halt_exc:
             captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
             if captured_run_core is not None:
                 self._captured_run_cores.append(captured_run_core)
@@ -573,7 +573,7 @@ class Recorder:
             object.__setattr__(
                 self._state.recording,
                 "n_ops",
-                max(self._state.recording.n_ops, self._next_pass_index),
+                max(self._state.recording.num_ops, self._next_pass_index),
             )
             self._mark_halted_pass(
                 self._next_pass_index, halt_exc, inference_only=trace.inference_only
@@ -641,7 +641,7 @@ class Recorder:
         object.__setattr__(
             self._state.recording,
             "n_ops",
-            max(self._state.recording.n_ops, self._next_pass_index),
+            max(self._state.recording.num_ops, self._next_pass_index),
         )
         return output
 
@@ -673,7 +673,7 @@ class Recorder:
         self._capture_events.concat(source)
 
     def _mark_halted_pass(
-        self, pass_index: int, halt_exc: HaltSignal, *, inference_only: bool = False
+        self, pass_index: int, halt_exc: StopSignal, *, inference_only: bool = False
     ) -> None:
         """Persist halt state for the given pass."""
 
@@ -685,7 +685,7 @@ class Recorder:
         stamp_recording_outcome(
             self._state.recording,
             CaptureOutcome(
-                status=CaptureStatus.HALTED,
+                status=CaptureStatus.STOPPED,
                 reason=halt_exc.reason,
                 boundary_kind=getattr(halt_exc, "boundary_kind", None),
                 boundary_label=getattr(halt_exc, "boundary_label", None) or halt_exc.reason,
@@ -825,14 +825,14 @@ class Recorder:
             CaptureStatus.FAILED,
             CaptureStatus.ABORTED_NONFINITE,
         ):
-            stamped = dataclass_replace(settled, n_ops_committed=recording.n_ops_completed)
+            stamped = dataclass_replace(settled, num_committed_ops=recording.num_committed_ops)
         else:
             stamped = CaptureOutcome(
                 status=CaptureStatus.FAILED,
                 origin=classify_failure_origin(exc),
                 reason=safe_exception_str(exc),
                 error_type=type(exc).__name__,
-                n_ops_committed=recording.n_ops_completed,
+                num_committed_ops=recording.num_committed_ops,
             )
         stamp_recording_outcome(recording, stamped)
 
@@ -862,7 +862,7 @@ class Recorder:
         self._state.event_index = 0
         self._state.step_index = 0
 
-    def log_backward(
+    def backward(
         self,
         loss: torch.Tensor,
         *,
@@ -874,8 +874,8 @@ class Recorder:
         """Run backward for the active recorder and retain selected gradients."""
 
         if not self._entered or self._exited or self._state is None:
-            raise RecorderStateError("Recorder.log_backward() requires an active with-block")
-        self._state.recording.log_backward(
+            raise RecorderStateError("Recorder.backward() requires an active with-block")
+        self._state.recording.backward(
             loss,
             save_grads=save_grads,
             default_grad=default_grad,

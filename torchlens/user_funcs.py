@@ -113,17 +113,17 @@ from .autoroute._builtin_output import (
     refuse_unresolved_output_style,
     semantic_output_cache_key,
 )
-from .backends import (
+from .backends._options import (
+    MLX_EXTRA_KWARG_POLICY,
+    TRACE_OPTION_CAPABILITY_GATES,
+    reject_extra_trace_kwargs,
+)
+from .backends.registry import (
     BackendName,
     BackendSpec,
     BackendUnsupportedError,
     get_backend_spec,
     resolve_backend_spec,
-)
-from .backends._options import (
-    MLX_EXTRA_KWARG_POLICY,
-    TRACE_OPTION_CAPABILITY_GATES,
-    reject_extra_trace_kwargs,
 )
 from .backends.torch._op_markers import refuse_unavailable_nvtx
 from .backends.torch._tl import get_tensor_label
@@ -168,7 +168,7 @@ from .options import (
     EpisodeSpec,
     ReplayOptions,
     SaveOptions,
-    StreamingOptions,
+    StorageOptions,
     VisualizationOptions,
     merge_capture_options,
     merge_save_options,
@@ -512,7 +512,7 @@ def _load_authenticated_capture_cache(cache_path: Path, secret: bytes) -> Any:
         f"Ignoring TorchLens capture cache entry {cache_path} because {reason}. The "
         "entry is NOT unpickled (unauthenticated pickles are never loaded); the "
         "capture runs normally and the entry is rewritten. "
-        "torchlens.clear_capture_cache() empties the cache.",
+        "torchlens.clear_cache() empties the cache.",
         UserWarning,
         stacklevel=2,
     )
@@ -577,7 +577,7 @@ def _store_authenticated_capture_cache(trace: Trace, cache_path: Path, secret: b
             f"{_CAPTURE_CACHE_MAX_BYTES}-byte cache-entry ceiling, so the entry could "
             "never be loaded back. The capture itself is unaffected; it simply will "
             "not hit the cache. Existing valid entries are left in place "
-            "(torchlens.clear_capture_cache() empties the cache).",
+            "(torchlens.clear_cache() empties the cache).",
             UserWarning,
             stacklevel=2,
         )
@@ -594,7 +594,7 @@ def _store_authenticated_capture_cache(trace: Trace, cache_path: Path, secret: b
             f"Not caching this capture: serializing or writing the cache entry "
             f"failed ({type(exc).__name__}: {exc}). The capture itself is "
             "unaffected; it simply will not hit the cache. Existing valid "
-            "entries are left in place (torchlens.clear_capture_cache() "
+            "entries are left in place (torchlens.clear_cache() "
             "empties the cache).",
             UserWarning,
             stacklevel=2,
@@ -685,7 +685,7 @@ def _evict_capture_cache(cache_root: Path, *, keep: Path) -> None:
         retained -= 1
 
 
-def clear_capture_cache(cache_dir: str | Path | None = None) -> int:
+def clear_cache(cache_dir: str | Path | None = None) -> int:
     """Delete authenticated capture-cache entries while preserving the secret.
 
     Parameters
@@ -878,9 +878,9 @@ def _trace_mlx_model(
     raw_input = None
     model_input_args = input_args
     model_input_kwargs = input_kwargs
-    if capture_options.transform is not None:
+    if capture_options.input_transform is not None:
         raw_input = input_args
-        transformed_input = capture_options.transform(input_args)
+        transformed_input = capture_options.input_transform(input_args)
         if isinstance(transformed_input, collections.abc.Mapping):
             model_input_args = []
             model_input_kwargs = dict(transformed_input)
@@ -901,11 +901,11 @@ def _trace_mlx_model(
         save_raw_activations=save_options.save_raw_activations,
         detach_saved_activations=capture_options.detach_saved_activations,
         save_grads=capture_options.save_grads,
-        random_seed=capture_options.random_seed,
+        seed=capture_options.seed,
         num_context_lines=capture_options.source_context_lines,
-        save_arg_values=capture_options.save_arg_values,
-        save_code_context=capture_options.save_code_context,
-        save_rng_states=capture_options.save_rng_states,
+        save_args=capture_options.save_args,
+        save_source_context=capture_options.save_source_context,
+        save_rng=capture_options.save_rng,
         recurrence_detection=capture_options.recurrence_detection,
         compute_input_output_distances=capture_options.compute_input_output_distances,
         verbose=capture_options.verbose,
@@ -917,7 +917,7 @@ def _trace_mlx_model(
         save_raw_input=capture_options.save_raw_input,
         batch_render=capture_options.batch_render,
         output_transform=capture_options.output_transform,
-        save_raw_output=capture_options.save_raw_output,
+        save_transformed_output=capture_options.save_transformed_output,
         layer_visualizers=cast(
             "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
         ),
@@ -1672,7 +1672,7 @@ def _run_model_and_save_specified_outs(
             every exit path, so code after the capture continues its own streams. When
             None the seed is drawn from a private entropy-seeded stream, so an outer
             ``torch.manual_seed`` does not make an unseeded capture reproducible. The
-            seed used is recorded on ``trace.random_seed``.
+            seed used is recorded on ``trace.seed``.
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
         recurrence_detection: If True (default), run full isomorphic subgraph expansion to
@@ -1949,18 +1949,18 @@ def _run_model_and_save_specified_outs(
             activation_transform=activation_transform,
             grad_transform=grad_transform,
             save_raw_activations=save_raw_activations,
-            save_raw_gradients=save_raw_gradients,
+            save_raw_grads=save_raw_gradients,
             save_mode=save_mode,
             capture_tensor_grad_hooks=capture_tensor_grad_hooks,
             keep_orphans=keep_orphans,
-            save_arg_values=save_arg_values,
+            save_args=save_arg_values,
             save_grads=grads_to_save if save_grads else None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=mark_layer_depths,
             num_context_lines=num_context_lines,
             optimizer=optimizer,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
@@ -1970,12 +1970,12 @@ def _run_model_and_save_specified_outs(
             measure_python_peak_memory=measure_python_peak_memory,
             distributed_witness=distributed_witness,
             save_budget=save_budget,
-            transform=transform,
+            input_transform=transform,
             raw_input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
             facet_registry_snapshot=facets_mod.snapshot(recipes),
@@ -2067,14 +2067,14 @@ def _run_model_and_save_specified_outs(
                 default_op = CaptureSpec(
                     save_out=default_save,
                     save_metadata=default_save,
-                    keep_grad=True,
+                    save_grad=True,
                 )
             trace._predicate_save_options = RecordingOptions(
                 keep_op=save_predicate,
                 intervene=intervene_predicate,
                 halt=halt_predicate,
                 default_op=default_op,
-                streaming=StreamingOptions(
+                streaming=StorageOptions(
                     bundle_path=save_outs_to,
                     retain_in_memory=keep_outs_in_memory,
                     include_custom_attributes=stream_custom_attributes,
@@ -2555,8 +2555,8 @@ def trace(
     halt: HaltPredicateFn | None = None,
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
-    storage: StreamingOptions | None = None,
-    streaming: StreamingOptions | None = None,
+    storage: StorageOptions | None = None,
+    streaming: StorageOptions | None = None,
     profile: bool | MissingType = MISSING,
     recipes: (
         list[Callable[[Any], dict[str, Any]]]
@@ -2566,7 +2566,7 @@ def trace(
     ) = MISSING,
     *,
     grouping: str | MissingType = MISSING,
-    echo: Any | None = None,
+    narrate: Any | None = None,
     jax_static_argnums: int | Sequence[int] | MissingType = MISSING,
     grad_options: Any | None | MissingType = MISSING,
     episode: EpisodeSpec | None = None,
@@ -2702,7 +2702,7 @@ def trace(
         Live narration (DOCUMENTED-UNSTABLE, lane F28): ``True`` narrates
         every completed tensor-output event plus module structure lines;
         ``"modules"`` narrates structure only; a live selector scopes the
-        stream; ``tl.options.EchoOptions`` groups the full surface (stats
+        stream; ``tl.options.NarrationOptions`` groups the full surface (stats
         rungs, sink, crash tail). Narration is a display of capture
         events -- independent of ``save=`` retention. Torch-only.
     jax_static_argnums:
@@ -2787,12 +2787,12 @@ def trace(
             from .postprocess._grouping_stamp import validate_grouping_knob
 
             validate_grouping_knob(grouping)
-        if echo is not None and echo is not False:
+        if narrate is not None and narrate is not False:
             # Entry-time echo refusals (bad spellings, finalized-label selectors)
             # fire BEFORE any capture work on every backend path.
             from .snoop import normalize_echo
 
-            normalize_echo(echo)
+            normalize_echo(narrate)
         if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
             raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
         if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
@@ -2833,7 +2833,7 @@ def trace(
                 "recipes": recipes,
                 "episode": episode,
                 "grouping": grouping,
-                "echo": echo,
+                "echo": narrate,
                 "on_zero_fire": on_zero_fire,
             }
             for detector in autoroute.input.iter_by_priority():
@@ -2853,7 +2853,7 @@ def trace(
         from .snoop._entry import refuse_echo_non_torch
 
         # Never a silent no-op: echo= is torch-only in wave 1 (typed refusal).
-        refuse_echo_non_torch(echo, resolved_spec)
+        refuse_echo_non_torch(narrate, resolved_spec)
         _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
         _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
         _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
@@ -2944,8 +2944,8 @@ def _trace_torch_model(
     halt: HaltPredicateFn | None = None,
     lookback: int = 0,
     lookback_payload_policy: str = "metadata_only",
-    storage: StreamingOptions | None = None,
-    streaming: StreamingOptions | None = None,
+    storage: StorageOptions | None = None,
+    streaming: StorageOptions | None = None,
     backward_ready: bool | MissingType = MISSING,
     inference_only: bool | MissingType = MISSING,
     name: str | None | MissingType = MISSING,
@@ -3098,7 +3098,7 @@ def _trace_torch_model(
     )
     profile_enabled = False if isinstance(profile, MissingType) else bool(profile)
     raw_input = None
-    input_transform = capture_options.transform
+    input_transform = capture_options.input_transform
     if input_transform is not None:
         raw_input = input_args
         transformed_input = input_transform(input_args)
@@ -3260,7 +3260,7 @@ def _trace_torch_model(
     output_transform_value = capture_options.output_transform
     output_style_value = capture_options.output_style
     output_head_value = capture_options.output_head
-    save_raw_output_policy = capture_options.save_raw_output
+    save_raw_output_policy = capture_options.save_transformed_output
     layer_visualizers_value = cast(
         "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
     )
@@ -3280,11 +3280,11 @@ def _trace_torch_model(
             argument="save_mode",
         )
     refuse_unavailable_nvtx(capture_options.emit_nvtx)
-    save_arg_values = capture_options.save_arg_values
+    save_arg_values = capture_options.save_args
     capture_tensor_grad_hooks = capture_options.capture_tensor_grad_hooks
-    save_code_context = capture_options.save_code_context
-    save_rng_states = capture_options.save_rng_states
-    random_seed = capture_options.random_seed
+    save_code_context = capture_options.save_source_context
+    save_rng_states = capture_options.save_rng
+    random_seed = capture_options.seed
     source_context_lines = capture_options.source_context_lines
     optimizer = capture_options.optimizer
     compute_input_output_distances = capture_options.compute_input_output_distances
@@ -3383,13 +3383,13 @@ def _trace_torch_model(
     from ._options_validation import _validate_output_device
 
     _validate_output_device(output_device)
-    if streaming_options.bundle_path is not None and streaming_options.out_callback is not None:
+    if streaming_options.bundle_path is not None and streaming_options.on_save is not None:
         raise ArgumentConflictError(
             "Both disk-backed output storage and an output callback were configured",
             code="output_sink_conflict",
             remedy=(
                 "choose either disk storage (storage=tl.to_disk(...) / "
-                "streaming.bundle_path) or streaming.out_callback"
+                "streaming.bundle_path) or streaming.on_save"
             ),
             arguments=("bundle_path", "out_callback"),
         )
@@ -3667,23 +3667,23 @@ def _trace_torch_model(
         )
         recursive_capture_options = CaptureOptions(
             layers_to_save=layers_to_save,
-            transform=None,
+            input_transform=None,
             save_raw_input=save_raw_input_policy,
             batch_render=batch_render_policy,
             output_transform=output_transform_value,
             output_style=output_style_value,
             output_head=output_head_value,
-            save_raw_output=save_raw_output_policy,
+            save_transformed_output=save_raw_output_policy,
             layer_visualizers=layer_visualizers_value,
             save_visualizations=save_visualizations_value,
             keep_orphans=keep_orphans,
             output_device=output_device,
-            save_arg_values=save_arg_values,
+            save_args=save_arg_values,
             save_grads=save_grads_policy,
             capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
-            random_seed=random_seed,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
+            seed=random_seed,
             source_context_lines=source_context_lines,
             optimizer=optimizer,
             compute_input_output_distances=compute_input_output_distances,
@@ -3729,7 +3729,7 @@ def _trace_torch_model(
             activation_transform=activation_transform,
             grad_transform=grad_transform,
             save_raw_activations=save_raw_activations,
-            save_raw_gradients=save_raw_gradients,
+            save_raw_grads=save_raw_gradients,
         )
         recursive_save_value: SaveOptions | PredicateFn | BaseSelector | None = (
             save_predicate if save_predicate is not None else recursive_save_options
@@ -3835,7 +3835,7 @@ def _trace_torch_model(
         }
         for chunk_index, chunk in enumerate(chunks[1:], start=1):
             if save_predicate is None:
-                trace.run(model, chunk, replay=ReplayOptions(append=True), transform=False)
+                trace.run(model, chunk, replay=ReplayOptions(append=True), input_transform=False)
                 continue
             new_trace = _trace_torch_model(
                 model=model,
@@ -3984,7 +3984,7 @@ def _trace_torch_model(
         stream_max_pending_bytes=streaming_options.max_pending_bytes,
         grad_storage_path=grad_storage_path_value,
         retain_grads_in_memory=retain_grads_in_memory_value,
-        out_sink=streaming_options.out_callback,
+        out_sink=streaming_options.on_save,
         intervention_ready=intervention_ready,
         capture_container_structure=capture_container_structure,
         hooks=hooks,
@@ -4065,7 +4065,7 @@ def _trace_torch_model(
     # driver).
     rescue_eligible = (
         streaming_options.bundle_path is None
-        and streaming_options.out_callback is None
+        and streaming_options.on_save is None
         and grad_storage_path_value is None
         and halt is None
         and intervene is None

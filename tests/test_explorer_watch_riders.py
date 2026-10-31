@@ -220,16 +220,16 @@ class TestRecorderCoverage:
 
         with tl.fastlog.Recorder(
             model,
-            default_op=CaptureSpec(save_out=True, keep_grad=True),
+            default_op=CaptureSpec(save_out=True, save_grad=True),
             save_grads=True,
             grad_transform=summary(lambda t: t.float().abs().sum().unsqueeze(0)),
-            save_raw_gradients=False,
+            save_raw_grads=False,
             backward_ready=True,
         ) as recorder:
             out_1 = recorder.log(torch.randn(2, 8, requires_grad=True))
-            recorder.log_backward(out_1.sum())
+            recorder.backward(out_1.sum())
             out_2 = recorder.log(torch.randn(2, 8, requires_grad=True))
-            recorder.log_backward(out_2.sum())
+            recorder.backward(out_2.sum())
         recording = recorder.recording
         assert recording.grad_records, "backward coverage: grad records present"
         for grad_record in recording.grad_records:

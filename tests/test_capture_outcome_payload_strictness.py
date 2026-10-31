@@ -174,7 +174,7 @@ def test_every_settleable_status_round_trips_through_the_strict_codec() -> None:
         is_failed = status is CaptureStatus.FAILED
         outcome = CaptureOutcome(
             status=status,
-            derived=status is CaptureStatus.UNATTESTED,
+            is_derived=status is CaptureStatus.UNATTESTED,
             phase=CapturePhase.FORWARD if is_failed else None,
             origin=FailureOrigin.USER_OP if is_failed else None,
         )
@@ -182,7 +182,7 @@ def test_every_settleable_status_round_trips_through_the_strict_codec() -> None:
         assert parsed.status is status
         assert attestation_coherent(
             parsed,
-            halted=status is CaptureStatus.HALTED,
+            halted=status is CaptureStatus.STOPPED,
             finished=True,
         ), status
 
@@ -208,9 +208,9 @@ def test_contradictory_payload_degrades_to_unknown_with_one_warning() -> None:
     with pytest.warns(RuntimeWarning, match="internally contradictory") as records:
         resolved = resolve_loaded_outcome(state)
     assert resolved.status is CaptureStatus.UNKNOWN
-    assert resolved.derived is True
-    assert "attestation_incoherent" in (resolved.settlement_note or "")
-    assert "FAILED-only field" in (resolved.settlement_note or "")
+    assert resolved.is_derived is True
+    assert "attestation_incoherent" in (resolved.note or "")
+    assert "FAILED-only field" in (resolved.note or "")
     assert not any("structural evidence" in str(record.message) for record in records)
 
 
@@ -225,8 +225,8 @@ def test_unknown_key_payload_degrades_to_unknown_with_one_warning() -> None:
     with pytest.warns(RuntimeWarning, match="could not parse"):
         resolved = resolve_loaded_outcome(state)
     assert resolved.status is CaptureStatus.UNKNOWN
-    assert resolved.derived is True
-    assert "attestation_parse_failed" in (resolved.settlement_note or "")
+    assert resolved.is_derived is True
+    assert "attestation_parse_failed" in (resolved.note or "")
 
 
 def test_tampered_artifact_on_disk_degrades_and_then_refuses_export(tmp_path) -> None:

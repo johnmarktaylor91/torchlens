@@ -171,7 +171,7 @@ def _record(
     else:
         config["declares"] = "nothing"
     return Resolution(
-        record=ResolvedPreprocessing(
+        preprocessing=ResolvedPreprocessing(
             source=source,
             identifier=identifier,
             verified=False,
@@ -516,7 +516,7 @@ def _adapt_compose(authority: Any) -> Resolution:
         transform=authority,
     )
     if unparsed:
-        resolution.record.config["unparsed_steps"] = list(unparsed)
+        resolution.preprocessing.config["unparsed_steps"] = list(unparsed)
     return resolution
 
 
@@ -680,11 +680,11 @@ def _as_model_metadata(resolution: Resolution) -> Resolution:
 
     from torchlens.data_classes.trace import ResolvedPreprocessing
 
-    record = resolution.record
+    record = resolution.preprocessing
     config = dict(record.config)
     config["resolution_method"] = "model_metadata"
     return Resolution(
-        record=ResolvedPreprocessing(
+        preprocessing=ResolvedPreprocessing(
             source=record.source,
             identifier=record.identifier,
             verified=True,
@@ -739,8 +739,8 @@ def _discover_hf(model: Any, offline: bool | None) -> Resolution:
         )
     resolution = _adapt_hf_processor(processor)
     resolution = _as_model_metadata(resolution)
-    resolution.record.config["fetch"] = fetch
-    resolution.record.config["upstream"] = str(name_or_path)
+    resolution.preprocessing.config["fetch"] = fetch
+    resolution.preprocessing.config["upstream"] = str(name_or_path)
     return resolution
 
 
@@ -786,7 +786,7 @@ def resolve(
                 "authority is an opaque callable: it declares no comparable fields"
             )
             return Resolution(
-                record=resolution.record,
+                preprocessing=resolution.preprocessing,
                 declared=None,
                 transform=authority,
             )

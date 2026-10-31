@@ -35,7 +35,7 @@ from safetensors.torch import load_file, save_file
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._errors import InvalidArgumentError
-from ..backends import BackendPayloadUnsupportedError, BackendSpec, get_backend_spec
+from ..backends.registry import BackendPayloadUnsupportedError, BackendSpec, get_backend_spec
 from ..data_classes._state_adapter import state_items
 from ..data_classes.trace import Trace
 from ..errors import TorchLensWarning

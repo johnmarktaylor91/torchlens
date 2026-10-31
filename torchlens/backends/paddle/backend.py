@@ -12,7 +12,7 @@ from typing import Any, cast
 from ... import _state
 from ..._deprecations import MISSING, MissingType
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import BackendName, BackendUnsupportedError, get_backend_spec
+from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...capture.outcome import StopRequest, stamp_backend_finalized
 from ...data_classes.derived_grad import (
     DerivedGradAccessor,
@@ -22,7 +22,7 @@ from ...data_classes.derived_grad import (
 )
 from ...data_classes.param import Param, ParamAccessor
 from ...data_classes.trace import Trace
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from ...fastlog.types import CaptureSpec
 from ...ir.capture_events import CaptureEvents
 from ...ir.events import (
@@ -355,16 +355,16 @@ class PaddleBackend:
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
-        save_arg_values = capture_options.save_arg_values
-        save_code_context = capture_options.save_code_context
-        save_rng_states = capture_options.save_rng_states
+        save_arg_values = capture_options.save_args
+        save_code_context = capture_options.save_source_context
+        save_rng_states = capture_options.save_rng
         recurrence_detection = capture_options.recurrence_detection
         compute_input_output_distances = capture_options.compute_input_output_distances
         verbose = capture_options.verbose
         backward_ready = capture_options.backward_ready
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_raw_output
+        save_raw_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
         random_seed = _resolve_optional_capture_field(capture, "random_seed", random_seed)
@@ -459,27 +459,27 @@ class PaddleBackend:
             activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
             grad_transform=None,
             save_raw_activations=save_raw_activations,
-            save_raw_gradients=True,
+            save_raw_grads=True,
             keep_orphans=keep_orphans,
-            save_arg_values=save_arg_values,
+            save_args=save_arg_values,
             save_grads=None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=cast(bool, compute_input_output_distances),
             num_context_lines=num_context_lines,
             optimizer=None,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
-            transform=cast("Callable[[Any], Any] | None", transform),
+            input_transform=cast("Callable[[Any], Any] | None", transform),
             raw_input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
@@ -549,11 +549,11 @@ class PaddleBackend:
             wrap_paddle(self)
             self._label_source_tensors(trace, args, kwargs)
             trace.capture_start_time = time.time()
-            halt_signal: HaltSignal | None = None
+            halt_signal: StopSignal | None = None
             try:
                 with _state.active_logging(trace):
                     output = cast(Any, prepared_model)(*args, **kwargs)
-            except HaltSignal as exc:
+            except StopSignal as exc:
                 halt_signal = exc
                 output = exc.frontier_output
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
@@ -563,7 +563,7 @@ class PaddleBackend:
             )
             if halt_signal is not None:
                 trace.halted = True
-                trace.halt_reason = halt_signal.reason
+                trace.stop_reason = halt_signal.reason
                 trace.halt_frontier = halt_signal.reason
                 trace.raw_output = None
             elif intervention_runtime is not None:
@@ -1191,7 +1191,7 @@ class PaddleBackend:
                         boundary_kind=getattr(ctx, "kind", None),
                         boundary_label=site.label_raw,
                     )
-                    raise HaltSignal(site.label_raw, frontier_output=final_output)
+                    raise StopSignal(site.label_raw, frontier_output=final_output)
         return final_output
 
     def build_record_context(

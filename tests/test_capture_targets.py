@@ -281,8 +281,8 @@ def test_op_save_activation_identity_dedup_reuses_same_source() -> None:
     source = torch.randn(1, 2)
     first_op, second_op = trace.layer_list[:2]
 
-    first_op.save_activation(source, (), {}, save_arg_values=False)
-    second_op.save_activation(source, (), {}, save_arg_values=False)
+    first_op.save_activation(source, (), {}, save_args=False)
+    second_op.save_activation(source, (), {}, save_args=False)
 
     assert first_op.out is second_op.out
     assert second_op.annotations["dedup_reference_label"] == first_op._layer_label_raw

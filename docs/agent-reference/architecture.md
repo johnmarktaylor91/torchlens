@@ -254,7 +254,7 @@ Key entry points:
   `on_forward_error="raise"`; `on_forward_error="attach_partial"` attaches
   `exc.partial_recording` and re-raises, while `on_forward_error="return_partial"` returns a
   failed partial `Recording`. Failed partials set `status="partial_error"`, `failed=True`,
-  string-only error metadata, `n_ops_completed`, and best-effort `last_event_*` fields.
+  string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields.
   user-op failures exclude the failing call; TL-side capture failures may include a
   skipped/partial current-call event. Trace failed captures separately expose
   `exc.partial_log`, recoverable with `tl.partial.from_failed_capture(exc)`.

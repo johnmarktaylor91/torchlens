@@ -12,7 +12,7 @@ from .data_classes.trace import Trace
 from .fastlog.options import HaltPredicateFn
 from .intervention.errors import AppendMismatchError, ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate
-from .options import StreamingOptions
+from .options import StorageOptions
 
 
 def _should_store_auto_coerced_raw_input(original: Any, coerced: Any) -> bool:
@@ -43,7 +43,7 @@ def _validate_chunked_forward_capture(
     hooks: Any | None,
     intervene: InterventionPredicate | None,
     halt: HaltPredicateFn | None,
-    streaming: StreamingOptions,
+    streaming: StorageOptions,
 ) -> None:
     """Reject unsupported ``trace(chunk_size=...)`` option combinations.
 
@@ -84,7 +84,7 @@ def _validate_chunked_forward_capture(
         raise ChunkedForwardConfigError("chunk_size cannot be combined with intervene=.")
     if halt is not None:
         raise ChunkedForwardConfigError("chunk_size cannot be combined with halt=.")
-    if streaming.bundle_path is not None or streaming.out_callback is not None:
+    if streaming.bundle_path is not None or streaming.on_save is not None:
         raise ChunkedForwardConfigError(
             "chunk_size is in-memory only in v1 and cannot be combined with streaming storage."
         )

@@ -103,7 +103,7 @@ class _Offsets(nn.Module):
 def _validate(model: nn.Module, x: torch.Tensor, **options: Any) -> bool:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return bool(tl.validate(model, x, scope="forward", random_seed=0, **options))
+        return bool(tl.validate(model, x, scope="forward", seed=0, **options))
 
 
 # ---------------------------------------------------------------------------
@@ -210,7 +210,7 @@ def test_a_cloned_parameter_is_still_charged_on_same() -> None:
 def test_a_user_trace_still_charges_parameter_copies() -> None:
     torch.manual_seed(0)
     model, x = nn.Linear(256, 256), torch.randn(2, 256)
-    capture = CaptureOptions(layers_to_save="all", save_arg_values=True, save_budget=_BELOW_WEIGHTS)
+    capture = CaptureOptions(layers_to_save="all", save_args=True, save_budget=_BELOW_WEIGHTS)
     with warnings.catch_warnings(), pytest.raises(SaveBudgetExceededError):
         warnings.simplefilter("ignore")
         tl.trace(model, x, capture=capture)

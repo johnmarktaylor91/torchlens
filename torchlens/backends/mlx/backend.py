@@ -15,7 +15,7 @@ import numpy as np
 
 from ... import _state
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends import (
+from ...backends.registry import (
     BackendName,
     BackendUnsupportedError,
     get_backend_spec,
@@ -30,7 +30,7 @@ from ...data_classes.derived_grad import (
 )
 from ...data_classes.param import Param, ParamAccessor
 from ...data_classes.trace import Trace
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from ...fastlog.types import CaptureSpec
 from ...ir.capture_events import CaptureEvents
 from ...ir.events import (
@@ -760,7 +760,7 @@ class MLXBackend:
 
         cleanup_model_session(session, prepared_model)
 
-    def cleanup_halted_forward_session(self, session: object, prepared_model: object) -> None:
+    def cleanup_stopped_forward_session(self, session: object, prepared_model: object) -> None:
         """Clean up MLX state after a halted forward capture."""
 
         self.cleanup_model_session(session, prepared_model)
@@ -1186,27 +1186,27 @@ class MLXBackend:
             activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
             grad_transform=None,
             save_raw_activations=save_raw_activations,
-            save_raw_gradients=True,
+            save_raw_grads=True,
             keep_orphans=keep_orphans,
-            save_arg_values=save_arg_values,
+            save_args=save_arg_values,
             save_grads=None,
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=compute_input_output_distances,
             num_context_lines=num_context_lines,
             optimizer=None,
-            save_code_context=save_code_context,
-            save_rng_states=save_rng_states,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
-            transform=cast("Callable[[Any], Any] | None", transform),
+            input_transform=cast("Callable[[Any], Any] | None", transform),
             raw_input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
-            save_raw_output=save_raw_output,
+            save_transformed_output=save_raw_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
@@ -1260,17 +1260,17 @@ class MLXBackend:
             kwargs = {} if input_kwargs is None else dict(input_kwargs)
             self._label_source_arrays(trace, args, kwargs)
             trace.capture_start_time = time.time()
-            halt_signal: HaltSignal | None = None
+            halt_signal: StopSignal | None = None
             try:
                 with self.active_logging(trace):
                     output = cast(Any, model)(*args, **kwargs)
-            except HaltSignal as signal:
+            except StopSignal as signal:
                 # Save-then-halt ordering: the frontier op's events were
                 # appended before the signal, so the partial graph ends at it.
                 halt_signal = signal
                 output = signal.frontier_output
                 trace.halted = True
-                trace.halt_reason = signal.reason
+                trace.stop_reason = signal.reason
                 trace.halt_frontier = signal.reason
             # Forward-time-only state: the emit path reads these during the
             # model call; leaving them on the trace breaks the portable-state
@@ -1920,7 +1920,7 @@ class MLXBackend:
                 reason=halt_label,
                 boundary_label=halt_label,
             )
-            raise HaltSignal(halt_label, frontier_output=output)
+            raise StopSignal(halt_label, frontier_output=output)
         return output
 
     def _apply_mlx_intervention(self, plan: Any, leaf: Any) -> Any:

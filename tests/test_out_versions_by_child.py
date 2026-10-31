@@ -43,7 +43,7 @@ def test_selective_save_rebuilds_out_versions_for_child_lookup() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_args=True),
     )
 
     parent = trace["add_1_1"]
@@ -65,7 +65,7 @@ def test_selective_save_without_arg_values_reports_versions_incomplete() -> None
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_arg_values=False),
+        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_args=False),
     )
 
     assert not trace._replay_arg_version_data_complete

@@ -931,7 +931,7 @@ The hard invariant is:
 
 Sparse raw-value rule (r69 E): a runnable save scrubs the Trace `raw_input`/`raw_output`
 diagnostic fields to `None` under the sparse effective `DROP` policy BEFORE any field-specific
-raw-value serialization runs -- including when the ordinary `save_raw_input`/`save_raw_output`
+raw-value serialization runs -- including when the ordinary `save_raw_input`/`save_transformed_output`
 policy is `True` or `"small"` and for nested tensor/string containers. An effective
 `DROP`/`WEAKREF_STRIP` always wins over a field-specific serializer, so the diagnostic
 raw-value policy can never re-introduce a tensor into the value-free sparse core (a fully

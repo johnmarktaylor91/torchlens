@@ -38,7 +38,7 @@ def _capture(model: nn.Module, seed: int, **kwargs: object) -> tl.Trace:
     return tl.trace(
         model,
         torch.randn(5, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True, random_seed=seed, **kwargs),
+        capture=tl.options.CaptureOptions(intervention_ready=True, seed=seed, **kwargs),
     )
 
 
@@ -78,9 +78,9 @@ def test_content_digest_hashes_retained_payloads() -> None:
     torch.manual_seed(0)
     model = _TwoBlock()
     torch.manual_seed(1)
-    run_one = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(random_seed=7))
+    run_one = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(seed=7))
     torch.manual_seed(2)
-    run_two = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(random_seed=7))
+    run_two = tl.trace(model, torch.randn(5, 4), capture=tl.options.CaptureOptions(seed=7))
     address_one = reference([run_one], origin="o")
     address_two = reference([run_two], origin="o")
     assert address_one.population_identity == address_two.population_identity

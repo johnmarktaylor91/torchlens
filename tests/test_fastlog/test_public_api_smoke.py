@@ -130,8 +130,8 @@ def test_recorder_context_records_multiple_forwards() -> None:
         for _ in range(5):
             recorder.log(torch.ones(1, 3))
 
-    assert recorder.recording.n_ops == 5
-    assert recorder.recording.n_passes == 5
+    assert recorder.recording.num_ops == 5
+    assert recorder.recording.num_passes == 5
 
 
 def test_activation_payloads_by_raw_label_preserves_repeated_passes() -> None:

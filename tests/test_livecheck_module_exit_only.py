@@ -285,7 +285,7 @@ def _record_fingerprint(spec_name: str, *, force_legacy: bool) -> dict[str, Any]
             (str(r.ctx.label), str(r.ctx.layer_type), _thash(r.ram_payload))
             for r in recording.records
         ],
-        "n_ops": recording.n_ops,
+        "n_ops": recording.num_ops,
         "status": recording.status,
         "fires": fires,
         "output": _thash(output),

@@ -19,7 +19,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._source_links import terminal_file_line_link
-from torchlens.options import EchoOptions
+from torchlens.options import NarrationOptions
 from torchlens.snoop import NarrationEvent, NarrationStats, render_line, render_stats_segment
 
 _ESCAPE_BYTES = re.compile("[\x1b\x9d\x07]")
@@ -48,7 +48,7 @@ def _run_transcript(seed: int) -> str:
     torch.manual_seed(seed)
     x = torch.randn(2, 4)
     sink = io.StringIO()
-    tl.record(model, x, echo=EchoOptions(select=True, sink=sink, stats="sampled"))
+    tl.record(model, x, narrate=NarrationOptions(select=True, sink=sink, stats="sampled"))
     return sink.getvalue()
 
 
@@ -125,7 +125,7 @@ def test_max_lines_suppression_is_announced_and_counted() -> None:
     tl.record(
         SmallNet(),
         torch.randn(2, 4),
-        echo=EchoOptions(select=True, sink=sink, max_lines=1),
+        narrate=NarrationOptions(select=True, sink=sink, max_lines=1),
     )
     lines = [line for line in sink.getvalue().split("\n") if line]
     markers = [line for line in lines if "max_lines=1 reached" in line]
@@ -145,7 +145,7 @@ def test_zero_match_scoped_capture_warns_once_with_code() -> None:
         tl.record(
             SmallNet(),
             torch.randn(2, 4),
-            echo=EchoOptions(select=tl.func("softmax"), sink=sink),
+            narrate=NarrationOptions(select=tl.func("softmax"), sink=sink),
         )
     codes = [getattr(item.message, "fields", {}).get("code") for item in caught]
     assert codes.count("echo_zero_match") == 1
@@ -160,7 +160,7 @@ def test_matched_scoped_capture_does_not_warn() -> None:
         tl.record(
             SmallNet(),
             torch.randn(2, 4),
-            echo=EchoOptions(select=tl.func("relu"), sink=sink),
+            narrate=NarrationOptions(select=tl.func("relu"), sink=sink),
         )
     codes = [getattr(item.message, "fields", {}).get("code") for item in caught]
     assert "echo_zero_match" not in codes
@@ -183,6 +183,8 @@ def test_file_sink_flushes_per_line(tmp_path) -> None:
             lines_at_first_call.append(len(target.read_text().splitlines()))
             return y + 1
 
-    tl.record(SpyModule(), torch.randn(2, 4), echo=EchoOptions(select=True, sink=str(target)))
+    tl.record(
+        SpyModule(), torch.randn(2, 4), narrate=NarrationOptions(select=True, sink=str(target))
+    )
     assert lines_at_first_call and lines_at_first_call[0] >= 1
     assert len(target.read_text().splitlines()) > lines_at_first_call[0]

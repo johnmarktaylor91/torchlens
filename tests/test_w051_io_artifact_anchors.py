@@ -209,7 +209,7 @@ def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
     trace = tl.trace(
         _Model(),
         torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
     )
     edge = next(e for e in trace.edges if e.parent_label == "relu_1_2")
     fork = trace.fork()

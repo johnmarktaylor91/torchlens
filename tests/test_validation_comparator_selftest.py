@@ -41,7 +41,7 @@ def _traced_linear() -> tuple[tl.Trace, list[torch.Tensor], nn.Module]:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     return trace, [ground_truth], model
 

@@ -354,7 +354,7 @@ def test_postprocess_write_audit_covers_save_code_context_axis(
     trace = tl.trace(
         _AssigningModel().eval(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(save_code_context=True, save_grads=False),
+        capture=tl.options.CaptureOptions(save_source_context=True, save_grads=False),
     )
     try:
         assert any(op.var_names for op in trace.layer_list if op.type != "output")

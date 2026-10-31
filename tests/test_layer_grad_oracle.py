@@ -277,7 +277,7 @@ def _run_public_layer_grad_validation(
             input_args,
             input_kwargs=input_kwargs,
             loss_fn=loss_fn,
-            random_seed=random_seed,
+            seed=random_seed,
             atol=atol,
             rtol=rtol,
             validate_metadata=True,
@@ -645,7 +645,7 @@ def test_validate_backward_pass_validate_layer_grads_public_flag() -> None:
     assert backward_validation.validate_backward_pass(
         TinyMLP(),
         torch.randn(2, 3),
-        random_seed=42,
+        seed=42,
         validate_layer_grads=True,
     )
 
@@ -682,7 +682,7 @@ def test_zero_parameter_grads_fail_independently_of_layer_grad_flag() -> None:
                 backward_validation.validate_backward_pass(
                     model,
                     x,
-                    random_seed=42,
+                    seed=42,
                     validate_layer_grads=validate_layer_grads,
                 )
             )
@@ -707,7 +707,7 @@ def test_layer_grad_default_runs_captured_grad_oracle(
         "torchlens.validation._layer_grad_report._compare_module_output_grads",
         count_comparison,
     )
-    assert backward_validation.validate_backward_pass(TinyMLP(), torch.randn(2, 3), random_seed=42)
+    assert backward_validation.validate_backward_pass(TinyMLP(), torch.randn(2, 3), seed=42)
     assert calls == 1
 
 
@@ -878,7 +878,7 @@ def test_shipped_backward_path_resnet50_metadata_invariant_holds() -> None:
     backward_validation.validate_backward_pass(
         model,
         torch.randn(1, 3, 32, 32),
-        random_seed=42,
+        seed=42,
         validate_metadata=True,
         validate_layer_grads=False,
     )

@@ -273,7 +273,7 @@ def test_cuda_validator_capture_holds_activations_on_host() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_arg_values=True, output_device="cpu"),
+        capture=CaptureOptions(layers_to_save="all", save_args=True, output_device="cpu"),
     )
     devices = {op.out.device.type for op in trace.layer_list if op.out is not None}
     assert devices == {"cpu"}
@@ -327,8 +327,8 @@ def test_cuda_example_models_keep_their_verdict_with_host_activations(model_name
     torch.manual_seed(0)
     model = getattr(example_models, model_name)().to("cuda")
     x = torch.rand(6, 3, 24, 24, device="cuda")
-    assert tl.validate(model, x, scope="forward", random_seed=0) is True
-    assert tl.validate(model, x, scope="forward", random_seed=0, output_device="cpu") is True
+    assert tl.validate(model, x, scope="forward", seed=0) is True
+    assert tl.validate(model, x, scope="forward", seed=0, output_device="cpu") is True
 
 
 @_CUDA

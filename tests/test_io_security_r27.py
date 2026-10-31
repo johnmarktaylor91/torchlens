@@ -124,7 +124,7 @@ def _build_torch_bundle(tmp_path: Path, *, name: str = "trace.tlspec") -> Path:
     trace = tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(layers_to_save="all", random_seed=0),
+        capture=CaptureOptions(layers_to_save="all", seed=0),
     )
     bundle_path = tmp_path / name
     tl.save(trace, bundle_path)
@@ -155,7 +155,7 @@ def _build_intervention_spec(tmp_path: Path, *, name: str = "iv.tlspec") -> Path
     log = tl.trace(
         _InterventionModel(),
         inputs,
-        capture=CaptureOptions(intervention_ready=True, random_seed=0),
+        capture=CaptureOptions(intervention_ready=True, seed=0),
     )
     log.set(tl.func("relu"), tl.steer(torch.ones(2, 3)), confirm_mutation=True)
     spec_path = tmp_path / name

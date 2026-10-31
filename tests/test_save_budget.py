@@ -713,7 +713,7 @@ def test_saved_arg_value_copies_are_charged() -> None:
     torch.manual_seed(0)
     plain = tl.trace(model, x)
     torch.manual_seed(0)
-    with_args = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    with_args = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
 
     plain_committed = sum(
         ledger.committed_bytes
@@ -863,6 +863,6 @@ def test_saved_args_refuse_at_pre_allocation_admission() -> None:
         tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(save_arg_values=True, save_budget=1000),
+            capture=tl.options.CaptureOptions(save_args=True, save_budget=1000),
         )
     assert excinfo.value.fields["accounting_phase"] == "pre_allocation_admission"

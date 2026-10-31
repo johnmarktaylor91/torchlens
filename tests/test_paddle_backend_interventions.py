@@ -22,7 +22,6 @@ import numpy as np  # noqa: E402
 import torchlens as tl  # noqa: E402
 from torchlens.backends import (  # noqa: E402
     BackendUnsupportedError,
-    get_backend_spec,
     require_capability_implementation,
 )
 from torchlens.backends.paddle import PaddleBackend  # noqa: E402
@@ -93,7 +92,7 @@ def _ablated_trace() -> Any:
 def test_paddle_capability_lift_is_real() -> None:
     """The lifted flag binds a resolvable implementing surface."""
 
-    spec = get_backend_spec("paddle")
+    spec = tl.backends.spec("paddle")
     assert spec.capabilities.interventions is True
     implementation = require_capability_implementation(spec, "interventions")
     assert implementation is not None
@@ -204,8 +203,8 @@ def test_paddle_halt_stops_execution_at_frontier() -> None:
     trace = tl.trace(mlp_with_flag, _inputs(), backend="paddle", halt=tl.func("functional.relu"))
     assert executed == []
     assert trace.halted is True
-    assert "relu" in str(trace.halt_reason)
-    assert trace.halt_frontier == trace.halt_reason
+    assert "relu" in str(trace.stop_reason)
+    assert trace.halt_frontier == trace.stop_reason
     assert not any("linear_2" in label for label in trace.layer_labels)
     assert any("relu" in label for label in trace.layer_labels)
     assert PaddleBackend().validate_trace(trace) is True

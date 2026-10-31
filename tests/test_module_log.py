@@ -190,7 +190,7 @@ class TestModuleLogFields:
         log = trace_fn(
             _make_simple_model(),
             _simple_input(),
-            capture=tl.options.CaptureOptions(save_code_context=True),
+            capture=tl.options.CaptureOptions(save_source_context=True),
         )
         ml = log.modules["0"]
         assert ml.class_source_file is not None  # nn.Linear has inspectable source

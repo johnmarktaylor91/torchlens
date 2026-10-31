@@ -137,7 +137,7 @@ def _captured_log(*, intervention_ready: bool = False) -> tl.Trace:
         capture=CaptureOptions(
             intervention_ready=intervention_ready,
             layers_to_save="all",
-            random_seed=0,
+            seed=0,
         ),
     )
 
@@ -659,7 +659,7 @@ def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
         UnifiedSavedOrphanModel(),
         x,
         save=tl.func("randn"),
-        capture=CaptureOptions(random_seed=1),
+        capture=CaptureOptions(seed=1),
     )
     path = tmp_path / "orphan_records.tlspec"
     expected_payload = log.orphan_records[0]["payload_ref"].detach().clone()
@@ -684,7 +684,7 @@ def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) 
     torch.manual_seed(2101)
     model = torchvision_models.resnet18(weights=None).eval()
     x = torch.randn(1, 3, 64, 64)
-    log = tl.trace(model, x, capture=CaptureOptions(random_seed=2101))
+    log = tl.trace(model, x, capture=CaptureOptions(seed=2101))
     path = tmp_path / "resnet18_full_default.tlspec"
 
     log.save(path, level="portable")

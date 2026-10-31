@@ -113,13 +113,13 @@ def test_alias_contract_snapshots_unsaved_mutated_parent(
     full = tl.trace(
         model,
         x.clone(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     selective = tl.trace(
         model,
         x.clone(),
         save=_save_only_mul,
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
     saved_children = [
         op
@@ -153,7 +153,7 @@ def test_layers_to_save_supports_disk_streaming(tmp_path: Path) -> None:
         TinyLinear(),
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path),
     )
     saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
     assert saved
@@ -398,7 +398,7 @@ def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None
         model,
         x,
         capture=tl.options.CaptureOptions(layers_to_save=[-1]),
-        streaming=tl.options.StreamingOptions(bundle_path=bundle_path),
+        streaming=tl.options.StorageOptions(bundle_path=bundle_path),
     )
     assert bundle_path.exists()
     loaded = tl.load(bundle_path)
@@ -420,7 +420,7 @@ def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None
         model,
         x,
         capture=tl.options.CaptureOptions(layers_to_save=[-1]),
-        streaming=tl.options.StreamingOptions(out_callback=capture_value),
+        streaming=tl.options.StorageOptions(on_save=capture_value),
     )
     expected_values = [op.out for op in callback_trace.layer_list if op.has_saved_activation]
     assert callback_values
@@ -511,7 +511,7 @@ def test_orphan_records_expose_saved_payload_when_pruned_or_retained() -> None:
         SavedOrphan(),
         x,
         save=tl.func("randn"),
-        capture=tl.options.CaptureOptions(random_seed=1),
+        capture=tl.options.CaptureOptions(seed=1),
     )
     assert pruned.orphan_records
     assert pruned.orphan_records[0]["raw_label"].startswith("randn")
@@ -522,7 +522,7 @@ def test_orphan_records_expose_saved_payload_when_pruned_or_retained() -> None:
         SavedOrphan(),
         x,
         save=tl.func("randn"),
-        capture=tl.options.CaptureOptions(random_seed=1, keep_orphans=True),
+        capture=tl.options.CaptureOptions(seed=1, keep_orphans=True),
     )
     assert retained.orphan_records
     assert retained.orphans

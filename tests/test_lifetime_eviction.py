@@ -56,7 +56,7 @@ def test_nested_container_payloads_evict_with_last_owner() -> None:
     log = tl.trace(
         _StackNet(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(save_arg_values=True),
+        capture=tl.options.CaptureOptions(save_args=True),
     )
     refs = _nested_arg_tensor_refs(log)
     assert refs, "expected retained arg containers holding tensors"

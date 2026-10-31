@@ -197,7 +197,7 @@ def test_sylvester_reparam_idiom_captures_validates_and_matches_modern_spelling(
 
     outputs = []
     for candidate in (model, modern):
-        trace = tl.trace(candidate, x, capture=tl.options.CaptureOptions(random_seed=7))
+        trace = tl.trace(candidate, x, capture=tl.options.CaptureOptions(seed=7))
         (out_label,) = trace.output_layers
         outputs.append(trace[out_label].out)
     torch.manual_seed(7)

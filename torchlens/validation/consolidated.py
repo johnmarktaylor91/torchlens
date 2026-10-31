@@ -12,7 +12,7 @@ from torch import nn
 
 from .._literals import OutputDeviceLiteral
 from .._save_budget import SaveBudgetOption
-from ..backends import BackendName, BackendUnsupportedError, resolve_backend_spec
+from ..backends.registry import BackendName, BackendUnsupportedError, resolve_backend_spec
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
 from ..utils.display import user_stacklevel
@@ -288,7 +288,7 @@ def _intervention_report(
         model,
         input_args,
         input_kwargs=input_kwargs,
-        random_seed=random_seed,
+        seed=random_seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
         **(save_options or {}),
@@ -388,7 +388,7 @@ def _validate_receptive_field_scope(
         capture=CaptureOptions(
             layers_to_save="all",
             backward_ready=True,
-            random_seed=random_seed,
+            seed=random_seed,
         ),
         backend=backend,
     )
@@ -405,7 +405,7 @@ def validate(
     input_kwargs: dict[str, Any] | None = None,
     *,
     scope: str,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
@@ -531,7 +531,7 @@ def validate(
             input_kwargs=input_kwargs,
             loss_fn=loss_fn,
             validate_metadata=validate_metadata,
-            random_seed=random_seed,
+            seed=seed,
             atol=atol,
             rtol=rtol,
             validate_layer_grads=(True if validate_layer_grads is None else validate_layer_grads),
@@ -548,7 +548,7 @@ def validate(
             model,
             input_args,
             input_kwargs,
-            random_seed=random_seed,
+            random_seed=seed,
             validate_metadata=validate_metadata,
             backend=backend,
         )
@@ -587,7 +587,7 @@ def validate(
                     model,
                     input_args,
                     input_kwargs=input_kwargs,
-                    random_seed=random_seed,
+                    seed=seed,
                     verbose=verbose,
                     validate_metadata=validate_metadata,
                     backend=backend,
@@ -642,7 +642,7 @@ def validate(
         model,
         input_args,
         input_kwargs,
-        random_seed=random_seed,
+        random_seed=seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
         save_options=save_options,

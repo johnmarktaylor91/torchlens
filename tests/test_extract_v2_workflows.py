@@ -98,7 +98,7 @@ def test_rg14_shape_clip_processor_kwargs_envelope(tmp_path: Path) -> None:
         return BatchEnvelope(
             args=(),
             kwargs=dict(kwargs),
-            row_count=n_rows,
+            num_rows=n_rows,
             mask=None,
             disclosure={"kind": "processor_kwargs"},
         )

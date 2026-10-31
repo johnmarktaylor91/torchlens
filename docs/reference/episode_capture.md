@@ -485,10 +485,10 @@ open across forced joins.
 ## The managed RNG recipe
 
 Episode captures use the managed seeding discipline: the capture's effective
-`random_seed` (drawn or passed, exactly as for any capture) is recorded as
+`seed` (drawn or passed, exactly as for any capture) is recorded as
 the ledger `entry_seed`. Re-running the same declaration with the same seed
 reproduces a sampled episode bit-identically; pass
-`capture=CaptureOptions(random_seed=...)` explicitly for cross-run
+`capture=CaptureOptions(seed=...)` explicitly for cross-run
 reproduction.
 
 ## Escalation (session semantics)

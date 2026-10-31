@@ -65,7 +65,7 @@ def test_predicate_accepts_supported_return_types(result: bool | CaptureSpec | N
         default_op=True,
     )
 
-    assert recording.n_ops == 1
+    assert recording.num_ops == 1
 
 
 @pytest.mark.parametrize(

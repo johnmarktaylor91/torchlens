@@ -77,7 +77,7 @@ def _build_trace(seed: int = 0) -> Trace:
     return trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all", random_seed=seed),
+        capture=tl.options.CaptureOptions(layers_to_save="all", seed=seed),
     )
 
 
@@ -533,7 +533,7 @@ def test_plain_pickle_survives_a_lambda_input_transform() -> None:
     log = trace_fn(
         _PlainPickleModel(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(transform=lambda a: a * 2),
+        capture=tl.options.CaptureOptions(input_transform=lambda a: a * 2),
     )
     restored = pickle.loads(pickle.dumps(log))
     assert restored._transform is None

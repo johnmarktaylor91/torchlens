@@ -47,7 +47,7 @@ from ._validation_state_snapshot import (
     snapshot_state_for_restore,
     state_matches_snapshot,
 )
-from .backends import BackendName, BackendUnsupportedError, resolve_backend_spec
+from .backends.registry import BackendName, BackendUnsupportedError, resolve_backend_spec
 from .data_classes.trace import Trace
 from .errors import TraceNotReproducibleWarning
 from .options import (
@@ -550,7 +550,7 @@ def show_model_graph(
     fold_repeats: FoldRepeatsLiteral | MissingType = MISSING,
     order_siblings: bool | MissingType = MISSING,
     code_panel: CodePanelOption = False,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     recurrence_detection: bool | MissingType = MISSING,
     visualization: VisualizationOptions | None = None,
@@ -590,7 +590,7 @@ def show_model_graph(
     random_seed:
         Fixed RNG seed for stochastic models. The capture reseeds the global
         RNG engines for its forward and restores their prior states afterwards;
-        see ``CaptureOptions.random_seed``.
+        see ``CaptureOptions.seed``.
     recurrence_detection:
         If True, run full isomorphic subgraph expansion. Set this to False when
         the forward pass has more than about 1M operations and postprocessing
@@ -640,7 +640,7 @@ def show_model_graph(
         mark_layer_depths=False,
         detach_saved_activations=False,
         save_grads=False,
-        random_seed=random_seed,
+        random_seed=seed,
         recurrence_detection=recurrence_detection_enabled,
         verbose=verbose,
     )
@@ -675,7 +675,7 @@ def draw_backward(
     ----------
     trace:
         Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.recording_backward()``.
+        or ``trace.capture_backward()``.
     node_spec_fn:
         Optional callback receiving ``(grad_fn_handle, default_spec)``.
     collapsed_node_spec_fn:
@@ -756,7 +756,7 @@ def draw_combined(
     ----------
     trace:
         Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.recording_backward()``.
+        or ``trace.capture_backward()``.
     node_spec_fn:
         Optional callback receiving ``(layer_log, default_spec)``.
     backward_node_spec_fn:
@@ -908,7 +908,7 @@ def validate_forward_pass(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    random_seed: int | None = None,
+    seed: int | None = None,
     verbose: bool = False,
     validate_metadata: bool = True,
     *,
@@ -983,7 +983,7 @@ def validate_forward_pass(
         model,
         input_args,
         input_kwargs=input_kwargs,
-        random_seed=random_seed,
+        random_seed=seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
         **save_options,
@@ -1835,7 +1835,7 @@ def validate_backward_pass(
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
     validate_metadata: bool = True,
-    random_seed: int | None = None,
+    seed: int | None = None,
     atol: float | None = None,
     rtol: float | None = None,
     validate_layer_grads: bool = True,
@@ -1892,7 +1892,7 @@ def validate_backward_pass(
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
         validate_metadata=validate_metadata,
-        random_seed=random_seed,
+        random_seed=seed,
         atol=atol,
         rtol=rtol,
         validate_layer_grads=validate_layer_grads,

@@ -614,7 +614,7 @@ class TestMemberOutcomeGate:
         from torchlens.capture.outcome import CaptureStatus
         from torchlens.merged import merge_ranks
 
-        merged = merge_ranks(self._attested_pair(CaptureStatus.HALTED, CaptureStatus.COMPLETE))
+        merged = merge_ranks(self._attested_pair(CaptureStatus.STOPPED, CaptureStatus.COMPLETE))
         assert merged.value_status is MergeValueStatus.ATTESTED_COMPLETE
         assert merged.member_outcomes == {0: "halted", 1: "complete"}
         summary = merged.summary()
@@ -635,7 +635,7 @@ class TestMemberOutcomeGate:
         from torchlens.capture.outcome import CaptureStatus
         from torchlens.merged import merge_ranks
 
-        merged = merge_ranks(self._attested_pair(CaptureStatus.HALTED, CaptureStatus.COMPLETE))
+        merged = merge_ranks(self._attested_pair(CaptureStatus.STOPPED, CaptureStatus.COMPLETE))
         merged.release()
         assert merged.member_outcomes == {0: "halted", 1: "complete"}
         assert "halted" in merged.summary()
@@ -679,7 +679,7 @@ class TestMemberOutcomeGate:
 
         cores = {
             str(tmp_path / "rank0.tlspec"): self._attested_pair(
-                CaptureStatus.HALTED, CaptureStatus.COMPLETE
+                CaptureStatus.STOPPED, CaptureStatus.COMPLETE
             )[0]
         }
         monkeypatch.setattr(bundle_module, "load", lambda path: cores[str(path)])
@@ -711,7 +711,7 @@ class TestHaltedMemberArtifactRoundTrip:
             # leaves behind (analysis-level member saves accept halted cores).
             log.halted = True
             log._capture_outcome = CaptureOutcome(
-                status=CaptureStatus.HALTED, reason="synthetic halt for merge disclosure"
+                status=CaptureStatus.STOPPED, reason="synthetic halt for merge disclosure"
             )
         entry = boundary(
             rank,

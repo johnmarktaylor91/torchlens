@@ -167,7 +167,7 @@ def test_paddle_preview_rejects_random_seed() -> None:
             lambda x: x + 1,
             _input(),
             backend="paddle",
-            capture=tl.options.CaptureOptions(random_seed=123),
+            capture=tl.options.CaptureOptions(seed=123),
         )
 
 

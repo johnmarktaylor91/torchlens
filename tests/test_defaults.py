@@ -197,7 +197,7 @@ def test_trace_accepts_explicit_opt_in_overrides(
         capture=tl.options.CaptureOptions(
             layers_to_save=None,
             compute_input_output_distances=True,
-            save_code_context=True,
+            save_source_context=True,
             recurrence_detection=False,
         ),
     )
@@ -314,7 +314,7 @@ def test_validate_forward_pass_uses_validation_overrides(
     result = tl.validation.validate_forward_pass(
         _TinyModel(),
         _tiny_input(),
-        random_seed=123,
+        seed=123,
         validate_metadata=False,
     )
 

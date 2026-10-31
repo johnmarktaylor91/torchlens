@@ -73,7 +73,7 @@ from ...data_classes.op import (
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from ...fastlog._storage_resolver import _resolve_storage
 from ...fastlog.exceptions import PredicateError
 from ...fastlog.types import (

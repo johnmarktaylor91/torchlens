@@ -3084,11 +3084,11 @@ def log_recording_backward(
 
     recording_state = getattr(recording, "_recording_state", None)
     if recording_state is None:
-        raise RecorderStateError("Recording.log_backward() requires a live recording state")
+        raise RecorderStateError("Recording.backward() requires a live recording state")
     trace = getattr(recording_state, "runtime_trace", None)
     if trace is None:
         raise RecorderStateError(
-            "Recording.log_backward() requires a live runtime trace from Recorder.log()."
+            "Recording.backward() requires a live runtime trace from Recorder.log()."
         )
     effective_save_grads = (
         save_grads if save_grads is not None else recording_state.options.save_grads

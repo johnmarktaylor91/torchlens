@@ -202,7 +202,7 @@ def test_a_user_save_arg_values_trace_still_saves_copies_after_validation() -> N
     assert arg_references.active_argument_references() is None
     assert arg_references._SESSION.get() is None
     trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True)
+        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
     )
     linears = [op for op in trace.layer_list if op.func_name == "linear"]
     assert len(linears) == 2

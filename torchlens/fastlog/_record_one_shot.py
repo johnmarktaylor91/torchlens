@@ -12,7 +12,7 @@ from .._deprecations import MISSING, MissingType
 from .._errors import KeywordConflictError
 from .._input_coerce import _coerce_input_args
 from .._robustness import check_model_and_input_variants
-from ..backends import (
+from ..backends.registry import (
     TORCH_BACKEND_NAME,
     BackendName,
     BackendUnsupportedError,
@@ -20,7 +20,7 @@ from ..backends import (
     require_capability_implementation,
 )
 from ..intervention.predicates import InterventionPredicate
-from ..options import StreamingOptions
+from ..options import StorageOptions
 from ..types import ActivationPostfunc, GradientPostfunc
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
@@ -53,20 +53,20 @@ def record(
     max_predicate_failures: int = 32,
     on_predicate_error: PredicateErrorMode = "auto",
     on_forward_error: ForwardErrorMode = "raise",
-    storage: StreamingOptions | None = None,
-    streaming: StreamingOptions | None = None,
+    storage: StorageOptions | None = None,
+    streaming: StorageOptions | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
     return_output: bool = False,
     postprocess: str = "none",
-    random_seed: int | None = None,
+    seed: int | None = None,
     activation_transform: ActivationPostfunc | None = None,
     save_raw_activations: bool = True,
     save_grads: GradPredicateFn | bool | CaptureSpec | None = None,
     default_grad: bool | CaptureSpec | MissingType = MISSING,
     grad_transform: GradientPostfunc | None = None,
-    save_raw_gradients: bool = True,
+    save_raw_grads: bool = True,
     backward_ready: bool = False,
-    echo: Any | None = None,
+    narrate: Any | None = None,
     backend: BackendName | None = None,
     detach_saved_activations: bool | MissingType = MISSING,
 ) -> Recording | GenerationRecording | tuple[Any, Recording | GenerationRecording]:
@@ -116,7 +116,7 @@ def record(
         are always detached. ``backward_ready=True`` refuses an explicit
         ``True``.
     save_grads, default_grad, grad_transform, save_raw_gradients:
-        Gradient capture options for a later ``Recording.log_backward()``.
+        Gradient capture options for a later ``Recording.backward()``.
         Gradient hooks are installed only when ``backward_ready=True``,
         ``save_grads=`` or ``default_grad=`` is given (``save_grads=None``
         or ``False`` and ``default_grad=False`` do not count); without one,
@@ -127,7 +127,7 @@ def record(
         ``recording_backward_inference_only``.
     echo:
         Live narration scope: ``True``, ``"modules"``, a live selector, or a
-        grouped ``tl.options.EchoOptions``. Narration and retention are fully
+        grouped ``tl.options.NarrationOptions``. Narration and retention are fully
         independent ("narrate everything, keep nothing" is legal).
     backend:
         Optional backend selector. ``tl.record`` is torch-only in backend v1;
@@ -216,15 +216,15 @@ def record(
                 "on_forward_error": on_forward_error,
                 "storage": storage,
                 "streaming": streaming,
-                "random_seed": random_seed,
+                "random_seed": seed,
                 "activation_transform": activation_transform,
                 "save_raw_activations": save_raw_activations,
                 "save_grads": save_grads,
                 "default_grad": default_grad,
                 "grad_transform": grad_transform,
-                "save_raw_gradients": save_raw_gradients,
+                "save_raw_gradients": save_raw_grads,
                 "backward_ready": backward_ready,
-                "echo": echo,
+                "echo": narrate,
                 "detach_saved_activations": detach_saved_activations,
             },
         )
@@ -248,15 +248,15 @@ def record(
         on_forward_error=on_forward_error,
         storage=storage,
         streaming=streaming,
-        random_seed=random_seed,
+        seed=seed,
         activation_transform=activation_transform,
         save_raw_activations=save_raw_activations,
         save_grads=save_grads,
         default_grad=default_grad,
         grad_transform=grad_transform,
-        save_raw_gradients=save_raw_gradients,
+        save_raw_grads=save_raw_grads,
         backward_ready=backward_ready,
-        echo=echo,
+        narrate=narrate,
         detach_saved_activations=detach_saved_activations,
     ) as recorder:
         output = recorder.log(input_args, input_kwargs)

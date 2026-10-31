@@ -1050,7 +1050,7 @@ _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS: tuple[tuple[str, str], ...] = (
         "torch.random.fork_rng above (behaviorally pinned)",
     ),
     (
-        "torch.distributed.pipeline.sync.checkpoint.save_rng_states",
+        "torch.distributed.pipeline.sync.checkpoint.save_rng",
         "the SAVE half of the same torchgpipe-derived pair above: calls "
         "torch.get_rng_state/torch.cuda.get_rng_state and returns the state "
         "tensor(s) -- structurally covered the same way those module-patched "

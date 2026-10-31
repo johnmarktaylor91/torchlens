@@ -62,12 +62,12 @@
   the historical `on_forward_error="raise"` behavior; opt into
   `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
   `on_forward_error="return_partial"` to return a failed partial `Recording`. Failed partials
-  set `status="partial_error"`, `failed=True`, string-only error metadata, `n_ops_completed`,
+  set `status="partial_error"`, `failed=True`, string-only error metadata, `num_committed_ops`,
   and best-effort `last_event_*` fields. user-op failures exclude the failing call; TL-side
   capture failures may include a skipped/partial current-call event. Failed partials cannot be
-  converted with `Recording.to_trace()` or used with `Recording.log_backward()`.
+  converted with `Recording.to_trace()` or used with `Recording.backward()`.
   `tl.record` installs gradient hooks only when `backward_ready=True`, `save_grads=` or
-  `default_grad=` is given; otherwise `Recording.log_backward()` refuses
+  `default_grad=` is given; otherwise `Recording.backward()` refuses
   (`recording_backward_not_requested`). A `tl.trace` or `tl.record` entered under
   `torch.no_grad()` or `torch.inference_mode()` with no backward option implies
   `inference_only=True` (`Trace.inference_only`, `outcome.inference_only`), and a later
@@ -1242,7 +1242,7 @@
   scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`,
   `ScorecardCell`, `PREVIEW_BACKENDS`, and `RosterModel.expected_op_kinds`
   (the op-inventory check that fails when a backend silently drops an op).
-- LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `echo=` on `tl.trace`/`tl.record`
+- LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens.snoop` owns
   `NarrationEvent`/`EchoSession`/sinks and post-hoc `narrate_trace` /
@@ -1380,7 +1380,7 @@
   recipe never anchors `verified`); a PIL image whose model resolves no authority
   refuses `preprocessing_unresolved` (the ImageNet recipe is never applied
   silently; its explicit opt-in is
-  `CaptureOptions(transform=torchlens.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
+  `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
   closed authority standing (authoritative/unverified_fallback/unknown); a
   `tl.trace(transform=)` capture whose transform IS a recognized authority (the object

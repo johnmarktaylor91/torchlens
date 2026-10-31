@@ -398,9 +398,9 @@ def _workload(case: str, model: nn.Module | None) -> tuple[Callable[[], Any], Ca
 
     if case.startswith("recorder-"):
         n = int(case.split("-")[1])
-        return (lambda: _run_recorder(model, n)), (lambda recording: recording.n_passes)
+        return (lambda: _run_recorder(model, n)), (lambda recording: recording.num_passes)
     if case == "failed-partial":
-        return _run_failed_partial, (lambda recording: recording.n_passes)
+        return _run_failed_partial, (lambda recording: recording.num_passes)
     n = int(case.rsplit("-", 1)[1])
     passes = synthetic_stream(n, rewire_every=10 if "rewired" in case else 0)
     return (lambda: _run_synthetic(passes, None)), (lambda _: 2 * n)

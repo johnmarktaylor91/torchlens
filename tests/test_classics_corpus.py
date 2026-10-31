@@ -68,7 +68,7 @@ def _validate_entry(entry: CorpusEntry, model: object, inputs: object) -> None:
     """Fail with the structured failure summary unless forward validation passes."""
 
     verdict = tl.validate(
-        model, inputs, scope="forward", random_seed=VALIDATION_SEED, validate_metadata=True
+        model, inputs, scope="forward", seed=VALIDATION_SEED, validate_metadata=True
     )
     if not verdict:
         failure = last_validation_failure()

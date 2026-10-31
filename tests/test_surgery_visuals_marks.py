@@ -31,7 +31,7 @@ from torchlens.visualization.surgery_visuals import (
     surgery_stage,
 )
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_arg_values=True)
+_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
 
 #: The execution-removal verbs no surgery wording may ever contain (the F38
 #: lint's vocabulary; unrepresentable here by construction).

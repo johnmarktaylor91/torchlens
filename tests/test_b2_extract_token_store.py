@@ -102,7 +102,7 @@ def test_token_rows_read_back_equal_per_token(tmp_path: Path) -> None:
     tokens = reader.token_rows()
     assert isinstance(tokens, TokenRows)
     true_ids = [int(word) for text in _TEXTS for word in text.split()]
-    assert tokens.n_tokens == len(true_ids)
+    assert tokens.num_tokens == len(true_ids)
     assert tokens.values["input_ids"].tolist() == true_ids
     model = _TokenModel().eval()
     for index, text in enumerate(_TEXTS):

@@ -175,7 +175,7 @@ def test_crossthread_captured_operand_consumption_ceilings(
         torch.manual_seed(0)
         data = torch.randn(1, 4)
         model = _CrossThreadModel(_CONSUMERS[surface], runner)
-        trace = tl.trace(model, (_gate_pos(), data), capture=CaptureOptions(random_seed=1, **_CAP))
+        trace = tl.trace(model, (_gate_pos(), data), capture=CaptureOptions(seed=1, **_CAP))
         assert host_escape_has_cross_thread_captured_tensor(trace), (
             f"{surface}/{thread_mode}: captured-operand consumption did not ceiling"
         )
@@ -222,7 +222,7 @@ def test_benign_own_tensor_worker_stays_verified(
     try:
         model = _BenignOwnTensorModel(runner, use_aten=use_aten)
         x = torch.randn(2, 4)
-        trace = tl.trace(model, x, capture=CaptureOptions(random_seed=1, **_CAP))
+        trace = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
         assert not host_escape_has_cross_thread_captured_tensor(trace)
         path = tmp_path / f"benign_{thread_mode}_{use_aten}.tlspec"
         shutil.rmtree(path, ignore_errors=True)
@@ -249,7 +249,7 @@ def test_idle_worker_stays_verified(tmp_path: Path) -> None:
                 return self.lin(x).relu()
 
         x = torch.randn(2, 4)
-        trace = tl.trace(_IdleModel(), x, capture=CaptureOptions(random_seed=1, **_CAP))
+        trace = tl.trace(_IdleModel(), x, capture=CaptureOptions(seed=1, **_CAP))
         assert not host_escape_has_cross_thread_captured_tensor(trace)
         path = tmp_path / "idle.tlspec"
         shutil.rmtree(path, ignore_errors=True)
@@ -293,7 +293,7 @@ def test_patches_installed_while_armed_and_restored_after() -> None:
             return self.lin(x).relu()
 
     model = _ProbeModel()
-    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(random_seed=1, **_CAP))
+    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(seed=1, **_CAP))
 
     assert stashed(log, "during")["count"] == len(originals)
     assert stashed(log, "during")["all_patched"] is True, (
@@ -369,7 +369,7 @@ def test_install_failure_marks_observer_incomplete(monkeypatch: pytest.MonkeyPat
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return self.lin(x).relu()
 
-    trace = tl.trace(_M(), torch.randn(2, 4), capture=CaptureOptions(random_seed=1, **_CAP))
+    trace = tl.trace(_M(), torch.randn(2, 4), capture=CaptureOptions(seed=1, **_CAP))
     assert host_escape_observer_install_failed(trace)
 
 
@@ -405,9 +405,7 @@ def test_variable_functions_private_spelling_residual(tmp_path: Path) -> None:
 
         torch.manual_seed(0)
         data = torch.randn(1, 4)
-        trace = tl.trace(
-            _VFModel(), (_gate_pos(), data), capture=CaptureOptions(random_seed=1, **_CAP)
-        )
+        trace = tl.trace(_VFModel(), (_gate_pos(), data), capture=CaptureOptions(seed=1, **_CAP))
         # If this ever ceilings, the residual is CLOSED and the xfail flips to XPASS.
         assert host_escape_has_cross_thread_captured_tensor(trace)
     finally:

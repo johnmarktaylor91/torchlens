@@ -41,7 +41,7 @@ def _fresh_log() -> Trace:
     return tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(layers_to_save="all", random_seed=0),
+        capture=CaptureOptions(layers_to_save="all", seed=0),
     )
 
 

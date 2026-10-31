@@ -18,7 +18,7 @@ from ...capture.projections import (
     append_projected_event,
     get_active_recording_state,
 )
-from ...fastlog._halt import HaltSignal
+from ...fastlog._halt import StopSignal
 from ...fastlog.exceptions import PredicateError
 from ...fastlog.types import ActivationRecord, CaptureSpec
 from ...ir.predicate import RetroactiveCaptureDecision
@@ -210,7 +210,7 @@ def log_source_tensor_predicate(
         # input/buffer event, after the append.
         _emit_source_echo(self, ctx)
         _evaluate_halt(ctx, state.options, frontier_output=t)
-    except HaltSignal:
+    except StopSignal:
         raise
     except (TorchLensPostfuncError, TrainingModeConfigError):
         # Postfunc + train-mode validation errors are storage failures and
@@ -383,14 +383,14 @@ def log_source_tensor_exhaustive(
         "func_qualname": None,
         "code_context": _get_code_context(
             self.num_context_lines,
-            source_loading_enabled=self.save_code_context,
+            source_loading_enabled=self.save_source_context,
             disable_col_offset=False,
             context_cache=_source_code_context_cache(self),
         ),
         "func_duration": 0,
         "flops_forward": 0,
         "flops_backward": 0,
-        "func_rng_states": log_current_rng_states(torch_only=True) if self.save_rng_states else {},
+        "func_rng_states": log_current_rng_states(torch_only=True) if self.save_rng else {},
         "func_autocast_state": {},
         "arg_names": (),
         "num_args_total": 0,

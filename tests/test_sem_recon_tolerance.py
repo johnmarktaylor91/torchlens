@@ -212,7 +212,7 @@ def test_per_head_result_orientation_from_module_class(projection: str) -> None:
     log = tl.trace(
         model,
         [q, k, v],
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_arg_values=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     try:
         module = log.modules["self"]

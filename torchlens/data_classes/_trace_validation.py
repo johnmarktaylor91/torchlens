@@ -317,7 +317,7 @@ class TraceValidationMixin(_TraceMixinBase):
         input_kwargs: dict[Any, Any] | None = None,
         layers_to_save: str | list[str] = "all",
         grad_layers_to_save: str | list[str] | None = "all",
-        random_seed: int | None = None,
+        seed: int | None = None,
         backward_ready: bool | None = None,
         _run_until_plan: Any | None = None,
     ) -> None:
@@ -349,7 +349,7 @@ class TraceValidationMixin(_TraceMixinBase):
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
-            random_seed=random_seed,
+            random_seed=seed,
             backward_ready=backward_ready,
             _run_until_plan=_run_until_plan,
         )
@@ -383,7 +383,7 @@ class TraceValidationMixin(_TraceMixinBase):
             runtime replay captures were stripped return an explicit
             unavailable status instead of a pass/fail bool.
         """
-        from ..backends import get_backend_spec
+        from ..backends.registry import get_backend_spec
         from ..capture.outcome import require_capture_capability
         from ..runnable import refuse_poisoned_trace
 
@@ -431,7 +431,7 @@ class TraceValidationMixin(_TraceMixinBase):
             traces whose runtime replay captures were stripped during save.
         """
 
-        from ..backends import get_backend_spec
+        from ..backends.registry import get_backend_spec
         from ..validation.status import ValidationReplayStatus
 
         cached_status = getattr(self, "_validation_replay_status", None)
@@ -553,7 +553,7 @@ class TraceValidationMixin(_TraceMixinBase):
         on_divergence: DivergencePolicy = DivergencePolicy.RAISE,
         chunk_paths: Any | None = None,
         replay: ReplayOptions | None = None,
-        transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         on_zero_fire: str | MissingType = MISSING,
     ) -> "Trace | RunResult":
@@ -1037,7 +1037,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     code="run_legacy_arguments_conflict",
                     remedy="pass run(model, x) or run(new_user_input), never both forms",
                 )
-            transformed_input = self._apply_rerun_transform(user_input, transform=transform)
+            transformed_input = self._apply_rerun_transform(user_input, transform=input_transform)
             run_model = source_ref() if source_ref is not None else None
             if run_model is None:
                 raise RecordBindingError(
@@ -1047,7 +1047,7 @@ class TraceValidationMixin(_TraceMixinBase):
                 )
         replay_options = merge_replay_options(replay=replay)
         if isinstance(model, nn.Module):
-            transformed_input = self._apply_rerun_transform(user_input, transform=transform)
+            transformed_input = self._apply_rerun_transform(user_input, transform=input_transform)
         _warn_stateful_live_run_once(self, run_model)
 
         from ..intervention.rerun import run as _impl
@@ -1283,7 +1283,7 @@ class TraceValidationMixin(_TraceMixinBase):
         Trace
             This model log, for chaining.
         """
-        from ..backends import BackendUnsupportedError, get_backend_spec
+        from ..backends.registry import BackendUnsupportedError, get_backend_spec
         from ..capture.outcome import require_capture_capability
 
         # N3: the backward projection assumes a structurally complete captured
@@ -1324,7 +1324,7 @@ class TraceValidationMixin(_TraceMixinBase):
 
         return self.log_backward(loss, **backward_kwargs)
 
-    def recording_backward(self: "Trace") -> Any:
+    def capture_backward(self: "Trace") -> Any:
         """Return a context manager that captures user-managed backward calls.
 
         Returns
@@ -1332,7 +1332,7 @@ class TraceValidationMixin(_TraceMixinBase):
         Any
             Backward recording context manager.
         """
-        from ..backends import BackendUnsupportedError, get_backend_spec
+        from ..backends.registry import BackendUnsupportedError, get_backend_spec
         from ..capture.outcome import require_capture_capability
 
         require_capture_capability(self, "backward")

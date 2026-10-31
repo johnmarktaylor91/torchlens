@@ -43,7 +43,7 @@ _CAPTURE = CaptureOptions(
     intervention_ready=True,
     capture_container_structure=True,
     cache=False,
-    random_seed=0,
+    seed=0,
 )
 
 

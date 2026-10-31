@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import user_funcs
-from torchlens.options import CaptureOptions, SaveOptions, StreamingOptions, VisualizationOptions
+from torchlens.options import CaptureOptions, SaveOptions, StorageOptions, VisualizationOptions
 
 _VISUALIZATION_CASES = [
     ("view", "vis_mode", "rolled", "vis_mode"),
@@ -318,7 +318,7 @@ def test_streaming_options_group_supports_every_field(
             _TinyModel(),
             _tiny_input(),
             capture=CaptureOptions(layers_to_save="all"),
-            streaming=StreamingOptions(**option_kwargs),
+            streaming=StorageOptions(**option_kwargs),
         )
 
     assert captured[captured_key] == value

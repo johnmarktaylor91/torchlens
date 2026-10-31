@@ -48,7 +48,7 @@ _CAP = {"intervention_ready": True, "capture_container_structure": True, "cache"
 def _capture(model: nn.Module, x: Any, *, seed: int = 1) -> tl.Trace:
     """Capture a runnable-ready trace under a fixed seed."""
 
-    return tl.trace(model, x, capture=CaptureOptions(random_seed=seed, **_CAP))
+    return tl.trace(model, x, capture=CaptureOptions(seed=seed, **_CAP))
 
 
 # --------------------------------------------------------------------------------------

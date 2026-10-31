@@ -141,7 +141,7 @@ def _raw_input_first_trace(model_key: str):
             m,
             x,
             capture=tl.options.CaptureOptions(
-                transform=lambda z: (z - 0.5) / 0.5, batch_render="first"
+                input_transform=lambda z: (z - 0.5) / 0.5, batch_render="first"
             ),
         )
 
@@ -226,7 +226,7 @@ def _raw_input_trace(model_key: str):
     def _build():
         m, x = MODELS[model_key]()
         return tl.trace(
-            m, x, capture=tl.options.CaptureOptions(transform=lambda z: (z - 0.5) / 0.5)
+            m, x, capture=tl.options.CaptureOptions(input_transform=lambda z: (z - 0.5) / 0.5)
         )
 
     return _build

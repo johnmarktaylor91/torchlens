@@ -22,7 +22,7 @@ from torch import nn
 import torchlens as tl
 import torchlens.postprocess as pp
 from torchlens.fastlog import Recorder
-from torchlens.fastlog._halt import HaltSignal
+from torchlens.fastlog._halt import StopSignal
 
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
@@ -164,7 +164,7 @@ def test_halted_postprocess_failure_propagates_with_halt_context(monkeypatch) ->
     monkeypatch.setattr(pp, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted halted-pp") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    assert isinstance(exc_info.value.__context__, HaltSignal)
+    assert isinstance(exc_info.value.__context__, StopSignal)
 
 
 @pytest.mark.smoke
@@ -183,7 +183,7 @@ def test_halted_finalize_failure_propagates_with_halt_context(monkeypatch) -> No
     monkeypatch.setattr(TorchBackend, "cleanup_model_session", _boom)
     with pytest.raises(ValueError, match="planted halted-cleanup") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    assert isinstance(exc_info.value.__context__, HaltSignal)
+    assert isinstance(exc_info.value.__context__, StopSignal)
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +197,7 @@ def test_halted_trace_basic_shape() -> None:
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert trace.halted is True
     assert trace._tracing_finished is True
-    assert trace.halt_frontier == trace.halt_reason
+    assert trace.halt_frontier == trace.stop_reason
 
 
 def test_halted_trace_has_no_transient_attribution_leak() -> None:
@@ -360,8 +360,8 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
     assert first_output is not None
     assert second_output is None
     assert recording.status == "halted"
-    assert recording.halted is True
-    assert set(recording.halts_by_pass) == {2}
+    assert recording.is_stopped is True
+    assert set(recording.stops_by_pass) == {2}
 
 
 # ---------------------------------------------------------------------------

@@ -77,9 +77,9 @@ def _build_log(
         inputs,
         capture=tl.options.CaptureOptions(
             layers_to_save="all",
-            save_arg_values=save_arg_values,
-            save_rng_states=save_rng_states,
-            random_seed=seed,
+            save_args=save_arg_values,
+            save_rng=save_rng_states,
+            seed=seed,
         ),
     )
 

@@ -105,7 +105,7 @@ def test_row_count_is_input_derived_and_refuses_drift(tmp_path: Path) -> None:
         return BatchEnvelope(
             args=(torch.stack(items),),
             kwargs={},
-            row_count=len(items) + 1,
+            num_rows=len(items) + 1,
             mask=None,
             disclosure={"kind": "test"},
         )

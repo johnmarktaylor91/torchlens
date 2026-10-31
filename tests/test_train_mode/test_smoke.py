@@ -17,7 +17,7 @@ def test_trace_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
     trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        capture=CaptureOptions(backward_ready=True, random_seed=0),
+        capture=CaptureOptions(backward_ready=True, seed=0),
     )
     saved = trace[trace.output_layers[0]].out
 
@@ -36,13 +36,13 @@ def test_save_new_outs_train_mode_basic(two_layer_mlp: TwoLayerMlp) -> None:
     trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        capture=CaptureOptions(detach_saved_activations=True, random_seed=0),
+        capture=CaptureOptions(detach_saved_activations=True, seed=0),
     )
     trace.save_new_outs(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
-        random_seed=0,
+        seed=0,
     )
     saved = trace[trace.output_layers[0]].out
 

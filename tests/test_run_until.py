@@ -102,7 +102,7 @@ def test_live_truncation_does_not_assert_replay_arg_completeness():
 
     model = _Chain()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
     result = log.run(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
     assert result.trace._replay_arg_version_data_complete is False
 
@@ -132,7 +132,7 @@ def test_live_truncation_leaves_source_outcome_complete():
     # The result fork's outcome is exactly what a FULL run's fork derives
     # (forked from the COMPLETE source) -- the internal HALTED settle never
     # reaches it.
-    assert result.trace.outcome.status is not CaptureStatus.HALTED
+    assert result.trace.outcome.status is not CaptureStatus.STOPPED
     full = log.run(inputs=torch.randn(2, 4))
     assert result.trace.outcome.status is full.trace.outcome.status
 
@@ -168,7 +168,7 @@ def test_live_truncation_leaves_no_halted_trace_registered():
         entry
         for entry in fresh
         if getattr(entry, "outcome", None) is not None
-        and entry.outcome.status is CaptureStatus.HALTED
+        and entry.outcome.status is CaptureStatus.STOPPED
     ]
     assert not halted_fresh, (
         "the truncated live run left a HALTED trace enumerable through "

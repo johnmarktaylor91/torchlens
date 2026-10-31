@@ -268,7 +268,7 @@ Trace.num_tensors	int	quantity	num_tensors	green	tests/oracles/test_legacy_graph
 Trace.num_uncalled_modules	int	quantity	num_uncalled_modules	green	tests/oracles/test_legacy_graph_counts.py::test_module_call_and_param_use_counts (I2)	-
 Trace.overhead_duration	Duration	quantity	overhead_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-
 Trace.pinned_autograd_memory	Bytes	quantity	pinned_autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
-Trace.random_seed	int	identifier	-	-	-	seed echo
+Trace.seed	int	identifier	-	-	-	seed echo
 Trace.saved_activation_memory	Bytes	quantity	saved_activation_memory	green	tests/test_brainpipe_byte_model.py::test_saved_activation_memory_equals_real_retained_bytes (I1)	-
 Trace.saved_gradient_memory	Bytes	quantity	saved_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_two_backward_passes (I2)	-
 Trace.setup_duration	Duration	quantity	setup_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_capture_phase_durations_are_bounded_by_an_outside_clock (I1)	-

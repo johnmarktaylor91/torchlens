@@ -1006,7 +1006,7 @@ def _log_model(
         x,
         capture=CaptureOptions(
             layers_to_save=layers_to_save,
-            save_code_context=save_code_context,
+            save_source_context=save_code_context,
         ),
     )
 

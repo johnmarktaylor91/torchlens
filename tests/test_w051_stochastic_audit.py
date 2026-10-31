@@ -24,7 +24,7 @@ def _trace() -> tl.Trace:
     return tl.trace(
         _OneBlock(),
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True, random_seed=0),
+        capture=tl.options.CaptureOptions(intervention_ready=True, seed=0),
     )
 
 

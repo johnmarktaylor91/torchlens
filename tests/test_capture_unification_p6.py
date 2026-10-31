@@ -36,7 +36,7 @@ def _keep_linear_grad(ctx: RecordContext) -> CaptureSpec | bool:
     """Request graph-connected capture at linear ops."""
 
     if ctx.func_name == "linear":
-        return CaptureSpec(keep_grad=True)
+        return CaptureSpec(save_grad=True)
     return False
 
 

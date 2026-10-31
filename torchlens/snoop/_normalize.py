@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..options import EchoOptions
+from ..options import NarrationOptions
 from ._errors import EchoConfigError
 
 __tl_layer__ = "L5"
@@ -50,7 +50,7 @@ def _refuse_finalized_selector(selector: Any) -> None:
         )
 
 
-def normalize_echo(echo: Any) -> EchoOptions | None:
+def normalize_echo(narrate: Any) -> NarrationOptions | None:
     """Normalize one ``echo=`` value to a grouped ``EchoOptions`` (or off).
 
     Parameters
@@ -70,9 +70,9 @@ def normalize_echo(echo: Any) -> EchoOptions | None:
         ints) and for selectors that need finalized labels.
     """
 
-    if echo is None or echo is False:
+    if narrate is None or narrate is False:
         return None
-    normalized = _coerce_echo_value(echo)
+    normalized = _coerce_echo_value(narrate)
     select = normalized.select
     if select is None or select is False:
         return None
@@ -87,16 +87,16 @@ def normalize_echo(echo: Any) -> EchoOptions | None:
     return normalized
 
 
-def _coerce_echo_value(echo: Any) -> EchoOptions:
+def _coerce_echo_value(echo: Any) -> NarrationOptions:
     """Coerce one armed ``echo=`` spelling to ``EchoOptions``, or refuse typed."""
 
-    if isinstance(echo, EchoOptions):
+    if isinstance(echo, NarrationOptions):
         return echo
     if echo is True:
-        return EchoOptions(select=True)
+        return NarrationOptions(select=True)
     if isinstance(echo, str):
         if echo == "modules":
-            return EchoOptions(select="modules")
+            return NarrationOptions(select="modules")
         raise EchoConfigError(
             f"echo={echo!r} is not a live narration scope: label/substring selections "
             "resolve against FINAL labels, which do not exist during a live forward. "
@@ -106,10 +106,10 @@ def _coerce_echo_value(echo: Any) -> EchoOptions:
             remedy="pass True, 'modules', a live selector, or EchoOptions",
         )
     if callable(echo):
-        return EchoOptions(select=echo)
+        return NarrationOptions(select=echo)
     raise EchoConfigError(
         f"echo= received unsupported type {type(echo).__name__}. Remedy: pass True, "
-        "'modules', a live selector/callable, or tl.options.EchoOptions.",
+        "'modules', a live selector/callable, or tl.options.NarrationOptions.",
         code="echo_argument_invalid",
         remedy="pass True, 'modules', a live selector, or EchoOptions",
     )
@@ -161,7 +161,7 @@ def refuse_echo_shaped_predicate(value: Any, *, slot: str) -> None:
     """
 
     values: tuple[Any, ...] = tuple(value) if isinstance(value, (list, tuple)) else (value,)
-    if not any(isinstance(item, EchoOptions) for item in values):
+    if not any(isinstance(item, NarrationOptions) for item in values):
         return
     if slot == "save":
         raise EchoConfigError(

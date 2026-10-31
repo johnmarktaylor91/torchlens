@@ -464,7 +464,7 @@ def audit(
     from ._authorities import resolve as _resolve
 
     resolution = authority if isinstance(authority, Resolution) else _resolve(authority)
-    authority_status = status_of(resolution.record)
+    authority_status = status_of(resolution.preprocessing)
     authority_fields = (
         resolution.declared.comparable_fields()
         if resolution.declared is not None

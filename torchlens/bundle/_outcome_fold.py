@@ -69,8 +69,8 @@ def _fold_member_outcomes(
     if not member_outcomes:
         return CaptureOutcome(
             status=CaptureStatus.UNKNOWN,
-            derived=True,
-            settlement_note=(
+            is_derived=True,
+            note=(
                 "bundle worst-of-members fold over 0 members: no member "
                 "outcomes to fold (fail-closed)"
             ),
@@ -99,4 +99,4 @@ def _fold_member_outcomes(
     )
     if unsettled:
         note += f"; {unsettled} member(s) carry no settled outcome (treated unknown, fail-closed)"
-    return CaptureOutcome(status=worst_status, derived=True, settlement_note=note)
+    return CaptureOutcome(status=worst_status, is_derived=True, note=note)
