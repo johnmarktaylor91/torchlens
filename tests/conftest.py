@@ -16,6 +16,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import _xdist_groups
 import numpy as np
 import pytest
 import torch
@@ -136,6 +137,9 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ.setdefault("TORCHLENS_COLLAPSE_STRICT", "1")
     config._tl_warn_once_sentinel_specs = _WARN_ONCE_SENTINELS
     _pin_test_threads(config)
+    # pytest 9.2 + xdist 3.8 drop ``xdist_group`` under ``--dist loadgroup``
+    # (tests/_xdist_groups.py); restamp the group on the id pytest reads.
+    _xdist_groups.register(config)
     # Pay PyTorch's one-time RNG and deterministic-mode initialization during
     # session setup, not against whichever smoke test happens to run first.
     torch.random.get_rng_state()
