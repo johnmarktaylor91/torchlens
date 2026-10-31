@@ -40,6 +40,34 @@ def _is_extraction_manifest(candidate: dict[str, Any]) -> bool:
     return candidate.get("schema") in {MANIFEST_SCHEMA_V1, MANIFEST_SCHEMA_V2}
 
 
+def _read_root_manifest(bundle_path: Path) -> dict[str, Any] | None:
+    """Read a directory's root ``manifest.json`` mapping, if it has a usable one.
+
+    Parameters
+    ----------
+    bundle_path:
+        The ``.tlspec`` directory.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        The parsed mapping, or None when the root manifest is absent, a
+        symlink, unreadable, or not a JSON object.
+    """
+
+    merged_manifest_path = bundle_path / "manifest.json"
+    if not merged_manifest_path.is_file() or merged_manifest_path.is_symlink():
+        return None
+    try:
+        # ``read_text`` allocated the entire attacker-sized file BEFORE the
+        # ceiling could refuse it; the bounded path reader reads at most
+        # ``max_bytes + 1``, so discovery cannot be an allocation DoS.
+        candidate = _json.read_bounded(merged_manifest_path)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return candidate if isinstance(candidate, dict) else None
+
+
 def load_by_root_manifest(bundle_path: Path) -> Any:
     """Load a directory whose root manifest names a merged, fastlog or extraction format.
 
@@ -55,17 +83,8 @@ def load_by_root_manifest(bundle_path: Path) -> Any:
         absent, a symlink, unreadable, or names none of these formats.
     """
 
-    merged_manifest_path = bundle_path / "manifest.json"
-    if not merged_manifest_path.is_file() or merged_manifest_path.is_symlink():
-        return NOT_ROUTED
-    try:
-        # ``read_text`` allocated the entire attacker-sized file BEFORE the
-        # ceiling could refuse it; the bounded path reader reads at most
-        # ``max_bytes + 1``, so discovery cannot be an allocation DoS.
-        candidate = _json.read_bounded(merged_manifest_path)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return NOT_ROUTED
-    if not isinstance(candidate, dict):
+    candidate = _read_root_manifest(bundle_path)
+    if candidate is None:
         return NOT_ROUTED
     # One refusal for every saved format: a file an earlier major
     # release wrote is never read (no compatibility reader is carried).
