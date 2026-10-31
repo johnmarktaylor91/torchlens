@@ -365,7 +365,7 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
             input_io_roles.get(event.label_raw),
             output_versions.get(event.label_raw, {}),
             op_events_by_label,
-            inputs._param_logs,
+            inputs.param_logs,
             registered_buffer_names,
         )
         start = time.perf_counter()

@@ -1230,7 +1230,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
                 "transformed_out_shape",
             )
         ),
-        trace_state=tokens("r:conditional_records", "w:layer_logs"),
+        trace_state=tokens("r:conditional_records", "w:_layer_logs"),
     ),
     "16": PostprocessStepContract(
         "16",
@@ -1282,7 +1282,7 @@ POSTPROCESS_STEP_CONTRACTS: dict[str, PostprocessStepContract] = {
         # — observe-empty-and-fall-through.
         placeholder_probes=frozenset(("_grad_records",)),
         trace_state=tokens(
-            "r:layer_logs",
+            "r:_layer_logs",
             "r:module_build",
             "r:module_capture_ws",
             "rw:param_logs_kind",

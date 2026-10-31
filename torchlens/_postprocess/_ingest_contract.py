@@ -137,7 +137,7 @@ INGEST_CONTRACT_ROWS: tuple[tuple[str, str], ...] = (
     ("buffer_initial_values", "read-only"),
     ("op_equivalence_classes", "read-only identity-bearing mapping"),
     ("source_model_ref", "read-only weakref"),
-    ("_param_logs", "read-only registry"),
+    ("param_logs", "read-only registry"),
     ("owning_trace", "identity join target ONLY (source_trace default)"),
     ("op_row_store", "destination store handle (orchestrator-created)"),
     ("trace_core", "orchestrator-created core handle (ppdag 9.1)"),
