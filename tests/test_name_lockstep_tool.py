@@ -512,7 +512,7 @@ class Probe:
 
     def summary(self) -> int:
         """Summarise."""
-        return len(self._layer_list)
+        return len(self.layer_list)
 
 
 def run_probe(probe, budget=3):
@@ -536,9 +536,9 @@ def _codemod_repo(root: Path) -> list[dict]:
             "tests/test_a.py": (
                 "import torchlens as tl\nfrom torchlens import run_probe\n\n"
                 "def test_a(p):\n    tl.run_probe(p, budget=2)\n    run_probe(p)\n"
-                "    p._layer_list\n    Probe._layer_list\n"
+                "    p.layer_list\n    Probe.layer_list\n"
             ),
-            "docs/guide.md": "Call `tl.run_probe(p, budget=1)`; read `Probe._layer_list`.\n",
+            "docs/guide.md": "Call `tl.run_probe(p, budget=1)`; read `Probe.layer_list`.\n",
             "CHANGELOG.md": "Added tl.run_probe.\n",
         },
     )
@@ -552,10 +552,10 @@ def _codemod_repo(root: Path) -> list[dict]:
             "proposed": "probe_run",
         },
         {
-            "id": "member:torchlens:Probe._layer_list",
+            "id": "member:torchlens:Probe.layer_list",
             "kind": "member",
-            "name": "_layer_list",
-            "path": "Probe._layer_list",
+            "name": "layer_list",
+            "path": "Probe.layer_list",
             "owner": "torchlens:Probe",
             "owner_names": ["Probe"],
             "module": "torchlens",
@@ -590,8 +590,8 @@ def test_codemod_dry_run_writes_nothing_and_classifies(tmp_path: Path) -> None:
     by_site = {(e.path, e.line, e.old): e.certainty for e in edits}
     assert by_site[("torchlens/__init__.py", 3, "run_probe")] == codemod.DEFINITE
     assert by_site[("tests/test_a.py", 2, "run_probe")] == codemod.DEFINITE
-    assert by_site[("tests/test_a.py", 7, "_layer_list")] == codemod.AMBIGUOUS
-    assert by_site[("tests/test_a.py", 8, "_layer_list")] == codemod.DEFINITE
+    assert by_site[("tests/test_a.py", 7, "layer_list")] == codemod.AMBIGUOUS
+    assert by_site[("tests/test_a.py", 8, "layer_list")] == codemod.DEFINITE
     assert by_site[("tests/test_a.py", 5, "budget")] == codemod.AMBIGUOUS
     assert by_site[("torchlens/__init__.py", 16, "budget")] == codemod.DEFINITE
     # The local parameter that shadows the root name in ``other`` is left alone.
@@ -613,7 +613,7 @@ def test_codemod_apply_writes_definite_edits_only(tmp_path: Path) -> None:
     assert "len(self.ops)" in package and "    ops: list" in package
     test_text = (tmp_path / "tests/test_a.py").read_text()
     assert "from torchlens import probe_run" in test_text and "    probe_run(p)" in test_text
-    assert "tl.probe_run(p, budget=2)" in test_text and "p._layer_list" in test_text
+    assert "tl.probe_run(p, budget=2)" in test_text and "p.layer_list" in test_text
     assert "Probe.ops" in test_text
     assert "`tl.probe_run(p, budget=1)`" in (tmp_path / "docs/guide.md").read_text()
 

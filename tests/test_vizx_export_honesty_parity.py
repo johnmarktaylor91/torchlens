@@ -47,7 +47,7 @@ TEXT_MARKERS: dict[str, str | None] = {
     "capture_status": None,
     "capture_verified": "unverified",
     "capture_verification_reason": None,
-    "_rescue_rerun": "rescue re-run",
+    "rescue_rerun": "rescue re-run",
     "structure_only": "structure-only",
     "claim_status": None,
     "values_available": "no tensor payloads",

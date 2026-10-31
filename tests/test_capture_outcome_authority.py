@@ -114,7 +114,7 @@ def test_payload_parse_rejects_non_mapping() -> None:
 
 
 @pytest.mark.parametrize(
-    ("status", "derived", "is_stopped", "finished", "coherent"),
+    ("status", "derived", "halted", "finished", "coherent"),
     [
         (CaptureStatus.COMPLETE, False, False, True, True),
         (CaptureStatus.COMPLETE, False, True, True, False),

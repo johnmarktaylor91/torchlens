@@ -10,6 +10,7 @@ must leave the source bytes intact.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tarfile
 from pathlib import Path
@@ -17,9 +18,9 @@ from pathlib import Path
 import pytest
 
 from torchlens._ecosystem import migrate
-from torchlens._ecosystem.migrate import _ABSENT_FAMILIES_BY_TARGET
-from torchlens._io import ArtifactError, ArtifactTooOldError
-from torchlens._io.compat_ledger import MIGRATION_WITNESS_FILENAME
+from torchlens._ecosystem.migrate import _ABSENT_FAMILIES_BY_TARGET, _stage_and_publish
+from torchlens._io import TLSPEC_VERSION, ArtifactError, ArtifactTooOldError
+from torchlens._io.compat_ledger import MIGRATION_WITNESS_FILENAME, read_migration_witness
 
 GOLDENS_DIR = Path(__file__).parent / "release_goldens"
 CORPUS_PATH = GOLDENS_DIR / "genuine_release_artifacts.tar.gz"
@@ -108,6 +109,74 @@ def test_pre_floor_source_refuses_as_saved_by_2x(
     assert "saved by torchlens 2.x" in str(excinfo.value)
     assert not (path / MIGRATION_WITNESS_FILENAME).exists()
     assert sorted(p.relative_to(path) for p in path.rglob("*")) == before
+
+
+def _manifest_only_source(tmp_path: Path) -> Path:
+    """Build a directory holding one current-stamp manifest for the transaction seams."""
+
+    path = tmp_path / "art_current"
+    path.mkdir()
+    (path / "manifest.json").write_text(
+        json.dumps({"tlspec_version": TLSPEC_VERSION}), encoding="utf-8"
+    )
+    return path
+
+
+def test_staging_failure_leaves_source_intact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A staging-boundary failure refuses typed and never mutates the source.
+
+    With the floor at the current format no source reaches staging through
+    ``migrate``, so the transaction law is driven at its own seam.
+    """
+
+    path = _manifest_only_source(tmp_path)
+    original = (path / "manifest.json").read_bytes()
+
+    def _boom(src: object, dst: object, **kwargs: object) -> None:
+        raise OSError("injected copy failure")
+
+    monkeypatch.setattr(shutil, "copytree", _boom)
+    with pytest.raises(ArtifactError) as excinfo:
+        _stage_and_publish(path, witness={})
+    assert excinfo.value.fields["code"] == "migration_staging_failed"
+    assert (path / "manifest.json").read_bytes() == original
+    assert not path.with_name(path.name + ".tl-migrate-staging").exists()
+
+
+@pytest.mark.smoke
+def test_publish_failure_restores_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A final-rename failure restores the source in place, typed."""
+
+    path = _manifest_only_source(tmp_path)
+    original = (path / "manifest.json").read_bytes()
+    real_rename = os.rename
+    calls = {"n": 0}
+
+    def _second_rename_fails(src: object, dst: object) -> None:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("injected publish failure")
+        real_rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", _second_rename_fails)
+    with pytest.raises(ArtifactError) as excinfo:
+        _stage_and_publish(path, witness={})
+    assert excinfo.value.fields["code"] == "migration_staging_failed"
+    assert (path / "manifest.json").read_bytes() == original
+    assert not (path / MIGRATION_WITNESS_FILENAME).exists()
+
+
+@pytest.mark.smoke
+def test_broken_witness_refuses_typed(tmp_path: Path) -> None:
+    """A structurally broken witness sidecar refuses migration_witness_invalid."""
+
+    path = _manifest_only_source(tmp_path)
+    (path / MIGRATION_WITNESS_FILENAME).write_text('{"witness_schema": "bogus"}', encoding="utf-8")
+    with pytest.raises(ArtifactError) as excinfo:
+        read_migration_witness(path)
+    assert excinfo.value.fields["code"] == "migration_witness_invalid"
 
 
 def test_every_v1_step_declares_manifest_level() -> None:
