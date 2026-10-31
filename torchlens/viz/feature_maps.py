@@ -59,7 +59,7 @@ def feature_maps(
         Channel selection. ``None`` stores one channel-aggregate map per
         stimulus, a sequence stores explicit channels, and ``"top"`` stores
         per-stimulus top channels by mean absolute activation.
-    top_k:
+    k:
         Number of top channels to consider for ``channels="top"`` before the
         ``max_channels`` display cap is applied.
     reduce:

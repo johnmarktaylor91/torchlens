@@ -86,7 +86,7 @@ def record(
         Optional keyword arguments for the model call.
     save, default_op, default_module, history_size, lookback,
     lookback_payload_policy, include_source_events, max_predicate_failures,
-    on_predicate_error, storage, streaming, random_seed:
+    on_predicate_error, storage, streaming, seed:
         Fastlog recording options.
     on_forward_error:
         Controls failed-forward handling. ``"raise"`` preserves the historical
@@ -126,7 +126,7 @@ def record(
         ``torch.inference_mode()`` implies ``inference_only=True``, reported on
         ``Recording.outcome``, and ``log_backward()`` refuses with
         ``recording_backward_inference_only``.
-    echo:
+    narrate:
         Live narration scope: ``True``, ``"modules"``, a live selector, or a
         grouped ``tl.options.NarrationOptions``. Narration and retention are fully
         independent ("narrate everything, keep nothing" is legal).

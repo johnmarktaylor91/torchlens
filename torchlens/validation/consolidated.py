@@ -436,7 +436,7 @@ def validate(
         captures with ``save_mode="reference"``, so a model whose forward
         writes its own buffers in place (a train-mode BatchNorm's running
         statistics) raises ``MutatedReferenceError``; validate it in eval mode.
-    random_seed:
+    seed:
         Optional random seed for forward-like validation.
     verbose:
         Whether validators should emit diagnostics.

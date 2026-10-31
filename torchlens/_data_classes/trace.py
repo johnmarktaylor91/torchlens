@@ -1718,7 +1718,7 @@ class Trace(
             save_mode: Tensor retention mode for saved activation and gradient payloads.
             keep_orphans: If True, orphan island ops remain in raw metadata and
                 are exposed via ``trace.graph.orphans``.
-            save_arg_values: Whether to deep-copy each operation's input arguments.
+            save_args: Whether to deep-copy each operation's input arguments.
             save_grads: Which backward gradients should be retained. ``True``
                 saves all gradients, ``False``/``None`` saves no payloads, and
                 selectors/predicates save matching gradient records.
@@ -1758,15 +1758,15 @@ class Trace(
                 restores the default ``"auto"``.
             facet_registry_snapshot: Immutable facet recipe snapshot captured for
                 this trace.
-            transform: Optional callable used to convert raw user input into
+            input_transform: Optional callable used to convert raw user input into
                 model-ready input.
-            raw_input: Original user input before ``transform`` was applied.
+            raw_input: Original user input before ``input_transform`` was applied.
             save_raw_input: Portable save policy for ``raw_input``.
             batch_render: Raw-input batch rendering policy for visualization.
             output_transform: Optional callable used to convert model output into
                 human-readable metadata.
             raw_output: Human-readable model output after ``output_transform``.
-            save_raw_output: Portable save policy for ``raw_output``.
+            save_transformed_output: Portable save policy for ``raw_output``.
             layer_visualizers: Optional mapping of selectors to visualizer callables.
             save_visualizations: Whether rendered visualizations should persist in bundles.
         """

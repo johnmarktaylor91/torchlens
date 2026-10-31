@@ -1246,11 +1246,11 @@ def integrated_gradients(
     Quadrature: the path integral is approximated by the midpoint Riemann rule,
     sampling the path at ``(k + 0.5) / n_steps`` for ``k`` in
     ``range(n_steps)``. Captum's default is Gauss-Legendre, so the two
-    libraries give close but not identical values at the same ``n_steps``;
+    libraries give close but not identical values at the same ``num_steps``;
     compare them through the completeness fields, not element by element.
     ``extra["completeness_residual"]`` is ``attribution_sum - target_delta``
     and ``extra["residual_rel"]`` is its size relative to
-    ``extra["target_delta_abs"]``: raise ``n_steps`` until ``residual_rel`` is
+    ``extra["target_delta_abs"]``: raise ``num_steps`` until ``residual_rel`` is
     small. A small relative residual over a near-zero ``target_delta_abs``
     certifies nothing, which is why the denominator is always reported.
 
@@ -1269,7 +1269,7 @@ def integrated_gradients(
         selected values, a callable ``output -> scalar tensor``, or a
         :class:`SiteTarget` naming a hidden layer's output (and unit) to
         attribute instead of the model output.
-    n_steps
+    num_steps
         Number of midpoint Riemann samples along the straight path.
     baseline
         Optional baseline tree matching attributed input leaves. A bare tensor is

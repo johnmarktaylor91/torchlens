@@ -167,7 +167,7 @@ def inspect_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
         Optional single comparator token id (logit-diff row).
     position:
         Position whose next-token distribution is inspected (default last).
-    top_k:
+    k:
         How many top predictions to include.
     tokenizer:
         Optional tokenizer for piece rendering + the BOS disclosure.

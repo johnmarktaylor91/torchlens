@@ -926,7 +926,7 @@ def compile_legacy_capture_plan(
         Existing activation selector argument.
     grad_layers_to_save
         Existing gradient selector argument.
-    random_seed
+    seed
         Existing forward RNG seed.
     postprocess
         Whether legacy orchestration will materialize a ``Trace`` now.
@@ -1100,7 +1100,7 @@ def attach_legacy_capture_session(
         Opaque selected backend adapter.
     backend_name
         Selected backend name.
-    layers_to_save, grad_layers_to_save, random_seed, postprocess
+    layers_to_save, grad_layers_to_save, seed, postprocess
         Existing orchestration arguments mirrored into the plan.
 
     Returns

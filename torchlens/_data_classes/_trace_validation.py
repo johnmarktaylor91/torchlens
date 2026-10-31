@@ -325,7 +325,7 @@ class TraceValidationMixin(_TraceMixinBase):
 
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, random_seed, backward_ready:
+        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, seed, backward_ready:
             Forwarded unchanged to
             :func:`torchlens.capture.trace.save_new_outs`.
         """
@@ -598,7 +598,7 @@ class TraceValidationMixin(_TraceMixinBase):
             Optional explicit tensor leaf paths to split.
         strict:
             Whether graph-shape divergence should raise instead of warn.
-        transform:
+        input_transform:
             Stored-transform sentinel, ``False`` to bypass, or explicit input
             transform callable for this run.
         output_transform:

@@ -574,15 +574,15 @@ class TFBackend:
             Detach option, unsupported for TF.
         save_grads
             Gradient saving option.
-        random_seed
+        seed
             User random seed, if any.
         num_context_lines
             Source context line count.
-        save_arg_values
+        save_args
             Argument saving option.
-        save_code_context
+        save_source_context
             Code context option.
-        save_rng_states
+        save_rng
             RNG-state option.
         recurrence_detection
             Recurrence option.
@@ -604,7 +604,7 @@ class TFBackend:
             Batch rendering policy.
         output_transform
             Output transform.
-        save_raw_output
+        save_transformed_output
             Raw output save policy.
         layer_visualizers
             Visualization options.
@@ -1079,11 +1079,11 @@ def _reject_unsupported_options(
         Detach option.
     save_grads
         Gradient save option.
-    save_arg_values
+    save_args
         Argument save option.
-    save_code_context
+    save_source_context
         Code context option.
-    save_rng_states
+    save_rng
         RNG-state option.
     backward_ready
         Backward-ready option.

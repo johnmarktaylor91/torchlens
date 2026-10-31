@@ -3177,7 +3177,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
         Parameters
         ----------
-        transform:
+        input_transform:
             Transform or hook to apply to this operation's output.
         model:
             Model required when ``intervention.engine="rerun"``.
@@ -3734,7 +3734,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             t: The output tensor of the operation.
             t_args: Positional arguments passed to the operation.
             t_kwargs: Keyword arguments passed to the operation.
-            save_arg_values: Whether to deep-copy and store args/kwargs.
+            save_args: Whether to deep-copy and store args/kwargs.
             activation_transform: Optional transform applied to the tensor
                 before storing (e.g. detach, to-numpy, normalize).
         """

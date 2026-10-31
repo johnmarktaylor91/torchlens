@@ -417,7 +417,7 @@ class FacetSpec(_SelectionOperand):
             Kind of home value.
         function_id:
             Recipe identifier.
-        recipe_version:
+        function_version:
             Recipe version.
 
         Returns
@@ -457,7 +457,7 @@ class FacetSpec(_SelectionOperand):
             Callable that computes the read value.
         function_id:
             Recipe identifier.
-        recipe_version:
+        function_version:
             Recipe version.
 
         Returns

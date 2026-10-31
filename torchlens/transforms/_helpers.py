@@ -106,7 +106,7 @@ def srp_dims_for(num_samples: int, eps: float = 0.1) -> SrpSizing:
 
     Parameters
     ----------
-    n_samples:
+    num_samples:
         Number of rows the projection must preserve pairwise (``>= 2``).
     eps:
         Maximum pairwise-L2 distortion target, in ``(0, 1)``.

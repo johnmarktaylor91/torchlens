@@ -687,7 +687,7 @@ class TraceStatsMixin(_TraceMixinBase):
             Resource column used for sorting. Time is descending by default.
         ascending:
             Whether to sort the selected metric ascending.
-        top_k:
+        k:
             Number of rows to keep after sorting, or ``None`` for all rows.
         group_by:
             ``"source_line"`` folds op rows into one row per user source line

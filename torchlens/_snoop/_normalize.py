@@ -55,7 +55,7 @@ def normalize_echo(narrate: Any) -> NarrationOptions | None:
 
     Parameters
     ----------
-    echo:
+    narrate:
         The user's ``echo=`` value on any mount.
 
     Returns

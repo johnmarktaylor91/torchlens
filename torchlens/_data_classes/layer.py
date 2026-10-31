@@ -1807,7 +1807,7 @@ class Layer(_SelectionOperand):
 
         Parameters
         ----------
-        transform:
+        input_transform:
             Transform or hook to apply to this layer's output.
         model:
             Model required when ``intervention.engine="rerun"``.

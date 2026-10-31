@@ -206,7 +206,7 @@ def road_curve(  # noqa: PLR0913 - public door: keyword-only evaluation settings
     ranking
         ``"most_relevant_first"`` (default, MoRF) or
         ``"least_relevant_first"`` (LeRF).
-    n_steps
+    num_steps
         Number of steps after the unperturbed start (default 20).
     features
         Feature grouping as in :func:`deletion_curve` (default ``"auto"``:

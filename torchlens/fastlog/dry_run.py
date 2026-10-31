@@ -32,7 +32,7 @@ def dry_run(
         Tensor, list, or tuple of positional model inputs.
     input_kwargs:
         Optional keyword arguments for the model call.
-    save, history_size, include_source_events, random_seed:
+    save, history_size, include_source_events, seed:
         Fastlog dry-run options. Predicate exceptions propagate immediately.
 
     Returns

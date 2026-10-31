@@ -281,7 +281,7 @@ def model(
         LIT minibatch bound (memo D9: batching is what makes warm_start fast).
     max_new_tokens:
         Fixed deterministic-generation length (causal LM only).
-    top_k:
+    k:
         Next-token candidates per row (causal LM only).
     attention:
         REFUSED (memo D12): LIT deleted its attention panel upstream; the type

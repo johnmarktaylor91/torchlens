@@ -568,7 +568,7 @@ def validate_backward_pass(
         summing all returned tensors.
     validate_metadata:
         If True, run metadata invariant checks on the captured backward trace.
-    random_seed:
+    seed:
         Fixed RNG seed for stock and candidate passes. Auto-generated if None.
     atol:
         Absolute tolerance for the parameter-gradient ``torch.allclose``.

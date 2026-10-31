@@ -2671,7 +2671,7 @@ def trace(
         policy that actually ran on ``trace.grouping_policy``. Distinct
         from the display-only ``fold_repeats`` viz knob, which folds
         repeated module runs at RENDER time and never changes grouping.
-    echo:
+    narrate:
         Live narration (DOCUMENTED-UNSTABLE, lane F28): ``True`` narrates
         every completed tensor-output event plus module structure lines;
         ``"modules"`` narrates structure only; a live selector scopes the

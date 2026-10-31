@@ -239,7 +239,7 @@ class Recorder:
             PyTorch module to record.
         save, default_op, default_module, history_size,
         lookback, lookback_payload_policy, include_source_events, max_predicate_failures,
-        on_predicate_error, storage, streaming, random_seed:
+        on_predicate_error, storage, streaming, seed:
             Fastlog recording options.
         on_forward_error:
             Controls failed-forward handling. ``"raise"`` preserves the

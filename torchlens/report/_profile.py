@@ -894,7 +894,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
         Column used for sorting. ``"time"`` sorts descending by default.
     ascending:
         Whether to reverse the default descending order.
-    top_k:
+    k:
         Number of sorted bottleneck rows to retain. ``None`` retains all rows.
         Percent denominators are UNAFFECTED (D6: a view never changes the
         partition total).

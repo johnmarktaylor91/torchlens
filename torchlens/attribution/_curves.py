@@ -593,7 +593,7 @@ def deletion_curve(  # noqa: PLR0913 - public door: keyword-only evaluation sett
         What a removed feature becomes: ``"zeros"`` (default), ``"blur"`` (an
         11x11 box blur of the input, ``(N, C, H, W)`` inputs only), a number,
         or a tensor of the input's shape.
-    n_steps
+    num_steps
         Number of steps after the unperturbed start (default 20).
     features
         Feature grouping: ``"auto"`` (default: ``"pixels"`` for
@@ -648,7 +648,7 @@ def insertion_curve(  # noqa: PLR0913 - mirrors deletion_curve one-to-one
 
     Parameters
     ----------
-    model, inputs, input_kwargs, target, attribution, baseline, n_steps, features, patch_size
+    model, inputs, input_kwargs, target, attribution, baseline, num_steps, features, patch_size
         As in :func:`deletion_curve`; ``baseline`` is the starting input.
 
     Returns

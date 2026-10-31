@@ -612,7 +612,7 @@ def plan_extraction(  # noqa: PLR0913 -- the memo-specified public planner surfa
     sites:
         ``"all"`` (every saved-activation site on the observed path) or an
         iterable of layer labels to include.
-    n_stimuli:
+    num_stimuli:
         Total stimuli the run will consume.
     batch_size:
         The run's batch size. Belongs to the user (D-10): the planner

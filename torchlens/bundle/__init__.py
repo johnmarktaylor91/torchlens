@@ -1672,7 +1672,7 @@ class Bundle:
         ----------
         baseline:
             Optional baseline override.
-        top_k:
+        k:
             Maximum rows to RETURN. Every site is scored first; this is a
             display cap on the sorted result, not a compute bound.
         metric:
