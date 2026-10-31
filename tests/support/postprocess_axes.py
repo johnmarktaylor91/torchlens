@@ -1,12 +1,9 @@
-"""The postprocess recording/enforcement axes matrix (design-ppdag-v3 §8.1).
+"""Capture axes that reach different ``postprocess()`` code paths.
 
 Every axis is one FRESH capture reaching ``postprocess()`` (refresh included
-— it is a fresh capture projected onto the source trace afterwards). The
-matrix is the shared input of the one-time declaration seeding sweep
-(``tools/record_postprocess_matrix.py``), the read-before-write findings
-classification, and the env-gated read-enforcement CI leg. A configuration
-that gates postprocess code paths belongs here: the honest residual of read
-enforcement is exactly the axes NOT in this matrix.
+-- it is a fresh capture projected onto the source trace afterwards). The
+matrix is shared test input (schema lockstep, buffer data model, step-6 merge).
+A configuration that gates postprocess code paths belongs here.
 """
 
 from __future__ import annotations
