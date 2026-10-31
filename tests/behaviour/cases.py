@@ -55,7 +55,7 @@ def _always_draws(op: Any) -> bool:
     if torch.Tag.nondeterministic_seeded not in getattr(op, "tags", ()):
         return False
     arguments = getattr(getattr(op, "_schema", None), "arguments", ())
-    has_generator = any(str(a.type).startswith("Generator") for a in arguments)
+    has_generator = any(a.name == "generator" or "Generator" in str(a.type) for a in arguments)
     gated = any(a.name in {"train", "training"} for a in arguments)
     return has_generator and not gated
 
