@@ -197,7 +197,7 @@
   match there, negated or combined, so `.bind(...)` refuses the rule with `BindingPreflightError`
   code `bind_rule_unsupported` before any forward runs. Select the op structurally instead:
   `tl.func("relu") & tl.in_module("1")` (the label's op type, plus a module address from
-  `model.named_modules()`). Labels keep working on a capture (`tl.trace(...)`, `trace.resolve_sites`).
+  `model.named_modules()`). Labels keep working on a capture (`tl.trace(...)`, `trace[selector]`).
   A `tl.where` predicate that reads post-capture fields (`p.layer_label`) is opaque, so it still
   fails at the first op with `bind_rule_runtime_error`.
 - TorchScript and DLPack: a `torch.jit.script` function called from an eager forward runs its

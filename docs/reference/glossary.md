@@ -1027,7 +1027,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   predicate callable.
 
 **Structural selectors**
-: `tl.func` / `tl.module` / `tl.in_module` select by callable or module context;
+: `tl.func` / `tl.module` / `tl.in_module(address)` select by callable or module context
+  (`in_module` only builds a selector; whether one record lies in a module is read on the
+  record, `layer.module == address` or `address in layer.modules`);
   a module registered under several names (`self.dec = self.enc`, all recorded in
   `Module.all_addresses`) is selected by its canonical `named_modules()` name, which fires at
   every call site of it (pass labels such as `"enc:2"` count calls of that one object); an
@@ -1057,6 +1059,17 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.grad_input` / `tl.grad_output` (backward event tensors), `tl.in_backward_pass`
   (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
   the former `intervening` alias is removed).
+
+**`Accessor.count_by(*keys)`**
+: Every accessor (`trace.layers`, `trace.ops`, `trace.modules`, `trace.params`, ...) counts
+  its records by one or more record fields: one key gives `{value: count}`, two or more give
+  `{(v1, v2, ...): count}`, in first-seen order; `len(accessor)` is the total. Layers and ops
+  count by `"module"` (containing module address) and `"kind"` (the op family token,
+  `conv2d`, `relu`); other accessors count by any string or int field their records carry
+  (`trace.modules.count_by("class_name")`, `trace.params.count_by("dtype")`). No key refuses
+  `accessor_count_by_key_required`; an unknown key refuses `accessor_count_by_key_unknown`
+  naming the countable fields. Filtering (the labels for one value) is a selector lookup:
+  `trace[tl.in_module(address)].labels`.
 
 ## Intervention helpers
 
@@ -1484,8 +1497,8 @@ shims, by declared contract. Each carries the same tag at its definition.
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
   `tl.facet(name).latent(k)` then addresses latent `k` at the doors a
   `tl.head` selector serves (`Trace.set`, `attach_hooks`, `Trace.do`,
-  `fork().do`; and, as a bare selector, `trace[selector]` and
-  `trace.resolve_sites(selector)`, which return the `Facet` whose `.value` is
+  `fork().do`; and, as a bare selector, `trace[selector]`, which returns the
+  `Facet` whose `.value` is
   the read, and `tl.trace(save=selector)`, which keeps the ops that read
   needs), and `trace[site].facets[name]` (every latent),
   `facets[f"{name}[{k}]"]` or `facets[f"{name}[{j},{k}]"]` read the encoder
@@ -1787,9 +1800,18 @@ S2-gated*
 deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
 : `tl.Selector` is the composable selection QUERY — a frozen AST over leaf
   terms (selector / receptive-field box / gradient-RF / facet / param / unit)
-  and boolean combinators, trace-independent; `selection.resolve(trace)`
-  returns a `tl.Selection` — frozen, trace-bound, an ordered tuple of
-  `Site(key, mask, provenance)` rows. TWO-LEVEL DENOTATION:
+  and boolean combinators, trace-independent; `trace[selector]` (the one
+  resolution door) returns a `tl.Selection` — frozen, trace-bound, an ordered
+  tuple of `tl.types.Site(key, mask, provenance)` rows, never capped; a
+  spelling that names one thing (an exact label, a target spec, a facet
+  selector) must match exactly one site and returns that record
+  (`site_spelling_not_unique` otherwise). `Selection` is a container: `len`,
+  iteration, `[i]` (a `Site`) and slices (a `Selection`), `.labels` (property,
+  pass-qualified op labels), `.selector` (the selector that produced it, or
+  `None`), `.kind`, `.is_empty`, `.digest`, `.align_to(other)` and
+  `.to_pandas()`; its repr is `Selection[ACT](N sites, M elements)`. The
+  former `SiteTable` (`resolve_sites`, `.first`, `.where`) folded into it:
+  `selection[0]` and `trace[selector & other]` spell those. TWO-LEVEL DENOTATION:
   (touched-site family, selected-element set); zero-mask entries are retained
   first-class; `.is_empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
   type refuses typed (`selection_bool_ambiguous`). Anything region-shaped
@@ -3374,6 +3396,7 @@ The sections above describe each surface in depth.
 ### Members
 | Spelling | Meaning |
 | --- | --- |
+| `Accessor.count_by` | Count records by one or more record fields |
 | `Accessor.search` | Return records whose lookup key contains `needle` |
 | `AmbiguousBackendError.default_remedy` | The remedy the error names when none is passed |
 | `BackendCapabilities.has_validation_replay` | Whether the backend can perform replay validation |
@@ -3548,6 +3571,9 @@ The sections above describe each surface in depth.
 | `ScanRow.is_audited` | False exactly when `skip_reason` says why the row was not audited |
 | `ScanRow.is_constant` | Whether the scanned value stayed constant (`None` when unknown) |
 | `Selection.align_to` | Re-bind a resolved selection onto another trace |
+| `Selection.labels` | Pass-qualified op label of every row, in row order |
+| `Selection.selector` | The selector that produced the rows, or `None` |
+| `Selection.to_pandas` | One row per site: label, kind, key, num_selected, numel, shape, relation, source |
 | `Session.to_bundle` | Return a bundle containing all captured invocation logs |
 | `Site.num_selected` | Return the number of selected elements at this site |
 | `Site.structural_site_key` | The structural site key when present, else `None` |
@@ -3690,6 +3716,7 @@ Members of classes whose public home changed, one entry per class.
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
+| `address=` | keyword of `tl.in_module`: the module address whose contained sites the selector matches |
 | `breakdown_k=` | keyword of `tl.report.flops`: how many rows the breakdown lists |
 | `builder=` | field of `RosterModel`: zero-argument factory returning `(model, example_input)` |
 | `captured_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |

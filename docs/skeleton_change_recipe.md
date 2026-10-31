@@ -277,7 +277,7 @@ print(compat_v2.outcome)
 ```
 
 ```text
-SiteTable(1 site: addmm_8_93)
+_SiteTable(1 site: addmm_8_93)
 EXACT
 ```
 
