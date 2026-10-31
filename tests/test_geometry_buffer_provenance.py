@@ -72,12 +72,6 @@ _DEFINED_FROM_NONEMPTY_STATES = ["resize_shrink", "resize_same", "resize_as_shri
 # Validation gaps that are not entry-state graph dependence; each is pinned so it
 # flips loudly when fixed.
 _KNOWN_VALIDATION_GAPS = {
-    # Validation perturbs the template tensor of ``resize_as_``, whose values never
-    # reach the output (only its size is read), so the perturbation check fails
-    # from every entry state.
-    ("resize_as_shrink", "fresh"): "resize_as_ template is perturbed as a value edge",
-    ("resize_as_shrink", "after_one_forward"): "resize_as_ template is perturbed as a value edge",
-    ("resize_as_shrink", "aliased"): "resize_as_ template is perturbed as a value edge",
     # The buffer views a larger shared storage, so the grow exposes the neighbour's
     # defined elements; replay resizes a compact copy of the receiver instead.
     ("resize_grow_then_zero", "aliased"): "replay of a grow inside a shared storage",
