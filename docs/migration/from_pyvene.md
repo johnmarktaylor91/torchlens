@@ -17,7 +17,7 @@ page.
 | `ZeroIntervention` | `tl.zero_ablate()` |
 | `VanillaIntervention` (interchange from a source run) | `tl.patch_from(source_trace, source_site=..., positions=...)` |
 | `AdditionIntervention`, steering vectors | `tl.steer(direction, strength=..., dim=...)` |
-| Generation under an intervention | `torchlens.intervention.steer_generate(model, ids, spec, ...)` |
+| Generation under an intervention | `spec.bind(model).generate(ids, ...)` |
 | Fixed-direction subspace edits | `tl.project_out(direction, ...)`, `tl.project_onto(direction, ...)` |
 | `CollectIntervention` | a `save=` selector on `tl.trace` or `tl.record` |
 | SAE features as the intervention basis | `torchlens.bridge.sae.splice(..., latents_edit=...)` |
@@ -159,7 +159,6 @@ RESULT = torch.allclose(logits, reference, atol=1e-6)
 # migration-test: tool=torchlens expected=True
 import torch
 import torchlens as tl
-from torchlens.intervention import steer_generate
 from transformers import LlamaConfig, LlamaForCausalLM
 
 torch.manual_seed(0)
@@ -178,11 +177,12 @@ spec = tl.when(
     tl.module("model.layers.0.mlp"),
     tl.steer(torch.randn(32), strength=8.0, dim=-1),
 )
-result = steer_generate(lm, ids, spec, max_new_tokens=4, do_sample=False, pad_token_id=0)
-RESULT = result.outputs.shape[-1] == ids.shape[-1] + 4
+bound = spec.bind(lm)
+outputs = bound.generate(ids, max_new_tokens=4, do_sample=False, pad_token_id=0)
+RESULT = outputs.shape[-1] == ids.shape[-1] + 4 and bound.last_report is not None
 ```
 
-`steer_generate` holds the edit across every decoding step, KV cache included; the
+A bound `generate` holds the edit across every decoding step, KV cache included; the
 [KV-cache recipe](../guides/kv_cache.md) covers what that costs and how it differs from editing
 the cache itself.
 

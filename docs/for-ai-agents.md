@@ -352,7 +352,7 @@ serves); nothing guarantees a response is never trimmed, so always check `trunca
 ## Anti-patterns
 
 - Do not run a fresh `tl.trace(..., intervene=...)` per generation step just to steer; it costs
-  milliseconds per op. Use `spec.bind(model)` or `steer_generate`, and `tl.record` when each step
+  milliseconds per op. Use `spec.bind(model)` (and `spec.bind(model).generate(...)` for HF `generate()`), and `tl.record` when each step
   needs evidence ([choosing a fast path](guides/fast_paths.md)).
 - Do not trace `torch.compile`, `torch.jit`, or `torch.export` artifacts. Trace the original
   Python `nn.Module`.

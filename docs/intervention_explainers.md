@@ -10,7 +10,7 @@ questions, so pick by what you need back, not by habit.
 | See every op of one edited run, with a record of where the edit fired | `tl.trace(model, x, intervene=spec)` | yes, once | a `Trace` of the edited run |
 | Ask "what if this saved value had been different" on an input you already traced | `trace.fork().do(site, action)` | no: the edit is pushed down the recorded graph from saved values | the fork, with its saved values updated |
 | The same question when the edit may change control flow, randomness or module state | `trace.fork().do(site, action, model=model, x=x)`, or `trace.run(model, x)` | yes | the fork, re-executed under the edit |
-| Apply one edit to many forwards or to HF `generate()`, with no trace | `spec.bind(model)`, or `torchlens.intervention.steer_generate` | yes, every call | the model's own outputs, plus `last_report` fire counts |
+| Apply one edit to many forwards or to HF `generate()`, with no trace | `spec.bind(model)`, and `spec.bind(model).generate(...)` for HF `generate()` | yes, every call | the model's own outputs, plus `last_report` fire counts |
 | Apply an edit and keep a few activations on every forward | `tl.record(model, x, save=..., intervene=spec, return_output=True)` | yes, every call | the output and a sparse `Recording` |
 
 `do()` picks its engine from its arguments: with neither `model=` nor `x=` it pushes over the saved

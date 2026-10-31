@@ -6,7 +6,7 @@
 | Step-wise hidden-state access | `log.find_sites(...)` over repeated loop sites | Equivalent when generation loop is visible. |
 | Contrastive inputs | Capture clean/corrupted logs and compare with `Bundle` | Equivalent comparison pattern. |
 | Attribution method selection | `tl.attribution` ships saliency, input x gradient, integrated gradients, SmoothGrad, gradient SHAP, occlusion, layer attribution methods and more; `tl.attribution.text` uses integrated gradients | Partial; Inseq's generation-aware method catalog (including DeepLift, LIME and attention-weight methods) stays in Inseq. |
-| Intervention during generation | `torchlens.intervention.steer_generate(model, ids, spec)`, or `tl.when(site, action).bind(model)` for many forwards | Equivalent for local PyTorch generation code. |
+| Intervention during generation | `tl.when(site, action).bind(model).generate(ids, ...)`, or `.bind(model)` alone for many forwards | Equivalent for local PyTorch generation code. |
 | Token-position patching | Tensor-shaped replacements or custom hooks | Equivalent if target tensors expose position dimensions. |
 | Save analysis setup | `.tlspec/` saves intervention recipe; metric code remains external | Partial. |
 | Visual attribution reports | The `tl.attribution.text` result renders per-token scores (`.show()`, `.to_html()`, `.to_text()`) | Per-token report for one target; no per-step generation heatmap. |

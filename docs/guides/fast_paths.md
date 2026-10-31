@@ -11,7 +11,7 @@ For the general speed knobs and benchmark tables, see the [performance guide](..
 
 | You want to | Use | Cost, measured |
 | --- | --- | --- |
-| Steer or patch the model over many forwards, including generation | `tl.when(site, action).bind(model)`, or `steer_generate` for HF `generate()` | 1.0 to 1.2x a plain forward hook, exact |
+| Steer or patch the model over many forwards, including generation | `tl.when(site, action).bind(model)`, and `.bind(model).generate(...)` for HF `generate()` | 1.0 to 1.2x a plain forward hook, exact |
 | Steer and also keep a few activations as evidence, every step | `tl.record(model, x, save=..., intervene=spec, return_output=True)` | about 1 ms per op (CPU decoders); 9 s per step on Qwen3.5-9B |
 | Steer and refresh a trace's saved activations on each new input, including generation | trace once with `intervene=`, then `trace.run(model, x)` per input | about 1.5 to 2x a plain forward hook per step, exact; see [Fast steered rerun](#fast-steered-rerun) |
 | Inspect the full graph, metadata and activations of one forward | `tl.trace(model, x, save=...)` | about 3 ms per op; 47 s for one Qwen3.5-9B trace |
@@ -85,15 +85,14 @@ What to know about a binding:
 ### Generation with HF `generate()`
 
 `bound.generate(...)` runs the base model's real `generate()` with the edits held across every
-decoding step, KV cache included. `torchlens.intervention.steer_generate(model, ids, spec, ...)`
-is the same thing in one call and returns the model's outputs together with the report. On
+decoding step, KV cache included, and returns the model's own outputs; the fire counts are on
+`bound.last_report`. On
 Qwen3.5-9B with the KV cache on, steered generation cost 1.07 to 1.10x a plain hook per token
 (one run read 1.20x), and every step's scores matched the plain hook exactly.
 
 ```python
 import torch
 import torchlens as tl
-from torchlens.intervention import steer_generate
 from transformers import LlamaConfig, LlamaForCausalLM
 
 
@@ -115,9 +114,9 @@ spec = tl.when(
 )
 gen_kwargs = {"max_new_tokens": 5, "do_sample": False, "use_cache": True, "pad_token_id": 0}
 
-steered = spec.bind(lm).generate(ids, **gen_kwargs)
-result = steer_generate(lm, ids, spec, **gen_kwargs)
-assert torch.equal(result.outputs, steered)
+bound = spec.bind(lm)
+steered = bound.generate(ids, **gen_kwargs)
+assert bound.last_report is not None
 
 
 def add_direction(module, args, output):
@@ -139,8 +138,8 @@ step (`bound(ids)`); the binding is reused across steps and the input may grow.
 To steer only on the steps where a condition holds, with a per-token audit of when the steer was
 applied, see the [conditional steering recipe](../recipes/conditional_steering.md).
 
-`steer_generate` is always routed through the binding: it never traces, so it records nothing
-beyond the fire counts in its report. To record what generation computed, capture the whole run
+A bound `generate` never traces, so it records nothing beyond the fire counts in
+`bound.last_report`. To record what generation computed, capture the whole run
 as an episode (`tl.trace(..., episode=tl.options.EpisodeOptions(...))`), which is diagnostic tier:
 its cost grows faster than the number of steps, so plan for tens of steps, never hundreds
 ([episode capture](../reference/episode_capture.md)). To edit what the KV cache holds for the

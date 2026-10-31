@@ -11,7 +11,7 @@ Pyvene and pyreft are idle upstream. Runnable versions of these rows are on
 | Zero and mean ablations | `tl.zero_ablate()`, `torchlens.intervention.mean_fill(dim=...)`, `torchlens.intervention.mean_from(population)` | Equivalent common helpers; see [stochastic and population edits](../stochastic_edits.md). |
 | Resampling ablation | `torchlens.intervention.resample_rows_from(population, seed=..., axis=...)` | Whole-row donors from a population, seeded and recorded. |
 | Directional intervention | `tl.steer(direction, strength=..., dim=...)` | Equivalent tensor steering helper. |
-| Generation under an intervention | `torchlens.intervention.steer_generate(model, ids, spec, ...)` | Runs the model's own `generate()` with the edit on every step, KV cache included. |
+| Generation under an intervention | `spec.bind(model).generate(ids, ...)` | Runs the model's own `generate()` with the edit on every step, KV cache included. |
 | Fixed-direction subspace edits | `tl.project_out(direction, ...)`, `tl.project_onto(direction, ...)`, `torchlens.intervention.set_direction_mean(...)` | Equivalent for a given direction; no learned rotation. |
 | SAE feature interventions | `torchlens.bridge.sae.splice(..., latents_edit=...)` | Duck-typed SAE (`encode` and `decode`); no SAE package required. |
 | Trainable interventions (DAS, pyreft adapters) | Your own optimizer over parameters a bound spec reads | TorchLens ships no trainer; the training loop is yours. |

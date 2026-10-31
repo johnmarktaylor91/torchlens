@@ -353,7 +353,7 @@ to keep before the first long capture:
   saved activations in host memory.
 - For a logit-lens sweep over many positions, `torchlens.semantic.logit_lens_predictions`
   projects one layer at a time and keeps only top-k summaries.
-- For many forwards or generation, a bound spec or `steer_generate` saves nothing at all; editing
+- For many forwards or generation, a bound spec (and its `generate`) saves nothing at all; editing
   the cached past of a long prompt is the [KV-cache recipe](guides/kv_cache.md).
 - For a dataset of long sequences, `tl.extract_dataset(..., output_dir=...)` writes the named
   layers to disk batch by batch.
