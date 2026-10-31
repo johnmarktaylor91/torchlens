@@ -1301,13 +1301,13 @@ def _resolve_facet_term(node: _FacetTerm, trace: Any) -> ResolvedSelection:
         if home_out is None:
             raise _unresolvable(
                 "value_not_saved",
-                f"facet {getattr(spec, 'recipe_id', '<unknown>')!r} needs the saved "
+                f"facet {getattr(spec, 'function_id', '<unknown>')!r} needs the saved "
                 f"home value at {home_label!r}, which this capture did not retain.",
                 site=home_label,
             ) from exc
         raise _unresolvable(
             "facet_write_mask_unavailable",
-            f"facet {getattr(spec, 'recipe_id', '<unknown>')!r} cannot produce its "
+            f"facet {getattr(spec, 'function_id', '<unknown>')!r} cannot produce its "
             f"write mask: {exc}",
             site=home_label,
         ) from exc
@@ -1319,7 +1319,7 @@ def _resolve_facet_term(node: _FacetTerm, trace: Any) -> ResolvedSelection:
             site=op.label,
         )
     mask = _mask_from_dense(shape, write_mask.bool().cpu())
-    source = f"facet {getattr(spec, 'recipe_id', '<unknown>')!r} write region"
+    source = f"facet {getattr(spec, 'function_id', '<unknown>')!r} write region"
     return ResolvedSelection(trace, "ACT", [_act_entry(op, mask, "exact", source)])
 
 

@@ -375,7 +375,7 @@ class FacetSpec(_SelectionOperand):
         Which home value version the spec reads.
     conflict_alias_group:
         Shared-home conflict/alias group for future intervention.
-    recipe_id:
+    function_id:
         Recipe identifier that produced this facet.
     recipe_version:
         Recipe version that produced this facet.
@@ -415,7 +415,7 @@ class FacetSpec(_SelectionOperand):
             Runtime home object.
         home_kind:
             Kind of home value.
-        recipe_id:
+        function_id:
             Recipe identifier.
         recipe_version:
             Recipe version.
@@ -455,7 +455,7 @@ class FacetSpec(_SelectionOperand):
         ----------
         value_func:
             Callable that computes the read value.
-        recipe_id:
+        function_id:
             Recipe identifier.
         recipe_version:
             Recipe version.
