@@ -1166,40 +1166,6 @@
     "transform_repr": "keep",
     "verbose": "keep"
    },
-   "torchlens.intervention.types.Edit": {
-    "args": "keep",
-    "batch_independent": "keep",
-    "compatible_with_append": "keep",
-    "direction": "keep",
-    "factory": "drop",
-    "helper_name": "keep",
-    "kind": "keep",
-    "kwargs": "keep",
-    "metadata": "keep",
-    "portability": "keep",
-    "selection_recipe": "blob_recursive"
-   },
-   "torchlens.intervention.types.FireRecord": {
-    "backward_pass_index": "keep",
-    "call_index": "keep",
-    "call_label": "keep",
-    "container_path": "keep",
-    "determinism_note": "keep",
-    "direction": "keep",
-    "edge_address": "keep",
-    "engine": "keep",
-    "func_call_id": "keep",
-    "grad_kind": "keep",
-    "helper": "keep",
-    "helper_name": "keep",
-    "replaced": "keep",
-    "seed": "keep",
-    "site_label": "keep",
-    "target_label": "keep",
-    "timestamp": "keep",
-    "timing": "keep",
-    "tuple_index": "keep"
-   },
    "torchlens._ir.container.ContainerSpec": {
     "aux_data": "blob_recursive",
     "child_specs": "blob_recursive",
@@ -1304,6 +1270,40 @@
     "_available": "keep",
     "_launches": "keep",
     "_relations": "keep"
+   },
+   "torchlens.intervention.types.Edit": {
+    "args": "keep",
+    "batch_independent": "keep",
+    "compatible_with_append": "keep",
+    "direction": "keep",
+    "factory": "drop",
+    "helper_name": "keep",
+    "kind": "keep",
+    "kwargs": "keep",
+    "metadata": "keep",
+    "portability": "keep",
+    "selection_recipe": "blob_recursive"
+   },
+   "torchlens.intervention.types.FireRecord": {
+    "backward_pass_index": "keep",
+    "call_index": "keep",
+    "call_label": "keep",
+    "container_path": "keep",
+    "determinism_note": "keep",
+    "direction": "keep",
+    "edge_address": "keep",
+    "engine": "keep",
+    "func_call_id": "keep",
+    "grad_kind": "keep",
+    "helper": "keep",
+    "helper_name": "keep",
+    "replaced": "keep",
+    "seed": "keep",
+    "site_label": "keep",
+    "target_label": "keep",
+    "timestamp": "keep",
+    "timing": "keep",
+    "tuple_index": "keep"
    }
   },
   "contract_schema": "torchlens.writer_contract.v1",
@@ -4101,5 +4101,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "8f04983185f9d9638f005d6fa1acc591a291563f40beba8b2fc781bc9e0a8a5f"
+ "writer_contract_digest": "ad27e4069d8b1fc942412a7a2362a5aaaf1240d8e027b8c91894e4410c0aad2e"
 }
