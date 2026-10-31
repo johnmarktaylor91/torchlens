@@ -14,7 +14,6 @@ import pytest
 from torchlens._ir import (
     ArgTemplateRef,
     BlobRef,
-    ConditionalEvent,
     DeferredRef,
     DeviceRef,
     DtypeRef,
@@ -282,12 +281,6 @@ def _build_ir_instances() -> dict[str, object]:
         fire_results=(fire_result,),
         intervention_template_ref=intervention_template_ref,
     )
-    conditional_event = ConditionalEvent(
-        conditional_id=1,
-        record={"label": "bool_1_1_raw"},
-        arm_entry_edges=(("entry", "then"),),
-        edge_call_indices=(("entry", "then", 1, "bool_1_1_raw", 1),),
-    )
     reserved_label = ReservedLabel(
         label="linear_1_1_raw",
         label_raw="linear_1_1_raw",
@@ -380,7 +373,6 @@ def _build_ir_instances() -> dict[str, object]:
         "fire_result": fire_result,
         "intervention_template_ref": intervention_template_ref,
         "op_event": op_event,
-        "conditional_event": conditional_event,
         "reserved_label": reserved_label,
         "function_event_input": function_event_input,
         "record_context": record_context,
@@ -414,7 +406,6 @@ def test_imports_every_public_ir_type() -> None:
         "fire_result",
         "intervention_template_ref",
         "op_event",
-        "conditional_event",
         "reserved_label",
         "function_event_input",
         "record_context",
@@ -443,7 +434,6 @@ def test_frozen_dataclasses_are_frozen_and_slotted() -> None:
         "fire_result",
         "intervention_template_ref",
         "op_event",
-        "conditional_event",
         "reserved_label",
         "function_event_input",
         "record_context",

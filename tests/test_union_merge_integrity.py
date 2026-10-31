@@ -223,10 +223,6 @@ UNION_CHECKS: dict[str, Check] = {
     f"{_DATA}/refusal_site_classification.tsv": unique_tsv_key(1),
     f"{_ORACLES}/surface_module_classification.tsv": unique_tsv_key(1),
     f"{_ORACLES}/numeral_baseline.tsv": unique_tsv_key(None),
-    "docs/reference/error_refusal_contract.md": check_contract_tables,
-    "docs/reference/warning_contract.md": check_contract_tables,
-    "tests/test_file_size_ratchet.py": check_dict_literal_keys,
-    "tests/test_ruff_ratchet_governance.py": check_dict_literal_keys,
 }
 
 #: Former union files whose concurrent edits must now conflict; still checked, since a
@@ -234,6 +230,10 @@ UNION_CHECKS: dict[str, Check] = {
 CONFLICT_CHECKS: dict[str, Check] = {
     f"{_LEDGER}/static_scan.json": check_static_scan,
     f"{_LEDGER}/PROVENANCE": check_provenance,
+    "docs/reference/error_refusal_contract.md": check_contract_tables,
+    "docs/reference/warning_contract.md": check_contract_tables,
+    "tests/test_file_size_ratchet.py": check_dict_literal_keys,
+    "tests/test_ruff_ratchet_governance.py": check_dict_literal_keys,
 }
 
 ALL_CHECKS = {**UNION_CHECKS, **CONFLICT_CHECKS}

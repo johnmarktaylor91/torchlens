@@ -4,7 +4,7 @@
 # macOS filesystems an NFD-named file could bypass an NFC exclusion and be
 # packed into the sdist. This project's sdist governance is exactly that
 # MANIFEST machinery, so the fixed release is a build-time floor, not an
-# audit suppression (grind r3, R61/b2:B5). >=77 was the PEP 639 license floor.
+# audit suppression. It also covers the PEP 639 license metadata floor (>=77).
 requires = ["setuptools>=83"]
 build-backend = "setuptools.build_meta"
 
@@ -32,28 +32,18 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    # Runtime floors are DECLARED and EXERCISED (grind r4, b2:B6 third round:
-    # numpy/packaging/tqdm/graphviz were bare names, so the metadata promised
-    # nothing while CI quietly tested numpy==1.26.4 -- the tested floor and the
-    # declared floor were different artifacts). numpy's floor is the exact pin
+    # Runtime floors are DECLARED and EXERCISED: a bare name promises nothing in
+    # the metadata, so each floor is one CI actually installs. numpy's floor is the exact pin
     # the tests.yml floor legs run; the other three are the oldest releases the
     # nightly lowest-direct leg installs and smoke-imports, so a floor claim
     # that stops being true goes red there instead of shipping.
     "numpy>=1.26.4",
     "packaging>=23.2",
-    # torch>=2.1 supported. The only torch-2.4-specific APIs TorchLens used were
-    # torch.is_autocast_enabled(device_type) / torch.get_autocast_dtype(device_type)
-    # (the device_type argument is torch 2.4+ only); these are now routed through
     # a backward-compatible shim (torchlens/_utils/_torch_compat.py) that falls back
-    # to the legacy per-device autocast helpers on torch 2.1-2.3. Lowering the floor
-    # to 2.1 unblocks frameworks pinned to older torch (e.g. the OpenMMLab stack,
-    # which caps mmcv<2.2 -> prebuilt wheels only for torch<=2.1).
-    #
     # The floor is PYTHON-CONDITIONED because a bare torch>=2.1 is UNSATISFIABLE
-    # on newer interpreters (grind r3, R85/SF-16, measured): the first torch with
-    # cp312 wheels is 2.2.0. For py3.13 the honest picture is platform-split
-    # (grind r4 correction -- the old "first cp313 is 2.6.0" claim was wrong):
-    # torch 2.5.0/2.5.1 DO ship a cp313 wheel, but only for manylinux x86_64;
+    # on newer interpreters (measured): the first torch with cp312 wheels is
+    # 2.2.0. For py3.13 the picture is platform-split: torch 2.5.0/2.5.1 DO
+    # ship a cp313 wheel, but only for manylinux x86_64;
     # 2.6.0 is the first release with cp313 wheels across the supported
     # platforms (macOS arm64, aarch64, Windows), so 2.6 is the floor a
     # platform-neutral marker can promise. Without these markers the resolver
@@ -70,9 +60,8 @@ dependencies = [
     "typing_extensions>=4.0",
     # Pillow backs the viz / repgeom image-rendering surfaces (node images,
     # input montages, MDS/feature-map thumbnails). It is resolved at CALL time,
-    # not import time -- `import torchlens` succeeds with PIL absent (probed
-    # 2026-08-15; the old "hard import-time dependency" rationale was false,
-    # grind r3 SF-15). It stays a base dependency so the default drawing
+    # not import time -- `import torchlens` succeeds with PIL absent (probed).
+    # It stays a base dependency so the default drawing
     # surface works out of the box; moving it to an extra is a queued owner
     # decision, not a hygiene fix.
     "pillow>=9",
@@ -83,17 +72,16 @@ notebook = ["ipython>=8.0", "jupyter-client>=8.0"]
 # rsatoolbox: >=0.1.5 keeps the validated floor; the ceiling admits the 0.2/0.3
 # line because 0.1.5 ships no cp313 wheels (0.3.x is the first that does) and the
 # bridge surface used (rsatoolbox.data.Dataset) is stable across the range.
-# neuro carries rsatoolbox plus xarray (tl.export.xarray, U28.2 2026-10-12) and never
-# Brain-Score (neuro memo D17, both halves landed by D05 2026-09-02).
+# neuro carries rsatoolbox plus xarray (tl.export.xarray) and never Brain-Score.
 # The Brain-Score seam (torchlens/bridge/brain_score.py imports
 # brainscore_vision.model_helpers) lives in its OWN extra below, which is the
 # spelling torchlens.neuro's teaching remedy names
 # ('pip install "torchlens[brainscore]" (Python >= 3.11)'). Carrying
-# brainscore_vision inside [neuro] was measured BROKEN in the D05 clean-venv
+# brainscore_vision inside [neuro] was measured BROKEN in a clean-venv
 # extras audit: brainscore_vision 2.3.22 pins scikit-learn<1.6 while rsatoolbox
 # 0.3.x imports sklearn.utils.validation.validate_data (scikit-learn >= 1.6), so
 # `torchlens[neuro]` resolved (scikit-learn 1.5.2) and then could not
-# `import rsatoolbox` on 3.11+. Pure-RSA users now never resolve Brain-Score at
+# `import rsatoolbox` on 3.11+. Pure-RSA users never resolve Brain-Score at
 # all; [neuro,brainscore] together still hits the upstream conflict (disclosed in
 # docs/reference/neuro.md). brainscore_vision declares requires-python >=3.11 on
 # every release, so its marker keeps [brainscore] installable (empty) on 3.10 and
@@ -104,7 +92,7 @@ neuro = [
     "xarray>=2023.1",
 ]
 brainscore = ["brainscore_vision~=2.3; python_version >= '3.11'"]
-# F14 (netron memo D-20): the serve/widget one-liner's teaching refusal
+# The serve/widget one-liner's teaching refusal
 # (netron_serve_unavailable) names this extra; bounded below the next major.
 # CI pins netron==9.2.2 EXACT for the vendor-parser harness (pin REFRESHED,
 # never widened); the artifact FILE itself needs no extra.
@@ -116,51 +104,42 @@ netron = ["netron>=9.2,<10"]
 # (pin REFRESHED after the contract passes on it, never widened); the
 # exported collection FILE itself needs no extra.
 model-explorer = ["ai-edge-model-explorer>=0.1.33,<0.2"]
-# F16: the treescope bridge extra. torchlens/bridge/treescope.py probes
+# The treescope bridge extra. torchlens/bridge/treescope.py probes
 # capability at first use, so the released-but-torch-broken 0.1.10 stays
 # installable and degrades strictly (the probe, not the pin, is the gate).
 treescope = ["treescope>=0.1.10"]
-# F18 (extract memo D15): hdf5/mat exporters only -- lazy imports, the typed
+# hdf5/mat exporters only -- lazy imports, the typed
 # extraction_export_dependency_missing refusal names this extra, and NOTHING
 # lands on the default path (the npy exporter runs dependency-free).
 extraction-export = ["h5py>=3.10", "scipy>=1.10"]
-# F37 (deployment envelope): the extra the skip-audit ledger's optional-preview
-# rows for bitsandbytes/peft name. CPU wheels suffice (bitsandbytes 0.50.2 runs
-# 8/4-bit linears on CPU, measured 2026-08-31); installing it un-skips
+# The extra the skip-audit ledger's optional-preview rows for bitsandbytes/peft
+# name. CPU wheels suffice (bitsandbytes 0.50.2 runs 8/4-bit linears on CPU,
+# measured); installing it un-skips
 # tests/test_deploy_env_{offload,device_map,quantized,peft}.py in any leg.
 deploy = ["accelerate>=1.0", "peft>=0.17", "bitsandbytes>=0.48"]
-# F05 (mikit memo D13): TEST-ONLY oracle extra, exact-pinned on the
-# transformers-5.x band (uv-resolved 2026-09-02: transformer-lens 3.8.0 pulls
-# transformers 5.16.1, inside >=4.45,<6). Deliberately NOT folded into [test]:
-# every CI leg installs [test], and the TransformerLens stack would ride into
-# all of them for the sake of the Gate-2 oracle rows (G2a/G2b/G2c), which
-# importorskip until this extra is installed. Never advertised to users.
+# TEST-ONLY oracle extra, exact-pinned on the transformers-5.x band
+# (transformer-lens 3.8.0 resolves transformers 5.16.1, inside >=4.45,<6).
+# Deliberately NOT folded into [test]: every CI leg installs [test], and the
+# TransformerLens stack would ride into all of them for the sake of a few
+# oracle rows, which importorskip until this extra is installed. Never advertised to users.
 tlens-oracle = ["transformer-lens==3.8.0"]
-# F26 (trackers memo item 1 / section 7 rows 3-4): relay-fidelity TEST extra
-# for the T-RELAY-W / T-RELAY-C pins in tests/test_trackers_sinks_relay_pins.py
+# Relay-fidelity TEST extra for the relay pins in
+# tests/test_trackers_sinks_relay_pins.py
 # (importorskip today; activate by installing this extra). Exact pins on
 # purpose: a relay-fidelity pin against a floating tracker is not a pin.
 trackers-relay-test = ["wandb==0.30.0", "clearml==2.1.12", "tensorboard>=2.21"]
-# F07 FORK-T1 branch A (tviz memo section 10): torchlens.transformer resolves
-# matplotlib at CALL time and refuses typed (tv_matplotlib_missing) naming this
-# extra; the band is the one already proven in the test extra. cairosvg is
-# deliberately NOT added (tviz memo N15/N16).
+# torchlens.transformer resolves matplotlib at CALL time and refuses typed
+# (tv_matplotlib_missing) naming this extra; the band is the one already proven
+# in the test extra.
 viz = ["torchshow~=0.5", "lovely-tensors~=0.1.18", "matplotlib>=3.8,<4"]
 tabular = ["pandas>=2.0", "pyarrow>=14"]
-# F06 (attrib memo section 6, packaging_requests 2026-08-28): the oracle ledger
-# B10 was measured on captum 0.9.0; `~=0.7` excluded every 0.8/0.9 release and
-# blocked the consolidated ledger. Bounded at the next major.
+# The attribution oracle ledger is measured on captum 0.9.0, so the band admits
+# the 0.8/0.9 releases a `~=0.7` pin would exclude. Bounded at the next major.
 captum = ["captum>=0.7,<1.0"]
 # `mcp` gates the torchlens.bridge.mcp stdio server (python -m torchlens.bridge.mcp);
 # the pure tool layer (TOOL_SPECS / call_tool) works without it.
 mcp = ["mcp>=2.0"]
 sae = ["sae-lens~=6.45; python_version >= '3.10'"]
-# The former empty `profiler = []` extra was REMOVED (2026-08 completeness
-# audit, E1 item 10 / WT A-VI item 35): torch.profiler ships with torch itself,
-# the tl.bridge.profiler surface imports nothing beyond the base install, and
-# the marker was referenced nowhere (README, docs, package, CI), so it could
-# not be discovered and installed nothing. pip treats an unknown extra as a
-# warning, so `torchlens[profiler]` keeps installing the (sufficient) base.
 lightning = ["lightning~=2.4"]
 wandb = ["wandb>=0.16"]
 # 0.26.5 is excluded because its manylinux wheel ships without libmlx.so (the
@@ -171,25 +150,21 @@ jax = ["jax[cpu]", "equinox", "flax"]
 tinygrad = ["tinygrad>=0.13,<0.14; python_version >= '3.11'"]
 paddle = ["paddlepaddle>=3.3,<3.4"]
 # `tensorflow` aliases `tf` (same rollup idiom as all/all-stretch) so the two
-# spellings can never drift -- they were previously two byte-identical literal
-# lists (2026-08 completeness audit, E1-r2).
+# spellings can never drift.
 tf = ["tensorflow>=2.16"]
 tensorflow = ["torchlens[tf]"]
 # tensorboard backs the tl.export.tensorboard exporter (SummaryWriter comes
 # from torch.utils.tensorboard, which requires the `tensorboard` dist at call
-# time). Before this extra existed the exporter was an executes-nowhere
-# surface: no declared install path, and its only test skipped in the
-# reference env (2026-08 completeness audit, tensorboard card section 2).
+# time). The extra gives the exporter a declared install path, so its test
+# runs in the reference env instead of skipping.
 tensorboard = ["tensorboard>=2.15,<3"]
-# TRANSFORMERS BAND (in-repo widen, megaplan FORK-2, Phase 0/A12): >=4.45,<6
-# admits the 5.x line the CI matrix already pins (tests.yml rows install
-# transformers==5.14.1) while keeping the validated 4.45 floor. The published-
-# band TIMING (launch vs now) stays a maintainer fork; this repo-side widen is what
-# every lane develops against. Band coherence with the `test` extra below is
+# TRANSFORMERS BAND: >=4.45,<6 admits the 5.x line the CI matrix already pins
+# (tests.yml rows install transformers==5.14.1) while keeping the validated 4.45
+# floor. Band coherence with the `test` extra below is
 # mandatory: widen BOTH in the same change, never one side alone.
 hf = ["transformers>=4.45,<6", "timm~=1.0"]
 gradcam = ["grad-cam~=1.5"]
-# shap floor 0.45.1 (2026-10-05): lit-nlp 1.3 requires shap>=0.42,<0.46, and
+# shap floor 0.45.1: lit-nlp 1.3 requires shap>=0.42,<0.46, and
 # tl.bridge.shap.explain is bit-identical to shap.DeepExplainer on shap 0.45.1
 # (tests/test_bridge_real_shap.py), so the floor admits the 0.45 line and
 # [lit,shap] resolves. Keep this pin and the all-stretch copy identical.
@@ -199,7 +174,7 @@ inseq = ["inseq~=0.6"]
 # the bridge calls steering_vectors.mean_aggregator, absent from early 0.x releases.
 steering = ["steering-vectors~=0.12"]
 repeng = ["repeng~=0.4"]
-# D05 extras audit (2026-09-02): dialz imports IPython.display at import time
+# dialz imports IPython.display at import time
 # (dialz/visualize.py) without declaring ipython, so `torchlens[dialz]` installed
 # but could not `import dialz` in a clean venv -- the ipython rider closes that.
 # dialz floor = the tested line (1.1.4, tests/test_bridge_real_dialz.py): the
@@ -210,23 +185,22 @@ repeng = ["repeng~=0.4"]
 # the fix-by-exclusion idiom the tinygrad extra already uses). The same two
 # members appear in all-stretch below.
 dialz = ["dialz>=1.1,<2; python_version < '3.13'", "ipython>=8.0; python_version < '3.13'"]
-# lit-nlp is bounded to the 1.3 line (LIT-panel memo item 1): `~=1.3` admitted
-# every future 1.x. lit-nlp 1.3 requires numpy<2 and shap>=0.42,<0.46; the
+# lit-nlp is bounded to the 1.3 line because `~=1.3` would admit every future
+# 1.x. lit-nlp 1.3 requires numpy<2 and shap>=0.42,<0.46; the
 # shap extra's 0.45.1 floor makes [lit,shap] resolve (nightly lit-real asserts
-# it), but the numpy<2 requirement keeps the extra OUT of all-stretch (fix-by-
-# exclusion, Batch-8 ruling): rolling it up would pin every [all] install to
+# it), but the numpy<2 requirement keeps the extra OUT of all-stretch
+# (fix-by-exclusion): rolling it up would pin every [all] install to
 # numpy 1.x.
 lit = ["lit-nlp>=1.3,<1.4"]
 depyf = ["depyf~=0.18"]
 compat-shims = ["torchextractor>=0.3,<2", "sentence-transformers>=2.5,<5"]
 vision-shims = ["torchvision>=0.18,<1"]
 # `all` aliases `all-stretch` so the two never drift, and BOTH resolve:
-# FIX-BY-EXCLUSION (Batch-8 ruling, 2026-08-26): `all` means "everything that
+# FIX-BY-EXCLUSION: `all` means "everything that
 # installs together", and every excluded member is NAMED here rather than
 # silently dropped.
 #   * lit-nlp (the [lit] extra) is EXCLUDED: lit-nlp 1.3 requires numpy<2,
-#     which would pin every [all] install to numpy 1.x (its shap<0.46 pin
-#     made the rollup known-unsatisfiable through 2.34.1; the shap extra now
+#     which would pin every [all] install to numpy 1.x (the shap extra
 #     admits 0.45.1, so `torchlens[lit,shap]` resolves). Install
 #     `torchlens[lit]` separately when the LIT bridge is wanted.
 #   * The framework-backend extras (jax/tf/tensorflow/paddle/mlx/tinygrad)
@@ -235,7 +209,7 @@ vision-shims = ["torchvision>=0.18,<1"]
 #     tabular, wandb, lightning) are not rolled up, so `torchlens[all]`
 #     never meant "everything".
 # `pip install torchlens[all]` requests exactly `torchlens[all-stretch]`;
-# nightly's extras-resolution gate now enforces that both meta-extras resolve
+# nightly's extras-resolution gate enforces that both meta-extras resolve
 # on every advertised interpreter.
 all = ["torchlens[all-stretch]"]
 all-stretch = [
@@ -255,7 +229,7 @@ all-stretch = [
     "lovely-tensors~=0.1.18",
 ]
 dev = [
-    # Tooling floors are BOUNDED at the next major (grind r3, b2:B6): these
+    # Tooling floors are BOUNDED at the next major: these
     # tools' majors routinely change verdicts (pytest collection rules,
     # pre-commit config schema, jsonschema validator API), so an unbounded
     # floor lets a future major silently change what the gates enforce. Exact
@@ -271,13 +245,10 @@ dev = [
     "pip-audit==2.10.1",
     "pre-commit>=4,<5",
     # The packaging gates (test_built_wheel_manifest_is_diet,
-    # test_built_sdist_manifest_is_governed) shell out to `python -m build`, and
-    # `build` was declared NOWHERE. It happened to be present in local venvs and
-    # ABSENT in CI, so the sdist gate had never actually run there -- it died on
-    # ModuleNotFoundError, briefly disguised as a `./build/` shadowing error,
-    # while the wheel gate silently fell back to `pip wheel`. Declared so both
-    # gates have a real installed dependency instead of an ambient one
-    # (2026-08-19).
+    # test_built_sdist_manifest_is_governed) shell out to `python -m build`.
+    # Declared so both gates have a real installed dependency instead of an
+    # ambient one: without it the sdist gate dies on ModuleNotFoundError in CI
+    # and the wheel gate silently falls back to `pip wheel`.
     "build>=1.2",
     # jsonschema validates the shipped agent-surface JSON schemas against real
     # envelopes (tests/test_agent_surface_schemas.py, Draft202012Validator).
@@ -286,15 +257,11 @@ dev = [
     "jsonschema>=4.18,<5",
 ]
 test = [
-    # BAND COHERENCE (r7 R83-2): the four ML packages the bridge/ adapters
-    # wrap are banded HERE to the exact ranges this file's own extras declare
-    # as supported (lightning, hf, vision-shims above). Before this, the
-    # eight .[dev,test,tabular] CI legs validated whatever resolved --
-    # transformers 5.x landed while the hf extra called ~=4.45 supported, and
-    # CI recorded reds from exactly that fork. Widen an adapter band
-    # and this extra IN THE SAME CHANGE, never one side alone. The
-    # transformers band below moved to >=4.45,<6 in the SAME change as the hf
-    # extra (megaplan FORK-2 in-repo widen).
+    # BAND COHERENCE: the four ML packages the bridge/ adapters wrap are banded
+    # HERE to the exact ranges this file's own extras declare as supported
+    # (lightning, hf, vision-shims above), so the .[dev,test,tabular] CI legs
+    # validate the supported band rather than whatever resolves. Widen an
+    # adapter band and this extra IN THE SAME CHANGE, never one side alone.
     "lightning~=2.4",
     # TRIPWIRE_GUARD deps (tests/test_skip_audit.py): absence silently disarms
     # correctness gates for rendered label geometry, PDF visibility, and plots.
@@ -311,7 +278,7 @@ test = [
     # PIN AUTHORITY for pydot: the DOT-render goldens embed the pydot version as
     # a fingerprint KEY, so an environment that resolves pydot freely (nightly/
     # weekly install .[test]) drifts off the goldens' recording environment and
-    # surfaces as confusing scheduled-only render failures (grind r4, R83-6).
+    # surfaces as confusing scheduled-only render failures.
     # Keep equal to the inline pins in tests.yml / latest-canary.yml (their lean
     # .[dev,tabular] envs cannot see this extra); the Lint workflow's
     # pin-lockstep step asserts the equality.
@@ -320,7 +287,7 @@ test = [
     "pytest",
     # Order-isolation infra: every `-p no:randomly` in the suite/drivers and
     # the randomized order-audit leg are REAL only when the plugin is present
-    # (R76 reopened 2026-08-15: the flags were silent no-ops without it).
+    # (the flags are silent no-ops without it).
     "pytest-randomly",
     "pytest-timeout",
     "requests",
@@ -341,19 +308,17 @@ test = [
     "psutil>=5.9",
     "transformers>=4.45,<6",
     "visualpriors",
-    # F14 (netron memo B0/D-07): un-skips the strict onnx.ModelProto parse +
-    # check_model(full_check=True) acceptance gate in EVERY CI leg -- the
-    # memo's falsified "contract-tested" baseline. protobuf backs the JSON
-    # parser the same gate uses.
+    # Un-skips the strict onnx.ModelProto parse + check_model(full_check=True)
+    # acceptance gate in EVERY CI leg. protobuf backs the JSON parser the same
+    # gate uses.
     "onnx>=1.22",
     "protobuf",
-    # F33 (weightsfree memo item 20): unlocks the Tier-2 init_empty_weights()
-    # and device_map="meta" on-ramp rows -- the one DIGEST-AUDIT-named spelling
-    # never executed in four rounds (tests importorskip so absence stays green).
+    # Unlocks the init_empty_weights() and device_map="meta" on-ramp rows
+    # (tests importorskip so absence stays green).
     "accelerate>=1.0",
 ]
 
-# F29 (agent memo 3.11): the console-script spelling beside the shipped
+# The console-script spelling beside the shipped
 # `python -m torchlens`; the CLI, its exit codes, and tier-0 torch purity are
 # tested through -m (tests/test_agent_cli*.py), and setuptools writes this to
 # dist-info/entry_points.txt (inside the wheel-diet allowlist).
@@ -380,10 +345,10 @@ torchlens = [
     "autoroute/data/*.md",
     "schemas/*.json",
     # mechinterp/_aliases.py reads translation.json through importlib.resources at
-    # runtime; the D05 wheel-venue gate (2026-09-02) caught the file missing from
-    # BOTH artifacts (three tests/test_mikit_* rows red on the installed wheel).
+    # runtime, so the file must ship in BOTH artifacts (the tests/test_mikit_*
+    # rows go red on an installed wheel without it).
     "mechinterp/*.json",
-    # forks.11 FK3: the bundled open font (Liberation Sans, SIL OFL 1.1, shipped
+    # The bundled open font (Liberation Sans, SIL OFL 1.1, shipped
     # unmodified with its license) every Graphviz render resolves the pinned
     # family to; visualization/_fonts.py falls back to system fonts without it.
     "visualization/fonts/*.ttf",
@@ -394,9 +359,9 @@ torchlens = [
 # WHEEL authority for the agent-doc exclusion. MANIFEST.in excludes govern the
 # sdist only: building a wheel from the source tree collects package data
 # through include-package-data (default true for pyproject builds), which does
-# NOT re-apply MANIFEST.in exclude directives — the round-1 blanket `*.md`
-# include shipped 32 CLAUDE.md/AGENTS.md agent docs (~135 kB, private sprint
-# IDs) into every `pip install torchlens` (grind r3, R84 regression-by-fix).
+# NOT re-apply MANIFEST.in exclude directives, so without this a blanket `*.md`
+# include ships the CLAUDE.md/AGENTS.md agent docs into every
+# `pip install torchlens`.
 # Asserted by tests/test_packaging_diet.py::test_built_wheel_manifest_is_diet.
 "*" = ["CLAUDE.md", "AGENTS.md"]
 
@@ -407,7 +372,7 @@ torchlens = [
 # modules imported fine locally and failed collection in CI with
 # "ModuleNotFoundError: No module named 'scripts'" / "'tests'" -- an
 # invocation-dependent import environment that hid a whole class of breakage
-# from local verification (2026-08-19). Setting it here makes both invocations
+# from local verification. Setting it here makes both invocations
 # identical instead of relying on how pytest happened to be launched.
 pythonpath = ["."]
 markers = [
@@ -425,7 +390,7 @@ markers = [
     "backend_tinygrad: marks tests that require the optional tinygrad backend runtime",
     "backend_paddle: marks tests that require the optional paddle backend runtime",
     "tf_backend: marks tests that require the optional TensorFlow backend runtime",
-    # The two composition-sprint SELECTION markers (compo memo row 0.1). ORTHOGONAL
+    # The two composition SELECTION markers. ORTHOGONAL
     # selectors, never cost tiers: they compose with any smoke/heavy/slow tier and
     # never alter tier resolution or duration budgets. The marker ALGEBRA is declared
     # ONCE in tests/composition_expectations/marker_algebra.py and lockstep-enforced
@@ -440,15 +405,14 @@ filterwarnings = [
     # TorchLens-originated warnings should be deliberate and locally asserted.
     # NOTE: pytest applies filterwarnings bottom-to-top priority (later entries win),
     # so the broad error rules go FIRST and the message-specific "default" exceptions
-    # below them take precedence for their exact messages. The deprecation-shim
-    # families (and TorchLensDeprecationWarning) were deleted by the 2026-08-19
-    # shim-removal lane, so no alias-warning carve-outs remain.
+    # below them take precedence for their exact messages. The package ships no
+    # deprecation shims, so no alias-warning carve-outs exist.
     "error::DeprecationWarning:torchlens(\\.|$)",
     "error::UserWarning:torchlens(\\.|$)",
     # Expected graceful torch-capability degradations (e.g. functorch level API absent on
     # torch 2.1) flip a HAS_* flag and warn once; visible-not-fatal across the torch matrix.
     "default:TorchLens torch capability .* is unavailable;.*:UserWarning:torchlens(\\.|$)",
-    # Runtime CUDA RNG snapshot degradation (grind p5, B2P3-16): a live generator read can
+    # Runtime CUDA RNG snapshot degradation: a live generator read can
     # fail TRANSIENTLY (busy device, momentary OOM, fork context); the designed behavior is
     # degrade-with-disclosure, and the broad promotion rule inverted it into a capture
     # abort. Warned once per latch episode (re-armed per capture); asserted locally in
@@ -458,13 +422,13 @@ filterwarnings = [
     # fatal -- like the capability-degradation warning above. Fires whenever save_mode=
     # 'reference' is used, so it is not per-test assertable.
     "default:save_mode='reference' stores source tensors by reference.*:UserWarning:torchlens(\\.|$)",
-    # A06 (batchnorm_train_stats_mutated disclosure): once-per-process in the
+    # The batchnorm_train_stats_mutated disclosure: once-per-process in the
     # package but re-armed per test by the autouse sentinel reset; train-BN
     # fixtures are a common idiom, so like the save_mode caveat above it is
     # visible-not-fatal and asserted locally in
     # tests/test_capopts_truth_batchnorm_warn.py.
     "default:tracing runs the model's REAL forward.*:UserWarning:torchlens(\\.|$)",
-    # Informational disclosure (r6 H2): an activation archive saved from a `save=` selective
+    # Informational disclosure: an activation archive saved from a `save=` selective
     # capture records no original-input digests, so numeric attestation can never apply.
     # Fires for every selective include_activations= save -- a commonly exercised idiom, so
     # like the save_mode caveat above it is not per-test assertable. Asserted locally in
@@ -477,7 +441,7 @@ filterwarnings = [
     # from mis-promoting them; genuine TorchLens-originated UserWarnings still error.
     "default:Converting a tensor with requires_grad=True to a scalar.*:UserWarning:torchlens(\\.|$)",
     "default:Sparse invariant checks are implicitly disabled.*:UserWarning:torchlens(\\.|$)",
-    # STRUCTURAL exemption for the same class (grind p3, B2P3-8): every C++-originated
+    # STRUCTURAL exemption for the same class: every C++-originated
     # TORCH_WARN/TORCH_WARN_ONCE carries the "(Triggered internally at <file>:<line>)"
     # suffix that no TorchLens-authored warning ever emits. After the first capture wraps
     # torch, ANY first-firing torch C++ warning reached through a wrapped call is
@@ -487,9 +451,8 @@ filterwarnings = [
     # torch-internal suffix exempts the whole third-party class without listing messages;
     # genuine TorchLens-originated UserWarnings still error.
     "default:(?s).*\\(Triggered internally at :UserWarning:torchlens(\\.|$)",
-    # Between-floor artifact-age advisory (grind r3, R15-F1). Recategorized from
-    # DeprecationWarning to the visible ArtifactSchemaAgeWarning (a UserWarning
-    # subclass) because it deprecates no API; legacy-bundle tests exercise it
+    # Between-floor artifact-age advisory. It is the visible ArtifactSchemaAgeWarning
+    # (a UserWarning subclass), not a DeprecationWarning, because it deprecates no API; legacy-bundle tests exercise it
     # broadly, so it stays visible-not-fatal and is asserted locally.
     "default:Bundle tlspec_version=.* is older than runtime tlspec_version=.*:UserWarning",
     # External: torchvision model init deprecations
@@ -513,9 +476,9 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_empty = true
-# COVERAGE FLOOR (tripwire — never lower it to pass; R72 grind r4). Keep equal
-# to the nightly coverage job's --cov-fail-under; both are locked by
-# tests/test_coverage_floor_governance.py. Measured 64% on 2026-08-15.
+# COVERAGE FLOOR (tripwire: never lower it to pass). Keep equal to the nightly
+# coverage job's --cov-fail-under; both are locked by
+# tests/test_coverage_floor_governance.py.
 fail_under = 55
 
 [tool.coverage.html]
@@ -525,14 +488,9 @@ directory = "tests/generated_outputs/reports/coverage_html"
 output = "tests/generated_outputs/coverage.lcov"
 
 [tool.mypy]
-# STRICTNESS RATCHET (R68, grind r4): the flags below only ever FLIP TO TRUE,
-# each landed at measured zero cost against the pinned mypy; the set is locked
-# by tests/test_mypy_ratchet_governance.py (narrowing any of them goes red
-# there). 2026-08-16 (fixwave-7, R68 paired re-measurement): the disputed
-# dead-ignore count adjudicated at 64 in 31 files (pinned mypy 2.1.0,
-# torchlens/ config scope) -- all 64 removed, warn_unused_ignores flipped;
-# the 3 untyped defs annotated, disallow_untyped_defs flipped. Both rungs
-# now enforce; the ratchet has no measured next rung.
+# STRICTNESS RATCHET: the flags below only ever FLIP TO TRUE, each landed at
+# measured zero cost against the pinned mypy; the set is locked by
+# tests/test_mypy_ratchet_governance.py (narrowing any of them goes red there).
 python_version = "3.11"
 warn_return_any = false
 warn_unused_configs = true
@@ -567,29 +525,26 @@ line-length = 100
 extend-exclude = [
     "tests/classics_corpus/models",
     # Harvested-corpus provenance dir: same vendored-data doctrine as the
-    # classics corpus row (P05 request, sprint packaging queue, landed by A12).
+    # classics corpus row.
     "tests/release_goldens",
     "torchlens/_data_classes/_schema_bindings.py",
     "torchlens/_ir/op_record_manifest.py",
 ]
 
 [tool.ruff.lint]
-# RULE-FAMILY RATCHET. `select` grows MONOTONICALLY, one bounded wave per grind
-# round; it is never narrowed. Naming `select` replaces ruff's implicit default,
+# RULE-FAMILY RATCHET. `select` grows MONOTONICALLY, one bounded family at a
+# time; it is never narrowed. Naming `select` replaces ruff's implicit default,
 # so the four default groups (E4/E7/E9/F) are restated here and stay enforced.
-#
-# grind round 3 wave: I (import order), B (bugbear), SIM (simplify),
-# UP (pyupgrade), C4 (comprehensions). 3748 violations found, 3203 fixed.
 select = ["E4", "E7", "E9", "F", "I", "B", "SIM", "UP", "C4"]
 
 # DEFERRAL LEDGER. Each entry is a code inside an ENABLED family that is not yet
-# clean, with its reason and (where applicable) its owning grind row. This is the
+# clean, with its reason. This is the
 # honest alternative to leaving a whole family out of `select`: the family is ON,
 # so no new site of any OTHER code in it can land, and every exception is named.
 # Entries leave this list; nothing joins it without a reason.
 #
-# COUNT AUTHORITY (R70 grind r4): per-code site counts below are informational
-# snapshots (measured 2026-08-15, pinned ruff, isolated CI scope); the ENFORCED
+# COUNT AUTHORITY: per-code site counts below are informational snapshots
+# (pinned ruff, isolated CI scope); the ENFORCED
 # no-growth ceilings live in tests/test_ruff_ratchet_governance.py, which also
 # locks `select` against narrowing. Deferred debt may shrink, never grow.
 ignore = [
@@ -623,17 +578,17 @@ ignore = [
     # blocked behind the same accessor-protocol decision as SIM118.
     "SIM401",
 
-    # --- owned by another grind row: do NOT double-fix here ---------------------
-    "B905",  # zip-without-explicit-strict -> row R23 (109 sites)
-    "B028",  # no-explicit-stacklevel -> row R66, warnings hygiene (2 sites; near-closable)
+    # --- each fixed in its own dedicated pass: do NOT double-fix here ----------
+    "B905",  # zip-without-explicit-strict (109 sites)
+    "B028",  # no-explicit-stacklevel, warnings hygiene (2 sites; near-closable)
 
-    # --- judgment calls, later rounds ------------------------------------------
+    # --- judgment calls ---------------------------------------------------------
     # 88 sites. if/else -> ternary is a readability call, and several sit in
     # invariant-heavy code where the explicit branch carries a per-arm comment.
     "SIM108",
     # 99 sites. `contextlib.suppress` is measurably slower than bare
-    # try/except/pass, and several of these sit on capture hot paths the
-    # SPEEDENING sprint tuned. Needs a per-site perf verdict, not a sweep.
+    # try/except/pass, and several of these sit on tuned capture hot paths.
+    # Needs a per-site perf verdict, not a sweep.
     "SIM105",
     # 40 sites. Collapsing the two `if`s orphans the per-branch comments that
     # explain why the second condition is separate.
@@ -699,29 +654,27 @@ version_variables = ["torchlens/__init__.py:__version__"]
 branch = "main"
 major_on_zero = true
 # `build` is installed from the HASH-LOCKED release-requirements.txt before
-# semantic-release runs (grind r5, P9/R61): build_command formerly ran its
-# own `pip install 'build==1.5.0'` INSIDE the token scope without
-# --require-hashes, so a replaced index artifact could execute with the
-# repo-write App token despite the lock. PIN AUTHORITY: the build== pin in
+# semantic-release runs, so build_command never installs a builder of its own
+# INSIDE the token scope without --require-hashes, where a replaced index
+# artifact could execute with the repo-write App token. PIN AUTHORITY: the build== pin in
 # .github/workflows/release-requirements.txt; the nightly wheel job installs
 # hash-verified from the SAME lock, so its double-build gate always
 # attests exactly the builder the release uses.
 #
 # REPRODUCIBILITY: SOURCE_DATE_EPOCH makes the wheel's timestamps
 # deterministic, and scripts/normalize_sdist.py normalizes the remaining
-# machine-dependent metadata in BOTH artifacts (grind r4 R86-1: gzip header
-# wall-clock mtime + builder uid/gid/uname/gname in the tar members; grind
-# r5 b10 R84-1, measured: the build user's umask leaking source-file modes
-# into tar member headers and wheel zip external_attr). The nightly
+# machine-dependent metadata in BOTH artifacts (gzip header wall-clock mtime,
+# builder uid/gid/uname/gname in the tar members, and the build user's umask
+# leaking source-file modes into tar member headers and wheel zip
+# external_attr). The nightly
 # double-build gate rebuilds under a DIFFERENT umask and attests both
 # artifacts byte-identical.
 #
-# REPRODUCE FROM A TAG (grind r4 recipe correction): python-semantic-release
+# REPRODUCE FROM A TAG: python-semantic-release
 # runs this build_command AFTER bumping the version files but BEFORE creating
 # the release commit and tag, so at build time `git log -1` resolves to the
-# PARENT of the future tag. The old recipe ("check out the tag and use its
-# own commit timestamp") was off by one commit and could never reproduce the
-# published bytes. Correct recipe:
+# PARENT of the future tag, so the tag's own commit timestamp is off by one
+# commit and cannot reproduce the published bytes. Recipe:
 #   git checkout vX.Y.Z
 #   pip install --require-hashes --only-binary :all: \
 #       -r .github/workflows/release-requirements.txt
@@ -729,10 +682,10 @@ major_on_zero = true
 #   SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct HEAD^)" \
 #       python scripts/normalize_sdist.py dist/*.tar.gz dist/*.whl
 #
-# --no-isolation (r7 R86, fable+opus HIGH): without it `python -m build`
+# --no-isolation: without it `python -m build`
 # creates an isolated env and pip-installs the setuptools backend UNPINNED
 # from the live index at build time -- inside the token scope, with the
-# repo-write App token persisted in .git/config. The backend now comes from
+# repo-write App token persisted in .git/config. The backend comes from
 # the same hash-verified lock as the builder (setuptools== in
 # release-requirements.txt); tests/test_packaging_diet.py enforces the
 # lockstep in both directions.
@@ -745,7 +698,7 @@ commit_message = "chore(release): {version} [skip ci]"
 commit_parser = "scripts/no_major_parser.py:NoMajorAngularParser"
 
 [tool.semantic_release.changelog]
-# DISCOVERY PIN (grind r4, R86-3): template_dir is stated explicitly. Under the
+# DISCOVERY PIN: template_dir is stated explicitly. Under the
 # implicit default, a PSR default-value change or a templates/ rename silently
 # reverts the GitHub release notes to the uncapped builtin template, whose
 # failure mode is exactly the 2.34.0 422-blocks-PyPI incident.
