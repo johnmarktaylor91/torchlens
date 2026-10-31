@@ -25,3 +25,8 @@ What the benchmark authors did to fit the template (8,192 bytes):
   (`activation-patching`, `causal-tracing`, ...) are not included: every arm gets
   one file of the same size. The harness may offer them as an explicitly reported
   "extended material" arm if wanted.
+
+Pitfall parity (30 Oct 2026, see `../PITFALL-PARITY.md`): added the final-norm sentence
+in "Reading intermediate values", the batched vector-Jacobian sentence in "Gradients and
+attribution", the batch-size sentence in "Batching, timing and determinism" and pitfall 8
+(in-place overwrites), so this file covers the same task traps as the plain-PyTorch file.

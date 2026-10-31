@@ -1,4 +1,4 @@
-# T12: record one module's output for 100 inputs (control task)
+# T12: record one module's output for 100 inputs
 
 ## Prompt to the agent
 

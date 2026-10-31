@@ -23,3 +23,9 @@ from a maintainers' usage file because none exists. The file is thinner in
 maintainer-authored pitfalls than the nnsight one; the pitfalls listed are the
 ones the public documentation itself warns about. A reviewer who knows the 4.x
 API should check the hook names before the first run.
+
+Pitfall parity (30 Oct 2026, see `../PITFALL-PARITY.md`): added the final-norm and
+unwrapped-model sentences in "Reading intermediate values", the graph-root line in the
+gradient example (it raised on a frozen model, as the plain-PyTorch example did before
+its fix), the batched vector-Jacobian sentence, the batch-size sentence and pitfall 8
+(in-place overwrites), so this file covers the same task traps as the plain-PyTorch file.

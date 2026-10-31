@@ -11,3 +11,6 @@ One context file per arm, all built on `TEMPLATE.md` and all at most 8,192 bytes
 Raw snapshots live beside each file under `raw/` and are not given to agents.
 Material for any further library arm follows the same template and size and
 records its provenance in a `NOTES.md` the same way.
+
+`PITFALL-PARITY.md` lists the task traps every arm file must cover and where each
+file covers them; check any new arm file against it before a run uses it.

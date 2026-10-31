@@ -38,7 +38,10 @@ Hook names, canonical (compatibility mode): `hook_embed`, `hook_pos_embed`,
 registered at boot. `run_with_cache(x, names_filter=lambda n: n.endswith("resid_post"))`
 limits what is stored. Values with no hook point (a sum inside an attention
 implementation, for example) are not cached; compute them from neighbouring hooks
-or read the component's source.
+or read the component's source. The last block's `hook_resid_post` is before the
+final norm; `ln_final.hook_normalized` is after it. For a model TransformerLens does
+not wrap (a CNN, a vision transformer) use plain PyTorch forward hooks; those module
+outputs can be tuples, so take `[0]`.
 
 ## Changing intermediate values
 
@@ -71,6 +74,8 @@ Mean- or zero-ablation is the same hook with a different right-hand side.
 bridge.requires_grad_(False)
 store = {}
 def keep(act, hook):
+    if not act.requires_grad:           # frozen model: make this tensor the graph root
+        act.requires_grad_(True)
     act.retain_grad(); store[hook.name] = act
     return act
 logits = bridge.run_with_hooks(prompt, fwd_hooks=[("blocks.6.hook_resid_post", keep)])
@@ -85,6 +90,8 @@ at that hook point. Attribution patching is the forward value difference times t
 gradient at the same hook; `torch.autograd.grad` with `grad_outputs` gives a
 vector-Jacobian product through a kept activation, and `torch.func.jacrev` on a
 function that runs the remaining blocks gives a full Jacobian of a small model.
+Replicating the input along the batch axis, one cotangent row each, computes many
+vector-Jacobian products in one backward.
 `transformer_lens.tools.analysis` has single-call analyses over the cache such as
 direct logit attribution; `cache.decompose_resid`, `cache.stack_head_results` and
 `cache.apply_ln_to_stack` build per-component residual decompositions.
@@ -98,7 +105,8 @@ keep the number of hooked points small in timed loops and use `names_filter`.
 Compatibility mode folds layer norms and centres weights (`fold_ln`,
 `center_writing_weights`, `center_unembed`); raw-HF comparisons must use the same
 load configuration (fp32, eager attention) or turn compatibility mode off.
-Determinism: `torch.manual_seed`, `do_sample=False`, CPU float32.
+Determinism: `torch.manual_seed`, `do_sample=False`, CPU float32, and the same batch
+size as any reference (CPU kernels can differ by about 1e-5 between batch sizes).
 
 ## Pitfalls
 
@@ -115,6 +123,9 @@ Determinism: `torch.manual_seed`, `do_sample=False`, CPU float32.
    of `W_O` for the head's contribution to the residual stream.
 7. The `HookedTransformer`, `HookedEncoder` and `HookedSAETransformer` classes are
    gone in 4.0; adapt old tutorial code to `TransformerBridge`.
+8. Hooked and cached activations are the model's own tensors: an in-place edit later
+   in the run (a hook writing into `act`, an in-place activation) changes what you
+   kept; keep a `.clone()`.
 
 ## Where to look
 

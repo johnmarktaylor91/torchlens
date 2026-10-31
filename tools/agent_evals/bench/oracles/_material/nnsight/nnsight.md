@@ -44,6 +44,8 @@ at once. `.input` is a module's first positional input; `.inputs` the full call.
 Values computed inside a module's forward that are not a submodule output are
 reached through `.source` (source tracing): `model.transformer.h[5].attn.source`
 lists the operations inside that forward, each with its own `.output`.
+The final hidden state is after the last norm (`model.transformer.ln_f`); the last
+block's `.output` is before it, so read the module you mean.
 
 ## Changing intermediate values
 
@@ -93,6 +95,8 @@ the forward graph alive: `.detach()` anything you keep or reuse. For a
 vector-Jacobian product, build the cotangent as the metric (`(hidden * v).sum()`)
 and read `.grad` the same way; a full Jacobian is a loop of such products or
 `torch.func.jacrev` on a function that runs the remaining modules on a saved value.
+Many products in one backward: replicate the input along the batch axis and give
+each row its own cotangent.
 
 ## Batching, timing and determinism
 
@@ -113,7 +117,8 @@ Inside an invoke, index as if that input were alone; inputs are left-padded to t
 longest, so a full-sequence or absolute index includes the pads: slice
 `[:, -len(ids):]`. One trace is one forward pass: N traces to fetch N layers is N
 forward passes. Determinism: `do_sample=False` for `generate` and `pipe`, fixed
-seeds, float32 on CPU. `model.scan(x)` gives shapes and dtypes with no compute.
+seeds, float32 on CPU, and the same batch size as any reference (CPU kernels can
+differ by about 1e-5 between batch sizes). `model.scan(x)` gives shapes and dtypes with no compute.
 
 | You want | Use | You get back |
 |---|---|---|
@@ -143,6 +148,9 @@ seeds, float32 on CPU. `model.scan(x)` gives shapes and dtypes with no compute.
    invokes through a `nnsight.save({})` written from inside each one.
 7. Inside a `tracer.iter` loop a wrong-order read binds to the *next* step instead
    of raising.
+8. Saved values are the model's own tensors: an in-place op later in the forward
+   (`nn.ReLU(inplace=True)`, `+=`, your own slice edit) overwrites what you saved;
+   save a `.clone()`.
 
 ## Where to look
 
