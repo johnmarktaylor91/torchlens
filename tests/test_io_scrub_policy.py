@@ -871,11 +871,11 @@ def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     groups = collections.defaultdict(set)
     groups["conv2d_param_000002_param_000001"] = {"conv2d_1_1"}
     groups["relu"] = {"relu_2_1"}
-    state: dict[str, Any] = {"op_equivalence_classes": groups}
+    state: dict[str, Any] = {"_graph_op_equivalence_classes": groups}
 
     _scrub_nondeterministic_identities(state)
 
-    rebuilt = state["op_equivalence_classes"]
+    rebuilt = state["_graph_op_equivalence_classes"]
     assert isinstance(rebuilt, collections.defaultdict)
     assert rebuilt.default_factory is set
     # No matching param barcode was registered (no params/ops/layers were

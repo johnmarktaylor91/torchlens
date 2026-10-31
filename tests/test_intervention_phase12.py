@@ -265,6 +265,6 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     log.save_intervention(spec_path, level="audit")
     spec = tl.io.load_intervention_spec(spec_path)
     append_state = spec.metadata["append_state"]
-    assert append_state["is_appended"] is True
+    assert append_state["_provenance_is_appended"] is True
     assert append_state["append_sequence_id"] == log._append_sequence_id
     assert append_state["state_history"][-1]["op"] == "append"

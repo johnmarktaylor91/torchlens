@@ -247,7 +247,7 @@ def test_phase0_neutral_refs_default_fill_legacy_object_state() -> None:
 
     trace_state = trace.__getstate__()
     trace_state.pop("module_identity_mode")
-    trace_state.pop("param_source")
+    trace_state.pop("_provenance_param_source")
     loaded = type(trace).__new__(type(trace))
     loaded.__setstate__(trace_state)
 

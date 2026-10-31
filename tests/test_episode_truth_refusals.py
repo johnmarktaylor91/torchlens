@@ -264,5 +264,5 @@ def test_capture_kind_and_public_step_access():
     assert plain_trace.episode is None
 
     product = episode_trace.run(inputs=torch.tensor([[9]]))
-    assert product.trace.capture_kind == "plain"
+    assert product.trace.provenance.kind == "plain"
     assert product.trace.episode is None

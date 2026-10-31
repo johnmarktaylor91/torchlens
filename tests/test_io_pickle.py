@@ -283,7 +283,7 @@ def test_trace_setstate_coerces_wrong_typed_total_backward_memory() -> None:
 
     live_log = _build_live_log()
     state = live_log.__getstate__()
-    state.pop("total_backward_memory")
+    state.pop("_cost_total_backward_memory")
 
     restored = Trace.__new__(Trace)
     restored.__setstate__(state)
@@ -300,7 +300,7 @@ def test_trace_setstate_coerces_present_but_wrong_typed_total_backward_memory() 
 
     live_log = _build_live_log()
     state = live_log.__getstate__()
-    state["total_backward_memory"] = 12345  # legacy plain int, not Bytes
+    state["_cost_total_backward_memory"] = 12345  # legacy plain int, not Bytes
 
     restored = Trace.__new__(Trace)
     restored.__setstate__(state)

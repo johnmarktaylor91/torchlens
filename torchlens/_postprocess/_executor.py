@@ -129,7 +129,7 @@ def _run_step_4(ctx: StepContext) -> None:
 def _should_run_step_4(ctx: StepContext) -> bool:
     """Gate step 4 on the opt-in ``Trace.options.mark_layer_depths`` flag."""
 
-    return bool(ctx.trace.mark_layer_depths)
+    return bool(ctx.trace._options_mark_layer_depths)
 
 
 def _run_step_5(ctx: StepContext) -> None:

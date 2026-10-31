@@ -98,7 +98,7 @@ def test_forged_restored_state_never_surfaces_a_number() -> None:
 
     trace = tl.trace(_mlp(), torch.randn(2, 4))
     state = trace.__getstate__()
-    state["pinned_autograd_memory"] = 123456
+    state["_cost_pinned_autograd_memory"] = 123456
     restored = object.__new__(type(trace))
     restored.__setstate__(state)
 

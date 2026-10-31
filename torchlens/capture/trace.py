@@ -1566,7 +1566,7 @@ def run_and_log_inputs_through_model(
         # The private stream keeps both properties: byte-exact global-engine
         # neutrality AND fresh seeds per capture.
         seed = _AUTO_SEED_ENTROPY.randint(1, 4294967294)
-    self._options_seed = seed
+    self._options_seed = seed  # type: ignore[assignment]
     # The per-capture code-context cache (and the call-site anchor stored
     # inside it) is only valid for the stack of ONE capture run: the anchor
     # frame is proven alive by identity for the duration of a single capture,

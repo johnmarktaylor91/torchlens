@@ -168,7 +168,7 @@ def test_state_without_the_field_restores_with_no_reason() -> None:
 
     trace = _capture()
     state = trace.__getstate__()
-    state.pop("forward_peak_memory_reason", None)
+    state.pop("_cost_forward_peak_memory_reason", None)
     restored = type(trace).__new__(type(trace))
     restored.__setstate__(state)
     assert restored.cost.forward_peak_memory_reason is None
