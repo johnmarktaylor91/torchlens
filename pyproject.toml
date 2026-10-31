@@ -41,14 +41,6 @@ dependencies = [
     # that stops being true goes red there instead of shipping.
     "numpy>=1.26.4",
     "packaging>=23.2",
-    # torch>=2.1 supported. The only torch-2.4-specific APIs TorchLens used were
-    # torch.is_autocast_enabled(device_type) / torch.get_autocast_dtype(device_type)
-    # (the device_type argument is torch 2.4+ only); these are now routed through
-    # a backward-compatible shim (torchlens/utils/_torch_compat.py) that falls back
-    # to the legacy per-device autocast helpers on torch 2.1-2.3. Lowering the floor
-    # to 2.1 unblocks frameworks pinned to older torch (e.g. the OpenMMLab stack,
-    # which caps mmcv<2.2 -> prebuilt wheels only for torch<=2.1).
-    #
     # The floor is PYTHON-CONDITIONED because a bare torch>=2.1 is UNSATISFIABLE
     # on newer interpreters (grind r3, R85/SF-16, measured): the first torch with
     # cp312 wheels is 2.2.0. For py3.13 the honest picture is platform-split
@@ -155,12 +147,6 @@ captum = ["captum>=0.7,<1.0"]
 # the pure tool layer (TOOL_SPECS / call_tool) works without it.
 mcp = ["mcp>=2.0"]
 sae = ["sae-lens~=6.45; python_version >= '3.10'"]
-# The former empty `profiler = []` extra was REMOVED (2026-08 completeness
-# audit, E1 item 10 / WT A-VI item 35): torch.profiler ships with torch itself,
-# the tl.bridge.profiler surface imports nothing beyond the base install, and
-# the marker was referenced nowhere (README, docs, package, CI), so it could
-# not be discovered and installed nothing. pip treats an unknown extra as a
-# warning, so `torchlens[profiler]` keeps installing the (sufficient) base.
 lightning = ["lightning~=2.4"]
 wandb = ["wandb>=0.16"]
 # 0.26.5 is excluded because its manylinux wheel ships without libmlx.so (the
@@ -577,9 +563,6 @@ extend-exclude = [
 # RULE-FAMILY RATCHET. `select` grows MONOTONICALLY, one bounded wave per grind
 # round; it is never narrowed. Naming `select` replaces ruff's implicit default,
 # so the four default groups (E4/E7/E9/F) are restated here and stay enforced.
-#
-# grind round 3 wave: I (import order), B (bugbear), SIM (simplify),
-# UP (pyupgrade), C4 (comprehensions). 3748 violations found, 3203 fixed.
 select = ["E4", "E7", "E9", "F", "I", "B", "SIM", "UP", "C4"]
 
 # DEFERRAL LEDGER. Each entry is a code inside an ENABLED family that is not yet
