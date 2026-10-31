@@ -629,3 +629,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 56df3e62128a1828fc1c15db55089e2a820e2cb8 (dirty)
 recorded: 2026-10-31T14:08:31.399157+00:00
+---
+generator: tests/test_state_keyset_contract.py
+flag: TORCHLENS_UPDATE_STATE_KEYSET_ORACLE=1
+reason: v11 Trace group rows (lane v11-groups)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c747c3f32ae6ce31001ced795c36976a0703eb83 (dirty)
+recorded: 2026-10-31T16:40:33.278073+00:00
