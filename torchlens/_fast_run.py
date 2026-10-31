@@ -982,7 +982,7 @@ def _live_modules_by_address(model: nn.Module) -> dict[str, nn.Module]:
 def _is_opaque_output_root(output: Any) -> bool:
     """Return whether a model output is a container capture walks only by attribute search."""
 
-    from .backends.torch._ops_containers import _try_build_container_spec
+    from .backends.torch._ops_container_base import _try_build_container_spec
 
     return (
         output is not None
