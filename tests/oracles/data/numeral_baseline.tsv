@@ -5662,10 +5662,6 @@ test-docstrings	tests/test_global_state_child_process_guard.py	40
 test-docstrings	tests/test_global_state_child_process_guard.py	56
 test-docstrings	tests/test_global_state_inventory.py	54
 test-docstrings	tests/test_global_state_inventory.py	55
-test-docstrings	tests/test_golden_governance_lint.py	10
-test-docstrings	tests/test_golden_governance_lint.py	53
-test-docstrings	tests/test_golden_governance_lint.py	77
-test-docstrings	tests/test_golden_governance_lint.py	78
 test-docstrings	tests/test_grad_tolerance_dtype_tripwire.py	10
 test-docstrings	tests/test_grad_tolerance_dtype_tripwire.py	100
 test-docstrings	tests/test_grad_tolerance_dtype_tripwire.py	13
@@ -6556,13 +6552,10 @@ test-docstrings	tests/test_save_union_lookup.py	24
 test-docstrings	tests/test_saved_tensors_hooks_capture.py	35
 test-docstrings	tests/test_scaling_ladder.py	52
 test-docstrings	tests/test_scaling_ladder.py	60
-test-docstrings	tests/test_schema_lockstep.py	10
-test-docstrings	tests/test_schema_lockstep.py	14
 test-docstrings	tests/test_schema_lockstep.py	17
 test-docstrings	tests/test_schema_lockstep.py	3.0
 test-docstrings	tests/test_schema_lockstep.py	3.10
 test-docstrings	tests/test_schema_lockstep.py	3.11
-test-docstrings	tests/test_schema_lockstep.py	53
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	10
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	2.34.1
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	22.3
