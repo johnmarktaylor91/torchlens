@@ -1682,14 +1682,12 @@ def _build_call_arguments(
     diagnostics: list[RunnableDiagnostic],
 ) -> tuple[list[TensorArgumentRef], list[LiteralArgumentRef], bool]:
     """Build tensor and literal call leaves from one cooked argument template."""
-
     from torchlens._data_classes import layer as _layer_mod, op as _op_mod
 
     tensor_args: list[TensorArgumentRef] = []
     literal_args: list[LiteralArgumentRef] = []
-    parameter_candidates = list(
-        (op._param_logs if isinstance(op, (_op_mod.Op, _layer_mod.Layer)) else ()) or ()
-    )
+    is_record = isinstance(op, (_op_mod.Op, _layer_mod.Layer))
+    parameter_candidates = list((op._param_logs if is_record else ()) or ())
     non_tensor_positional = iter(getattr(op, "non_tensor_pos_args", ()) or ())
     has_unmodelled_host_write = False
 
