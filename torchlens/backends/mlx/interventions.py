@@ -284,10 +284,11 @@ def _resolve_helper_applier(spec: Edit, mx: Any) -> MLXHookApplier:
         return MLXHookApplier(identity, lambda out: mx.clip(out, low, high))
     if name == "mean_ablate":
         source = spec.args[0] if spec.args else None
-        if source is not None or kwargs.get("dim", "self") != "self":
+        if source is not None or kwargs.get("dim") is not None or "population_identity" in kwargs:
             raise BackendUnsupportedError(
                 "MLX backend tl.mean_ablate(...) interventions support the "
-                "over='self' form only; tensor sources are torch-side semantics."
+                "self form with dim=None only; tensor and population sources and "
+                "axis-aware means are torch-side semantics."
             )
         return MLXHookApplier(identity, lambda out: mx.zeros_like(out) + mx.mean(out))
     if name == "replace_with":

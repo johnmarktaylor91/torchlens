@@ -98,7 +98,7 @@ def test_flags_and_combine_and_seeded_stochastic_leaf_allowed() -> None:
     seeded = compose(tl.scale(2.0), tl.add_noise(0.1, seed=7))
     assert [leaf.helper_name for leaf in seeded.args] == ["scale", "add_noise"]
     assert seeded.batch_independent is True
-    baseline_flags = compose(tl.scale(2.0), tl.mean_ablate())
+    baseline_flags = compose(tl.scale(2.0), tl.mean_ablate(dim=None))
     assert baseline_flags.batch_independent is False, "mean_ablate self-mean couples the batch"
 
 

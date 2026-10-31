@@ -236,7 +236,7 @@ def test_tf_unsupported_helper_refuses_typed() -> None:
             _relu_plus_ten,
             x,
             backend="tf",
-            intervene=tl.when(tl.func("relu"), tl.mean_ablate()),
+            intervene=tl.when(tl.func("relu"), tl.mean_ablate(dim=None)),
         )
 
 

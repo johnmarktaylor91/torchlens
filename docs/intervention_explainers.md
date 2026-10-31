@@ -123,14 +123,14 @@ rows, the edit acts on the coordinates `c = Q x` (one per row) and the site gets
 `x + Q^T (edit(c) - c)`. This is the addressing distributed alignment search uses.
 
 - Coordinate verbs act on `c`: `tl.zero_ablate()`, `tl.scale(...)`, `tl.clamp(...)`,
-  `tl.add_noise(...)`, `tl.mean_ablate()`, `mean_fill(dim=...)` without `reference=`,
+  `tl.add_noise(...)`, `tl.mean_ablate(dim=...)` without `source=`,
   `scramble_elements(seed=...)` without `source=`, `tl.add(scalar)`,
   `splice_module(module, input_route="out")`, and any hook callable `fn(c, *, hook)`, which receives
   the coordinates with the bound axis resized to `k`.
 - Value verbs compute a value in activation space and write its component: `tl.patch_from(source)`
   is the interchange (the component becomes the source run's), and likewise `swap_with`,
-  `replace_with`, `tl.add(tensor)`, `steer`, `permute_batch`, `resample_rows_from`, `mean_from` and
-  `mean_fill(reference, ...)`.
+  `replace_with`, `tl.add(tensor)`, `steer`, `permute_batch`, `resample_rows_from` and
+  `tl.mean_ablate(population, dim=...)`.
 - A source verb maps the whole site value to new coordinates: `tl.intervention.set_affine_coordinates(W,
   bias=b)` sets them to `W x + b` (LoReFT; see "A learned affine source" below).
 - Every other verb refuses `subspace_edit_unsupported` and names the spelling that works: the

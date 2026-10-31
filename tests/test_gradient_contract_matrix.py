@@ -53,7 +53,6 @@ from torchlens.intervention import (
     subspace_interchange,
 )
 from torchlens.intervention.helpers import swap_with
-from torchlens.intervention.stochastic import mean_fill, mean_from
 from torchlens.intervention.types import InterventionDecision
 
 _PAGE = Path(__file__).resolve().parent.parent / "docs" / "gradient_contract.md"
@@ -138,9 +137,13 @@ def _cut(value: Callable[[torch.Tensor], torch.Tensor]) -> Callable[[torch.Tenso
 # from the whole site value (and refuses affine_source_needs_subspace elsewhere).
 _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor], str]] = {
     "zero_ablate": (zero_ablate, _cut(torch.zeros_like), "coord"),
-    "mean_ablate": (mean_ablate, lambda out: torch.zeros_like(out) + out.mean(), "coord"),
+    "mean_ablate": (
+        lambda: mean_ablate(dim=None),
+        lambda out: torch.zeros_like(out) + out.mean(),
+        "coord",
+    ),
     "mean_ablate(source)": (
-        lambda: mean_ablate(_CONST),
+        lambda: mean_ablate(_CONST, dim=None),
         _cut(lambda out: torch.zeros_like(out) + _CONST.mean()),
         "refused",
     ),
@@ -182,14 +185,18 @@ _VERBS: dict[str, tuple[Callable[[], Any], Callable[[torch.Tensor], torch.Tensor
         _cut(torch.zeros_like),
         "value",
     ),
-    "mean_from": (lambda: mean_from(_site_donors()), _cut(torch.zeros_like), "value"),
-    "mean_fill": (
-        lambda: mean_fill(dim="all"),
-        lambda out: torch.zeros_like(out) + out.mean(),
+    "mean_ablate(population)": (
+        lambda: mean_ablate(_site_donors(), dim=None),
+        _cut(torch.zeros_like),
+        "value",
+    ),
+    "mean_ablate(dim=0)": (
+        lambda: mean_ablate(dim=0),
+        lambda out: torch.zeros_like(out) + out.mean(0, keepdim=True),
         "coord",
     ),
-    "mean_fill(reference)": (
-        lambda: mean_fill(_site_donors(), dim="all"),
+    "mean_ablate(population, dim=(0, 1))": (
+        lambda: mean_ablate(_site_donors(), dim=(0, 1)),
         _cut(torch.zeros_like),
         "value",
     ),

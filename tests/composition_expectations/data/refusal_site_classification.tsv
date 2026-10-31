@@ -79,7 +79,7 @@ torchlens.intervention.save:_validate_spec_json_structure:ReplayPreconditionErro
 torchlens.intervention.save:_validate_spec_json_structure:ReplayPreconditionError::2	KNOWN-GAP		spec.json unknown save_level (item 20, lane A08); typed, uncoded -- C03 continues
 torchlens.intervention.save:_validate_spec_json_structure:ReplayPreconditionError::3	KNOWN-GAP		spec.json non-list top-level field (item 20, lane A08); typed, uncoded -- C03 continues
 torchlens.intervention.save:_edge_address_from_json:ReplayPreconditionError::1	KNOWN-GAP		malformed persisted edge_address refusal (item 20, lane A08); typed, uncoded -- C03 continues
-torchlens.intervention.helpers:mean_ablate:InvalidArgumentError::1	CONTRACTED	intervention_over_invalid	new fail-closed over= vocabulary gate contracted in its own change (edits memo 0a/D16): coded, remedy, contract-doc row
+torchlens.intervention.helpers:mean_ablate:InvalidArgumentError::1	CONTRACTED	intervention_over_invalid	one mean door (R2 D.4): dim= vocabulary is None, an int or a tuple of ints; any other token refuses at construction so a typo never flips batch_independent open
 torchlens.intervention.helpers:scramble_elements:InvalidArgumentError::1	CONTRACTED	intervention_source_conflict	new both-passed source=/from_= refusal contracted in its own change (edits memo 0b/D19): coded, remedy, contract-doc row
 torchlens.intervention.helpers:_resolve_patch_donor_site:HookValueError::2	CONTRACTED	patch_donor_pass_ambiguous	multi-pass donor guessing refusal (edits memo row 4/D2) contracted in the T09 fix cycle: site-visible code, Remedy-marker structured remedy, contract-doc row, provoked in tests/test_interv_honesty_donor_pass.py
 torchlens.intervention.edge_substitution:require_depth1_arg_path:SelectionError:_apply_invalid:1	CONTRACTED	selection_apply_invalid	depth-2 splice tripwire (edits memo 0d) contracted in the T09 fix cycle: closed-vocabulary code spelled site-visibly through the factory (reason=not_maskable), existing contract-doc row
@@ -759,8 +759,7 @@ torchlens.intervention.stochastic:permute_batch.factory._hook:InvalidArgumentErr
 torchlens.intervention.stochastic:resample_rows_from:InvalidArgumentError::1	CONTRACTED	population_source_invalid	F02 resample_rows_from takes the population noun
 torchlens.intervention.stochastic:resample_rows_from:InvalidArgumentError::2	CONTRACTED	population_source_invalid	F02 row donors must be tensor members
 torchlens.intervention.stochastic:resample_rows_from.factory._hook:InvalidArgumentError::1	CONTRACTED	population_datum_count_mismatch	F02 per-row datum count vs batch extent
-torchlens.intervention.stochastic:mean_fill:InvalidArgumentError::1	CONTRACTED	population_source_invalid	F02 mean_fill ref= takes the population noun
-torchlens.intervention.stochastic:mean_fill.factory._hook:InvalidArgumentError::1	CONTRACTED	sampling_geometry_mismatch	F02 population mean does not broadcast to the site
+torchlens.intervention.helpers:_broadcast_mean:InvalidArgumentError::1	CONTRACTED	sampling_geometry_mismatch	one mean door (R2 D.11): a reduced source or population mean does not broadcast to the site
 torchlens.intervention.stochastic:set_direction_mean:InvalidArgumentError::1	CONTRACTED	direction_vector_invalid	F02 direction must be 1-D
 torchlens.intervention.stochastic:set_direction_mean:InvalidArgumentError::2	CONTRACTED	direction_vector_invalid	F02 direction must be finite nonzero-norm
 torchlens.intervention.stochastic:set_direction_mean:InvalidArgumentError::3	CONTRACTED	sampling_geometry_mismatch	F02 member does not carry the direction extent on feature_axis

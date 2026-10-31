@@ -14,7 +14,7 @@ oracle-backed, deterministic):
 - A4b analog: the draw-independence matrix on a REAL weight-tied two-pass
   module -- ``per_firing`` pass draws differ, ``per_rule`` draws are equal,
   both byte-stable across a re-push.
-- A1/A1b analog: ``mean_fill`` axis semantics vs the legacy global scalar;
+- A1/A1b analog: ``tl.mean_ablate(dim=)`` axis semantics vs the global scalar;
   typo'd and named ``over=`` tokens refuse; ``batch_independent`` is derived.
 - A8: eager derivation equality -- the recorded derived seed re-derives from
   the recorded coordinate.
@@ -36,7 +36,7 @@ from torchlens.intervention import (
 )
 from torchlens.intervention.hooks import make_hook_context
 from torchlens.intervention.population import OneDatum, PerRowDatums
-from torchlens.intervention.stochastic import _derived_seed, mean_fill, mean_from, sampling_records
+from torchlens.intervention.stochastic import _derived_seed, sampling_records
 
 
 class _Toy(nn.Module):
@@ -299,40 +299,37 @@ def test_singleton_agreement_class_discloses_and_strict_refuses() -> None:
     assert excinfo.value.fields["code"] == "sampling_agreement_class_too_small"
 
 
-def test_mean_fill_axis_semantics_and_derived_flag() -> None:
-    """A1/A1b analog: real over= vocabulary; batch_independent DERIVED."""
+def test_mean_ablate_axis_semantics_and_derived_flag() -> None:
+    """A1/A1b analog: real dim= vocabulary; batch_independent DERIVED."""
 
     log = _toy_trace()
     baseline = log["relu_1_2"].out
     fork = log.fork()
-    fork.do(tl.label("relu_1_2"), mean_fill(dim="all"))
+    fork.do(tl.label("relu_1_2"), tl.mean_ablate(dim=None))
     filled = fork["relu_1_2"].out
     assert torch.allclose(filled, torch.zeros_like(baseline) + baseline.mean())
-    assert filled.unique().numel() == 1, "over='all' is the explicit global scalar"
+    assert filled.unique().numel() == 1, "dim=None is the explicit global scalar"
     fork2 = log.fork()
-    fork2.do(tl.label("relu_1_2"), mean_fill(dim=0))
+    fork2.do(tl.label("relu_1_2"), tl.mean_ablate(dim=0))
     axis_filled = fork2["relu_1_2"].out
     assert torch.allclose(axis_filled, torch.zeros_like(baseline) + baseline.mean(0, keepdim=True))
     assert axis_filled[0].unique().numel() > 1, "axis-aware fill varies per feature"
     # The one line pinned in both failure directions (A1b):
     with pytest.raises(Exception) as excinfo:
-        mean_fill(dim="btach")
+        tl.mean_ablate(dim="btach")
     assert excinfo.value.fields["code"] == "intervention_over_invalid"
     with pytest.raises(Exception) as excinfo:
-        mean_fill(dim="batch")
+        tl.mean_ablate(dim="batch")
     assert excinfo.value.fields["code"] == "axis_semantics_unknown"
     # D18: derived, never tabled. Self-sourced reads the traced batch.
-    assert mean_fill(dim="all").batch_independent is False
+    assert tl.mean_ablate(dim=None).batch_independent is False
     donors = population(torch.randn(4, *baseline.shape), origin="pop")
-    assert mean_fill(donors, dim="all").batch_independent is True
-    # 'self' warns and maps to 'all' (one migration window).
-    with pytest.warns(UserWarning, match="over='all'") as aliased_warnings:
-        aliased = mean_fill(dim="self")
-    assert dict(aliased.kwargs)["dim"] == "all"
-    assert any(
-        getattr(record.message, "fields", {}).get("code") == "mean_over_self_alias"
-        for record in aliased_warnings
-    ), "the S-18 alias disclosure carries its contract code"
+    assert tl.mean_ablate(donors, dim=None).batch_independent is True
+    # The legacy 'self' and 'all' spellings are gone: no alias, a typed refusal.
+    for legacy in ("self", "all"):
+        with pytest.raises(Exception) as excinfo:
+            tl.mean_ablate(dim=legacy)
+        assert excinfo.value.fields["code"] == "intervention_over_invalid"
 
 
 def test_trace_backed_population_reduce_refuses() -> None:
@@ -341,18 +338,18 @@ def test_trace_backed_population_reduce_refuses() -> None:
     log = _toy_trace()
     donors = population([log], origin="one captured run")
     with pytest.raises(Exception) as excinfo:
-        mean_from(donors)
+        tl.mean_ablate(donors, dim=None)
     assert excinfo.value.fields["code"] == "population_reduce_unsupported"
 
 
-def test_mean_from_evidence_set_fill() -> None:
+def test_mean_ablate_population_evidence_set_fill() -> None:
     """Deterministic elementwise evidence mean; stochastic=False recorded."""
 
     log = _toy_trace()
     baseline = log["relu_1_2"].out
     donors = population(torch.stack([baseline, baseline + 2.0]), origin="evidence")
     fork = log.fork()
-    fork.do(tl.label("relu_1_2"), mean_from(donors))
+    fork.do(tl.label("relu_1_2"), tl.mean_ablate(donors, dim=None))
     assert torch.allclose(fork["relu_1_2"].out, baseline + 1.0)
     record = sampling_records(fork)[-1]
     assert record["stochastic"] is False
@@ -415,7 +412,7 @@ def test_chunked_capture_refuses_batch_coherent_edits() -> None:
         fork.do(tl.label("relu_1_2"), permute_batch(seed=1, axis=0))
     assert excinfo.value.fields["code"] == "chunked_replay_batch_coupling"
     with pytest.raises(Exception) as excinfo:
-        fork.do(tl.label("relu_1_2"), mean_fill(dim="all"))
+        fork.do(tl.label("relu_1_2"), tl.mean_ablate(dim=None))
     assert excinfo.value.fields["code"] == "chunked_replay_batch_coupling"
     # Per-row edits never couple rows and stay legal on chunked captures.
     rows = population(torch.randn(2, 4), origin="rows")

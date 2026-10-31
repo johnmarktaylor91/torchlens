@@ -2041,7 +2041,7 @@
     "fork_do",
     "storage"
    ],
-   "summary": "A batch-coherent edit (permute_batch, self-sourced mean_fill) refuses chunked_replay_batch_coupling on a trace captured with chunk_size; the same edit is accepted on an unchunked trace.",
+   "summary": "A batch-coherent edit (permute_batch, self-sourced mean_ablate) refuses chunked_replay_batch_coupling on a trace captured with chunk_size; the same edit is accepted on an unchunked trace.",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "pending"

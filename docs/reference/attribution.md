@@ -101,7 +101,7 @@ Trace, so the output projection is explicit (for example,
 `score=lambda run: run.output_ops[0].out[..., 0].sum()`).
 
 The baseline is always named and disclosed. `"zeros"` uses `tl.zero_ablate()` and is the
-documented default; `"mean"` uses `tl.mean_ablate()`; `"blur"` uses a same-shaped spatial mean
+documented default; `"mean"` uses `tl.mean_ablate(dim=None)`; `"blur"` uses a same-shaped spatial mean
 blur before the Selection engine scatters the chosen region. These counterfactuals are not
 interchangeable, and the result records the endpoint scores, Selection digest, and chosen policy.
 

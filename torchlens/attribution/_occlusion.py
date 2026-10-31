@@ -134,7 +134,7 @@ def _occlusion_edit(baseline: _OcclusionBaseline, blur_kernel_size: int) -> Any:
     if baseline == "zeros":
         return zero_ablate()
     if baseline == "mean":
-        return mean_ablate()
+        return mean_ablate(dim=None)
     if baseline == "blur":
         if isinstance(blur_kernel_size, bool) or blur_kernel_size < 3 or blur_kernel_size % 2 == 0:
             raise AttributionError("blur_kernel_size must be an odd integer of at least 3")
@@ -199,8 +199,8 @@ def occlusion(
     data. To ask "what if this region held another input's value", patch from
     a donor trace instead: ``trace.fork().do(selection, tl.patch_from(donor))``
     with the donor captured on that other input, or the population-based
-    replacements in ``torchlens.intervention`` (``mean_from``,
-    ``sample_from``, ``resample_rows_from``). The baseline used is always
+    replacements (``tl.mean_ablate(population, dim=None)``,
+    ``torchlens.intervention.sample_from``, ``resample_rows_from``). The baseline used is always
     returned in ``extra["baseline"]``; report it with the score.
 
     Parameters

@@ -176,7 +176,7 @@ def _refuse_batch_dependent(rule: Any) -> None:
         code="extraction_intervention_batch_dependent",
         remedy=(
             "use a batch-independent helper (for example tl.zero_ablate(), or "
-            "tl.mean_ablate(source) with a precomputed source tensor)"
+            "tl.mean_ablate(source, dim=None) with a precomputed source tensor)"
         ),
         action=str(name),
     )

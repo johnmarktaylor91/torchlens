@@ -8,7 +8,7 @@ Pyvene and pyreft are idle upstream. Runnable versions of these rows are on
 | Define intervention locations | Selectors such as `tl.module`, `tl.func`, `tl.label`, `tl.in_module`; facets such as `tl.head(i, "q")` for one attention head | Equivalent targeting, on the unwrapped model. |
 | Run a configured intervention | `tl.trace(model, x, intervene=tl.when(site, action))`, `trace.fork().do(site, action)`, or `tl.when(site, action).bind(model)` | Equivalent for local PyTorch execution; the engines are compared on the [intervention explainers](../intervention_explainers.md#which-engine-when) page. |
 | Interchange (representation swap) from a source run | `tl.patch_from(source_trace, source_site=..., positions=...)` | Equivalent, including different prompt lengths through a position map. |
-| Zero and mean ablations | `tl.zero_ablate()`, `torchlens.intervention.stochastic.mean_fill(dim=...)`, `torchlens.intervention.stochastic.mean_from(population)` | Equivalent common helpers; see [stochastic and population edits](../stochastic_edits.md). |
+| Zero and mean ablations | `tl.zero_ablate()`, `tl.mean_ablate(dim=...)`, `tl.mean_ablate(population, dim=None)` | Equivalent common helpers; see [stochastic and population edits](../stochastic_edits.md). |
 | Resampling ablation | `torchlens.intervention.resample_rows_from(population, seed=..., axis=...)` | Whole-row donors from a population, seeded and recorded. |
 | Directional intervention | `tl.steer(direction, strength=..., dim=...)` | Equivalent tensor steering helper. |
 | Generation under an intervention | `spec.bind(model).generate(ids, ...)` | Runs the model's own `generate()` with the edit on every step, KV cache included. |

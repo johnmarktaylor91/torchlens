@@ -102,7 +102,7 @@ def test_phase3_helpers_import_and_return_specs() -> None:
 
     helper_specs = [
         tl.zero_ablate(),
-        tl.mean_ablate(),
+        tl.mean_ablate(dim=None),
         tl.intervention.scramble_elements(),
         tl.steer(torch.ones(3), dim=-1),
         tl.scale(2.0),
