@@ -131,7 +131,7 @@ def _after_halt(cell: Cell) -> None:
     )
     if cell.loaded is not None:
         cell.expect(
-            cell.loaded.outcome.status is CaptureStatus.HALTED,
+            cell.loaded.outcome.status is CaptureStatus.STOPPED,
             f"loaded outcome {cell.loaded.outcome.status!r}",
         )
         cell.expect(
