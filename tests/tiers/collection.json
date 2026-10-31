@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "source_commit": "486821b4",
+  "environment": "pinned smoke row: python 3.10, torch 2.13.0+cpu",
+  "durations_source": "per-test durations of the not-rare, not-slow, not-serial tier at ad2e0300 (-n 8, line-coverage tracing on; an upper bound)",
+  "estimate_workers": 4,
+  "tiers": {
+    "smoke": {
+      "count": 1485,
+      "files": 459,
+      "id_digest": 38567407636275,
+      "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"smoke\" tests/",
+      "wall_estimate": {
+        "method": "per_test",
+        "tests_with_duration": 1473,
+        "tests_without_duration": 12,
+        "serial_seconds": 268.3,
+        "n4_seconds": 67.1
+      }
+    },
+    "mid": {
+      "count": 23730,
+      "files": 1587,
+      "id_digest": 227724161295751,
+      "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"not rare and not slow and not heavy\" tests/",
+      "wall_estimate": {
+        "method": "per_test",
+        "tests_with_duration": 22101,
+        "tests_without_duration": 1629,
+        "serial_seconds": 8960.1,
+        "n4_seconds": 2240.0
+      }
+    },
+    "not_slow": {
+      "count": 25546,
+      "files": 1661,
+      "id_digest": 160033435157288,
+      "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"not rare and not slow\" tests/",
+      "wall_estimate": {
+        "method": "per_test",
+        "tests_with_duration": 23824,
+        "tests_without_duration": 1722,
+        "serial_seconds": 12465.2,
+        "n4_seconds": 3116.3
+      }
+    },
+    "all": {
+      "count": 37857,
+      "files": 1690,
+      "id_digest": 276299145533507,
+      "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider tests/",
+      "wall_estimate": {
+        "method": "per_test",
+        "tests_with_duration": 23824,
+        "tests_without_duration": 14033,
+        "serial_seconds": 12465.2,
+        "n4_seconds": 3116.3
+      }
+    }
+  }
+}
