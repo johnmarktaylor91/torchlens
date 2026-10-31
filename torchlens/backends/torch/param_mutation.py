@@ -46,7 +46,7 @@ def is_unregistered_parameter(trace: Any, value: Any) -> bool:
     address = None if meta is None else meta.param_address
     if not address:
         return True
-    param_logs = getattr(trace, "_param_logs", None)
+    param_logs = trace._param_logs
     if param_logs is None or address not in param_logs:
         return True
     return getattr(param_logs[address], "_param_ref", None) is not value

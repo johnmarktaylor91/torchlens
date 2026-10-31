@@ -3546,7 +3546,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
     devices = sorted(
         {
             str(device)
-            for op in getattr(trace, "_layer_list", ())
+            for op in trace._layer_list
             if (device := getattr(op, "device_ref", None)) is not None
         }
     )
@@ -3554,7 +3554,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
     default_dtype = ambient.get("default_dtype") if isinstance(ambient, Mapping) else None
     autocast_facts: list[dict[str, Any]] = []
     seen_autocast: set[str] = set()
-    for op in getattr(trace, "_layer_list", ()):
+    for op in trace._layer_list:
         state = getattr(op, "func_autocast_state", None)
         if not isinstance(state, Mapping) or not state:
             continue
@@ -4316,7 +4316,7 @@ def _reanchor_visualizer_paths(trace: Trace, bundle_path: Path) -> None:
         Root of the loaded bundle.
     """
 
-    layer_list = getattr(trace, "_layer_list", None)
+    layer_list = trace._layer_list
     if not layer_list:
         return
     visualizers_dir = bundle_path / "visualizers"

@@ -219,8 +219,8 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "total_activation_memory": getattr(trace, "total_activation_memory", None),
         },
         "backward": {
-            "num_grad_fn_records": len(getattr(trace, "_grad_fn_logs", {}) or {}),
-            "num_backward_passes": len(getattr(trace, "_backward_pass_logs", {}) or {}),
+            "num_grad_fn_records": len(trace._grad_fn_logs or {}),
+            "num_backward_passes": len(trace._backward_pass_logs or {}),
         },
         "annotations": tuple(sorted(getattr(trace, "annotations", {}) or {})),
         # log_value read-back (sumfam D20): logged values are inventory, not

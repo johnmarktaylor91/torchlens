@@ -456,9 +456,7 @@ def _close_implicit_backward_pass_if_open(trace: Any, *, _close_path: str = "syn
                     close_path=_close_path,
                 )
             )
-            trace._num_backward_passes = max(
-                int(getattr(trace, "_num_backward_passes", 0)), int(pass_index)
-            )
+            trace._num_backward_passes = max(int(trace._num_backward_passes), int(pass_index))
             trace.__dict__.pop("_active_backward_pass_index", None)
             # Close the open-pass flag BEFORE the fallible record clear
             # (R14-1 sibling ordering): a clear failure propagates loudly
@@ -594,7 +592,7 @@ def _traces_for_roots(roots: Any) -> tuple[Any, ...]:
         trace_ref = _BACKWARD_GRAD_FN_REGISTRY.get(grad_fn_object_id)
         if trace_ref is not None:
             trace = trace_ref()
-            if trace is None or not hasattr(trace, "_layer_list"):
+            if trace is None or trace.__dict__.get("_tl_cleaned_up", False):
                 stale_ids.append(grad_fn_object_id)
             elif (
                 id(trace) not in matched_ids
@@ -673,7 +671,7 @@ def _root_tensor_step_index(trace: Any, root: torch.Tensor) -> int | None:
     if label is None:
         return None
     lookup_labels = (getattr(trace, "_raw_to_final_layer_labels", {}).get(label, label), label)
-    layer_lookup = getattr(trace, "_layer_dict_all_keys", {})
+    layer_lookup = trace._layer_dict_all_keys
     for lookup_label in lookup_labels:
         layer = layer_lookup.get(lookup_label)
         step_index = getattr(layer, "step_index", None)
@@ -900,7 +898,7 @@ def _param_module_address(trace: Any, param_ref: object | None) -> str | None:
 
     if not isinstance(param_ref, str):
         return None
-    param_logs = getattr(trace, "_param_logs", {})
+    param_logs = trace._param_logs
     if param_ref not in param_logs:
         return None
     param_log = param_logs[param_ref]
@@ -1066,7 +1064,7 @@ def _infer_grad_fn_module_membership(trace: Any) -> None:
         fields are updated in place.
     """
 
-    grad_fn_logs = getattr(trace, "_grad_fn_logs", {})
+    grad_fn_logs = trace._grad_fn_logs
     label_to_id = {grad_fn.label: object_id for object_id, grad_fn in grad_fn_logs.items()}
     carve_out_ids = _post_forward_grad_fn_ids(grad_fn_logs)
     changed = True
@@ -1117,7 +1115,7 @@ def _prefer_direct_pairing_source_for_paired_ops(trace: Any) -> None:
         ``module_membership_source="paired"``.
     """
 
-    for grad_fn_record in getattr(trace, "_grad_fn_logs", {}).values():
+    for grad_fn_record in trace._grad_fn_logs.values():
         op = grad_fn_record.op
         if (
             op is not None
@@ -1494,13 +1492,13 @@ def _bind_backward_epoch(trace: Any, *, full_rebuild: bool, revision: Any, water
     epochs = core.backward_epochs
     staged = full_rebuild or not epochs
     epoch = BackwardEpoch() if staged else epochs[-1]
-    grad_fn_logs = getattr(trace, "_grad_fn_logs", None) or {}
+    grad_fn_logs = trace._grad_fn_logs or {}
     grad_fns = list(grad_fn_logs.values())
     calls: list[Any] = []
     for grad_fn_record in grad_fns:
         call_map = getattr(grad_fn_record.calls, "_dict", grad_fn_record.calls)
         calls.extend(call_map.values())
-    passes = list((getattr(trace, "_backward_pass_logs", None) or {}).values())
+    passes = list((trace._backward_pass_logs or {}).values())
     adopt_rows(epoch.stores, "grad_fn", grad_fns)
     adopt_rows(epoch.stores, "grad_fn_call", calls)
     adopt_rows(epoch.stores, "backward_pass", passes)
@@ -1581,7 +1579,7 @@ def _materialize_backward_projections_impl(
     preserved_grad_fn_logs: OrderedDict[int, GradFn] = OrderedDict()
     prior_grad_fn_logs: dict[int, GradFn] = {}
     if pass_index_base:
-        prior_grad_fn_logs = dict(getattr(trace, "_grad_fn_logs", {}) or {})
+        prior_grad_fn_logs = dict(trace._grad_fn_logs or {})
         for object_id, grad_fn_record in prior_grad_fn_logs.items():
             if object_id not in discovered:
                 preserved_grad_fn_logs[object_id] = grad_fn_record
@@ -1694,7 +1692,7 @@ def _materialize_backward_projections_impl(
 
     # Gradient records at or below the pass-index base are preserved facts
     # from before the stream detach; only the stream's own window rebuilds.
-    for op in getattr(trace, "_layer_list", []):
+    for op in trace._layer_list:
         if pass_index_base:
             op_records = op._slot("_grad_records") or []
             op._internal_set(
@@ -1705,7 +1703,7 @@ def _materialize_backward_projections_impl(
             op._clear_gradient_records()
     _fold_op_grad_events(trace, state, op_grad_events)
 
-    for param_log in getattr(trace, "_param_logs", {}).values():
+    for param_log in trace._param_logs.values():
         if pass_index_base:
             param_log._grad_records = [
                 record
@@ -1718,9 +1716,7 @@ def _materialize_backward_projections_impl(
 
     backward_pass_logs: OrderedDict[int, BackwardPass] = OrderedDict()
     if pass_index_base:
-        for preserved_pass_index, preserved_pass in getattr(
-            trace, "_backward_pass_logs", {}
-        ).items():
+        for preserved_pass_index, preserved_pass in trace._backward_pass_logs.items():
             if preserved_pass_index <= pass_index_base:
                 backward_pass_logs[preserved_pass_index] = preserved_pass
     pass_indices = sorted(
@@ -1736,11 +1732,11 @@ def _materialize_backward_projections_impl(
             parent_layer = trace._layer_logs.get(grad_fn_record.op.layer_label)
             if parent_layer is not None:
                 parent_layer.grad_fn = grad_fn_record
-    for layer in getattr(trace, "_layer_list", ()):
+    for layer in trace._layer_list:
         grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
         if grad_fn_object_id in trace._grad_fn_logs:
             layer.grad_fn = trace._grad_fn_logs[grad_fn_object_id]
-    for layer in getattr(trace, "_layer_logs", {}).values():
+    for layer in trace._layer_logs.values():
         grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
         if grad_fn_object_id in trace._grad_fn_logs:
             layer.grad_fn = trace._grad_fn_logs[grad_fn_object_id]
@@ -1839,7 +1835,7 @@ def _fold_op_grad_events(
         op_grad_events, key=lambda item: (item.pass_index, item.timestamp, item.seq)
     ):
         event_label = _resolve_op_grad_event_label(trace, event.op_label)
-        if event_label not in getattr(trace, "_layer_dict_all_keys", {}):
+        if event_label not in trace._layer_dict_all_keys:
             continue
         op = trace._layer_dict_all_keys[event_label]
         payload = event.payload_ref if isinstance(event.payload_ref, torch.Tensor) else None
@@ -1896,7 +1892,7 @@ def _fold_param_grad_events(
     scratch-rebuilt records are identical.
     """
 
-    param_logs = getattr(trace, "_param_logs", None)
+    param_logs = trace._param_logs
     if param_logs is None:
         return
     for event in sorted(
@@ -2703,9 +2699,7 @@ def _walk_and_hook_backward_graph(
     # grad_fns (e.g. the output clone wrapper), creating phantom cycles.
     strong_refs = trace.__dict__.setdefault("_backward_gradfn_refs", [])
     strong_refs.extend(root_grad_fns)
-    pass_index = int(
-        getattr(trace, "_active_backward_pass_index", getattr(trace, "_num_backward_passes", 0) + 1)
-    )
+    pass_index = int(getattr(trace, "_active_backward_pass_index", trace._num_backward_passes + 1))
     roots_by_pass = trace.__dict__.setdefault("_backward_roots_by_pass", {})
     roots_by_pass.setdefault(pass_index, [])
     for root_grad_fn_id in map(id, root_grad_fns):
@@ -3283,7 +3277,7 @@ def _run_backward_with_capture(
         intervention_spec=intervention_spec,
     )
     trace._active_save_grads_policy = active_save_grads_policy
-    pass_index = int(getattr(trace, "_num_backward_passes", 0)) + 1
+    pass_index = int(trace._num_backward_passes) + 1
     trace._active_backward_pass_index = pass_index
     trace._implicit_backward_pass_open = False
     start_event = BackwardPassStart(
@@ -3342,7 +3336,7 @@ def _run_backward_with_capture(
                 order_attribution_coverage=None,
             )
         )
-        trace._num_backward_passes = max(int(getattr(trace, "_num_backward_passes", 0)), pass_index)
+        trace._num_backward_passes = max(int(trace._num_backward_passes), pass_index)
         for handle in handles:
             with contextlib.suppress(BaseException):
                 handle.remove()
@@ -3420,9 +3414,7 @@ def _run_backward_with_capture(
             # backward re-enters hook code and appends phantom events).
             # Mirror the walk-failure arm's unconditional cleanup, then
             # re-raise the rewalk error.
-            trace._num_backward_passes = max(
-                int(getattr(trace, "_num_backward_passes", 0)), pass_index
-            )
+            trace._num_backward_passes = max(int(trace._num_backward_passes), pass_index)
             with contextlib.suppress(BaseException):
                 _clear_pending_accumulate_grad_records(trace)
             with contextlib.suppress(BaseException):
@@ -3439,7 +3431,7 @@ def _run_backward_with_capture(
             with contextlib.suppress(BaseException):
                 _materialize_backward_projections(trace)
             raise rewalk_error
-        trace._num_backward_passes = max(int(getattr(trace, "_num_backward_passes", 0)), pass_index)
+        trace._num_backward_passes = max(int(trace._num_backward_passes), pass_index)
         # Fenced like the rewalk-error arm above (b3-sol-R14-1): an unfenced
         # failure in the pending-record clear stranded every grad-fn hook and
         # strong forward graph ref registered by the walk. Each cleanup step
@@ -3480,7 +3472,7 @@ def _run_backward_with_capture(
         record_backward_peak(trace, backend, peak_delta)
         trace.backward_durations.append(Duration(duration))
         trace.total_param_gradient_memory = Bytes(
-            sum(int(param_log.grad_memory) for param_log in getattr(trace, "_param_logs", []))
+            sum(int(param_log.grad_memory) for param_log in trace._param_logs)
         )
         # Fence in-flight cpu_async D2H grad copies before projections make
         # the payloads reachable (R36-1 for the backward seam): the forward
@@ -3966,7 +3958,7 @@ def _refresh_checkpoint_witness(trace: Any) -> None:
             token: _checkpoint_token_summary(
                 record,
                 state["lock"],
-                getattr(trace, "_grad_fn_logs", {}),
+                trace._grad_fn_logs,
                 trace,
             )
             for token, record in state["tokens"].items()

@@ -266,7 +266,7 @@ def _check_pass_count_consistency(ml: Trace) -> None:
     """
 
     name = "pass_count_consistency"
-    layer_num_calls = getattr(ml, "_layer_num_calls", {}) or {}
+    layer_num_calls = ml._layer_num_calls or {}
     for layer_label, layer_log in ml._layer_logs.items():
         ops = getattr(layer_log, "ops", {}) or {}
         expected_keys = set(range(1, getattr(layer_log, "num_passes", 0) + 1))

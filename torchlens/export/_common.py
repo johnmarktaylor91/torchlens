@@ -62,9 +62,7 @@ def _iter_layers(log: Any) -> list[Any]:
         Layer entries.
     """
 
-    return list(
-        getattr(log, "_layer_list", None) or getattr(log, "_layer_dict_main_keys", {}).values()
-    )
+    return list(log._layer_list or log._layer_dict_main_keys.values())
 
 
 def _repeated_layer_labels(entries: list[Any]) -> set[str]:

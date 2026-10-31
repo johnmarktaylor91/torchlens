@@ -1177,7 +1177,7 @@ def _has_pending_lazy_payload(trace: Trace) -> bool:
         Whether an out/grad lazy ref exists whose payload slot is empty.
     """
 
-    for op in getattr(trace, "_layer_list", []) or []:
+    for op in trace._layer_list or []:
         slot = getattr(op, "_slot", None)
         if not callable(slot):
             continue
@@ -1548,7 +1548,7 @@ def _source_bundle_path_for_trace(trace: Trace) -> Path:
     if isinstance(bundle_path, Path):
         return bundle_path
 
-    for layer in getattr(trace, "_layer_list", []):
+    for layer in trace._layer_list:
         out_ref = getattr(layer, "out_ref", None)
         if isinstance(out_ref, LazyActivationRef):
             return out_ref.source_bundle_path

@@ -230,9 +230,7 @@ def _check_profile_rows(trace: Trace, profile: Any) -> list[Any]:
     if set(evidence) != {row.sequence for row in rows}:
         _primitive_failure("event-owner evidence does not exactly cover primitive rows")
     ops = list(trace._layer_list)
-    grad_fn_labels = {
-        str(grad_fn.label) for grad_fn in (getattr(trace, "_grad_fn_logs", {}) or {}).values()
-    }
+    grad_fn_labels = {str(grad_fn.label) for grad_fn in (trace._grad_fn_logs or {}).values()}
     labels: set[str] = set()
     sequences: set[int] = set()
     partitions: dict[tuple[str, object], list[int]] = defaultdict(list)

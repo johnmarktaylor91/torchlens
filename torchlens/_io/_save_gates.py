@@ -32,9 +32,7 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
     """
 
     carriers = [
-        op.label
-        for op in getattr(trace, "_layer_list", ()) or ()
-        if getattr(op, "edge_substitutions", None)
+        op.label for op in trace._layer_list or () if getattr(op, "edge_substitutions", None)
     ]
     if not carriers:
         return

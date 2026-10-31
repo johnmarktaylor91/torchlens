@@ -536,7 +536,7 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
     # identity sums independently from param_logs.
     layers_with_params = _deduped_layers_with_params(ml)
 
-    param_logs = list(getattr(ml, "_param_logs", []) or [])
+    param_logs = list(ml._param_logs or [])
     total_params = sum(int(pl.num_params) for pl in param_logs)
     trainable_params = sum(int(pl.num_params) for pl in param_logs if pl.is_trainable)
     frozen_params = sum(int(pl.num_params) for pl in param_logs if not pl.is_trainable)
@@ -573,7 +573,7 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
             f"identity frozen param total {frozen_params} != "
             f"trace.num_params_frozen={ml.num_params_frozen}",
         )
-    if layers_with_params != getattr(ml, "_num_layers_with_params", 0):
+    if layers_with_params != ml._num_layers_with_params:
         raise MetadataInvariantError(
             name,
             f"deduped layers_with_params count {layers_with_params} != "

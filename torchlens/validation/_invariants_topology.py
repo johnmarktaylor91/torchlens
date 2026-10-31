@@ -72,7 +72,7 @@ def _check_trace_self_consistency(ml: Trace) -> None:
     # dropped declared-but-never-executed parameters; the tripwire now checks
     # the identity partition it once contradicted. This matches the summation
     # logic in labeling.py (_tally_params_by_identity).
-    param_logs = list(getattr(ml, "_param_logs", []) or [])
+    param_logs = list(ml._param_logs or [])
     expected_param_sum = len(param_logs)
     expected_num_params = sum(int(pl.num_params) for pl in param_logs)
     if ml._num_param_tensors != expected_param_sum:

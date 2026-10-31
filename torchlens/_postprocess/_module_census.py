@@ -83,5 +83,5 @@ def bind_layer_conditional_roles(trace: Trace, roles_by_label: Mapping[str, Sequ
         Conditional role refs keyed by Layer label.
     """
 
-    for layer_label, layer in (getattr(trace, "_layer_logs", None) or {}).items():
+    for layer_label, layer in (trace._layer_logs or {}).items():
         layer.in_conditionals = list(roles_by_label.get(layer_label, []))

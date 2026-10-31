@@ -137,7 +137,7 @@ def _saved_out(layer: Any) -> Any:
 def _layer_list(log: Any) -> Any:
     """Return the finalized layer sequence of a log."""
 
-    return getattr(log, "_layer_list", []) or []
+    return log._layer_list or []
 
 
 def _raw_layers(log: Any) -> Any:

@@ -547,7 +547,7 @@ class CaptureSession:
                     {
                         raw_index
                         for site in _resolve_unchecked(
-                            tuple(getattr(trace, "_layer_list", ())),
+                            tuple(trace._layer_list),
                             activation_selector,
                             strict=False,
                         )
@@ -681,7 +681,7 @@ class CaptureSession:
                     {
                         raw_index
                         for site in _resolve_unchecked(
-                            tuple(getattr(trace, "_layer_list", ())),
+                            tuple(trace._layer_list),
                             gradient_selector,
                             strict=False,
                         )

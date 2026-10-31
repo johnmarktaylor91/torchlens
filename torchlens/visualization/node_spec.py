@@ -232,9 +232,7 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
                 site_label = getattr(forward_site, "layer_label", None)
             if isinstance(site_label, str):
                 by_label.setdefault(site_label, cast("Op", forward_site))
-    execution_order = {
-        _site_sort_key(op): index for index, op in enumerate(getattr(trace, "_layer_list", ()))
-    }
+    execution_order = {_site_sort_key(op): index for index, op in enumerate(trace._layer_list)}
     return sorted(by_label.values(), key=lambda site: execution_order.get(_site_sort_key(site), 0))
 
 

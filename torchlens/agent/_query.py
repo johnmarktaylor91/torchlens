@@ -470,7 +470,7 @@ def query_sites(log: Any, query: Any | None) -> tuple[list[dict[str, Any]], dict
 
     if query is not None:
         validate_query(query)
-    ops = list(getattr(log, "_layer_list", []) or [])
+    ops = list(log._layer_list or [])
     input_labels = {
         str(getattr(item, "label", item)) for item in getattr(log, "input_ops", []) or []
     }

@@ -444,7 +444,7 @@ def _forward_op_count_at_backward_trigger(trace: "Trace") -> int | None:
 
     step_indices = [
         int(step_index)
-        for layer in getattr(trace, "_layer_list", ())
+        for layer in trace._layer_list
         if isinstance((step_index := getattr(layer, "step_index", None)), int) and step_index > 0
     ]
     if step_indices:
@@ -473,7 +473,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
             _close_implicit_backward_pass_if_open(trace)
         else:
             return int(pass_index)
-    pass_index = int(getattr(trace, "_num_backward_passes", 0)) + 1
+    pass_index = int(trace._num_backward_passes) + 1
     trace._active_backward_pass_index = pass_index
     trace._implicit_backward_pass_open = True
     if current_task_id is not None:
@@ -622,7 +622,7 @@ def _build_grad_payloads(
 
     if not _should_save_grad_payload(trace, layer_label):
         return None, None, False
-    if layer_label not in getattr(trace, "_layer_dict_all_keys", {}):
+    if layer_label not in trace._layer_dict_all_keys:
         raw_payload, transformed_payload = _build_fastlog_grad_payloads(trace, grad)
         return raw_payload, transformed_payload, True
     op = trace._layer_dict_all_keys[layer_label]
@@ -668,7 +668,7 @@ def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:
         return False
     if policy is True or policy == "all":
         return True
-    if layer_label not in getattr(trace, "_layer_dict_all_keys", {}):
+    if layer_label not in trace._layer_dict_all_keys:
         param_log = _param_log_for_exact_address(trace, layer_label)
         if param_log is not None:
             # Parameter gradients honor selector/callable policies through a
@@ -865,7 +865,7 @@ def _param_log_for_exact_address(trace: "Trace", address: str) -> Any | None:
     never accidentally resolve to a parameter.
     """
 
-    param_logs = getattr(trace, "_param_logs", None)
+    param_logs = trace._param_logs
     if param_logs is None:
         return None
     exact = getattr(param_logs, "_dict", None)

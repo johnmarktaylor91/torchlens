@@ -342,9 +342,9 @@ def _reset_backward_projection(log: Trace) -> None:
     log.total_param_gradient_memory = Bytes(0)
     log.backward_memory_backend = "unknown"
     log._replay_frontier = {}
-    for op in getattr(log, "_layer_list", ()):
+    for op in log._layer_list:
         _clear_op_gradient_projection(op)
-    for param_log in getattr(log, "_param_logs", {}).values():
+    for param_log in log._param_logs.values():
         _clear_param_gradient_projection(param_log)
 
 

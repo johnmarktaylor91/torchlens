@@ -1426,9 +1426,7 @@ class TinygradBackend:
                 "tinygrad validation requires live DEV=PYTHON realized-copy payloads; "
                 "audit-only traces cannot be replay validated."
             )
-        ops_by_raw_label = {
-            getattr(op, "_label_raw", ""): op for op in getattr(trace, "_layer_list", ())
-        }
+        ops_by_raw_label = {getattr(op, "_label_raw", ""): op for op in trace._layer_list}
         hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
         for capture in captures:
             op = ops_by_raw_label.get(capture.label_raw)

@@ -112,13 +112,13 @@ def _refuse_backward_evidence_without_registry(trace: Trace, name: str) -> None:
     """
 
     evidence: list[str] = []
-    backward_pass_logs = getattr(trace, "_backward_pass_logs", None) or {}
+    backward_pass_logs = trace._backward_pass_logs or {}
     ok_pass_count = sum(
         1 for record in backward_pass_logs.values() if getattr(record, "status", "ok") == "ok"
     )
     if ok_pass_count:
         evidence.append(f"backward_pass_logs holds {ok_pass_count} ok-status pass record(s)")
-    num_backward_passes = getattr(trace, "_num_backward_passes", 0) or 0
+    num_backward_passes = trace._num_backward_passes or 0
     if isinstance(num_backward_passes, int) and num_backward_passes > len(backward_pass_logs):
         evidence.append(
             f"num_backward_passes={num_backward_passes} exceeds the "
@@ -180,7 +180,7 @@ def _check_backward_grad_fn_registry(trace: Trace, name: str) -> set[int]:
             f"backward_root_grad_fn_object_ids {missing_root_ids!r} are not present in grad_fn_logs",
         )
 
-    return set(getattr(trace, "_backward_pass_logs", {}).keys())
+    return set(trace._backward_pass_logs.keys())
 
 
 def _check_backward_grad_fn_handle_records(
@@ -333,9 +333,10 @@ def _check_backward_layer_backpointers(trace: Trace, name: str) -> None:
             # a dropped backpointer on it still raises) AND the grad-carrying
             # reachability walk — which fails closed on every resolution
             # gap — cannot reach any visited op downstream.
-            if grad_fn_object_id not in getattr(
-                trace, "_grad_fn_logs", {}
-            ) and not _layer_feeds_recorded_backward_roots(trace, layer):
+            if (
+                grad_fn_object_id not in trace._grad_fn_logs
+                and not _layer_feeds_recorded_backward_roots(trace, layer)
+            ):
                 continue
             raise MetadataInvariantError(
                 name,
@@ -397,7 +398,7 @@ def _check_backward_pass_record_consistency(
         If backward pass logs are not dense or calls reference missing passes.
     """
 
-    for pass_index, backward_pass in getattr(trace, "_backward_pass_logs", {}).items():
+    for pass_index, backward_pass in trace._backward_pass_logs.items():
         if backward_pass.pass_index != pass_index:
             raise MetadataInvariantError(
                 name,
@@ -436,7 +437,7 @@ def _check_backward_pass_index_density(trace: Trace, name: str) -> None:
     """
 
     expected_pass_indices = list(range(1, trace._num_backward_passes + 1))
-    actual_pass_indices = sorted(getattr(trace, "_backward_pass_logs", {}).keys())
+    actual_pass_indices = sorted(trace._backward_pass_logs.keys())
     if actual_pass_indices != expected_pass_indices:
         raise MetadataInvariantError(
             name,

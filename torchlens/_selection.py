@@ -375,8 +375,7 @@ def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
         """Map each ``(layer_label, pass_index)`` address to its graph step."""
 
         return {
-            (op.layer_label, op.pass_index): step
-            for step, op in enumerate(getattr(trace, "_layer_list", ()) or ())
+            (op.layer_label, op.pass_index): step for step, op in enumerate(trace._layer_list or ())
         }
 
     order = fail_open(_execution_order, lambda _error: {})

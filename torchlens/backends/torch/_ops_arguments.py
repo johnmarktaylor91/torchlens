@@ -316,7 +316,7 @@ def _session_validated_parameter(trace: "Trace", value: torch.Tensor) -> bool:
     if param_meta is None or not param_meta.param_address:
         return False
     addr = param_meta.param_address
-    param_logs = getattr(trace, "_param_logs", None)
+    param_logs = trace._param_logs
     if param_logs is None or addr not in param_logs:
         return False
     if getattr(param_logs[addr], "_param_ref", None) is value:

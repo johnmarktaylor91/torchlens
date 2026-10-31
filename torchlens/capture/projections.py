@@ -1456,7 +1456,7 @@ def sync_recording_grad_records_from_sidecar(state: RecordingState) -> None:
     state.recording.grad_by_pass.clear()
     state.recording.grad_by_label.clear()
     state.recording.grad_by_grad_fn_label.clear()
-    backward_passes = getattr(trace, "_backward_pass_logs", {})
+    backward_passes = trace._backward_pass_logs
     backward_events = tuple(getattr(trace, "backward_events", ()))
     # Public grad-record contexts expose the position of an event within the
     # BACKWARD sidecar (its lane ordinal), not the raw global journal ``seq``:
@@ -1503,10 +1503,10 @@ def _maybe_add_grad_fn_metadata_record(
 
     from ..fastlog.types import GradRecord
 
-    grad_fn = getattr(trace, "_grad_fn_logs", {}).get(event.object_id)
+    grad_fn = trace._grad_fn_logs.get(event.object_id)
     if grad_fn is None or getattr(grad_fn, "has_op", False):
         return
-    pass_record = getattr(trace, "_backward_pass_logs", {}).get(event.pass_index)
+    pass_record = trace._backward_pass_logs.get(event.pass_index)
     ctx = GradRecordContext(
         label=grad_fn.label,
         grad_fn_class_name=grad_fn.class_name,
@@ -1542,7 +1542,7 @@ def _grad_record_context_from_op_grad_event(
     """Build a ``GradRecordContext`` from one op-gradient sidecar event."""
 
     pass_record = backward_passes.get(event.pass_index)
-    if event.op_label not in getattr(trace, "_layer_dict_all_keys", {}):
+    if event.op_label not in trace._layer_dict_all_keys:
         fastlog_ctx = getattr(trace, "_fastlog_grad_contexts", {}).get(event.op_label)
         if fastlog_ctx is not None:
             return GradRecordContext(

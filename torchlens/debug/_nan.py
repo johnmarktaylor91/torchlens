@@ -790,9 +790,7 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
 
     amp_disclosure: str | None = None
     if trace is not None:
-        low_precision = {
-            str(getattr(op, "dtype", "")) for op in getattr(trace, "_layer_list", ())
-        } & {
+        low_precision = {str(getattr(op, "dtype", "")) for op in trace._layer_list} & {
             "torch.float16",
             "torch.bfloat16",
         }

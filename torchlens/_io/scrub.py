@@ -304,9 +304,7 @@ def _stamp_replacement_evidence(trace: Trace, state: dict[str, Any]) -> None:
         return
     from ..validation._invariants_backward_flow import op_has_genuine_replacement_evidence
 
-    live_ops_by_label = {
-        getattr(op, "label", None): op for op in (getattr(trace, "_layer_list", None) or ())
-    }
+    live_ops_by_label = {getattr(op, "label", None): op for op in (trace._layer_list or ())}
     for scrubbed_op in scrubbed_ops:
         live_op = live_ops_by_label.get(getattr(scrubbed_op, "label", None))
         corroborated = bool(

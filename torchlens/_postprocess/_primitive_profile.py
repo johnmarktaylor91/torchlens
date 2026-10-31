@@ -210,7 +210,7 @@ def _resolve_grad_fn_call_ref(
     if event_ref is None:
         return None
     object_id, call_index, pass_index = event_ref
-    grad_fn = getattr(trace, "_grad_fn_logs", {}).get(object_id)
+    grad_fn = trace._grad_fn_logs.get(object_id)
     if grad_fn is None:
         return None
     try:
@@ -260,7 +260,7 @@ def _link_forward_grad_fn_rows(trace: Any, profile: _PrimitiveOpProfile) -> None
     ``heuristic`` and never presented as ``exact_via_aten`` evidence.
     """
 
-    grad_fns = getattr(trace, "_grad_fn_logs", {}) or {}
+    grad_fns = trace._grad_fn_logs or {}
     if not grad_fns:
         return
     ops = list(trace._layer_list)

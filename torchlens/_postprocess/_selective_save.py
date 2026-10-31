@@ -117,7 +117,7 @@ def apply_static_label_save_policy(
     _reject_non_static_save_predicate(predicate, backend_name=backend_name)
     hidden_payloads = _hidden_payloads_by_label(trace)
     matched_any = False
-    for op in getattr(trace, "_layer_list", ()):
+    for op in trace._layer_list:
         if bool(predicate(op)):
             matched_any = True
         else:
@@ -176,7 +176,7 @@ def _hidden_payloads_by_label(trace: Any) -> dict[str, Any]:
     """
 
     hidden_payloads: dict[str, Any] = {}
-    for op in getattr(trace, "_layer_list", ()):
+    for op in trace._layer_list:
         output = getattr(op, "out", None)
         if output is None:
             continue
@@ -286,7 +286,7 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
 
     saved_ops = [
         op
-        for op in getattr(trace, "_layer_list", ())
+        for op in trace._layer_list
         if getattr(op, "has_saved_activation", False) and not getattr(op, "is_orphan", False)
     ]
     trace._num_saved_ops = len(saved_ops)
@@ -299,7 +299,7 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
     trace.saved_activation_memory = Bytes(retained_activation_bytes(saved_ops))
     refresh_saved_module_call_count(trace, {op.label for op in saved_ops})
     refresh_pinned_autograd_memory(trace, saved_ops)
-    trace._layers_saved = trace._num_saved_ops == len(getattr(trace, "_layer_list", ()))
+    trace._layers_saved = trace._num_saved_ops == len(trace._layer_list)
 
 
 def _reject_non_static_save_predicate(

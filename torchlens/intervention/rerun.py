@@ -1633,7 +1633,7 @@ def _is_where_predicate_entry(entry: Any) -> bool:
 def _matched_site_count(log: Trace, entry: Any) -> int:
     """Count the sites an entry's selector resolves to on a finished trace (0 if it cannot)."""
 
-    fanout = len(getattr(log, "_layer_list", ()) or ()) + 1
+    fanout = len(log._layer_list or ()) + 1
     try:
         return len(log.resolve_sites(entry.site_target, max_fanout=fanout))
     except Exception:  # noqa: BLE001 - an unresolvable target keeps the warning path

@@ -120,7 +120,9 @@ class _ArrayPlan:
 def _is_partial(log: Any) -> bool:
     """Whether the subject is a failed-capture PartialTrace."""
 
-    return getattr(log, "_layer_logs", None) is None and hasattr(log, "raw_layers")
+    from .._partial import PartialTrace
+
+    return isinstance(log, PartialTrace)
 
 
 def _intervention_sites(log: Any) -> list[tuple[str, str]]:
@@ -697,7 +699,7 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
             getattr(getattr(log, "outcome", None), "status", None), "name", "UNKNOWN"
         ),
         "counts": {
-            "ops": getattr(log, "_num_ops", None),
+            "ops": None if _is_partial(log) else log._num_ops,
             "saved_ops": len(log.saved_ops) if hasattr(log, "saved_ops") else None,
             "modules": len(log.modules) if hasattr(log, "modules") else None,
         },

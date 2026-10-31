@@ -179,7 +179,7 @@ def _unused_justification(name: str) -> str:
 def build_render_audit(trace: Any) -> TorchLensRenderAudit:
     """Return an explicit used/unused field audit for the bridge."""
     model_fields = _list_public_fields(trace)
-    entry_sample = trace._layer_list[0] if getattr(trace, "_layer_list", None) else None
+    entry_sample = trace._layer_list[0] if trace._layer_list else None
     entry_fields = _list_public_fields(entry_sample) if entry_sample is not None else []
     module_values = list(trace.modules) if hasattr(trace, "modules") else []
     module_fields = _list_public_fields(module_values[0]) if module_values else []

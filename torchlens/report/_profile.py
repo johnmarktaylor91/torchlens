@@ -996,7 +996,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     capture_status = str(status_value) if status_value is not None else "unknown"
     capture_verified = getattr(trace, "capture_verified", None)
     capture_verification_reason = getattr(trace, "capture_verification_reason", None)
-    rescue_rerun = bool(getattr(trace, "_rescue_rerun", None) or False)
+    rescue_rerun = bool(trace.__dict__.get("_rescue_rerun") or False)
     verification = {
         "capture_status": capture_status,
         "capture_verified": capture_verified,

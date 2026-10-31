@@ -45,13 +45,9 @@ def _check_backend_neutral_graph_topology(ml: Trace) -> None:
 
     name = "backend_neutral_graph_topology"
     labels = {
-        getattr(layer, "label", getattr(layer, "layer_label", ""))
-        for layer in getattr(ml, "_layer_list", ())
-    } | {
-        getattr(layer, "layer_label", getattr(layer, "label", ""))
-        for layer in getattr(ml, "_layer_list", ())
-    }
-    for layer in getattr(ml, "_layer_list", ()):
+        getattr(layer, "label", getattr(layer, "layer_label", "")) for layer in ml._layer_list
+    } | {getattr(layer, "layer_label", getattr(layer, "label", "")) for layer in ml._layer_list}
+    for layer in ml._layer_list:
         label = getattr(layer, "layer_label", getattr(layer, "label", type(layer).__name__))
         parents = list(getattr(layer, "parents", ()) or ())
         children = list(getattr(layer, "children", ()) or ())
@@ -211,7 +207,7 @@ def _check_edge_use_parent_arg_invariants(ml: Trace) -> None:
     # traces (caught by the validation-decision golden's TinyRecurrent).
     # Each op record carries its own row and its own pass-exact
     # parents/parent_arg_positions staging.
-    for layer in getattr(ml, "_layer_list", ()) or ():
+    for layer in ml._layer_list or ():
         for op in getattr(layer, "ops", None) or (layer,):
             row = getattr(op, "_row", None)
             if row is None:
