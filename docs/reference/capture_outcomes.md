@@ -7,7 +7,7 @@ the record or on the stable refusal codes below — never on exception text.
 
 ## The status vocabulary
 
-| status | meaning | `partial` |
+| status | meaning | `is_partial` |
 |---|---|---|
 | `COMPLETE` | settled complete; attested by the settlement stamp | `False` |
 | `STOPPED` | stopped by `stop=` or imperative `tl.fastlog.stop()`; an honest prefix | `True` |
@@ -80,7 +80,7 @@ Artifacts WITHOUT an attestation derive from structural evidence alone, by
 truthiness (`False` / `None` / absent are one class):
 
 ```
-halted and finished      -> HALTED      (derived)
+halted and finished      -> STOPPED      (derived)
 halted and not finished  -> UNKNOWN     (the halted postprocess never completed)
 finished and not halted  -> UNATTESTED  (genuine-complete and tail-failure are indistinguishable)
 otherwise                -> UNKNOWN
@@ -99,7 +99,7 @@ Enforced through the ONE chokepoint
 (`require_capture_capability(trace, capability)`); refusals raise
 `tl.errors.CaptureOutcomeError` with a stable `fields["code"]`:
 
-| capability | COMPLETE | HALTED | ABORTED / FAILED | UNATTESTED | UNKNOWN |
+| capability | COMPLETE | STOPPED | ABORTED / FAILED | UNATTESTED | UNKNOWN |
 |---|---|---|---|---|---|
 | validation entry (N2) | allow | allow (halted output block skipped, as always) | refuse N2 | **allow** — the tripwire stays armed | refuse N2 |
 | `tl.save` analysis (N1) | allow | allow | refuse N1 | allow (no upgrade) | refuse N1 |
@@ -131,7 +131,7 @@ Row rationales, stated once:
   halted runnable (the producer preflight already failed).
 - **`Recording.backward`** refuses a failed partial with the table's N3
   code (`RecorderStateError`, `fields["code"] == "N3"`) and additionally
-  refuses HALTED with `fields["code"] == "recording_backward_halted"` — a
+  refuses STOPPED with `fields["code"] == "recording_backward_halted"` — a
   deliberate Recording-scoped strictness beyond the table's HALTED-allow
   cell, which describes Trace-side backward (a halted Trace holds the prefix
   autograd graph; a halted Recording is a sparse event product whose frontier
@@ -222,7 +222,7 @@ ABORTED_NONFINITE (the abort did not actually stop the forward). Imperative
 Every product constructor settles through the authority: the torch
 orchestrator's arms (success, halted partial-return, halted re-raise,
 failure, interrupt), `Recording.to_trace()` (`cooked_from=recording`
-provenance note; a halted cooked trace is HALTED and hits N4/N5), each
+provenance note; a halted cooked trace is STOPPED and hits N4/N5), each
 recorder pass and the recorder exit, and every preview backend's capture
 entry (`stamp_backend_finalized` as the LAST act after all tail work). A
 failure BEFORE any product is reachable — configuration errors, backend

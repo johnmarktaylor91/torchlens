@@ -37,7 +37,7 @@ Member cores must carry a mergeable settled capture outcome: a member whose
 settled outcome is FAILED, ABORTED_NONFINITE, or UNKNOWN refuses typed at
 input resolution (`merge_input_invalid`, reason
 `member_outcome_not_mergeable`) for live traces and path-loaded bundles
-alike. HALTED (and legacy UNATTESTED) members merge and are DISCLOSED —
+alike. STOPPED (and legacy UNATTESTED) members merge and are DISCLOSED —
 `MergedTrace.member_outcomes` maps each rank to its settled status string and
 `summary()` carries the non-complete disclosure ahead of the witness-coverage
 line, so the presenter never claims `attested_complete` silently over a

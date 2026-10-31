@@ -38,7 +38,7 @@ class CaptureStatus(str, Enum):
     """Terminal status vocabulary for one capture product."""
 
     COMPLETE = "complete"
-    STOPPED = "halted"
+    STOPPED = "stopped"
     ABORTED_NONFINITE = "aborted_nonfinite"
     FAILED = "failed"
     UNATTESTED = "unattested"

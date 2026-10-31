@@ -61,7 +61,7 @@ def test_c3_halted_capture_carries_the_outcome_marker(tmp_path: Path) -> None:
     path = tl.export.netron(log, tmp_path / "halted.json", granularity="op")
     payload = json.loads(path.read_text(encoding="utf-8"))
     props = _props(payload)
-    assert props["torchlens.capture_outcome"] == "halted"
+    assert props["torchlens.capture_outcome"] == "stopped"
     honesty = json.loads(props["torchlens.capture_honesty"])
     assert honesty["capture_status"] != "complete"
 

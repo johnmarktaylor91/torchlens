@@ -1038,7 +1038,7 @@ def row_status_for_member_outcome(status: str, phase: str | None) -> RowStatus:
     normalized = status.upper()
     if normalized == "COMPLETE":
         return "complete"
-    if normalized in ("HALTED", "ABORTED_NONFINITE"):
+    if normalized in ("STOPPED", "ABORTED_NONFINITE"):
         return "interrupted"
     if normalized == "FAILED":
         if phase in ("finalize", "postprocess", "teardown"):
@@ -1529,7 +1529,7 @@ def _derive_row_statuses(
         status == "FAILED" and phase in ("finalize", "postprocess", "teardown")
     ):
         return ["complete"] * started
-    if status in ("HALTED", "ABORTED_NONFINITE") or (
+    if status in ("STOPPED", "ABORTED_NONFINITE") or (
         status == "FAILED" and phase in ("forward", None)
     ):
         if started == 0:

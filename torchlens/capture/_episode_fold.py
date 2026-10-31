@@ -87,11 +87,11 @@ def _fold_terminal_tail(
 ) -> EpisodeFoldResult | None:
     """Fold arms 3/5/6: the single trailing non-complete member's verdict."""
 
-    if status == "HALTED":
+    if status == "STOPPED":
         return EpisodeFoldResult(
             status="episode_halted_at_step",
             at_step=at_step,
-            member_status="HALTED",
+            member_status="STOPPED",
             provenance_tier=episode_tier,
         )
     if status == "ABORTED_NONFINITE":

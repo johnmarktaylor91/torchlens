@@ -106,7 +106,7 @@ def test_incomplete_gate_trips_on_a_halted_capture(tmp_path: Path) -> None:
     """A HALTED capture is not complete: --fail-on incomplete exits 1."""
 
     log = tl.trace(RepeatedBlockNet().eval(), deterministic_input(), halt=tl.func("relu"))
-    assert log.outcome.status.value == "halted"
+    assert log.outcome.status.value == "stopped"
     path = tmp_path / "halted.tlspec"
     tl.save(log, str(path))
     envelope = call_tool("torchlens_overview", {"path": str(path)})

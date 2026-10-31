@@ -344,7 +344,7 @@ def test_halted_episode_ledger_discloses_truncation():
         halt=halt_after_two,
         episode=EpisodeSpec(stepped_module=model, n_steps=5),
     )
-    assert log.outcome.status.name == "HALTED"
+    assert log.outcome.status.name == "STOPPED"
     ledger = episode_ledger_for(log)
     assert ledger is not None
     assert ledger.steps_completed < 5
@@ -463,7 +463,7 @@ def test_episode_key_rides_plain_v8_artifacts(tmp_path):
 @pytest.mark.smoke
 def test_member_outcome_row_mapping_is_total_and_non_upgrading():
     assert row_status_for_member_outcome("COMPLETE", None) == "complete"
-    assert row_status_for_member_outcome("HALTED", None) == "interrupted"
+    assert row_status_for_member_outcome("STOPPED", None) == "interrupted"
     assert row_status_for_member_outcome("ABORTED_NONFINITE", None) == "interrupted"
     assert row_status_for_member_outcome("FAILED", "forward") == "interrupted"
     for phase in ("finalize", "postprocess", "teardown"):
@@ -497,7 +497,7 @@ def test_fold_arms_first_match_and_fail_closed():
     )
     # Arm 3: HALTED member.
     result = derive_episode_status(
-        [("COMPLETE", None), ("HALTED", None)], n_declared=None, ledger=None
+        [("COMPLETE", None), ("STOPPED", None)], n_declared=None, ledger=None
     )
     assert result.status == "episode_halted_at_step" and result.at_step == 1
     # Arm 5: exact shipped spelling disclosed verbatim.

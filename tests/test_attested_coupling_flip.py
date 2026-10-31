@@ -384,7 +384,7 @@ def test_halt_mid_episode_keeps_measured_fire_counts():
         halt=stop_at_third_step,
         capture=tl.options.CaptureOptions(seed=SEED),
     )
-    assert log.outcome.status.name == "HALTED"
+    assert log.outcome.status.name == "STOPPED"
     rows = log.annotations["episode"]["rows"]
     statuses = [row["status"] for row in rows]
     assert statuses[-1] == "absent"  # the never-started tail is absent

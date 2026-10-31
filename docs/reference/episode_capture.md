@@ -407,7 +407,7 @@ row, absent tail) and are write-once at settlement. The ledger is a
 DISCLOSURE, never a settlement authority: the episode product settles through
 the one existing `CaptureOutcome` authority with its vocabulary unchanged,
 and every capability gate (N1–N5) applies verbatim. Truncation stays a
-run/report term: an episode halted at a step boundary settles HALTED with a
+run/report term: an episode halted at a step boundary settles STOPPED with a
 clean prefix and the truncation disclosed on the ledger
 (`steps_completed`, `truncated_at_step`) — nothing rounds up.
 

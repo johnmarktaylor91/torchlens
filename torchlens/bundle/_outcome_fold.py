@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 _OUTCOME_FOLD_SEVERITY: dict[str, int] = {
     "complete": 0,
     "unattested": 1,
-    "halted": 2,
+    "stopped": 2,
     "aborted_nonfinite": 3,
     "failed": 4,
     "unknown": 5,

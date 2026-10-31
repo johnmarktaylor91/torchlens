@@ -80,7 +80,7 @@ def test_failed_only_fields_refuse_on_a_complete_status() -> None:
 
 
 @pytest.mark.parametrize("field_name,value", [("phase", "forward"), ("origin", "torchlens")])
-@pytest.mark.parametrize("status", ["complete", "halted", "aborted_nonfinite", "unknown"])
+@pytest.mark.parametrize("status", ["complete", "stopped", "aborted_nonfinite", "unknown"])
 def test_failed_only_fields_refuse_on_every_non_failed_status(
     status: str, field_name: str, value: str
 ) -> None:
@@ -90,7 +90,7 @@ def test_failed_only_fields_refuse_on_every_non_failed_status(
     if status == "unattested":
         payload["derived"] = True
     outcome = parse_outcome_payload(payload)
-    halted = status == "halted"
+    halted = status == "stopped"
     assert attestation_coherent(outcome, halted=halted, finished=True) is False
 
 
@@ -114,7 +114,7 @@ def test_boundary_evidence_refuses_on_complete_but_not_on_halted() -> None:
 
     complete = parse_outcome_payload({"status": "complete", "boundary_label": "relu_1_1"})
     assert attestation_coherent(complete, halted=False, finished=True) is False
-    halted = parse_outcome_payload({"status": "halted", "boundary_label": "relu_1_1"})
+    halted = parse_outcome_payload({"status": "stopped", "boundary_label": "relu_1_1"})
     assert attestation_coherent(halted, halted=True, finished=True) is True
 
 
@@ -299,13 +299,13 @@ def test_forged_derived_flag_refuses_on_settle_only_statuses(status: str) -> Non
     assert attestation_coherent(outcome, halted=halted, finished=finished) is False
 
 
-@pytest.mark.parametrize("status", ["halted", "unattested", "unknown"])
+@pytest.mark.parametrize("status", ["stopped", "unattested", "unknown"])
 def test_legitimate_derived_statuses_stay_coherent(status: str) -> None:
     """The lattice's own derived statuses still parse and adopt."""
 
     outcome = parse_outcome_payload({"status": status, "derived": True})
-    halted = status == "halted"
-    finished = status in ("halted", "unattested")
+    halted = status == "stopped"
+    finished = status in ("stopped", "unattested")
     assert attestation_coherent(outcome, halted=halted, finished=finished) is True
 
 
