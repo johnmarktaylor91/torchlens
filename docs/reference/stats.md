@@ -238,14 +238,14 @@ with tempfile.TemporaryDirectory() as folder:
 `"none"`: each op's out is folded into a `tl.stats.RunningStats` while the forward
 runs, and no activation payload is kept. The capture logs the same graph as a
 full capture (the reducer's own torch calls never enter it), makes no raw
-copy of an out, and keeps one fixed 16-number float64 vector (128 bytes) per
+copy of an activation, and keeps one fixed 16-number float64 vector (128 bytes) per
 op whatever the batch size. `tl.stats.site_stats(trace)` returns
 `{op label: RunningStats}` in capture order. For a float64 out the counts, the
 extrema, the sum and the mean equal `RunningStats().update(out)` on the full
-capture's out exactly. The reducer folds each out in chunks of 2^16 values,
-so its largest working tensor is 512 KiB whatever the out's size (where
+capture's activation exactly. The reducer folds each activation in chunks of 2^16 values,
+so its largest working tensor is 512 KiB whatever the activation's size (where
 `RunningStats.update` holds full-size float64 copies); the sum of squares, the sum
-of absolute values and M2 are therefore bit-equal for outs up to one chunk
+of absolute values and M2 are therefore bit-equal for activations up to one chunk
 and otherwise equal within float64 reduction-order rounding. A float32 out's sum
 accumulates in float64 without a converted copy, so it can differ from
 `RunningStats.update` in the last bits. The returned spines are live accumulators:
