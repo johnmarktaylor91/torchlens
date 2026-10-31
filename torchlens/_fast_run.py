@@ -21,6 +21,7 @@ from ._call_fingerprint import (
     install_module_token_hooks,
     module_fingerprint_address,
 )
+from ._capture_state_helpers import hold_fused_attention_fastpath_off
 from ._data_classes._trace_accessors import boundary_label_rows
 from ._fast_live_plans import (
     DirectForwardRoute,
@@ -1179,7 +1180,16 @@ class _FastLiveSession:
             set_random_seed(seed)
         truncation = None
         routes = direct_forward_routes_installed(self.direct_routes, weakref.ref(self))
-        with self.activated(), self.steer_plan.context(), routes, fingerprinting() as fingerprint:
+        with (
+            self.activated(),
+            self.steer_plan.context(),
+            routes,
+            fingerprinting() as fingerprint,
+            # The native forward must run the attention program the capture
+            # recorded (its call fingerprint is compared against the trace's), so
+            # the fused fast path is held off exactly as at capture entry.
+            hold_fused_attention_fastpath_off(model),
+        ):
             try:
                 # Bind positional inputs exactly as capture and the ordinary live
                 # run do (a tuple or list spreads; a one-parameter forward takes a
