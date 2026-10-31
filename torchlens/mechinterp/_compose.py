@@ -183,7 +183,7 @@ def stack_facet(trace: Any, name: str) -> ComponentStack:
         refuse(
             code="mi_payload_missing",
             message=f"No module exposes a readable {name!r} facet.",
-            remedy="check tl.facets.facet_coverage(trace) for the available vocabulary",
+            remedy="check tl.facets.coverage(trace) for the available vocabulary",
             analysis="stack_facet",
             missing_sites=[],
         )

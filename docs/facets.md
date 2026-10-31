@@ -542,7 +542,7 @@ nnsight module.path.output       -> log.modules["module.path"].facets["out"]
 
 ## Coverage and Recipe Maintenance
 
-`torchlens.semantic.facet_coverage(log)` (DOCUMENTED-UNSTABLE spelling) reports
+`torchlens.facets.coverage(log)` (DOCUMENTED-UNSTABLE spelling) reports
 per-module recipe coverage for a completed trace: which recipes matched, which
 declared facets are readable, typed absence reasons, an inventory of
 structural-only module classes (recipe candidates), and disclosed rows for

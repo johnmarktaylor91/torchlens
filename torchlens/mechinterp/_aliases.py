@@ -276,8 +276,7 @@ def _status_for(module: Any, facet: str) -> tuple[str, str | None]:
     if item is None:
         return (
             "structurally_absent",
-            "this architecture's recipes never declare the facet; see "
-            "tl.facets.facet_coverage(trace)",
+            "this architecture's recipes never declare the facet; see tl.facets.coverage(trace)",
         )
     if item.status == "available_now":
         value = module.facets.get(facet)
@@ -394,7 +393,7 @@ def _resolve(trace: Any, query: _Query) -> AliasResolution:
             query=query.display,
             status="structurally_absent",
             facet=facet,
-            remedy=f"{detail}; see tl.facets.facet_coverage(trace)",
+            remedy=f"{detail}; see tl.facets.coverage(trace)",
             generation=query.generation,
         )
     if len(homes) > 1:

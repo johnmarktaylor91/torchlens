@@ -162,7 +162,7 @@ def patch_grid(  # noqa: PLR0913 -- the memo-normative driver signature (section
             refuse(
                 code="mi_payload_missing",
                 message=f"No module exposes facet {sites!r} on the clean baseline.",
-                remedy="check tl.facets.facet_coverage(trace) for the vocabulary",
+                remedy="check tl.facets.coverage(trace) for the vocabulary",
                 analysis="patching.grid",
                 missing_sites=[],
             )

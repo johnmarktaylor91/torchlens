@@ -978,7 +978,7 @@ def _warn_if_campaign_all_identical(campaign_ledger: Mapping[str, int], where: s
                 "possible, but identical values at EVERY site usually mean the facet is "
                 "anchored on an input-derived op (e.g. an attention-mask view) rather "
                 "than the computation it names. Remedy: inspect "
-                "tl.facets.facet_coverage(trace) and re-anchor the facet before "
+                "tl.facets.coverage(trace) and re-anchor the facet before "
                 "publishing this as a null result",
                 code="patch_campaign_all_identical",
             ),
@@ -1044,7 +1044,7 @@ def _require_effective_patch(
         "plausible-looking null result). This usually means the facet's home op is "
         "not a live-hookable site on this architecture -- for example the facet is "
         "anchored on an aliasing, mask-derived, or input-derived op. Remedy: inspect "
-        "tl.facets.facet_coverage(trace) for this model, choose a facet whose home "
+        "tl.facets.coverage(trace) for this model, choose a facet whose home "
         "is a real computation site, or patch an explicit op site via fork.do().",
         code="patch_ineffective",
     )

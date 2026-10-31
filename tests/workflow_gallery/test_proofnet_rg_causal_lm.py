@@ -74,12 +74,11 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
     explicit facet DIFF, not both-run)."""
 
     import torchlens as tl
-    import torchlens.semantic as sem
 
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
     trace = tl.trace(lm["model"], (), dict(encoded))
     try:
-        coverage = sem.facet_coverage(trace)
+        coverage = tl.facets.coverage(trace)
         assert not coverage.unresolved, f"unresolved facet rows: {coverage.unresolved}"
         by_class: dict[str, list[Any]] = {}
         for row in coverage.rows:
@@ -128,7 +127,7 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
         capture=tl.options.CaptureOptions(save_arg_values=True),
     )
     try:
-        eager_coverage = sem.facet_coverage(eager_trace)
+        eager_coverage = tl.facets.coverage(eager_trace)
         eager_attention = [row for row in eager_coverage.rows if row.class_name == "GPT2Attention"]
         assert eager_attention and all("pattern" in row.available for row in eager_attention), (
             "eager arm: the attention pattern facet is still unavailable --"

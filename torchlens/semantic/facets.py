@@ -31,6 +31,7 @@ from ..ir.container import (
 from ..selection import _SelectionOperand
 from ..utils._callable_safety import FACET_RECIPE_MARKER_ATTR
 from ._families import family_entries, family_spec
+from .coverage import facet_coverage as coverage
 
 RecordScope = Literal["op", "module", "any"]
 RecipeFunc = Callable[[Any], Any]
@@ -1980,6 +1981,7 @@ def _class_filter_matches(class_names: tuple[str, ...], class_name: str | None) 
 
 __all__ = [
     "AbsenceReason",
+    "coverage",
     "AttentionHeadView",
     "Facet",
     "FacetFunction",

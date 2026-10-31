@@ -4,7 +4,6 @@ from . import patching as patching, recipes as recipes
 from .coverage import (
     FacetCoverageReport as FacetCoverageReport,
     ModuleCoverageRow as ModuleCoverageRow,
-    facet_coverage,
 )
 from .facets import (
     FacetCapabilityFlags as FacetCapabilityFlags,
@@ -20,6 +19,5 @@ from .logit_lens import (
 __all__ = [
     "logit_lens",
     "logit_lens_predictions",
-    "facet_coverage",
     "patching",
 ]

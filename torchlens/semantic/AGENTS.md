@@ -29,7 +29,7 @@
   DOCUMENTED-UNSTABLE.
 
 ## coverage.py
-- `facet_coverage(trace)` -> `FacetCoverageReport` (`ModuleCoverageRow` per
+- `facet_coverage(trace)` (public as `tl.facets.coverage`) -> `FacetCoverageReport` (`ModuleCoverageRow` per
   module): recipes matched, readable facets, typed absences, structural-only
   candidates, and disclosed `unresolved` rows for multi-call facet refusals.
   Input to `tools/facet_maintenance/` (proposals only; recipes are NEVER

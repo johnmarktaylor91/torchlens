@@ -284,7 +284,7 @@ def _locate_all(clean_log: Any, corrupted_log: Any, site: str) -> list[_Expansio
         refuse(
             code="mi_payload_missing",
             message=f"No module exposes facet {site!r} on the clean baseline.",
-            remedy="check tl.facets.facet_coverage(trace) for the vocabulary",
+            remedy="check tl.facets.coverage(trace) for the vocabulary",
             analysis="patching.query_heads_grid",
             missing_sites=[],
         )
