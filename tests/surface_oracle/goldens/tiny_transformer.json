@@ -10439,6 +10439,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -10595,6 +10596,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -10751,6 +10753,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -10907,6 +10910,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -11063,6 +11067,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -11215,6 +11220,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 2,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -11367,6 +11373,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -11525,6 +11532,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 26,
     "num_layers": 25,
+    "num_ops": 25,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -11715,6 +11723,7 @@
     "num_input_edges": 2,
     "num_internal_edges": 37,
     "num_layers": 35,
+    "num_ops": 35,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -11888,6 +11897,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 40,
     "num_layers": 37,
+    "num_ops": 37,
     "num_output_edges": 0,
     "num_param_tensors": 12,
     "num_param_tensors_frozen": 0,
@@ -12026,11 +12036,49 @@
      "encoder.dropout2",
      "encoder.norm2"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "encoder.self_attn"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.norm1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.linear1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.linear2"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout2"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.norm2"
+     }
+    ],
     "call_depth": 1,
     "call_labels": [
      "encoder:1"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder"
@@ -12275,7 +12323,9 @@
     "num_edges": 40,
     "num_input_edges": 2,
     "num_internal_edges": 37,
+    "num_layers": 35,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 172,
@@ -12335,6 +12385,20 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias",
+     "encoder.linear2.weight",
+     "encoder.linear2.bias",
+     "encoder.norm1.weight",
+     "encoder.norm1.bias",
+     "encoder.norm2.weight",
+     "encoder.norm2.bias",
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -12371,11 +12435,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout"
@@ -12450,7 +12519,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -12510,6 +12581,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -12546,11 +12618,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout1"
@@ -12625,7 +12702,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -12685,6 +12764,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -12721,11 +12801,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout2"
@@ -12800,7 +12885,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -12860,6 +12947,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -12896,11 +12984,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.linear1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear1"
@@ -12977,7 +13070,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 40,
@@ -13037,6 +13132,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -13073,11 +13172,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.linear2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear2"
@@ -13154,7 +13258,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 36,
@@ -13214,6 +13320,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear2.weight",
+     "encoder.linear2.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -13250,11 +13360,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.norm1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm1"
@@ -13334,7 +13449,9 @@
     "num_edges": 3,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 2,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 8,
@@ -13394,6 +13511,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.norm1.weight",
+     "encoder.norm1.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -13430,11 +13551,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.norm2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm2"
@@ -13514,7 +13640,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 8,
@@ -13574,6 +13702,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.norm2.weight",
+     "encoder.norm2.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -13612,11 +13744,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.self_attn:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.self_attn"
@@ -13821,7 +13958,9 @@
     "num_edges": 28,
     "num_input_edges": 1,
     "num_internal_edges": 26,
+    "num_layers": 25,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 80,
@@ -13881,6 +14020,12 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -13921,11 +14066,18 @@
     "call_children": [
      "encoder"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "encoder"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -14180,7 +14332,9 @@
     "num_edges": 40,
     "num_input_edges": 0,
     "num_internal_edges": 40,
+    "num_layers": 37,
     "num_output_edges": 0,
+    "num_param_tensors": 12,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 12,
     "num_params": 172,
@@ -14240,6 +14394,20 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias",
+     "encoder.linear2.weight",
+     "encoder.linear2.bias",
+     "encoder.norm1.weight",
+     "encoder.norm1.bias",
+     "encoder.norm2.weight",
+     "encoder.norm2.bias",
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -29256,8 +29424,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -29290,6 +29458,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 8,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29335,8 +29505,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -29370,6 +29540,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 32,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29417,8 +29589,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -29451,6 +29623,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29496,8 +29670,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -29531,6 +29705,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 32,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29578,8 +29754,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -29612,6 +29788,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29657,8 +29835,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -29691,6 +29869,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29736,8 +29916,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -29770,6 +29950,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29815,8 +29997,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -29849,6 +30031,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29894,8 +30078,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -29928,6 +30112,8 @@
     "name": "in_proj_bias",
     "num_calls": 1,
     "num_params": 12,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29973,8 +30159,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -30008,6 +30194,8 @@
     "name": "in_proj_weight",
     "num_calls": 1,
     "num_params": 48,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -30055,8 +30243,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -30081,6 +30269,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -30126,8 +30316,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -30153,6 +30343,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 16,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -44673,6 +44865,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -44829,6 +45022,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -44985,6 +45179,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -45141,6 +45336,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -45297,6 +45493,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -45449,6 +45646,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 2,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -45601,6 +45799,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -45759,6 +45958,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 26,
     "num_layers": 25,
+    "num_ops": 25,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -45949,6 +46149,7 @@
     "num_input_edges": 2,
     "num_internal_edges": 37,
     "num_layers": 35,
+    "num_ops": 35,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -46122,6 +46323,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 40,
     "num_layers": 37,
+    "num_ops": 37,
     "num_output_edges": 0,
     "num_param_tensors": 12,
     "num_param_tensors_frozen": 0,
@@ -46260,11 +46462,49 @@
      "encoder.dropout2",
      "encoder.norm2"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "encoder.self_attn"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.norm1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.linear1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.linear2"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout2"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.norm2"
+     }
+    ],
     "call_depth": 1,
     "call_labels": [
      "encoder:1"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder"
@@ -46509,7 +46749,9 @@
     "num_edges": 40,
     "num_input_edges": 2,
     "num_internal_edges": 37,
+    "num_layers": 35,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 172,
@@ -46569,6 +46811,20 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias",
+     "encoder.linear2.weight",
+     "encoder.linear2.bias",
+     "encoder.norm1.weight",
+     "encoder.norm1.bias",
+     "encoder.norm2.weight",
+     "encoder.norm2.bias",
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -46605,11 +46861,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout"
@@ -46684,7 +46945,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -46744,6 +47007,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -46780,11 +47044,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout1"
@@ -46859,7 +47128,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -46919,6 +47190,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -46955,11 +47227,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout2"
@@ -47034,7 +47311,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -47094,6 +47373,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -47130,11 +47410,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.linear1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear1"
@@ -47211,7 +47496,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 40,
@@ -47271,6 +47558,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -47307,11 +47598,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.linear2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear2"
@@ -47388,7 +47684,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 36,
@@ -47448,6 +47746,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear2.weight",
+     "encoder.linear2.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -47484,11 +47786,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.norm1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm1"
@@ -47568,7 +47875,9 @@
     "num_edges": 3,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 2,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 8,
@@ -47628,6 +47937,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.norm1.weight",
+     "encoder.norm1.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -47664,11 +47977,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.norm2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm2"
@@ -47748,7 +48066,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 8,
@@ -47808,6 +48128,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.norm2.weight",
+     "encoder.norm2.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -47846,11 +48170,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.self_attn:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.self_attn"
@@ -48055,7 +48384,9 @@
     "num_edges": 28,
     "num_input_edges": 1,
     "num_internal_edges": 26,
+    "num_layers": 25,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 80,
@@ -48115,6 +48446,12 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -48155,11 +48492,18 @@
     "call_children": [
      "encoder"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "encoder"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -48414,7 +48758,9 @@
     "num_edges": 40,
     "num_input_edges": 0,
     "num_internal_edges": 40,
+    "num_layers": 37,
     "num_output_edges": 0,
+    "num_param_tensors": 12,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 12,
     "num_params": 172,
@@ -48474,6 +48820,20 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias",
+     "encoder.linear2.weight",
+     "encoder.linear2.bias",
+     "encoder.norm1.weight",
+     "encoder.norm1.bias",
+     "encoder.norm2.weight",
+     "encoder.norm2.bias",
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -63490,8 +63850,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -63524,6 +63884,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 8,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -63569,8 +63931,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -63604,6 +63966,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 32,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -63651,8 +64015,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -63685,6 +64049,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -63730,8 +64096,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -63765,6 +64131,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 32,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -63812,8 +64180,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -63846,6 +64214,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -63891,8 +64261,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -63925,6 +64295,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -63970,8 +64342,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -64004,6 +64376,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -64049,8 +64423,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -64083,6 +64457,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -64128,8 +64504,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -64162,6 +64538,8 @@
     "name": "in_proj_bias",
     "num_calls": 1,
     "num_params": 12,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -64207,8 +64585,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -64242,6 +64620,8 @@
     "name": "in_proj_weight",
     "num_calls": 1,
     "num_params": 48,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -64289,8 +64669,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -64315,6 +64695,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -64360,8 +64742,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -64387,6 +64769,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 16,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -78959,6 +79343,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -79115,6 +79500,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -79271,6 +79657,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -79427,6 +79814,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -79583,6 +79971,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -79735,6 +80124,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 2,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -79887,6 +80277,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -80045,6 +80436,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 26,
     "num_layers": 25,
+    "num_ops": 25,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -80235,6 +80627,7 @@
     "num_input_edges": 2,
     "num_internal_edges": 37,
     "num_layers": 35,
+    "num_ops": 35,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -80408,6 +80801,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 40,
     "num_layers": 37,
+    "num_ops": 37,
     "num_output_edges": 0,
     "num_param_tensors": 12,
     "num_param_tensors_frozen": 0,
@@ -80546,11 +80940,49 @@
      "encoder.dropout2",
      "encoder.norm2"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "encoder.self_attn"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.norm1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.linear1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.linear2"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout2"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.norm2"
+     }
+    ],
     "call_depth": 1,
     "call_labels": [
      "encoder:1"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder"
@@ -80795,7 +81227,9 @@
     "num_edges": 40,
     "num_input_edges": 2,
     "num_internal_edges": 37,
+    "num_layers": 35,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 172,
@@ -80855,6 +81289,20 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias",
+     "encoder.linear2.weight",
+     "encoder.linear2.bias",
+     "encoder.norm1.weight",
+     "encoder.norm1.bias",
+     "encoder.norm2.weight",
+     "encoder.norm2.bias",
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -80891,11 +81339,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout"
@@ -80970,7 +81423,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -81030,6 +81485,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -81066,11 +81522,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout1"
@@ -81145,7 +81606,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -81205,6 +81668,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -81241,11 +81705,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout2"
@@ -81320,7 +81789,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -81380,6 +81851,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -81416,11 +81888,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.linear1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear1"
@@ -81497,7 +81974,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 40,
@@ -81557,6 +82036,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -81593,11 +82076,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.linear2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear2"
@@ -81674,7 +82162,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 36,
@@ -81734,6 +82224,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear2.weight",
+     "encoder.linear2.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -81770,11 +82264,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.norm1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm1"
@@ -81854,7 +82353,9 @@
     "num_edges": 3,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 2,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 8,
@@ -81914,6 +82415,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.norm1.weight",
+     "encoder.norm1.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -81950,11 +82455,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.norm2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm2"
@@ -82034,7 +82544,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 8,
@@ -82094,6 +82606,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.norm2.weight",
+     "encoder.norm2.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -82132,11 +82648,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.self_attn:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.self_attn"
@@ -82341,7 +82862,9 @@
     "num_edges": 28,
     "num_input_edges": 1,
     "num_internal_edges": 26,
+    "num_layers": 25,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 80,
@@ -82401,6 +82924,12 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -82441,11 +82970,18 @@
     "call_children": [
      "encoder"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "encoder"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -82700,7 +83236,9 @@
     "num_edges": 40,
     "num_input_edges": 0,
     "num_internal_edges": 40,
+    "num_layers": 37,
     "num_output_edges": 0,
+    "num_param_tensors": 12,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 12,
     "num_params": 172,
@@ -82760,6 +83298,20 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias",
+     "encoder.linear2.weight",
+     "encoder.linear2.bias",
+     "encoder.norm1.weight",
+     "encoder.norm1.bias",
+     "encoder.norm2.weight",
+     "encoder.norm2.bias",
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -97776,8 +98328,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -97810,6 +98362,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 8,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -97855,8 +98409,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -97890,6 +98444,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 32,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -97937,8 +98493,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -97971,6 +98527,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -98016,8 +98574,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -98051,6 +98609,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 32,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -98098,8 +98658,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -98132,6 +98692,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -98177,8 +98739,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -98211,6 +98773,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -98256,8 +98820,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -98290,6 +98854,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -98335,8 +98901,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -98369,6 +98935,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -98414,8 +98982,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -98448,6 +99016,8 @@
     "name": "in_proj_bias",
     "num_calls": 1,
     "num_params": 12,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -98493,8 +99063,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -98528,6 +99098,8 @@
     "name": "in_proj_weight",
     "num_calls": 1,
     "num_params": 48,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -98575,8 +99147,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -98601,6 +99173,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -98646,8 +99220,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -98673,6 +99247,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 16,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -113189,6 +113765,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -113345,6 +113922,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -113501,6 +114079,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -113657,6 +114236,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -113813,6 +114393,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -113965,6 +114546,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 2,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -114117,6 +114699,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -114275,6 +114858,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 26,
     "num_layers": 25,
+    "num_ops": 25,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -114465,6 +115049,7 @@
     "num_input_edges": 2,
     "num_internal_edges": 37,
     "num_layers": 35,
+    "num_ops": 35,
     "num_output_edges": 1,
     "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
@@ -114638,6 +115223,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 40,
     "num_layers": 37,
+    "num_ops": 37,
     "num_output_edges": 0,
     "num_param_tensors": 12,
     "num_param_tensors_frozen": 0,
@@ -114776,11 +115362,49 @@
      "encoder.dropout2",
      "encoder.norm2"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "encoder.self_attn"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.norm1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.linear1"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.linear2"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.dropout2"
+     },
+     {
+      "__ref__": "Module",
+      "label": "encoder.norm2"
+     }
+    ],
     "call_depth": 1,
     "call_labels": [
      "encoder:1"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder"
@@ -115025,7 +115649,9 @@
     "num_edges": 40,
     "num_input_edges": 2,
     "num_internal_edges": 37,
+    "num_layers": 35,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 172,
@@ -115085,6 +115711,20 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias",
+     "encoder.linear2.weight",
+     "encoder.linear2.bias",
+     "encoder.norm1.weight",
+     "encoder.norm1.bias",
+     "encoder.norm2.weight",
+     "encoder.norm2.bias",
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -115121,11 +115761,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout"
@@ -115200,7 +115845,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -115260,6 +115907,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -115296,11 +115944,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout1"
@@ -115375,7 +116028,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -115435,6 +116090,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -115471,11 +116127,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.dropout2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.dropout2"
@@ -115550,7 +116211,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 0,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 0,
     "num_params": 0,
@@ -115610,6 +116273,7 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -115646,11 +116310,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.linear1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear1"
@@ -115727,7 +116396,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 40,
@@ -115787,6 +116458,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -115823,11 +116498,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.linear2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.linear2"
@@ -115904,7 +116584,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 36,
@@ -115964,6 +116646,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear2.weight",
+     "encoder.linear2.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -116000,11 +116686,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.norm1:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm1"
@@ -116084,7 +116775,9 @@
     "num_edges": 3,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 2,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 8,
@@ -116144,6 +116837,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.norm1.weight",
+     "encoder.norm1.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -116180,11 +116877,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.norm2:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.norm2"
@@ -116264,7 +116966,9 @@
     "num_edges": 2,
     "num_input_edges": 1,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 8,
@@ -116324,6 +117028,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.norm2.weight",
+     "encoder.norm2.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -116362,11 +117070,16 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 2,
     "call_labels": [
      "encoder.self_attn:1"
     ],
     "call_parent": "encoder",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "encoder"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "encoder.self_attn"
@@ -116571,7 +117284,9 @@
     "num_edges": 28,
     "num_input_edges": 1,
     "num_internal_edges": 26,
+    "num_layers": 25,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 80,
@@ -116631,6 +117346,12 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -116671,11 +117392,18 @@
     "call_children": [
      "encoder"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "encoder"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -116930,7 +117658,9 @@
     "num_edges": 40,
     "num_input_edges": 0,
     "num_internal_edges": 40,
+    "num_layers": 37,
     "num_output_edges": 0,
+    "num_param_tensors": 12,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 12,
     "num_params": 172,
@@ -116990,6 +117720,20 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "encoder.linear1.weight",
+     "encoder.linear1.bias",
+     "encoder.linear2.weight",
+     "encoder.linear2.bias",
+     "encoder.norm1.weight",
+     "encoder.norm1.bias",
+     "encoder.norm2.weight",
+     "encoder.norm2.bias",
+     "encoder.self_attn.in_proj_weight",
+     "encoder.self_attn.in_proj_bias",
+     "encoder.self_attn.out_proj.weight",
+     "encoder.self_attn.out_proj.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -131128,8 +131872,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131146,6 +131890,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 8,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131180,8 +131926,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131198,6 +131944,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 32,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131233,8 +131981,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131251,6 +131999,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131285,8 +132035,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131303,6 +132053,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 32,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131338,8 +132090,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131356,6 +132108,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131390,8 +132144,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131408,6 +132162,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131442,8 +132198,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131460,6 +132216,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131494,8 +132252,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131512,6 +132270,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131546,8 +132306,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131564,6 +132324,8 @@
     "name": "in_proj_bias",
     "num_calls": 1,
     "num_params": 12,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131598,8 +132360,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131616,6 +132378,8 @@
     "name": "in_proj_weight",
     "num_calls": 1,
     "num_params": 48,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131651,8 +132415,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131669,6 +132433,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -131703,8 +132469,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -131721,6 +132487,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 16,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [

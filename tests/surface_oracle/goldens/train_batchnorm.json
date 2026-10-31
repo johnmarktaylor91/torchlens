@@ -9,6 +9,9 @@
     "all_addresses": [
      "bn.num_batches_tracked"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "add_1_1",
     "call_index": 2,
     "dtype": "torch.int64",
     "final_value": {
@@ -19,8 +22,8 @@
      "shape": []
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.int64",
@@ -47,7 +50,6 @@
     ],
     "name": "num_batches_tracked",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [],
     "trace": {
      "__ref__": "Trace",
@@ -68,8 +70,7 @@
       "__ref__": "Op",
       "label": "buffer_2:1"
      }
-    ],
-    "writer_label": "add_1_1"
+    ]
    },
    "bn.running_mean": {
     "activation_memory": "<measured>",
@@ -77,6 +78,9 @@
     "all_addresses": [
      "bn.running_mean"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "batchnorm_1_2",
     "call_index": 2,
     "dtype": "torch.float32",
     "final_value": {
@@ -89,8 +93,8 @@
      ]
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -121,7 +125,6 @@
     ],
     "name": "running_mean",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [
      2
     ],
@@ -144,8 +147,7 @@
       "__ref__": "Op",
       "label": "buffer_5:1"
      }
-    ],
-    "writer_label": "batchnorm_1_2"
+    ]
    },
    "bn.running_var": {
     "activation_memory": "<measured>",
@@ -153,6 +155,9 @@
     "all_addresses": [
      "bn.running_var"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "batchnorm_1_2",
     "call_index": 2,
     "dtype": "torch.float32",
     "final_value": {
@@ -165,8 +170,8 @@
      ]
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -197,7 +202,6 @@
     ],
     "name": "running_var",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [
      2
     ],
@@ -220,8 +224,7 @@
       "__ref__": "Op",
       "label": "buffer_6:1"
      }
-    ],
-    "writer_label": "batchnorm_1_2"
+    ]
    }
   },
   "grad_fns": {},
@@ -3095,6 +3098,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 6,
     "num_layers": 8,
+    "num_ops": 8,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -3245,6 +3249,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 9,
     "num_layers": 11,
+    "num_ops": 11,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -3350,11 +3355,16 @@
     ],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "bn:1"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "bn"
@@ -3467,7 +3477,9 @@
     "num_edges": 8,
     "num_input_edges": 1,
     "num_internal_edges": 6,
+    "num_layers": 8,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 4,
@@ -3531,6 +3543,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "bn.weight",
+     "bn.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -3578,11 +3594,18 @@
     "call_children": [
      "bn"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "bn"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -3707,7 +3730,9 @@
     "num_edges": 9,
     "num_input_edges": 0,
     "num_internal_edges": 9,
+    "num_layers": 11,
     "num_output_edges": 0,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 4,
@@ -3771,6 +3796,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "bn.weight",
+     "bn.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -7779,8 +7808,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -7813,6 +7842,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -7858,8 +7889,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -7892,6 +7923,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 2,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -9300,6 +9333,9 @@
     "all_addresses": [
      "bn.num_batches_tracked"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "add_1_1",
     "call_index": 2,
     "dtype": "torch.int64",
     "final_value": {
@@ -9310,8 +9346,8 @@
      "shape": []
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.int64",
@@ -9338,7 +9374,6 @@
     ],
     "name": "num_batches_tracked",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [],
     "trace": {
      "__ref__": "Trace",
@@ -9359,8 +9394,7 @@
       "__ref__": "Op",
       "label": "buffer_2:1"
      }
-    ],
-    "writer_label": "add_1_1"
+    ]
    },
    "bn.running_mean": {
     "activation_memory": "<measured>",
@@ -9368,6 +9402,9 @@
     "all_addresses": [
      "bn.running_mean"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "batchnorm_1_2",
     "call_index": 2,
     "dtype": "torch.float32",
     "final_value": {
@@ -9380,8 +9417,8 @@
      ]
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -9412,7 +9449,6 @@
     ],
     "name": "running_mean",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [
      2
     ],
@@ -9435,8 +9471,7 @@
       "__ref__": "Op",
       "label": "buffer_5:1"
      }
-    ],
-    "writer_label": "batchnorm_1_2"
+    ]
    },
    "bn.running_var": {
     "activation_memory": "<measured>",
@@ -9444,6 +9479,9 @@
     "all_addresses": [
      "bn.running_var"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "batchnorm_1_2",
     "call_index": 2,
     "dtype": "torch.float32",
     "final_value": {
@@ -9456,8 +9494,8 @@
      ]
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -9488,7 +9526,6 @@
     ],
     "name": "running_var",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [
      2
     ],
@@ -9511,8 +9548,7 @@
       "__ref__": "Op",
       "label": "buffer_6:1"
      }
-    ],
-    "writer_label": "batchnorm_1_2"
+    ]
    }
   },
   "grad_fns": {},
@@ -12386,6 +12422,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 6,
     "num_layers": 8,
+    "num_ops": 8,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -12536,6 +12573,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 9,
     "num_layers": 11,
+    "num_ops": 11,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -12641,11 +12679,16 @@
     ],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "bn:1"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "bn"
@@ -12758,7 +12801,9 @@
     "num_edges": 8,
     "num_input_edges": 1,
     "num_internal_edges": 6,
+    "num_layers": 8,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 4,
@@ -12822,6 +12867,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "bn.weight",
+     "bn.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -12869,11 +12918,18 @@
     "call_children": [
      "bn"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "bn"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -12998,7 +13054,9 @@
     "num_edges": 9,
     "num_input_edges": 0,
     "num_internal_edges": 9,
+    "num_layers": 11,
     "num_output_edges": 0,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 4,
@@ -13062,6 +13120,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "bn.weight",
+     "bn.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -17070,8 +17132,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -17104,6 +17166,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -17149,8 +17213,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -17183,6 +17247,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 2,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -18589,6 +18655,9 @@
     "all_addresses": [
      "bn.num_batches_tracked"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "add_1_1",
     "call_index": 2,
     "dtype": "torch.int64",
     "final_value": {
@@ -18599,8 +18668,8 @@
      "shape": []
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -18621,7 +18690,6 @@
     ],
     "name": "num_batches_tracked",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [],
     "trace": {
      "__ref__": "Trace",
@@ -18642,8 +18710,7 @@
       "__ref__": "Op",
       "label": "buffer_2:1"
      }
-    ],
-    "writer_label": "add_1_1"
+    ]
    },
    "bn.running_mean": {
     "activation_memory": "<measured>",
@@ -18651,6 +18718,9 @@
     "all_addresses": [
      "bn.running_mean"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "batchnorm_1_2",
     "call_index": 2,
     "dtype": "torch.float32",
     "final_value": {
@@ -18663,8 +18733,8 @@
      ]
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -18687,7 +18757,6 @@
     ],
     "name": "running_mean",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [
      2
     ],
@@ -18710,8 +18779,7 @@
       "__ref__": "Op",
       "label": "buffer_5:1"
      }
-    ],
-    "writer_label": "batchnorm_1_2"
+    ]
    },
    "bn.running_var": {
     "activation_memory": "<measured>",
@@ -18719,6 +18787,9 @@
     "all_addresses": [
      "bn.running_var"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "batchnorm_1_2",
     "call_index": 2,
     "dtype": "torch.float32",
     "final_value": {
@@ -18731,8 +18802,8 @@
      ]
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -18755,7 +18826,6 @@
     ],
     "name": "running_var",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [
      2
     ],
@@ -18778,8 +18848,7 @@
       "__ref__": "Op",
       "label": "buffer_6:1"
      }
-    ],
-    "writer_label": "batchnorm_1_2"
+    ]
    }
   },
   "grad_fns": {},
@@ -21653,6 +21722,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 6,
     "num_layers": 8,
+    "num_ops": 8,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -21803,6 +21873,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 9,
     "num_layers": 11,
+    "num_ops": 11,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -21908,11 +21979,16 @@
     ],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "bn:1"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "bn"
@@ -22025,7 +22101,9 @@
     "num_edges": 8,
     "num_input_edges": 1,
     "num_internal_edges": 6,
+    "num_layers": 8,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 4,
@@ -22089,6 +22167,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "bn.weight",
+     "bn.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -22136,11 +22218,18 @@
     "call_children": [
      "bn"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "bn"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -22265,7 +22354,9 @@
     "num_edges": 9,
     "num_input_edges": 0,
     "num_internal_edges": 9,
+    "num_layers": 11,
     "num_output_edges": 0,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 4,
@@ -22329,6 +22420,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "bn.weight",
+     "bn.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -26337,8 +26432,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
@@ -26355,6 +26450,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -26389,8 +26486,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
@@ -26407,6 +26504,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 2,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -27798,6 +27897,9 @@
     "all_addresses": [
      "bn.num_batches_tracked"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "add_1_1",
     "call_index": 2,
     "dtype": "torch.int64",
     "final_value": {
@@ -27808,8 +27910,8 @@
      "shape": []
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.int64",
@@ -27836,7 +27938,6 @@
     ],
     "name": "num_batches_tracked",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [],
     "trace": {
      "__ref__": "Trace",
@@ -27857,8 +27958,7 @@
       "__ref__": "Op",
       "label": "buffer_2:1"
      }
-    ],
-    "writer_label": "add_1_1"
+    ]
    },
    "bn.running_mean": {
     "activation_memory": "<measured>",
@@ -27866,6 +27966,9 @@
     "all_addresses": [
      "bn.running_mean"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "batchnorm_1_2",
     "call_index": 2,
     "dtype": "torch.float32",
     "final_value": {
@@ -27878,8 +27981,8 @@
      ]
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -27910,7 +28013,6 @@
     ],
     "name": "running_mean",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [
      2
     ],
@@ -27933,8 +28035,7 @@
       "__ref__": "Op",
       "label": "buffer_5:1"
      }
-    ],
-    "writer_label": "batchnorm_1_2"
+    ]
    },
    "bn.running_var": {
     "activation_memory": "<measured>",
@@ -27942,6 +28043,9 @@
     "all_addresses": [
      "bn.running_var"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "batchnorm_1_2",
     "call_index": 2,
     "dtype": "torch.float32",
     "final_value": {
@@ -27954,8 +28058,8 @@
      ]
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": {
      "__tensor__": true,
      "dtype": "torch.float32",
@@ -27986,7 +28090,6 @@
     ],
     "name": "running_var",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [
      2
     ],
@@ -28009,8 +28112,7 @@
       "__ref__": "Op",
       "label": "buffer_6:1"
      }
-    ],
-    "writer_label": "batchnorm_1_2"
+    ]
    }
   },
   "grad_fns": {},
@@ -30884,6 +30986,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 6,
     "num_layers": 8,
+    "num_ops": 8,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -31034,6 +31137,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 9,
     "num_layers": 11,
+    "num_ops": 11,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -31139,11 +31243,16 @@
     ],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "bn:1"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "bn"
@@ -31256,7 +31365,9 @@
     "num_edges": 8,
     "num_input_edges": 1,
     "num_internal_edges": 6,
+    "num_layers": 8,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 4,
@@ -31320,6 +31431,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "bn.weight",
+     "bn.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -31367,11 +31482,18 @@
     "call_children": [
      "bn"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "bn"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -31496,7 +31618,9 @@
     "num_edges": 9,
     "num_input_edges": 0,
     "num_internal_edges": 9,
+    "num_layers": 11,
     "num_output_edges": 0,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 4,
@@ -31560,6 +31684,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "bn.weight",
+     "bn.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -35568,8 +35696,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -35602,6 +35730,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -35647,8 +35777,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -35681,6 +35811,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 2,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -37097,6 +37229,9 @@
     "all_addresses": [
      "bn.num_batches_tracked"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "add_1_1",
     "call_index": 2,
     "dtype": "torch.int64",
     "final_value": {
@@ -37107,8 +37242,8 @@
      "shape": []
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -37129,7 +37264,6 @@
     ],
     "name": "num_batches_tracked",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [],
     "trace": {
      "__ref__": "Trace",
@@ -37150,8 +37284,7 @@
       "__ref__": "Op",
       "label": "buffer_2:1"
      }
-    ],
-    "writer_label": "add_1_1"
+    ]
    },
    "bn.running_mean": {
     "activation_memory": "<measured>",
@@ -37159,6 +37292,9 @@
     "all_addresses": [
      "bn.running_mean"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "batchnorm_1_2",
     "call_index": 2,
     "dtype": "torch.float32",
     "final_value": {
@@ -37171,8 +37307,8 @@
      ]
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -37195,7 +37331,6 @@
     ],
     "name": "running_mean",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [
      2
     ],
@@ -37218,8 +37353,7 @@
       "__ref__": "Op",
       "label": "buffer_5:1"
      }
-    ],
-    "writer_label": "batchnorm_1_2"
+    ]
    },
    "bn.running_var": {
     "activation_memory": "<measured>",
@@ -37227,6 +37361,9 @@
     "all_addresses": [
      "bn.running_var"
     ],
+    "buffer_overwrite_index": 2,
+    "buffer_pass": 2,
+    "buffer_source": "batchnorm_1_2",
     "call_index": 2,
     "dtype": "torch.float32",
     "final_value": {
@@ -37239,8 +37376,8 @@
      ]
     },
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "handle": null,
     "has_grad": false,
     "has_multiple_addresses": false,
@@ -37263,7 +37400,6 @@
     ],
     "name": "running_var",
     "num_overwrites": 1,
-    "overwrite_index": 2,
     "shape": [
      2
     ],
@@ -37286,8 +37422,7 @@
       "__ref__": "Op",
       "label": "buffer_6:1"
      }
-    ],
-    "writer_label": "batchnorm_1_2"
+    ]
    }
   },
   "grad_fns": {},
@@ -40148,6 +40283,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 6,
     "num_layers": 8,
+    "num_ops": 8,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -40298,6 +40434,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 9,
     "num_layers": 11,
+    "num_ops": 11,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -40403,11 +40540,16 @@
     ],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "bn:1"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "bn"
@@ -40520,7 +40662,9 @@
     "num_edges": 8,
     "num_input_edges": 1,
     "num_internal_edges": 6,
+    "num_layers": 8,
     "num_output_edges": 1,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 4,
@@ -40584,6 +40728,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "bn.weight",
+     "bn.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -40631,11 +40779,18 @@
     "call_children": [
      "bn"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "bn"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -40760,7 +40915,9 @@
     "num_edges": 9,
     "num_input_edges": 0,
     "num_internal_edges": 9,
+    "num_layers": 11,
     "num_output_edges": 0,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 4,
@@ -40824,6 +40981,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "bn.weight",
+     "bn.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -44641,8 +44802,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -44659,6 +44820,8 @@
     "name": "bias",
     "num_calls": 1,
     "num_params": 2,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -44693,8 +44856,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -44711,6 +44874,8 @@
     "name": "weight",
     "num_calls": 1,
     "num_params": 2,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 1,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [

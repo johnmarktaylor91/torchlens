@@ -421,3 +421,67 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 1d9c79ae26462f829e7254ce975faad23b1442a6 (dirty)
 recorded: 2026-10-29T07:10:25.483928+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:31.808580+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:31.916067+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:32.034798+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:32.375969+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:32.401566+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:32.878704+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:33.038222+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: 3.0 rename: renamed fields and options; v10-persisted Buffer, Param, Module and ModuleCall fields at their v10 spelling
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8177837d997276f26f111c962696c132320687bb (dirty)
+recorded: 2026-10-31T09:22:33.215589+00:00

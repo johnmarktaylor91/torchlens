@@ -1091,6 +1091,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -1233,6 +1234,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -1375,6 +1377,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -1514,6 +1517,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 7,
     "num_layers": 4,
+    "num_ops": 8,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -1601,6 +1605,7 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "cell:1",
@@ -1608,6 +1613,10 @@
      "cell:3"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": "<raises AttributeError>",
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.\n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    Args:\n        in_features: size of each input sample\n        out_features: size of each output sample\n        bias: If set to ``False``, the layer will not learn an additive bias.\n            Default: ``True``\n\n    Shape:\n        - Input: :math:`(*, H_\\text{in})` where :math:`*` means any number of\n          dimensions including none and :math:`H_\\text{in} = \\text{in\\_features}`.\n        - Output: :math:`(*, H_\\text{out})` where all but the last dimension\n          are the same shape as the input and :math:`H_\\text{out} = \\text{out\\_features}`.\n\n    Attributes:\n        weight: the learnable weights of the module of shape\n            :math:`(\\text{out\\_features}, \\text{in\\_features})`. The values are\n            initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`, where\n            :math:`k = \\frac{1}{\\text{in\\_features}}`\n        bias:   the learnable bias of the module of shape :math:`(\\text{out\\_features})`.\n                If :attr:`bias` is ``True``, the values are initialized from\n                :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n                :math:`k = \\frac{1}{\\text{in\\_features}}`\n\n    Examples::\n\n        >>> m = nn.Linear(20, 30)\n        >>> input = torch.randn(128, 20)\n        >>> output = m(input)\n        >>> print(output.size())\n        torch.Size([128, 30])\n    ",
@@ -1681,7 +1690,9 @@
     "num_edges": 6,
     "num_input_edges": 3,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 3,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -1711,6 +1722,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "cell.weight",
+     "cell.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -1751,11 +1766,18 @@
     "call_children": [
      "cell"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "cell"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -1845,7 +1867,9 @@
     "num_edges": 7,
     "num_input_edges": 0,
     "num_internal_edges": 7,
+    "num_layers": 4,
     "num_output_edges": 0,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -1901,6 +1925,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "cell.weight",
+     "cell.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -4976,8 +5004,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -5010,6 +5038,8 @@
     "name": "bias",
     "num_calls": 3,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -5057,8 +5087,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -5092,6 +5122,8 @@
     "name": "weight",
     "num_calls": 3,
     "num_params": 16,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -7282,6 +7314,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -7424,6 +7457,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -7566,6 +7600,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -7705,6 +7740,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 7,
     "num_layers": 4,
+    "num_ops": 8,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -7792,6 +7828,7 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "cell:1",
@@ -7799,6 +7836,10 @@
      "cell:3"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": "<raises AttributeError>",
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.\n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    Args:\n        in_features: size of each input sample\n        out_features: size of each output sample\n        bias: If set to ``False``, the layer will not learn an additive bias.\n            Default: ``True``\n\n    Shape:\n        - Input: :math:`(*, H_\\text{in})` where :math:`*` means any number of\n          dimensions including none and :math:`H_\\text{in} = \\text{in\\_features}`.\n        - Output: :math:`(*, H_\\text{out})` where all but the last dimension\n          are the same shape as the input and :math:`H_\\text{out} = \\text{out\\_features}`.\n\n    Attributes:\n        weight: the learnable weights of the module of shape\n            :math:`(\\text{out\\_features}, \\text{in\\_features})`. The values are\n            initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`, where\n            :math:`k = \\frac{1}{\\text{in\\_features}}`\n        bias:   the learnable bias of the module of shape :math:`(\\text{out\\_features})`.\n                If :attr:`bias` is ``True``, the values are initialized from\n                :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n                :math:`k = \\frac{1}{\\text{in\\_features}}`\n\n    Examples::\n\n        >>> m = nn.Linear(20, 30)\n        >>> input = torch.randn(128, 20)\n        >>> output = m(input)\n        >>> print(output.size())\n        torch.Size([128, 30])\n    ",
@@ -7872,7 +7913,9 @@
     "num_edges": 6,
     "num_input_edges": 3,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 3,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -7902,6 +7945,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "cell.weight",
+     "cell.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -7942,11 +7989,18 @@
     "call_children": [
      "cell"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "cell"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -8036,7 +8090,9 @@
     "num_edges": 7,
     "num_input_edges": 0,
     "num_internal_edges": 7,
+    "num_layers": 4,
     "num_output_edges": 0,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -8092,6 +8148,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "cell.weight",
+     "cell.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -11167,8 +11227,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -11201,6 +11261,8 @@
     "name": "bias",
     "num_calls": 3,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -11248,8 +11310,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -11283,6 +11345,8 @@
     "name": "weight",
     "num_calls": 3,
     "num_params": 16,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -13472,6 +13536,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -13614,6 +13679,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -13756,6 +13822,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -13895,6 +13962,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 7,
     "num_layers": 4,
+    "num_ops": 8,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -13982,6 +14050,7 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "cell:1",
@@ -13989,6 +14058,10 @@
      "cell:3"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": "<raises AttributeError>",
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.\n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    Args:\n        in_features: size of each input sample\n        out_features: size of each output sample\n        bias: If set to ``False``, the layer will not learn an additive bias.\n            Default: ``True``\n\n    Shape:\n        - Input: :math:`(*, H_\\text{in})` where :math:`*` means any number of\n          dimensions including none and :math:`H_\\text{in} = \\text{in\\_features}`.\n        - Output: :math:`(*, H_\\text{out})` where all but the last dimension\n          are the same shape as the input and :math:`H_\\text{out} = \\text{out\\_features}`.\n\n    Attributes:\n        weight: the learnable weights of the module of shape\n            :math:`(\\text{out\\_features}, \\text{in\\_features})`. The values are\n            initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`, where\n            :math:`k = \\frac{1}{\\text{in\\_features}}`\n        bias:   the learnable bias of the module of shape :math:`(\\text{out\\_features})`.\n                If :attr:`bias` is ``True``, the values are initialized from\n                :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n                :math:`k = \\frac{1}{\\text{in\\_features}}`\n\n    Examples::\n\n        >>> m = nn.Linear(20, 30)\n        >>> input = torch.randn(128, 20)\n        >>> output = m(input)\n        >>> print(output.size())\n        torch.Size([128, 30])\n    ",
@@ -14062,7 +14135,9 @@
     "num_edges": 6,
     "num_input_edges": 3,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 3,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -14092,6 +14167,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "cell.weight",
+     "cell.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -14132,11 +14211,18 @@
     "call_children": [
      "cell"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "cell"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -14226,7 +14312,9 @@
     "num_edges": 7,
     "num_input_edges": 0,
     "num_internal_edges": 7,
+    "num_layers": 4,
     "num_output_edges": 0,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -14282,6 +14370,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "cell.weight",
+     "cell.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -17357,8 +17449,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
@@ -17375,6 +17467,8 @@
     "name": "bias",
     "num_calls": 3,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -17411,8 +17505,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": null,
     "has_grad": false,
@@ -17429,6 +17523,8 @@
     "name": "weight",
     "num_calls": 3,
     "num_params": 16,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -19601,6 +19697,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -19743,6 +19840,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -19885,6 +19983,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -20024,6 +20123,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 7,
     "num_layers": 4,
+    "num_ops": 8,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -20111,6 +20211,7 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "cell:1",
@@ -20118,6 +20219,10 @@
      "cell:3"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": "<raises AttributeError>",
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.\n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    Args:\n        in_features: size of each input sample\n        out_features: size of each output sample\n        bias: If set to ``False``, the layer will not learn an additive bias.\n            Default: ``True``\n\n    Shape:\n        - Input: :math:`(*, H_\\text{in})` where :math:`*` means any number of\n          dimensions including none and :math:`H_\\text{in} = \\text{in\\_features}`.\n        - Output: :math:`(*, H_\\text{out})` where all but the last dimension\n          are the same shape as the input and :math:`H_\\text{out} = \\text{out\\_features}`.\n\n    Attributes:\n        weight: the learnable weights of the module of shape\n            :math:`(\\text{out\\_features}, \\text{in\\_features})`. The values are\n            initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`, where\n            :math:`k = \\frac{1}{\\text{in\\_features}}`\n        bias:   the learnable bias of the module of shape :math:`(\\text{out\\_features})`.\n                If :attr:`bias` is ``True``, the values are initialized from\n                :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n                :math:`k = \\frac{1}{\\text{in\\_features}}`\n\n    Examples::\n\n        >>> m = nn.Linear(20, 30)\n        >>> input = torch.randn(128, 20)\n        >>> output = m(input)\n        >>> print(output.size())\n        torch.Size([128, 30])\n    ",
@@ -20191,7 +20296,9 @@
     "num_edges": 6,
     "num_input_edges": 3,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 3,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -20221,6 +20328,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "cell.weight",
+     "cell.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -20261,11 +20372,18 @@
     "call_children": [
      "cell"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "cell"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -20355,7 +20473,9 @@
     "num_edges": 7,
     "num_input_edges": 0,
     "num_internal_edges": 7,
+    "num_layers": 4,
     "num_output_edges": 0,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -20411,6 +20531,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "cell.weight",
+     "cell.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -23486,8 +23610,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -23520,6 +23644,8 @@
     "name": "bias",
     "num_calls": 3,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -23567,8 +23693,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "handle": {
      "__tensor__": true,
@@ -23602,6 +23728,8 @@
     "name": "weight",
     "num_calls": 3,
     "num_params": 16,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -25789,6 +25917,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -25931,6 +26060,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -26073,6 +26203,7 @@
     "num_input_edges": 1,
     "num_internal_edges": 0,
     "num_layers": 1,
+    "num_ops": 1,
     "num_output_edges": 1,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -26212,6 +26343,7 @@
     "num_input_edges": 0,
     "num_internal_edges": 7,
     "num_layers": 4,
+    "num_ops": 8,
     "num_output_edges": 0,
     "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
@@ -26299,6 +26431,7 @@
     "buffer_layers": [],
     "buffers": "<torchlens._data_classes.buffer.BufferAccessor>",
     "call_children": [],
+    "call_children_modules": [],
     "call_depth": 1,
     "call_labels": [
      "cell:1",
@@ -26306,6 +26439,10 @@
      "cell:3"
     ],
     "call_parent": "self",
+    "call_parent_module": {
+     "__ref__": "Module",
+     "label": "self"
+    },
     "call_tree": "<raises AttributeError>",
     "calls": "<torchlens._data_classes.module.ModuleCallAccessor>",
     "class_docstring": "Applies an affine linear transformation to the incoming data: :math:`y = xA^T + b`.\n\n    This module supports :ref:`TensorFloat32<tf32_on_ampere>`.\n\n    On certain ROCm devices, when using float16 inputs this module will use :ref:`different precision<fp16_on_mi200>` for backward.\n\n    Args:\n        in_features: size of each input sample\n        out_features: size of each output sample\n        bias: If set to ``False``, the layer will not learn an additive bias.\n            Default: ``True``\n\n    Shape:\n        - Input: :math:`(*, H_\\text{in})` where :math:`*` means any number of\n          dimensions including none and :math:`H_\\text{in} = \\text{in\\_features}`.\n        - Output: :math:`(*, H_\\text{out})` where all but the last dimension\n          are the same shape as the input and :math:`H_\\text{out} = \\text{out\\_features}`.\n\n    Attributes:\n        weight: the learnable weights of the module of shape\n            :math:`(\\text{out\\_features}, \\text{in\\_features})`. The values are\n            initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`, where\n            :math:`k = \\frac{1}{\\text{in\\_features}}`\n        bias:   the learnable bias of the module of shape :math:`(\\text{out\\_features})`.\n                If :attr:`bias` is ``True``, the values are initialized from\n                :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` where\n                :math:`k = \\frac{1}{\\text{in\\_features}}`\n\n    Examples::\n\n        >>> m = nn.Linear(20, 30)\n        >>> input = torch.randn(128, 20)\n        >>> output = m(input)\n        >>> print(output.size())\n        torch.Size([128, 30])\n    ",
@@ -26379,7 +26516,9 @@
     "num_edges": 6,
     "num_input_edges": 3,
     "num_internal_edges": 0,
+    "num_layers": 1,
     "num_output_edges": 3,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -26409,6 +26548,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "cell.weight",
+     "cell.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -26449,11 +26592,18 @@
     "call_children": [
      "cell"
     ],
+    "call_children_modules": [
+     {
+      "__ref__": "Module",
+      "label": "cell"
+     }
+    ],
     "call_depth": 0,
     "call_labels": [
      "self:1"
     ],
     "call_parent": null,
+    "call_parent_module": null,
     "call_tree": {
      "__ref__": "ModuleCall",
      "label": "self"
@@ -26543,7 +26693,9 @@
     "num_edges": 7,
     "num_input_edges": 0,
     "num_internal_edges": 7,
+    "num_layers": 4,
     "num_output_edges": 0,
+    "num_param_tensors": 2,
     "num_param_tensors_frozen": 0,
     "num_param_tensors_trainable": 2,
     "num_params": 20,
@@ -26599,6 +26751,10 @@
     "params": "<torchlens._data_classes.param.ParamAccessor>",
     "projective_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
     "receptive_field": "<skipped: lazy influence-geometry solver; view object, solve cost unbounded>",
+    "recursive_param_addresses": [
+     "cell.weight",
+     "cell.bias"
+    ],
     "recursive_params": "<torchlens._data_classes.param.ParamAccessor>",
     "total_autograd_memory": "<measured>",
     "total_backward_duration": "<measured>",
@@ -29516,8 +29672,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -29534,6 +29690,8 @@
     "name": "bias",
     "num_calls": 3,
     "num_params": 4,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
@@ -29570,8 +29728,8 @@
     "dtype_ref": "<torchlens._ir.refs.DtypeRef>",
     "grad": null,
     "grad_dtype": null,
-    "grad_memory": "<measured>",
     "grad_shape": null,
+    "gradient_memory": "<measured>",
     "grads": "<raises TypeError>",
     "handle": null,
     "has_grad": false,
@@ -29588,6 +29746,8 @@
     "name": "weight",
     "num_calls": 3,
     "num_params": 16,
+    "num_uses_by_layers": 1,
+    "num_uses_by_ops": 3,
     "param_memory": "<measured>",
     "resolver_status": "resolved",
     "shape": [
