@@ -27,6 +27,22 @@ BUILDER_PATH = REPO_ROOT / "scripts" / "build_affected_test_map.py"
 MAX_TESTS = 8
 
 
+def _is_glob(key: str) -> bool:
+    """Return whether a map key needs ``fnmatch`` (an exact path does not).
+
+    Parameters
+    ----------
+    key:
+        Map key.
+
+    Returns
+    -------
+    bool
+        True when the key holds a wildcard character.
+    """
+    return any(ch in key for ch in "*?[")
+
+
 def _load_map() -> dict[str, list[str]]:
     """Return the committed ``inner.map``.
 
@@ -79,9 +95,15 @@ def _load_builder() -> ModuleType:
 def test_every_torchlens_module_matches_a_key() -> None:
     """Every ``.py`` file under ``torchlens/`` matches at least one map key."""
     keys = list(_load_map())
+    exact = {k for k in keys if not _is_glob(k)}
+    globs = [k for k in keys if _is_glob(k)]
     modules = _module_paths()
     assert modules, "no modules found under torchlens/"
-    unmapped = [path for path in modules if not any(fnmatch.fnmatchcase(path, k) for k in keys)]
+    unmapped = [
+        path
+        for path in modules
+        if path not in exact and not any(fnmatch.fnmatchcase(path, k) for k in globs)
+    ]
     assert not unmapped, f"{len(unmapped)} unmapped modules, e.g. {unmapped[:10]}"
 
 
@@ -113,9 +135,13 @@ def test_no_list_exceeds_the_cap() -> None:
 def test_keys_cover_only_torchlens_paths() -> None:
     """Every key is a ``torchlens/`` pattern that matches at least one module."""
     modules = _module_paths()
+    module_set = set(modules)
     for key in _load_map():
         assert key.startswith("torchlens/"), key
-        assert any(fnmatch.fnmatchcase(path, key) for path in modules), f"dead key {key}"
+        if _is_glob(key):
+            assert any(fnmatch.fnmatchcase(path, key) for path in modules), f"dead key {key}"
+        else:
+            assert key in module_set, f"dead key {key}"
 
 
 @pytest.mark.heavy
