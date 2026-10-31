@@ -382,3 +382,69 @@ jobs:
             "tests/test_packaging_diet.py::test_built_wheel_manifest_is_diet" \
             "tests/test_ci_packaging_gates.py::test_built_sdist_manifest_is_governed" \
             --tb=short -q
+
+  packaging-sets:
+    name: Packaging install sets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # The one source: tools/packaging/matrix.toml. The generator's --check
+    # fails this job when tools/packaging/constraints/ is stale, and its set
+    # list becomes the install matrix below (the pr group on pull requests,
+    # every set on manual dispatch and workflow_call).
+    outputs:
+      include: ${{ steps.sets.outputs.include }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Check the generated constraints and list the sets
+        id: sets
+        env:
+          GROUP: ${{ (github.event_name == 'pull_request' || github.event_name == 'push') && 'pr' || 'all' }}
+        run: |
+          python tools/packaging/generate_constraints.py --check
+          echo "include=$(python tools/packaging/generate_constraints.py --list-sets --group "$GROUP")" >> "$GITHUB_OUTPUT"
+
+  packaging-install:
+    name: Clean install (${{ matrix.set }}, python ${{ matrix.python }})
+    needs: packaging-sets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # Builds the wheel and sdist, installs each into a fresh venv with the
+    # set's extras under tools/packaging/constraints/<set>.txt, and probes
+    # import, the health call, one trace, a save and load round trip and the
+    # typed dependency refusals (tests/packaging/). The only place the matrix
+    # resolves against the live indexes on every pull request.
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.packaging-sets.outputs.include) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "tools/packaging/constraints/*.txt"
+
+      - name: Install the test runner
+        # The runner environment only builds and drives the venvs; torchlens
+        # and its extras install inside each fresh venv, never here.
+        run: uv pip install --system "pytest>=8,<10" "build>=1.2" "tomli>=2; python_version < '3.11'"
+
+      - name: Run the clean-install tests for this set
+        env:
+          TORCHLENS_PACKAGING_SETS: ${{ matrix.set }}
+        # --noconftest: tests/conftest.py imports torch and torchlens, which
+        # this runner environment deliberately lacks.
+        run: python -m pytest tests/packaging -m packaging --noconftest -p no:cacheprovider --tb=short -q
