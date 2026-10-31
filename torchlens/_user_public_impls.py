@@ -54,6 +54,7 @@ from ._validation_state_snapshot import (
     restore_snapshot_if_changed,
     snapshot_state_for_restore,
     state_matches_snapshot,
+    with_storage_bindings_of,
 )
 from .backends.registry import BackendName, resolve_backend_spec
 from .errors import TraceNotReproducibleWarning
@@ -1652,10 +1653,11 @@ def _validate_forward_pass_torch(
                 {"code": COPY_FAILED_CODE} if validation_plain_attr_snapshot.copy_failure else None,
             )
         # The replay model was just copied from (or is) the restored live model,
-        # so its state normally equals the live snapshot bit for bit: reuse it
-        # rather than hold a second copy of the weights.
+        # so its state normally equals the live snapshot bit for bit: reuse its
+        # values rather than hold a second copy of the weights, with the
+        # storage bindings of the replay model's own tensors.
         validation_state_dict = (
-            state_dict
+            with_storage_bindings_of(state_dict, validation_model)
             if state_matches_snapshot(validation_model, state_dict)
             else snapshot_state_for_restore(validation_model)
         )
