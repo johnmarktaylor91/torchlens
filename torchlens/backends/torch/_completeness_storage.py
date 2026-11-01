@@ -639,12 +639,11 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
         yield
     except BaseException as inflight:
         _restore_scalar_belt()
-        # b3-sol (R07 filter-hazard rollup): this advisory used to fire from an
-        # unconditional ``finally``, so a warnings-as-error filter raised it
-        # DURING UNWIND and replaced the real in-flight capture failure
-        # (cascading into the terminal capture-failed advisory). On the
-        # exception path the advisory degrades to a note; the success path
-        # below keeps full filter semantics.
+        # b3-sol (R07 filter-hazard rollup): this advisory used to fire from an unconditional
+        # ``finally``, so a warnings-as-error filter raised it DURING UNWIND and replaced the
+        # real in-flight capture failure (cascading into the terminal capture-failed advisory).
+        # On the exception path the advisory degrades to a note; the success path below keeps
+        # full filter semantics.
         # NOTE: this arm runs while the user's exception is in flight, so it
         # uses only names bound at this module's top; a name that failed to
         # resolve here would replace the in-flight exception with a NameError.
@@ -654,8 +653,6 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
             # Bare try/except, no helper: the advisory must never replace the
             # user's in-flight exception (the exact bug this arm exists to prevent).
             try:
-                # _exception_notes is bound in BOTH modules' globals, so it
-                # resolves under the rebind described in the NOTE above.
                 _exception_notes.defer_failure_note(
                     state.trace,
                     inflight,

@@ -808,9 +808,8 @@ def capture_with_rescue(
         # started from (the capture observer's snapshot), never from what the
         # first forward left; buffers keep the R16-2 refusal above.
         _state.rewind_capture_attributes()
-        # The rescue run's own capture-failed advisory is deferred too: its
-        # exception never propagates (the primary's error or trace does), so
-        # an advisory pointing at ITS exc.partial_trace would always be untrue.
+        # The rescue run's own capture-failed advisory is deferred too: its exception
+        # never propagates, so an advisory pointing at ITS exc.partial_trace would be untrue.
         with (
             _suppress_repeated_warnings(emitted_warnings),
             _defer_capture_failed_warnings(rescue_deferred),
@@ -869,9 +868,8 @@ def capture_with_rescue(
             )
             if primary_error is not None:
                 _flush_deferred_warnings(primary_deferred)
-                partial_trace = getattr(
-                    getattr(primary_error, "partial_trace", None), "trace", None
-                )
+                partial = getattr(primary_error, "partial_trace", None)
+                partial_trace = getattr(partial, "trace", None)
                 if partial_trace is not None:
                     try:
                         partial_trace._rescue_rerun = _disclosure(

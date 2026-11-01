@@ -14,9 +14,8 @@ from __future__ import annotations
 
 import contextlib
 from types import MappingProxyType
-from typing import Any
 
-from .._errors import TraceCaptureError
+from .._errors import TraceCaptureError, attach_partial_trace, original_exception
 from .._utils._exception_notes import annotate_guarded, pop_failure_notes
 from ..errors import TorchLensError
 from .outcome import FailureOrigin, classify_failure_origin, safe_exception_str
@@ -107,49 +106,6 @@ def _add_notes(error: BaseException, notes: tuple[str, ...]) -> None:
     for note in notes:
         with contextlib.suppress(Exception):
             annotate_guarded(error, note)
-
-
-def attach_partial_trace(error: BaseException, partial: Any) -> None:
-    """Attach the partial capture to the escaping error.
-
-    Parameters
-    ----------
-    error:
-        Exception the capture door is about to raise.
-    partial:
-        Partial capture built from the failed session.
-
-    Raises
-    ------
-    Exception
-        Whatever the exception's attribute assignment raises; the caller
-        reports it without masking ``error``.
-    """
-
-    if isinstance(error, TraceCaptureError):
-        error.partial_trace = partial
-        return
-    if getattr(error, "partial_trace", None) is None:
-        error.partial_trace = partial  # type: ignore[attr-defined]
-
-
-def original_exception(error: BaseException) -> BaseException:
-    """Return the exception the forward raised, unwrapping a TraceCaptureError.
-
-    Parameters
-    ----------
-    error:
-        Exception a capture door raised.
-
-    Returns
-    -------
-    BaseException
-        The ``__cause__`` of a :class:`TraceCaptureError`, else ``error``.
-    """
-
-    if isinstance(error, TraceCaptureError) and error.__cause__ is not None:
-        return error.__cause__
-    return error
 
 
 def _message(

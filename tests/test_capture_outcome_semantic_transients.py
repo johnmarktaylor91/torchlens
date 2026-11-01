@@ -121,11 +121,7 @@ def test_failed_capture_drops_the_semantic_output_scratch() -> None:
     model = Boom().eval()
     model._torchlens_output_tokenizer = _Tokenizer()
     with pytest.raises(TraceCaptureError) as excinfo:
-        tl.trace(
-            model,
-            torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(output_style="classification"),
-        )
+        tl.trace(model, torch.ones(1, 3))
     assert isinstance(excinfo.value.__cause__, RuntimeError)
     partial = getattr(excinfo.value, "partial_trace", None)
     if partial is None:

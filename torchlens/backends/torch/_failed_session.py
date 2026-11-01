@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any, cast
 
+from torchlens._errors import TraceCaptureError, attach_partial_trace, original_exception
 from torchlens._utils._exception_notes import annotate_guarded
 from torchlens.backends.torch import _tl
 
@@ -89,9 +90,6 @@ def _attach_partial_trace(
     itself. The partial is built from the forward's own exception and lands on
     ``exc.partial_trace``; the forward's exception is never mutated.
     """
-    from torchlens._capture._trace_capture_error import attach_partial_trace, original_exception
-    from torchlens._errors import TraceCaptureError
-
     try:
         partial_trace = partial_trace_cls.from_trace(
             cast("Trace", session), original_exception(exc)
@@ -163,8 +161,6 @@ def _capture_attempt_failed_message(exc: Exception) -> str:
     # BatchNorm running stats) is NOT rolled back, so the historical
     # "the model ... restored" claim was false exactly when a forward
     # materialized a module and then failed.
-    from torchlens._capture._trace_capture_error import original_exception
-
     return (
         "TorchLens capture attempt failed "
         f"({type(original_exception(exc)).__name__}); TorchLens instrumentation is removed "

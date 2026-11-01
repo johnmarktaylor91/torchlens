@@ -4587,7 +4587,6 @@ package-docstrings	torchlens/_option_receipt.py	28,
 package-docstrings	torchlens/_options_validation.py	2026
 package-docstrings	torchlens/_options_validation.py	26
 package-docstrings	torchlens/_partial/__init__.py	10
-package-docstrings	torchlens/_partial/__init__.py	128
 package-docstrings	torchlens/_partial/__init__.py	16
 package-docstrings	torchlens/_partial/__init__.py	24
 package-docstrings	torchlens/_partial/__init__.py	25
@@ -7411,6 +7410,7 @@ test-docstrings	tests/test_capture_cache_impl_fingerprint.py	32
 test-docstrings	tests/test_capture_cache_impl_fingerprint.py	35
 test-docstrings	tests/test_capture_cache_impl_fingerprint.py	39
 test-docstrings	tests/test_capture_failure_reporting.py	3.10
+test-docstrings	tests/test_capture_failure_reporting.py	3.11
 test-docstrings	tests/test_capture_failure_reporting.py	678
 test-docstrings	tests/test_capture_guard_transactionality.py	3.12
 test-docstrings	tests/test_capture_guard_transactionality.py	60
@@ -7779,13 +7779,11 @@ test-docstrings	tests/test_fp8_guard.py	256
 test-docstrings	tests/test_fp8_guard.py	32
 test-docstrings	tests/test_fp8_guard.py	57344,
 test-docstrings	tests/test_fp8_guard.py	80
-test-docstrings	tests/test_gc.py	128
 test-docstrings	tests/test_gc.py	18
 test-docstrings	tests/test_gc.py	20
 test-docstrings	tests/test_gc.py	25
 test-docstrings	tests/test_gc.py	33
 test-docstrings	tests/test_gc.py	37
-test-docstrings	tests/test_gc.py	37,
 test-docstrings	tests/test_gc.py	54
 test-docstrings	tests/test_generate_api_map.py	10
 test-docstrings	tests/test_generative_properties_r73.py	120

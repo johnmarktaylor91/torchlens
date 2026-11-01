@@ -601,6 +601,38 @@ class TraceCaptureError(CaptureError):
         self.origin = origin
 
 
+def original_exception(error: BaseException) -> BaseException:
+    """The exception the forward raised: a :class:`TraceCaptureError`'s ``__cause__``, else ``error``."""
+
+    if isinstance(error, TraceCaptureError) and error.__cause__ is not None:
+        return error.__cause__
+    return error
+
+
+def attach_partial_trace(error: BaseException, partial: Any) -> None:
+    """Attach the partial capture to the escaping error.
+
+    Parameters
+    ----------
+    error:
+        Exception the capture door is about to raise.
+    partial:
+        Partial capture built from the failed session.
+
+    Raises
+    ------
+    Exception
+        Whatever the exception's attribute assignment raises; the caller
+        reports it without masking ``error``.
+    """
+
+    if isinstance(error, TraceCaptureError):
+        error.partial_trace = partial
+        return
+    if getattr(error, "partial_trace", None) is None:
+        error.partial_trace = partial  # type: ignore[attr-defined]
+
+
 class UserTransformError(CaptureError, RuntimeError):
     """Raised when activation_transform or grad_transform raises."""
 

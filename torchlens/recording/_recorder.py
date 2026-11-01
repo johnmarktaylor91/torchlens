@@ -15,7 +15,6 @@ from torch import nn
 from torchlens._ir.capture_events import CaptureEvents
 
 from .. import _state
-from .._capture._trace_capture_error import original_exception
 from .._capture.finalize.settle import _extract_and_mark_outputs
 from .._capture.outcome import safe_exception_repr, safe_exception_str
 from .._capture.predicates import _save_selector_matches, validate_followed_by_capability
@@ -29,7 +28,7 @@ from .._capture.stop import StopDirective, stop_directive_for_trace
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
-from .._errors import CaptureNotActiveError, KeywordConflictError
+from .._errors import CaptureNotActiveError, KeywordConflictError, original_exception
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..intervention.predicates import InterventionPredicate
@@ -236,13 +235,10 @@ class Recorder:
         on_predicate_error, storage, streaming, seed:
             Fastlog recording options.
         on_forward_error:
-            Controls failed-forward handling. ``"raise"`` raises the
-            capture's ``TraceCaptureError`` (chained ``from`` the forward's
-            exception). ``"attach_partial"`` attaches a failed partial
-            ``Recording`` to that error as ``exc.partial_recording`` and
-            re-raises it.
-            ``"return_partial"`` returns ``None`` from the failed ``log()`` and
-            exposes the failed partial on ``recorder.recording``.
+            Controls failed-forward handling: ``"raise"`` raises the capture's ``TraceCaptureError``;
+            ``"attach_partial"`` also hangs the failed partial ``Recording`` on it as
+            ``exc.partial_recording`` before re-raising. ``"return_partial"`` returns ``None`` from
+            the failed ``log()`` and exposes the failed partial on ``recorder.recording``.
         halt:
             Optional predicate evaluated after each event's save decision. Returning
             ``True`` stops the active forward pass and marks the recording halted.
@@ -561,11 +557,6 @@ class Recorder:
             output = None
             return output
         except Exception as exc:
-            # ``exc`` is what propagates: a TraceCaptureError wrapping the
-            # forward's exception, or a TorchLens error as itself. Notes and
-            # ``partial_recording`` ride it; the failed recording's string
-            # metadata describes the forward's own exception.
-            forward_exc = original_exception(exc)
             captured_run_core = trace.__dict__.pop("_fastlog_captured_run_core", None)
             if captured_run_core is not None:
                 self._captured_run_cores.append(captured_run_core)
@@ -579,11 +570,11 @@ class Recorder:
                     if add_note is not None:
                         add_note(echo_note)
             if forward_disposition == "raise":
-                self._state.abort_storage(safe_exception_str(forward_exc))
+                self._state.abort_storage(safe_exception_str(original_exception(exc)))
                 raise
             partial_build_failed = False
             try:
-                partial = self._mark_recording_failed(trace, forward_exc)
+                partial = self._mark_recording_failed(trace, original_exception(exc))
                 self._failed = True
                 self._recording = partial
                 if forward_disposition == "attach_partial":
