@@ -430,7 +430,7 @@ torchlens/_quickstart/_primitive.py::capture_concrete	82
 torchlens/_quickstart/_render.py::_render_finished_trace	74
 torchlens/_quickstart/_render.py::render	111
 torchlens/_registry/kernel.py::Registry.register	88
-torchlens/_robustness.py	821
+torchlens/_robustness.py	820
 torchlens/_robustness.py::_iter_tensors_with_paths	88
 torchlens/_robustness.py::_maybe_admit_meta	63
 torchlens/_robustness.py::check_model_and_input_variants	268
@@ -1065,7 +1065,7 @@ torchlens/bridge/shap.py::explain	68
 torchlens/bridge/transformers.py	804
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	62
 torchlens/bridge/transformers.py::trace_text	67
-torchlens/bundle/__init__.py	1997
+torchlens/bundle/__init__.py	1993
 torchlens/bundle/__init__.py::Bundle.rank_changes	78
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
 torchlens/bundle/_compare_gate.py::require_comparable	143

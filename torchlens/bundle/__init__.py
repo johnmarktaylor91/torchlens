@@ -60,7 +60,7 @@ from ._deltas import (
     _tensor_field as _tensor_field,
 )
 from ._draw import bundle_draw as _bundle_draw
-from ._labels import label_view
+from ._labels import AmbiguousLabelError, label_view
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
 from ._measure import (
     measure_members as _measure_members,
@@ -114,10 +114,6 @@ def _member_outcome_token(member: Any) -> str:
 
     outcome = fail_open(lambda: getattr(member, "outcome", None), lambda _error: None)
     return getattr(getattr(outcome, "status", None), "value", None) or "unknown"
-
-
-class AmbiguousLabelError(KeyError):
-    """Raised when ``Bundle.at`` finds a label in multiple accessors."""
 
 
 class _BundleAccessorClassView:

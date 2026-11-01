@@ -2507,7 +2507,7 @@ def _refuse_unwrap_during_active_capture() -> None:
     if _state._active_trace is None and not _state._logging_enabled:
         return
     trace = _state._active_trace
-    model_name = None if trace is None else (trace.model_name or trace._source_class_name)
+    model_name = (trace.model_name or trace._source_class_name) if trace is not None else None
     raise CaptureNotActiveError(
         "unwrap_torch() was called while a TorchLens capture is still active"
         + (f" for model {model_name!r}" if model_name else ""),

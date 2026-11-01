@@ -5,6 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final
 
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.op import Op
+
 from .._capture.flops import append_attention_note
 from .._errors import InvalidArgumentError
 from .._quantities import Duration
@@ -401,8 +404,6 @@ def _format_value(value: Any) -> str:
 def _param_items(params: Any) -> list[Any]:
     """Extract parameter-like items from a node or iterable."""
 
-    from torchlens._data_classes.layer import Layer
-    from torchlens._data_classes.op import Op
     from torchlens._visualization._render_common import BoundaryNode, FocusNode
 
     barcodes = getattr(params, "_param_barcodes", None)
