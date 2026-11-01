@@ -7019,9 +7019,7 @@ test-docstrings	tests/test_argpos_hardening.py	5.0
 test-docstrings	tests/test_aten_profile.py	2.1
 test-docstrings	tests/test_aten_profile.py	2.2
 test-docstrings	tests/test_attested_coupling_evidence.py	40
-test-docstrings	tests/test_attested_coupling_real_models.py	051
 test-docstrings	tests/test_attested_coupling_selectors.py	42
-test-docstrings	tests/test_attr7_edge_sets.py	64
 test-docstrings	tests/test_attrib_methods_captum_ledger.py	13
 test-docstrings	tests/test_attrib_methods_captum_ledger.py	18
 test-docstrings	tests/test_attrib_methods_captum_ledger.py	2.80
@@ -7114,7 +7112,6 @@ test-docstrings	tests/test_backward_p5_modules.py	26
 test-docstrings	tests/test_backward_p5_modules.py	27
 test-docstrings	tests/test_backward_validation_walker_guards.py	40
 test-docstrings	tests/test_bound_method_root_contract.py	41
-test-docstrings	tests/test_bound_method_root_real_model.py	11
 test-docstrings	tests/test_brainpipe_byte_model.py	64
 test-docstrings	tests/test_brainpipe_capture_floor.py	11
 test-docstrings	tests/test_brainpipe_capture_floor.py	20
@@ -7412,7 +7409,6 @@ test-docstrings	tests/test_entry_facade_lazy_entry.py	15
 test-docstrings	tests/test_entry_facade_lazy_entry.py	20
 test-docstrings	tests/test_entry_facade_modern_spelling.py	18
 test-docstrings	tests/test_episode_derivation_declared.py	13
-test-docstrings	tests/test_episode_derivation_real_model.py	13
 test-docstrings	tests/test_episode_join_persistence.py	40
 test-docstrings	tests/test_episode_truth_four_clause.py	40
 test-docstrings	tests/test_episode_truth_real_model.py	10
@@ -7506,7 +7502,6 @@ test-docstrings	tests/test_fast_until.py	32
 test-docstrings	tests/test_fast_until.py	32,
 test-docstrings	tests/test_fastlog/test_ddp_unwrap.py	10
 test-docstrings	tests/test_fastlog/test_ddp_unwrap.py	2026
-test-docstrings	tests/test_fastlog/test_dynamic_graph.py	1000
 test-docstrings	tests/test_fastlog/test_persistence_recover.py	10
 test-docstrings	tests/test_fastlog/test_persistence_recover.py	13
 test-docstrings	tests/test_fastlog/test_persistence_recover.py	15
@@ -7884,13 +7879,6 @@ test-docstrings	tests/test_lovely_containers_reprs.py	31
 test-docstrings	tests/test_lovely_edge_semantics.py	28
 test-docstrings	tests/test_lovely_glance_seams.py	14
 test-docstrings	tests/test_lovely_golden_corpus.py	33
-test-docstrings	tests/test_lovely_value_reprs.py	10
-test-docstrings	tests/test_lovely_value_reprs.py	120
-test-docstrings	tests/test_lovely_value_reprs.py	15
-test-docstrings	tests/test_lovely_value_reprs.py	30
-test-docstrings	tests/test_lovely_value_reprs.py	32
-test-docstrings	tests/test_lovely_value_reprs.py	4.4
-test-docstrings	tests/test_lovely_value_reprs.py	52
 test-docstrings	tests/test_marker_lint.py	10
 test-docstrings	tests/test_marker_lint.py	1300
 test-docstrings	tests/test_marker_lint.py	15,
@@ -7970,7 +7958,6 @@ test-docstrings	tests/test_modelexplorer_episode.py	12
 test-docstrings	tests/test_modelexplorer_episode.py	14
 test-docstrings	tests/test_modelexplorer_export.py	14
 test-docstrings	tests/test_modelexplorer_export.py	19
-test-docstrings	tests/test_modelexplorer_multigraph.py	10
 test-docstrings	tests/test_modelexplorer_overlay.py	12
 test-docstrings	tests/test_modelexplorer_overlay.py	14
 test-docstrings	tests/test_modelexplorer_real.py	100
@@ -8652,7 +8639,6 @@ test-docstrings	tests/test_stoch_edits_population.py	32
 test-docstrings	tests/test_stoch_edits_verbs.py	12
 test-docstrings	tests/test_stoch_edits_verbs.py	15
 test-docstrings	tests/test_stoch_edits_verbs.py	34
-test-docstrings	tests/test_stop_early.py	20
 test-docstrings	tests/test_streaming_finalization_arming.py	18
 test-docstrings	tests/test_streaming_stats.py	13
 test-docstrings	tests/test_streaming_stats.py	19
@@ -9457,7 +9443,6 @@ test-names	tests/test_extract_v2_workflows.py	18_
 test-names	tests/test_factcore_tensor_stats.py	16_
 test-names	tests/test_factcore_tensor_stats.py	64
 test-names	tests/test_fast_until.py	18_
-test-names	tests/test_fastlog/test_dynamic_graph.py	1000_
 test-names	tests/test_fixa_escrow_replay_output_contract.py	18_
 test-names	tests/test_fixa_escrow_spill.py	16_
 test-names	tests/test_fixa_escrow_spill.py	18_
