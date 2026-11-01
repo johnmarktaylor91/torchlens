@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-80 packages, 1237 modules, 617268 lines, 0 modules without a docstring.
+80 packages, 1240 modules, 617282 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -30,7 +30,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 28 | 16657 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 2185 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 2 | 473 |
-| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14716 |
+| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14717 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 10 | 6697 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2940 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2113 |
@@ -58,7 +58,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 88 | 50816 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8008 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 17 | 7729 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 20 | 7821 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 690 |
 | `torchlens.checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3824 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2017 |
@@ -68,10 +68,10 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2214 |
 | `torchlens.errors` | Public TorchLens exception classes. | 4 | 1029 |
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 73 |
-| `torchlens.experiment` | torchlens.experiment — multi-run experiments as first-class objects. | 5 | 2360 |
+| `torchlens.experiment` | torchlens.experiment — multi-run experiments as first-class objects. | 5 | 2280 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 333 |
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 951 |
-| `torchlens.export` | Static export helpers for TorchLens logs. | 13 | 5202 |
+| `torchlens.export` | Static export helpers for TorchLens logs. | 13 | 5203 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 2999 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 63 | 35140 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
@@ -587,11 +587,11 @@ Private registry kernel package (architecture ; never public API). (2 modules, 4
 
 ### `torchlens._runnable`
 
-Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14716 lines)
+Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14717 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 1825 |
+| `__init__` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 1826 |
 | `attestation` | Numeric attestation and nondeterminism checks. | 599 |
 | `call_arguments` | Sparse-call argument decoding and binding. | 630 |
 | `call_outputs` | Sparse-call output binding and mutation checks. | 613 |
@@ -1229,26 +1229,29 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2700 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (17 modules, 7729 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (20 modules, 7821 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 2338 |
+| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 2046 |
 | `_aligned_sites` | Cross-member site pairing for Bundle site reads. | 82 |
-| `_alternatives` | ''Bundle.add_alternative'': merge a steered re-run of the user's harness. | 358 |
+| `_alternatives` | ''Bundle.add_alternative'': merge a steered re-run of the user's harness. | 357 |
 | `_bytes` | Bundle-level retained-bytes aggregation + retention preflight ( item 5c). | 120 |
-| `_compare_gate` | The Bundle comparison gate: two predicates, operand-scoped, topology-aware. | 381 |
-| `_comparisons` | Named per-node comparison fields stored on a bundle's supergraph. | 154 |
-| `_deltas` | Member-pairwise delta and comparison helpers for :class:'Bundle'. | 492 |
+| `_compare_gate` | The Bundle comparison gate: two predicates, operand-scoped, topology-aware. | 382 |
+| `_comparisons` | Named per-node comparison fields stored on a bundle's supergraph. | 140 |
+| `_deltas` | Member-pairwise delta and comparison helpers for :class:'Bundle'. | 432 |
+| `_draw` | The one ''Bundle.draw'' door: the bundle graph and the member diff picture. | 103 |
 | `_fed_by` | The ''fed_by'' relation kind: content provenance between two traced calls. | 531 |
+| `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 190 |
 | `_lineage` | Bundle lineage: bundle_id, member-construction anchors, BundleOperation rows. | 488 |
+| `_members` | Member-list coercion behind ''Bundle'' construction, ''add'' and ''remove''. | 187 |
 | `_outcome_fold` | Derived worst-of-members capture-outcome fold for ''Bundle'' (foldB ). | 102 |
 | `_provenance` | The provenance join: ''bundle.why'' / ''bundle.provenance'' ( item 4). | 411 |
-| `_relation_carriage` | Relation-carriage dynamic methods for ''Bundle'' (C07X, foldB ). | 330 |
+| `_relation_carriage` | Relation-carriage method bodies for ''Bundle'' (C07X, foldB ). | 315 |
 | `_relations` | Bundle member-relation table (grammar v2): typed, closed, OPTIONAL relations. | 780 |
 | `_selected_by` | The ''selected_by'' relation kind: a control decision between two traced calls. | 93 |
-| `_token_divergence` | ''Bundle.token_divergence'': where two runs of one call part, by exact token ids. | 224 |
-| `_token_spans` | Automatic ''fed_by'' span finding and the strict token-pair read. | 570 |
+| `_token_divergence` | ''Bundle.token_divergence'': where two runs of one call part, by exact token ids. | 223 |
+| `_token_spans` | Automatic ''fed_by'' span finding and the strict token-pair read. | 564 |
 | `_vary` | ''bundle.vary(mapping)'' — one explicit edit or identity PER member ( item 5). | 275 |
 
 ### `torchlens.callbacks`
@@ -1385,12 +1388,12 @@ Example-loading namespace for small TorchLens artifacts. (1 modules, 73 lines)
 
 ### `torchlens.experiment`
 
-torchlens.experiment — multi-run experiments as first-class objects. (5 modules, 2360 lines)
+torchlens.experiment — multi-run experiments as first-class objects. (5 modules, 2280 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | torchlens.experiment — multi-run experiments as first-class objects. | 46 |
-| `_engine` | The private candidate engine + the ''site_sweep'' face ( items 6-8). | 1044 |
+| `_engine` | The private candidate engine + the ''site_sweep'' face ( items 6-8). | 964 |
 | `_head_sugar` | Head-ablation sugar ( item 7b): the canonical mechinterp move, guarded. | 134 |
 | `_ledger` | The persistent experiment ledger ( items 9-10): event-sourced, chained. | 948 |
 | `_reader` | Read-only ledger reader ( item 11): ''tl.experiment.read_ledger(path)''. | 188 |
@@ -1415,11 +1418,11 @@ Experimental Dagua rendering bridge exports. (2 modules, 951 lines)
 
 ### `torchlens.export`
 
-Static export helpers for TorchLens logs. (13 modules, 5202 lines)
+Static export helpers for TorchLens logs. (13 modules, 5203 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Static export helpers for TorchLens logs. | 1250 |
+| `__init__` | Static export helpers for TorchLens logs. | 1251 |
 | `_common` | Shared export helpers (subpackage promotion, item 18). | 217 |
 | `_graphs` | Foreign graph-viewer export targets (bridge tier; item 18). | 18 |
 | `_netron` | The enriched netron exporter entry (netron -B6). | 400 |
