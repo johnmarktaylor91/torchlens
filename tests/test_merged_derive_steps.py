@@ -1,7 +1,7 @@
 """Characterization pins for ``derive_merge`` across its derivation stages.
 
 Each case runs the one merge derivation over synthetic rank evidence and pins
-either a SHA-256 digest of the whole returned ``MergeDerivation`` (its full
+either a hash digest of the whole returned ``MergeDerivation`` (its full
 ``repr``, which includes every join, per-rank reference, finding, audit
 verdict and dict insertion order, plus the canonical payload) or the refusal
 it raises (class, message and every payload field, code included). The
@@ -77,7 +77,7 @@ def _role(name: str, index: int, shape: list[int] | None = None) -> dict[str, An
 
 
 def _hex64(char: str) -> str:
-    """Return a syntactically valid SHA-256 hex digest made of ``char``.
+    """Return a syntactically valid hex witness digest made of ``char``.
 
     Parameters
     ----------
@@ -87,7 +87,7 @@ def _hex64(char: str) -> str:
     Returns
     -------
     str
-        The 64-character digest.
+        The full-length digest.
     """
 
     return char * 64
@@ -480,7 +480,7 @@ def _case_order_contradiction() -> Case:
                 epoch="armed_before_any_group",
             ),
         },
-        None,
+        [0, 1, 3],
     )
 
 
@@ -532,6 +532,42 @@ def _case_every_finding_stage_at_once() -> Case:
         source="synthetic[0]",
     )
     return (cores, [0, 1, 2, 4])
+
+
+def _case_every_key_check_on_one_key() -> Case:
+    # Ranks 0 and 1 of a three-rank group are armed before any group; rank 2
+    # presents no core. Key delta 1 then carries a relation violation (reduce
+    # op), a c10d mismatch, an absolute-seq mismatch, a presence gap and a
+    # value divergence, so the per-key finding ORDER is pinned.
+    def core(rank: int, seqs: tuple[int, int], c10d: tuple[int, int], op: str) -> RankEvidence:
+        entries = [
+            boundary(
+                rank,
+                seqs[0],
+                digest=WORLD3,
+                members=(0, 1, 2),
+                c10d_group_seq=c10d[0],
+                **digest_kwargs(),
+            ),
+            boundary(
+                rank,
+                seqs[1],
+                digest=WORLD3,
+                members=(0, 1, 2),
+                c10d_group_seq=c10d[1],
+                reduce_op=op,
+                **digest_kwargs("aa" if rank == 0 else "bb"),
+            ),
+        ]
+        return evidence(rank, entries, ledger=armed_ledger(WORLD3), epoch="armed_before_any_group")
+
+    return (
+        {
+            0: core(0, (0, 1), (10, 11), "RedOpType.SUM"),
+            1: core(1, (5, 6), (20, 25), "RedOpType.MAX"),
+        },
+        None,
+    )
 
 
 # --- refusal cases -----------------------------------------------------------
@@ -725,6 +761,7 @@ CASES: dict[str, Callable[[], Case]] = {
     "gather_slice_attested": _case_gather_slice_attested,
     "order_contradiction": _case_order_contradiction,
     "every_finding_stage_at_once": _case_every_finding_stage_at_once,
+    "every_key_check_on_one_key": _case_every_key_check_on_one_key,
     "refuse_shard_local": _case_refuse_shard_local,
     "refuse_shard_local_before_p2p_same_rank": _case_refuse_shard_local_before_p2p_same_rank,
     "refuse_p2p_lower_rank_before_shard_local": _case_refuse_p2p_lower_rank_before_shard_local,
@@ -745,7 +782,7 @@ CASES: dict[str, Callable[[], Case]] = {
 
 
 def _digest(derivation: MergeDerivation) -> str:
-    """Return a stable SHA-256 digest of a whole derivation.
+    """Return a stable hash digest of a whole derivation.
 
     Parameters
     ----------
@@ -902,6 +939,21 @@ EXPECTED: dict[str, dict[str, Any]] = {
         "num_joins": 3,
         "value_status": "unwitnessed",
     },
+    "every_key_check_on_one_key": {
+        "alignment": "conflicted",
+        "digest": "6e58ddd33c6e5403bd1638accd91441b8877d23a6cdf40019b847061d7eb473b",
+        "finding_kinds": [
+            "correlation_delta_mismatch",
+            "presence_gap",
+            "relation_violation",
+            "correlation_delta_mismatch",
+            "correlation_delta_mismatch",
+            "presence_gap",
+            "value_divergence",
+        ],
+        "num_joins": 2,
+        "value_status": "divergent",
+    },
     "expected_ranks_never_narrow": {
         "alignment": "aligned",
         "digest": "ab86fb88c332199984a8f424988675b8a780805abaa821bf11ddd2d822507326",
@@ -953,8 +1005,8 @@ EXPECTED: dict[str, dict[str, Any]] = {
     },
     "order_contradiction": {
         "alignment": "conflicted",
-        "digest": "a614983d610e83cd7f09d6f8312fc90c887c16c0b2903b921edde685ea8f18b3",
-        "finding_kinds": ["order_contradiction"],
+        "digest": "1ea201c73b3cd4494f484ef2db458eb0a08c6dc2838e386f7d4021d3f3c5b3a6",
+        "finding_kinds": ["presence_gap", "order_contradiction"],
         "num_joins": 2,
         "value_status": "unwitnessed",
     },
