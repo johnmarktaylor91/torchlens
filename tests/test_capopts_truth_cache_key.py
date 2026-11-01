@@ -120,6 +120,9 @@ def test_warm_cache_identical_config_hits(tmp_path: Path) -> None:
         ("track_nonfinite", True),
         ("save_budget", 10**9),
         ("measure_python_peak_memory", True),
+        ("save_raw_grads", False),
+        ("reconstruction_ready", True),
+        ("on_nonfinite", "warn"),
     ],
 )
 def test_warm_cache_semantic_flip_recaptures(

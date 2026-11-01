@@ -1103,6 +1103,12 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "module_identity_mode",
         "payload_policy",
         "structure_only",
+        "grad_options",
+        "grouping",
+        "jax_static_argnums",
+        "on_nonfinite",
+        "reconstruction_ready",
+        "save_raw_grads",
     }
 )
 
@@ -3556,6 +3562,14 @@ def _trace_torch_model(
             # a completed halt= capture could otherwise satisfy a stop_after=
             # request whose cold run would have refused stop_after_never_fired.
             "stop_after": _stable_cache_fragment(stop_after_site),
+            # Former door kwargs that now ride CaptureOptions (r2-options) and
+            # change what is captured: keyed by field name so the static
+            # coverage lint sees them (the runtime sweep below is invisible to it).
+            "grad_options": _stable_cache_fragment(capture_options.grad_options),
+            "grouping": capture_options.grouping,
+            "jax_static_argnums": _stable_cache_fragment(capture_options.jax_static_argnums),
+            "on_nonfinite": capture_options.on_nonfinite,
+            "reconstruction_ready": capture_options.reconstruction_ready,
             # Capability / payload-policy options that change WHAT is captured or
             # stored in the returned trace. Omitting any of these let a second
             # trace() with a different capability silently return an earlier cached
@@ -3572,7 +3586,7 @@ def _trace_torch_model(
             "save_raw_input": repr(save_raw_input_policy),
             "save_transformed_output": repr(save_raw_output_policy),
             "save_raw_activations": save_raw_activations,
-            "save_raw_gradients": save_raw_grads,
+            "save_raw_grads": save_raw_grads,
             "activation_transform": _stable_cache_fragment(activation_transform),
             "grad_transform": _stable_cache_fragment(grad_transform),
             "seed": seed,
