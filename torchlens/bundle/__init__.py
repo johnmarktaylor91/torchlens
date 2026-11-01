@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 import torch
 
 from ..errors.episode import BundleRelationError
-from ..intervention._metrics import is_scalar_like, relative_l1, resolve_metric
 from ..intervention._super.super_logs import (
     SuperBufferAccessor,
     SuperGradFnAccessor,
@@ -1496,7 +1495,6 @@ class Bundle:
             pairs=[(baseline_name, name) for name in self._members if name != baseline_name],
         )
         baseline_log = self._members[baseline_name]
-        metric_fn = resolve_metric(metric)
         scored: list[tuple[str, float]] = []
         baseline_sites = list(getattr(baseline_log, "layer_list", []))
         if baseline_sites:  # the at() model-floor gate, once instead of per site
@@ -1520,12 +1518,8 @@ class Bundle:
             for name, out in outs.items():
                 if name == baseline_name or not isinstance(out, torch.Tensor):
                     continue
-                val = (
-                    relative_l1(base, out)
-                    if is_scalar_like(base) and is_scalar_like(out)
-                    else metric_fn(base, out)
-                )
-                distances.append(float(val.detach().item()))
+                label = str(site.layer_label)
+                distances.append(_distance_value(base, out, metric, site=label))
             if distances:
                 scored.append((str(site.layer_label), sum(distances) / len(distances)))
         scored.sort(key=lambda row: row[1], reverse=True)
@@ -1659,12 +1653,9 @@ class Bundle:
 
         left_log = self._members[left_name]
         right_log = self._members[right_name]
-        # Match every other caller of relative_l1 in this subsystem
-        # (_diff_row/_diff_matrix/most_changed/_distance_value): the scalar
-        # fallback fires ONLY when both operands are scalar-like; multi-element
-        # activations route through a real vector metric. Without this guard
-        # relative_l1 silently truncates each site to its first element.
-        metric_fn = resolve_metric(metric)
+        # _distance_value holds the shared per-site rules: scalar fallback
+        # only when both operands are scalar-like, identical payloads read
+        # 0.0, different shapes refuse (typed) naming the site.
         rows: list[tuple[str, float]] = []
         aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
         for left_site in getattr(left_log, "layer_list", []):
@@ -1681,12 +1672,7 @@ class Bundle:
                 torch.Tensor,
             ):
                 continue
-            value = (
-                relative_l1(left_out, right_out)
-                if is_scalar_like(left_out) and is_scalar_like(right_out)
-                else metric_fn(left_out, right_out)
-            )
-            rows.append((label, float(value.detach().item())))
+            rows.append((label, _distance_value(left_out, right_out, metric, site=label)))
         return rows
 
     @property
