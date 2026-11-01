@@ -1271,9 +1271,9 @@ torchlens/intervention/replay.py::_run_differentiable_replay	62
 torchlens/intervention/replay.py::_run_replay	213
 torchlens/intervention/replay.py::_threaded_buffer_value	97
 torchlens/intervention/replay.py::cone_of_effect	65
-torchlens/intervention/rerun.py	1695
+torchlens/intervention/rerun.py	1693
 torchlens/intervention/rerun.py::_append_rerun	104
-torchlens/intervention/rerun.py::_capture_with_active_spec	92
+torchlens/intervention/rerun.py::_capture_with_active_spec	90
 torchlens/intervention/rerun.py::_chunked_rerun	78
 torchlens/intervention/rerun.py::_reconcile_rerun_hook_fires	99
 torchlens/intervention/rerun.py::_refuse_source_matched_zero_fire	72

@@ -230,7 +230,6 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "_runnable_witness_contracts",
         "_training_validation",
         "_fast_run",
-        "_user_funcs",
         # floor2 fix (2026-10-01): the runnable-save CPU float8 path
         # consumes get_cpu_float8_deterministic_fill_support() at the ONE
         # sanctioned probe chokepoint (_utils/_torch_compat); the module

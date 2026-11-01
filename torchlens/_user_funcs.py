@@ -47,6 +47,10 @@ from ._data_classes.trace import (
     Trace,
 )
 from ._deprecations import MISSING, MissingType
+from ._errors import (
+    CaptureNotActiveError as CaptureNotActiveError,
+    UserTransformError as UserTransformError,
+)
 from ._input_coerce import (
     _reject_extra_positional_input,
     _reject_non_mapping_input_kwargs,
