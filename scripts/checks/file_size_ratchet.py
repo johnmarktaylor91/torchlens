@@ -404,7 +404,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
     "torchlens/_visualization/auto_collapse.py": 2150,
-    "torchlens/validation/exemptions.py": 3000,
+    "torchlens/validation/exemptions.py": 2850,
     # 2700 -> 2800 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
     # conditional relabel epilogue plus intervention/halt predicate
