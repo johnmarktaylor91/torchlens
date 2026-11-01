@@ -173,6 +173,12 @@ def _vec() -> torch.Tensor:
     return torch.rand(5, 5)
 
 
+def _seq() -> torch.Tensor:
+    # (seq, batch, features): LSTMModel and RNNModel build 3-D initial states. Each
+    # nn.LSTM / nn.RNN call is one recorded op, so neither row is multi-pass.
+    return torch.rand(5, 5, 5)
+
+
 def _four() -> torch.Tensor:
     return torch.rand(4, 4)
 
@@ -219,8 +225,8 @@ TOY_CASES: tuple[Case, ...] = (
         "recurrent",
         "child_module",
     ),
-    _toy("lstm", example_models.LSTMModel, _vec, "recurrent", "child_module"),
-    _toy("rnn", example_models.RNNModel, _vec, "recurrent", "child_module"),
+    _toy("lstm", example_models.LSTMModel, _seq, "child_module"),
+    _toy("rnn", example_models.RNNModel, _seq, "child_module"),
     _toy(
         "view_mutation_transpose",
         example_models.ViewMutationTranspose,
