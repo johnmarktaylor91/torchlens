@@ -1113,12 +1113,16 @@ def _special_pair_global(module: str, name: str) -> Any | None:
     if (module, name) == ("torch.storage", "_load_from_bytes"):
         raise pickle.UnpicklingError(
             "Blocked torch.storage._load_from_bytes during bundle metadata "
-            "unpickle: an embedded tensor storage would be reconstructed by a "
-            "nested torch.load over file bytes, which TorchLens no longer "
-            "performs. A genuine artifact written by an earlier TorchLens that "
-            "embedded a tensor in its metadata must be re-saved with the current "
-            "release (tl.load the trace there, then trace.save); otherwise the file "
-            "is hostile or corrupt."
+            "unpickle: this file embeds a tensor in its metadata in the format "
+            "TorchLens 2.36.2 and earlier wrote (an annotation value such as one "
+            "logged with tl.observers.log_value, or a small raw input or output), "
+            "which this release no longer reads. To recover it, re-run the capture "
+            "with this release and save it again; or load the file with the "
+            "release that wrote it, replace the tensors in trace.annotations with "
+            "plain values (for example tensor.tolist()), set "
+            "trace.save_raw_input = False and trace.save_raw_output = False, and "
+            "save: the re-saved file loads here. If no TorchLens release wrote "
+            "this file, it is corrupt."
         )
     # The TorchLens-owned inline tensor reduction: validated arguments, an exact
     # byte-length check and a non-resizable buffer-backed storage.

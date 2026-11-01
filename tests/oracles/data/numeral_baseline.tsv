@@ -3506,6 +3506,7 @@ error-strings	torchlens/_extraction/pool.py	20.66
 error-strings	torchlens/_extraction/reader.py	32
 error-strings	torchlens/_extraction/resume.py	14
 error-strings	torchlens/_extraction/resume.py	32
+error-strings	torchlens/_io/_safe_unpickle.py	2.36.2
 error-strings	torchlens/_io/bundle.py	256
 error-strings	torchlens/_io/lazy.py	256
 error-strings	torchlens/_io/manifest.py	256
@@ -4022,6 +4023,7 @@ package-docstrings	torchlens/_io/_forgery_identity_facts.py	10
 package-docstrings	torchlens/_io/_forgery_identity_facts.py	3.0
 package-docstrings	torchlens/_io/_forgery_identity_facts.py	41
 package-docstrings	torchlens/_io/_forgery_identity_facts.py	43
+package-docstrings	torchlens/_io/_inline_tensor.py	32
 package-docstrings	torchlens/_io/_json.py	33
 package-docstrings	torchlens/_io/_json.py	512
 package-docstrings	torchlens/_io/_json.py	54
@@ -6915,6 +6917,9 @@ test-docstrings	tests/semantic/test_facets_p4.py	77
 test-docstrings	tests/semantic/test_mlp_recipes.py	4.57
 test-docstrings	tests/semantic/test_patching_input_leaf.py	76
 test-docstrings	tests/semantic/test_patching_input_leaf.py	77
+test-docstrings	tests/stress/axes/dtypes_cpu.py	64
+test-docstrings	tests/stress/generator.py	256
+test-docstrings	tests/stress/generator.py	32
 test-docstrings	tests/support/census_harness.py	1,2,3,4
 test-docstrings	tests/support/census_harness.py	1.1
 test-docstrings	tests/support/census_harness.py	1.2
