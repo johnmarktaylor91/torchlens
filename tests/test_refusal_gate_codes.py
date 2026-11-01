@@ -316,3 +316,47 @@ def test_chunk_paths_and_size_pass_the_shared_precondition() -> None:
     with pytest.raises(BackendUnsupportedError) as excinfo:
         _filter_trace_kwargs_for_backend({"chunk_paths": (0,), "chunk_size": 1}, _spec(None))
     _assert_code(excinfo.value, _OPTION_CODE)
+
+
+@pytest.mark.parametrize(
+    "flag", sorted(f for f, r in CAPABILITY_REQUESTS.items() if r.kind == "capture_option")
+)
+def test_capture_option_probe_marks_only_its_own_fields(flag: str) -> None:
+    """A capture-option request's ``CaptureOptions`` marks only the probed fields explicit.
+
+    Every other field explicit would let the option filter refuse an unrelated
+    spine field with ``trace_option_unsupported`` before the capability gate ran.
+    """
+
+    from dataclasses import fields as dataclass_fields
+
+    from torchlens.options import CaptureOptions
+
+    request = CAPABILITY_REQUESTS[flag]
+    adapter = _RecordingAdapter()
+    _refusal_cases._issue_request(adapter, None, request, (object(), object(), None))
+    [call] = adapter.calls
+    capture = call["capture"]
+    explicit = {
+        field.name
+        for field in dataclass_fields(CaptureOptions)
+        if not field.name.startswith("_") and capture.is_field_explicit(field.name)
+    }
+    assert explicit == {str(request.option)}, explicit
+
+
+def test_capture_option_probe_reaches_the_capability_gate() -> None:
+    """The probe's ``capture=`` passes the option filter and refuses with the flag's code."""
+
+    from torchlens.options import CaptureOptions
+    from torchlens.user_funcs import (
+        _enforce_capability_option_gates,
+        _filter_trace_kwargs_for_backend,
+    )
+
+    kwargs: dict[str, Any] = {"capture": CaptureOptions(backward_ready=True)}
+    spec = _spec("backward_capture")
+    _filter_trace_kwargs_for_backend(kwargs, spec)
+    with pytest.raises(BackendUnsupportedError) as excinfo:
+        _enforce_capability_option_gates(kwargs, spec)
+    _assert_code(excinfo.value, refusal_code_for_capability("backward_capture"))

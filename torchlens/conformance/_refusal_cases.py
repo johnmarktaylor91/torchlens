@@ -255,8 +255,6 @@ def _issue_request(
 ) -> None:
     """Issue one capability request through the public entry."""
 
-    from dataclasses import replace
-
     from ..options import CaptureOptions
 
     net, example, trace = prepared
@@ -268,7 +266,10 @@ def _issue_request(
     if request.kind == "trace_option":
         adapter.trace_with(net, example, **options)
     elif request.kind == "capture_option":
-        capture = replace(CaptureOptions(), **options)
+        # Construct with only the probed fields: ``dataclasses.replace`` would pass
+        # every field to ``__init__`` and mark them all explicit, so the option
+        # filter would refuse an unrelated field before the capability gate.
+        capture = CaptureOptions(**options)
         adapter.trace_with(net, example, capture=capture)
     elif request.kind == "record":
         import torchlens as tl
