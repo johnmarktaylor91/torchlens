@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,17 @@ COMMAND = "python tools/docs/where_index.py"
 SUMMARY_LIMIT = 140
 NO_DOCSTRING = "(no docstring)"
 SKIP_DIRS = {"__pycache__"}
+# Private planning ids (the families ``scripts/checks/id_lint.py`` counts) stay out
+# of the copied line: a public index of the package carries none of them.
+sys.path.insert(0, str(REPO / "scripts" / "checks"))
+from id_lint import FAMILIES  # noqa: E402
+
+_ID_TOKENS = re.compile("|".join(f"(?:{pattern})" for pattern in FAMILIES.values()))
+_EMPTY_BRACKETS = re.compile(r"\s*[(\[]\s*[;,:]*\s*[)\]]")
+_LOOSE_SEPARATORS = re.compile(r"\s*([;,])(?:\s*[;,])+")
+_ORPHAN_LABEL = re.compile(
+    r"([(\[])(?:lane|workstream|row|round|memo item|memo items)\s*(?:[;,:]\s*)?(?=[;,:)\]]|$)"
+)
 
 
 @dataclass(frozen=True)
@@ -59,10 +71,23 @@ def first_docstring_line(path: Path) -> str:
     if not docstring:
         return NO_DOCSTRING
     for line in docstring.splitlines():
-        text = line.strip()
+        text = without_internal_ids(line.strip())
         if text:
             return text
     return NO_DOCSTRING
+
+
+def without_internal_ids(text: str) -> str:
+    """Drop private planning ids from ``text`` and tidy the punctuation they leave."""
+
+    cleaned = _ID_TOKENS.sub("", text)
+    cleaned = _ORPHAN_LABEL.sub(r"\1", cleaned)
+    cleaned = _LOOSE_SEPARATORS.sub(r"\1", cleaned)
+    cleaned = re.sub(r"([(\[])\s*[;,:]\s*", r"\1", cleaned)
+    cleaned = re.sub(r"\s*[;,:]\s*([)\]])", r"\1", cleaned)
+    cleaned = _EMPTY_BRACKETS.sub("", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+    return cleaned.rstrip(";,:").rstrip() or text
 
 
 def line_count(path: Path) -> int:
