@@ -1419,6 +1419,14 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "subclass); errors-namespace registration rides the S2 ratification "
         "PR with its structure-only siblings above"
     ),
+    # Aliased output slots (net-f26): the flat leaf stream ran dry while a
+    # container spec was being rebuilt; an internal signal that carries the
+    # slot path up the recursion and is turned into the public ValueError by
+    # ``rebuild_container_from_spec`` once the full path is known.
+    "torchlens._ir.container._LeafStreamDry": (
+        "internal recursion signal carrying the dry slot path; caught by "
+        "rebuild_container_from_spec, which raises the public ValueError"
+    ),
 }
 
 

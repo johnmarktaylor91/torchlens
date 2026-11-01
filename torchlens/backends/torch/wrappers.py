@@ -63,7 +63,13 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ._callable_location import _callable_source_location
-from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
+from ._function_boundary import (
+    _BARCODE_TRANSPARENT_FUNCS,
+    EXPORT_FUNC_NAMES,
+    funcs_not_to_log,
+    note_function_export,
+    print_funcs,
+)
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
@@ -666,15 +672,6 @@ def _decorate_direct_transforms() -> None:
         except (AttributeError, TypeError):
             pass
 
-
-# Functions that should never be logged — they are metadata queries, not
-# computational operations, and logging them would cause infinite recursion
-# (e.g. size() is called internally by logging code).
-funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
-
-# Print functions get special handling: intercepted to add TorchLens label
-# info to the repr without creating a new logged operation.
-print_funcs = ["__repr__", "__str__", "_str"]
 
 # Names of torch factory functions that accept a ``device`` kwarg.
 # When a ``torch.device`` context manager is active (TorchFunctionMode),
@@ -1481,7 +1478,7 @@ def torch_func_decorator(
     elif func_name != "data" or property_accessor == "del":
         canonical_capture_callable = (func, func_name)
     # See the barcode-transparency note inside ``wrapped_func`` (R16-5).
-    is_barcode_transparent = func_name == "as_subclass"
+    is_barcode_transparent = func_name in _BARCODE_TRANSPARENT_FUNCS
     # TorchLens's synthetic ``identity`` op (Identity modules, pass-through tensors)
     # never occurs in a native forward, so it stays out of the call fingerprint.
     fingerprint_token = None if func_name == "identity" else _state.call_token(func_name)
@@ -1559,7 +1556,7 @@ def torch_func_decorator(
                         raise
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
-                fast_collector.capture_function(func_name, out)
+                fast_collector.capture_function(func_name, out, args, property_accessor)
             if is_detached_propagation_func and has_detached_saved_activations():
                 propagate_detached_saved_activation(
                     func_name,
@@ -1756,10 +1753,9 @@ def torch_func_decorator(
 
         # Snapshot args before the call in case in-place ops mutate them.
         if trace.save_arg_values:
-            from ._ops_retention import _copy_saved_arg_tree
+            from ._ops_arguments import _copy_saved_call_args
 
-            arg_copies = tuple([_copy_saved_arg_tree(arg) for arg in args])
-            kwarg_copies = {k: _copy_saved_arg_tree(v) for k, v in kwargs.items()}
+            arg_copies, kwarg_copies = _copy_saved_call_args(func_name, args, kwargs)
         else:
             arg_copies = args
             kwarg_copies = kwargs

@@ -41,7 +41,6 @@ from .._ir.events import is_control_edge_use
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
-from .._utils.collections import assign_to_sequence_or_dict
 from .._utils.tensor_utils import (
     _ACCUMULATING_REPLAY_ULP_HEADROOM,
     derive_float_tolerances,
@@ -71,6 +70,10 @@ from ._replay_device import (
     saved_args_on_consumed_devices,
 )
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
+from ._replay_storage_context import (
+    restore_receiver_storage_context,
+    write_replay_slot,
+)
 from ._replay_warnings import replay_warnings_ignored
 from ._script_metadata_proof import script_metadata_only_proof
 from ._shift_probe import LIFT_MIN_ENTRY_STRATEGY, VALUE_STEP_STRATEGIES, lift_min_entry_values
@@ -3620,34 +3623,6 @@ def _read_nested_value(value: Any, key: Any) -> Any:
     return value[key]
 
 
-def _write_nested_replay_arg_value(
-    container: Any,
-    key_path: tuple[Any, ...],
-    value: torch.Tensor,
-) -> Any:
-    """Write a nested replay argument by key path.
-
-    Parameters
-    ----------
-    container:
-        Nested list, tuple, or dict containing the value to replace.
-    key_path:
-        One or more nested keys beneath the replay arg root.
-    value:
-        Replacement tensor.
-
-    Returns
-    -------
-    Any
-        Updated container, rebuilding tuple levels as needed.
-    """
-
-    if len(key_path) == 1:
-        return assign_to_sequence_or_dict(container, key_path[0], value)
-    child = _write_nested_replay_arg_value(container[key_path[0]], key_path[1:], value)
-    return assign_to_sequence_or_dict(container, key_path[0], child)
-
-
 @_grad_fidelity.built_outside_inference_mode
 def _prepare_input_args_for_validating_layer(
     self: "Trace",
@@ -3699,6 +3674,7 @@ def _prepare_input_args_for_validating_layer(
         "kwargs": layer_to_validate_parents_for.saved_kwargs.copy(),
     }
     input_args = _copy_validation_args(input_args)
+    restore_receiver_storage_context(layer_to_validate_parents_for, input_args)
     _restore_live_parameter_args_for_replay(input_args, layer_to_validate_parents_for)
 
     # Swap in saved parent outs:
@@ -3764,14 +3740,9 @@ def _prepare_input_args_for_validating_layer(
             parent_layer_func_values = _grad_fidelity.with_slot_grad_flags(
                 layer_to_validate_parents_for, arg_type, key, parent_layer, parent_layer_func_values
             )
-            if not isinstance(key, tuple):
-                input_args[arg_type][key] = parent_layer_func_values
-            else:
-                input_args[arg_type][key[0]] = _write_nested_replay_arg_value(
-                    input_args[arg_type][key[0]],
-                    key[1:],
-                    parent_layer_func_values,
-                )
+            write_replay_slot(
+                layer_to_validate_parents_for, input_args, arg_type, key, parent_layer_func_values
+            )
 
     _grad_fidelity.restore_leaf_for_requires_grad_toggle(layer_to_validate_parents_for, input_args)
     return input_args, None

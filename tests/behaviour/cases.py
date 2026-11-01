@@ -40,6 +40,52 @@ _RANDOM_FUNCS = frozenset(
     }
 )
 _INPLACE_MARKERS = ("_",)
+
+
+def _always_draws(op: Any) -> bool:
+    """Whether an ATen overload draws random numbers on every call.
+
+    Torch's ``nondeterministic_seeded`` tag also covers ops whose draw is gated
+    by a ``train``/``training`` flag (the dropout family, ``lstm``, ``gru``,
+    ``scaled_dot_product_attention``); those are deterministic on the eval-mode
+    models the net runs. A sampler that always draws takes an explicit
+    ``Generator?`` argument and has no such gate.
+    """
+
+    if torch.Tag.nondeterministic_seeded not in getattr(op, "tags", ()):
+        return False
+    arguments = getattr(getattr(op, "_schema", None), "arguments", ())
+    has_generator = any(a.name == "generator" or "Generator" in str(a.type) for a in arguments)
+    gated = any(a.name in {"train", "training"} for a in arguments)
+    return has_generator and not gated
+
+
+def _draws_random_numbers(feature: str) -> bool:
+    """Whether a ``func:<name>`` coverage feature names an op that draws random numbers.
+
+    The hand list above is the floor; beyond it the test is torch's own
+    ``nondeterministic_seeded`` tag on an ATen sampler that always draws
+    (``exponential_``, ``uniform_``, ``random_``, ``cauchy_``, ..., so a
+    Gumbel-softmax forward counts as stochastic without a name being spelled
+    here), judged by ``_always_draws``.
+    """
+
+    if feature in _RANDOM_FUNCS:
+        return True
+    if not feature.startswith("func:"):
+        return False
+    name = feature[len("func:") :]
+    candidates = (name, name[:-1]) if name.endswith("_") and not name.startswith("_") else (name,)
+    for candidate in candidates:
+        packet = getattr(torch.ops.aten, candidate, None)
+        overloads = getattr(packet, "overloads", None)
+        if not callable(overloads):
+            continue
+        if any(_always_draws(getattr(packet, overload_name)) for overload_name in overloads()):
+            return True
+    return False
+
+
 _VIEW_FUNCS = frozenset(
     {
         "func:view",
@@ -106,7 +152,7 @@ def _corpus_tags(entry: CorpusEntry) -> frozenset[str]:
         tags.add("views")
     if any(f.startswith("dtype:") and f not in {"dtype:float32"} for f in features):
         tags.add("dtype")
-    if features & _RANDOM_FUNCS:
+    if any(_draws_random_numbers(feature) for feature in features):
         tags.add("stochastic")
     if any(f.startswith("mod:") for f in features):
         tags.add("child_module")
@@ -173,6 +219,12 @@ def _vec() -> torch.Tensor:
     return torch.rand(5, 5)
 
 
+def _seq() -> torch.Tensor:
+    # (seq, batch, features): LSTMModel and RNNModel build 3-D initial states. Each
+    # nn.LSTM / nn.RNN call is one recorded op, so neither row is multi-pass.
+    return torch.rand(5, 5, 5)
+
+
 def _four() -> torch.Tensor:
     return torch.rand(4, 4)
 
@@ -219,8 +271,8 @@ TOY_CASES: tuple[Case, ...] = (
         "recurrent",
         "child_module",
     ),
-    _toy("lstm", example_models.LSTMModel, _vec, "recurrent", "child_module"),
-    _toy("rnn", example_models.RNNModel, _vec, "recurrent", "child_module"),
+    _toy("lstm", example_models.LSTMModel, _seq, "child_module"),
+    _toy("rnn", example_models.RNNModel, _seq, "child_module"),
     _toy(
         "view_mutation_transpose",
         example_models.ViewMutationTranspose,
@@ -233,6 +285,9 @@ TOY_CASES: tuple[Case, ...] = (
     _toy("type_cast_chain", example_models.TypeCastChainModel, _four, "dtype", "child_module"),
     _toy("getitem_tracking", example_models.GetItemTracking, _vec, "views"),
 )
+
+# wave-3 fills
+from tests.behaviour._fill_capture import TOY_CASES  # noqa: E402, F811 (adds toy rows)
 
 
 @cache

@@ -15,6 +15,7 @@ import torch
 from torchlens.backends.torch import _tl
 
 from ..._io import BlobRef as PortableBlobRef
+from ..._ir._output_occurrences import container_path_to_address, occurrences_by_raw_label
 from ..._ir.container import ContainerSpec, OutputPathComponent
 from ..._ir.container_registry import ContainerLeafOccurrence, ModelSite, Phase, Role
 from ..._ir.events import OpEvent, OutputRef
@@ -557,33 +558,6 @@ def _assign_nested_input_value(
     return obj
 
 
-def _container_path_to_address(path: tuple[Any, ...]) -> str:
-    """Convert an output path tuple to TorchLens' display address string.
-
-    Parameters
-    ----------
-    path:
-        Path components from path-aware output traversal.
-
-    Returns
-    -------
-    str
-        Dot-separated output address suffix.
-    """
-
-    parts: list[str] = []
-    for component in path:
-        if hasattr(component, "index"):
-            parts.append(str(component.index))
-        elif hasattr(component, "key"):
-            parts.append(str(component.key))
-        elif hasattr(component, "name"):
-            parts.append(str(component.name))
-        else:
-            parts.append(str(component))
-    return ".".join(parts)
-
-
 def _collect_output_addresses(
     self_trace: Trace,
     outputs: object,
@@ -606,17 +580,14 @@ def _collect_output_addresses(
     )
     if output_entries:
         output_tensors_w_addresses_all = [
-            (tensor, _container_path_to_address(path), None)
+            (tensor, container_path_to_address(path), None)
             for tensor, path, _container_spec in output_entries
         ]
-        output_specs_by_raw_label = {}
-        for tensor, path, container_spec in output_entries:
-            _label_raw = _tl.get_tensor_label(tensor)
-            if _label_raw is not None:
-                output_specs_by_raw_label[_label_raw] = (
-                    path,
-                    container_spec if persist_container_spec else None,
-                )
+        # One output op per occurrence; see ``_ir/_output_occurrences.py``.
+        output_specs_by_raw_label = occurrences_by_raw_label(
+            (_tl.get_tensor_label(tensor), path, spec if persist_container_spec else None)
+            for tensor, path, spec in output_entries
+        )
         setattr(self_trace, "_output_container_specs_by_raw_label", output_specs_by_raw_label)
     else:
         output_tensors_w_addresses_all = []
