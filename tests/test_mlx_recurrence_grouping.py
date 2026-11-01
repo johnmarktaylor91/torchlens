@@ -170,7 +170,7 @@ def test_mlx_tamper_swapped_capture_labels_fail_validation() -> None:
     captures[first] = dataclasses.replace(captures[first], labels_raw=labels_second)
     captures[second] = dataclasses.replace(captures[second], labels_raw=labels_first)
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_tamper_dangling_capture_label_fails_validation() -> None:
@@ -181,7 +181,7 @@ def test_mlx_tamper_dangling_capture_label_fails_validation() -> None:
     target = next(index for index, capture in enumerate(captures) if capture.op_name == "matmul")
     captures[target] = dataclasses.replace(captures[target], labels_raw=("matmul_9_99_raw",))
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_tamper_stale_parent_leaf_label_fails_validation() -> None:
@@ -198,7 +198,7 @@ def test_mlx_tamper_stale_parent_leaf_label_fails_validation() -> None:
         arg_leaf_labels=captures[pass1_index].arg_leaf_labels,
     )
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 @pytest.mark.optional
