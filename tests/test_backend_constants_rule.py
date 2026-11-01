@@ -401,12 +401,12 @@ def test_closure_constant_is_a_parentless_source_op_with_payload_and_a_consumer_
     assert tuple(constant.parents) == ()
     assert constant.is_input is False and constant.is_buffer is False
     assert constant.out is not None and tuple(constant.out.shape) == (2, 3)
-    assert constant.tensor_shape == (2, 3) or tuple(constant.tensor_shape) == (2, 3)
+    assert tuple(constant.shape) == (2, 3)
     assert is_closure_constant_op(constant) and is_constant_op(constant)
     assert not is_literal_producer_op(constant)
     consumer = _op_by_raw(trace, labels["add"])
-    assert constant.label in tuple(consumer.parents)
-    assert consumer.label in tuple(constant.children)
+    assert constant.layer_label in tuple(consumer.parents)
+    assert consumer.layer_label in tuple(constant.children)
 
 
 def test_literal_producer_keeps_zero_parents_and_a_payload() -> None:
@@ -420,7 +420,7 @@ def test_literal_producer_keeps_zero_parents_and_a_payload() -> None:
     assert is_literal_producer_op(ones) and is_constant_op(ones)
     assert not is_closure_constant_op(ones)
     consumer = _op_by_raw(trace, labels["mul"])
-    assert ones.label in tuple(consumer.parents)
+    assert ones.layer_label in tuple(consumer.parents)
     assert set(constant_op_labels(trace)) == {
         _op_by_raw(trace, labels["w"]).label,
         ones.label,
@@ -617,7 +617,7 @@ def test_finalize_audit_refuses_a_constant_without_payload_evidence() -> None:
     raw_op = trace._raw_graph_ws.raw_layer_dict[label_w]
     # Simulate a backend that recorded the op and then lost its payload and shape.
     raw_op._internal_set("out", None)
-    raw_op._internal_set("tensor_shape", None)
+    raw_op._internal_set("shape", None)
     with pytest.raises(BackendUnsupportedError) as excinfo:
         apply_constants_rule(trace, backend_name="fake", ledger=None)
     assert excinfo.value.fields["code"] == CONSTANT_UNREALIZABLE_CODE
@@ -678,7 +678,8 @@ def test_torch_already_satisfies_the_rule_structure() -> None:
     mul_ops = [op for op in trace.layer_list if op.func_name == "mul"]
     assert mul_ops
     mul = mul_ops[0]
-    parents = [trace[label] for label in mul.parents]
+    by_layer_label = {op.layer_label: op for op in trace.layer_list}
+    parents = [by_layer_label[label] for label in mul.parents]
     assert len(parents) == 2, mul.parents
     # The closure tensor arrives as a parentless source op (input-like or buffer-like):
     # nothing upstream of it, a payload-bearing leaf, never a lost edge.

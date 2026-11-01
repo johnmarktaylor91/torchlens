@@ -549,7 +549,7 @@ def _audit_closure_constant(
             op_label=label_raw,
         )
     has_payload = getattr(op, "out", None) is not None
-    has_shape = getattr(op, "tensor_shape", None) is not None
+    has_shape = getattr(op, "shape", None) is not None
     in_ledger = ledger is not None and label_raw in ledger
     if not (has_payload or has_shape or in_ledger):
         consumer = next(
