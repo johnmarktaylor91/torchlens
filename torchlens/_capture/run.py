@@ -166,7 +166,7 @@ def _begin_capture(
         # process) or, if bracketed, made every ``seed=None`` capture reuse
         # the identical seed (correlated dropout across runs).
         seed = _AUTO_SEED_ENTROPY.randint(1, 4294967294)
-    self._options_seed = seed  # type: ignore[assignment]
+    self._options_seed = seed
     # The per-capture code-context cache (and the call-site anchor stored in
     # it) is valid for the stack of ONE capture run: a re-capture on a
     # carried-over Trace state (a live-refresh fork) must never consult a
@@ -261,7 +261,7 @@ def _claim_slot_and_seed(self: "Trace", run: _RunState, reservation_resume: obje
     The slot is claimed BEFORE any capture-global side effect (label-session
     swap in model prep, compiled-submodule swaps, the recorder's fastlog
     state): a concurrent capture destined for ``ReentrantTraceError`` used to
-    run those mutations first and orphan the admitted winner's session. r8 R54
+    run those mutations first and orphan the admitted winner's session. R54
     moved the claim ahead of the RNG snapshot, reseed and input setup too, so
     a refused loser never reseeds the process-global engines mid-window. A
     same-thread re-entry passes only on the recorder's continuation token

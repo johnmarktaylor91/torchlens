@@ -402,7 +402,7 @@ def _run_predicate_forward_with_root_frame(
         address="",
         module_type=type(model).__name__,
         module_id=id(model),
-        pass_index=1,
+        pass_number=1,
     )
     skipped_spec = CaptureSpec(save_out=False, save_metadata=False)
     backend.push_existing_module_frame(trace, state.module_stack, root_frame)
