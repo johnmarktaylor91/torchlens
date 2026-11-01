@@ -528,7 +528,7 @@ def test_runnable_save_round_trips_a_normal_output_verified(tmp_path: Path) -> N
         model, capture=CaptureOptions(intervention_ready=True, capture_container_structure=True)
     )
     path = tmp_path / "normal.tlspec"
-    trace.save(path, level="runnable")
+    trace.save(path, level="runnable", include_weights=True)
     result = tl.load(path).run(inputs=_x())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     _assert_same_distribution(result.output, model(_x()))
@@ -545,7 +545,7 @@ def test_runnable_save_never_blesses_a_lossy_distribution(tmp_path: Path) -> Non
     )
     path = tmp_path / "tanh.tlspec"
     try:
-        trace.save(path, level="runnable")
+        trace.save(path, level="runnable", include_weights=True)
     except tl.errors.TorchLensError:
         return
     result = tl.load(path).run(inputs=_x(), on_divergence="return")
