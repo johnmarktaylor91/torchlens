@@ -134,7 +134,13 @@ def test_container_registry_identity_guard_handles_reused_id_slot() -> None:
 def test_no_live_container_registry_state_survives_final_streamed_or_cached_trace(
     tmp_path: Path,
 ) -> None:
-    """Final, streamed, and cached traces do not retain live registry state."""
+    """Final, streamed, and cached traces do not retain live registry state.
+
+    ``Trace.output`` holds the model's return value in memory for the trace's
+    lifetime (by design), so the output container is checked to be exactly that
+    object and to be released once the trace itself is dropped: no registry
+    state, and nothing past the trace, keeps it alive.
+    """
 
     model = PairOutputModel()
     final_trace = tl.trace(
@@ -145,6 +151,8 @@ def test_no_live_container_registry_state_survives_final_streamed_or_cached_trac
     final_ref = stashed(final_trace, "last_output_ref")
     assert final_ref is not None
     _assert_no_live_registry_state(final_trace)
+    assert final_ref() is final_trace.output
+    del final_trace
     gc.collect()
     assert final_ref() is None
 
@@ -158,6 +166,8 @@ def test_no_live_container_registry_state_survives_final_streamed_or_cached_trac
     streamed_ref = stashed(streamed_trace, "last_output_ref")
     assert streamed_ref is not None
     _assert_no_live_registry_state(streamed_trace)
+    assert streamed_ref() is streamed_trace.output
+    del streamed_trace
     gc.collect()
     assert streamed_ref() is None
 
@@ -172,6 +182,8 @@ def test_no_live_container_registry_state_survives_final_streamed_or_cached_trac
     cached_ref = stashed(cached_trace, "last_output_ref")
     assert cached_ref is not None
     _assert_no_live_registry_state(cached_trace)
+    assert cached_ref() is cached_trace.output
+    del cached_trace
     gc.collect()
     assert cached_ref() is None
 
