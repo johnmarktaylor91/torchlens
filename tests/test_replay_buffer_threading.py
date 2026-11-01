@@ -202,3 +202,58 @@ def test_unprovable_buffer_thread_warns_and_keeps_captured_value() -> None:
     # from the stale-but-honest state (add_ re-executes from 1s -> 2s -> 3s).
     assert torch.equal(fork.layer_dict_all_keys["buffer_1:1"].out, torch.full((4,), 7.0))
     assert torch.equal(fork.layer_dict_all_keys["buffer_1:2"].out, torch.full((4,), 1.0))
+
+
+class BufRead(nn.Module):
+    """Reads a buffer it never writes: the initial version is the only version."""
+
+    def __init__(self, registered: bool) -> None:
+        """Hold the mask as a registered buffer or as a plain tensor attribute."""
+
+        super().__init__()
+        self.cell = nn.Linear(4, 4, bias=True)
+        mask = torch.tensor([1.0, 2.0, 3.0, 4.0])
+        if registered:
+            self.register_buffer("mask", mask)
+        else:
+            self.mask = mask
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Scale the cell's output by the (never written) mask."""
+
+        return torch.relu(self.cell(x) * self.mask)
+
+
+@pytest.mark.smoke
+@pytest.mark.parametrize("registered", [True, False], ids=["registered", "attribute"])
+def test_hook_edit_on_initial_buffer_read_applies_and_records(registered: bool) -> None:
+    """A hook-style edit on an unwritten buffer read fires at that site and threads.
+
+    The behaviour net's ``fork.do(tl.label("buffer_1:1"), tl.scale(0.5))``
+    (finding F4) neither applied nor refused: the buffer-only group has no
+    producer to thread, and the engine skipped the site's hooks with it.
+    """
+
+    torch.manual_seed(0)
+    model = BufRead(registered)
+    x = torch.randn(2, 4)
+    log = tl.trace(
+        model,
+        x,
+        capture=tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True),
+    )
+    site = log.layer_dict_all_keys["buffer_1:1"]
+    assert site.is_buffer and not tuple(site.parents or ())
+    original = site.out.detach().clone()
+
+    fork = log.fork()
+    fork.do(tl.label("buffer_1:1"), tl.scale(0.5))
+
+    edited = fork.layer_dict_all_keys["buffer_1:1"]
+    assert torch.equal(edited.out, original * 0.5), edited.out
+    assert edited.intervention_replaced is True
+    assert len(fork.ops) == len(log.ops)
+    with torch.no_grad():
+        expected = torch.relu(model.cell(x) * (original * 0.5))
+    assert torch.allclose(fork.output_ops[0].out, expected, atol=ATOL)
+    assert torch.equal(log.layer_dict_all_keys["buffer_1:1"].out, original), "source mutated"
