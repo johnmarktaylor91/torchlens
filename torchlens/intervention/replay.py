@@ -679,11 +679,7 @@ def _run_replay(
                 member_key = _replay_site_key(member)
                 if preserve_origins and member_key in origin_keys:
                     continue
-                threaded = (
-                    _threaded_buffer_value(member, log, overlay, strict=strict)
-                    if getattr(member, "is_buffer", False)
-                    else None
-                )
+                threaded = _threaded_source_value(member, log, overlay, strict=strict)
                 if threaded is None:
                     # Nothing threads into this record (an input leaf, an
                     # initial buffer read, or an undisclosed gap kept its
@@ -734,12 +730,15 @@ def _run_replay(
             # through copy-on-write forks, the SOURCE trace's payloads).
             args = _clone_tensors_in(args)
             kwargs = {key: _clone_tensors_in(value) for key, value in kwargs.items()}
-        if _keeps_captured_draw(
-            representative, replay_group, pending_updates=pending_updates, label_keys=label_keys
-        ):
-            output = representative.out.clone()
-        else:
-            output = _execute_group_call(representative, args, kwargs, origins=origins)
+        output = _replay_group_output(
+            representative,
+            replay_group,
+            args,
+            kwargs,
+            origins=origins,
+            pending_updates=pending_updates,
+            label_keys=label_keys,
+        )
         if output is None and _is_inplace_none_return(representative):
             output = args[0]
         for member in replay_group:
@@ -1226,6 +1225,52 @@ def _execute_replay_func_strict(
     )
 
 
+def _replay_group_output(
+    representative: Op,
+    replay_group: Sequence[Op],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    origins: Sequence[Op],
+    pending_updates: Mapping[str, torch.Tensor],
+    label_keys: Mapping[str, tuple[str, ...]],
+) -> Any:
+    """Return one function-call group's replay output.
+
+    A stochastic call with no recorded RNG state and no changed argument
+    keeps its captured output (:func:`_keeps_captured_draw`); every other
+    call re-executes its saved callable (:func:`_execute_group_call`).
+
+    Parameters
+    ----------
+    representative:
+        Representative site of the group.
+    replay_group:
+        Sites the call produced.
+    args:
+        Reconstructed positional arguments.
+    kwargs:
+        Reconstructed keyword arguments.
+    origins:
+        Replay origins (the edited sites).
+    pending_updates:
+        Values this replay has recomputed so far, by replay site key.
+    label_keys:
+        Label spelling to replay site keys.
+
+    Returns
+    -------
+    Any
+        The call's output, to be sliced per member by container path.
+    """
+
+    if _keeps_captured_draw(
+        representative, replay_group, pending_updates=pending_updates, label_keys=label_keys
+    ):
+        return representative.out.clone()
+    return _execute_group_call(representative, args, kwargs, origins=origins)
+
+
 def _execute_group_call(
     site: Op,
     args: tuple[Any, ...],
@@ -1313,6 +1358,29 @@ def _keeps_captured_draw(
         True when the captured output is the correct replay value.
     """
 
+    if not _is_unseeded_single_draw(representative, replay_group):
+        return False
+    if getattr(representative, "edge_substitutions", None):
+        return False
+    return not _any_parent_updated(representative, pending_updates, label_keys)
+
+
+def _is_unseeded_single_draw(representative: Op, replay_group: Sequence[Op]) -> bool:
+    """Whether a group is one tensor-valued random draw with no recorded RNG state.
+
+    Parameters
+    ----------
+    representative:
+        Representative site of the function-call group.
+    replay_group:
+        Sites the call produced.
+
+    Returns
+    -------
+    bool
+        True for a single-output stochastic op whose ``func_rng_states`` is empty.
+    """
+
     from ..debug._precision import _STOCHASTIC_FUNC_NAMES
 
     func_name = str(getattr(representative, "func_name", "") or "").rstrip("_")
@@ -1322,15 +1390,36 @@ def _keeps_captured_draw(
         return False
     if len(replay_group) != 1 or tuple(representative.container_path or ()):
         return False
-    if not isinstance(representative.out, torch.Tensor):
-        return False
-    if getattr(representative, "edge_substitutions", None):
-        return False
-    for parent in representative.parents or ():
+    return isinstance(representative.out, torch.Tensor)
+
+
+def _any_parent_updated(
+    site: Op,
+    pending_updates: Mapping[str, torch.Tensor],
+    label_keys: Mapping[str, tuple[str, ...]],
+) -> bool:
+    """Whether any parent of ``site`` was recomputed earlier in this replay.
+
+    Parameters
+    ----------
+    site:
+        Site whose parents are checked.
+    pending_updates:
+        Values this replay has recomputed so far, by replay site key.
+    label_keys:
+        Label spelling to replay site keys.
+
+    Returns
+    -------
+    bool
+        True when a parent's replay key carries a pending update.
+    """
+
+    for parent in site.parents or ():
         for key in label_keys.get(parent, (parent,)):
             if key in pending_updates:
-                return False
-    return True
+                return True
+    return False
 
 
 def _apply_replay_hooks(
@@ -1951,6 +2040,40 @@ def _check_edge_expectations(site: Op, *, strict: bool) -> None:
         if strict:
             raise ControlFlowDivergenceError(message)
         warnings.warn(message, ControlFlowDivergenceWarning, stacklevel=3)
+
+
+def _threaded_source_value(
+    site: Op,
+    trace: Trace,
+    overlay: Mapping[str, torch.Tensor],
+    *,
+    strict: bool,
+) -> torch.Tensor | None:
+    """Return the value threaded into a source record, if any.
+
+    Only a buffer version record has a writing op to thread from; a model
+    input leaf has none and keeps its captured value.
+
+    Parameters
+    ----------
+    site:
+        Source record (buffer version or input leaf).
+    trace:
+        Model log being replayed.
+    overlay:
+        Recomputed values so far, by replay site key.
+    strict:
+        Whether a threading gap raises instead of warning.
+
+    Returns
+    -------
+    torch.Tensor | None
+        Threaded value for a buffer record; None for an input leaf or a gap.
+    """
+
+    if not getattr(site, "is_buffer", False):
+        return None
+    return _threaded_buffer_value(site, trace, overlay, strict=strict)
 
 
 def _threaded_buffer_value(
