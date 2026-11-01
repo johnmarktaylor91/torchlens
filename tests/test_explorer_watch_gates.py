@@ -317,6 +317,7 @@ class TestCudaGateRows:
     Run explicitly: ``pytest tests/test_explorer_watch_gates.py -m rare``.
     """
 
+    @pytest.mark.cuda
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="C-EXPLORER runs on CUDA")
     @pytest.mark.parametrize(
         ("sketch_cadence", "threshold"),

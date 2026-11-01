@@ -109,6 +109,7 @@ def test_forward_validation_weight_copies_on_a_cpu_model() -> None:
     assert beyond_model[2] <= 2, beyond_model
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs an accelerator device")
 def test_forward_validation_weight_copies_on_an_accelerator() -> None:
     """On an accelerator only the deep copy shares the card with the model.

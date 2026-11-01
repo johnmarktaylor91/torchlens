@@ -128,6 +128,67 @@ def test_capability_row_optional_absences_do_not_warn(monkeypatch: pytest.Monkey
     assert "missing=" not in row.detail
 
 
+def test_capability_snapshot_force_probes_meta_item_and_mha_switch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The diagnostic snapshot resolves the two cheap lazy probes it used to skip.
+
+    ``get_meta_item_guard_support`` and ``get_mha_fastpath_switch_support``
+    document that diagnostic surfaces force them; the snapshot did not, so the
+    doctor read both as ``unprobed`` (and never as a real absence on torch
+    2.1-2.2) on any install that had not yet consumed them.
+    """
+
+    from torchlens._utils import _torch_compat as tc
+
+    for latch, flag in (
+        ("_META_ITEM_GUARD_PROBED", "HAS_META_ITEM_GUARD"),
+        ("_MHA_FASTPATH_SWITCH_PROBED", "HAS_MHA_FASTPATH_SWITCH"),
+    ):
+        monkeypatch.setattr(tc, latch, False)
+        monkeypatch.setattr(tc, flag, False)
+    snapshot = get_torch_capability_snapshot()
+    assert tc._META_ITEM_GUARD_PROBED is True
+    assert tc._MHA_FASTPATH_SWITCH_PROBED is True
+    assert snapshot["HAS_META_ITEM_GUARD"] is tc._probe_meta_item_guard()
+    assert snapshot["HAS_MHA_FASTPATH_SWITCH"] is tc._probe_mha_fastpath_switch()
+
+
+def _row_segment(text: str, key: str) -> str:
+    """Return one ``key=a,b`` group of a capability row (empty when absent)."""
+
+    for part in text.split("; "):
+        if part.startswith(key + "="):
+            return part
+    return ""
+
+
+def test_compat_capability_row_reads_unprobed_lazy_flag_as_unprobed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The capability row classifies a never-probed lazy flag as ``unprobed``.
+
+    A lazily probed flag nothing has consumed yet (here the memory profile,
+    which needs a live profiler session) is ``unprobed``, not ``missing``, so
+    it must not turn a healthy install's row into a warning. The same flag
+    after its probe ran and found nothing stays ``missing`` and still warns.
+    The former compat report row was folded into this doctor row.
+    """
+
+    from torchlens._utils import _probe_torch_capabilities, _torch_compat as tc
+
+    monkeypatch.setattr(tc, "HAS_MEMORY_PROFILE", False)
+    monkeypatch.setattr(tc, "_MEMORY_PROFILE_PROBED", False)
+    doctor_row = _probe_torch_capabilities()
+    assert "HAS_MEMORY_PROFILE" in _row_segment(doctor_row.detail, "unprobed")
+    assert "HAS_MEMORY_PROFILE" not in _row_segment(doctor_row.detail, "missing")
+
+    monkeypatch.setattr(tc, "_MEMORY_PROFILE_PROBED", True)
+    doctor_row = _probe_torch_capabilities()
+    assert "HAS_MEMORY_PROFILE" in _row_segment(doctor_row.detail, "missing")
+    assert doctor_row.status == "WARN"
+
+
 def test_capability_row_pre_graphsafe_generator_flags_stay_pass(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

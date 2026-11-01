@@ -602,6 +602,7 @@ def test_graph_shape_hash_matches_across_fresh_python_process() -> None:
     assert actual_hash == expected_hash
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
 def test_graph_shape_hash_matches_between_cpu_and_cuda() -> None:
     """Graph-shape hash is device-blind for the same model topology."""

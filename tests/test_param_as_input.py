@@ -342,6 +342,7 @@ def test_parameter_input_tlspec_roundtrip_preserves_metadata(tmp_path: Path) -> 
     assert any(input_label in op.parents for op in loaded.layer_list if not op.is_input)
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="Cross-device check requires CUDA.")
 def test_cross_device_parameter_input_matches_plain_tensor_path_if_cuda_available() -> None:
     """Cross-device Parameter-to-Tensor downgrade avoids the CPU crash when CUDA is available."""

@@ -307,7 +307,7 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     # absent (healthy-old-install) flags than current dev torch. Rebuild the
     # cell's exact expected length from the same building blocks
     # the environment capability probe uses (format_capability_summary plus the
-    # missing=/optional_absent= groupings), so the check tracks any honest
+    # missing=/unprobed=/optional_absent= groupings), so the check tracks any honest
     # absence count instead of a magic number -- it still catches a
     # regression to the legacy verbose per-flag dump, which does not share
     # this structure.

@@ -92,6 +92,7 @@ def test_uint8_byte_view_works_on_all_layouts() -> None:
         flat.view(torch.uint8)  # raises on non-contiguous input
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA device")
 def test_cross_device_channels_last_single_host_copy() -> None:
     """(c) CUDA channels_last transport allocates ONE host buffer, not two."""

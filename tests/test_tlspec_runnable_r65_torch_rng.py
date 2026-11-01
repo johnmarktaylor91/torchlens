@@ -632,6 +632,7 @@ def test_get_offset_marks_fail_closed_at_entry() -> None:
     assert "torch.Generator.get_offset" in result.channels
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA default generator")
 def test_cuda_default_get_offset_is_ceiled(_torch_rng_state_guard) -> None:
     """r66 hon1-F5 device path: a successful default-receiver offset read ceilings."""
@@ -1059,6 +1060,7 @@ def test_r67_clone_state_initial_seed_ceilings_every_run(run_seed: int, tmp_path
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA default generator")
 def test_r67_cuda_default_get_offset_ceilings_every_run(
     _torch_rng_state_guard, tmp_path: Path

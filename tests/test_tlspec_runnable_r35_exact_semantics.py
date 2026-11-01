@@ -207,6 +207,7 @@ class _CudaDrawModel(nn.Module):
         return x + noise.cpu()
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_r35_seeded_run_restores_produced_only_cuda_rng(tmp_path: Path) -> None:
     """corr2_4 repro: a produced-only-CUDA seeded run leaks no CUDA RNG state."""

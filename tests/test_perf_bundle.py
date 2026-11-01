@@ -330,6 +330,7 @@ class TestCudaProbeGating:
             f"observed {fake_avail.call_count} torch.cuda.is_available calls."
         )
 
+    @pytest.mark.cuda
     @pytest.mark.skipif(
         not torch.cuda.is_available(),
         reason="CUDA-only sanity check; skipped without a real CUDA device.",

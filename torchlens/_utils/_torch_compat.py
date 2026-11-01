@@ -2412,6 +2412,11 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_reduce_tuple_dim_support(force_probe=True)
     get_cpu_half_kernels_support(force_probe=True)
     get_cpu_float8_deterministic_fill_support(force_probe=True)
+    # Both getters document that diagnostic surfaces force them; without this
+    # the doctor reported them "unprobed" on every install that had not yet
+    # consumed them, hiding a real absence on torch 2.1-2.2.
+    get_meta_item_guard_support(force_probe=True)
+    get_mha_fastpath_switch_support(force_probe=True)
     get_device_mesh_type(force_probe=True)
     get_pipelining_module_types(force_probe=True)
     get_tracing_tensor_types(force_probe=True)

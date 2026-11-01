@@ -915,6 +915,7 @@ print("CPU_ONLY_OK")
 """
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 class TestCudaStagingAndReadiness:
     """hon1_3/corr2-8: transport stays lazy; run stages state to slot devices."""

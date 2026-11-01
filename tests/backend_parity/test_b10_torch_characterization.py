@@ -436,6 +436,7 @@ def test_model_device_selection_params_buffers_and_paramless_fallback(
     assert seen_devices == [torch.device("cpu"), torch.device("cpu"), None]
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(
     not torch.cuda.is_available(),
     reason="CUDA-only device-preservation pin; skipped without a real CUDA device.",

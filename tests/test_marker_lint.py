@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import ast
 import functools
+import re
 from pathlib import Path
 
 import pytest
@@ -1651,4 +1652,73 @@ def test_smoke_tier_stays_under_its_size_ceiling(request: pytest.FixtureRequest)
         f"{SMOKE_TIER_SIZE_CEILING} (tests/conftest.py). Keep new tests unmarked unless "
         "they cover a critical path nothing in smoke reaches, or demote a smoke test "
         "they make redundant."
+    )
+
+
+_CUDA_SKIPIF_RE = re.compile(r"skipif\(\s*not torch\.cuda\.is_available\(\)")
+_CUDA_ALIAS_RE = re.compile(
+    r"^(\w+)\s*=\s*pytest\.mark\.skipif\(\s*not torch\.cuda\.is_available\(\)"
+)
+
+
+def _decorator_block_has_cuda_mark(lines: list[str], index: int) -> bool:
+    """Return whether the decorator block holding ``lines[index]`` carries ``cuda``."""
+
+    start = index
+    while start > 0 and lines[start - 1].lstrip().startswith("@"):
+        start -= 1
+    end = index
+    while end < len(lines) and not lines[end].lstrip().startswith(("def ", "async def ", "class ")):
+        end += 1
+    return any(line.strip() == "@pytest.mark.cuda" for line in lines[start:end])
+
+
+def _unmarked_cuda_skip_sites(text: str) -> list[int]:
+    """Return 1-based lines of CUDA-only skips whose test lacks the ``cuda`` marker.
+
+    A ``skipif(not torch.cuda.is_available(), ...)`` decorator, or each use of
+    a module alias for one, must sit in a decorator block that also carries
+    ``@pytest.mark.cuda`` so the GPU leg's ``-m cuda`` selection reaches it.
+    """
+
+    lines = text.split("\n")
+    aliases = {m.group(1) for line in lines if (m := _CUDA_ALIAS_RE.match(line.strip()))}
+    offenders = []
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        is_site = stripped.startswith("@pytest.mark.skipif(") and _CUDA_SKIPIF_RE.search(
+            " ".join(lines[index : index + 3])
+        )
+        if (is_site or stripped.lstrip("@") in aliases and stripped.startswith("@")) and not (
+            _decorator_block_has_cuda_mark(lines, index)
+        ):
+            offenders.append(index + 1)
+    return offenders
+
+
+def test_cuda_only_skips_carry_the_cuda_marker() -> None:
+    """Every CUDA-only skip site also carries ``@pytest.mark.cuda`` (GPU leg selection)."""
+
+    tests_dir = Path(__file__).resolve().parent
+    offenders = [
+        f"{path.relative_to(tests_dir.parent)}:{line}"
+        for path in sorted(tests_dir.rglob("*.py"))
+        for line in _unmarked_cuda_skip_sites(path.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, "add @pytest.mark.cuda beside these CUDA-only skips:\n  " + "\n  ".join(
+        offenders
+    )
+
+
+def test_cuda_marker_scanner_is_red_capable() -> None:
+    """A planted unmarked CUDA skip (direct or via an alias) is reported."""
+
+    skip = '@pytest.mark.skipif(not torch.cuda.is_available(), reason="x")'
+    assert _unmarked_cuda_skip_sites(f"{skip}\ndef test_a():\n    pass") == [1]
+    assert _unmarked_cuda_skip_sites(f"@pytest.mark.cuda\n{skip}\ndef test_a():\n    pass") == []
+    alias = 'GPU = pytest.mark.skipif(not torch.cuda.is_available(), reason="x")'
+    assert _unmarked_cuda_skip_sites(f"{alias}\n@GPU\ndef test_b():\n    pass") == [2]
+    assert (
+        _unmarked_cuda_skip_sites(f"{alias}\n@GPU\n@pytest.mark.cuda\ndef test_b():\n    pass")
+        == []
     )

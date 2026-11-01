@@ -93,6 +93,7 @@ def test_op_tier_gate_row_runs_end_to_end_on_cpu() -> None:
 
 @pytest.mark.rare
 @pytest.mark.real_model
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="the D25 op-tier row runs on CUDA")
 def test_op_tier_overhead_row_cuda_gpt2() -> None:
     """The funded GPU-hour row: gpt2-124M, b2 x s128, op grain on one block's ops."""
