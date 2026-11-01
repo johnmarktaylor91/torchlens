@@ -72,6 +72,28 @@ def _no_func_message(site: Op, *, loaded: bool) -> str:
     )
 
 
+def _unmet_log_precondition(log: Trace) -> str | None:
+    """Return the first log-level replay precondition ``log`` fails, else None.
+
+    Parameters
+    ----------
+    log:
+        Model log to check.
+
+    Returns
+    -------
+    str | None
+        The refusal message for the first unmet precondition (a completed
+        capture, then ``intervention_ready=True`` metadata), or None.
+    """
+
+    if not getattr(log, "_tracing_finished", False):
+        return "replay requires a completed Trace"
+    if not getattr(log, "intervention_ready", False):
+        return "replay requires intervention_ready=True capture metadata"
+    return None
+
+
 def _keeps_captured_draw(
     representative: Op,
     replay_group: Sequence[Op],

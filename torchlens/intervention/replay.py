@@ -56,6 +56,7 @@ from ._replay_sites import (
     _is_source_record,
     _keeps_captured_draw,
     _no_func_message,
+    _unmet_log_precondition,
 )
 from ._replay_values import (
     _call_mutates_tensor_args,
@@ -1438,10 +1439,9 @@ def _preflight_log(log: Trace) -> None:
     from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(log, "path-assuming intervention chaining")
-    if not getattr(log, "_tracing_finished", False):
-        raise ReplayPreconditionError("replay requires a completed Trace")
-    if not getattr(log, "intervention_ready", False):
-        raise ReplayPreconditionError("replay requires intervention_ready=True capture metadata")
+    unmet = _unmet_log_precondition(log)
+    if unmet is not None:
+        raise ReplayPreconditionError(unmet)
 
 
 def _preflight_group(group: Sequence[Op], *, loaded: bool = False) -> None:
