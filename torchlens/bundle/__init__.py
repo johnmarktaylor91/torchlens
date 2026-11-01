@@ -1333,11 +1333,11 @@ class Bundle:
         graph: BundleGraphLiteral = "forward",
         nodes: Literal["ops", "members"] = "ops",
         rolled: bool = False,
-        direction: VisDirectionLiteral = "bottomup",
+        direction: VisDirectionLiteral | None = None,
         theme: str | None = None,
         show_legend: bool | None = None,
         file_format: str | None = None,
-        open_viewer: bool = True,
+        open_viewer: bool = False,
         graph_overrides: dict[str, Any] | None = None,
         node_overrides: dict[str, Any] | None = None,
         edge_overrides: dict[tuple[str, str], Any] | None = None,
@@ -1350,11 +1350,12 @@ class Bundle:
         Parameters
         ----------
         path:
-            Output path without extension. Defaults to ``"bundle_modelgraph"``,
-            or ``"bundle_diff"`` for ``graph="diff"``.
+            Output path; a recognised extension picks the format. A bare call
+            writes a collision-safe ``bundle_modelgraph`` file (``bundle_diff``
+            for ``graph="diff"``) in the working directory.
         graph:
-            Which picture: ``"forward"`` (default), ``"backward"``, ``"both"``
-            or ``"overlay"`` draw the bundle's union op graph for that pass;
+            Which picture: ``"forward"`` (default), ``"backward"`` or
+            ``"combined"`` draw the bundle's union op graph for that pass;
             ``"diff"`` draws two members side by side with their aligned
             sites coloured by ``metric`` distance.
         nodes:
@@ -1363,7 +1364,7 @@ class Bundle:
         rolled:
             Draw the rolled (per-layer) graph instead of every op.
         direction:
-            Graphviz layout direction.
+            Graphviz layout direction; ``None`` is ``"bottomup"``.
         theme:
             Skin preset, the names ``Trace.draw`` takes. Defaults to
             ``"torchlens"``, or ``"paper"`` for ``graph="diff"``.

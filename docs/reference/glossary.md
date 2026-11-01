@@ -849,18 +849,21 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `bundle_gate_*` code.
 
 **Bundle.draw**
-: `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction="bottomup",
-  theme=None, show_legend=None, file_format=None, open_viewer=True, graph_overrides=None,
+: `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction=None, theme=None,
+  show_legend=None, file_format=None, open_viewer=False, graph_overrides=None,
   node_overrides=None, edge_overrides=None, members=None, metric="relative_l2", on="out")` draws
   the bundle as one picture beside `b.show()` (one picture per member) and returns the DOT
-  source. `graph="forward"` (default), `"backward"`, `"both"` or `"overlay"` draw the bundle's
-  union op graph for that pass; `nodes="members"` draws one node per member and one edge per
-  relation row (`graph` must stay `"forward"`); `rolled=True` draws the per-layer graph. `theme`
-  takes the `Trace.draw` skin names (default `"torchlens"`). `graph="diff"` draws two members side
-  by side with their aligned sites coloured by `metric` distance on the `on` field: `members=(left,
-  right)` names them (default the baseline and the next member); its defaults are `theme="paper"`,
-  `file_format="svg"` and `path="bundle_diff"`. The diff runs the comparison gate on the rendered
-  pair only.
+  source; the public home of the former `show_bundle_graph`. `Trace.draw` spellings: path first,
+  its extension picks the format (else `file_format`, default `"pdf"`), a bare call writes a
+  collision-safe `bundle_modelgraph` file. `graph="forward"` (default), `"backward"` or
+  `"combined"` draw the bundle's union op graph for that pass; `nodes="members"` draws one node
+  per member and one edge per relation row (`graph` must stay `"forward"`); `rolled=True` draws
+  the per-layer graph; `direction=None` is `"bottomup"`. `theme` takes the `Trace.draw` skin
+  names (`None` is `"torchlens"`). `graph="diff"` draws two members side by side with their
+  aligned sites coloured by `metric` distance on the `on` field (the former `show_diff`):
+  `members=(left, right)` names them (default the baseline and the next member); its defaults
+  are `theme="paper"`, `file_format="svg"` and a `bundle_diff` file. The diff runs the comparison
+  gate on the rendered pair only.
 
 **Bundle.episode_status** *(spelling documented-unstable)*
 : `b.episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
