@@ -166,6 +166,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "research-model dependency for real-world coverage, deliberately undeclared",
     ),
     "equinox": (OPTIONAL_PREVIEW, "jax extra"),
+    "flax": (OPTIONAL_PREVIEW, "jax extra"),
     "scipy": (
         OPTIONAL_PREVIEW,
         "extraction-export extra (MAT exporter); requested in "
@@ -380,6 +381,12 @@ DYNAMIC_IMPORTORSKIP_SITES = frozenset(
 
 # Every unconditional skip in tests/ (scanner key -> dated justification).
 UNCONDITIONAL_SKIP_LEDGER: dict[str, str] = {
+    "test_backend_scorecard_packaging.py::_wheel_build_command": (
+        "[2026-11-01] reached only when neither ``build`` nor ``pip`` is importable "
+        "(feature check, never a version parse): with no wheel builder the packaging "
+        "test has nothing to drive; every CI leg installs pip, so the skip is a guard, "
+        "not a dead test."
+    ),
     "real_model/test_track_compile_recompile_burst.py::_recompile_limit": (
         "[2026-10-12] reached only when the loop above finds neither Dynamo "
         "recompile-limit name (feature check, never a version parse): with no "

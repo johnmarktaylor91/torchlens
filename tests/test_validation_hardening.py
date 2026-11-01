@@ -39,6 +39,7 @@ from _validation_capture import _capture, _quiet_validate
 from example_models import BufferRewriteModel
 
 import torchlens as tl
+from torchlens._state import pause_logging
 from torchlens.backends.torch import rescue
 from torchlens.errors import TraceNotReproducibleWarning
 from torchlens.options import CaptureOptions
@@ -590,18 +591,21 @@ def test_w34_factory_internal_sources_keep_exemption() -> None:
 
 
 def test_w34_outside_tensor_consumer_with_traced_parent_fails_source_provenance() -> None:
-    """A genuinely outside tensor beside a traced input fails forward validation.
+    """A tensor the capture never saw, beside a traced input, fails forward validation.
 
-    The global-payload pattern warns (no graph/source provenance) and, since the
-    source-provenance check, fails on ``source_provenance`` rather than on the
-    graph_connectivity invariant: the traced parent keeps the consumer connected.
+    A pre-forward global is a recorded ``constant`` source, so the gap is planted
+    with a tensor built mid-forward while logging is paused. It warns (no
+    graph/source provenance) and fails on ``source_provenance`` rather than on
+    the graph_connectivity invariant: the traced parent keeps the consumer connected.
     """
 
     outside = torch.randn(3, 4)
 
     class _GlobalTensor(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return x + outside
+            with pause_logging():
+                unseen = outside.clone()
+            return x + unseen
 
     assert _quiet_validate(_GlobalTensor(), torch.randn(3, 4)) is False
     failure = tl.validation.last_validation_failure()

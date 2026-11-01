@@ -30,10 +30,10 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from . import FieldPolicy
+from ._field_policy import FieldPolicy
+from .format_errors import PreReleaseArtifactError
 
 #: State-dict key carrying the pre-release marker on switch-on writes. Lives
 #: next to ``tlspec_version`` in the scrubbed Trace envelope and is popped and
@@ -87,8 +87,6 @@ def register_prerelease_field(
         If the field is not declared on ``owner``, is not declared ``DROP``,
         or the requested persisting policy is itself ``DROP``.
     """
-
-    from . import FieldPolicy
 
     spec = getattr(owner, "_PORTABLE_STATE_SPEC", None)
     if not isinstance(spec, dict) or field_name not in spec:
@@ -232,8 +230,6 @@ def effective_policy(owner_type: type, field_name: str, declared: FieldPolicy) -
         registered, in which case the registered persisting policy.
     """
 
-    from . import FieldPolicy
-
     if declared is not FieldPolicy.DROP or not _ACTIVE:
         return declared
     override = persisted_policy_override(owner_type, field_name)
@@ -279,7 +275,6 @@ def validate_prerelease_state(state: dict[str, Any], *, cls_name: str) -> None:
     payload = state.pop(PRERELEASE_STATE_KEY, None)
     if payload is None:
         return
-    from . import PreReleaseArtifactError
 
     if not _ACTIVE:
         raise PreReleaseArtifactError(

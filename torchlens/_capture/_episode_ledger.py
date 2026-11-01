@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._utils.hashing import sha256_canonical_json
+from ..errors.episode import EpisodeCaptureError, EpisodeLedgerError
 from ._episode_derivation import (
     _call_returned,
     _declaration_error,
@@ -1133,8 +1134,6 @@ class ResolvedEpisode:
 def _ledger_error(message: str, *, code: str) -> Exception:
     """Build the typed ledger refusal."""
 
-    from ..errors.episode import EpisodeLedgerError
-
     return EpisodeLedgerError(message, code=code)
 
 
@@ -1627,8 +1626,6 @@ def _attach_settlement_partial_log(exc: BaseException, trace: Any) -> None:
     product keeps it, and an exception that rejects attribute assignment
     propagates unmodified (the refusal itself is never masked).
     """
-
-    from ..errors.episode import EpisodeCaptureError
 
     if not isinstance(exc, EpisodeCaptureError):
         return

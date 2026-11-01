@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 else:
     _TraceMixinBase = object
 from .._deprecations import MISSING, MissingType
-from .._errors import InvalidArgumentError
+from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
@@ -851,8 +851,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             totals, capture facts, and the
             render/print/to_pandas/to_markdown/to_html result API.
         """
-        from .._errors import InvalidArgumentError
-
         one_call_only = {
             "input_shape": input_shape,
             "execution_mode": execution_mode,
@@ -890,8 +888,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             **unsupported,
         )
         if not self._tracing_finished:  # a cleaned trace raises trace_cleaned_up here
-            from .._errors import CaptureNotActiveError
-
             raise CaptureNotActiveError(
                 "trace.summary() cannot run before the forward pass is complete; "
                 "a partial capture has no summary (repr(trace) shows the live op count).",

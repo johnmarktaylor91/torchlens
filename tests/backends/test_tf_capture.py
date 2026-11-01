@@ -97,7 +97,15 @@ def test_tf_capture_hand_built_op_chain_edges_and_saved_values() -> None:
     # like torch (``postprocess/labeling.py``): a referenced op's bare
     # ``layer_label`` when its own layer has a single pass (as here), and
     # only a multi-pass referenced layer gets the pass-qualified ``label``.
-    assert by_func["Mul"].parents == (by_func["AddV2"].layer_label,)
+    # The closure constant ``[3.0, 4.0]`` is a recorded ``constant`` parent too
+    # (shared constants rule), so AddV2 is one of Mul's two parents.
+    constant_ops = [op for op in trace.layer_list if op.func_name == "constant"]
+    assert len(constant_ops) == 2
+    assert by_func["AddV2"].layer_label in by_func["Mul"].parents
+    assert set(by_func["Mul"].parents) <= {by_func["AddV2"].layer_label} | {
+        op.layer_label for op in constant_ops
+    }
+    assert len(by_func["Mul"].parents) == 2
     assert np.allclose(trace[by_func["Mul"].label].out, np.array([9.0, 20.0], dtype=np.float32))
     assert np.isfinite(trace[by_func["AddV2"].label].out).all()
 

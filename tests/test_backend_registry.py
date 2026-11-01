@@ -34,7 +34,11 @@ from torchlens.backends.default_specs import (
 from torchlens.backends.jax import capabilities as jax_capabilities
 from torchlens.backends.mlx import capabilities as mlx_capabilities
 from torchlens.backends.paddle import capabilities as paddle_capabilities
-from torchlens.backends.registry import _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES, SerializationPolicy
+from torchlens.backends.registry import (
+    _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES,
+    BackendRegistryError,
+    SerializationPolicy,
+)
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.errors import (
@@ -1142,3 +1146,54 @@ def test_backend_none_ambiguity_is_deterministic() -> None:
     finally:
         tl.backends.unregister("fake_a")
         tl.backends.unregister("fake_b")
+
+
+@pytest.mark.parametrize(
+    ("flag", "code"),
+    [
+        ("backward_capture", "backward_capture_unsupported"),
+        ("fastlog", "fastlog_unsupported"),
+        ("interventions", "interventions_unsupported"),
+        ("rng_replay", "rng_replay_unsupported"),
+        ("has_streaming", "streaming_unsupported"),
+        ("structure_only_capture", "structure_only_capture_unsupported"),
+        ("has_validation_replay", "validation_replay_unsupported"),
+        ("payload_materialization", "payload_materialization_unsupported"),
+        ("intermediate_derived_grads", "intermediate_derived_grads_unsupported"),
+    ],
+)
+def test_every_refusable_capability_flag_owes_a_registered_code(flag: str, code: str) -> None:
+    """Each ``BackendCapabilities`` flag that can be False maps to a registered refusal code."""
+
+    from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS, REFUSAL_CODES
+
+    assert REFUSABLE_CAPABILITY_FLAGS[flag] == code
+    assert code in REFUSAL_CODES
+    exc = BackendUnsupportedError(f"{flag} is not declared by this backend", code=code)
+    assert exc.code == code
+
+
+def test_refusal_code_passed_at_the_raise_site_is_the_instance_code() -> None:
+    """``exc.code`` is the contract: a raise-site ``code=`` wins; the class code is the default."""
+
+    exc = BackendUnsupportedError(
+        "tf backend refuses backward capture", code="backward_capture_unsupported"
+    )
+    assert exc.code == "backward_capture_unsupported"
+    assert exc.fields["code"] == "backward_capture_unsupported"
+    assert BackendUnsupportedError.code == "backend_unsupported"
+
+    default = BackendUnsupportedError("tf backend refuses something")
+    assert default.code == "backend_unsupported"
+    assert default.fields["code"] == "backend_unsupported"
+
+    registry_default = BackendRegistryError("registry failed")
+    assert registry_default.code == "backend_error"
+    typed = UnknownBackendError("no such backend", code="runtime_missing")
+    assert typed.code == "runtime_missing" and typed.fields["code"] == "runtime_missing"
+    # The instance code survives the pickle recipe the class defines.
+    import pickle
+
+    restored = pickle.loads(pickle.dumps(exc))
+    assert restored.code == "backward_capture_unsupported"
+    assert restored.fields["code"] == "backward_capture_unsupported"

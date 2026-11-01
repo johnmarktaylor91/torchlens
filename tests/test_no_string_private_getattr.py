@@ -108,11 +108,19 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # channel" reading (net +1 against a discharged older site).
     "_io": 26,
     "_autoroute": 2,
-    "backends/jax": 7,
-    "backends/mlx": 21,
-    "backends/paddle": 20,
-    "backends/tf": 9,
-    "backends/tinygrad": 5,
+    # Preview-protocol union (2026-11-01): the B009 autofix turned default-less
+    # `getattr(trace, "_x")` reads into direct reads (jax, tinygrad), and the
+    # preview packets' reads of scratch fields the capture start declares
+    # (`_<backend>_module_stack`, `_capture_depth`, `_op_captures`, the mlx
+    # constants censuses and intervention plan) became direct reads; the tf
+    # loaded-flag reads use the try/except seam `_trace_validation.py` already
+    # uses for `_loaded_from_bundle`. The lazy-initialised mlx stores and the
+    # loaded-trace guards keep their defaulted reads (absence is meaningful).
+    "backends/jax": 5,
+    "backends/mlx": 19,
+    "backends/paddle": 18,
+    "backends/tf": 8,
+    "backends/tinygrad": 4,
     # 111 -> 112 (2026-08-14 fixwave-2 reconcile): heavy site churn from the
     # ops.py/completeness_witness.py file splits nets +1, dominated by the
     # intended safetynet stage-2 rescue path (rescue.py) and backward-projection

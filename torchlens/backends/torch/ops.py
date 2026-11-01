@@ -287,42 +287,6 @@ _ANCESTOR_SLOT_DESCRIPTORS = {
 register_relation_cell_encoding(_AncestorBitset)
 
 
-def _get_root_ancestors(op: Op) -> "set[str] | frozenset[str]":
-    """Return ``op.root_ancestors``: staging set or frozen closure view."""
-
-    return _get_ancestor_field(op, "root_ancestors")
-
-
-def _set_root_ancestors(op: Op, value: set[str]) -> None:
-    """Assign ``op.root_ancestors`` through its preserved slot descriptor."""
-
-    _set_ancestor_field(op, "root_ancestors", value)
-
-
-def _delete_root_ancestors(op: Op) -> None:
-    """Delete ``op.root_ancestors`` through its preserved slot descriptor."""
-
-    _delete_ancestor_field(op, "root_ancestors")
-
-
-def _get_internal_source_ancestors(op: Op) -> "set[str] | frozenset[str]":
-    """Return ``op.internal_source_ancestors``: staging set or frozen closure view."""
-
-    return _get_ancestor_field(op, "internal_source_ancestors")
-
-
-def _set_internal_source_ancestors(op: Op, value: set[str]) -> None:
-    """Assign ``op.internal_source_ancestors`` through its preserved slot descriptor."""
-
-    _set_ancestor_field(op, "internal_source_ancestors", value)
-
-
-def _delete_internal_source_ancestors(op: Op) -> None:
-    """Delete ``op.internal_source_ancestors`` through its preserved slot descriptor."""
-
-    _delete_ancestor_field(op, "internal_source_ancestors")
-
-
 def _get_input_ancestors(op: Op) -> "set[str] | frozenset[str]":
     """Return ``op.input_ancestors``: staging set or frozen closure view."""
 
@@ -359,20 +323,6 @@ def _delete_output_descendants(op: Op) -> None:
     _delete_ancestor_field(op, "output_descendants")
 
 
-setattr(
-    Op,
-    "root_ancestors",
-    property(_get_root_ancestors, _set_root_ancestors, _delete_root_ancestors),
-)
-setattr(
-    Op,
-    "internal_source_ancestors",
-    property(
-        _get_internal_source_ancestors,
-        _set_internal_source_ancestors,
-        _delete_internal_source_ancestors,
-    ),
-)
 setattr(
     Op,
     "input_ancestors",
@@ -626,8 +576,29 @@ _SAFE_TENSOR_PROPERTY_NAMES: frozenset[str] = _PURE_TENSOR_PROPERTY_NAMES
 # module's classes and constants back, so they must exist before the splits load.
 from ._ops_capture_records import (  # noqa: E402
     _delete_ancestor_field,
+    _delete_internal_source_ancestors,
+    _delete_root_ancestors,
     _get_ancestor_field,
+    _get_internal_source_ancestors,
+    _get_root_ancestors,
     _set_ancestor_field,
+    _set_internal_source_ancestors,
+    _set_root_ancestors,
+)
+
+setattr(
+    Op,
+    "root_ancestors",
+    property(_get_root_ancestors, _set_root_ancestors, _delete_root_ancestors),
+)
+setattr(
+    Op,
+    "internal_source_ancestors",
+    property(
+        _get_internal_source_ancestors,
+        _set_internal_source_ancestors,
+        _delete_internal_source_ancestors,
+    ),
 )
 from ._ops_container_base import (  # noqa: E402
     _op_record_from_log,

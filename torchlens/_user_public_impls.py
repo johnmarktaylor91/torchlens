@@ -28,6 +28,7 @@ from ._capture_state_helpers import (
 from ._data_classes.trace import Trace
 from ._deploy_env import restore_state_dict_resilient
 from ._deprecations import MISSING, MissingType
+from ._errors import CaptureNotActiveError, InvalidArgumentError
 from ._input_coerce import _coerce_input_args
 from ._literals import (
     BufferVisibilityLiteral,
@@ -392,8 +393,6 @@ def _validate_summary_grammar(summary_kwargs: dict[str, Any]) -> None:
 def _validate_summary_modes(execution_mode: str, grad_mode: str) -> None:
     """Refuse unknown one-call summary execution/grad mode tokens typed."""
 
-    from ._errors import InvalidArgumentError
-
     if execution_mode not in ("eval", "train", "same"):
         raise InvalidArgumentError(
             f"execution_mode must be 'eval', 'train', or 'same'; got {execution_mode!r}.",
@@ -436,8 +435,6 @@ def _maybe_weightsfree_summary(
     if not _all_meta_model(model):
         return None
     if input_args is None and not input_kwargs and input_size is None:
-        from ._errors import InvalidArgumentError
-
         raise InvalidArgumentError(
             "summary() on a meta-built model needs input evidence: the "
             "zero-argument inference rung runs real probing forwards, which "
@@ -1396,7 +1393,6 @@ def _validate_forward_pass_torch(
     # contract as tl.trace -- a bound method of an nn.Module wraps into the
     # TL-authored synthetic root before the module-shaped preflights run;
     # other callables refuse typed (previously a bare AttributeError leak).
-    from ._errors import InvalidArgumentError
     from .backends.torch.bound_root import TLBoundMethodRoot, is_bound_method_of_module
 
     if not isinstance(model, nn.Module):
@@ -1537,7 +1533,6 @@ def _validate_forward_pass_torch(
                 _trace_observer,
                 {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
-        from ._errors import CaptureNotActiveError
         from .backends.torch._ops_containers import _walk_output_tensors_with_paths
         from .validation._pristine import pristine_torch_oracle
 

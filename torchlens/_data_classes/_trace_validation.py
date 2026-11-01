@@ -14,10 +14,17 @@ if TYPE_CHECKING:
 else:
     _TraceMixinBase = object
 from .._deprecations import MISSING, MissingType
-from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
+from .._errors import (
+    InvalidArgumentError,
+    KeywordConflictError,
+    PayloadUnavailableError,
+    RecordBindingError,
+)
 from .._runnable import DivergencePolicy, RunProvider, RunResult
+from ..errors import RunCapabilityUnavailableError, StateBindingError
 from ..options import ReplayOptions, merge_replay_options
 from ._staged_spec import _staged_user_entries
+from ._trace_pristine import derive_pristine
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
     _clear_entry_attributes,
@@ -49,7 +56,6 @@ def _refuse_loaded_backward_capture(trace: "Trace", entry_point: str) -> None:
     if not loaded_from_bundle:
         return
     from .._runnable import RunnableErrorCode
-    from ..errors import RunCapabilityUnavailableError
 
     raise RunCapabilityUnavailableError(
         f"{entry_point}() is unavailable on a bundle-loaded Trace: the loaded "
@@ -132,7 +138,6 @@ def _refuse_state_compromised_live_run(trace: Any) -> None:
     compromised = getattr(runnable_state, "state_compromised", None)
     if compromised is None:
         return
-    from ..errors import StateBindingError
 
     raise StateBindingError(
         "A prior run() failed while RESTORING this trace's live model state "
@@ -295,7 +300,6 @@ def _refuse_stats_capture(trace: Any, purpose: str) -> None:
 
     if not is_stats_capture(trace):
         return
-    from .._errors import PayloadUnavailableError
 
     action = "validation" if purpose == "validation_entry" else "replay"
     raise PayloadUnavailableError(
@@ -470,8 +474,6 @@ class TraceValidationMixin(_TraceMixinBase):
             or a non-torch backend), which means no evidence and is never a
             pristine reading; otherwise ``True``.
         """
-
-        from ._trace_pristine import derive_pristine
 
         return derive_pristine(self)
 
@@ -717,7 +719,6 @@ class TraceValidationMixin(_TraceMixinBase):
             # inherited-status leg would silently settle UNVERIFIABLE instead,
             # which is exactly the silence the capability table forbids.
             from .._runnable import RunnableErrorCode
-            from ..errors import RunCapabilityUnavailableError
 
             raise RunCapabilityUnavailableError(
                 "This Trace is a TRUNCATED run product (until=): it covers only "
@@ -834,7 +835,6 @@ class TraceValidationMixin(_TraceMixinBase):
                 )
             if fast and save is not None:
                 from .._runnable import RunnableErrorCode
-                from ..errors import RunCapabilityUnavailableError
 
                 raise RunCapabilityUnavailableError(
                     "run-time save= does not compose with fast=True yet: the fast "

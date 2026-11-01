@@ -128,6 +128,42 @@ def _delete_ancestor_field(op: Op, field_name: str) -> None:
     _ANCESTOR_SLOT_DESCRIPTORS[field_name].__delete__(op)
 
 
+def _get_root_ancestors(op: Op) -> set[str] | frozenset[str]:
+    """Return ``op.root_ancestors``: staging set or frozen closure view."""
+
+    return _get_ancestor_field(op, "root_ancestors")
+
+
+def _set_root_ancestors(op: Op, value: set[str]) -> None:
+    """Assign ``op.root_ancestors`` through its preserved slot descriptor."""
+
+    _set_ancestor_field(op, "root_ancestors", value)
+
+
+def _delete_root_ancestors(op: Op) -> None:
+    """Delete ``op.root_ancestors`` through its preserved slot descriptor."""
+
+    _delete_ancestor_field(op, "root_ancestors")
+
+
+def _get_internal_source_ancestors(op: Op) -> set[str] | frozenset[str]:
+    """Return ``op.internal_source_ancestors``: staging set or frozen closure view."""
+
+    return _get_ancestor_field(op, "internal_source_ancestors")
+
+
+def _set_internal_source_ancestors(op: Op, value: set[str]) -> None:
+    """Assign ``op.internal_source_ancestors`` through its preserved slot descriptor."""
+
+    _set_ancestor_field(op, "internal_source_ancestors", value)
+
+
+def _delete_internal_source_ancestors(op: Op) -> None:
+    """Delete ``op.internal_source_ancestors`` through its preserved slot descriptor."""
+
+    _delete_ancestor_field(op, "internal_source_ancestors")
+
+
 def _compact_ancestor_sets(trace: Trace) -> None:
     """Replace finished Ops' two large ancestor sets with interned integer bitmaps.
 

@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
+from ._errors import SelectionError
 from ._selection_align import align_resolved_selection
 from ._selection_mask import (
     _Mask,
@@ -60,7 +61,7 @@ from ._selection_mask import (
     _mask_whole,
 )
 from ._utils.fail_open import fail_open
-from .errors._base import ConfigurationError, TorchLensError
+from .errors._base import TorchLensError
 
 if TYPE_CHECKING:
     from ._data_classes.trace import Trace
@@ -81,16 +82,6 @@ RelationName = Literal["exact", "upper_bound", "lower_bound", "unknown"]
 _RELATIONS: tuple[str, ...] = ("exact", "upper_bound", "lower_bound", "unknown")
 
 _OPERATOR_SYMBOLS = {"or": "|", "and": "&", "sub": "-"}
-
-
-class SelectionError(ConfigurationError, ValueError):
-    """Carrier class for the closed ``selection_*`` refusal codes.
-
-    Branch on ``exc.fields["code"]`` (``selection_trace_mismatch`` /
-    ``selection_bool_ambiguous`` / ``selection_kind_incompatible`` /
-    ``selection_unresolvable`` / ``selection_apply_invalid`` /
-    ``selection_alignment_invalid``), never on message text.
-    """
 
 
 # ---------------------------------------------------------------------------

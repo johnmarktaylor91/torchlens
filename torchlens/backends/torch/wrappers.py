@@ -107,6 +107,7 @@ from ._tl import (
     set_tensor_label,
 )
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
+from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
 from .aliasing import _tensors_alias
 from .buffer_writes import (
     record_op_buffer_writes,
@@ -126,7 +127,7 @@ from .param_mutation import (
     parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
     receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
 )
-from .sources import log_source_tensor
+from .sources import log_closure_constant_if_known, log_source_tensor
 
 if TYPE_CHECKING:
     pass
@@ -1728,6 +1729,11 @@ def torch_func_decorator(
             address = resolve_or_late_index_buffer_address(trace, t)
             if address is not None and get_tensor_label(t) is None:
                 log_source_tensor(trace, t, "buffer", address)
+            elif address is None:
+                # A tensor the forward closes over (SPEC 2 rule 1) becomes a
+                # ``constant`` source op on first use; anything not proven
+                # pre-forward stays unattributed.
+                log_closure_constant_if_known(trace, t)
 
         # Intercept print functions to show TorchLens label info in repr.
         if is_print_func and arg_tensorlike:
@@ -1909,21 +1915,7 @@ def torch_func_decorator(
             # help there, confirmed by direct instrumentation). Translate torch's
             # own crash into the same typed, disclosed refusal the fast path
             # raises, rather than let a cryptic RuntimeError escape.
-            if (
-                pauses_owned_modes
-                and not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
-                and "already associated to a python object" in str(exc)
-            ):
-                raise TensorSubclassUnsupportedError(
-                    f"torchlens could not construct the Tensor subclass via "
-                    f"{func_name!r} even after pausing its own dispatch mode on this "
-                    f"torch build (original torch error: {exc}). "
-                    "Remedy: upgrade torch (HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE reports "
-                    "False here), or avoid this construction while other TorchLens "
-                    "instrumentation observes the same forward on this build.",
-                    code="subclass_ctor_under_dispatch_mode_unsupported",
-                    func_name=func_name,
-                ) from exc
+            _raise_if_subclass_ctor_under_dispatch_mode(exc, func_name, pauses_owned_modes)
             raise
         finally:
             # Markers close FIRST so the range covers the user op, not the

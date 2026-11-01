@@ -15,7 +15,7 @@ import torch
 from ... import _state
 from ..._capture.session import capture_session_for
 from ..._data_classes.internal_types import FuncExecutionContext
-from ..._errors import CaptureGapWarning
+from ..._errors import CaptureGapWarning, CaptureNotActiveError, OutputAttributionError
 from ..._io import BlobRef as PortableBlobRef
 from ..._ir._output_occurrences import container_path_to_address, occurrences_by_raw_label
 from ..._ir.container import ContainerSpec, OutputPathComponent
@@ -429,8 +429,6 @@ class TorchBackend:
                         # with zero logging and return a silently empty Trace.
                         # Refuse loudly instead.
                         if not _state._is_decorated:
-                            from ..._errors import CaptureNotActiveError
-
                             raise CaptureNotActiveError(
                                 "torch wrappers were removed between model "
                                 "preparation and capture admission (a "
@@ -926,7 +924,6 @@ class TorchBackend:
             if _label_raw is None:
                 if getattr(self_trace, "_raw_transform_escape_detected", False):
                     continue
-                from ..._errors import OutputAttributionError
 
                 try:
                     shape_text = str(tuple(t.shape))

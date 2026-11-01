@@ -88,7 +88,7 @@ def test_mlx_zero_ablate_substitutes_downstream_and_validates() -> None:
     ]
     assert all(not op.intervention_replaced for op in non_intervened)
 
-    assert MLXBackend().validate_trace(ablated) is True
+    assert MLXBackend().validate_trace(ablated).passed is True
 
 
 def test_mlx_scale_and_callable_transform_apply() -> None:
@@ -104,7 +104,7 @@ def test_mlx_scale_and_callable_transform_apply() -> None:
     scaled = tl.trace(model, x, backend="mlx", intervene=tl.when(tl.func("relu"), tl.scale(0.5)))
     relu_scaled = np.asarray(next(op for op in scaled.layer_list if op.layer_type == "relu").out)
     assert np.allclose(relu_scaled, relu_baseline * 0.5, atol=1e-5)
-    assert MLXBackend().validate_trace(scaled) is True
+    assert MLXBackend().validate_trace(scaled).passed is True
 
     def _negate(out: mx.array, *, ctx: object) -> mx.array:
         """Return the negated activation."""
@@ -115,7 +115,7 @@ def test_mlx_scale_and_callable_transform_apply() -> None:
     negated = tl.trace(model, x, backend="mlx", intervene=tl.when(tl.func("relu"), _negate))
     relu_negated = np.asarray(next(op for op in negated.layer_list if op.layer_type == "relu").out)
     assert np.allclose(relu_negated, -relu_baseline, atol=1e-5)
-    assert MLXBackend().validate_trace(negated) is True
+    assert MLXBackend().validate_trace(negated).passed is True
 
 
 def test_mlx_halt_returns_partial_trace_at_frontier() -> None:
@@ -130,7 +130,7 @@ def test_mlx_halt_returns_partial_trace_at_frontier() -> None:
     # Save-then-halt: the relu frontier is captured; the second linear is not.
     assert any(label.startswith("relu") for label in labels)
     assert sum(label.startswith("linear") for label in labels) == 1
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_intervened_record_stripped_of_declaration_fails_validation() -> None:
@@ -148,7 +148,7 @@ def test_mlx_intervened_record_stripped_of_declaration_fails_validation() -> Non
     index = next(i for i, capture in enumerate(captures) if capture.interventions)
     captures[index] = dataclasses.replace(captures[index], interventions=(), appliers=())
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_intervened_record_with_forged_declaration_fails_validation() -> None:
@@ -165,7 +165,7 @@ def test_mlx_intervened_record_with_forged_declaration_fails_validation() -> Non
         appliers=((0, lambda out: mx.zeros_like(out)),),
     )
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_value_dependent_intervene_refuses_typed() -> None:
@@ -312,4 +312,4 @@ def test_mlx_in_module_intervention_site() -> None:
     assert np.allclose(np.asarray(encoder_op.out), 0.0)
     head_ops = [op for op in trace.layer_list if op.layer_type == "linear"]
     assert not head_ops[-1].intervention_replaced
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True

@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._errors import InvalidArgumentError
 from ._summary_charset import degrade
 
 if TYPE_CHECKING:
@@ -182,8 +183,6 @@ class SummaryReport(str):
         """The rebuilt payload, or a typed teaching refusal when there is none."""
 
         if self._rebuilt is None:
-            from .._errors import InvalidArgumentError
-
             raise InvalidArgumentError(
                 f"{method}() serves rebuilt-grammar summaries; this report "
                 "carries no rebuilt-grammar payload (it was assembled from text).",
@@ -207,7 +206,6 @@ class SummaryReport(str):
             from ._summary_result import render_result_html
 
             return render_result_html(payload)
-        from .._errors import InvalidArgumentError
 
         raise InvalidArgumentError(
             f"render() style must be 'ascii', 'unicode', or 'html'; got {style!r}.",
@@ -225,8 +223,6 @@ class SummaryReport(str):
         stream = file if file is not None else sys.stdout
         resolved = detect_style(stream) if style == "auto" else style
         if resolved not in ("ascii", "unicode"):
-            from .._errors import InvalidArgumentError
-
             raise InvalidArgumentError(
                 f"print() style must be 'auto', 'ascii', or 'unicode'; got {style!r}.",
                 code="summary_option_invalid",

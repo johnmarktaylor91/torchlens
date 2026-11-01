@@ -29,6 +29,8 @@ from typing import Any, Final
 
 import torch
 
+from .._errors import WeightsfreeIntegrityError
+
 __all__ = [
     "MetaAdmissionRecord",
     "admission_record_for",
@@ -123,7 +125,6 @@ def self_test_meta_identity() -> None:
         _IDENTITY_SELF_TEST_RESULT = _run_identity_self_test()
     if _IDENTITY_SELF_TEST_RESULT == "ok":
         return
-    from .._errors import WeightsfreeIntegrityError
 
     raise WeightsfreeIntegrityError(
         "Weights-free admission requires a storage-identity primitive that "
@@ -209,7 +210,6 @@ def enforce_settlement_invariants(trace: Any) -> None:
     violation = _first_settlement_violation(trace)
     if violation is None:
         return
-    from .._errors import WeightsfreeIntegrityError
 
     raise WeightsfreeIntegrityError(
         f"Weights-free settlement invariant violated: {violation}. An "
@@ -453,8 +453,6 @@ def _absorbed_ambient_device_context() -> Iterator[None]:
         return
     surgery = get_torch_function_stack_surgery()
     if surgery is None:
-        from .._errors import WeightsfreeIntegrityError
-
         raise WeightsfreeIntegrityError(
             "A torch device context (with torch.device(...)) is active at an "
             "admitted weights-free capture, and this torch build offers no "

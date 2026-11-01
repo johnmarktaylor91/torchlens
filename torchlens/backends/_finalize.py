@@ -22,6 +22,8 @@ from .._postprocess.finalization import _build_module_logs, _build_root_module_l
 from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from .._quantities import Bytes
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
+from ._constants import ConstantLedger, apply_constants_rule
+from ._finalize_totals import _count_trace_ops, _update_param_totals_from_layers
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -34,6 +36,27 @@ MetadataTopLevelPredicate: TypeAlias = Callable[
 ]
 OpTopLevelPredicate: TypeAlias = Callable[[str], bool]
 TrainingModeResolver: TypeAlias = Callable[[dict[str, Any]], bool]
+
+
+def _attach_op_to_layer(
+    trace: Trace,
+    op_log: Any,
+    enrich_layer: LayerEnrichmentHook | None,
+) -> None:
+    """Attach one finalized op to its layer log, creating the layer on first sight."""
+
+    layer_log = trace.layer_logs.get(op_log.layer_label)
+    layer_created = layer_log is None
+    if layer_log is None:
+        layer_log = Layer(op_log)
+    layer_log.ops[op_log.pass_index] = op_log
+    layer_log.call_labels.append(op_log.label)
+    if op_log.num_passes != 1:
+        layer_log.num_passes = op_log.num_passes
+    if layer_created:
+        if enrich_layer is not None:
+            enrich_layer(layer_log, op_log)
+        trace.layer_logs[op_log.layer_label] = layer_log
 
 
 def finalize_single_pass_trace(
@@ -53,6 +76,7 @@ def finalize_single_pass_trace(
     compute_input_output_distances: bool | None = None,
     recurrence_detection: bool = False,
     relabel_sidecar_labels: SidecarRelabelHook | None = None,
+    constants: ConstantLedger | None = None,
 ) -> None:
     """Finalize raw single-pass op logs into public trace accessors.
 
@@ -100,6 +124,12 @@ def finalize_single_pass_trace(
         may ignore the hook. Called unconditionally (N5: every op's raw label
         differs from its final label now, not only multi-pass group members),
         not only when ``recurrence_detection`` is on.
+    constants:
+        The capture's :class:`~torchlens.backends._constants.ConstantLedger`
+        when the backend keeps one. The shared constants rule audits the raw
+        graph against it first (closure constants are parentless source ops
+        with payload evidence, literal producers stay parentless); the rule
+        runs with or without a ledger.
 
     Returns
     -------
@@ -107,6 +137,10 @@ def finalize_single_pass_trace(
         The trace is updated in place.
     """
 
+    # The shared constants rule runs first, on raw labels: a constant op
+    # recorded with parents or without payload evidence refuses here, before
+    # any op is finalized or relabelled.
+    apply_constants_rule(trace, backend_name=backend_name, ledger=constants)
     _mint_preview_site_keys(trace)
     assignments: dict[str, RecurrenceAssignment] | None = None
     if recurrence_detection:
@@ -128,24 +162,9 @@ def finalize_single_pass_trace(
             layers_with_params_seen.add(op_log.layer_label)
         if update_param_usage:
             _attach_param_usage(trace, op_log, param_usage_membership)
-        layer_log = trace.layer_logs.get(op_log.layer_label)
-        layer_created = layer_log is None
-        if layer_log is None:
-            layer_log = Layer(op_log)
-        layer_log.ops[op_log.pass_index] = op_log
-        layer_log.call_labels.append(op_log.label)
-        if op_log.num_passes != 1:
-            layer_log.num_passes = op_log.num_passes
-        if layer_created:
-            if enrich_layer is not None:
-                enrich_layer(layer_log, op_log)
-            trace.layer_logs[op_log.layer_label] = layer_log
+        _attach_op_to_layer(trace, op_log, enrich_layer)
 
-    trace.num_ops = sum(
-        1
-        for op_log in trace.layer_list
-        if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
-    )
+    trace.num_ops = _count_trace_ops(trace)
     if compute_input_output_distances is None:
         compute_input_output_distances = bool(getattr(trace, "mark_layer_depths", False))
     trace.mark_layer_depths = bool(compute_input_output_distances)
@@ -802,43 +821,6 @@ def _attach_param_usage(
         if op_log.layer_label not in layer_membership:
             trace.layers_with_params[param.barcode].append(op_log.layer_label)
             layer_membership.add(op_log.layer_label)
-
-
-def _update_param_totals_from_layers(trace: Trace) -> None:
-    """Recompute trace parameter totals on a parameter-identity basis.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ``param_logs`` registry is already populated.
-
-    Returns
-    -------
-    None
-        Trace-level parameter counters are updated when parameters are present.
-
-    Notes
-    -----
-    Totals derive from ``trace.param_logs`` (the deduped-by-identity param
-    registry), not from summing each op's own ``num_param_tensors`` across
-    unique layer labels: a param reused by more than one op/layer (a tied
-    weight, or a composite op decomposed into several primitive ops that
-    each separately attach it) is counted once per referencing layer by the
-    per-op sum, inflating the total past the true unique-param count and
-    tripping the ``trace_self_consistency`` invariant's parameter-identity
-    check (``num_param_tensors != len(param_logs)``).
-    """
-
-    if trace.param_source != "none":
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
-        trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
-        )
-        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.has_params}
-        )
 
 
 def numel_from_shape(shape: Any) -> int:
