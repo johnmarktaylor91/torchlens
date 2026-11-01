@@ -436,14 +436,31 @@ def capability_summary(protocol: Any | None, cells: tuple[ScorecardCell, ...]) -
     return summary
 
 
+@dataclass(frozen=True)
+class GraduationInputs:
+    """What the graduation items of :func:`scorecard_from_report` compare against.
+
+    Parameters
+    ----------
+    reference:
+        The torch scorecard the graduation check G1 compares against; the
+        shipped torch record when omitted, the card itself for torch.
+    repo_root:
+        Repository root for the file-based graduation items; auto-detected
+        from the package location when omitted.
+    """
+
+    reference: PreviewScorecard | None = None
+    repo_root: Path | None = None
+
+
 def scorecard_from_report(
     report: ConformanceReport,
     roster: tuple[RosterModel, ...],
     *,
     framework_version: str,
     adapter: Any | None = None,
-    reference: PreviewScorecard | None = None,
-    repo_root: Path | None = None,
+    graduation: GraduationInputs | None = None,
 ) -> PreviewScorecard:
     """Fold one full C0-C2 conformance report into a scorecard.
 
@@ -458,12 +475,9 @@ def scorecard_from_report(
     adapter:
         The adapter the run used; resolved from ``report.backend`` when omitted
         (a provider the runner cannot resolve enumerates protocol-free slots).
-    reference:
-        The torch scorecard the graduation check G1 compares against; the
-        shipped torch record when omitted, the card itself for torch.
-    repo_root:
-        Repository root for the file-based graduation items; auto-detected
-        from the package location when omitted.
+    graduation:
+        The reference scorecard and repository root the graduation items use;
+        both auto-detected when omitted.
 
     Returns
     -------
@@ -506,11 +520,13 @@ def scorecard_from_report(
         roster_groups=groups,
     )
     if protocol is not None:
-        torch_card = reference
+        inputs = graduation or GraduationInputs()
+        torch_card = inputs.reference
         if torch_card is None:
             torch_card = reference_scorecard_for(report.backend, card)
         card = replace(
-            card, graduation=graduation_items(card, reference=torch_card, repo_root=repo_root)
+            card,
+            graduation=graduation_items(card, reference=torch_card, repo_root=inputs.repo_root),
         )
     return _with_digest(card)
 
@@ -564,7 +580,7 @@ def preview_scorecard(
         roster,
         framework_version=_framework_version(backend),
         adapter=adapter,
-        repo_root=repo_root,
+        graduation=GraduationInputs(repo_root=repo_root),
     )
 
 
