@@ -18,12 +18,12 @@ probes, before any real object is built:
   type before BUILD can reach it;
 * stream corruption surfaces from the dry run as the C machine's own failures and is
   normalised by the unpickler's boundary, as the pure-Python boundary did;
-* persistent ids, extension codes and out-of-band buffers fail in the dry run as they
-  fail in the real run.
+* persistent ids and out-of-band buffers fail in the dry run as they fail in the real run.
 
 A stream shape the dry run cannot classify (a constructed object called, a construction
 with arguments built at run time, a global or a REDUCE result used both as a callable
-and as a value or class) raises :class:`StreamNeedsInterpreter`; the unpickler then runs
+and as a value or class, a REDUCE result that is both a BUILD target and a callable, a
+BUILD applied to a global) raises :class:`StreamNeedsInterpreter`; the unpickler then runs
 the stream through the pure-Python machine, which enforces the same checks per opcode.
 No TorchLens writer produces such a stream, so the fast path is the normal path and the
 interpreter is the exact fallback, never a weaker one.
@@ -31,7 +31,10 @@ interpreter is the exact fallback, never a weaker one.
 A tight byte reader (:func:`scan_opcodes`) walks the opcodes once before either machine
 runs: it refuses a memo PUT index above the opcode count (the C machine's memo table is
 sized from that index, so an absurd one is an allocation amplifier the pure-Python dict
-memo never had) and counts opcodes against the ceiling on streams large enough to reach it.
+memo never had), refuses a FRAME that declares more bytes than the stream holds (the two
+machines decide a short frame differently) and the extension-code opcodes (the C machine
+caches their resolution process-wide, so a dry run would leak its probes into every later
+unpickler), and counts opcodes against the ceiling on streams large enough to reach it.
 """
 
 from __future__ import annotations
@@ -267,6 +270,8 @@ def _iter_opcodes(data: bytes) -> Any:  # noqa: C901 -- one opcode-argument tabl
         elif kind == "uint8":
             arg = _UNPACK_Q(data, pos)[0]
             pos += 8
+            if name == "FRAME" and arg > end - pos:
+                raise ValueError("truncated FRAME payload")
         elif kind == "stringnl_noescape_pair":
             first = data.find(b"\n", pos)
             second = data.find(b"\n", first + 1) if first >= 0 else -1
@@ -333,6 +338,9 @@ class _ProbeMeta(type):
 
     def __call__(cls, *args: Any, **kwargs: Any) -> Any:
         return cls._planner.on_reduce(cls, args, kwargs)
+
+    def __setstate__(cls, state: Any) -> None:
+        raise StreamNeedsInterpreter("BUILD applied to a global")
 
 
 class _ProbeBase(metaclass=_ProbeMeta):
@@ -407,6 +415,8 @@ class _DryRunPlanner:
     def on_derived_call(self, node: _Node, args: tuple[Any, ...], kwargs: dict[str, Any]) -> _Node:
         if node.site < 0:
             raise StreamNeedsInterpreter("REDUCE on a constructed object")
+        if self.reduce_sites[node.site].build_target:
+            raise StreamNeedsInterpreter("a REDUCE result is both a BUILD target and a callable")
         self.reduce_sites[node.site].result_callable = True
         node.called = True
         site = ReduceSite(len(self.reduce_sites), None, node.site)
@@ -432,6 +442,10 @@ class _DryRunPlanner:
 
     def on_build(self, node: _Node) -> None:
         if node.site >= 0:
+            if self.reduce_sites[node.site].result_callable:
+                raise StreamNeedsInterpreter(
+                    "a REDUCE result is both a BUILD target and a callable"
+                )
             self.reduce_sites[node.site].build_target = True
         elif isinstance(node.cls_real, type):
             reason = self.build_type_refusal(node.cls_real)
@@ -551,11 +565,20 @@ def scan_opcodes(data: bytes, max_opcodes: int | None) -> int:
             raise OpcodeCeilingExceeded(_CORRUPT + "opcode count exceeds the allocation ceiling")
         if name in _PUT_OPCODES and (arg < 0 or arg > count):
             raise _corrupt("memo PUT index above the opcode count")
+        if name in _EXT_OPCODES:
+            raise _corrupt("extension codes are not used in bundle metadata")
         if name == "STOP":
             return count
 
 
 _PUT_OPCODES = frozenset({"PUT", "BINPUT", "LONG_BINPUT"})
+#: EXT1 / EXT2 / EXT4 resolve through the process-wide ``copyreg`` extension registry and
+#: the C machine caches what ``find_class`` returned for a code in the shared
+#: ``copyreg._extension_cache``: a dry run would cache its recording probe for every
+#: later unpickler in the process. No bundle writer emits them (a bundle that needed a
+#: registry entry would not load in another process anyway), so the reader refuses them
+#: before either machine runs.
+_EXT_OPCODES = frozenset({"EXT1", "EXT2", "EXT4"})
 
 
 def prescan_stream(

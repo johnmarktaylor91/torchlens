@@ -2142,7 +2142,24 @@ class _PurePythonBundleUnpickler(_BundleAllowlistPolicy, pickle._Unpickler):
             raise pickle.UnpicklingError(reason)
         return super()._instantiate(klass, args)  # type: ignore[misc]
 
+    def load_ext(self) -> None:
+        """Refuse an extension-code opcode, as the reader pass does for the fast path.
+
+        EXT1 / EXT2 / EXT4 resolve a code through the process-wide ``copyreg`` extension
+        registry, and both machines CACHE what the resolution returned in the shared
+        ``copyreg._extension_cache``, where every later unpickler in the process reads
+        it. No bundle writer emits them (a bundle needing a registry entry would not load
+        in another process), so both machines refuse them and neither writes that cache.
+        """
+
+        raise pickle.UnpicklingError(
+            "corrupt or malformed pickle stream: extension codes are not used in bundle metadata"
+        )
+
     dispatch = _DenyMissingDispatch(pickle._Unpickler.dispatch)
+    dispatch[pickle.EXT1[0]] = load_ext
+    dispatch[pickle.EXT2[0]] = load_ext
+    dispatch[pickle.EXT4[0]] = load_ext
     dispatch[pickle.BUILD[0]] = load_build
     dispatch[pickle.REDUCE[0]] = load_reduce
     dispatch[pickle.NEWOBJ[0]] = load_newobj
