@@ -71,6 +71,7 @@ from .._options import (
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from .._validation_shared import float_replay_tolerances_for_dtype_name, scalar_replay_close
+from ._captures import TinygradIntermediateCandidate, TinygradUOpCapture
 from ._derived_grads import (
     _differentiated_input_leaves,
     _normalize_tinygrad_input_grad_argnums,
@@ -94,56 +95,6 @@ from ._rules import (
 )
 
 _ACTIVE_TINYGRAD_MODULE_STACK: list[TinygradModuleFrame] = []
-
-
-@dataclass(frozen=True)
-class TinygradUOpCapture:
-    """Captured tinygrad UOp metadata for validation.
-
-    Parameters
-    ----------
-    label_raw
-        Raw TorchLens label for the materialized op.
-    uop
-        Source tinygrad UOp snapshot.
-    op_name
-        UOp operation name.
-    parent_labels
-        Raw parent labels captured from UOp source edges.
-    parent_arg_positions
-        UOp source positions for each raw parent label.
-    payload_snapshot
-        Realized tinygrad tensor copy saved during capture.
-    """
-
-    label_raw: str
-    uop: Any
-    op_name: str
-    parent_labels: tuple[str, ...]
-    parent_arg_positions: tuple[tuple[int, str], ...]
-    payload_snapshot: Any
-
-
-@dataclass(frozen=True)
-class TinygradIntermediateCandidate:
-    """Live retained tinygrad tensor candidate for one op-level gradient.
-
-    Parameters
-    ----------
-    signature
-        Conservative structural signature used for trace-op matching.
-    tensor
-        Live tinygrad Tensor retained from the no-realize forward pass.
-    aval
-        Human-readable abstract-value description.
-    dtype_ref
-        Backend-neutral dtype reference for the tensor.
-    """
-
-    signature: tuple[Any, ...]
-    tensor: Any
-    aval: str
-    dtype_ref: DtypeRef | None
 
 
 @dataclass(frozen=True)
