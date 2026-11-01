@@ -7448,7 +7448,6 @@ test-docstrings	tests/test_collapse_rolled_svg.py	21
 test-docstrings	tests/test_collapse_rolled_svg.py	25
 test-docstrings	tests/test_collapse_rolled_svg.py	27
 test-docstrings	tests/test_collapse_rolling_suffix_linearity.py	19
-test-docstrings	tests/test_collapse_segment_adjacency.py	121
 test-docstrings	tests/test_compat_report.py	13
 test-docstrings	tests/test_compat_report.py	16,
 test-docstrings	tests/test_compile_set_stance.py	2.6
@@ -8205,8 +8204,6 @@ test-docstrings	tests/test_neuro_pkg_geometry.py	64
 test-docstrings	tests/test_neuro_pkg_geometry.py	64.
 test-docstrings	tests/test_neuro_pkg_matrix.py	10
 test-docstrings	tests/test_neuro_pkg_matrix.py	11
-test-docstrings	tests/test_neuro_pkg_namespace.py	14
-test-docstrings	tests/test_neuro_pkg_namespace.py	16
 test-docstrings	tests/test_neuro_pkg_rdms.py	15
 test-docstrings	tests/test_neuro_pkg_rdms.py	24.2
 test-docstrings	tests/test_neuro_pkg_rdms.py	56.3
@@ -8525,8 +8522,6 @@ test-docstrings	tests/test_recipe_dissection.py	64
 test-docstrings	tests/test_recipe_dissection.py	64.
 test-docstrings	tests/test_recipe_dissection.py	7697
 test-docstrings	tests/test_record_schema_bindings.py	11
-test-docstrings	tests/test_recurrent_ops_pooling.py	12
-test-docstrings	tests/test_recurrent_ops_pooling.py	2026
 test-docstrings	tests/test_reentrant_trace.py	55
 test-docstrings	tests/test_rehydration_floor.py	10,
 test-docstrings	tests/test_rehydration_floor.py	2.16
@@ -8626,8 +8621,6 @@ test-docstrings	tests/test_reprs.py	715
 test-docstrings	tests/test_rerun_push_head_ablation_parity.py	12
 test-docstrings	tests/test_rerun_push_head_ablation_parity.py	29
 test-docstrings	tests/test_rerun_push_head_ablation_parity.py	52
-test-docstrings	tests/test_rerun_subset.py	11
-test-docstrings	tests/test_rerun_subset.py	47
 test-docstrings	tests/test_rescue_rerun.py	16
 test-docstrings	tests/test_rescue_rerun.py	63
 test-docstrings	tests/test_rescue_rerun.py	67
@@ -9597,7 +9590,6 @@ test-names	tests/test_checks_kit_scan.py	16_
 test-names	tests/test_circ1_component_graph.py	64
 test-names	tests/test_collapse_power_admission.py	18_
 test-names	tests/test_collapse_power_admission.py	201_
-test-names	tests/test_collapse_segment_adjacency.py	121_
 test-names	tests/test_conditional_branches.py	310_
 test-names	tests/test_conditional_integration.py	310_
 test-names	tests/test_conditional_integration.py	311_
