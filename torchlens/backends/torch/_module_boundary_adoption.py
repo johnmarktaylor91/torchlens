@@ -88,8 +88,8 @@ def is_forward_closure_constant(trace: "Trace", t: torch.Tensor) -> bool:
     from ._tl import get_tensor_label
 
     if (
-        getattr(trace, "_raw_transform_escape_detected", False)
-        or getattr(trace, "_raw_dynamo_region_detected", False)
+        trace._raw_transform_escape_detected
+        or trace._raw_dynamo_region_detected
         or isinstance(t, nn.Parameter)
         or get_tensor_label(t) is not None
     ):
