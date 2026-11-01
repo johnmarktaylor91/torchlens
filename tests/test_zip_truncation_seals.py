@@ -55,7 +55,7 @@ def test_bundle_output_delta_refuses_output_arity_mismatch() -> None:
     # The comparison gate now refuses the pair first (the two graphs are not
     # one model's); the arity guard below it stays the second line of defence.
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.output_delta("baseline")
+        bundle._output_delta("baseline")
     assert excinfo.value.fields["code"] == "bundle_gate_model_axis_unmet"
     with pytest.raises(BundleMemberError, match="structurally divergent"):
         _output_layer_pairs(two, one)
@@ -74,7 +74,7 @@ def test_bundle_output_delta_still_works_on_matching_arity() -> None:
     )
     bundle = tl.Bundle({"baseline": first, "other": second}, baseline="baseline")
 
-    delta = bundle.output_delta("baseline")
+    delta = bundle._output_delta("baseline")
     assert set(delta) == {"baseline", "other"}
     assert len(delta["other"]) == 2, "expected one delta row per output"
 

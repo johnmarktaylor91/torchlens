@@ -635,6 +635,7 @@ docs-md	docs/agent-reference/current-2-x-surface.md	16.
 docs-md	docs/agent-reference/current-2-x-surface.md	17
 docs-md	docs/agent-reference/current-2-x-surface.md	17,
 docs-md	docs/agent-reference/current-2-x-surface.md	18
+docs-md	docs/agent-reference/current-2-x-surface.md	1_1
 docs-md	docs/agent-reference/current-2-x-surface.md	2.0
 docs-md	docs/agent-reference/current-2-x-surface.md	2.16
 docs-md	docs/agent-reference/current-2-x-surface.md	2.3.22
@@ -5891,7 +5892,6 @@ package-docstrings	torchlens/bundle/_bytes.py	97.
 package-docstrings	torchlens/bundle/_compare_gate.py	18
 package-docstrings	torchlens/bundle/_compare_gate.py	256
 package-docstrings	torchlens/bundle/_compare_gate.py	43
-package-docstrings	torchlens/bundle/_deltas.py	1.0.
 package-docstrings	torchlens/bundle/_deltas.py	43
 package-docstrings	torchlens/bundle/_lineage.py	12,
 package-docstrings	torchlens/bundle/_lineage.py	256

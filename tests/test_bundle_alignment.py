@@ -95,7 +95,7 @@ def test_aligned_pairs_returns_best_match_sites_across_architectures() -> None:
         }
     )
 
-    pairs = bundle.aligned_pairs("small", "large")
+    pairs = bundle._aligned_pairs("small", "large")
     pair_labels = [(left.layer_label, right.layer_label) for left, right in pairs]
 
     assert pairs
