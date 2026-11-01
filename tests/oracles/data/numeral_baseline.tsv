@@ -3901,7 +3901,6 @@ package-docstrings	torchlens/_data_substrate/artifact.py	32
 package-docstrings	torchlens/_data_substrate/artifact.py	4,000
 package-docstrings	torchlens/_data_substrate/artifact.py	44
 package-docstrings	torchlens/_data_substrate/artifact.py	597
-package-docstrings	torchlens/_data_substrate/digests.py	16
 package-docstrings	torchlens/_data_substrate/digests.py	256
 package-docstrings	torchlens/_data_substrate/digests.py	3.55
 package-docstrings	torchlens/_data_substrate/digests.py	32
@@ -3946,8 +3945,6 @@ package-docstrings	torchlens/_extraction/callable_identity.py	3.12
 package-docstrings	torchlens/_extraction/context.py	13
 package-docstrings	torchlens/_extraction/dtype_policy.py	11
 package-docstrings	torchlens/_extraction/dtype_policy.py	16
-package-docstrings	torchlens/_extraction/dtype_policy.py	16,
-package-docstrings	torchlens/_extraction/dtype_policy.py	2.10
 package-docstrings	torchlens/_extraction/dtype_policy.py	32
 package-docstrings	torchlens/_extraction/engine.py	10
 package-docstrings	torchlens/_extraction/engine.py	11

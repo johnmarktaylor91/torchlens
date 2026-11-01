@@ -43,7 +43,6 @@ from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 # under the R43 file-size ratchet. Re-exported here because the historical import
 # surface for the capture-cache key helpers is torchlens._capture_state_helpers.
 from ._capture_fingerprint import (  # noqa: F401  isort: skip
-    _iter_tensor_inputs,
     _ATTRIBUTE_FRAGMENT_DEPTH_CEILING,
     _ATTRIBUTE_FRAGMENT_ITEM_CEILING,
     _attribute_state_fragment,
@@ -1456,7 +1455,9 @@ def _input_id_for_relationship_evidence(input_args: Any) -> int:
         the input container.
     """
 
-    tensors = _iter_tensor_inputs(input_args)
+    from ._utils.tensor_utils import iter_tensors
+
+    tensors = list(iter_tensors(input_args, sort_keys=True))
     if len(tensors) == 1:
         return id(tensors[0])
     return id(input_args)
@@ -1487,7 +1488,9 @@ def _hash_input_signatures(input_args: Any, input_kwargs: Any) -> str:
     path 2: a shape/dtype/device hash is value-blind).
     """
 
-    tensors = _iter_tensor_inputs((input_args, input_kwargs))
+    from ._utils.tensor_utils import iter_tensors
+
+    tensors = list(iter_tensors((input_args, input_kwargs), sort_keys=True))
     entries = [(tuple(tensor.shape), str(tensor.dtype), str(tensor.device)) for tensor in tensors]
     return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
 

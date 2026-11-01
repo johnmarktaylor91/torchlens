@@ -19,10 +19,11 @@ from safetensors.torch import save_file
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._errors import InvalidArgumentError
+from .._utils.hashing import sha256_file
 from ..backends.registry import get_backend_spec
 from . import TLSPEC_VERSION, ArtifactError
 from ._durability import fsync_dir, fsync_tree
-from .manifest import Manifest, TensorEntry, sha256_of_file
+from .manifest import Manifest, TensorEntry
 from .paths import reject_symlink_path
 
 _PARTIAL_SENTINEL = "PARTIAL"
@@ -303,7 +304,7 @@ class _TlSpecWriter:
                     "shape": [],
                     "num_elements": 0,
                     "intended_use": "bundle_marker",
-                    "sha256": sha256_of_file(tmp_path / body_filename),
+                    "sha256": sha256_file(tmp_path / body_filename),
                 }
             ]
             cls.write_json(tmp_path / TLSPEC_MANIFEST_FILENAME, manifest)
