@@ -14,10 +14,8 @@ import io
 import os
 import pickle
 import platform
-import sys
 import threading
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,13 +28,14 @@ from .._state import pause_logging
 from . import TLSPEC_VERSION, ArtifactError
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
-from .manifest import Manifest, TensorEntry, sha256_of_file
+from .manifest import Manifest, TensorEntry, _runtime_python_version, sha256_of_file
 from .scrub import BlobSpec
 from .streaming_async import (
     DEFAULT_MAX_PENDING_BYTES,
     AsyncWriteEngine,
     AsyncWriteFailedError,
     PendingWrite,
+    _PreparedPayload,
 )
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
 from .tlspec import _TlSpecWriter
@@ -44,26 +43,6 @@ from .tlspec import _TlSpecWriter
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
 _BLOB_TENSOR_KEY = "data"
-
-
-@dataclass(frozen=True)
-class _PreparedPayload:
-    """One serialization-ready payload plus its origin-tensor manifest facts.
-
-    Parameters
-    ----------
-    payload:
-        Contiguous tensor to serialize (CPU-resident when prepared for the
-        async worker).
-    device_at_save:
-        Device string of the ORIGINAL tensor at submission time.
-    requires_grad:
-        ``requires_grad`` of the original tensor at submission time.
-    """
-
-    payload: torch.Tensor
-    device_at_save: str
-    requires_grad: bool
 
 
 def _restrict_mode(path: Path, mode: int) -> None:
@@ -512,16 +491,7 @@ class BundleStreamWriter:
                     )
                 self.write_blob(blob_id, tensor, kind=kind, label=label)
 
-            legacy_manifest = self._build_manifest(
-                scrubbed_state=scrubbed_state, unsupported=unsupported, trace=trace
-            )
-            _TlSpecWriter.write_trace_manifest(
-                path=self.tmp_path / "manifest.json",
-                trace=trace,
-                legacy_manifest=legacy_manifest,
-                save_level="portable",
-            )
-            _restrict_mode(self.tmp_path / "manifest.json", 0o600)
+            self._write_manifest(scrubbed_state, unsupported, trace)
         except ArtifactError:
             raise
         except (OSError, TypeError, ValueError, pickle.PickleError) as exc:
@@ -987,14 +957,13 @@ class BundleStreamWriter:
             engine.shutdown(discard=False)
             self._async_engine = None
 
-    def _build_manifest(
+    def _write_manifest(
         self,
-        *,
         scrubbed_state: dict[str, Any],
         unsupported: list[dict[str, str]],
         trace: Any,
-    ) -> Manifest:
-        """Build the final manifest for the streamed bundle."""
+    ) -> None:
+        """Build the final manifest for the streamed bundle and write it as ``manifest.json``."""
 
         tensor_entries = list(self._tensor_entries)
         n_out_blobs = sum(1 for entry in tensor_entries if entry.kind == "out")
@@ -1020,13 +989,11 @@ class BundleStreamWriter:
         buffer_disclosure = _buffer_values_disclosure(trace, included=self.include_buffer_values)
         _warn_buffer_value_embedding(buffer_disclosure)
 
-        return Manifest(
+        legacy_manifest = Manifest(
             tlspec_version=TLSPEC_VERSION,
             torchlens_version=TORCHLENS_VERSION,
             torch_version=torch.__version__,
-            python_version=(
-                f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-            ),
+            python_version=_runtime_python_version(),
             platform=f"{platform.system().lower()}-{platform.machine().lower()}",
             created_at=datetime.now(timezone.utc)
             .replace(microsecond=0)
@@ -1042,6 +1009,13 @@ class BundleStreamWriter:
             custom_attributes_disclosure=disclosure,
             buffer_values_disclosure=buffer_disclosure,
         )
+        _TlSpecWriter.write_trace_manifest(
+            path=self.tmp_path / "manifest.json",
+            trace=trace,
+            legacy_manifest=legacy_manifest,
+            save_level="portable",
+        )
+        _restrict_mode(self.tmp_path / "manifest.json", 0o600)
 
     def _ensure_writable(self) -> None:
         """Raise if the writer has already been closed."""
