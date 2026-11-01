@@ -58,6 +58,7 @@ from ..intervention.selectors import (
     BaseSelector,
     CompositeSelector,
     FollowedBySelector,
+    GradSelector,
     NotSelector,
     PrecededBySelector,
 )
@@ -72,8 +73,10 @@ _LIFECYCLE_DESC: dict[str, str] = {
     "live": "live hook matching",
 }
 
-#: Selector kinds that describe a forward op's identity or container position
-#: and therefore bridge from a backward ``GradFn`` site to its paired forward op.
+#: Selector kinds that describe a forward op's identity or container position.
+#: Inside ``tl.grad(...)`` (and only there) they bridge from a backward
+#: ``GradFn`` site to its paired forward op; a bare one never reaches the
+#: backward universe.
 DIRECTION_AGNOSTIC_KINDS = frozenset(
     {
         "label",
@@ -148,6 +151,10 @@ def walk_selector(selector: Any, *, unwrap: bool = False) -> Iterator[Any]:
             stack.extend(reversed(node.selectors))
         elif isinstance(node, NotSelector):
             stack.append(node.selector)
+        elif isinstance(node, GradSelector):
+            # A gradient address is a structural wrapper: its forward site is
+            # part of the tree every capability and alias check must see.
+            stack.append(node.inner)
         elif unwrap and not isinstance(node, BaseSelector):
             inner = getattr(node, "selector", None)
             if inner is not None:
@@ -1131,6 +1138,10 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
         )
     if kind == "not" and isinstance(selector, NotSelector):
         return not evaluate(selector.selector, subject, lifecycle=cast(Lifecycle, lifecycle))
+    if kind == "grad":
+        # A gradient address belongs to the forward op its inner names; which
+        # universe the match lands in is the site plan's decision.
+        return evaluate(selector.selector_value, subject, lifecycle=cast(Lifecycle, lifecycle))
 
     if kind == "label":
         _maybe_guard_label(kind, str(value), subject, lifecycle)
@@ -1378,9 +1389,10 @@ def _preceded_by_matches(selector: PrecededBySelector, ctx: Any) -> bool:
 def _evaluate_grad_fn_site(selector: BaseSelector, site: Any) -> bool:
     """Evaluate one selector against one backward ``GradFn`` site.
 
-    Direction-agnostic kinds bridge to the paired forward op (and synthetic
-    boundary aliases sharing the autograd identity); backward kinds match the
-    GradFn itself.
+    Node kinds match the GradFn itself. A bare forward kind never matches a
+    GradFn: the bridge from a forward site to the GradFn behind it lives only
+    in ``tl.grad(...)``, whose inner selector is evaluated against the paired
+    forward op (and synthetic boundary aliases sharing the autograd identity).
 
     Parameters
     ----------
@@ -1402,13 +1414,10 @@ def _evaluate_grad_fn_site(selector: BaseSelector, site: Any) -> bool:
         return any(evaluate(child, site, lifecycle="site") for child in selector.selectors)
     if kind == "not" and isinstance(selector, NotSelector):
         return not evaluate(selector.selector, site, lifecycle="site")
+    if kind == "grad":
+        return _evaluate_bridged(selector.selector_value, site)
     if kind in DIRECTION_AGNOSTIC_KINDS:
-        forward_op = _grad_fn_forward_op(site)
-        if forward_op is not None and _evaluate_subject(selector, forward_op, "site"):
-            return True
-        return any(
-            _evaluate_subject(selector, alias, "site") for alias in _grad_fn_boundary_aliases(site)
-        )
+        return False
     if kind in {"intervening", "without_op"}:
         return not site.has_op
     if kind == "grad_fn_label":
@@ -1437,6 +1446,42 @@ def _evaluate_grad_fn_site(selector: BaseSelector, site: Any) -> bool:
             for call in _grad_fn_call_values(site)
         )
     return False
+
+
+def _evaluate_bridged(inner: Any, site: Any) -> bool:
+    """Evaluate a ``tl.grad`` inner selector against the op behind a GradFn.
+
+    The one bridge from the forward universe to a backward ``GradFn`` site:
+    connectives recurse; every forward kind evaluates against the paired
+    pass-level op and the boundary aliases sharing its autograd identity.
+
+    Parameters
+    ----------
+    inner:
+        The gradient address's forward site (selector or bare label string).
+    site:
+        GradFn site.
+
+    Returns
+    -------
+    bool
+        Whether the GradFn carries the gradient of a matched op's output.
+    """
+
+    selector = normalize_selector_like(inner, lifecycle="site")
+    kind = str(selector.selector_kind)
+    if kind == "and" and isinstance(selector, CompositeSelector):
+        return all(_evaluate_bridged(child, site) for child in selector.selectors)
+    if kind == "or" and isinstance(selector, CompositeSelector):
+        return any(_evaluate_bridged(child, site) for child in selector.selectors)
+    if kind == "not" and isinstance(selector, NotSelector):
+        return not _evaluate_bridged(selector.selector, site)
+    forward_op = _grad_fn_forward_op(site)
+    if forward_op is not None and _evaluate_subject(selector, forward_op, "site"):
+        return True
+    return any(
+        _evaluate_subject(selector, alias, "site") for alias in _grad_fn_boundary_aliases(site)
+    )
 
 
 def _grad_fn_forward_op(site: Any) -> Any:
@@ -1718,6 +1763,12 @@ def selector_from_spec(
             code="episode_step_selector_invalid",
             remedy="rebuild the selector with at_step(<step indices>)",
         )
+    if kind == "grad":
+        from ..intervention.selectors import grad
+
+        if isinstance(value, str):
+            return grad(value)
+        return grad(normalize_selector_like(value, lifecycle=lifecycle))
     if kind == "not":
         return ~normalize_selector_like(value, lifecycle=lifecycle)
     if kind in {"and", "or"}:
