@@ -1362,7 +1362,7 @@ Single Bundle type for intervention-ready TorchLens model logs. (25 modules, 832
 | `_provenance` | The provenance join: ''bundle.why'' / ''bundle.provenance'' ( item 4). | 411 |
 | `_relation_carriage` | Relation-carriage method bodies for ''Bundle'' (C07X, foldB ). | 381 |
 | `_relations` | Bundle member-relation table (grammar v2): typed, closed, OPTIONAL relations. | 780 |
-| `_save` | Bundle save: the one deferred ''_io'' door the bundle package keeps. | 28 |
+| `_save` | Bundle save: the one late-bound ''_io'' door the bundle package keeps. | 28 |
 | `_selected_by` | The ''selected_by'' relation kind: a control decision between two traced calls. | 93 |
 | `_token_divergence` | ''Bundle.token_divergence'': where two runs of one call part, by exact token ids. | 223 |
 | `_token_spans` | Automatic ''fed_by'' span finding and the strict token-pair read. | 564 |

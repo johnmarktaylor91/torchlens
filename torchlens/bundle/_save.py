@@ -1,4 +1,4 @@
-"""Bundle save: the one deferred ``_io`` door the bundle package keeps."""
+"""Bundle save: the one late-bound ``_io`` door the bundle package keeps."""
 
 from __future__ import annotations
 
