@@ -165,19 +165,26 @@ class TapObserver:
 
     def record_backward(
         self,
-        grad_input: tuple[torch.Tensor | None, ...],
+        grad_input: Any,
         *,
-        grad_output: tuple[torch.Tensor | None, ...] | None,
-        grad_fn_handle: Any,
-        call_index: int,
-        run_ctx: dict[str, Any],
-    ) -> None:
+        grad_output: tuple[torch.Tensor | None, ...] | None = None,
+        grad_fn_handle: Any = None,
+        call_index: int | None = None,
+        run_ctx: dict[str, Any] | None = None,
+        ctx: Any = None,
+    ) -> torch.Tensor | None:
         """Record a backward gradient and leave autograd gradients unchanged.
+
+        Two mounts call this. A gradient site (``tl.grad(site)``) passes the
+        output gradient tensor and its hook context (``ctx``), recorded as
+        :meth:`__call__` records a backward fire. An autograd-node site passes
+        the node's ``grad_input`` tuple with its ``grad_output``.
 
         Parameters
         ----------
         grad_input:
-            Autograd grad_input tuple at the grad_fn_handle hook.
+            Output gradient tensor (gradient site) or the autograd
+            ``grad_input`` tuple (node site).
         grad_output:
             Autograd grad_output tuple at the grad_fn_handle hook, when available.
         grad_fn_handle:
@@ -186,14 +193,19 @@ class TapObserver:
             One-based backward call index.
         run_ctx:
             Shared hook run context. Accepted for hook API compatibility.
+        ctx:
+            Hook context of a gradient-site fire.
 
         Returns
         -------
-        None
-            Backward taps observe only and do not mutate gradients.
+        torch.Tensor | None
+            The unchanged gradient for a gradient-site fire; ``None`` for a
+            node fire. Taps observe only.
         """
 
         del run_ctx
+        if ctx is not None:
+            return self(grad_input, ctx=ctx)
         grad_value, grad_kind = _first_tensor_grad(grad_output, "grad_output")
         if grad_value is None:
             grad_value, grad_kind = _first_tensor_grad(grad_input, "grad_input")
