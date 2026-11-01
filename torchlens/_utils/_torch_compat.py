@@ -830,11 +830,10 @@ def _probe_safe_weights_only_load() -> bool:
     CVE-2025-32434 (critical, CVSS 9.3; affects torch <= 2.5.1, fixed in torch
     2.6.0) is a remote-code-execution reachable through ``torch.load`` *itself*
     even with ``weights_only=True``: the pre-2.6 weights-only unpickler could be
-    bypassed. TorchLens no longer hands any file bytes to ``torch.load`` (the
-    restricted metadata unpickler refuses ``torch.storage._load_from_bytes`` by
-    name and plain metadata tensors travel through its own inline reduction), so
-    this flag gates no TorchLens code path; it stays a reported capability of the
-    running torch in the capability snapshot and ``doctor()``.
+    bypassed. TorchLens hands no file bytes to ``torch.load`` (the restricted
+    metadata unpickler refuses ``torch.storage._load_from_bytes`` by name), so this
+    flag gates no TorchLens code path; it stays a reported capability of the running
+    torch in the capability snapshot and ``doctor()``.
 
     The patched behavior is internal to the unpickler and has NO version-string-
     free *behavioral* signature we can cheaply exercise, so -- consistent with this

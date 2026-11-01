@@ -1083,6 +1083,50 @@ def _build_allowed_getattr_objects() -> frozenset[Any]:
 _ALLOWED_GETATTR_OBJECTS: frozenset[Any] = _build_allowed_getattr_objects()
 
 
+def _special_pair_global(module: str, name: str) -> Any | None:
+    """Resolve the exact pairs ``find_class`` answers before any allowlist.
+
+    Parameters
+    ----------
+    module, name:
+        The pickled global pair.
+
+    Returns
+    -------
+    Any | None
+        The TorchLens-owned callable that stands in for the pair, or ``None`` when the
+        pair is not one of them.
+
+    Raises
+    ------
+    pickle.UnpicklingError
+        For ``torch.storage._load_from_bytes``, which is refused by name.
+    """
+
+    # Safe wrapper for the one legitimately-needed but individually-dangerous
+    # callable.
+    if (module, name) == ("builtins", "getattr"):
+        return _safe_getattr
+    # The storage leg of torch's default tensor reduction is a nested
+    # ``torch.load`` over file bytes. Refused by name, before anything else
+    # resolves: no byte from the file ever reaches torch's unpickler.
+    if (module, name) == ("torch.storage", "_load_from_bytes"):
+        raise pickle.UnpicklingError(
+            "Blocked torch.storage._load_from_bytes during bundle metadata "
+            "unpickle: an embedded tensor storage would be reconstructed by a "
+            "nested torch.load over file bytes, which TorchLens no longer "
+            "performs. A genuine artifact written by an earlier TorchLens that "
+            "embedded a tensor in its metadata must be re-saved with the current "
+            "release (tl.load the trace there, then trace.save); otherwise the file "
+            "is hostile or corrupt."
+        )
+    # The TorchLens-owned inline tensor reduction: validated arguments, an exact
+    # byte-length check and a non-resizable buffer-backed storage.
+    if (module, name) == INLINE_TENSOR_GLOBAL:
+        return rebuild_inline_tensor
+    return None
+
+
 def _safe_getattr(obj: Any, name: Any) -> Any:
     """Restricted ``getattr`` admitted in place of ``builtins.getattr``.
 
@@ -1361,27 +1405,9 @@ class SafeBundleUnpickler(pickle._Unpickler):
 
         refuse_pre_3_module_path(module, name)
 
-        # Safe wrapper for the one legitimately-needed but individually-dangerous
-        # callable.
-        if (module, name) == ("builtins", "getattr"):
-            return _safe_getattr
-        # The storage leg of torch's default tensor reduction is a nested
-        # ``torch.load`` over file bytes. Refused by name, before anything else
-        # resolves: no byte from the file ever reaches torch's unpickler.
-        if (module, name) == ("torch.storage", "_load_from_bytes"):
-            raise pickle.UnpicklingError(
-                "Blocked torch.storage._load_from_bytes during bundle metadata "
-                "unpickle: an embedded tensor storage would be reconstructed by a "
-                "nested torch.load over file bytes, which TorchLens no longer "
-                "performs. A genuine artifact written by an earlier TorchLens that "
-                "embedded a tensor in its metadata must be re-saved with the current "
-                "release (tl.load the trace there, then tl.save); otherwise the file "
-                "is hostile or corrupt."
-            )
-        # The TorchLens-owned inline tensor reduction: validated arguments, an exact
-        # byte-length check and a non-resizable buffer-backed storage.
-        if (module, name) == INLINE_TENSOR_GLOBAL:
-            return rebuild_inline_tensor
+        special = _special_pair_global(module, name)
+        if special is not None:
+            return special
 
         # Exact-pair allowlist of inert data/value types and tensor reconstructors.
         if (module, name) in _SAFE_EXPLICIT_GLOBALS:
