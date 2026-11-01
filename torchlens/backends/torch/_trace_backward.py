@@ -25,6 +25,11 @@ from .backward import (
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
+__all__ = [
+    "capture_backward",
+    "log_backward",
+]
+
 
 def _refuse_loaded_backward_capture(trace: Trace, entry_point: str) -> None:
     """Refuse live backward capture on a bundle-loaded analysis trace.

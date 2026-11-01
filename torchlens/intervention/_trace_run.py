@@ -50,6 +50,13 @@ from .rerun import run as _rerun_impl
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
+__all__ = [
+    "disarm_triggers",
+    "push",
+    "push_from",
+    "run",
+]
+
 
 def _apply_run_save_selection(result: Any, selected: Any) -> Any:
     """Apply the run-time save= retention selection to one settled RunResult.

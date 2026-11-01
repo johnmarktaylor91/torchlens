@@ -24,6 +24,13 @@ from .status import ValidationStatus
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
+__all__ = [
+    "check_metadata_invariants",
+    "save_new_outs",
+    "validate_forward_pass",
+    "validation_replay_status",
+]
+
 _JAX_VALIDATION_REPLAY_BACKEND = "jax"
 _MLX_VALIDATION_REPLAY_BACKEND = "mlx"
 _TINYGRAD_VALIDATION_REPLAY_BACKEND = "tinygrad"
