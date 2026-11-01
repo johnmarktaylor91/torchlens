@@ -131,12 +131,24 @@ def test_lazyimportref_type_reduce_rce_denied_through_tl_load(tmp_path: Path) ->
 
 
 @pytest.mark.smoke
-def test_lazyimportref_type_denied_at_unpickler() -> None:
-    """The LazyImportRef TYPE is denied at find_class (the reduce callable is unresolvable)."""
+@pytest.mark.parametrize(
+    "module",
+    [
+        "torchlens.intervention._spec_values",  # where the class lives
+        "torchlens.intervention.save",  # where it lived; the path resolves to nothing
+    ],
+)
+def test_lazyimportref_type_denied_at_unpickler(module: str) -> None:
+    """The LazyImportRef TYPE is denied at find_class under its live and its stale path.
+
+    The allowlist is consulted before resolution, so a non-allowlisted path refuses
+    with UnpicklingError whether it still names a class or no longer resolves at all;
+    an AttributeError leaking from a stale path would bypass the refusal contract.
+    """
 
     unpickler = SafeBundleUnpickler(io.BytesIO(b""))
     with pytest.raises(pickle.UnpicklingError):
-        unpickler.find_class("torchlens.intervention.save", "LazyImportRef")
+        unpickler.find_class(module, "LazyImportRef")
 
 
 @pytest.mark.parametrize(

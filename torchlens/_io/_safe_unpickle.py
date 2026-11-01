@@ -1341,6 +1341,53 @@ class SafeBundleUnpickler(pickle._Unpickler):
             return module in self._allowed_custom_callable_modules
         return self._trust_custom_callables
 
+    def _find_torchlens_global(self, module: str, name: str) -> Any:
+        """Admit a torchlens-owned pickled global, allowlist first.
+
+        ``_SAFE_TORCHLENS_TYPES`` is consulted BEFORE anything is imported or
+        resolved; an allowlisted pair is admitted when it still resolves to a type.
+        Every other pair is denied as a type (a pickle ``REDUCE`` INVOKES it with
+        attacker args: ``LazyImportRef`` would be a load-time RCE) and admitted as a
+        callable only when the RESOLVED object passes ``is_inert_first_party_callable``
+        (facet marker or the frozen vetted set; never the live registry). Trust is the
+        resolved ``__module__``, never the pickled path (``torchlens._io.tlspec`` /
+        ``os.system`` walks off to ``posix``: denied). Resolving a torchlens submodule
+        runs first-party code only and tells a vetted callable from a type; a pair
+        that resolves to nothing is refused with ``UnpicklingError``.
+        """
+
+        if (module, name) in _SAFE_TORCHLENS_TYPES:
+            obj = super().find_class(module, name)
+            if isinstance(obj, type):
+                return obj
+            raise pickle.UnpicklingError(
+                "Blocked allowlisted torchlens name that no longer resolves to a type "
+                f"during bundle metadata unpickle: {module}.{name}."
+            )
+        try:
+            obj = super().find_class(module, name)
+        except (AttributeError, ImportError) as exc:
+            raise pickle.UnpicklingError(
+                "Blocked unresolvable torchlens global during bundle metadata "
+                f"unpickle: {module}.{name} names no importable torchlens global "
+                "(a stale module path or class name is refused, never resolved)."
+            ) from exc
+        if isinstance(obj, type):
+            raise pickle.UnpicklingError(
+                "Blocked non-allowlisted torchlens type during bundle metadata "
+                f"unpickle: {module}.{name}. Only vetted-inert first-party DATA "
+                "types are admitted; import-sink / instance-callable types such "
+                "as LazyImportRef are denied (a pickle REDUCE would INVOKE the "
+                "reconstructed object with attacker arguments)."
+            )
+        from .._utils._callable_safety import is_inert_first_party_callable  # import-order
+
+        if callable(obj) and _is_torchlens_owned(obj) and is_inert_first_party_callable(obj):
+            return obj
+        raise pickle.UnpicklingError(
+            f"Blocked disallowed torchlens global during bundle metadata unpickle: {module}.{name}."
+        )
+
     def find_class(self, module: str, name: str) -> Any:  # noqa: C901 -- explicit policy
         """Resolve a pickled global only if it is on the metadata allowlist.
 
@@ -1496,60 +1543,13 @@ class SafeBundleUnpickler(pickle._Unpickler):
                 f"unpickle: {module}.{name}."
             )
 
-        # TorchLens-owned metadata: admit classes always, and a NARROW, vetted set
-        # of first-party CALLABLES. Importing a torchlens submodule runs only
-        # trusted first-party code, so it is safe to import + inspect the resolved
-        # object's true owner. Trust is decided by the resolved ``__module__``,
-        # NEVER by the pickled path: a key like ``torchlens._io.tlspec`` /
-        # ``os.system`` walks attributes off a torchlens module to reach
-        # ``os.system`` (real module ``posix``), which is NOT torchlens-owned and is
-        # therefore denied.
-        #
-        # A resolved TYPE is admitted -- it is reconstructed via normal unpickling,
-        # never INVOKED with attacker args. A resolved CALLABLE is admitted only if
-        # it is a vetted-INERT first-party callable (public facet recipe / transform
-        # / helper that cannot import/exec/open/spawn): a pickle ``REDUCE`` INVOKES
-        # the admitted callable with attacker args, and the pre-r21 blanket
-        # ``_is_torchlens_owned`` admission trusted EVERY torchlens-owned callable --
-        # including the private import gadget ``torchlens._utils._module_is_installed``
-        # (``importlib.import_module`` of attacker input == confirmed load-time RCE).
-        # The gate is DETERMINISTIC (public-name + side-effect-name guard), never
-        # keyed off the live facet registry (that ordering-dependent snapshot was a
-        # prior load-failure bug).
-        #
-        # EXCLUDES the extras-gated appliance packages (``torchlens.neuro`` /
-        # ``torchlens._notebook``): importing THOSE runs foreign third-party code,
-        # so a global naming one of them must never reach ``super().find_class``
-        # here -- it falls through to the foreign-global handling below instead.
+        # TorchLens-owned metadata (not the extras-gated appliance packages, whose
+        # import runs foreign code): allowlisted DATA types and vetted-inert
+        # first-party callables only. Policy and refusal order: the method.
         if (
             module == "torchlens" or module.startswith("torchlens.")
         ) and not _is_torchlens_appliance_module(module):
-            obj = super().find_class(module, name)
-            if isinstance(obj, type):
-                # A resolved TYPE is NO LONGER admitted unconditionally: a pickle
-                # ``REDUCE`` INVOKES the type (or its reconstructed instance) with
-                # attacker args, so an import-sink type such as ``LazyImportRef``
-                # would be a load-time RCE. Admit ONLY vetted-inert first-party DATA
-                # types on the positive allowlist; deny every other torchlens type.
-                if (module, name) in _SAFE_TORCHLENS_TYPES:
-                    return obj
-                raise pickle.UnpicklingError(
-                    "Blocked non-allowlisted torchlens type during bundle metadata "
-                    f"unpickle: {module}.{name}. Only vetted-inert first-party DATA "
-                    "types are admitted; import-sink / instance-callable types such "
-                    "as LazyImportRef are denied (a pickle REDUCE would INVOKE the "
-                    "reconstructed object with attacker arguments)."
-                )
-            # Imported lazily to keep this early security front door free of
-            # import-order coupling (mirrors ``_safe_getattr`` above).
-            from .._utils._callable_safety import is_inert_first_party_callable
-
-            if callable(obj) and _is_torchlens_owned(obj) and is_inert_first_party_callable(obj):
-                return obj
-            raise pickle.UnpicklingError(
-                "Blocked disallowed torchlens global during bundle metadata "
-                f"unpickle: {module}.{name}."
-            )
+            return self._find_torchlens_global(module, name)
 
         # Foreign global -- e.g. a user/test-registered ``@tl.facets.register``
         # recipe embedded by identity in a FacetRegistrySnapshot. Admission here is
