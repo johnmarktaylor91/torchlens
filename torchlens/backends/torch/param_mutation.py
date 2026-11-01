@@ -19,7 +19,7 @@ import torch
 
 from ... import _state
 from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
-from ..._utils.tensor_utils import safe_copy
+from ..._utils.tensor_utils import iter_tensors, safe_copy
 from ._tl import get_param_meta
 
 
@@ -80,30 +80,6 @@ def is_prepared_parameter_receiver(trace: Any, value: Any) -> bool:
     if meta is None:
         return False
     return not getattr(trace.param_logs[meta.param_address], "_lazy_at_prep", False)
-
-
-def _iter_operand_tensors(value: Any) -> Iterator[torch.Tensor]:
-    """Yield the tensors in one call operand, descending into plain containers.
-
-    Parameters
-    ----------
-    value:
-        A positional or keyword argument of a wrapped call.
-
-    Yields
-    ------
-    torch.Tensor
-        Each tensor found directly or inside nested tuples, lists and dicts.
-    """
-
-    if isinstance(value, torch.Tensor):
-        yield value
-    elif isinstance(value, (tuple, list)):
-        for item in value:
-            yield from _iter_operand_tensors(item)
-    elif isinstance(value, dict):
-        for item in value.values():
-            yield from _iter_operand_tensors(item)
 
 
 @contextmanager
@@ -193,7 +169,7 @@ def frozen_parameter_receiver_context(
     if meta is None or meta.requires_grad_before_capture is not False:
         return nullcontext()
     for operand in (*args[1:], *kwargs.values()):
-        if any(tensor.requires_grad for tensor in _iter_operand_tensors(operand)):
+        if any(tensor.requires_grad for tensor in iter_tensors(operand)):
             return _frozen_receiver_flag(receiver)
     return torch.no_grad()
 

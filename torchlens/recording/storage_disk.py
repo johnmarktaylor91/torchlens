@@ -12,18 +12,18 @@ import warnings
 from dataclasses import fields
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import torch
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._io import TLSPEC_VERSION, ArtifactError
 from .._io._durability import fsync_dir, fsync_tree
-from .._io._torch_symbols import torch_attr
 from .._io.manifest import Manifest, TensorEntry
 from .._io.streaming import BundleStreamWriter
 from .._ir.predicate import coerce_deferred_value
 from .._ir.refs import DeviceRef, DtypeRef
+from .._utils._torch_symbols import torch_dtype_named
 from ._indexes import write_label_index, write_pass_index
 from ._storage_resolver import _resolve_storage
 from .exceptions import PredicateError, RecordingConfigError
@@ -468,8 +468,7 @@ def _torch_dtype_from_ref(dtype: Any) -> torch.dtype | None:
 
     if dtype is None or isinstance(dtype, torch.dtype):
         return dtype
-    name = str(dtype).replace("torch.", "")
-    return cast(torch.dtype | None, torch_attr(name))  # r47 secD_1: no lazy ``torch.__getattr__``
+    return torch_dtype_named(str(dtype).replace("torch.", ""))
 
 
 def _ctx_from_json(data: dict[str, Any]) -> Any:
@@ -535,10 +534,10 @@ def _dtype_from_name(name: str | None) -> torch.dtype | None:
 
     if name is None:
         return None
-    dtype_obj = torch_attr(str(name))  # r47 secD_1: no lazy ``torch.__getattr__``
-    if not isinstance(dtype_obj, torch.dtype):
+    dtype_obj = torch_dtype_named(str(name))
+    if dtype_obj is None:
         raise ArtifactError(f"Unsupported dtype name in fastlog spec: {name!r}.")
-    return cast(torch.dtype, dtype_obj)
+    return dtype_obj
 
 
 def _write_metadata(path: Path, recording: Recording, options: RecordingOptions) -> None:

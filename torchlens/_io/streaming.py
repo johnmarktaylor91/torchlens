@@ -25,10 +25,12 @@ from safetensors.torch import save_file
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._state import pause_logging
+from .._utils.hashing import sha256_file
 from . import TLSPEC_VERSION, ArtifactError
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
-from .manifest import Manifest, TensorEntry, _runtime_python_version, sha256_of_file
+from .manifest import Manifest, TensorEntry, _runtime_python_version
+from .paths import reject_symlink_path
 from .scrub import BlobSpec
 from .streaming_async import (
     DEFAULT_MAX_PENDING_BYTES,
@@ -137,8 +139,7 @@ class BundleStreamWriter:
         self.include_custom_attributes = include_custom_attributes
         self.include_buffer_values = include_buffer_values
         self.final_path = Path(path)
-        if self.final_path.is_symlink():
-            raise ArtifactError(f"Refusing symlinked save target: {self.final_path}.")
+        reject_symlink_path(self.final_path, context="save target")
         if self.final_path.exists():
             raise ArtifactError(f"Bundle path already exists: {self.final_path}")
 
@@ -807,7 +808,7 @@ class BundleStreamWriter:
             device_at_save=prepared.device_at_save,
             layout=str(payload.layout).replace("torch.", ""),
             bytes=int(payload.numel() * payload.element_size()),
-            sha256=sha256_of_file(blob_path),
+            sha256=sha256_file(blob_path),
             requires_grad=prepared.requires_grad,
         )
 

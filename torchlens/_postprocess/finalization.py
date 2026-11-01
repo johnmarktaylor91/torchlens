@@ -41,12 +41,12 @@ from .._data_classes.prehook import ModuleInputSnapshot, PreHookEffect
 from .._io import ArtifactError, BlobRef
 from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef
-from .._io.manifest import sha256_of_file
 from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
-from .._utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import torch_dtype_named
+from .._utils.hashing import sha256_file
 from ..backends.torch._tl import clear_meta
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
@@ -1703,7 +1703,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     setattr(
         self,
         "_source_bundle_manifest_sha256",
-        sha256_of_file(
+        sha256_file(
             Path(writer.tmp_path if not writer._finalized else final_path) / "manifest.json"
         ),
     )
@@ -1991,7 +1991,7 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
         If the dtype name is unknown to the current runtime.
     """
 
-    dtype_obj = torch_attr(dtype_name)  # r47 secD_1: no lazy ``torch.__getattr__``
-    if not isinstance(dtype_obj, torch.dtype):
+    dtype_obj = torch_dtype_named(dtype_name)
+    if dtype_obj is None:
         raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj

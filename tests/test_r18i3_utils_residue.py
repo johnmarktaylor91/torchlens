@@ -156,7 +156,7 @@ def test_m14_missing_capability_reports_warn_not_pass(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(
         tl_utils,
-        "_runtime_capability_snapshot",
+        "capability_snapshot",
         lambda: {"cap_a": True, "cap_b": False, "cap_c": False},
     )
     row = tl_utils._probe_torch_capabilities()
@@ -170,7 +170,7 @@ def test_m14_all_capabilities_present_reports_pass(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(
         tl_utils,
-        "_runtime_capability_snapshot",
+        "capability_snapshot",
         lambda: {"cap_a": True, "cap_b": True},
     )
     row = tl_utils._probe_torch_capabilities()

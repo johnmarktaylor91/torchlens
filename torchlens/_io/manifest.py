@@ -15,7 +15,6 @@ import os
 import sys
 import warnings
 from dataclasses import asdict, dataclass
-from hashlib import sha256
 from pathlib import Path
 from typing import Any, TypeGuard
 
@@ -816,27 +815,6 @@ class Manifest:
             raise _schema_refuse("Manifest n_grad_blobs does not match tensor entries.")
         if self.n_auxiliary_blobs != n_auxiliary_blobs:
             raise _schema_refuse("Manifest n_auxiliary_blobs does not match tensor entries.")
-
-
-def sha256_of_file(path: str | Path) -> str:
-    """Compute the SHA-256 digest of one file's bytes.
-
-    Parameters
-    ----------
-    path:
-        File path to hash.
-
-    Returns
-    -------
-    str
-        Lowercase hexadecimal digest.
-    """
-
-    digest = sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _is_sha256(value: Any) -> bool:
