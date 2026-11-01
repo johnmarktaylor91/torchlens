@@ -40,7 +40,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_layer_views.py` | Layer view functions: pass delegation and graph unions (record rebuild destination) |
 | `trace.py` | `Trace`, conditional event records, save/load/intervention/summary helpers |
 | `_trace_accessors.py` | Trace-level typed accessor construction |
-| `_trace_export.py` | Trace tabular export, decoded-output helpers, and the `to_agent_json()` agent dump entry point |
+| `_trace_export.py` | Thin `Trace` export methods (`to_pandas`, `decode_output`, `output_table`, `to_agent_json`); bodies live in `export/_trace_tables.py` and `report/_agent_json.py` |
 | `_trace_intervention.py` | Trace intervention surface; fork dispatch, replay, and rerun helpers |
 | `_trace_fork.py` | M11 copy-on-write fork builder (COW shells over `OpStoreView`s) |
 | `_compaction.py` | Freeze-seam Op metadata pooling (M11 fold) + M14 duplicate/empty container-cell pooling (`PooledCell`, hydrate-on-read) + singleton label-list compaction (bare str + identity-gated store registry, kind tables only) |
@@ -48,7 +48,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_layer_accessors.py` | `OpAccessor`/`LayerAccessor` dict-like lookup (split out of `layer.py`; re-exported there) |
 | `_schema_bindings.py` | GENERATED per-field `StorageBinding` axes — DO NOT EDIT; regenerate with `tools/generate_record_schema.py` |
 | `_trace_components.py` | Declared `TRACE_FIELD_OWNERSHIP` component map — 329 entries, pinned equal to the `_FIELD_POLICY` key set (the 229-name `MODEL_LOG_FIELD_ORDER` is a strict subset) |
-| `_trace_stack.py` | Order-aligned activation stacking for completed traces |
+| `_trace_stack.py` | `StackedActivations` and `stack_traces()`; `Trace.stack` is a thin method over it |
 | `_trace_rehydrate.py` | Load-side Trace rehydration |
 | `_backend_capability_guards.py` | Backend capability guard helpers |
 | `_nonfinite.py` | Nonfinite scan/abort helpers |
@@ -56,7 +56,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_trace_profile.py` | Trace profiling and timing helpers |
 | `_trace_stats.py` | Trace aggregate stats and backward-pass projections |
 | `_trace_validation.py` | Trace validation and log-entry removal helpers |
-| `_trace_viz.py` | Trace visualization entrypoints |
+| `_trace_viz.py` | Thin `Trace` visualization and summary methods; bodies live in `_visualization/_trace_draw.py` and `report/_trace_summary.py` |
 | `op.py` | `Op` two-word row facade (`_core`/`_row` over `_trace_core`), tensor save, per-pass fields |
 | `_op_transforms.py` | User-transform apply + train-mode/streaming output validation helpers (split from `op.py`; `op.py` re-exposes them) |
 | `layer.py` | `Layer` aggregate, pass delegation, graph unions |

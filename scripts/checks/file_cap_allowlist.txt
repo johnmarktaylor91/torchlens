@@ -80,9 +80,6 @@ torchlens/_data_classes/_op_dedup.py::_dedup_cached_identity_out	66
 torchlens/_data_classes/_op_dedup.py::_dedup_saved_activation_out	109
 torchlens/_data_classes/_op_transforms.py::validate_train_mode_transform_output	65
 torchlens/_data_classes/_schema_bindings.py	1029
-torchlens/_data_classes/_trace_export.py::TraceExportMixin.decode_output	65
-torchlens/_data_classes/_trace_export.py::TraceExportMixin.output_table	61
-torchlens/_data_classes/_trace_export.py::TraceExportMixin.to_pandas	112
 torchlens/_data_classes/_trace_fork.py	846
 torchlens/_data_classes/_trace_fork.py::_fill_layer_shells	62
 torchlens/_data_classes/_trace_fork.py::build_fork	178
@@ -101,7 +98,7 @@ torchlens/_data_classes/_trace_intervention.py::TraceInterventionMixin.set	111
 torchlens/_data_classes/_trace_inventory.py::build_bill_of_materials	95
 torchlens/_data_classes/_trace_inventory.py::build_sites_table	94
 torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	97
-torchlens/_data_classes/_trace_stack.py::TraceStackMixin.stack	90
+torchlens/_data_classes/_trace_stack.py::stack_traces	68
 torchlens/_data_classes/_trace_stats.py	1771
 torchlens/_data_classes/_trace_stats.py::TraceStatsMixin.collapse_plan	69
 torchlens/_data_classes/_trace_validation.py	1425
@@ -109,12 +106,9 @@ torchlens/_data_classes/_trace_validation.py::TraceValidationMixin._batch_remove
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	525
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.validate_forward_pass	65
 torchlens/_data_classes/_trace_validation.py::_warn_pending_value_edits_on_new_input_run	64
-torchlens/_data_classes/_trace_viz.py	989
-torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.animate_ops	61
-torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.draw	259
-torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.draw_backward	72
-torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.first_nonfinite	72
-torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.summary	131
+torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.draw	240
+torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.draw_backward	71
+torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.summary	102
 torchlens/_data_classes/cleanup.py	1081
 torchlens/_data_classes/cleanup.py::_scrub_conditional_fields_after_removal	72
 torchlens/_data_classes/cleanup.py::cleanup	137
@@ -657,6 +651,7 @@ torchlens/_visualization/_render_utils.py::_open_file_quietly	66
 torchlens/_visualization/_stacking.py::resolve_stack_by	84
 torchlens/_visualization/_summary_internal/_discoverability.py::format_discoverability_summary	64
 torchlens/_visualization/_surgery_diff.py::surgery_diff	98
+torchlens/_visualization/_trace_draw.py::draw	125
 torchlens/_visualization/auto_collapse.py	2150
 torchlens/_visualization/auto_collapse.py::_compute_signal_skeleton	92
 torchlens/_visualization/auto_collapse.py::_iter_collapsible_child_path_runs	78
@@ -1158,6 +1153,7 @@ torchlens/export/_netron_module.py::_assemble_functions	68
 torchlens/export/_netron_records.py::project_rolled	65
 torchlens/export/_registry.py::register_target	63
 torchlens/export/_report.py::write_report	98
+torchlens/export/_trace_tables.py::to_pandas	91
 torchlens/export/_trackers.py::mlflow	84
 torchlens/features.py::as_matrix	61
 torchlens/fingerprint.py::_update_content_digest	114
@@ -1424,6 +1420,7 @@ torchlens/report/_summary_ladder.py::_ModelIndex.__init__	66
 torchlens/report/_summary_ladder.py::_elide_once	74
 torchlens/report/_summary_render.py::render_summary_pair	72
 torchlens/report/_summary_result.py::collect_summary_facts	80
+torchlens/report/_trace_summary.py::summary	76
 torchlens/stats/_aggregate.py::aggregate	72
 torchlens/stats/_fitted.py::load_fitted	103
 torchlens/stats/_fitted.py::save_fitted	62
