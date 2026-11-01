@@ -275,7 +275,9 @@ def _prepare_intervene(cell: Cell) -> None:
 
     ``tl.func(name)`` matches every op of that name, integer ones included, and
     ``tl.scale`` on an integer tensor is a typed dtype refusal; the integer ops
-    the plain capture saw under that name are excluded by label.
+    the plain capture saw under that name are excluded by their raw label (the
+    ``<raw_label>_raw`` spelling is the one a live capture can match; a final
+    label does not exist yet while the forward runs).
     """
 
     target = cell.facts.common_float_func
@@ -283,11 +285,13 @@ def _prepare_intervene(cell: Cell) -> None:
         _not_applicable("no floating-point op to scale")
     plain = cell.facts.plain
     integer = sorted(
-        op.label for op in plain.ops if op.func_name == target and not _is_float(op.dtype)
+        f"{op.raw_label}_raw"
+        for op in plain.ops
+        if op.func_name == target and not _is_float(op.dtype)
     )
     selector: Any = tl.func(target)
-    for label in integer:
-        selector = selector & ~tl.label(label)
+    for raw_label in integer:
+        selector = selector & ~tl.label(raw_label)
     _merge_intervene(cell, tl.when(selector, tl.scale(0.5)))
 
 
