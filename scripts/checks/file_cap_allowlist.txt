@@ -1219,6 +1219,8 @@ torchlens/intervention/_module_boundary.py::_apply_module_boundary_live_hooks	84
 torchlens/intervention/_patch_mapping.py::apply_position_map	72
 torchlens/intervention/_position_edits.py::positions	86
 torchlens/intervention/_rerun_ledger.py::_build_ledger_record	66
+torchlens/intervention/_resolver_registry.py::resolve_function_registry_key	401
+torchlens/intervention/_resolver_registry.py::resolve_function_registry_key._enforce_foreign_trust	69
 torchlens/intervention/_runtime_probes.py::_apply_inplace_replacement_to_mutated_storage	72
 torchlens/intervention/_subspace_edits.py::subspace_ablate	90
 torchlens/intervention/_subspace_spec.py::rebuild_subspace_edit	71
@@ -1278,8 +1280,6 @@ torchlens/intervention/rerun.py::_reconcile_rerun_hook_fires	99
 torchlens/intervention/rerun.py::_refuse_source_matched_zero_fire	72
 torchlens/intervention/rerun.py::run	144
 torchlens/intervention/resolver.py	1462
-torchlens/intervention/resolver.py::resolve_function_registry_key	401
-torchlens/intervention/resolver.py::resolve_function_registry_key._enforce_foreign_trust	69
 torchlens/intervention/runtime.py	1890
 torchlens/intervention/runtime.py::_apply_live_backward_hooks	75
 torchlens/intervention/runtime.py::_apply_live_backward_prehooks	72

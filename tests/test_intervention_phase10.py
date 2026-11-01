@@ -42,7 +42,7 @@ from torchlens.intervention.types import (
 )
 from torchlens.io import load_intervention_spec
 
-_INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention.resolver")
+_INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention._resolver_registry")
 
 
 class _TanhModel(nn.Module):
