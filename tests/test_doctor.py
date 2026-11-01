@@ -338,7 +338,9 @@ def test_environment_status_mapping(
     )
     monkeypatch.setattr(_utils, "_environment_checks", lambda: raw_checks)
     report = tl.report.doctor()
-    environment_rows = [row for row in report.checks if row.key in _ENVIRONMENT_REMEDIES]
+    environment_rows = [
+        row for row in report.checks if not row.key.startswith("backend_scorecard:")
+    ]
     assert len(environment_rows) == len(raw_checks)
     for row in environment_rows:
         assert row.status == status
