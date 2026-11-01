@@ -46,7 +46,7 @@ def bundle_diff(
     bundle:
         Bundle containing at least two traces.
     metric:
-        Metric forwarded to ``bundle.delta_map``.
+        Per-site tensor metric (the baseline comparison ``Bundle.compare`` runs).
     layout:
         Layout strategy. Only ``"paired"`` is currently supported.
     left:
@@ -54,9 +54,9 @@ def bundle_diff(
     right:
         Right member name or log. Defaults to the second bundle member.
     baseline:
-        Baseline forwarded to ``bundle.delta_map``. Defaults to ``left``.
+        Baseline member for the per-node distances. Defaults to ``left``.
     on:
-        Tensor field forwarded to ``bundle.delta_map``.
+        Tensor field compared at each site.
     path:
         Output path, with or without a recognised extension.
     vis_save_only:
@@ -98,7 +98,7 @@ def bundle_diff(
     delta_map = _delta_map_values(bundle, metric, baseline_name, on, [baseline_name, *sides])
     layer_to_node = _layer_to_supergraph_node(bundle)
     pairs = _select_pairs(
-        bundle.aligned_pairs(left_name, right_name),
+        bundle._aligned_pairs(left_name, right_name),
         left_name=left_name,
         right_name=right_name,
         delta_map=delta_map,
@@ -206,7 +206,7 @@ def _layer_to_supergraph_node(bundle: Bundle) -> dict[str, str]:
     -------
     dict[str, str]
         ``layer.layer_label`` to supergraph node name. Keyed by label rather
-        than ``id(layer)`` because ``bundle.aligned_pairs`` and
+        than ``id(layer)`` because the structural alignment and
         ``bundle.supergraph.nodes`` materialize independent layer objects with
         different ``id()`` values; an id-keyed lookup misses every entry, the
         delta lookup falls back to ``0.0``, and the diff renders all-white.
@@ -239,7 +239,7 @@ def _build_dot(
     Parameters
     ----------
     pairs:
-        Aligned layer pairs from ``bundle.aligned_pairs``.
+        Aligned layer pairs across the two members.
     bundle:
         Bundle being rendered.
     left_name:
@@ -251,7 +251,7 @@ def _build_dot(
     tensor_field:
         Tensor field used for comparison.
     delta_map:
-        Per-node metric values from ``bundle.delta_map``.
+        Per-node metric values from the baseline comparison.
     layer_to_node:
         Mapping from concrete layers to supergraph node keys.
     theme_name:

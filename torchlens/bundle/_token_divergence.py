@@ -188,8 +188,7 @@ def _bundle_token_divergence(
 ) -> TokenDivergence:
     """Return where two members' prompts and completions part, by exact token ids.
 
-    Exposed as the dynamic method ``Bundle.token_divergence`` (spelling
-    documented-unstable).
+    The body of ``Bundle.token_divergence`` (spelling documented-unstable).
     Typically ``original`` is a call of the first run and ``rerun`` its copy
     from a steered re-run (``b.token_divergence("critique", "cf_critique")``),
     but any two bound members compare.
