@@ -631,10 +631,26 @@ def _aggregate_loop(
     return _aggregate_out_loop(model, dataloader, metrics)
 
 
-def _metric_capture_layers(sites: Mapping[str, Any]) -> tuple[str | list[str], str | list[str]]:
-    """Return ``(layers_to_save, save_grads)`` for the metric keys' sites."""
+def _site_label(site: Any) -> str | None:
+    """Return the exact label a metric site names, or ``None`` for a pattern.
+
+    A ``tl.grad`` key names its inner site; a bare string inner or an exact
+    ``tl.label`` selector is a label.
+    """
 
     from ..intervention.spec import is_gradient_site
+
+    inner = getattr(site, "inner", None) if is_gradient_site(site) else site
+    if isinstance(inner, str):
+        return inner
+    label = getattr(inner, "selector_value", None)
+    if getattr(inner, "selector_kind", None) == "label" and isinstance(label, str):
+        return label
+    return None
+
+
+def _metric_capture_layers(sites: Mapping[str, Any]) -> tuple[str | list[str], str | list[str]]:
+    """Return ``(layers_to_save, save_grads)`` for the metric keys' sites."""
 
     activation: list[str] = []
     gradient: list[str] = []
@@ -643,11 +659,10 @@ def _metric_capture_layers(sites: Mapping[str, Any]) -> tuple[str | list[str], s
             if site != "output":
                 activation.append(site)
             continue
-        inner = getattr(site, "inner", None) if is_gradient_site(site) else site
-        label = getattr(inner, "selector_value", None)
-        if getattr(inner, "selector_kind", None) != "label" or not isinstance(label, str):
+        label = _site_label(site)
+        if label is None:
             return "all", "all"
-        (gradient if inner is not site else activation).append(label)
+        (gradient if _is_gradient_key(site) else activation).append(label)
     return (activation + gradient or "all"), (gradient or "all")
 
 
@@ -701,8 +716,8 @@ def _aggregate_backward_loop(
                 if isinstance(site, str) or not _is_gradient_key(site):
                     stat.update(_site_value(log, name, site))
                     continue
-                label = getattr(getattr(site, "inner", None), "selector_value", None)
-                if isinstance(label, str):
+                label = _site_label(site)
+                if label is not None:
                     stat.update(_metric_grad_from_log(log, label))
                 else:
                     stat.update(_site_value(log, name, site))
