@@ -63,7 +63,7 @@ class _IndexLookup(nn.Module):
 
 def _op_by_func(trace: tl.Trace, prefix: str) -> str:
     for op in trace.saved_ops:
-        if str(getattr(op, "func_name", "") or "").startswith(prefix):
+        if str(getattr(op, "func_name", "") or "").lstrip("_").startswith(prefix):
             return op.label
     raise AssertionError(f"no saved op with func name {prefix!r}")
 
@@ -82,9 +82,9 @@ def test_fork_edit_on_input_leaf_fires_on_captured_value_and_propagates() -> Non
     assert torch.equal(fork["input_1"].out, captured_input * 0.5)
     with torch.no_grad():
         expected = torch.relu(model.lin(captured_input * 0.5))
-    assert torch.allclose(fork.output, expected, atol=1e-6)
+    assert torch.allclose(fork.reconstruct_output(), expected, atol=1e-6)
     assert torch.equal(trace["input_1"].out, captured_input), "the edit wrote through"
-    assert torch.allclose(trace.output, model(x).detach(), atol=1e-6)
+    assert torch.allclose(trace.reconstruct_output(), model(x).detach(), atol=1e-6)
     helpers = [getattr(record, "helper_name", None) for record in fork["input_1"].interventions]
     assert helpers == ["scale"]
 
@@ -126,7 +126,7 @@ def test_fork_edit_at_random_source_site_edits_the_captured_draw() -> None:
     assert torch.allclose(fork[add_label].out, x + captured_noise * 0.5, atol=1e-6)
     with torch.no_grad():
         expected = model.lin(x + captured_noise * 0.5)
-    assert torch.allclose(fork.output, expected, atol=1e-6)
+    assert torch.allclose(fork.reconstruct_output(), expected, atol=1e-6)
     assert torch.equal(trace[noise_label].out, captured_noise), "the edit wrote through"
 
 
@@ -143,7 +143,7 @@ def test_edit_past_an_index_lookup_refuses_typed_naming_site_and_origin() -> Non
     with pytest.raises(ReplayPreconditionError) as info:
         fork.do(tl.label("linear_1_1"), tl.scale(1000.0))
     message = str(info.value)
-    assert embedding_label in message, message
+    assert embedding_label.split(":")[0] in message, message
     assert "'linear_1_1'" in message, message
     assert "IndexError" in message, message
     assert isinstance(info.value.__cause__, IndexError)

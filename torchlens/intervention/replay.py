@@ -1267,7 +1267,8 @@ def _execute_group_call(
         origin_labels = ", ".join(repr(_disclosure_label(origin)) for origin in origins)
         func_name = str(getattr(site, "func_name", "") or "the saved callable")
         raise ReplayPreconditionError(
-            f"replay of {site.layer_label!r} ({func_name}) raised {type(exc).__name__}: {exc}. "
+            f"replay of {_disclosure_label(site)!r} ({func_name}) raised "
+            f"{type(exc).__name__}: {exc}. "
             f"The edit at {origin_labels} produced a value this op cannot consume on the "
             "captured graph (an index, shape or dtype path fixed at capture). Nothing was "
             "committed. Choose an edit that keeps the edited site inside the range the "
