@@ -1496,10 +1496,13 @@ def _reconcile_rerun_hook_fires(
         corresponding fire, retaining multiplicity for duplicate plans.
     """
 
-    plan_ids = [_hook_plan_identifier(entry) for entry in hook_plan]
+    # Only forward entries can fire during the rerun's forward; a gradient or
+    # node entry is armed for the result's next backward and settles there.
+    forward_plan = [entry for entry in hook_plan if entry.signal == "forward"]
+    plan_ids = [_hook_plan_identifier(entry) for entry in forward_plan]
     base_by_id = {
         plan_id: str(entry.metadata.get("plan_id_base", plan_id))
-        for entry, plan_id in zip(hook_plan, plan_ids)
+        for entry, plan_id in zip(forward_plan, plan_ids)
     }
     planned = Counter(plan_ids)
     fired: Counter[str] = Counter()
