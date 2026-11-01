@@ -37,8 +37,10 @@ if TYPE_CHECKING:
 
 _UNSET: Any = object()
 
-#: Closed transaction-status vocabulary (documented-unstable).
-EventStatus = Literal["fired", "no_fire", "error"]
+#: Closed transaction-status vocabulary (documented-unstable). ``"armed"``
+#: marks a gradient edit registered for the next backward pass: no fire has
+#: happened yet, and a later settle row (``door="backward"``) says what did.
+EventStatus = Literal["fired", "no_fire", "error", "armed"]
 
 #: Closed lane vocabulary for the envelope (surgery memo lanes; ``bind`` is
 #: reserved for F01).
@@ -76,7 +78,7 @@ def build_fire_record(
     helper: Edit | None = None,
     site_label: str | None = None,
     timing: Literal["pre", "post"] | None = None,
-    direction: Literal["forward", "backward"] | None = None,
+    signal: Literal["forward", "backward"] | None = None,
     helper_name: str | None = None,
     run_ctx: dict[str, Any] | None = None,
     previous_notes: tuple[Any, ...] = (),
@@ -125,7 +127,7 @@ def build_fire_record(
         helper=helper,
         site_label=site_label,
         timing=timing,
-        direction=direction,
+        signal=signal,
         helper_name=helper_name,
         seed=seed,
         determinism_note=determinism_note,
@@ -418,12 +420,36 @@ def rules_payload(spec: Any) -> tuple[dict[str, Any], ...]:
             "rule_id": rule.rule_id,
             "where": rule.where_repr,
             "action": rule.action_repr,
-            "direction": rule.direction,
+            "signal": rule_signal(rule.target),
             "address_class": rule.address_class,
             "payload_fidelity": rule.payload_fidelity,
         }
         for rule in spec.rules
     )
+
+
+def rule_signal(target: Any) -> str:
+    """Return the pass a rule's site fires in: ``forward``, ``backward`` or ``both``.
+
+    Derived from the site, never stored on the rule: a bare site is an
+    activation (forward), ``tl.grad(site)`` and node selectors are backward,
+    and a union of both is ``"both"``.
+
+    Parameters
+    ----------
+    target:
+        The rule's site target.
+
+    Returns
+    -------
+    str
+        ``"forward"``, ``"backward"`` or ``"both"``.
+    """
+
+    from .hooks import _UNIVERSE_SIGNAL, split_site_branches
+
+    signals = {_UNIVERSE_SIGNAL[universe] for universe, _ in split_site_branches(target)}
+    return signals.pop() if len(signals) == 1 else "both"
 
 
 def site_keys_for_labels(trace: Any, labels: tuple[str, ...]) -> tuple[str, ...]:
@@ -453,6 +479,7 @@ __all__ = [
     "EXECUTION_EFFECTS",
     "EventLane",
     "EventStatus",
+    "rule_signal",
     "ExecutionEffect",
     "append_event_audit_row",
     "build_fire_record",
@@ -522,7 +549,7 @@ def _replay_fire_record(
         helper=entry.helper_spec,
         site_label=site.layer_label,
         timing="post",
-        direction="forward",
+        signal="forward",
         helper_name=_hook_name(entry),
         run_ctx=run_ctx,
         previous_notes=previous_notes,

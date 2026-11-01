@@ -167,10 +167,11 @@ from .fastlog.types import CaptureSpec
 from .intervention import injection as _injection, model_door as _model_door
 from .intervention._module_alias_guard import refuse_model_alias_spellings
 from .intervention._zero_fire import settle_capture_zero_fire, zero_fire_policy_scope
+from .intervention.audit import rule_signal
 from .intervention.errors import ChunkedForwardConfigError
-from .intervention.hooks import normalize_hook_plan
+from .intervention.hooks import normalize_hook_plan, site_universe, split_site_branches
 from .intervention.predicates import InterventionPredicate
-from .intervention.resolver import _selector_resolution_direction, resolve_sites
+from .intervention.resolver import resolve_sites
 from .intervention.selectors import BaseSelector
 from .intervention.types import InterventionDecision
 from .options import (
@@ -1299,7 +1300,6 @@ def _warn_zero_match_capture_selectors(
     *,
     save_selector: Any,
     intervene_selector: Any,
-    intervene_direction: str | None,
     halt_selector: Any = None,
     layers_to_save_request: Any = None,
 ) -> None:
@@ -1312,9 +1312,9 @@ def _warn_zero_match_capture_selectors(
     save_selector:
         Capture-time save selector, if configured.
     intervene_selector:
-        Capture-time intervention selector, if configured.
-    intervene_direction:
-        Intervention direction whose live phase determines warning timing.
+        Capture-time intervention selector, if configured. Its site branches
+        decide the warning timing: an autograd-node branch settles after the
+        backward pass.
     halt_selector:
         Capture-time halt predicate, if configured. ``halt=`` was the one
         selector slot outside the zero-match disclosure family: a typo'd
@@ -1345,7 +1345,7 @@ def _warn_zero_match_capture_selectors(
         layer does not matter" on the returned and saved Trace alike.
     """
 
-    def _record_unmatched(slot: str, selector: Any, direction: str | None = None) -> None:
+    def _record_unmatched(slot: str, selector: Any, signal: str | None = None) -> None:
         """Append one zero-match fact to the persisted trace annotations."""
 
         annotations = getattr(trace, "annotations", None)
@@ -1361,8 +1361,8 @@ def _warn_zero_match_capture_selectors(
             "slot": slot,
             "selector": _relativize_path_literals(repr(selector)),
         }
-        if direction is not None:
-            entry["direction"] = str(direction)
+        if signal is not None:
+            entry["signal"] = str(signal)
         annotations.setdefault("unmatched_capture_selectors", []).append(entry)
 
     defer_backward_intervention = False
@@ -1379,16 +1379,16 @@ def _warn_zero_match_capture_selectors(
                 stacklevel=3,
             )
         if isinstance(intervene_selector, BaseSelector):
-            selector_direction = _selector_resolution_direction(intervene_selector)
-            defer_backward_intervention = (
-                selector_direction == "backward" and intervene_direction in {"backward", "both"}
+            # A gradient or node branch fires at backward time: keep its fire
+            # counter for the after-backward reconciliation.
+            defer_backward_intervention = any(
+                universe != "activation"
+                for universe, _branch in split_site_branches(intervene_selector)
             )
-        if (
-            isinstance(intervene_selector, BaseSelector)
-            and not defer_backward_intervention
-            and intervene_selector_fired_nowhere(trace, intervene_selector, intervene_direction)
+        if isinstance(intervene_selector, BaseSelector) and intervene_selector_fired_nowhere(
+            trace, intervene_selector
         ):
-            _record_unmatched("intervene", intervene_selector, intervene_direction)
+            _record_unmatched("intervene", intervene_selector, rule_signal(intervene_selector))
             settle_capture_zero_fire(
                 f"Capture-time intervention selector {intervene_selector!r} matched zero sites; "
                 "no intervention fired.",
@@ -1834,7 +1834,7 @@ def _run_model_and_save_specified_outs(
         and selector_contains_kind(candidate_intervene_selector, "module")
         and isinstance(candidate_intervene_decision, InterventionDecision)
         and candidate_intervene_decision.hook is not None
-        and candidate_intervene_decision.direction in {"forward", "both"}
+        and site_universe(candidate_intervene_selector) == "activation"
     ):
         module_intervene_selector = candidate_intervene_selector
         # .selector is non-None only for single-rule specs, so rules[0] is
@@ -1855,7 +1855,6 @@ def _run_model_and_save_specified_outs(
             for entry in normalize_hook_plan(
                 candidate_intervene_selector,
                 candidate_intervene_decision.hook,
-                direction=candidate_intervene_decision.direction,
             )
         ]
         # Keep the original spec: the capture-door event must record the rules
@@ -2171,18 +2170,12 @@ def _run_model_and_save_specified_outs(
             for output_op in trace[output_label].ops:
                 output_op.tl_authored_root = True
     finish_echo(echo_session, trace)
-    warning_intervene_decision = (
-        candidate_intervene_decision
-        if isinstance(candidate_intervene_decision, InterventionDecision)
-        else getattr(intervene_predicate, "decision", None)
-    )
     _warn_zero_match_capture_selectors(
         trace,
         save_selector=module_save_selector or save_predicate,
         intervene_selector=(
             module_intervene_selector or getattr(intervene_predicate, "selector", None)
         ),
-        intervene_direction=getattr(warning_intervene_decision, "direction", None),
         # stop_after-compiled halts carry their OWN provenance-split never-fired
         # policy at the trace entry (typed refusal / coded warning); the generic
         # halt zero-match warning would double-disclose ahead of that refusal.

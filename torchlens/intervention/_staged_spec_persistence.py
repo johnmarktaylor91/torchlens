@@ -20,8 +20,9 @@ from typing import Any
 from .errors import EngineDispatchError
 
 _LOADED_PROVIDERS = frozenset({"loaded_sparse", "loaded_analysis"})
-# Audit rows that record an edit which changed no recorded value.
-_VALUE_NEUTRAL_AUDIT_STATUSES = frozenset({"no_fire", "error"})
+# Audit rows that record an edit which changed no recorded value (an armed
+# gradient edit changes no forward value; its settle row says what fired).
+_VALUE_NEUTRAL_AUDIT_STATUSES = frozenset({"no_fire", "error", "armed"})
 
 
 def _carries_intervened_values(trace: Any) -> bool:
