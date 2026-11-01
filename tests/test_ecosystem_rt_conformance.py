@@ -65,11 +65,10 @@ def _rows(report: ConformanceReport, case_id: str) -> list[Any]:
 
 #: Torch-side gaps pinned by exact cell id (the same table as
 #: tests/test_conformance_protocol_cells.py; cross-packet requests in the lane's RESULT.md):
-#: a failed replay status does not name the offending op in its message, and a loaded
-#: portable bundle has no callables for replay validation. A fix flips the pin; the cells
-#: stay strict.
-_TORCH_KNOWN_GAPS = frozenset({"c1_validation_names_reason", "c2_validation_after_load"})
-_FAKE_KNOWN_GAPS = frozenset({"c1_validation_names_reason", "c2_validation_after_load"})
+#: a failed replay status does not name the offending op in its message. A fix flips the
+#: pin; the cells stay strict.
+_TORCH_KNOWN_GAPS = frozenset({"c1_validation_names_reason"})
+_FAKE_KNOWN_GAPS = frozenset({"c1_validation_names_reason"})
 _TORCH_GAP_REASON = "torch's failed replay status does not name the offending op (pinned gap)"
 
 

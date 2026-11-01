@@ -187,18 +187,15 @@ def test_plant_tables_partition_the_closed_plant_set() -> None:
 #: Torch-side gaps the suite reports today, pinned by exact cell id with the detail each
 #: carries (cross-packet requests in the lane's RESULT.md): a failed replay status carries
 #: the generic message "Replay validation failed." instead of naming the offending op (and
-#: torch's ``arg_logging_mismatch`` reason is not yet in the closed reason list); a loaded
-#: portable bundle carries no callables so replay validation refuses it. A fix flips the
-#: pin, and the entry must then be removed; the cells stay strict.
+#: torch's ``arg_logging_mismatch`` reason is not yet in the closed reason list). A fix
+#: flips the pin, and the entry must then be removed; the cells stay strict.
 TORCH_KNOWN_GAPS: dict[str, str] = {
     "c1_validation_names_reason": "message does not name",
-    "c2_validation_after_load": "ArtifactError",
 }
 #: The fake refuses its one False flag typed before capture; it validates through torch, so
-#: it inherits the naming gap and the bundle gap.
+#: it inherits the naming gap.
 FAKE_KNOWN_GAPS: dict[str, str] = {
     "c1_validation_names_reason": "message does not name",
-    "c2_validation_after_load": "ArtifactError",
 }
 
 
@@ -241,7 +238,7 @@ def test_torch_reference_passes_every_protocol_cell(tmp_path: Path) -> None:
     assert [item.id for item in card.graduation] == ["G1", "G2", "G3", "G4", "G5", "G6"]
     # G1 and G2 read the pinned gaps; they flip with the gaps.
     assert "c1_refusal_intermediate_derived_grads" not in card.graduation[0].detail
-    assert not card.graduation[1].met and "c2_validation_after_load" in card.graduation[1].detail
+    assert "c2_validation_after_load" not in card.graduation[1].detail
     assert card.counts["denominator"] == len(card.cells)
     assert scorecard_from_json(card.to_json()) == card
 

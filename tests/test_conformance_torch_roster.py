@@ -253,3 +253,29 @@ def test_grad_options_refuses_with_the_capability_code() -> None:
     assert excinfo.value.code == "intermediate_derived_grads_unsupported"
     assert excinfo.value.fields["code"] == excinfo.value.code
     assert not calls
+
+
+def test_after_load_cell_reloads_at_the_replay_level(tmp_path: Any) -> None:
+    """Only ``c2_validation_after_load`` reads a reload saved with re-execution payloads.
+
+    The default-level reload the other C2 cells read drops saved arguments;
+    the replay reload keeps them and validates. An adapter without a replay
+    level validates the default reload unchanged.
+    """
+
+    from types import SimpleNamespace
+
+    from torchlens.conformance._adapters import TorchReferenceAdapter
+    from torchlens.conformance._protocol_cases import load_for_replay
+
+    adapter = TorchReferenceAdapter()
+    trace, reference, protocol, _model = _capture_row("mlp")
+    path = tmp_path / "c2.tlspec"
+    adapter.save(trace, path)
+    loaded = adapter.load(path)
+    assert all(op.saved_args is None for op in loaded.layer_list)
+    replay = load_for_replay(adapter, trace, path, loaded)
+    assert replay is not loaded and any(op.saved_args is not None for op in replay.layer_list)
+    status = protocol.validate(replay, reference)
+    assert status.state == "passed", status.message
+    assert load_for_replay(SimpleNamespace(), trace, path, loaded) is loaded

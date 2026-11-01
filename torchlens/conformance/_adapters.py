@@ -148,10 +148,19 @@ class TorchReferenceAdapter:
 
         return (torch.get_rng_state().numpy().tobytes(), len(_WRAPPED_FUNC_CODE))
 
-    def save(self, trace: Any, path: Path) -> None:
-        """Persist one captured trace as a portable artifact."""
+    #: Save level whose bundle keeps what torch replay validation re-executes
+    #: from (saved arguments and RNG states); ``portable`` drops them by design.
+    #: Only ``c2_validation_after_load`` saves at it (SPEC 4.2: validation of
+    #: the loaded trace passes); every other C2 cell keeps the default level.
+    replay_save_level = "executable_with_callables"
 
-        trace.save(path)
+    def save(self, trace: Any, path: Path, level: str | None = None) -> None:
+        """Persist one captured trace (default level unless ``level`` is given)."""
+
+        if level is None:
+            trace.save(path)
+        else:
+            trace.save(path, level=level)
 
     def load(self, path: Path) -> Any:
         """Reload one persisted artifact."""
@@ -293,10 +302,16 @@ class FakeProviderAdapter:
             raise AttributeError("fake provider declared validation_replay but has no engine")
         return trace
 
-    def save(self, trace: Any, path: Path) -> None:
+    @property
+    def replay_save_level(self) -> str:
+        """The torch delegate's replay save level (the fake validates through torch)."""
+
+        return self._delegate.replay_save_level
+
+    def save(self, trace: Any, path: Path, level: str | None = None) -> None:
         """Persist; the field-loss, identity, and tamper plants sabotage it."""
 
-        self._delegate.save(trace, path)
+        self._delegate.save(trace, path, level=level)
         self._last_saved = trace
         if self.plant == "tamper_tripwire":
             # Forge the writer identity to an UNGOVERNED release after the
