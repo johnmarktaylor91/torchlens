@@ -635,22 +635,6 @@ def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
     return ValidationCheckResult.failed_result("dispatch_op_count_mismatch")
 
 
-def _is_closure_constant_source(layer: Any) -> bool:
-    """Return whether ``layer`` is a closure-constant source op (no callable by design).
-
-    A ``constant`` op is a graph source whose value is its saved payload
-    (SPEC 2 rule 1): parentless, an internal source, no recorded call. An op
-    named ``constant`` with parents or a call id is not one.
-    """
-
-    return (
-        getattr(layer, "func_name", None) == "constant"
-        and bool(getattr(layer, "is_internal_source", False))
-        and not tuple(getattr(layer, "parents", ()) or ())
-        and getattr(layer, "func_call_id", None) is None
-    )
-
-
 def _raise_if_portable_bundle_log(self: Any) -> None:
     """Reject validation only when loaded logs lack replay callables.
 
@@ -668,18 +652,16 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
 
     if not bool(getattr(self, "_loaded_from_bundle", False)):
         return
-    # Replay is an execution boundary: resolve each op's recorded function
-    # identity (``func_id``) through the purity-gated resolver first; whatever
-    # does not resolve stays functionless and is refused by name below.
-    from ._loaded_callables import resolve_loaded_callables
+    from ._constant_source import is_closure_constant_source
 
-    resolve_loaded_callables(self)
+    # ``validate_saved_outs`` already resolved what recorded function identities
+    # can resolve for the replay phase; whatever did not is refused by name here.
     unresolved = [
         getattr(layer, "layer_label", "<unknown>")
         for layer in getattr(self, "layer_list", [])
         if getattr(layer, "func", None) is None
         and getattr(layer, "func_name", "none") not in {"none", "input", "output", "buffer"}
-        and not _is_closure_constant_source(layer)
+        and not is_closure_constant_source(layer)
     ]
     if unresolved:
         from .._io import ArtifactError
@@ -881,15 +863,25 @@ def validate_saved_outs(
         Aggregate replay-validation status. Fully validated pass/fail results
         remain bool-compatible through callers that unwrap completed statuses.
     """
+    from ._loaded_callables import release_loaded_callables, resolve_loaded_callables
+
+    # Replay is an execution boundary: a loaded op's recorded function identity
+    # (``func_id``) resolves to its callable for the replay phase only; whatever
+    # does not resolve stays functionless and the entry check refuses it by name.
+    resolved = (
+        resolve_loaded_callables(self) if bool(getattr(self, "_loaded_from_bundle", False)) else []
+    )
     try:
         return _validate_saved_outs_run(
-            self, ground_truth_output_tensors, verbose, validate_metadata
+            self, ground_truth_output_tensors, verbose, validate_metadata, resolved
         )
     finally:
         # Per-run scratch ends with the run, pass, fail or raise: a cache left in
         # ``__dict__`` would reach ``save`` as live state with no portability
         # policy, and a later run on a mutated trace must rebuild it anyway.
         self.__dict__.pop(_ORPHAN_CANDIDATE_INDEX_KEY, None)
+        # The loaded artifact goes back to its load-time shape (``func`` None).
+        release_loaded_callables(resolved)
 
 
 #: ``Trace.__dict__`` key of the orphan-arg sweep's per-run candidate index.
@@ -901,8 +893,14 @@ def _validate_saved_outs_run(
     ground_truth_output_tensors: list[torch.Tensor],
     verbose: bool,
     validate_metadata: bool,
+    resolved_callables: list[Any] | None = None,
 ) -> ValidationStatus:
-    """One validation run; :func:`validate_saved_outs` clears its scratch after it."""
+    """One validation run; :func:`validate_saved_outs` clears its scratch after it.
+
+    ``resolved_callables`` are the loaded ops whose ``func`` the replay phase
+    resolved; they are released before the metadata invariants, which check
+    the loaded artifact's own shape (``func`` never persists).
+    """
     from .._runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
 
     refuse_poisoned_trace(self, "validation")
@@ -1191,7 +1189,11 @@ def _validate_saved_outs_run(
         setattr(self, "_validation_replay_status", status)
         return status
 
-    # Metadata invariant checks (after out validation ops)
+    # Metadata invariant checks (after out validation ops) read the loaded
+    # artifact as loaded: the replay-phase callables are released first.
+    from ._loaded_callables import release_loaded_callables
+
+    release_loaded_callables(resolved_callables or [])
     if validate_metadata:
         from .invariants import check_metadata_invariants
 

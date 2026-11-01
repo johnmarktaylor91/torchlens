@@ -22,7 +22,10 @@ import torchlens as tl
 from torchlens._io import ArtifactError
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-from torchlens.validation._loaded_callables import resolve_loaded_callables
+from torchlens.validation._loaded_callables import (
+    release_loaded_callables,
+    resolve_loaded_callables,
+)
 
 
 class _Block(nn.Module):
@@ -56,7 +59,8 @@ def test_loaded_replay_ready_bundle_validates(tmp_path: Path) -> None:
     assert loaded.validate_forward_pass(reference) is True
     status = loaded.validation_replay_status
     assert status.state == "passed", status.message
-    assert all(op.func is not None for op in computational)
+    # Callables live for the replay phase only; the artifact keeps its load shape.
+    assert all(op.func is None for op in computational)
 
 
 def test_loaded_portable_bundle_refuses_by_name(tmp_path: Path) -> None:
@@ -79,27 +83,51 @@ def test_loaded_bundle_without_function_identities_still_refuses(tmp_path: Path)
         loaded.validate_forward_pass(reference)
 
 
+def _layer(key: FunctionRegistryKey, func_name: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        func=None,
+        func_id=key,
+        func_name=func_name,
+        is_input=False,
+        is_output=False,
+        is_buffer=False,
+        is_internal_source=False,
+    )
+
+
 @pytest.mark.parametrize(
-    "key",
+    ("key", "func_name"),
     [
-        FunctionRegistryKey("custom", "system", "function", import_path="os:system"),
-        FunctionRegistryKey("torch", "load", "function"),
-        FunctionRegistryKey("torch", "no_such_op_anywhere", "function"),
+        (FunctionRegistryKey("custom", "system", "function", import_path="os:system"), "system"),
+        (FunctionRegistryKey("torch", "load", "function"), "load"),
+        (FunctionRegistryKey("torch", "no_such_op_anywhere", "function"), "no_such_op_anywhere"),
+        (FunctionRegistryKey("torch", "relu", "function"), "sigmoid"),
     ],
-    ids=["custom_foreign", "torch_impure", "torch_missing"],
+    ids=["custom_foreign", "torch_impure", "torch_missing", "key_names_another_function"],
 )
-def test_foreign_impure_or_missing_keys_never_resolve(key: FunctionRegistryKey) -> None:
-    layer = SimpleNamespace(func=None, func_id=key)
-    assert resolve_loaded_callables(SimpleNamespace(layer_list=[layer])) == 0
+def test_foreign_impure_missing_or_mismatched_keys_never_resolve(
+    key: FunctionRegistryKey, func_name: str
+) -> None:
+    layer = _layer(key, func_name)
+    assert resolve_loaded_callables(SimpleNamespace(layer_list=[layer])) == []
     assert layer.func is None
 
 
-def test_pure_torch_keys_resolve() -> None:
+def test_structural_nodes_never_resolve() -> None:
+    """An output node inherits its producer's ``func_id``; it must not replay that function."""
+
+    output = _layer(FunctionRegistryKey("torch", "relu", "function"), "none")
+    output.is_output = True
+    assert resolve_loaded_callables(SimpleNamespace(layer_list=[output])) == []
+    assert output.func is None
+
+
+def test_pure_torch_keys_resolve_and_release() -> None:
     layers = [
-        SimpleNamespace(func=None, func_id=FunctionRegistryKey("torch", "relu", "function")),
-        SimpleNamespace(
-            func=None, func_id=FunctionRegistryKey("torch.Tensor", "__add__", "dunder")
-        ),
+        _layer(FunctionRegistryKey("torch", "relu", "function"), "relu"),
+        _layer(FunctionRegistryKey("torch.Tensor", "__add__", "dunder"), "__add__"),
     ]
-    assert resolve_loaded_callables(SimpleNamespace(layer_list=layers)) == 2
-    assert all(callable(layer.func) for layer in layers)
+    resolved = resolve_loaded_callables(SimpleNamespace(layer_list=layers))
+    assert resolved == layers and all(callable(layer.func) for layer in layers)
+    release_loaded_callables(resolved)
+    assert all(layer.func is None for layer in layers)
