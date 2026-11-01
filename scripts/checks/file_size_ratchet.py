@@ -132,7 +132,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # dedup split to _op_dedup.py (T77) lands on the merged tree alongside
     # the F10 deletions; re-keyed down to the next 50-line step above the
     # merged measurement (4794).
-    "torchlens/_data_classes/op.py": 4700,
+    # 4700 -> 3650 (2026-11-01 record rebuild, lane E): Op logic bodies moved
+    # verbatim to _op_save.py, _op_relations.py, _op_cost.py, _labels.py,
+    # intervention/_op_edits.py and receptive_field/_op_fields.py; re-keyed
+    # down to the next 50-line step above the measurement (3635).
+    "torchlens/_data_classes/op.py": 3650,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline

@@ -290,7 +290,7 @@ Core data structures for representing a logged forward pass. (77 modules, 38902 
 | `_doors` | Doors from the records to the packages above them (Rule F). | 116 |
 | `_fork_lineage` | Fork lineage: whether two traces are related through the fork parent chain. | 44 |
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
-| `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 111 |
+| `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 179 |
 | `_layer_accessors` | OpAccessor and LayerAccessor: dict-like lookup over ops and layers. | 365 |
 | `_layer_mirror` | Layer mirror reads: the representative op behind a Layer and its mirrored values. | 42 |
 | `_layer_sites` | Layer-level site accessors: ''layer_site_key'', ''site_peers'', ''shape_summary''. | 174 |
@@ -299,14 +299,14 @@ Core data structures for representing a logged forward pass. (77 modules, 38902 
 | `_lookup_keys` | Shared lookup-key validation helpers for ''Trace'' access paths. | 157 |
 | `_module_role_hints` | Semantic role hints for structured module outputs. | 152 |
 | `_nonfinite` | Shared non-finite activation scan behind a revalidated per-log memo. | 885 |
-| `_op_cost` | Op cost functions: FLOPs, bytes and timing projections (record rebuild destination; empty until its bodies move in). | 5 |
+| `_op_cost` | Cost derivations for ''Op'': compute record, MACs, FLOPs, arithmetic intensity. | 110 |
 | `_op_dedup` | Saved-activation dedup helpers for retained payload copies. | 258 |
 | `_op_grad_stream` | Grad-blob streaming for ''Op._log_tensor_grad''. | 41 |
-| `_op_relations` | Op relation functions: parents, children, siblings and containment (record rebuild destination; empty until its bodies move in). | 5 |
-| `_op_save` | Op tensor-save and payload functions moved off ''Op'' (record rebuild destination; empty until its bodies move in). | 5 |
+| `_op_relations` | Relation views for ''Op'': parents, children, siblings, containers, modules. | 305 |
+| `_op_save` | Tensor save, grad logging, transform validation and copy logic for ''Op''. | 773 |
 | `_op_transforms` | User-transform application and validation helpers for saved payloads. | 260 |
 | `_preprocessing_provenance` | Preprocessing provenance derivations that live WITH the record (tvscope). | 114 |
-| `_repr` | Shared record representation helpers. | 80 |
+| `_repr` | Shared record representation helpers. | 59 |
 | `_runtime_handles` | Shared runtime handle resolution for TorchLens records. | 77 |
 | `_schema_bindings` | GENERATED storage bindings for the declared record schema. DO NOT EDIT. | 1029 |
 | `_site_key` | Structural site keys (''site_key_v1''): the portable bridging relation. | 256 |
@@ -354,7 +354,7 @@ Core data structures for representing a logged forward pass. (77 modules, 38902 
 | `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 57 |
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 2079 |
 | `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2723 |
-| `op` | Op: per-operation metadata for a single invocation of a layer. | 4699 |
+| `op` | Op: per-operation metadata for a single invocation of a layer. | 3645 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1083 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 189 |
 | `trace` | Trace: the top-level container for a fully logged forward pass. | 3910 |
@@ -1597,7 +1597,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_intervened_rerun_guard` | Refuse the legacy rerun of a loaded trace whose recorded values were intervened. | 108 |
 | `_metrics` | Pairwise distance metrics for the multi-trace subpackage. | 219 |
 | `_module_boundary` | Module-boundary live-hook application (the ''tl.module(...)'' door). | 566 |
-| `_op_edits` | Op edit functions reached from the records through ''_data_classes._doors.intervention'' (record rebuild destination; empty until its bod... | 5 |
+| `_op_edits` | Op-level intervention verbs: ''do'', ''set'', ''attach_hooks'', ''grad_for'', facets. | 188 |
 | `_param_fingerprint` | Capture-time parameter fingerprints: replay refuses a parameter changed since capture. | 186 |
 | `_patch_mapping` | Source-site to target-site mapping for ''patch_from'' (Patchscopes, SelfIE). | 211 |
 | `_position_edits` | Token-position editing. | 197 |
@@ -1757,7 +1757,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (20 modules, 11395
 | `_gradient` | Autograd-backed receptive-field probes with capture-side-effect suppression. | 903 |
 | `_gradient_forward` | Saved-graph double-VJP probes for projective receptive fields. | 454 |
 | `_layer_fields` | Layer receptive-field functions reached from the records through ''_data_classes._doors.receptive_field'' (record rebuild destination; em... | 5 |
-| `_op_fields` | Op receptive-field functions reached from the records through ''_data_classes._doors.receptive_field'' (record rebuild destination; empty... | 5 |
+| `_op_fields` | Receptive and projective field views for ''Op''. | 52 |
 | `_path` | Executed-DAG endpoint resolution and directed path slicing. | 340 |
 | `_query` | Exact per-unit receptive-field queries over the captured operation DAG. | 1329 |
 | `_rules` | Extensible receptive-field operation-rule registry. | 499 |
