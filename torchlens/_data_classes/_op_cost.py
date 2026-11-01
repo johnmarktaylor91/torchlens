@@ -13,6 +13,16 @@ if TYPE_CHECKING:
     from .op import Op
 
 
+__all__ = [
+    "compute_record",
+    "macs_forward",
+    "macs_backward",
+    "flops_total",
+    "macs_total",
+    "arithmetic_intensity",
+]
+
+
 def compute_record(op: Op) -> Any | None:
     """Two-term compute record (fma_macs / other_flops), derived on read.
 

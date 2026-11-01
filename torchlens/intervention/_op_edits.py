@@ -16,6 +16,15 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 
+__all__ = [
+    "derived_grad",
+    "grad_for",
+    "do",
+    "set",
+    "attach_hooks",
+]
+
+
 def derived_grad(op: Op) -> Any | None:
     """Return this op's derived intermediate gradient payload, if available.
 

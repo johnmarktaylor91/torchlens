@@ -14,6 +14,12 @@ if TYPE_CHECKING:
     from .._data_classes.op import Op
 
 
+__all__ = [
+    "receptive_field",
+    "projective_field",
+]
+
+
 def receptive_field(op: Op) -> ReceptiveFieldView:
     """Return the lazy receptive-field query view for this Op."""
 

@@ -40,6 +40,10 @@ if TYPE_CHECKING:
     from .op import Op
     from .trace import Trace
 
+__all__ = [
+    "save_activation",
+]
+
 _DEEPCOPY_IMMUTABLE_TYPES = (
     str,
     bytes,

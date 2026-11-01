@@ -15,6 +15,21 @@ if TYPE_CHECKING:
     from .op import Op
 
 
+__all__ = [
+    "multi_output_type",
+    "atomic_module",
+    "siblings",
+    "co_parents",
+    "input_ops_by_index",
+    "buffer_source_ops_by_index",
+    "buffer_sink_ops_by_index",
+    "input_activations",
+    "input_to_modules",
+    "get_children",
+    "get_parents",
+]
+
+
 def multi_output_type(op: Op) -> type | str | None:
     """Python class of the multi-output container this Op came from.
 
