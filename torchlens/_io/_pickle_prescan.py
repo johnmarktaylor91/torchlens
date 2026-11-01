@@ -504,7 +504,7 @@ class _Walker:
                 "but no persistent_load function was specified."
             )
         elif name in ("EXT1", "EXT2", "EXT4"):
-            if arg in copyreg._inverted_registry:
+            if arg in getattr(copyreg, "_inverted_registry", {}):
                 raise StreamNeedsInterpreter("registered pickle extension code")
             raise _corrupt(f"unregistered extension code {arg!r}")
         elif name in ("NEXT_BUFFER", "READONLY_BUFFER"):
