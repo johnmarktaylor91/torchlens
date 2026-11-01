@@ -336,21 +336,21 @@ def test_empty_bundle_reads_refuse_typed_or_return_empty() -> None:
     empty = tl.Bundle()
     assert empty.ops.shared == [] and empty.ops.divergent == []
     with pytest.raises(BaselineUndeterminedError):
-        empty.delta_map("relative_l2")
+        empty._delta_map("relative_l2")
 
 
-def test_show_diff_gates_only_the_rendered_pair(tmp_path: Path, model: _TinyLM) -> None:
+def test_draw_diff_gates_only_the_rendered_pair(tmp_path: Path, model: _TinyLM) -> None:
     clean = _trace(model, [1, 2, 3])
     bundle = Bundle(
         {"clean": clean, "patched": clean.fork("patched"), "router": _trace(_Other(), [4, 5])},
         baseline="clean",
     )
-    dot = bundle.show_diff(
-        left="clean", right="patched", path=str(tmp_path / "d"), vis_save_only=True
+    dot = bundle.draw(
+        graph="diff", members=("clean", "patched"), path=str(tmp_path / "d"), open_viewer=False
     )
     assert "clean vs patched" in dot
     with pytest.raises(BundleComparisonError):
-        bundle.delta_map("relative_l2")
+        bundle._delta_map("relative_l2")
 
 
 def test_binding_descriptor_is_closed() -> None:
@@ -421,9 +421,9 @@ def test_at_on_a_member_subset_skips_a_foreign_member(model: _TinyLM) -> None:
 @pytest.mark.parametrize(
     "read",
     [
-        lambda b: b.delta_map("relative_l2"),
-        lambda b: b.norm_delta(),
-        lambda b: b.output_delta("draft"),
+        lambda b: b._delta_map("relative_l2"),
+        lambda b: b._norm_delta(),
+        lambda b: b._output_delta("draft"),
         lambda b: b.compare("draft", "critique", metric="relative_l2"),
         lambda b: b.store_comparison("relative_l2"),
     ],
@@ -441,10 +441,10 @@ def test_delta_family_refuses_unrelated_prompts(model: _TinyLM, read) -> None:
 def test_delta_family_refuses_fed_by_members_on_topology(model: _TinyLM) -> None:
     ids = [1, 2, 3, 4]
     bundle = Bundle({"draft": _trace(model, ids), "critique": _trace(model, ids)}, baseline="draft")
-    assert bundle.delta_map("relative_l2"), "same model, same input: comparable"
+    assert bundle._delta_map("relative_l2"), "same model, same input: comparable"
     bundle.relate("fed_by", "critique", "draft")
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.delta_map("relative_l2")
+        bundle._delta_map("relative_l2")
     assert _code(excinfo) == "bundle_gate_ordering_topology"
 
 
