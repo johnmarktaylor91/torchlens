@@ -29,6 +29,11 @@ from typing import Any, Literal
 
 from ..registry import BackendUnsupportedError
 
+#: Refusal code for a closure constant whose buffer tinygrad cannot read back.
+CONSTANT_UNREALIZABLE_CODE = "constant_unrealizable"
+#: Refusal code for a forward graph that still holds lazy RNG state.
+RNG_STATE_IN_GRAPH_CODE = "rng_state_in_graph"
+
 __tl_layer__ = "L2"
 
 ConstantKind = Literal["closure", "literal"]
@@ -81,7 +86,9 @@ def describe_uop(uop: Any) -> str:
     return " ".join(parts)
 
 
-def refuse_constant_unrealizable(uop: Any, cause: BaseException) -> BackendUnsupportedError:
+def refuse_constant_unrealizable(
+    uop: Any, cause: BaseException, *, code: str
+) -> BackendUnsupportedError:
     """Build the typed refusal for a payload tinygrad cannot read back.
 
     Parameters
@@ -90,6 +97,8 @@ def refuse_constant_unrealizable(uop: Any, cause: BaseException) -> BackendUnsup
         The UOp whose payload has no readable buffer.
     cause
         The tinygrad error that surfaced it (``NotImplementedError("need copyin")``).
+    code
+        The refusal code, spelled at the raise site (:data:`CONSTANT_UNREALIZABLE_CODE`).
 
     Returns
     -------
@@ -102,7 +111,7 @@ def refuse_constant_unrealizable(uop: Any, cause: BaseException) -> BackendUnsup
         f"{describe_uop(uop)}: the value has no readable buffer ({cause}). A closure "
         "constant built outside the traced callable (Tensor(ndarray) or a tinygrad.nn layer "
         "not yet realized) stays a host-side source buffer",
-        code="constant_unrealizable",
+        code=code,
         remedy="realize the constant before capture or pass it as a traced input",
         op=describe_uop(uop),
     )
@@ -131,13 +140,15 @@ def rng_state_uops(uops: Iterable[Any]) -> tuple[Any, ...]:
     return tuple(found)
 
 
-def refuse_rng_state_in_graph(uop: Any) -> BackendUnsupportedError:
+def refuse_rng_state_in_graph(uop: Any, *, code: str) -> BackendUnsupportedError:
     """Build the typed refusal for a forward graph holding lazy RNG state.
 
     Parameters
     ----------
     uop
         The first RNG-bearing UOp met in the graph.
+    code
+        The refusal code, spelled at the raise site (:data:`RNG_STATE_IN_GRAPH_CODE`).
 
     Returns
     -------
@@ -150,7 +161,7 @@ def refuse_rng_state_in_graph(uop: Any) -> BackendUnsupportedError:
         f"generator state (op {describe_uop(uop)}): a per-op realization would re-evaluate "
         "the random values, so random-init tinygrad.nn layers and in-forward Tensor.rand "
         "calls are refused until realize-once capture lands",
-        code="rng_state_in_graph",
+        code=code,
         remedy="realize random-init parameters before capture (for example by one eager forward)",
         op=describe_uop(uop),
     )

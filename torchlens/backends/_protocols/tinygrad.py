@@ -87,9 +87,11 @@ class TinygradProtocol(SpecBackedProtocol):
         try:
             return np.array(value.numpy(), copy=True)
         except NotImplementedError as error:
-            from ..tinygrad._rules import refuse_constant_unrealizable
+            from ..tinygrad._rules import CONSTANT_UNREALIZABLE_CODE, refuse_constant_unrealizable
 
-            raise refuse_constant_unrealizable(value.uop, error) from error
+            raise refuse_constant_unrealizable(
+                value.uop, error, code=CONSTANT_UNREALIZABLE_CODE
+            ) from error
 
     def validate(self, trace: Any, ground_truth: Any) -> Any:
         """Replay validation returning the stored status object, never a bool.

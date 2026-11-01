@@ -332,23 +332,33 @@ def realize_host_copy(
     except BackendUnsupportedError:
         raise
     except Exception as exc:  # noqa: BLE001 - every framework raises its own class here
-        raise _unrealizable(backend_name, op_label, consumer_label, cause=repr(exc)) from exc
+        raise _unrealizable(
+            backend_name, op_label, consumer_label, cause=repr(exc), code=CONSTANT_UNREALIZABLE_CODE
+        ) from exc
     if payload is None or not hasattr(payload, "shape"):
         raise _unrealizable(
-            backend_name, op_label, consumer_label, cause=f"host copy is {type(payload).__name__}"
+            backend_name,
+            op_label,
+            consumer_label,
+            cause=f"host copy is {type(payload).__name__}",
+            code=CONSTANT_UNREALIZABLE_CODE,
         )
     return payload
 
 
 def _unrealizable(
-    backend_name: str, op_label: str, consumer_label: str | None, *, cause: str
+    backend_name: str, op_label: str, consumer_label: str | None, *, cause: str, code: str
 ) -> BackendUnsupportedError:
-    """Build the typed refusal for a constant with no readable buffer."""
+    """Build the typed refusal for a constant with no readable buffer.
+
+    ``code`` is spelled at every raise site so the S-17 census reads the
+    refusal as coded there (it is always :data:`CONSTANT_UNREALIZABLE_CODE`).
+    """
 
     consumer = f" consumed by {consumer_label}" if consumer_label else ""
     return BackendUnsupportedError(
         f"{backend_name} backend cannot read the buffer of constant {op_label}{consumer}: {cause}",
-        code=CONSTANT_UNREALIZABLE_CODE,
+        code=code,
         remedy="realize the constant on the host before the forward, or pass it as an input",
         backend=backend_name,
         op_label=op_label,
@@ -557,5 +567,9 @@ def _audit_closure_constant(
             None,
         )
         raise _unrealizable(
-            backend_name, label_raw, consumer, cause="recorded with neither payload nor shape"
+            backend_name,
+            label_raw,
+            consumer,
+            cause="recorded with neither payload nor shape",
+            code=CONSTANT_UNREALIZABLE_CODE,
         )

@@ -75,7 +75,9 @@ from .._options import (
 from .._validation_shared import float_replay_tolerances_for_dtype_name, scalar_replay_close
 from ._rules import (
     CONSTANT_KIND_ANNOTATION,
+    CONSTANT_UNREALIZABLE_CODE,
     PER_UOP_PAYLOAD_POLICY,
+    RNG_STATE_IN_GRAPH_CODE,
     ReplayVerdict,
     constant_func_name,
     constant_kind_for_uop,
@@ -819,7 +821,7 @@ class TinygradBackend:
         # state (FORKS F-K interim; realize-once capture lifts this).
         rng_uops = rng_state_uops(uops)
         if rng_uops:
-            raise refuse_rng_state_in_graph(rng_uops[0])
+            raise refuse_rng_state_in_graph(rng_uops[0], code=RNG_STATE_IN_GRAPH_CODE)
         for uop in uops:
             if id(uop) in uop_labels or not _is_materializable_uop(uop):
                 continue
@@ -1688,7 +1690,7 @@ class TinygradBackend:
             # ``need copyin``: a host-side source buffer (closure constant) that
             # the forward never realized; refuse typed instead of crashing (F2).
             raise refuse_constant_unrealizable(
-                uop if uop is not None else value.uop, error
+                uop if uop is not None else value.uop, error, code=CONSTANT_UNREALIZABLE_CODE
             ) from error
 
     def _assert_runtime_supported(self) -> None:
