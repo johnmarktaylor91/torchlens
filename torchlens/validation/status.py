@@ -357,13 +357,11 @@ class ValidationStatus:
                     if num_pure_unverified_ops or num_effect_region_ops
                     else "region_not_per_op_replayable"
                 ),
-                message=(
-                    "Replay validation partially verified this trace: "
-                    f"{num_replayed_ops} nodes replayed, "
-                    f"{num_pure_unverified_ops} pure nodes unverified, "
-                    f"{num_effect_region_ops} effect regions unverified, "
-                    f"{num_unverified_ops} legacy regions unverified, "
-                    "0 failures."
+                message=_partial_replay_message(
+                    num_replayed_ops,
+                    num_pure_unverified_ops,
+                    num_effect_region_ops,
+                    num_unverified_ops,
                 ),
                 num_replayed_ops=num_replayed_ops,
                 num_unverified_ops=total_unverified_count,
@@ -585,6 +583,24 @@ __all__ = [
     "has_importer_region_provenance",
     "is_region_replay_annotation",
 ]
+
+
+def _partial_replay_message(
+    num_replayed_ops: int,
+    num_pure_unverified_ops: int,
+    num_effect_region_ops: int,
+    num_unverified_ops: int,
+) -> str:
+    """Message for a trace that replayed some nodes but left regions unverified."""
+
+    return (
+        "Replay validation partially verified this trace: "
+        f"{num_replayed_ops} nodes replayed, "
+        f"{num_pure_unverified_ops} pure nodes unverified, "
+        f"{num_effect_region_ops} effect regions unverified, "
+        f"{num_unverified_ops} legacy regions unverified, "
+        "0 failures."
+    )
 
 
 def _failed_replay_message(decisions: Sequence[Mapping[str, Any]] | None) -> str:
