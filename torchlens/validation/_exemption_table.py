@@ -85,7 +85,7 @@ def declared_custom_check_symbols() -> dict[str, str]:
     return custom_check_symbols(EXEMPTION_TABLE)
 
 
-def exemption_row(name: str) -> ExemptionRow:
-    """Return the row declaring an op spelling or reason code."""
+def exemption_row(name: str, kind: str | None = None) -> ExemptionRow:
+    """Return the row declaring an op spelling or reason code, optionally by kind."""
 
-    return row_for(EXEMPTION_TABLE, name)
+    return row_for(EXEMPTION_TABLE, name, kind)

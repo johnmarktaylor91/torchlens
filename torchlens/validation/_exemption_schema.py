@@ -141,16 +141,20 @@ def custom_check_symbols(table: tuple[ExemptionRow, ...]) -> dict[str, str]:
     }
 
 
-def row_for(table: tuple[ExemptionRow, ...], name: str) -> ExemptionRow:
+def row_for(table: tuple[ExemptionRow, ...], name: str, kind: str | None = None) -> ExemptionRow:
     """Return the row declaring ``name`` (an op spelling or a reason code).
+
+    A spelling may be declared under two kinds (``new`` is both an
+    uninitialized-by-design skip and a structural template), so ``kind``
+    selects among them; without it the first declaring row in table order wins.
 
     Raises
     ------
     KeyError
-        When no row declares ``name``.
+        When no row declares ``name`` (under ``kind`` when given).
     """
 
     for row in table:
-        if name in row.names:
+        if name in row.names and (kind is None or row.kind == kind):
             return row
-    raise KeyError(name)
+    raise KeyError(name if kind is None else f"{kind}:{name}")

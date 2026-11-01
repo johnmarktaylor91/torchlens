@@ -60,12 +60,12 @@ _THIS_FILE = "tests/test_validation_exemption_table.py::"
 # the table must declare it. Removing a table row removes the live member.
 # ---------------------------------------------------------------------------
 _SKIP_VALIDATION_MEMBERS: tuple[str, ...] = (
-    "empty",
     "empty_like",
+    "new",
     "new_empty",
-    "empty_strided",
     "new_empty_strided",
-    "resize_",
+    "newempty",
+    "newemptystrided",
 )
 _SKIP_PERTURBATION_MEMBERS: tuple[str, ...] = (
     "new_zeros",
@@ -79,13 +79,11 @@ _SKIP_PERTURBATION_MEMBERS: tuple[str, ...] = (
 )
 _STRUCTURAL_MEMBERS: dict[str, frozenset[int]] = {
     "new": frozenset({0}),
-    "new_tensor": frozenset({0}),
-    "newtensor": frozenset({0}),
-    "new_full": frozenset({0}),
+    "copy_": frozenset({0}),
+    "_foreach_copy_": frozenset({0}),
+    "foreachcopy": frozenset({0}),
     "fill_": frozenset({0}),
-    "full_like": frozenset({0}),
-    "to": frozenset({1}),
-    "type_as": frozenset({1}),
+    "set_": frozenset({0}),
     "expand_as": frozenset({1}),
     "expandas": frozenset({1}),
     "reshape_as": frozenset({1}),
@@ -95,13 +93,15 @@ _STRUCTURAL_MEMBERS: dict[str, frozenset[int]] = {
     "resize_as_": frozenset({1}),
     "_pack_padded_sequence": frozenset({1}),
     "_pad_packed_sequence": frozenset({1}),
-    "_foreach_copy_": frozenset({0}),
-    "_foreach_zero_": frozenset({0}),
-    "_foreach_mul_": frozenset({0}),
-    "_foreach_add_": frozenset({0}),
-    "_foreach_sub_": frozenset({0}),
-    "_foreach_div_": frozenset({0}),
-    "_foreach_addcmul_": frozenset({0}),
+    "type_as": frozenset({1}),
+    "new_tensor": frozenset({0}),
+    "newtensor": frozenset({0}),
+    "new_full": frozenset({0}),
+    "newfull": frozenset({0}),
+    "new_zeros": frozenset({0}),
+    "newzeros": frozenset({0}),
+    "new_ones": frozenset({0}),
+    "newones": frozenset({0}),
     "nms": frozenset({0}),
     "deform_conv2d": frozenset({1}),
     "roi_align": frozenset({1}),
@@ -112,7 +112,7 @@ _STRUCTURAL_MEMBERS: dict[str, frozenset[int]] = {
 _KWARG_ALIAS_MEMBERS: dict[str, dict[int, frozenset[str]]] = {
     "_pack_padded_sequence": {1: frozenset({"lengths"})},
     "_pad_packed_sequence": {1: frozenset({"lengths"})},
-    "type_as": {1: frozenset({"tensor", "other"})},
+    "type_as": {1: frozenset({"other", "tensor"})},
     "reshape_as": {1: frozenset({"other"})},
     "reshapeas": {1: frozenset({"other"})},
     "view_as": {1: frozenset({"other"})},
@@ -163,13 +163,13 @@ _MEMBER_CASES: tuple[str, ...] = (
 # appear without being declared here, and closing one must remove it here.
 _DECLARED_NEGATIVE_GAPS: frozenset[str] = frozenset(
     {
-        *_SKIP_PERTURBATION_MEMBERS,
-        "nms",
-        "deform_conv2d",
-        "roi_align",
-        "roi_pool",
-        "ps_roi_align",
-        "ps_roi_pool",
+        *(f"skip_perturbation:{name}" for name in _SKIP_PERTURBATION_MEMBERS),
+        "structural_position:nms",
+        "structural_position:deform_conv2d",
+        "structural_position:roi_align",
+        "structural_position:roi_pool",
+        "structural_position:ps_roi_align",
+        "structural_position:ps_roi_pool",
     }
 )
 
@@ -183,7 +183,7 @@ def test_registry_member_is_declared(case: str) -> None:
     """Each registry member pinned at consolidation is live and table-declared."""
 
     kind, _, name = case.partition(":")
-    row = exemption_row(name)
+    row = exemption_row(name, kind)
     assert row.kind == kind
     if kind == "skip_validation":
         assert ex.SKIP_VALIDATION_ENTIRELY[name] == row.reason
@@ -228,22 +228,27 @@ def test_registries_are_derived_from_the_table_only() -> None:
 
 
 def test_table_rows_are_unique_and_well_formed() -> None:
-    """Names are unique across the table and every row carries its proof fields."""
+    """Names are unique within a kind and every row carries its proof fields.
 
-    seen: set[str] = set()
+    A spelling may appear under two kinds (``new`` is both uninitialized-by-design
+    and a structural template; ``new_zeros`` skips perturbation and is structural):
+    the registries are disjoint by kind, so uniqueness is per kind.
+    """
+
+    seen: set[tuple[str, str]] = set()
     for row in EXEMPTION_TABLE:
         assert row.kind in REGISTRY_KINDS | DECISION_KINDS
         assert row.admits.strip() and row.reason.strip()
         assert ":" in row.guard
         assert "::" in row.removal_test
         for name in row.names:
-            assert name not in seen, name
-            seen.add(name)
+            assert (row.kind, name) not in seen, (row.kind, name)
+            seen.add((row.kind, name))
         if row.kind == "structural_position":
             assert row.positions
         else:
             assert not row.positions and not row.kwarg_aliases
-    gaps = {row.name for row in EXEMPTION_TABLE if row.negative_test is None}
+    gaps = {_row_ids(row) for row in EXEMPTION_TABLE if row.negative_test is None}
     assert gaps == _DECLARED_NEGATIVE_GAPS
 
 

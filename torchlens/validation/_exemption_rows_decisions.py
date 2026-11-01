@@ -69,7 +69,7 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         "uninitialized_by_design",
         "early_exit",
         _C1,
-        _EX + "uninitialized_by_design_applies",
+        _EX + "SKIP_VALIDATION_ENTIRELY",
         "an op in the skip_validation rows whose saved output is uninitialized memory; a "
         "value-bearing overload of the same spelling is not exempt",
         _HARDENING + "test_empty_like_is_justified_exempted_not_unverified",
@@ -186,7 +186,7 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         _STRUCTURAL_OUT,
         "the template tensor (arg 1 or other=) of a type-casting op; only its dtype and "
         "device flow into the output, a perturbed data source is not exempt",
-        "tests/test_validation_registry_ledger.py::test_every_structural_position_has_a_proof",
+        _HARDENING + "test_to_tensor_template_exemption_refuses_perturbed_data_source",
         _HARDENING + "test_to_tensor_template_exemption_refuses_perturbed_data_source",
     ),
     _decision(
@@ -490,8 +490,9 @@ _TOLERANCE_ROWS: tuple[ExemptionRow, ...] = (
         "torchlens._utils.tensor_utils:param_grad_tolerances_for_dtype",
         "backward replay compares parameter and layer gradients under the dtype-derived "
         "PARAM_GRAD_VALIDATION and LAYER_GRAD_VALIDATION pairs when no override is given",
-        "tests/test_grad_tolerance_dtype_tripwire.py::test_fp32_rows_are_the_pinned_defaults",
-        "tests/test_grad_tolerance_dtype_tripwire.py::test_every_row_respects_the_eps_floor",
+        "tests/test_grad_tolerance_dtype_tripwire.py::test_fp32_rows_are_exactly_the_legacy_constants",
+        "tests/test_grad_tolerance_dtype_tripwire.py::"
+        "test_fp64_corruption_masked_by_legacy_constants_now_fails",
     ),
     _decision(
         "replay_warnings_ignored",
