@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1340 modules, 624388 lines, 0 modules without a docstring.
+84 packages, 1341 modules, 624718 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -62,7 +62,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 98 | 51418 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8013 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 7995 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 25 | 8325 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3824 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2017 |
@@ -1338,30 +1338,31 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2700 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (24 modules, 7995 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (25 modules, 8325 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 1993 |
-| `_aligned_sites` | Cross-member site pairing for Bundle site reads. | 85 |
+| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 1509 |
+| `_aligned_sites` | Cross-member site pairing for Bundle site reads. | 110 |
 | `_alternatives` | ''Bundle.add_alternative'': merge a steered re-run of the user's harness. | 357 |
 | `_bytes` | Bundle-level retained-bytes aggregation + retention preflight ( item 5c). | 120 |
+| `_card` | Bundle card and outcome fold: ''repr'', ''str'' and the derived outcome of a ''Bundle''. | 87 |
 | `_compare_gate` | The Bundle comparison gate: two predicates, operand-scoped, topology-aware. | 382 |
-| `_comparisons` | Named per-node comparison fields stored on a bundle's supergraph. | 140 |
+| `_comparisons` | Named per-node comparison fields stored on a bundle's supergraph. | 320 |
 | `_deltas` | Member-pairwise delta and comparison helpers for :class:'Bundle'. | 538 |
 | `_draw` | The one ''Bundle.draw'' door: the bundle graph and the member diff picture. | 103 |
 | `_fed_by` | The ''fed_by'' relation kind: content provenance between two traced calls. | 531 |
 | `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 198 |
 | `_lineage` | Bundle lineage: bundle_id, member-construction anchors, BundleOperation rows. | 488 |
-| `_lookup` | Bundle member lookup functions moved off ''Bundle'' (record rebuild destination; empty until its bodies move in). | 5 |
+| `_lookup` | Bundle site lookup: ''at'', the cached supergraph and structural consistency. | 37 |
 | `_measure` | ''Bundle.measure_members'': recompute a metric over the members that still exist. | 95 |
-| `_members` | Member-list coercion behind ''Bundle'' construction, ''add'' and ''remove''. | 187 |
-| `_operations` | Bundle member operation functions moved off ''Bundle'' (record rebuild destination; empty until its bodies move in). | 5 |
+| `_members` | Member-list coercion behind ''Bundle'' construction, ''add'' and ''remove''. | 438 |
+| `_operations` | Bundle member operations: ''do'', ''fork'', ''run'', ''map'', ''show'', the chronology ledger and the effect table. | 155 |
 | `_outcome_fold` | Derived worst-of-members capture-outcome fold for ''Bundle'' (foldB ). | 102 |
 | `_provenance` | The provenance join: ''bundle.why'' / ''bundle.provenance'' ( item 4). | 411 |
-| `_relation_carriage` | Relation-carriage method bodies for ''Bundle'' (C07X, foldB ). | 315 |
+| `_relation_carriage` | Relation-carriage method bodies for ''Bundle'' (C07X, foldB ). | 381 |
 | `_relations` | Bundle member-relation table (grammar v2): typed, closed, OPTIONAL relations. | 780 |
-| `_save` | Bundle save functions moved off ''Bundle'' (record rebuild destination; empty until its bodies move in). | 5 |
+| `_save` | Bundle save: the one deferred ''_io'' door the bundle package keeps. | 28 |
 | `_selected_by` | The ''selected_by'' relation kind: a control decision between two traced calls. | 93 |
 | `_token_divergence` | ''Bundle.token_divergence'': where two runs of one call part, by exact token ids. | 223 |
 | `_token_spans` | Automatic ''fed_by'' span finding and the strict token-pair read. | 564 |
