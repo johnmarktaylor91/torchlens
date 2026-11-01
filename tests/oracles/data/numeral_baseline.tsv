@@ -1130,7 +1130,7 @@ docs-md	docs/maintainers/where.md	1324
 docs-md	docs/maintainers/where.md	1329
 docs-md	docs/maintainers/where.md	133
 docs-md	docs/maintainers/where.md	134
-docs-md	docs/maintainers/where.md	1340
+docs-md	docs/maintainers/where.md	1341
 docs-md	docs/maintainers/where.md	1342
 docs-md	docs/maintainers/where.md	135
 docs-md	docs/maintainers/where.md	136
@@ -1245,7 +1245,6 @@ docs-md	docs/maintainers/where.md	1896
 docs-md	docs/maintainers/where.md	19
 docs-md	docs/maintainers/where.md	190
 docs-md	docs/maintainers/where.md	1900
-docs-md	docs/maintainers/where.md	1905
 docs-md	docs/maintainers/where.md	192
 docs-md	docs/maintainers/where.md	193
 docs-md	docs/maintainers/where.md	1935
@@ -1300,6 +1299,7 @@ docs-md	docs/maintainers/where.md	22
 docs-md	docs/maintainers/where.md	220
 docs-md	docs/maintainers/where.md	221
 docs-md	docs/maintainers/where.md	2214
+docs-md	docs/maintainers/where.md	222
 docs-md	docs/maintainers/where.md	223
 docs-md	docs/maintainers/where.md	2235
 docs-md	docs/maintainers/where.md	224
@@ -1426,7 +1426,6 @@ docs-md	docs/maintainers/where.md	314
 docs-md	docs/maintainers/where.md	31452
 docs-md	docs/maintainers/where.md	315
 docs-md	docs/maintainers/where.md	317
-docs-md	docs/maintainers/where.md	31773
 docs-md	docs/maintainers/where.md	318
 docs-md	docs/maintainers/where.md	319
 docs-md	docs/maintainers/where.md	32
@@ -1440,6 +1439,7 @@ docs-md	docs/maintainers/where.md	329
 docs-md	docs/maintainers/where.md	33
 docs-md	docs/maintainers/where.md	330
 docs-md	docs/maintainers/where.md	332
+docs-md	docs/maintainers/where.md	33296
 docs-md	docs/maintainers/where.md	333
 docs-md	docs/maintainers/where.md	334
 docs-md	docs/maintainers/where.md	335
@@ -1484,6 +1484,7 @@ docs-md	docs/maintainers/where.md	372
 docs-md	docs/maintainers/where.md	374
 docs-md	docs/maintainers/where.md	375
 docs-md	docs/maintainers/where.md	376
+docs-md	docs/maintainers/where.md	37677
 docs-md	docs/maintainers/where.md	3772
 docs-md	docs/maintainers/where.md	378
 docs-md	docs/maintainers/where.md	379
@@ -1716,6 +1717,7 @@ docs-md	docs/maintainers/where.md	621
 docs-md	docs/maintainers/where.md	624
 docs-md	docs/maintainers/where.md	624895
 docs-md	docs/maintainers/where.md	624849
+docs-md	docs/maintainers/where.md	624828
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
@@ -1869,6 +1871,7 @@ docs-md	docs/maintainers/where.md	885
 docs-md	docs/maintainers/where.md	888
 docs-md	docs/maintainers/where.md	89
 docs-md	docs/maintainers/where.md	890
+docs-md	docs/maintainers/where.md	894
 docs-md	docs/maintainers/where.md	895
 docs-md	docs/maintainers/where.md	896
 docs-md	docs/maintainers/where.md	90
@@ -3998,13 +4001,6 @@ package-docstrings	torchlens/_data_classes/_trace_groups_capture.py	11
 package-docstrings	torchlens/_data_classes/_trace_groups_capture.py	12
 package-docstrings	torchlens/_data_classes/_trace_intervention.py	11
 package-docstrings	torchlens/_data_classes/_trace_intervention.py	13
-package-docstrings	torchlens/_data_classes/_trace_intervention.py	17,
-package-docstrings	torchlens/_data_classes/_trace_intervention.py	2026
-package-docstrings	torchlens/_data_classes/_trace_intervention.py	33
-package-docstrings	torchlens/_data_classes/_trace_intervention.py	33,
-package-docstrings	torchlens/_data_classes/_trace_intervention.py	34
-package-docstrings	torchlens/_data_classes/_trace_intervention.py	41
-package-docstrings	torchlens/_data_classes/_trace_intervention.py	42
 package-docstrings	torchlens/_data_classes/_trace_intervention.py	44
 package-docstrings	torchlens/_data_classes/_trace_intervention.py	60
 package-docstrings	torchlens/_data_classes/_trace_narrate.py	28,
@@ -6279,6 +6275,13 @@ package-docstrings	torchlens/intervention/_subspace_projection.py	256,
 package-docstrings	torchlens/intervention/_subspace_projection.py	64
 package-docstrings	torchlens/intervention/_subspace_spec.py	256
 package-docstrings	torchlens/intervention/_subspace_spec.py	64
+package-docstrings	torchlens/intervention/_trace_edits.py	34
+package-docstrings	torchlens/intervention/_trace_edits.py	41
+package-docstrings	torchlens/intervention/_trace_edits.py	42
+package-docstrings	torchlens/intervention/_trace_selection_edits.py	17,
+package-docstrings	torchlens/intervention/_trace_selection_edits.py	2026
+package-docstrings	torchlens/intervention/_trace_selection_edits.py	33
+package-docstrings	torchlens/intervention/_trace_selection_edits.py	33,
 package-docstrings	torchlens/intervention/audit.py	12
 package-docstrings	torchlens/intervention/audit.py	17
 package-docstrings	torchlens/intervention/binding.py	12

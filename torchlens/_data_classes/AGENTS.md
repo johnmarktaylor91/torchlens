@@ -41,7 +41,9 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `trace.py` | `Trace`, conditional event records, save/load/intervention/summary helpers |
 | `_trace_accessors.py` | Trace-level typed accessor construction |
 | `_trace_export.py` | Thin `Trace` export methods (`to_pandas`, `decode_output`, `output_table`, `to_agent_json`); bodies live in `export/_trace_tables.py` and `report/_agent_json.py` |
-| `_trace_intervention.py` | Trace intervention surface; fork dispatch, replay, and rerun helpers |
+| `_trace_intervention.py` | Trace intervention mixin: thin shell of the intervention verbs; bodies live in `intervention/_trace_edits.py`, `intervention/_trace_selection_edits.py`, `intervention/_trace_hooks.py` (via `_doors`), `_trace_intervention_records.py` and `_fork_lineage.py` |
+| `_trace_intervention_records.py` | Intervention spec state and history records of a `Trace` (record rebuild destination) |
+| `_fork_lineage.py` | Fork lineage functions: fork verb, fork naming, owner-ref rebinding (record rebuild destination) |
 | `_trace_fork.py` | M11 copy-on-write fork builder (COW shells over `OpStoreView`s) |
 | `_compaction.py` | Freeze-seam Op metadata pooling (M11 fold) + M14 duplicate/empty container-cell pooling (`PooledCell`, hydrate-on-read) + singleton label-list compaction (bare str + identity-gated store registry, kind tables only) |
 | `_layer_spec.py` | `_LAYER_MIRROR_SPEC` and the Layer mirror-field spec (split out of `layer.py`) |
