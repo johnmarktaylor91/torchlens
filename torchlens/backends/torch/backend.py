@@ -329,14 +329,13 @@ class TorchBackend:
         if not input_kwargs:
             input_kwargs = {}
 
-        # Detect device from first param or buffer. A model with NO parameters
-        # and NO buffers pins no device: eager execution runs each op on its
-        # operands' devices, so the inputs must stay exactly where the caller
-        # put them (``None`` = no move). The historical ``"cpu"`` fallback
-        # silently dragged CUDA inputs to the CPU and computed the whole
-        # forward there -- first observed on real H200 hardware when the
-        # CUPTI correlation matrix came back empty because the "CUDA" capture
-        # had launched zero kernels.
+        # Detect device from first param or buffer. A model with NO parameters and
+        # NO buffers pins no device: eager execution runs each op on its operands'
+        # devices, so the inputs must stay exactly where the caller put them
+        # (``None`` = no move). The historical ``"cpu"`` fallback silently dragged
+        # CUDA inputs to the CPU and computed the whole forward there -- first seen
+        # on real H200 hardware when the CUPTI correlation matrix came back empty
+        # because the "CUDA" capture had launched zero kernels.
         # Meta state never pins a device either: offload-hooked models
         # (accelerate device_map / cpu/disk offload, lane F37) hold meta
         # params between forwards, the hooks place inputs on the real

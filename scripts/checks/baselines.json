@@ -12,5 +12,7 @@
     "finding": 815,
     "sprint_feature": 1980,
     "memo_item": 2848
-  }
+  },
+  "in_function_internal_imports": 2721,
+  "largest_scc": 498
 }
