@@ -84,49 +84,7 @@ def _clear_session_tensor_metadata(
     if isinstance(value, (str, bytes, int, float, bool)):
         return
     if isinstance(value, ModuleType):
-        # r81 (r80 F1 root B): a stamped tensor stashed as a DIRECT attribute of
-        # a ``types.ModuleType`` escaped the belt entirely (this walk returned
-        # immediately for modules). r33/r83: a stamp nested inside a plain
-        # CONTAINER in the module namespace escaped the shallow sweep too and
-        # laundered provenance across sessions, so namespace containers now get
-        # a dedicated PURE container-tree descent (tensors + plain containers
-        # only). The descent deliberately never enters objects or nested
-        # modules: this walk reaches broadly-imported modules (``torch``,
-        # ``math``) through model-owned helper objects, and generic recursion
-        # from a module namespace would explode through ``sys.modules`` into
-        # every imported module in the process. Object stashes inside module
-        # namespaces stay covered by the session identity belt, which never
-        # trusts an unregistered stamp anyway.
-        obj_id = id(value)
-        if obj_id in seen or depth >= 12:
-            return
-        seen.add(obj_id)
-        namespace = getattr(value, "__dict__", None)
-        if isinstance(namespace, dict):
-            # No slot memo (r8 b4 R39, sol probe): the memo invalidated on
-            # ``len(namespace)`` only, so REPLACING a value at a constant
-            # length (``mod.stash = 5`` becoming ``mod.stash = tensor``) kept
-            # the stale slot list and the stamped tensor escaped the session
-            # clear -- provenance laundering across sessions. No cheaper
-            # invalidation is sound: detecting a new tensor/container slot
-            # requires type-inspecting every item, which IS the rebuild, so
-            # the filter runs fresh each walk (one isinstance pass per
-            # reachable module namespace per session end).
-            slot_names = tuple(
-                name
-                for name, item in namespace.items()
-                if not _is_isinstance_hostile_deprecation_shim(item)
-                and isinstance(
-                    item,
-                    (torch.Tensor, dict, list, tuple, set, frozenset, deque),
-                )
-            )
-            for name in slot_names:
-                item = namespace.get(name)
-                if isinstance(item, torch.Tensor) and not isinstance(item, torch.nn.Parameter):
-                    action(item)
-                elif isinstance(item, (dict, list, tuple, set, frozenset, deque)):
-                    _clear_container_tree_tensor_metadata(item, seen, depth + 1, visit)
+        _clear_module_namespace_tensor_metadata(value, seen, depth, action, visit)
         return
     if isinstance(value, torch.Tensor):
         if not isinstance(value, torch.nn.Parameter):
@@ -136,6 +94,71 @@ def _clear_session_tensor_metadata(
     if obj_id in seen or depth >= 12:
         return
     seen.add(obj_id)
+    _clear_reachable_tensor_metadata(value, seen, depth, visit)
+
+
+def _clear_module_namespace_tensor_metadata(
+    value: ModuleType,
+    seen: set[int],
+    depth: int,
+    action: Callable[[torch.Tensor], None],
+    visit: Callable[[torch.Tensor], None] | None,
+) -> None:
+    """Clear stamps on tensors and plain containers stored directly in a module namespace."""
+
+    # r81 (r80 F1 root B): a stamped tensor stashed as a DIRECT attribute of
+    # a ``types.ModuleType`` escaped the belt entirely (this walk returned
+    # immediately for modules). r33/r83: a stamp nested inside a plain
+    # CONTAINER in the module namespace escaped the shallow sweep too and
+    # laundered provenance across sessions, so namespace containers now get
+    # a dedicated PURE container-tree descent (tensors + plain containers
+    # only). The descent deliberately never enters objects or nested
+    # modules: this walk reaches broadly-imported modules (``torch``,
+    # ``math``) through model-owned helper objects, and generic recursion
+    # from a module namespace would explode through ``sys.modules`` into
+    # every imported module in the process. Object stashes inside module
+    # namespaces stay covered by the session identity belt, which never
+    # trusts an unregistered stamp anyway.
+    obj_id = id(value)
+    if obj_id in seen or depth >= 12:
+        return
+    seen.add(obj_id)
+    namespace = getattr(value, "__dict__", None)
+    if isinstance(namespace, dict):
+        # No slot memo (r8 b4 R39, sol probe): the memo invalidated on
+        # ``len(namespace)`` only, so REPLACING a value at a constant
+        # length (``mod.stash = 5`` becoming ``mod.stash = tensor``) kept
+        # the stale slot list and the stamped tensor escaped the session
+        # clear -- provenance laundering across sessions. No cheaper
+        # invalidation is sound: detecting a new tensor/container slot
+        # requires type-inspecting every item, which IS the rebuild, so
+        # the filter runs fresh each walk (one isinstance pass per
+        # reachable module namespace per session end).
+        slot_names = tuple(
+            name
+            for name, item in namespace.items()
+            if not _is_isinstance_hostile_deprecation_shim(item)
+            and isinstance(
+                item,
+                (torch.Tensor, dict, list, tuple, set, frozenset, deque),
+            )
+        )
+        for name in slot_names:
+            item = namespace.get(name)
+            if isinstance(item, torch.Tensor) and not isinstance(item, torch.nn.Parameter):
+                action(item)
+            elif isinstance(item, (dict, list, tuple, set, frozenset, deque)):
+                _clear_container_tree_tensor_metadata(item, seen, depth + 1, visit)
+
+
+def _clear_reachable_tensor_metadata(
+    value: Any,
+    seen: set[int],
+    depth: int,
+    visit: Callable[[torch.Tensor], None] | None,
+) -> None:
+    """Recurse into the children of a container or plain object, skipping scalar leaves."""
+
     # Scalar leaves cannot carry tl_* stamps; skipping them INLINE (instead of
     # paying a full call that immediately returns) halves the cost of walking
     # broadly-imported module namespaces like ``torch`` (round-3 b4 F1: the
@@ -226,6 +249,42 @@ def _clear_container_tree_tensor_metadata(
         _clear_container_tree_tensor_metadata(item, seen, depth + 1, visit)
 
 
+def _forward_wrapper_chain(raw_callable: Any) -> list[Any]:
+    """Follow TorchLens forward wrappers inward, returning every link ending at user code."""
+
+    chain: list[Any] = []
+    chain_ids: set[int] = set()
+    current = raw_callable
+    while current is not None and id(current) not in chain_ids:
+        chain_ids.add(id(current))
+        chain.append(current)
+        if not is_forward_call_decorated(current):
+            break
+        wrapped = getattr(current, "__wrapped__", None)
+        current = None if wrapped is None else getattr(wrapped, "__func__", wrapped)
+    return chain
+
+
+def _clear_callable_link_tensor_metadata(
+    link: Any,
+    seen: set[int],
+    visit: Callable[[torch.Tensor], None] | None,
+) -> None:
+    """Sweep one callable's defaults, keyword defaults and closure cells."""
+
+    defaults = getattr(link, "__defaults__", None) or ()
+    _clear_session_tensor_metadata(defaults, seen, visit=visit)
+    kwdefaults = getattr(link, "__kwdefaults__", None) or {}
+    _clear_session_tensor_metadata(kwdefaults, seen, visit=visit)
+    closure = getattr(link, "__closure__", None) or ()
+    for cell in closure:
+        try:
+            cell_value = cell.cell_contents
+        except ValueError:
+            continue
+        _clear_session_tensor_metadata(cell_value, seen, visit=visit)
+
+
 def _clear_callable_session_tensor_metadata(
     callable_obj: Any,
     seen: set[int],
@@ -261,30 +320,9 @@ def _clear_callable_session_tensor_metadata(
         Mutates reachable tensor metadata in place.
     """
 
-    raw_callable = getattr(callable_obj, "__func__", callable_obj)
-    chain: list[Any] = []
-    chain_ids: set[int] = set()
-    current = raw_callable
-    while current is not None and id(current) not in chain_ids:
-        chain_ids.add(id(current))
-        chain.append(current)
-        if not is_forward_call_decorated(current):
-            break
-        wrapped = getattr(current, "__wrapped__", None)
-        current = None if wrapped is None else getattr(wrapped, "__func__", wrapped)
-
+    chain = _forward_wrapper_chain(getattr(callable_obj, "__func__", callable_obj))
     for link in chain:
-        defaults = getattr(link, "__defaults__", None) or ()
-        _clear_session_tensor_metadata(defaults, seen, visit=visit)
-        kwdefaults = getattr(link, "__kwdefaults__", None) or {}
-        _clear_session_tensor_metadata(kwdefaults, seen, visit=visit)
-        closure = getattr(link, "__closure__", None) or ()
-        for cell in closure:
-            try:
-                cell_value = cell.cell_contents
-            except ValueError:
-                continue
-            _clear_session_tensor_metadata(cell_value, seen, visit=visit)
+        _clear_callable_link_tensor_metadata(link, seen, visit)
 
     user_callable = chain[-1]
     globals_dict = getattr(user_callable, "__globals__", None)
