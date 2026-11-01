@@ -323,6 +323,10 @@ test = [
     # Unlocks the init_empty_weights() and device_map="meta" on-ramp rows
     # (tests importorskip so absence stays green).
     "accelerate>=1.0",
+    # Notebook execution (scripts/run_notebooks.py, the nightly `notebooks` leg):
+    # nbclient drives a kernel per user notebook; ipykernel is that kernel.
+    "nbclient>=0.10,<1",
+    "ipykernel>=6.29,<8",
 ]
 
 # The console-script spelling beside the shipped
