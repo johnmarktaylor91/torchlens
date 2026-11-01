@@ -6,7 +6,7 @@ import time
 import warnings
 import weakref
 from collections import Counter
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -1523,11 +1523,22 @@ def _reconcile_rerun_hook_fires(
             "at plan time"
         )
 
+        reason_fields = _unfired_non_tensor_reason(new_log, hook_plan, unfired)
+        if reason_fields:
+            message = (
+                f"{message}. Reason ({reason_fields['reason']}): {reason_fields['reason_detail']}"
+            )
+
         def _warn() -> None:
             """Emit the coded ``rerun_zero_fire`` warning under ``on_zero_fire='warn'``."""
 
             warnings.warn(
-                TorchLensWarning(message, code="rerun_zero_fire", unfired_plan_ids=list(unfired)),
+                TorchLensWarning(
+                    message,
+                    code="rerun_zero_fire",
+                    unfired_plan_ids=list(unfired),
+                    **reason_fields,
+                ),
                 stacklevel=external_stacklevel(),
             )
 
@@ -1537,6 +1548,22 @@ def _reconcile_rerun_hook_fires(
             raise_error=lambda: raise_rerun_zero_fire(message, list(unfired)),
         )
     return total_fired, tuple(unfired)
+
+
+def _unfired_non_tensor_reason(
+    new_log: Trace, hook_plan: Sequence[Any], unfired: Sequence[str]
+) -> dict[str, Any]:
+    """Zero-fire ``reason`` fields for unfired module entries whose output is not a tensor."""
+
+    from ._zero_fire import non_tensor_reason_fields, recorded_non_tensor_details
+
+    unfired_ids = set(unfired)
+    targets = {
+        str(getattr(getattr(entry, "site_target", None), "selector_value", ""))
+        for entry in hook_plan
+        if _hook_plan_identifier(entry) in unfired_ids
+    }
+    return non_tensor_reason_fields(recorded_non_tensor_details(new_log, targets))
 
 
 def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:

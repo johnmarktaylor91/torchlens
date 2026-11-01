@@ -431,3 +431,56 @@ def test_standard_family_losslessness_table(name: str, factory: Any, lossless: b
     _assert_same_distribution(rebuilt, live)
     sample = live.sample()
     assert torch.equal(rebuilt.log_prob(sample), live.log_prob(sample))
+
+
+def _zero_fire_warnings(caught: list[warnings.WarningMessage], code: str) -> list[Any]:
+    from torchlens.errors import TorchLensWarning
+
+    return [
+        w.message
+        for w in caught
+        if isinstance(w.message, TorchLensWarning) and w.message.fields.get("code") == code
+    ]
+
+
+def _policy_rule() -> Any:
+    return tl.when(tl.module("policy"), tl.zero_ablate())
+
+
+def test_capture_door_zero_fire_names_the_distribution_output() -> None:
+    """``tl.trace(intervene=)`` on a module returning a Normal: zero fire, with the reason."""
+
+    from torchlens.intervention._zero_fire import NON_TENSOR_MODULE_OUTPUT_REASON
+
+    model = PolicyWithInnerDistribution().eval()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        tl.trace(model, _x(), intervene=_policy_rule())
+    (warning,) = _zero_fire_warnings(caught, "trace_zero_fire")
+    assert warning.fields["reason"] == NON_TENSOR_MODULE_OUTPUT_REASON
+    detail = warning.fields["reason_detail"]
+    assert "module 'policy' output is a Normal, not a tensor" in detail
+    assert "(output paths .loc, .scale)" in detail
+    assert detail in str(warning)
+
+
+def test_rerun_doors_zero_fire_name_the_distribution_output() -> None:
+    """The capture-engine rerun warns with the reason; the fast rerun refuses with it."""
+
+    from torchlens.errors import RunCapabilityUnavailableError
+    from torchlens.intervention._zero_fire import NON_TENSOR_MODULE_OUTPUT_REASON
+
+    model = PolicyWithInnerDistribution().eval()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, _x(), intervene=_policy_rule())
+    with pytest.raises(RunCapabilityUnavailableError) as refused:
+        trace.run(inputs=_x() + 1, fast=True)
+    assert refused.value.fields.get("reason") == NON_TENSOR_MODULE_OUTPUT_REASON
+    assert "(output paths .loc, .scale)" in str(refused.value)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace.run(model, _x() + 1)
+    (warning,) = _zero_fire_warnings(caught, "rerun_zero_fire")
+    assert warning.fields["reason"] == NON_TENSOR_MODULE_OUTPUT_REASON
+    assert "module 'policy' output is a Normal" in warning.fields["reason_detail"]

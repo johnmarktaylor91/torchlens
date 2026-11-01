@@ -556,6 +556,7 @@ def _warn_zero_match_capture_selectors(
                 f"Capture-time intervention selector {intervene_selector!r} matched zero sites; "
                 "no intervention fired.",
                 selector=repr(intervene_selector),
+                **_non_tensor_zero_fire_fields(trace, intervene_selector),
             )
         if isinstance(halt_selector, BaseSelector) and not getattr(trace, "is_stopped", False):
             _record_unmatched("halt", halt_selector)
@@ -590,6 +591,22 @@ def _warn_zero_match_capture_selectors(
         trace.__dict__.pop("_tl_save_selector_fire_count", None)
         if not defer_backward_intervention:
             trace.__dict__.pop("_tl_intervene_selector_fire_count", None)
+
+
+def _non_tensor_zero_fire_fields(trace: Any, selector: Any) -> dict[str, Any]:
+    """Zero-fire ``reason`` fields for targeted modules whose output was not a tensor.
+
+    Only a plain ``tl.module`` union names its modules exactly; any other selector
+    keeps the generic zero-fire message.
+    """
+
+    from ...intervention._zero_fire import non_tensor_reason_fields, recorded_non_tensor_details
+    from ..predicates import _plain_module_union
+
+    addresses = _plain_module_union(selector)
+    if not addresses:
+        return {}
+    return non_tensor_reason_fields(recorded_non_tensor_details(trace, addresses))
 
 
 def _refuse_predicate_shapes(args: _DoorArgs) -> None:

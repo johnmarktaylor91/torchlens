@@ -23,19 +23,23 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Literal, NoReturn
+from typing import Any, Final, Literal, NoReturn
 
 from .._errors import InvalidArgumentError, TorchLensWarning
 
 __all__ = (
     "DEFAULT_ZERO_FIRE_POLICY",
+    "NON_TENSOR_MODULE_OUTPUT_REASON",
     "ZERO_FIRE_POLICIES",
     "ZeroFirePolicy",
     "zero_fire_policy_scope",
     "check_zero_fire_policy",
     "current_zero_fire_policy",
     "external_stacklevel",
+    "non_tensor_module_output_detail",
+    "non_tensor_reason_fields",
     "raise_rerun_zero_fire",
+    "recorded_non_tensor_details",
     "settle_capture_zero_fire",
     "settle_zero_fire",
 )
@@ -49,6 +53,109 @@ ZERO_FIRE_POLICIES: tuple[str, ...] = ("warn", "error", "disclose")
 DEFAULT_ZERO_FIRE_POLICY: ZeroFirePolicy = "warn"
 
 _TORCHLENS_ROOT = Path(__file__).resolve().parents[1]
+
+#: ``reason`` field of a zero-fire warning whose target module returned something
+#: other than a tensor, so a module-output rule had no tensor to apply to
+#: (DOCUMENTED-UNSTABLE spelling).
+NON_TENSOR_MODULE_OUTPUT_REASON: Final = "module_output_not_tensor"
+
+
+#: Recorded module-output container kinds the module-boundary door descends into
+#: (``_module_boundary._iter_tensor_outputs``); any other recorded kind gives a
+#: module-output rule no tensor to apply to.
+_BOUNDARY_WALKED_KINDS: Final = frozenset(
+    {"tuple", "list", "dict", "namedtuple", "hf_model_output"}
+)
+
+
+def non_tensor_module_output_detail(address: str, kind: str, paths: tuple[str, ...]) -> str:
+    """Say why a rule on module ``address`` could not fire on its non-tensor output.
+
+    Parameters
+    ----------
+    address:
+        Module address the rule targeted.
+    kind:
+        The output's type name (``Normal``).
+    paths:
+        Output paths capture recorded as their own ops (``.loc``, ``.scale``), if any.
+
+    Returns
+    -------
+    str
+        One sentence naming the output type and what to target instead.
+    """
+
+    if paths:
+        return (
+            f"module {address!r} output is a {kind}, not a tensor; target its parameter "
+            f"ops instead (output paths {', '.join(paths)})"
+        )
+    return (
+        f"module {address!r} output is a {kind}, not a tensor; target the ops that "
+        "produce its tensors instead"
+    )
+
+
+def recorded_non_tensor_details(trace: Any, addresses: Any) -> list[str]:
+    """Return one detail per targeted module whose recorded output was not a tensor.
+
+    Reads each module's recorded ``output_structure``: a ``torch.distributions``
+    output (kind ``distribution``) names its parameter paths; another kind the
+    module-boundary door cannot descend into (a dataclass, an opaque object) names
+    its type.
+
+    Parameters
+    ----------
+    trace:
+        The finished capture.
+    addresses:
+        Module addresses (optionally pass-qualified) the rule targeted.
+
+    Returns
+    -------
+    list[str]
+        Sentences from :func:`non_tensor_module_output_detail`, in target order.
+    """
+
+    from .._ir.distribution_container import DISTRIBUTION_CONTAINER_KIND
+
+    modules = getattr(trace, "modules", None)
+    details: list[str] = []
+    for target in sorted({str(address).rsplit(":", 1)[0] for address in addresses or ()}):
+        if modules is None or target not in modules:
+            continue
+        spec = getattr(modules[target], "output_structure", None)
+        kind = getattr(spec, "kind", None)
+        if spec is None or kind in _BOUNDARY_WALKED_KINDS or kind == "literal":
+            continue
+        paths: tuple[str, ...] = ()
+        if kind == DISTRIBUTION_CONTAINER_KIND:
+            paths = tuple(f".{name}" for name in getattr(spec, "fields", ()))
+        details.append(
+            non_tensor_module_output_detail(target, str(spec.type_qualname or kind), paths)
+        )
+    return details
+
+
+def non_tensor_reason_fields(details: Any) -> dict[str, Any]:
+    """Return the zero-fire ``reason`` fields for recorded non-tensor module outputs.
+
+    Parameters
+    ----------
+    details:
+        Sentences from :func:`non_tensor_module_output_detail` (may be empty).
+
+    Returns
+    -------
+    dict[str, Any]
+        ``{"reason": ..., "reason_detail": ...}``, or ``{}`` when nothing was recorded.
+    """
+
+    details = [str(detail) for detail in details or ()]
+    if not details:
+        return {}
+    return {"reason": NON_TENSOR_MODULE_OUTPUT_REASON, "reason_detail": "; ".join(details)}
 
 
 def external_stacklevel() -> int:
@@ -172,6 +279,10 @@ def settle_capture_zero_fire(message: str, **fields: Any) -> None:
     SiteResolutionError
         ``trace_zero_fire`` under ``tl.trace(..., on_zero_fire="error")``.
     """
+
+    detail = fields.get("reason_detail")
+    if detail:
+        message = f"{message} Reason ({fields.get('reason')}): {detail}."
 
     def _warn() -> None:
         """Emit the coded ``trace_zero_fire`` warning under ``on_zero_fire='warn'``."""

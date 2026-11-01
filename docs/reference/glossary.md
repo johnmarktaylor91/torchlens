@@ -544,7 +544,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `rerun_zero_fire`), `"error"` raises the door's typed refusal with that code, and
   `"disclose"` records only. Any other value refuses `zero_fire_policy_invalid`. A rerun edit
   that cannot fire live (`rerun_selector_unmatchable_live`) is refused before the policy runs,
-  whatever the knob says.
+  whatever the knob says. When the rule targeted a module (a plain `tl.module` union at
+  `tl.trace(intervene=)`, a module entry at a rerun) whose recorded output is not a tensor, the
+  warning, the refusal and the fast rerun's `fast_rerun_graph_unsteered` refusal carry
+  `fields["reason"] == "module_output_not_tensor"` and a `reason_detail` sentence naming the
+  output type and, for a `torch.distributions` output, the parameter output paths to target
+  instead (`module 'policy' output is a Normal, not a tensor; target its parameter ops instead
+  (output paths .loc, .scale)`).
 
 **Bound intervention executor** *(spelling documented-unstable)*
 : `spec.bind(model)` pairs a `tl.Recipe` with a base model as a capture-free callable and
