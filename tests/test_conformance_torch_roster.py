@@ -3,20 +3,23 @@
 The roster's oracles (op inventories derived from each model definition and
 NumPy-computed intermediates) are accepted only when torch passes them, so
 these tests drive every config-built row through the torch protocol object.
-Two rows expose torch behaviour the shared rules name: a closure constant
-(torch records no source op for it today, and validation fails on the
-unattributed argument) and a forward that draws randomness (torch capture is
-RNG-neutral by design). Those rows are pinned as they behave, never skipped.
+Two rows exercise the shared rules: a closure constant (torch records it as a
+``constant`` source op with a saved payload, SPEC section 2) and a forward
+that draws randomness (torch capture is RNG-neutral by design). Those rows are
+pinned as they behave, never skipped.
 """
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import numpy as np
 import pytest
 import torch
 
+import torchlens as tl
+from torchlens._state import pause_logging
 from torchlens.backends.registry import BackendUnsupportedError, get_backend_spec
 from torchlens.conformance._cases import _captured_op_kinds
 from torchlens.conformance._rosters import torch as torch_roster
@@ -26,7 +29,7 @@ from torchlens.validation.status import ValidationStatus
 ROWS = {row.family: row for row in torch_roster.config_built_roster()}
 CLOSURE_ROW = "closure_constant"
 RANDOM_ROW = "random_forward"
-REPLAYABLE_ROWS = sorted(set(ROWS) - {CLOSURE_ROW, RANDOM_ROW})
+REPLAYABLE_ROWS = sorted(set(ROWS) - {RANDOM_ROW})
 
 
 def _protocol() -> Any:
@@ -92,33 +95,74 @@ def test_row_inventory_intermediates_and_validation(family: str) -> None:
     assert status.state == "passed", status.message
 
 
-def test_closure_constant_gap_fails_validation_by_name() -> None:
-    """Torch records no source op for a closure tensor; the tripwire names it.
+def _constant_ops(trace: Any) -> list[Any]:
+    return [op for op in trace.layer_list if str(op.func_name) == "constant"]
 
-    SPEC section 2 expects a ``constant`` source op. Until torch records one,
-    the inventory misses it and validation fails with
-    ``unattributed_tensor_args`` on the consuming op; when torch gains the
-    rule, this test flips and is updated with that change.
+
+def test_closure_constant_is_a_constant_source_op_and_validates() -> None:
+    """A closure tensor is a parentless ``constant`` source op the consumer lists as parent.
+
+    SPEC section 2 rule 1: no provenance warning, the saved payload is the
+    closure's value, the consuming ``matmul`` names it as a parent, and replay
+    validation passes with nothing failed.
     """
 
-    with pytest.warns(UserWarning, match=UNATTRIBUTED_WARNING):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
         trace, reference, protocol, _model = _capture_row(CLOSURE_ROW)
-    kinds = _captured_op_kinds(trace)
-    assert "constant" not in kinds and kinds != ROWS[CLOSURE_ROW].expected_op_kinds
+    assert _captured_op_kinds(trace) == ROWS[CLOSURE_ROW].expected_op_kinds
+    (constant,) = _constant_ops(trace)
+    assert tuple(constant.parents or ()) == ()
+    assert constant.is_internal_source and not constant.is_buffer and not constant.is_input
+    assert constant.layer_label.startswith("constant_")
+    np.testing.assert_array_equal(constant.out.detach().numpy(), torch_roster.W44)
+    (matmul,) = [op for op in trace.layer_list if str(op.func_name) == "matmul"]
+    assert constant.layer_label in {str(parent).split(":")[0] for parent in matmul.parents}
+    assert not tuple(matmul.unattributed_tensor_args or ())
     status = protocol.validate(trace, reference)
-    assert status.state == "failed"
-    failed = [d for d in status.decisions if d.get("decision") == "failed"]
-    assert [(d["func_name"], d["reason"]) for d in failed] == [
-        ("matmul", "unattributed_tensor_args")
-    ]
+    assert status.state == "passed", status.message
+    assert not [d for d in status.decisions if d.get("decision") == "failed"]
+
+
+def test_closure_constant_payload_obeys_save() -> None:
+    """SPEC 2 rule 5: ``save=`` filters a constant's payload like any activation."""
+
+    model, example = ROWS[CLOSURE_ROW].builder()
+    kept = tl.trace(model, example, save=tl.func("constant"))
+    (constant,) = _constant_ops(kept)
+    assert constant.has_saved_activation
+    dropped = tl.trace(model, example, save=tl.func("matmul"))
+    (constant,) = _constant_ops(dropped)
+    assert not constant.has_saved_activation and constant.out is None
+
+
+def test_closure_constant_needs_a_pre_forward_tensor() -> None:
+    """A tensor first built mid-forward and smuggled in untagged is no constant.
+
+    The narrow rule: only the exact object the pre-forward snapshot pinned,
+    reachable only from a forward callable, becomes a ``constant``; a tensor
+    the forward stores in a global and reads back is a capture gap and still
+    fails validation by name.
+    """
+
+    holder: dict[str, torch.Tensor] = {}
+
+    class _Smuggles(torch.nn.Module):
+        def forward(self, v: torch.Tensor) -> torch.Tensor:
+            with pause_logging():
+                holder["t"] = v * 3.0
+            return torch.relu(v + holder["t"])
+
+    with pytest.warns(UserWarning, match=UNATTRIBUTED_WARNING):
+        trace = tl.trace(_Smuggles(), torch.randn(2, 4))
+    assert not _constant_ops(trace)
 
 
 def test_literal_producers_are_parentless_ops() -> None:
     """Torch records ``ones`` and ``full`` as ops with no parents (rule 2's shape)."""
 
     ones_trace, _reference, _protocol, _model = _capture_row("reshape_transpose")
-    with pytest.warns(UserWarning, match=UNATTRIBUTED_WARNING):
-        closure_trace, _reference, _protocol, _model = _capture_row(CLOSURE_ROW)
+    closure_trace, _reference, _protocol, _model = _capture_row(CLOSURE_ROW)
     for trace, kind in ((ones_trace, "ones"), (closure_trace, "full")):
         producers = [op for op in trace.layer_list if str(op.func_name) == kind]
         assert len(producers) == 1 and not tuple(producers[0].parents or ())

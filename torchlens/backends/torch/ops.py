@@ -198,7 +198,7 @@ from .aliasing import (
 )
 from .buffer_writes import resolve_registered_buffer_address, session_validated_buffer_address
 from .completeness_witness import internal_scalar_read, record_alias_mutation_candidate
-from .sources import log_source_tensor
+from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import (
     _add_tensor_backward_hook,
     _append_module_suffix_to_equivalence_class,

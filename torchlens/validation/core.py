@@ -635,6 +635,22 @@ def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
     return ValidationCheckResult.failed_result("dispatch_op_count_mismatch")
 
 
+def _is_closure_constant_source(layer: Any) -> bool:
+    """Return whether ``layer`` is a closure-constant source op (no callable by design).
+
+    A ``constant`` op is a graph source whose value is its saved payload
+    (SPEC 2 rule 1): parentless, an internal source, no recorded call. An op
+    named ``constant`` with parents or a call id is not one.
+    """
+
+    return (
+        getattr(layer, "func_name", None) == "constant"
+        and bool(getattr(layer, "is_internal_source", False))
+        and not tuple(getattr(layer, "parents", ()) or ())
+        and getattr(layer, "func_call_id", None) is None
+    )
+
+
 def _raise_if_portable_bundle_log(self: Any) -> None:
     """Reject validation only when loaded logs lack replay callables.
 
@@ -657,6 +673,7 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
         for layer in getattr(self, "layer_list", [])
         if getattr(layer, "func", None) is None
         and getattr(layer, "func_name", "none") not in {"none", "input", "output", "buffer"}
+        and not _is_closure_constant_source(layer)
     ]
     if unresolved:
         from .._io import ArtifactError
