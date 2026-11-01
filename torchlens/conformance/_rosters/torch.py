@@ -22,7 +22,6 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Callable
-from dataclasses import fields
 from typing import Any
 
 import numpy as np
@@ -425,19 +424,6 @@ _ECOSYSTEM: tuple[tuple[str, Callable[[], tuple[Any, Any]], str], ...] = (
 
 
 # ------------------------------------------------------------------ assembly
-#: RosterModel fields the suite-completion packet adds; dropped only while the
-#: dataclass does not declare them yet.
-_SUITE_V2_FIELDS = frozenset({"expected_intermediates", "has_constants", "random_init", "group"})
-
-
-def _row(**values: Any) -> RosterModel:
-    declared = {field.name for field in fields(RosterModel)}
-    unknown = set(values) - declared - _SUITE_V2_FIELDS
-    if unknown:
-        raise TypeError(f"unknown RosterModel fields {sorted(unknown)}")
-    return RosterModel(**{key: value for key, value in values.items() if key in declared})
-
-
 def ecosystem_enabled() -> bool:
     """Whether the ecosystem rows are switched on in this environment."""
 
@@ -449,7 +435,7 @@ def config_built_roster() -> tuple[RosterModel, ...]:
 
     expected = _expected_intermediates()
     return tuple(
-        _row(
+        RosterModel(
             family=family,
             realism="config_built",
             builder=builder,
@@ -467,7 +453,7 @@ def ecosystem_roster() -> tuple[RosterModel, ...]:
     """Torch's pinned pretrained rows (need weights; see :data:`ECOSYSTEM_ENV`)."""
 
     return tuple(
-        _row(
+        RosterModel(
             family=family,
             realism="pretrained",
             builder=builder,

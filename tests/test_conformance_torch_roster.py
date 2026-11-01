@@ -46,21 +46,22 @@ def test_roster_has_the_probe_rows_and_the_two_rule_rows() -> None:
     rows = torch_roster.config_built_roster()
     assert len(rows) >= 8
     assert len({row.family for row in rows}) == len(rows)
-    assert all(row.realism == "config_built" and row.expected_op_kinds for row in rows)
-    flags = {family: (const, rand) for family, _b, _o, const, rand in torch_roster._CONFIG_BUILT}
+    assert all(row.group == "config_built" and row.expected_op_kinds for row in rows)
+    flags = {row.family: (row.has_constants, row.random_init) for row in rows}
     assert flags[CLOSURE_ROW] == (True, False)
     assert flags[RANDOM_ROW] == (False, True)
+    assert sum(bool(row.expected_intermediates) for row in rows) >= 8
 
 
 def test_ecosystem_rows_need_the_switch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pretrained rows join only under the ecosystem switch, with checkpoint evidence."""
 
     monkeypatch.delenv(torch_roster.ECOSYSTEM_ENV, raising=False)
-    assert all(row.realism == "config_built" for row in torch_roster.roster())
+    assert all(row.group == "config_built" for row in torch_roster.roster())
     monkeypatch.setenv(torch_roster.ECOSYSTEM_ENV, "1")
     pretrained = [row for row in torch_roster.roster() if row.realism == "pretrained"]
     assert len({row.family for row in pretrained}) >= 2
-    assert all(row.checkpoint_evidence for row in pretrained)
+    assert all(row.checkpoint_evidence and row.group == "ecosystem" for row in pretrained)
 
 
 @pytest.mark.parametrize("family", REPLAYABLE_ROWS)
@@ -69,8 +70,7 @@ def test_row_inventory_intermediates_and_validation(family: str) -> None:
 
     trace, reference, protocol = _capture_row(family)
     assert _captured_op_kinds(trace) == ROWS[family].expected_op_kinds
-    expected = torch_roster._expected_intermediates().get(family, {})
-    for kind, want in expected.items():
+    for kind, want in (ROWS[family].expected_intermediates or {}).items():
         ops = [op for op in trace.layer_list if str(op.func_name) == kind]
         wants = want if isinstance(want, list) else [want]
         assert len(ops) == len(wants), kind
