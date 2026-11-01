@@ -1137,7 +1137,7 @@ def test_in_window_captured_tensor_op_ceilings_even_when_unused(tmp_path: Path) 
     to the owner-thread census) will not later escape unwitnessed, so consumption is the
     fail-closed trigger -- the contract's former "tensor-only helper work whose result never
     escapes remains outside this ceiling" exemption is DELETED. (An OWN-tensor unused op stays
-    VERIFIED; that is pinned in ``test_tlspec_runnable_r45_crossthread_provenance.py``.)"""
+    VERIFIED.)"""
 
     class _ThreadCapturedTensorOp(nn.Module):
         def __init__(self) -> None:

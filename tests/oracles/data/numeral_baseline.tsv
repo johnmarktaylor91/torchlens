@@ -7401,9 +7401,6 @@ test-docstrings	tests/test_collapse_power_perf.py	16
 test-docstrings	tests/test_collapse_power_perf.py	201
 test-docstrings	tests/test_collapse_power_perf.py	24,165
 test-docstrings	tests/test_collapse_power_tokens.py	10
-test-docstrings	tests/test_collapse_rolled_svg.py	21
-test-docstrings	tests/test_collapse_rolled_svg.py	25
-test-docstrings	tests/test_collapse_rolled_svg.py	27
 test-docstrings	tests/test_collapse_rolling_suffix_linearity.py	19
 test-docstrings	tests/test_compat_report.py	13
 test-docstrings	tests/test_compat_report.py	16,
@@ -7980,7 +7977,6 @@ test-docstrings	tests/test_ledger_exp_head_oracle.py	12
 test-docstrings	tests/test_ledger_exp_head_oracle.py	36
 test-docstrings	tests/test_ledger_exp_ledger.py	11
 test-docstrings	tests/test_leverage_div_honesty.py	16
-test-docstrings	tests/test_leverage_div_join_neighbourhood.py	18
 test-docstrings	tests/test_lit_bridge_contract.py	10
 test-docstrings	tests/test_lit_bridge_contract.py	12
 test-docstrings	tests/test_lit_bridge_matrix.py	24
@@ -8424,9 +8420,6 @@ test-docstrings	tests/test_r36_cuda_hygiene.py	13
 test-docstrings	tests/test_r36_cuda_hygiene.py	36
 test-docstrings	tests/test_r36_tensor_method_smuggling.py	256
 test-docstrings	tests/test_r39_callable_invoke_denylist.py	39
-test-docstrings	tests/test_r41_gate_completeness.py	39
-test-docstrings	tests/test_r41_gate_completeness.py	40
-test-docstrings	tests/test_r41_gate_completeness.py	41
 test-docstrings	tests/test_r43_gate_inversion.py	43
 test-docstrings	tests/test_r45_property_classification.py	1_1
 test-docstrings	tests/test_r45_property_classification.py	2.7.1
@@ -9674,7 +9667,6 @@ test-names	tests/test_large_graphs.py	250
 test-names	tests/test_large_graphs.py	50
 test-names	tests/test_layer_grad_oracle.py	50
 test-names	tests/test_layer_grad_oracle.py	50_
-test-names	tests/test_leverage_div_join_neighbourhood.py	18_
 test-names	tests/test_load_refuses_saved_by_2x.py	2_16_
 test-names	tests/test_lovely_containers_reprs.py	10_
 test-names	tests/test_merged_engine.py	10
@@ -9731,7 +9723,6 @@ test-names	tests/test_r25_container_final.py	27_
 test-names	tests/test_r25_container_final.py	562_
 test-names	tests/test_r36_tensor_method_smuggling.py	36_
 test-names	tests/test_r39_callable_invoke_denylist.py	39_
-test-names	tests/test_r41_gate_completeness.py	40_
 test-names	tests/test_r45_property_classification.py	45_
 test-names	tests/test_r45_torch_symbol_decode.py	49_
 test-names	tests/test_r8_operator_gate_rce.py	32_
@@ -9827,7 +9818,6 @@ test-names	tests/test_tlspec_runnable_r65_state_metadata_parity.py	67_
 test-names	tests/test_tlspec_runnable_r65_state_metadata_parity.py	69_
 test-names	tests/test_tlspec_runnable_r65_torch_rng.py	67_
 test-names	tests/test_tlspec_runnable_r65_walker_parity.py	64_
-test-names	tests/test_tlspec_runnable_r67_defensive_clone_context.py	67_
 test-names	tests/test_tlspec_runnable_r67_input_structure.py	67_
 test-names	tests/test_tlspec_runnable_r67_input_structure.py	69_
 test-names	tests/test_tlspec_runnable_r67_input_structure.py	71
