@@ -6,8 +6,8 @@ import pytest
 
 from torchlens._data_classes import _labels
 
-# Smoke carries four items (the tier is near its size ceiling): two sweeps over the whole
-# vocabulary and the two table tests. The parametrised cases below run in the mid backstop.
+# No smoke mark: the smoke tier sits at its size ceiling (tests/conftest.py), so this module
+# runs in the mid backstop and in the targeted gates; two sweeps cover the whole vocabulary.
 
 OP_LABELS = [
     "conv2d_1_5:2",
@@ -89,8 +89,7 @@ def test_final_labels_are_not_raw(label: object) -> None:
     assert not _labels.is_raw(label)
 
 
-@pytest.mark.smoke
-def test_smoke_pass_qualified_vocabulary_round_trips() -> None:
+def test_pass_qualified_vocabulary_round_trips() -> None:
     for op_label, layer_label in zip(OP_LABELS, LAYER_LABELS, strict=True):
         assert _labels.is_pass_qualified(op_label), op_label
         assert not _labels.is_pass_qualified(layer_label), layer_label
@@ -100,8 +99,7 @@ def test_smoke_pass_qualified_vocabulary_round_trips() -> None:
         assert _labels.split_pass(layer_label) == (layer_label, None)
 
 
-@pytest.mark.smoke
-def test_smoke_short_forms_and_raw_suffix() -> None:
+def test_short_forms_and_raw_suffix() -> None:
     assert _labels.strip_step_index("conv2d_1_5") == "conv2d_1"
     assert _labels.strip_step_index("input_1") == "input_1"
     assert _labels.short_op_label("conv2d_1_5:2") == "conv2d_1:2"
@@ -129,7 +127,6 @@ class _TraceWithTables:
         }
 
 
-@pytest.mark.smoke
 def test_raw_to_final_tables_round_trip() -> None:
     trace = _TraceWithTables()
     assert _labels.raw_to_final_op(trace, "relu_1_2_raw") == "relu_1_2:1"  # type: ignore[arg-type]
@@ -141,7 +138,6 @@ def test_raw_to_final_tables_round_trip() -> None:
         assert _labels.final_to_raw_layer(trace, final) == raw  # type: ignore[arg-type]
 
 
-@pytest.mark.smoke
 def test_unknown_labels_resolve_to_none() -> None:
     trace = _TraceWithTables()
     assert _labels.raw_to_final_op(trace, "missing_raw") is None  # type: ignore[arg-type]
