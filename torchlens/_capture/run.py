@@ -40,22 +40,17 @@ from ..backends.registry import (
 from ..recording._halt import StopSignal
 from .outcome import (
     CapturePhase,
-    count_committed_ops,
     demote_outcome,
     safe_exception_str,
     set_capture_phase,
-    settle_completed,
-    settle_failed,
-    settle_halted,
 )
 from .session import (
-    CaptureSession,
     attach_capture_events_session,
     attach_legacy_capture_session,
     detach_capture_session,
 )
-from .stages import InternalCaptureConfig
-from .stop import StopDirective, cleared_inference_only_directive
+from .stages import CaptureRequest, ForwardArm, ForwardResult, InternalCaptureConfig
+from .stop import StopDirective
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -86,14 +81,13 @@ from ._input_records import (
     _register_model_input_container_snapshots,
 )
 from ._run_state import _attach_note, _RunState
-from .finalize.settle import (
-    _drop_semantic_output_transients,
-    _extract_and_mark_outputs,
-    _finalize_halted_trace,
-    _publish_streamed_bundle_at_settlement,
-    _scrub_failed_capture_transients,
-    _settle_interrupted_halted_arm,
+from .finalize.arms import (
+    finalize_completed,
+    finalize_failed,
+    finalize_halted,
+    finalize_interrupted,
 )
+from .finalize.settle import _drop_semantic_output_transients
 
 _ACTIVE_CAPTURE_BACKEND: CaptureBackend | None = None
 
@@ -559,282 +553,65 @@ def _run_forward(self: "Trace", run: _RunState) -> Any:
         return _run_exhaustive_forward(self, run)
 
 
-def _refuse_swallowed_stop(self: "Trace") -> None:
-    """Fail a forward that returned normally after a stop signal was raised (F6).
+def _forward_result(
+    self: "Trace",
+    run: _RunState,
+    arm: ForwardArm,
+    *,
+    raw_output: Any = None,
+    exc: BaseException | None = None,
+) -> ForwardResult:
+    """Bundle the forward's live state into the FINALIZE hand-off record.
 
-    The stop-request latch set on a normal return means user code swallowed
-    the control signal (halt or nonfinite abort) in a broad except. The
-    capture must never be blessed COMPLETE; the typed error settles FAILED
-    through the normal failure arm. Covers tl.trace and every Recorder pass.
+    Every arm after the forward is one FINALIZE entry; RUN holds the forward
+    state (``_RunState``) and FINALIZE the arm order, so the record is built
+    here and read there (``finalize_completed`` raises the swallowed-stop
+    error into the failed arm, exactly as the inline check did).
     """
 
-    swallowed_stop = self.__dict__.get("_stop_requested")
-    if swallowed_stop is None:
-        return
-    from .outcome import StopSignalSwallowedError
-
-    raise StopSignalSwallowedError(
-        "TorchLens raised a "
-        f"{'halt' if swallowed_stop.kind == 'halt' else 'non-finite abort'} "
-        "stop signal during this forward, but the forward returned "
-        "normally: user code swallowed the control signal (typically a "
-        "broad `except:` or `except BaseException:` around the model "
-        "body). The capture cannot be trusted as complete. Stop "
-        f"boundary: {swallowed_stop.boundary_label or swallowed_stop.reason!r}.",
-        kind=swallowed_stop.kind,
-        boundary_label=swallowed_stop.boundary_label,
-    )
-
-
-def _finalize_forward_outputs(self: "Trace", run: _RunState, outputs: Any) -> None:
-    """Close the forward phase: reconcile the session and decode the outputs."""
-
-    _refuse_swallowed_stop(self)
-    # an implied inference_only holds only if the forward discarded its graph.
-    cleared = cleared_inference_only_directive(self._stop_directive, outputs)
-    if cleared is not None:  # before settlement stamps the flag on the outcome
-        self.inference_only, self._stop_directive = False, cleared
-    set_capture_phase(self, CapturePhase.FINALIZE)
-    from .._data_classes._nonfinite import drain_pending_nonfinite
-    from .._utils.tensor_utils import synchronize_pending_cpu_async_copies
-
-    # Fence every cpu_async D2H copy recorded this forward BEFORE any
-    # host-side consumer (finalize, postprocess digests, ``op.out``,
-    # ``Trace.save`` serialization) can observe partial bytes (R36-1).
-    synchronize_pending_cpu_async_copies()
-    # Settle deferred track_nonfinite device flags here, after the forward
-    # is complete, so the record costs one batch of scalar reads instead of
-    # a per-op device synchronization (the flags' kernels are long done).
-    drain_pending_nonfinite(self)
-    run.backend.finalize_forward_session(self, self._raw_graph_ws)
-
-    output_transform = getattr(self, "_output_transform", None)
-    self.raw_output = output_transform(outputs) if output_transform is not None else None
-    from .._autoroute._builtin_output import decode_outputs_for_trace
-
-    decode_outputs_for_trace(self, outputs)
-    # Tight window on the normal arm: drop immediately after the only
-    # consumer. The outer ``finally`` repeats this for the arms that never
-    # reach here (halt, failure, interrupt); see B1-02.
-    _drop_semantic_output_transients(self)
-
-    self.forward_duration = Duration(time.time() - self.capture_start_time - self.setup_duration)
-    _vprint(
-        self,
-        f"Forward pass complete ({self.forward_duration:.2f s}, "
-        f"{len(self.capture_events.op_events)} raw operations)",
+    return ForwardResult(
+        trace=self,
+        request=CaptureRequest(
+            model=cast(nn.Module, run.model),
+            input_args=run.input_args,
+            input_kwargs=run.input_kwargs,
+            postprocess=run.postprocess,
+            reservation_resume=run.reservation_resume,
+        ),
+        arm=arm,
+        raw_output=raw_output,
+        session=run.capture_session,
+        exc=exc,
+        backend=run.backend,
+        model=run.model,
+        input_tensors=tuple(run.input_tensors or ()),
+        input_args=run.input_args,
+        input_kwargs=run.input_kwargs,
     )
 
 
 def _completed_arm(self: "Trace", run: _RunState, outputs: Any) -> Any:
-    """Finish a forward pass that returned: outputs, cleanup, postprocess, settlement.
+    """Finish a forward pass that returned: outputs, cleanup, postprocess, settlement."""
 
-    Output tensors are extracted and marked BEFORE ``cleanup_model_session``
-    strips TorchLens tensor metadata from every model-owned tensor (buffers
-    included); extracting afterward would let output attribution race against
-    that wipe. The recorder (``postprocess=False``) reads the scratch results
-    back off the trace and pops them immediately.
-    """
-
-    _finalize_forward_outputs(self, run, outputs)
-    output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, outputs, run.backend)
-    capture_session = cast(CaptureSession, run.capture_session)
-    if not run.postprocess:
-        self._fastlog_output_tensors = list(output_tensors)
-        self._fastlog_output_tensor_addresses = output_tensor_addresses
-        capture_session.snapshot_recording_projection(
-            self,
-            output_tensors=list(output_tensors),
-            output_tensor_addresses=output_tensor_addresses,
-        )
-        self._fastlog_captured_run_core = capture_session.seal()
-        self.__dict__.pop("_output_attribution_input_tensors", None)
-        run.backend.cleanup_model_session(self, run.cleanup_payload())
-        self.capture_end_time = time.time()
-        self.__dict__.pop("_capture_producer_policy", None)
-        settle_completed(self, capture_session)
-        return outputs
-
-    self.__dict__.pop("_output_attribution_input_tensors", None)
-    run.backend.cleanup_model_session(self, run.cleanup_payload())
-    _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")
-    set_capture_phase(self, CapturePhase.POSTPROCESS)
-    self._postprocess(output_tensors, output_tensor_addresses)
-    self.__dict__.pop("_capture_producer_policy", None)
-    settle_completed(self, capture_session)
-    _publish_streamed_bundle_at_settlement(self)
-    return outputs
-
-
-def _halted_partial_trace(self: "Trace", run: _RunState, halt_exc: StopSignal) -> Any:
-    """Materialize the partial trace of a halt and settle HALTED; return its output."""
-
-    try:
-        halted_output = _finalize_halted_trace(
-            self, run.backend, halt_exc, run.model, run.input_tensors or [], run.postprocess
-        )
-    except Exception as secondary_exc:
-        # Halted-finalization secondary failure: the capture settles FAILED
-        # (FINALIZE or POSTPROCESS per the finalizer's phase markers) with a
-        # mandatory disclosure note; the secondary exception propagates with
-        # the HaltSignal chained, exactly as before settlement existed.
-        self.__dict__.pop("_capture_producer_policy", None)
-        settle_failed(
-            self,
-            run.capture_session,
-            secondary_exc,
-            note=(f"halted finalization failed after halt at {getattr(halt_exc, 'reason', '')!r}"),
-        )
-        _scrub_failed_capture_transients(self)
-        raise
-    except BaseException as halt_interrupt_exc:
-        # Halted-arm interrupt: ``except Exception`` cannot see a
-        # KeyboardInterrupt/SystemExit, which used to escape with NO
-        # settlement stamp. Stamp FAILED/interrupted like the outer arm.
-        self.__dict__.pop("_capture_producer_policy", None)
-        _settle_interrupted_halted_arm(self, run.capture_session, halt_interrupt_exc, halt_exc)
-        raise
-    self.__dict__.pop("_capture_producer_policy", None)
-    settle_halted(
-        self, run.capture_session, halt_exc, finalize_partial=True, postprocess_ran=run.postprocess
-    )
-    _publish_streamed_bundle_at_settlement(self)
-    return halted_output
-
-
-def _halted_seal_and_cleanup(self: "Trace", run: _RunState, halt_exc: StopSignal) -> None:
-    """Seal the recorder projection and tear the stopped session down."""
-
-    capture_session = run.capture_session
-    try:
-        # Same double-fault fence as the failed-forward arm: a raising seal
-        # must not skip the model-session teardown.
-        try:
-            if capture_session is not None and not run.postprocess:
-                capture_session.snapshot_recording_projection(self)
-                self._fastlog_captured_run_core = capture_session.seal()
-        finally:
-            run.backend.cleanup_stopped_forward_session(self, run.cleanup_payload())
-    except Exception as secondary_exc:
-        self.__dict__.pop("_capture_producer_policy", None)
-        settle_failed(
-            self,
-            capture_session,
-            secondary_exc,
-            note=(f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"),
-        )
-        _scrub_failed_capture_transients(self)
-        raise
-    except BaseException as halt_interrupt_exc:
-        # Same halted-arm interrupt stamp as the finalize path: the
-        # seal/cleanup seam's ``except Exception`` cannot see an interrupt,
-        # which used to escape unsettled.
-        self.__dict__.pop("_capture_producer_policy", None)
-        _settle_interrupted_halted_arm(self, run.capture_session, halt_interrupt_exc, halt_exc)
-        raise
-    self.__dict__.pop("_capture_producer_policy", None)
-    settle_halted(self, capture_session, halt_exc, finalize_partial=False, postprocess_ran=False)
+    return finalize_completed(_forward_result(self, run, "completed", raw_output=outputs))
 
 
 def _halted_arm(self: "Trace", run: _RunState, halt_exc: StopSignal) -> Any:
     """Dispatch a halt: return the partial trace's output, or clean up and re-raise."""
 
-    options = getattr(self, "_predicate_save_options", None)
-    if (
-        options is not None
-        and getattr(options, "halt", None) is not None
-        and getattr(self, "_halt_returns_partial_trace", False)
-    ):
-        return _halted_partial_trace(self, run, halt_exc)
-    _halted_seal_and_cleanup(self, run, halt_exc)
-    raise halt_exc
+    return finalize_halted(_forward_result(self, run, "halted", exc=halt_exc))
 
 
 def _failed_arm(self: "Trace", run: _RunState, e: Exception) -> None:
-    """Settle a forward that raised an ordinary exception, then re-raise it.
+    """Settle a forward that raised an ordinary exception; the caller re-raises it."""
 
-    The seal runs FIRST (it reads live capture state that cleanup strips) but
-    must not be able to SKIP cleanup: a raising seal used to bypass
-    requires_grad restore, tl_* metadata stripping, buffer tracker uninstall
-    and end_label_session, leaving the user's model permanently altered.
-    grind-r6 b1 R06: the PRIMARY user error must propagate; an ordinary
-    seal/cleanup double-fault is attached as a note (a BaseException secondary
-    keeps escaping: interrupts always win, B8-23).
-    """
-
-    # Boundary facts snapshot eagerly at cause time: cleanup below may pop
-    # the event stream, and the settlement stamp must still carry the count.
-    committed_ops = count_committed_ops(self)
-    capture_session = run.capture_session
-    # Aborted-nonfinite label unification (observe item 1): postprocess the
-    # committed prefix with the offending tensor seeded as the output frontier,
-    # so every public surface reads FINAL labels. Failure-safe by contract.
-    if run.postprocess:
-        from ._nonfinite_prefix import maybe_finalize_nonfinite_prefix
-
-        maybe_finalize_nonfinite_prefix(self, run.backend, e, run.model, run.input_tensors or [])
-    try:
-        try:
-            try:
-                if capture_session is not None and not run.postprocess:
-                    capture_session.snapshot_recording_projection(self)
-                    self._fastlog_captured_run_core = capture_session.seal()
-            finally:
-                run.backend.cleanup_failed_forward_session(self, run.cleanup_payload(), e)
-            self.__dict__.pop("_capture_producer_policy", None)
-        except Exception as cleanup_exc:
-            _attach_note(
-                e,
-                "TorchLens failed-forward cleanup also failed while handling "
-                f"this error: {type(cleanup_exc).__name__}: {safe_exception_str(cleanup_exc)}",
-            )
-    finally:
-        # Guaranteed settlement: a cleanup double-fault still stamps the
-        # terminal outcome before the exception escapes. The transient scrub
-        # runs after settlement (R11/R32: the escaping partial must not pin
-        # live input tensors or the payload-bearing event stream).
-        settle_failed(self, capture_session, e, num_committed_ops=committed_ops)
-        _scrub_failed_capture_transients(self)
+    finalize_failed(_forward_result(self, run, "failed", exc=e))
 
 
 def _interrupted_arm(self: "Trace", run: _RunState, interrupt_exc: BaseException) -> None:
-    """Tear down and settle after a control-flow interrupt (KeyboardInterrupt, SystemExit).
+    """Tear down and settle after a control-flow interrupt; the caller re-raises it."""
 
-    The torch session forces gradient-capable parameters to require grads, so
-    its teardown must run before the escape propagates. B8-23: the PRIMARY
-    interrupt must propagate; an ordinary cleanup or settlement Exception is
-    attached as a note instead of raised, or a caller's ``except Exception``
-    retry loop would swallow Ctrl-C. An unsettled outcome reads UNKNOWN.
-    """
-
-    committed_ops = count_committed_ops(self)
-    capture_session = run.capture_session
-    try:
-        try:
-            run.backend.cleanup_model_session(self, run.cleanup_payload())
-        except Exception as cleanup_exc:
-            _attach_note(
-                interrupt_exc,
-                "TorchLens model-session cleanup also failed while handling "
-                f"this interrupt: {type(cleanup_exc).__name__}: {safe_exception_str(cleanup_exc)}",
-            )
-        self.__dict__.pop("_capture_producer_policy", None)
-    finally:
-        try:
-            settle_failed(
-                self,
-                capture_session,
-                interrupt_exc,
-                interrupted=True,
-                num_committed_ops=committed_ops,
-            )
-            _scrub_failed_capture_transients(self)
-        except Exception as settle_exc:
-            _attach_note(
-                interrupt_exc,
-                "TorchLens settlement/scrub also failed while handling "
-                f"this interrupt: {type(settle_exc).__name__}: {safe_exception_str(settle_exc)}",
-            )
+    finalize_interrupted(_forward_result(self, run, "interrupted", exc=interrupt_exc))
 
 
 def _release_instrumentation(run: _RunState) -> None:
@@ -934,6 +711,7 @@ def run_and_log_inputs_through_model(
         input_kwargs=input_kwargs,
         seed=seed,
         postprocess=postprocess,
+        reservation_resume=reservation_resume,
     )
     _claim_slot_and_seed(self, run, reservation_resume)
     try:

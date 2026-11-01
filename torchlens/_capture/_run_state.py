@@ -34,6 +34,7 @@ class _RunState:
     input_kwargs: dict[Any, Any] | None
     seed: int
     postprocess: bool
+    reservation_resume: object | None = None
     capture_slot: Any = None
     restore_rng: Callable[[], None] = lambda: None
     input_arg_names: list[str] = field(default_factory=list)

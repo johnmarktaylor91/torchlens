@@ -25,7 +25,6 @@ from ..._capture_state_helpers import (
     _unwrap_data_parallel,
     unwrap_compiled_model,
 )
-from ..._data_classes._preprocessing_provenance import stamp_user_transform_provenance
 from ..._data_classes.trace import (
     Trace,
 )
@@ -64,7 +63,7 @@ from ..._training_validation import (
     effective_inference_only,
     validate_training_compatibility,
 )
-from ..._utils.display import _vprint, warn_parallel
+from ..._utils.display import warn_parallel
 from ..._utils.tensor_utils import SaveMode
 from ...backends.torch._op_markers import refuse_unavailable_nvtx
 from ...backends.torch.bound_root import (
@@ -86,18 +85,20 @@ from ...options import (
 )
 from ...recording.options import HaltPredicateFn, PredicateFn
 from ...types import _ActivationPostfunc, _GradientPostfunc
-from .._episode_failed import attach_failed_episode_ledger
 from .._episode_ledger import (
     resolve_episode_declaration,
-    write_episode_ledger,
 )
 from .._structure_only_entry import (
     _enforce_structure_only_entry_contract,
     _StructureOnlyEntryFacts,
 )
-from ..finalize.epilogue import _render_layer_visualizers
+from ..finalize.epilogue import (
+    _render_layer_visualizers,
+    attach_failed_episode_ledger,
+    finish_trace,
+)
 from ..run_entry import _run_model_and_save_specified_outs
-from ..stages import CaptureRequest
+from ..stages import CaptureRequest, ForwardResult
 from .cache import (
     CAPTURE_CACHE_KEY_CURATED,
     CAPTURE_CACHE_KEY_NEUTRAL,
@@ -1470,116 +1471,45 @@ def _trace_torch_model(
                 # masking the user's exception.
                 attach_failed_episode_ledger(capture_exc, episode_resolved)
             raise
-    if stop_after_site is not None and not bool(getattr(trace, "halted", False)):
-        # Never-fired policy split by provenance (brainpipe D-16): a
-        # selector-shaped site that never fired is a typo-shaped wrong result
-        # (the full forward ran; the caller asked for a frontier) and refuses
-        # typed; an exploratory callable or ambient context-manager site
-        # legitimately may never fire and warns with a durable ledger entry.
-        site_repr = repr(stop_after_site)
-        if stop_after_selector_shaped and not stop_after_ambient:
-            raise InvalidArgumentError(
-                f"stop_after={site_repr} never fired: the capture ran the full "
-                "forward and completed without halting, so the result is not the "
-                "requested frontier",
-                code="stop_after_never_fired",
-                remedy=(
-                    "check the site against the model's module addresses "
-                    "(model.named_modules()) or use tl.func(...)/tl.module(...); "
-                    "an exploratory predicate that may legitimately never fire "
-                    "belongs in a callable"
-                ),
-                argument="stop_after",
-            )
-        stop_annotations = getattr(trace, "annotations", None)
-        if isinstance(stop_annotations, dict):
-            stop_annotations.setdefault("unmatched_capture_selectors", []).append(
-                {"slot": "stop_after", "selector": site_repr}
-            )
-        from ...errors import TorchLensWarning
 
-        warnings.warn(
-            TorchLensWarning(
-                f"stop_after={site_repr} never fired; the capture ran the full "
-                "forward and the outputs are the model's real outputs, not a "
-                "frontier. Remedy: check the stop_after site against the executed "
-                "model, or drop stop_after",
-                code="stop_after_never_fired_callable",
-            ),
-            stacklevel=2,
-        )
-    module_filter_suppressed = int(trace.__dict__.pop("_tl_module_filter_suppressed", 0))
-    if (
-        capture_options.module_filter is not None
-        and module_filter_suppressed > 0
-        and int(getattr(trace, "num_saved_ops", 0) or 0) == 0
-    ):
-        from ...errors import TorchLensWarning as _TorchLensWarning
+    def _store_capture_cache(cache_trace: Trace, path: Path, secret: Any) -> None:
+        """Write the authenticated capture-cache entry and evict stale siblings."""
+        _prepare_log_for_capture_cache(cache_trace)
+        if _store_authenticated_capture_cache(cache_trace, path, secret):
+            _evict_capture_cache(path.parent, keep=path)
 
-        warnings.warn(
-            _TorchLensWarning(
-                f"module_filter suppressed every selected payload "
-                f"({module_filter_suppressed} ops): the returned trace has full "
-                "metadata but ZERO saved activations. module_filter is a third "
-                "save gate composed with save=/layers_to_save, and its argument "
-                "is an op-record namespace (fields such as func_name, "
-                "layer_label, modules), NEVER an nn.Module. "
-                "Remedy: write the filter against op-record fields (e.g. lambda "
-                "op: op.func_name == 'linear'), or drop module_filter",
-                code="module_filter_zero_saved",
-            ),
-            stacklevel=2,
-        )
-    if input_transform is not None:
-        stamp_user_transform_provenance(trace, input_transform)
-    trace.profile_enabled = profile_enabled
-    trace.save_grads = save_grads_policy
-    if uses_selective_layers_to_save:
-        trace._layer_nums_to_save = [
-            op.raw_index
-            for op in trace.layer_list
-            if op.has_saved_activation and op.layer_type not in {"input", "output"}
-        ]
-        if not save_args:
-            trace._replay_arg_version_data_complete = False
-
-    # Print final summary.
-    _vprint(
-        trace,
-        f"Done: {len(trace.layer_logs)} layers, "
-        f"{trace.num_saved_ops} saved, "
-        f"{trace.total_activation_memory}",
+    # The door epilogue is the FINALIZE stage's ``finish_trace``; the request
+    # carries its inputs by today's local names.
+    return finish_trace(
+        ForwardResult(trace=trace),
+        CaptureRequest(
+            model=cast(nn.Module, model),
+            input_args=input_args,
+            input_kwargs=input_kwargs,
+            options=capture_options,
+            plan={
+                "stop_after_site": stop_after_site,
+                "stop_after_selector_shaped": stop_after_selector_shaped,
+                "stop_after_ambient": stop_after_ambient,
+                "module_filter": capture_options.module_filter,
+                "input_transform": input_transform,
+                "profile_enabled": profile_enabled,
+                "save_grads_policy": save_grads_policy,
+                "uses_selective_layers_to_save": uses_selective_layers_to_save,
+                "save_args": save_args,
+                "layer_visualizers": layer_visualizers_value,
+                "unwrap_when_done": unwrap_when_done,
+                "episode_resolved": episode_resolved,
+            },
+            cache={
+                "key": cache_key,
+                "path": cache_path,
+                "secret": cache_secret,
+                "store": _store_capture_cache,
+            },
+            admission={"meta_admission": meta_admission},
+        ),
     )
-
-    if layer_visualizers_value:
-        _render_layer_visualizers(trace, layer_visualizers_value)
-
-    if unwrap_when_done:
-        from ...backends.torch.wrappers import unwrap_torch
-
-        unwrap_torch()
-
-    if cache_path is not None and cache_key is not None and cache_secret is not None:
-        trace.capture_cache_hit = False
-        trace.capture_cache_key = cache_key
-        trace.capture_cache_path = str(cache_path)
-        _prepare_log_for_capture_cache(trace)
-        if _store_authenticated_capture_cache(trace, cache_path, cache_secret):
-            _evict_capture_cache(cache_path.parent, keep=cache_path)
-
-    if episode_resolved is not None:
-        # Settlement-time episode ledger (S7): written ONCE, after postprocess
-        # and outcome settlement, from the settled record + module-call truth.
-        write_episode_ledger(trace, episode_resolved)
-
-    # Weightsfree settlement (F33): wrap-generation stamp on every capture
-    # (W1-ORD preflight input), D22 invariant net + persisted evidence
-    # envelope on structure-only captures.
-    from .._structure_evidence import settle_weightsfree_capture
-
-    settle_weightsfree_capture(trace, meta_admission)
-
-    return trace
 
 
 def prepare_capture(

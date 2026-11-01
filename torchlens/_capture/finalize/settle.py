@@ -5,7 +5,7 @@ Moved verbatim from ``torchlens._capture.trace`` by the capture seam.
 
 import time
 import warnings
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from torch import nn
 
@@ -29,6 +29,18 @@ if TYPE_CHECKING:
 from ..._utils.display import _vprint
 from .._forward_helpers import _backend_name_for_trace
 from .._input_records import _get_op_nums_from_user_labels
+
+
+class _RefreshRequest(NamedTuple):
+    """The caller's refresh arguments, bundled so the private helpers stay narrow."""
+
+    model: object
+    input_args: Any | list[Any]
+    input_kwargs: dict[Any, Any] | None
+    layers_to_save: str | list[Any]
+    grad_layers_to_save: str | list[Any] | None
+    seed: int | None
+    run_until_plan: Any | None
 
 
 def save_new_outs(
@@ -71,40 +83,65 @@ def save_new_outs(
     -------
         Nothing; mutates ``self`` in place with new out values.
     """
+    request = _RefreshRequest(
+        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, seed, _run_until_plan
+    )
     if backward_ready is not None:
-        model_detach_saved_activations = self.detach_saved_activations
-        model_train_mode = getattr(self, "backward_ready", False)
-        layer_detach_saved_activations = {
-            layer_log_entry: layer_log_entry.detach_saved_activations for layer_log_entry in self
-        }
-        target_detach_saved_activations = False if backward_ready else self.detach_saved_activations
-        try:
-            self.detach_saved_activations = target_detach_saved_activations
-            self.backward_ready = backward_ready
-            for layer_log_entry in layer_detach_saved_activations:
-                layer_log_entry.detach_saved_activations = target_detach_saved_activations
-            save_new_outs(
-                self,
-                model=model,
-                input_args=input_args,
-                input_kwargs=input_kwargs,
-                layers_to_save=layers_to_save,
-                grad_layers_to_save=grad_layers_to_save,
-                seed=seed,
-                backward_ready=None,
-                _run_until_plan=_run_until_plan,
-            )
-        finally:
-            self.detach_saved_activations = model_detach_saved_activations
-            self.backward_ready = model_train_mode
-            for layer_log_entry, detach_saved_activations in layer_detach_saved_activations.items():
-                layer_log_entry.detach_saved_activations = detach_saved_activations
+        _refresh_under_backward_ready(self, request, backward_ready)
         return
+    _refresh_and_project(self, request)
 
-    from ..._user_funcs import _run_model_and_save_specified_outs
-    from ..projectors import RefreshProjector
 
-    save_grads_policy = getattr(self, "save_grads", None)
+def _refresh_under_backward_ready(
+    self: "Trace", request: _RefreshRequest, backward_ready: bool
+) -> None:
+    """Refresh under a temporary detach/backward-ready override, restoring it after."""
+
+    (
+        model,
+        input_args,
+        input_kwargs,
+        layers_to_save,
+        grad_layers_to_save,
+        seed,
+        _run_until_plan,
+    ) = request
+    model_detach_saved_activations = self.detach_saved_activations
+    model_train_mode = getattr(self, "backward_ready", False)
+    layer_detach_saved_activations = {
+        layer_log_entry: layer_log_entry.detach_saved_activations for layer_log_entry in self
+    }
+    target_detach_saved_activations = False if backward_ready else self.detach_saved_activations
+    try:
+        self.detach_saved_activations = target_detach_saved_activations
+        self.backward_ready = backward_ready
+        for layer_log_entry in layer_detach_saved_activations:
+            layer_log_entry.detach_saved_activations = target_detach_saved_activations
+        save_new_outs(
+            self,
+            model=model,
+            input_args=input_args,
+            input_kwargs=input_kwargs,
+            layers_to_save=layers_to_save,
+            grad_layers_to_save=grad_layers_to_save,
+            seed=seed,
+            backward_ready=None,
+            _run_until_plan=_run_until_plan,
+        )
+    finally:
+        self.detach_saved_activations = model_detach_saved_activations
+        self.backward_ready = model_train_mode
+        for layer_log_entry, detach_saved_activations in layer_detach_saved_activations.items():
+            layer_log_entry.detach_saved_activations = detach_saved_activations
+
+
+def _refresh_and_project(self: "Trace", request: _RefreshRequest) -> None:
+    """Resolve the layer selections, run the refresh forward, then project it."""
+
+    layers_to_save = request.layers_to_save
+    grad_layers_to_save = request.grad_layers_to_save
+    seed = request.seed
+    _run_until_plan = request.run_until_plan
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
     grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
     refresh_seed = self.random_seed if seed is None else seed
@@ -117,22 +154,51 @@ def save_new_outs(
                 self.layer_dict_all_keys[parent].raw_index for parent in output.parents
             )
         resolved_layer_nums = tuple(sorted(expanded_layer_nums))
-    refreshed = _run_model_and_save_specified_outs(
+    refreshed = _run_refresh_forward(
+        self, request, refresh_seed, resolved_layer_nums, grad_layer_nums_to_save
+    )
+    _project_refreshed(
+        self, refreshed, layer_nums_to_save, grad_layer_nums_to_save, _run_until_plan
+    )
+
+
+def _refresh_replay_config(self: "Trace") -> dict[str, Any]:
+    """Return the replay configuration the refresh capture inherits from ``self``."""
+
+    return {
+        "output_device": getattr(self, "output_device", "same"),
+        "activation_transform": getattr(self, "activation_transform", None),
+        "grad_transform": getattr(self, "grad_transform", None),
+        "save_raw_activations": getattr(self, "save_raw_activations", True),
+        "save_raw_grads": getattr(self, "save_raw_gradients", True),
+        "save_mode": getattr(self, "save_mode", "copy"),
+        "capture_tensor_grad_hooks": getattr(self, "capture_tensor_grad_hooks", True),
+        "keep_orphans": getattr(self, "keep_orphans", False),
+        "mark_layer_depths": getattr(self, "mark_layer_depths", False),
+        "detach_saved_activations": getattr(self, "detach_saved_activations", False),
+        "save_args": getattr(self, "save_arg_values", False),
+    }
+
+
+def _run_refresh_forward(
+    self: "Trace",
+    request: _RefreshRequest,
+    refresh_seed: int | None,
+    resolved_layer_nums: tuple[int, ...] | None,
+    grad_layer_nums_to_save: str | list[Any],
+) -> Any:
+    """Run the internal refresh capture over the new inputs and return its trace."""
+
+    from ..._user_funcs import _run_model_and_save_specified_outs
+
+    model, input_args, input_kwargs, _layers, grad_layers_to_save, _seed, _run_until_plan = request
+    save_grads_policy = getattr(self, "save_grads", None)
+    return _run_model_and_save_specified_outs(
         model=cast(nn.Module, model),
         input_args=input_args,
         input_kwargs=input_kwargs or {},
         layers_to_save="all" if resolved_layer_nums is None else "none",
-        output_device=getattr(self, "output_device", "same"),
-        activation_transform=getattr(self, "activation_transform", None),
-        grad_transform=getattr(self, "grad_transform", None),
-        save_raw_activations=getattr(self, "save_raw_activations", True),
-        save_raw_grads=getattr(self, "save_raw_gradients", True),
-        save_mode=getattr(self, "save_mode", "copy"),
-        capture_tensor_grad_hooks=getattr(self, "capture_tensor_grad_hooks", True),
-        keep_orphans=getattr(self, "keep_orphans", False),
-        mark_layer_depths=getattr(self, "mark_layer_depths", False),
-        detach_saved_activations=getattr(self, "detach_saved_activations", False),
-        save_args=getattr(self, "save_arg_values", False),
+        **_refresh_replay_config(self),
         save_grads=save_grads_policy not in (None, False),
         grads_to_save=grad_layers_to_save,
         seed=refresh_seed,
@@ -170,6 +236,19 @@ def save_new_outs(
         # partial normally into the projection flow below).
         halt_predicate=None if _run_until_plan is None else _run_until_plan.halt_predicate,
     )
+
+
+def _project_refreshed(
+    self: "Trace",
+    refreshed: "Trace",
+    layer_nums_to_save: str | list[Any],
+    grad_layer_nums_to_save: str | list[Any],
+    _run_until_plan: Any | None,
+) -> None:
+    """Project the refreshed capture onto ``self`` (prefix-scoped when a latch fired)."""
+
+    from ..projectors import RefreshProjector
+
     projected_layer_nums = (
         "all" if layer_nums_to_save == "all" else tuple(cast(list[int], layer_nums_to_save))
     )
@@ -406,6 +485,39 @@ def _settle_interrupted_halted_arm(
             warnings.warn(note, RuntimeWarning, stacklevel=2)
 
 
+def _recover_halt_frontier_output(self: "Trace", halt_exc: StopSignal) -> Any | None:
+    """Recover the halt-frontier tensor from the signal or the raw layer dict."""
+
+    frontier_output = halt_exc.frontier_output
+    if frontier_output is None:
+        raw_layer_dict = self._raw_graph_ws.raw_layer_dict
+        for event in reversed(getattr(self.capture_events, "op_events", ())):
+            entry = raw_layer_dict.get(event.label_raw)
+            if entry is not None and getattr(entry, "out", None) is not None:
+                frontier_output = entry.out
+                break
+    return frontier_output
+
+
+def _extract_and_postprocess_halted(
+    self: "Trace", backend: CaptureBackend, frontier_output: Any
+) -> None:
+    """Extract and mark the frontier outputs, then run the halted postprocess."""
+
+    output_tensors, output_tensor_addresses = _extract_and_mark_outputs(
+        self,
+        frontier_output,
+        backend,
+    )
+    # Mirror the completed paths: the transient attribution inputs are consumed
+    # by output extraction and must never survive onto the finished product
+    # (an unpopped copy blocked halted analysis saves via _PORTABLE_STATE_SPEC).
+    self.__dict__.pop("_output_attribution_input_tensors", None)
+    _vprint(self, f"Postprocessing halted graph at {self.halt_frontier!r}...")
+    set_capture_phase(self, CapturePhase.POSTPROCESS)
+    self._postprocess(output_tensors, output_tensor_addresses)
+
+
 def _finalize_halted_trace(
     self: "Trace",
     backend: CaptureBackend,
@@ -444,14 +556,7 @@ def _finalize_halted_trace(
     # F3a: recover the frontier BEFORE model-session cleanup. The cleanup
     # strips TorchLens metadata from model-owned tensors, so the reverse scan
     # must read the raw entries while their capture-time state is intact.
-    frontier_output = halt_exc.frontier_output
-    if frontier_output is None:
-        raw_layer_dict = self._raw_graph_ws.raw_layer_dict
-        for event in reversed(getattr(self.capture_events, "op_events", ())):
-            entry = raw_layer_dict.get(event.label_raw)
-            if entry is not None and getattr(entry, "out", None) is not None:
-                frontier_output = entry.out
-                break
+    frontier_output = _recover_halt_frontier_output(self, halt_exc)
     backend.cleanup_model_session(self, (model, input_tensors))
     if frontier_output is None:
         raise RuntimeError(
@@ -467,16 +572,5 @@ def _finalize_halted_trace(
         self.capture_end_time = time.time()
         return frontier_output
 
-    output_tensors, output_tensor_addresses = _extract_and_mark_outputs(
-        self,
-        frontier_output,
-        backend,
-    )
-    # Mirror the completed paths: the transient attribution inputs are consumed
-    # by output extraction and must never survive onto the finished product
-    # (an unpopped copy blocked halted analysis saves via _PORTABLE_STATE_SPEC).
-    self.__dict__.pop("_output_attribution_input_tensors", None)
-    _vprint(self, f"Postprocessing halted graph at {self.halt_frontier!r}...")
-    set_capture_phase(self, CapturePhase.POSTPROCESS)
-    self._postprocess(output_tensors, output_tensor_addresses)
+    _extract_and_postprocess_halted(self, backend, frontier_output)
     return frontier_output

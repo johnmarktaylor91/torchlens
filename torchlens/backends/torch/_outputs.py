@@ -8,7 +8,7 @@ and ``TorchBackend.finalize_forward_session``, which delegate here.
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import torch
 
@@ -92,6 +92,149 @@ def _write_output_parent_blob(
     return PortableBlobRef(blob_id=blob_id, kind=kind)
 
 
+def _output_parent_storage_intent(
+    trace: Trace,
+) -> tuple[StorageIntent, str | None, CaptureSpec]:
+    """Build the storage intent, output device and capture spec for one promotion."""
+
+    options = trace._predicate_save_options
+    streaming = options.streaming
+    intent = StorageIntent(
+        in_ram=streaming is None or streaming.path is None or streaming.retain_in_memory,
+        on_disk=streaming is not None and streaming.path is not None,
+    )
+    output_device = getattr(trace, "output_device", None)
+    if output_device == "same":
+        output_device = None
+    spec = CaptureSpec(
+        save_out=True,
+        save_metadata=True,
+        save_grad=False,
+        device=output_device,
+        save_mode=cast(Any, getattr(trace, "save_mode", "copy")),
+    )
+    return intent, output_device, spec
+
+
+def _retain_output_parent_payloads(
+    trace: Trace,
+    event: OpEvent,
+    tensor: torch.Tensor,
+    storage: tuple[StorageIntent, str | None, CaptureSpec],
+    ctx: Any,
+) -> tuple[Any, Any, Any, PortableBlobRef | None, PortableBlobRef | None]:
+    """Admit, resolve and persist the promoted output-parent payloads.
+
+    ``storage`` is the ``(intent, output_device, spec)`` triple from
+    ``_output_parent_storage_intent``.
+    """
+
+    intent, output_device, spec = storage
+
+    from ...recording._storage_resolver import _resolve_storage
+
+    # Output-parent promotion retains real payloads and must be visible to
+    # the save-budget accountant like every other RAM retention: this path
+    # kept ram/transformed payloads with no admit/commit, silently
+    # undercounting on every selective capture whose outputs were not
+    # selected (grind-r6 b5 R34-N2). Admit BEFORE the copy allocates;
+    # disk-only routes stay exempt like the other predicate disk saves.
+    budget = getattr(trace, "_save_budget_accountant", None)
+    reservation = None
+    if budget is not None and intent.in_ram:
+        target_device = torch.device(output_device) if output_device is not None else tensor.device
+        reservation = budget.admit(
+            str(event.label_raw),
+            target_device,
+            int(tensor.nelement() * tensor.element_size()),
+            site="primary",
+        )
+    ram_payload, disk_payload, transformed_ram_payload, transformed_disk_payload = _resolve_storage(
+        tensor,
+        spec,
+        intent,
+        activation_transform=getattr(trace, "activation_transform", None),
+        save_raw_activations=getattr(trace, "save_raw_activations", True),
+        ctx=ctx,
+        kind="activation",
+        detach_saved_activations=bool(getattr(trace, "detach_saved_activations", True)),
+    )
+    if budget is not None and reservation is not None:
+        budget.commit(reservation, (ram_payload, transformed_ram_payload))
+    raw_blob_ref = _write_output_parent_blob(trace, event.label_raw, disk_payload, "out")
+    transformed_blob_ref = _write_output_parent_blob(
+        trace,
+        event.label_raw,
+        transformed_disk_payload,
+        "transformed_out",
+    )
+    return (
+        ram_payload,
+        transformed_ram_payload,
+        transformed_disk_payload,
+        raw_blob_ref,
+        transformed_blob_ref,
+    )
+
+
+def _output_parent_output_ref(
+    event: OpEvent,
+    tensor: torch.Tensor,
+    retained: tuple[Any, Any, Any, PortableBlobRef | None, PortableBlobRef | None],
+) -> OutputRef:
+    """Rebind the event output to the retained output-parent payload refs.
+
+    ``retained`` is the ``(ram_payload, transformed_ram_payload,
+    transformed_disk_payload, raw_blob_ref, transformed_blob_ref)`` tuple
+    from ``_retain_output_parent_payloads``.
+    """
+
+    (
+        ram_payload,
+        transformed_ram_payload,
+        transformed_disk_payload,
+        raw_blob_ref,
+        transformed_blob_ref,
+    ) = retained
+
+    tensor_ref = dataclasses.replace(
+        event.output.tensor,
+        shape=tuple(tensor.shape),
+        dtype=str(tensor.dtype),
+        device=str(tensor.device),
+        requires_grad=tensor.requires_grad,
+        memory=_tensor_memory_bytes(tensor),
+        payload=ram_payload,
+        blob_ref=cast(Any, raw_blob_ref),
+        backend_handle_id=str(id(tensor)),
+    )
+    transformed_ref = event.output.transformed_tensor
+    if transformed_ram_payload is not None:
+        transformed_ref = TensorRef(
+            label_raw=event.label_raw,
+            shape=tuple(transformed_ram_payload.shape),
+            dtype=str(transformed_ram_payload.dtype),
+            device=str(transformed_ram_payload.device),
+            requires_grad=transformed_ram_payload.requires_grad,
+            memory=_tensor_memory_bytes(transformed_ram_payload),
+            payload=transformed_ram_payload,
+            blob_ref=cast(Any, transformed_blob_ref),
+            backend_handle_id=str(id(transformed_ram_payload)),
+        )
+    elif transformed_disk_payload is not None and transformed_ref is not None:
+        transformed_ref = dataclasses.replace(
+            transformed_ref,
+            blob_ref=cast(Any, transformed_blob_ref),
+        )
+    output_ref = dataclasses.replace(
+        event.output,
+        tensor=tensor_ref,
+        transformed_tensor=transformed_ref,
+        has_saved_activation=True,
+    )
+    return output_ref
+
+
 def _promote_layers_to_save_output_parent(
     trace: Trace,
     event: OpEvent,
@@ -128,95 +271,12 @@ def _promote_layers_to_save_output_parent(
         return event.output, event.policy, event.predicate_matched, event.capture_spec
 
     from ..._capture.projections import _record_context_from_event
-    from ...recording._storage_resolver import _resolve_storage
 
     ctx = dataclasses.replace(_record_context_from_event(event), is_output_parent=True)
-    options = trace._predicate_save_options
-    streaming = options.streaming
-    intent = StorageIntent(
-        in_ram=streaming is None or streaming.path is None or streaming.retain_in_memory,
-        on_disk=streaming is not None and streaming.path is not None,
-    )
-    output_device = getattr(trace, "output_device", None)
-    if output_device == "same":
-        output_device = None
-    spec = CaptureSpec(
-        save_out=True,
-        save_metadata=True,
-        save_grad=False,
-        device=output_device,
-        save_mode=cast(Any, getattr(trace, "save_mode", "copy")),
-    )
-    # Output-parent promotion retains real payloads and must be visible to
-    # the save-budget accountant like every other RAM retention: this path
-    # kept ram/transformed payloads with no admit/commit, silently
-    # undercounting on every selective capture whose outputs were not
-    # selected (grind-r6 b5 R34-N2). Admit BEFORE the copy allocates;
-    # disk-only routes stay exempt like the other predicate disk saves.
-    budget = getattr(trace, "_save_budget_accountant", None)
-    reservation = None
-    if budget is not None and intent.in_ram:
-        target_device = torch.device(output_device) if output_device is not None else tensor.device
-        reservation = budget.admit(
-            str(event.label_raw),
-            target_device,
-            int(tensor.nelement() * tensor.element_size()),
-            site="primary",
-        )
-    ram_payload, disk_payload, transformed_ram_payload, transformed_disk_payload = _resolve_storage(
-        tensor,
-        spec,
-        intent,
-        activation_transform=getattr(trace, "activation_transform", None),
-        save_raw_activations=getattr(trace, "save_raw_activations", True),
-        ctx=ctx,
-        kind="activation",
-        detach_saved_activations=bool(getattr(trace, "detach_saved_activations", True)),
-    )
-    if budget is not None and reservation is not None:
-        budget.commit(reservation, (ram_payload, transformed_ram_payload))
-    raw_blob_ref = _write_output_parent_blob(trace, event.label_raw, disk_payload, "out")
-    transformed_blob_ref = _write_output_parent_blob(
-        trace,
-        event.label_raw,
-        transformed_disk_payload,
-        "transformed_out",
-    )
-    tensor_ref = dataclasses.replace(
-        event.output.tensor,
-        shape=tuple(tensor.shape),
-        dtype=str(tensor.dtype),
-        device=str(tensor.device),
-        requires_grad=tensor.requires_grad,
-        memory=_tensor_memory_bytes(tensor),
-        payload=ram_payload,
-        blob_ref=cast(Any, raw_blob_ref),
-        backend_handle_id=str(id(tensor)),
-    )
-    transformed_ref = event.output.transformed_tensor
-    if transformed_ram_payload is not None:
-        transformed_ref = TensorRef(
-            label_raw=event.label_raw,
-            shape=tuple(transformed_ram_payload.shape),
-            dtype=str(transformed_ram_payload.dtype),
-            device=str(transformed_ram_payload.device),
-            requires_grad=transformed_ram_payload.requires_grad,
-            memory=_tensor_memory_bytes(transformed_ram_payload),
-            payload=transformed_ram_payload,
-            blob_ref=cast(Any, transformed_blob_ref),
-            backend_handle_id=str(id(transformed_ram_payload)),
-        )
-    elif transformed_disk_payload is not None and transformed_ref is not None:
-        transformed_ref = dataclasses.replace(
-            transformed_ref,
-            blob_ref=cast(Any, transformed_blob_ref),
-        )
-    output_ref = dataclasses.replace(
-        event.output,
-        tensor=tensor_ref,
-        transformed_tensor=transformed_ref,
-        has_saved_activation=True,
-    )
+    storage = _output_parent_storage_intent(trace)
+    retained = _retain_output_parent_payloads(trace, event, tensor, storage, ctx)
+    output_ref = _output_parent_output_ref(event, tensor, retained)
+    spec = storage[2]
     policy = dataclasses.replace(event.policy, save_payload=True)
     return output_ref, policy, True, spec
 
@@ -499,37 +559,13 @@ def _assign_nested_input_value(
     return obj
 
 
-def extract_and_mark_outputs(
-    self: TorchBackend,
-    session: object,
+def _collect_output_addresses(
+    self_trace: Trace,
     outputs: object,
-) -> tuple[list[torch.Tensor], list[str]]:
-    """Extract torch output tensors, deduplicate them, and mark output parents.
+    output_entries: list[Any],
+) -> list[Any]:
+    """Record output container metadata and return every output tensor with its address."""
 
-    Parameters
-    ----------
-    session:
-        Active trace.
-    outputs:
-        Raw model output object returned by the captured forward pass.
-
-    Returns
-    -------
-    tuple[list[torch.Tensor], list[str]]
-        Output tensors and their display addresses.
-    """
-
-    self_trace = cast("Trace", session)
-    output_entries = list(_walk_output_tensors_with_paths(outputs))
-    # r35 I1 (subsumes r33 R32-B1): stamp the POSITIVE model-output losslessness
-    # proof -- exact root kind, recursively supported children, encodable literal
-    # leaves, and a tensor-leaf/typed-path bijection (duplicate paths and any BFS
-    # fallback break the proof). The runnable producer refuses any save whose
-    # output is not PROVED lossless (refuse-unless-proved), closing every lossy
-    # cardinality/depth: bare one-tensor sets, nested sets, opaque tensor
-    # holders, set subclasses, and multi-tensor collapses alike. Ordinary
-    # analysis capture is unaffected by the stamp.
-    self_trace._runnable.output_losslessness = runnable_output_losslessness(outputs, output_entries)
     # The per-op container_spec is only user-facing metadata when explicitly
     # opted into via capture_container_structure (or implied by
     # intervention_ready); with the default OFF it must stay None on output
@@ -569,6 +605,120 @@ def extract_and_mark_outputs(
             return_addresses=True,
             allow_repeats=True,
         )
+    return output_tensors_w_addresses_all
+
+
+def _raise_output_attribution_error(
+    self_trace: Trace,
+    t: torch.Tensor,
+    output_address: str,
+) -> NoReturn:
+    """Raise the typed refusal for a model output tensor no traced op produced."""
+
+    try:
+        shape_text = str(tuple(t.shape))
+    except RuntimeError:
+        # Nested tensors raise from ``.shape``; the refusal must
+        # stay typed instead of crashing on its own message (R65).
+        shape_text = "<unavailable: nested>" if t.is_nested else "<unavailable>"
+    if getattr(t, "is_nested", False):
+        # An unlabeled NESTED output is an unsupported tensor
+        # variant constructed inside forward (protocol-invisible
+        # constructors like torch.nested.nested_tensor are never
+        # logged), NOT a pre-bound-function escape -- the escape
+        # remedy can never fix it (R65: typed-misdiagnosis
+        # successor of the round-4 raw crash).
+        raise OutputAttributionError(
+            "TorchLens could not attribute a model output tensor to any "
+            f"traced op (output address {output_address!r}, "
+            f"shape={shape_text}, dtype={t.dtype}): the output is a NESTED "
+            "tensor constructed inside forward(), an unsupported tensor "
+            "variant TorchLens cannot log. Remedy: build the nested tensor "
+            "outside the traced region, or pad to a dense tensor before "
+            "the ops you want captured.",
+            code="output_unsupported_tensor_variant",
+            remedy=(
+                "build the nested tensor outside the traced region, or "
+                "pad to a dense tensor before the ops you want captured"
+            ),
+            output_address=output_address,
+        )
+    remedy = output_attribution_remedy(self_trace)
+    raise OutputAttributionError(
+        "TorchLens could not attribute a model output tensor to any traced op "
+        f"(output address {output_address!r}, "
+        f"shape={shape_text}, dtype={t.dtype}). This may indicate an opaque "
+        "execution boundary or a pre-bound torch function that escaped wrapping. "
+        f"Remedy: {remedy}.",
+        code="output_attribution_failed",
+        remedy=remedy,
+        output_address=output_address,
+    )
+
+
+def _output_parent_promotion_amendment(
+    self_trace: Trace, label_raw: str, t: torch.Tensor
+) -> Any | None:
+    """Register one output layer and build its output-parent promotion amendment.
+
+    Returns ``None`` when the trace holds no op event for ``label_raw``. The caller
+    appends the amendment, so the journal's append site stays in the caller's frame.
+    """
+
+    self_trace.output_layers.append(label_raw)
+    event = self_trace.capture_events.op_event_by_label_raw.get(label_raw)
+    if event is None:
+        return None
+    promoted_output, promoted_policy, promoted_matched, promoted_spec = (
+        _promote_layers_to_save_output_parent(
+            self_trace,
+            event,
+            t,
+        )
+    )
+    return amend_output_parent_promotion(
+        event.seq,
+        label_raw,
+        is_output_parent=True,
+        output=promoted_output,
+        policy=promoted_policy,
+        predicate_matched=promoted_matched,
+        capture_spec=promoted_spec,
+    )
+
+
+def extract_and_mark_outputs(
+    self: TorchBackend,
+    session: object,
+    outputs: object,
+) -> tuple[list[torch.Tensor], list[str]]:
+    """Extract torch output tensors, deduplicate them, and mark output parents.
+
+    Parameters
+    ----------
+    session:
+        Active trace.
+    outputs:
+        Raw model output object returned by the captured forward pass.
+
+    Returns
+    -------
+    tuple[list[torch.Tensor], list[str]]
+        Output tensors and their display addresses.
+    """
+
+    self_trace = cast("Trace", session)
+    output_entries = list(_walk_output_tensors_with_paths(outputs))
+    # r35 I1 (subsumes r33 R32-B1): stamp the POSITIVE model-output losslessness
+    # proof -- exact root kind, recursively supported children, encodable literal
+    # leaves, and a tensor-leaf/typed-path bijection (duplicate paths and any BFS
+    # fallback break the proof). The runnable producer refuses any save whose
+    # output is not PROVED lossless (refuse-unless-proved), closing every lossy
+    # cardinality/depth: bare one-tensor sets, nested sets, opaque tensor
+    # holders, set subclasses, and multi-tensor collapses alike. Ordinary
+    # analysis capture is unaffected by the stamp.
+    self_trace._runnable.output_losslessness = runnable_output_losslessness(outputs, output_entries)
+    output_tensors_w_addresses_all = _collect_output_addresses(self_trace, outputs, output_entries)
     output_tensors, output_tensor_addresses = _dedupe_output_addresses(
         output_tensors_w_addresses_all
     )
@@ -588,69 +738,13 @@ def extract_and_mark_outputs(
         if _label_raw is None:
             if getattr(self_trace, "_raw_transform_escape_detected", False):
                 continue
-            try:
-                shape_text = str(tuple(t.shape))
-            except RuntimeError:
-                # Nested tensors raise from ``.shape``; the refusal must
-                # stay typed instead of crashing on its own message (R65).
-                shape_text = "<unavailable: nested>" if t.is_nested else "<unavailable>"
-            if getattr(t, "is_nested", False):
-                # An unlabeled NESTED output is an unsupported tensor
-                # variant constructed inside forward (protocol-invisible
-                # constructors like torch.nested.nested_tensor are never
-                # logged), NOT a pre-bound-function escape -- the escape
-                # remedy can never fix it (R65: typed-misdiagnosis
-                # successor of the round-4 raw crash).
-                raise OutputAttributionError(
-                    "TorchLens could not attribute a model output tensor to any "
-                    f"traced op (output address {output_address!r}, "
-                    f"shape={shape_text}, dtype={t.dtype}): the output is a NESTED "
-                    "tensor constructed inside forward(), an unsupported tensor "
-                    "variant TorchLens cannot log. Remedy: build the nested tensor "
-                    "outside the traced region, or pad to a dense tensor before "
-                    "the ops you want captured.",
-                    code="output_unsupported_tensor_variant",
-                    remedy=(
-                        "build the nested tensor outside the traced region, or "
-                        "pad to a dense tensor before the ops you want captured"
-                    ),
-                    output_address=output_address,
-                )
-            remedy = output_attribution_remedy(self_trace)
-            raise OutputAttributionError(
-                "TorchLens could not attribute a model output tensor to any traced op "
-                f"(output address {output_address!r}, "
-                f"shape={shape_text}, dtype={t.dtype}). This may indicate an opaque "
-                "execution boundary or a pre-bound torch function that escaped wrapping. "
-                f"Remedy: {remedy}.",
-                code="output_attribution_failed",
-                remedy=remedy,
-                output_address=output_address,
-            )
+            _raise_output_attribution_error(self_trace, t, output_address)
         attributable_output_tensors.append(t)
         attributable_output_tensor_addresses.append(output_address)
         if self_trace.capture_mode in {"exhaustive", "predicate"}:
-            self_trace.output_layers.append(_label_raw)
-            event = self_trace.capture_events.op_event_by_label_raw.get(_label_raw)
-            if event is not None:
-                promoted_output, promoted_policy, promoted_matched, promoted_spec = (
-                    _promote_layers_to_save_output_parent(
-                        self_trace,
-                        event,
-                        t,
-                    )
-                )
-                self_trace.capture_events.append_amendment(
-                    amend_output_parent_promotion(
-                        event.seq,
-                        _label_raw,
-                        is_output_parent=True,
-                        output=promoted_output,
-                        policy=promoted_policy,
-                        predicate_matched=promoted_matched,
-                        capture_spec=promoted_spec,
-                    )
-                )
+            amendment = _output_parent_promotion_amendment(self_trace, _label_raw, t)
+            if amendment is not None:
+                self_trace.capture_events.append_amendment(amendment)
 
     return attributable_output_tensors, attributable_output_tensor_addresses
 

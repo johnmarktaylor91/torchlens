@@ -227,6 +227,77 @@ def _rewrite_nonfinite_error(trace: Any, exc: BaseException, *, finalized: bool)
         exc.args = (exc.args[0].replace(repr(raw_label), replacement),) + exc.args[1:]
 
 
+def _is_latched_nonfinite_abort(stop_request: Any, exc: BaseException) -> bool:
+    """Whether ``exc`` is the latched nonfinite abort recorded on the stop request."""
+
+    from .outcome import StopRequest
+
+    return (
+        isinstance(stop_request, StopRequest)
+        and stop_request.kind == "nonfinite"
+        and stop_request.error_ref is not None
+        and stop_request.error_ref() is exc
+    )
+
+
+def _finalize_nonfinite_prefix_body(
+    trace: Trace,
+    backend: Any,
+    model: Any,
+    input_tensors: list[Any],
+    frontier_output: Any,
+) -> None:
+    """Recover the frontier, then clean the session, extract outputs and postprocess."""
+
+    from .finalize.settle import _extract_and_mark_outputs
+
+    if frontier_output is None:
+        raw_layer_dict = trace._raw_graph_ws.raw_layer_dict
+        for event in reversed(getattr(trace.capture_events, "op_events", ())):
+            entry = raw_layer_dict.get(event.label_raw)
+            if entry is not None and getattr(entry, "out", None) is not None:
+                frontier_output = entry.out
+                break
+    if frontier_output is None:
+        raise RuntimeError("no tensor frontier is recoverable for the aborted-nonfinite prefix")
+    # Mirror the halt finalizer ordering: recover the frontier while
+    # capture-time state is intact (done above), THEN clean the model
+    # session, then extract/mark outputs and postprocess. The later
+    # failed-forward cleanup's own model-session action dedupes through
+    # the session cleanup registry, so it does not run twice.
+    backend.cleanup_model_session(trace, (model, input_tensors))
+    output_tensors, output_tensor_addresses = _extract_and_mark_outputs(
+        trace,
+        frontier_output,
+        backend,
+    )
+    trace.__dict__.pop("_output_attribution_input_tensors", None)
+    trace.raw_output = None
+    trace._postprocess(output_tensors, output_tensor_addresses)
+    trace.__dict__["_nonfinite_prefix_finalized"] = True
+
+
+def _record_prefix_finalize_failure(
+    trace: Trace, exc: BaseException, stop_request: Any, finalize_exc: Exception
+) -> None:
+    """Attach a prefix-finalization failure as secondary evidence on the primary error."""
+
+    trace.__dict__["_nonfinite_prefix_finalize_error"] = (
+        f"{type(finalize_exc).__name__}: {finalize_exc}"
+    )
+    with contextlib.suppress(Exception):
+        annotate_guarded(
+            exc,
+            "TorchLens prefix finalization for public NaN labels failed "
+            f"({type(finalize_exc).__name__}: {finalize_exc}); the public "
+            "label is unavailable (never a raw spelling).",
+        )
+    with contextlib.suppress(Exception):
+        _rewrite_nonfinite_error(trace, exc, finalized=False)
+    with contextlib.suppress(Exception):
+        _update_stop_request(trace, stop_request, exc)
+
+
 def maybe_finalize_nonfinite_prefix(
     trace: Trace,
     backend: Any,
@@ -262,60 +333,16 @@ def maybe_finalize_nonfinite_prefix(
         Whether the prefix finalization ran to completion.
     """
 
-    from .finalize.settle import _extract_and_mark_outputs
-    from .outcome import StopRequest
-
     stop_request = trace.__dict__.get("_stop_requested")
-    if not (
-        isinstance(stop_request, StopRequest)
-        and stop_request.kind == "nonfinite"
-        and stop_request.error_ref is not None
-        and stop_request.error_ref() is exc
-    ):
+    if not _is_latched_nonfinite_abort(stop_request, exc):
         trace.__dict__.pop("_nonfinite_frontier_out", None)
         return False
     frontier_output = trace.__dict__.pop("_nonfinite_frontier_out", None)
     saved_phase = trace.__dict__.get("_capture_phase")
     try:
-        if frontier_output is None:
-            raw_layer_dict = trace._raw_graph_ws.raw_layer_dict
-            for event in reversed(getattr(trace.capture_events, "op_events", ())):
-                entry = raw_layer_dict.get(event.label_raw)
-                if entry is not None and getattr(entry, "out", None) is not None:
-                    frontier_output = entry.out
-                    break
-        if frontier_output is None:
-            raise RuntimeError("no tensor frontier is recoverable for the aborted-nonfinite prefix")
-        # Mirror the halt finalizer ordering: recover the frontier while
-        # capture-time state is intact (done above), THEN clean the model
-        # session, then extract/mark outputs and postprocess. The later
-        # failed-forward cleanup's own model-session action dedupes through
-        # the session cleanup registry, so it does not run twice.
-        backend.cleanup_model_session(trace, (model, input_tensors))
-        output_tensors, output_tensor_addresses = _extract_and_mark_outputs(
-            trace,
-            frontier_output,
-            backend,
-        )
-        trace.__dict__.pop("_output_attribution_input_tensors", None)
-        trace.raw_output = None
-        trace._postprocess(output_tensors, output_tensor_addresses)
-        trace.__dict__["_nonfinite_prefix_finalized"] = True
+        _finalize_nonfinite_prefix_body(trace, backend, model, input_tensors, frontier_output)
     except Exception as finalize_exc:  # noqa: BLE001 - secondary evidence, never the primary error.
-        trace.__dict__["_nonfinite_prefix_finalize_error"] = (
-            f"{type(finalize_exc).__name__}: {finalize_exc}"
-        )
-        with contextlib.suppress(Exception):
-            annotate_guarded(
-                exc,
-                "TorchLens prefix finalization for public NaN labels failed "
-                f"({type(finalize_exc).__name__}: {finalize_exc}); the public "
-                "label is unavailable (never a raw spelling).",
-            )
-        with contextlib.suppress(Exception):
-            _rewrite_nonfinite_error(trace, exc, finalized=False)
-        with contextlib.suppress(Exception):
-            _update_stop_request(trace, stop_request, exc)
+        _record_prefix_finalize_failure(trace, exc, stop_request, finalize_exc)
         return False
     finally:
         # Settlement attributes the PRIMARY error; the finalization must not
