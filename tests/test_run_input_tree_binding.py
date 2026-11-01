@@ -75,7 +75,7 @@ def test_loaded_run_spreads_a_tuple_for_a_two_argument_forward(tmp_path: Path) -
     torch.manual_seed(0)
     model = _TwoArgs().eval()
     y, no = _pair()
-    capture = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+    capture = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
     path = tmp_path / "two.tlspec"
     tl.trace(model, (y, no), capture=capture).save(path, level="runnable", include_weights=True)
     new_y, new_no = y + 1, no * 2

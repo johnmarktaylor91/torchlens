@@ -224,12 +224,9 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
     # comparison exact) only for passes strictly above the base. With base 0
     # every record is in scope — the historical full comparison.
     layer_labels = set(trace._layer_dict_all_keys)
-    projected_grad_records: Counter[tuple[str, int]] = Counter()
-    for layer in trace._layer_list:
-        for record in getattr(layer, "_grad_records", ()):
-            if record.backward_pass_index <= pass_index_base:
-                continue
-            projected_grad_records[(layer.layer_label, record.backward_pass_index)] += 1
+    projected_grad_records, projected_param_records, projected_calls = _projected_backward_records(
+        trace, pass_index_base
+    )
 
     event_grad_records: Counter[tuple[str, int]] = Counter()
     for op_grad_event in op_grad_events:
@@ -248,12 +245,6 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
         )
 
     param_addresses = set(trace._param_logs.keys())
-    projected_param_records: Counter[tuple[str, int]] = Counter()
-    for param_address, param_log in trace._param_logs.items():
-        for record in getattr(param_log, "_grad_records", ()):
-            if record.backward_pass_index <= pass_index_base:
-                continue
-            projected_param_records[(param_address, record.backward_pass_index)] += 1
     event_param_records: Counter[tuple[str, int]] = Counter()
     for param_grad_event in param_grad_events:
         if param_grad_event.param_address not in param_addresses:
@@ -270,20 +261,7 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
             "by multiplicity",
         )
 
-    projected_calls: dict[tuple[int, int], int] = defaultdict(int)
-    for grad_fn_handle in trace._grad_fn_logs.values():
-        for call in grad_fn_handle.calls.values():
-            call_pass_index = call.backward_pass_index
-            if call_pass_index is None:
-                raise MetadataInvariantError(
-                    name,
-                    f"grad_fn {grad_fn_handle.grad_fn_object_id} carries a projected call "
-                    "with no backward_pass_index",
-                )
-            if call_pass_index <= pass_index_base:
-                continue
-            projected_calls[(grad_fn_handle.grad_fn_object_id, call_pass_index)] += 1
-    event_calls: dict[tuple[int, int], int] = defaultdict(int)
+    event_calls: dict[tuple[int, int | None], int] = defaultdict(int)
     grad_fn_ids = set(trace._grad_fn_logs)
     for fired_event in fired_events:
         if fired_event.object_id not in grad_fn_ids:
@@ -293,9 +271,14 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
             )
         event_calls[(fired_event.object_id, fired_event.pass_index)] += 1
     if projected_calls != event_calls:
+        unmatched = sorted(
+            (set(projected_calls) ^ set(event_calls)) or set(projected_calls),
+            key=lambda key: (key[0], -1 if key[1] is None else key[1]),
+        )
         raise MetadataInvariantError(
             name,
-            "projected grad_fn calls do not match GradFnFired events",
+            "projected grad_fn calls do not match GradFnFired events "
+            f"(unmatched (grad_fn id, pass index): {unmatched[:8]!r})",
         )
 
 
@@ -328,6 +311,38 @@ def _intervention_spec_is_armed(spec: object | None) -> bool:
     return any(
         getattr(spec, field_name, None) is not None for field_name in ("hook", "helper", "value")
     )
+
+
+def _projected_backward_records(
+    trace: Trace, pass_index_base: int
+) -> tuple[Counter[tuple[str, int]], Counter[tuple[str, int]], dict[tuple[int, int | None], int]]:
+    """Count the op, param and grad_fn records projected for passes above the base.
+
+    A projected grad_fn call with no ``backward_pass_index`` is never in a
+    fired event (events always carry an int pass index), so it stays in scope
+    under a ``None`` key and fails the caller's multiplicity comparison by itself.
+    """
+
+    projected_grad_records: Counter[tuple[str, int]] = Counter()
+    for layer in trace._layer_list:
+        for record in getattr(layer, "_grad_records", ()):
+            if record.backward_pass_index <= pass_index_base:
+                continue
+            projected_grad_records[(layer.layer_label, record.backward_pass_index)] += 1
+    projected_param_records: Counter[tuple[str, int]] = Counter()
+    for param_address, param_log in trace._param_logs.items():
+        for record in getattr(param_log, "_grad_records", ()):
+            if record.backward_pass_index <= pass_index_base:
+                continue
+            projected_param_records[(param_address, record.backward_pass_index)] += 1
+    projected_calls: dict[tuple[int, int | None], int] = defaultdict(int)
+    for grad_fn_handle in trace._grad_fn_logs.values():
+        for call in grad_fn_handle.calls.values():
+            call_pass_index = call.backward_pass_index
+            if call_pass_index is not None and call_pass_index <= pass_index_base:
+                continue
+            projected_calls[(grad_fn_handle.grad_fn_object_id, call_pass_index)] += 1
+    return projected_grad_records, projected_param_records, projected_calls
 
 
 def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -> bool:

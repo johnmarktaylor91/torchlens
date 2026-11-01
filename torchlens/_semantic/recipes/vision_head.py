@@ -32,6 +32,7 @@ from typing import Any
 
 import torch
 
+from ..._utils.collections import _path_component_key
 from .._hops import HopRefusal, HopWalk, walk_upstream
 from ..facets import AbsenceReason, FacetSpec, register
 from ._helpers import (
@@ -346,8 +347,6 @@ def _container_role(op: Any) -> str | None:
     components = tuple(getattr(op, "container_path", ()) or ())
     if not components:
         return None
-    from ..._utils.collections import _path_component_key
-
     return str(_path_component_key(components[-1]))
 
 

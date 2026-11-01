@@ -23,6 +23,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._utils.collections import _path_component_key
+
 if TYPE_CHECKING:
     from ._episode_ledger import ResolvedEpisode
 
@@ -93,8 +95,6 @@ def _render_container_path(path: Any) -> str:
     ``"0.logits"``). The bare single-tensor root renders as ``""`` (nothing
     to declare; the default source is the whole output).
     """
-
-    from .._utils.collections import _path_component_key
 
     return ".".join(str(_path_component_key(segment)) for segment in tuple(path or ()))
 

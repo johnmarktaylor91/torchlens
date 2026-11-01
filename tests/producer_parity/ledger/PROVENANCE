@@ -3091,6 +3091,7 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
 recorded: 2026-11-01T11:29:49.193920+00:00
+---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: ret-netfix file-cap extraction moved OpEvent read sites between modules (orphan seeds, replay groups, staged spec, input layout)

@@ -651,7 +651,7 @@ def test_aliased_output_slots_rebuild_after_run_and_load(
     trace.run(model, x)
     _assert_same_output(trace.reconstruct_output(), plain)
 
-    ready = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    ready = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     _assert_same_output(ready.reconstruct_output(), plain)
 
     path = tmp_path / "alias.tlspec"

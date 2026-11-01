@@ -239,7 +239,7 @@ def test_hook_edit_on_initial_buffer_read_applies_and_records(registered: bool) 
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True),
+        capture=tl.options.CaptureOptions(layers_to_save="all", replayable=True),
     )
     site = log._layer_dict_all_keys["buffer_1:1"]
     assert site.is_buffer and not tuple(site.parents or ())
