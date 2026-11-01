@@ -2264,7 +2264,9 @@ def _preflight_unified_trace_body_index(
         raise ArtifactError(
             "Bundle manifest references missing blob files for blob_id(s): "
             + ", ".join(missing_blob_ids)
-            + "."
+            + ".",
+            code="bundle_load_failed",
+            remedy="restore the missing blob files, or re-save the bundle from its source capture",
         )
 
 
@@ -3999,7 +4001,9 @@ def _validate_manifest_blob_paths(
     if missing_blob_ids:
         raise ArtifactError(
             "Bundle manifest references missing blob files for blob_id(s): "
-            f"{', '.join(missing_blob_ids)}."
+            f"{', '.join(missing_blob_ids)}.",
+            code="bundle_load_failed",
+            remedy="restore the missing blob files, or re-save the bundle from its source capture",
         )
 
 

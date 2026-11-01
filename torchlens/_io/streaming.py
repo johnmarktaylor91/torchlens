@@ -114,7 +114,11 @@ class BundleStreamWriter:
         self.final_path = Path(path)
         reject_symlink_path(self.final_path, context="save target")
         if self.final_path.exists():
-            raise ArtifactError(f"Bundle path already exists: {self.final_path}")
+            raise ArtifactError(
+                f"Bundle path already exists: {self.final_path}",
+                code="bundle_save_failed",
+                remedy="stream to a path that does not exist yet, or remove the old bundle first",
+            )
 
         self.tmp_path = _make_tmp_bundle_path(self.final_path)
         self.blobs_path = self.tmp_path / "blobs"
@@ -599,7 +603,11 @@ class BundleStreamWriter:
         if self.final_path.exists():
             reason = f"Bundle path already exists: {self.final_path}"
             self.abort(reason)
-            raise ArtifactError(reason)
+            raise ArtifactError(
+                reason,
+                code="bundle_save_failed",
+                remedy="stream to a path that does not exist yet, or remove the old bundle first",
+            )
         try:
             self.tmp_path.rename(self.final_path)
         except OSError as exc:
