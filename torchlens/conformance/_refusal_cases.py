@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from ._adapters import RosterModel
 from ._cases import CaseResult, _failed, _passed
@@ -170,6 +170,7 @@ def run_c1_refusal_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[
     protocol = adapter_protocol(adapter)
     if protocol is None or not roster:
         return []
+    target = _RefusalTarget(adapter, protocol, roster[0])
     results: list[CaseResult] = []
     for flag in false_capability_flags(protocol):
         request = CAPABILITY_REQUESTS.get(flag)
@@ -178,7 +179,7 @@ def run_c1_refusal_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[
             results.append(_failed(case_id, "C1", f"no request recipe for capability {flag}"))
             continue
         expected = refusal_code_for_capability(flag)
-        results.append(_refusal_cell(case_id, adapter, protocol, roster[0], request, expected))
+        results.append(_refusal_cell(case_id, target, request, expected))
     for option in foreign_trace_options(protocol):
         case_id = f"{C1_REFUSAL_OPTION_PREFIX}{option}"
         probe = TRACE_OPTION_PROBES.get(option)
@@ -187,19 +188,20 @@ def run_c1_refusal_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[
             continue
         kind = "capture_option" if option in CAPTURE_OPTION_SPINE_FIELDS else "trace_option"
         request = CapabilityRequest(kind, option, probe, TRACE_OPTION_COMPANIONS.get(option))
-        results.append(
-            _refusal_cell(case_id, adapter, protocol, roster[0], request, _TRACE_OPTION_CODE)
-        )
+        results.append(_refusal_cell(case_id, target, request, _TRACE_OPTION_CODE))
     return results
 
 
+class _RefusalTarget(NamedTuple):
+    """What every refusal cell of one run issues its request against."""
+
+    adapter: Any
+    protocol: Any
+    model: RosterModel
+
+
 def _refusal_cell(
-    case_id: str,
-    adapter: Any,
-    protocol: Any,
-    model: RosterModel,
-    request: CapabilityRequest,
-    expected_code: str,
+    case_id: str, target: _RefusalTarget, request: CapabilityRequest, expected_code: str
 ) -> CaseResult:
     """Run one request; passed only on a typed refusal with the contracted code and no side effect."""
 
@@ -207,6 +209,7 @@ def _refusal_cell(
 
     from ..backends.registry import BackendUnsupportedError
 
+    adapter, protocol, model = target
     snapshot = getattr(adapter, "side_effect_snapshot", None)
     try:
         with warnings.catch_warnings():
