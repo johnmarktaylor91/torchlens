@@ -268,7 +268,7 @@ The invariant (deletion-closure), stated once:
 > or an UNVERIFIABLE floor, never VERIFIED. The single out-of-scope boundary is coherent
 > reauthoring (threat-model subsection below).
 
-**Registry v2.** `WITNESS_FAMILY_REGISTRY` (`torchlens/_runnable.py`, discriminator
+**Registry v2.** `WITNESS_FAMILY_REGISTRY` (`torchlens._runnable`, discriminator
 `witness_family_registry_v2`) is a closed table of typed `FamilySpec` rows -- one per
 verdict-steering witness family. It now covers the four DIRECT control kinds (`scalar_bool`,
 `loop_predicate`, `conditional_arm_entry`, `tensor_derived_scalar_literal`) that r70's
@@ -2800,7 +2800,7 @@ Documented residual (locked r67): on pre-guard-era supported torch, the user's O
 actual return and adds no compatibility branch and no speculative second read.
 
 Every state-metadata row carries exactly one disposition from the CLOSED four-class
-oracle-policy vocabulary (`STATE_METADATA_ORACLE_POLICY` in `torchlens._runnable_state`,
+oracle-policy vocabulary (`STATE_METADATA_ORACLE_POLICY` in `torchlens._runnable.state`,
 r67 C4), and producer checks, signatures, staging tripwires, and diagnostics consume the SAME
 rows:
 
@@ -3102,7 +3102,7 @@ Glossary of v2 vocabulary introduced by this amendment (canonical here per the l
 - `non_tensor_args_tensor_slots_and_context_v2` -- the call recipe introduced by this
   amendment, carrying the REQUIRED `CallExecutionContext` per call. SUPERSEDED: the shipped
   recipe is `non_tensor_args_tensor_slots_context_and_obligations_v3`
-  (`torchlens/_runnable.py::RUNNABLE_CALL_RECIPE_VERSION`), which additionally stamps the r71
+  (`torchlens._runnable.RUNNABLE_CALL_RECIPE_VERSION`), which additionally stamps the r71
   typed witness obligations.
 - `CallExecutionContext` / `AutocastDeviceContext` -- per-call autocast (explicit disabled) and
   grad/inference mode, entered tightly around each resolved call at replay.

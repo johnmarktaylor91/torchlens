@@ -320,3 +320,100 @@ def test_run_door_conflict_matrix_codes_present_in_door_source() -> None:
         assert referenced, (
             f"run-door conflict code {code} has no enum-member raise site in runnable machinery"
         )
+
+
+# Import purity of the vocabulary facade (docs/reference/runnable_model.md: the
+# vocabulary "remains behavior-free and must not import I/O, capture, state
+# preparation, or execution modules"). The package ``__init__.py`` is that
+# vocabulary, so it may not import its own submodules, and its only eager
+# TorchLens import edges stay absent so it stays outside the import cycle.
+_RUNNABLE_FACADE_FORBIDDEN_PREFIXES = (
+    "torchlens._io",
+    "torchlens._capture",
+    "torchlens.backends",
+)
+
+
+def _runnable_facade_imports() -> list[tuple[str, int, bool]]:
+    """Return ``(absolute target, line, eager)`` for every import in the facade."""
+
+    import ast
+    from pathlib import Path
+
+    package = "torchlens._runnable"
+    init_path = Path(__file__).resolve().parent.parent / "torchlens" / "_runnable" / "__init__.py"
+    tree = ast.parse(init_path.read_text(encoding="utf-8"))
+
+    def is_type_checking(test: ast.expr) -> bool:
+        return (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (
+            isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
+        )
+
+    found: list[tuple[str, int, bool]] = []
+
+    def visit(node: ast.AST, eager: bool) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.If) and is_type_checking(child.test):
+                for stmt in child.body:
+                    visit_stmt(stmt, False)
+                for stmt in child.orelse:
+                    visit_stmt(stmt, eager)
+            elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                visit(child, False)
+            else:
+                visit_stmt(child, eager)
+
+    def visit_stmt(node: ast.AST, eager: bool) -> None:
+        if isinstance(node, ast.Import):
+            found.extend((alias.name, node.lineno, eager) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                base = package.rsplit(".", node.level - 1)[0] if node.level > 1 else package
+                module = f"{base}.{node.module}" if node.module else base
+            else:
+                module = node.module or ""
+            found.append((module, node.lineno, eager))
+            if module == package:
+                found.extend(
+                    (f"{package}.{alias.name}", node.lineno, eager) for alias in node.names
+                )
+        else:
+            visit(node, eager)
+
+    visit(tree, True)
+    return found
+
+
+def test_runnable_facade_imports_no_submodule_io_capture_or_backend() -> None:
+    """``torchlens/_runnable/__init__.py`` stays a pure vocabulary module."""
+
+    import pkgutil
+    from pathlib import Path
+
+    package_dir = Path(__file__).resolve().parent.parent / "torchlens" / "_runnable"
+    submodules = {
+        f"torchlens._runnable.{info.name}" for info in pkgutil.iter_modules([str(package_dir)])
+    }
+    assert submodules, "torchlens/_runnable/ has no submodules to guard"
+    offenders = [
+        f"line {line}: {target}"
+        for target, line, _eager in _runnable_facade_imports()
+        if target in submodules
+        or any(target.startswith(f"{sub}.") for sub in submodules)
+        or any(
+            target == prefix or target.startswith(f"{prefix}.")
+            for prefix in _RUNNABLE_FACADE_FORBIDDEN_PREFIXES
+        )
+    ]
+    assert not offenders, f"the runnable vocabulary facade imports machinery: {offenders}"
+
+
+def test_runnable_facade_has_no_eager_torchlens_import() -> None:
+    """The facade's TorchLens imports are deferred or typing-only, never eager."""
+
+    eager = [
+        f"line {line}: {target}"
+        for target, line, is_eager in _runnable_facade_imports()
+        if is_eager and (target == "torchlens" or target.startswith("torchlens."))
+    ]
+    assert not eager, f"eager TorchLens import in the runnable vocabulary facade: {eager}"

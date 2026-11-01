@@ -122,7 +122,7 @@
 - Split modules import one another and their hub's constants at their bottoms (they form import
   cycles, so the imports run once every definition exists): `backends/torch/_ops_*` with `ops.py`,
   `backends/torch/_completeness_*` with `completeness_witness.py`, `validation/_invariants_*` with
-  `invariants.py`, and `_runnable_*` with `_runnable_execution.py`. A new module-level name used in a
+  `invariants.py`, and `_runnable_*` with `_runnable/execution.py`. A new module-level name used in a
   split module is imported there. A test patches a helper on the module that defines it and on every
   module that binds it by import, never on the hub alone: a from-import copy does not follow a patch.
   Module state reassigned after import (`completeness_witness._ACTIVE_WITNESS_STATE`) lives in one

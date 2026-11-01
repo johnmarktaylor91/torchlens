@@ -243,23 +243,6 @@ one-liners derived from each module's docstring or a skim of its contents.
 | `_input_walk.py` | Single-sourced model-input boundary traversal (normative dispatch for all input-tree walkers) |
 | `_literals.py` | Shared `Literal` aliases for public option strings |
 | `_robustness.py` | Tensor-variant detection and pre-flight guards for `trace` (meta/sparse/fake refusals) |
-| `_runnable_attestation.py` | Numeric attestation and nondeterminism checks for runnable execution |
-| `_runnable_call_arguments.py` | Sparse-call argument decoding and binding |
-| `_runnable_call_outputs.py` | Sparse-call output binding and mutation checks |
-| `_runnable_execution.py` | Transactional execution providers for the unified `Trace.run` surface |
-| `_runnable_input_aliases.py` | Input alias topology and non-tensor tree contracts |
-| `_runnable_input_metadata.py` | Input structure, literal, and metadata witness helpers |
-| `_runnable_input_sites.py` | Live input sites and metadata contract checks |
-| `_runnable_output_contracts.py` | Output reconstruction and post-execution contracts |
-| `_runnable_path_faithfulness.py` | Path-faithfulness and state comparison helpers |
-| `_runnable_providers.py` | Public provider entry points and run finalization |
-| `_runnable_retention.py` | Loaded-sparse retention floor and run-prep/bind memory bounds, including bounded admission of uncopied CPU views |
-| `_runnable_seam.py` | Narrow ownership seam between `Trace` and sparse runnable internals |
-| `_runnable_state.py` | Non-executing state binding and allocation for sparse runnable traces |
-| `_runnable_state_context.py` | State contracts and captured execution contexts |
-| `_runnable_transaction.py` | Loaded-sparse transaction execution and allocation checks |
-| `_runnable_verification.py` | Seed, RNG, attestation, and fork utilities for runnable runs |
-| `_runnable_witness_contracts.py` | Control, shape, and host-escape witness checks |
 | `_save_budget.py` | Running budget for retained activation bytes with typed refusal (`SaveBudgetExceededError`) |
 | `_source_links.py` | Source-location link formatting helpers |
 | `_state.py` | Global state for toggle-gated decoration; single source of truth for capture-control mutable state |
@@ -275,7 +258,6 @@ one-liners derived from each module's docstring or a skim of its contents.
 | `observers.py` | User observer helpers: taps, scalar logs, record spans |
 | `options.py` | Grouped option dataclasses (`CaptureOptions`, ...) for public TorchLens APIs |
 | `quantities.py` | Numeric quantity types with unit-aware display |
-| `runnable.py` | Frozen type contracts (enums and schema shapes) for sparse runnable `.tlspec` artifacts |
 | `types.py` | Public type aliases and rarely used data classes |
 | `user_funcs.py` | Public API entry points; contains every user-facing function |
 
@@ -284,6 +266,7 @@ one-liners derived from each module's docstring or a skim of its contents.
 | module | role |
 | --- | --- |
 | `_io/` | Portable save/load implementation: scrubs a Trace to metadata plus safetensors blobs, writes/rehydrates directory bundles |
+| `_runnable/` | Private runnable package: `__init__.py` holds the frozen type contracts (enums, schema shapes, reports, error vocabulary) for sparse runnable `.tlspec` artifacts; its submodules (`execution`, `state`, `transaction`, `providers`, `seam`, witness and input contracts, attestation) are the sparse replay machinery behind `Trace.run` |
 | `_trace_core/` | Private per-trace semantic store substrate (numpy-backed typed columns, per-trace interning) |
 | `accessors/` | Accessor classes for TorchLens log collections |
 | `attribution/` | Input-attribution methods for TorchLens |
