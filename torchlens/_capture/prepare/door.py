@@ -70,12 +70,12 @@ from ..._training_validation import (
 )
 from ..._utils.display import _vprint, warn_parallel
 from ..._utils.tensor_utils import SaveMode
+from ...backends.torch import rescue as _rescue
 from ...backends.torch._op_markers import refuse_unavailable_nvtx
 from ...backends.torch.bound_root import (
     TLBoundMethodRoot,
     is_bound_method_of_module,
 )
-from ...backends.torch.rescue import capture_with_rescue
 from ...errors.episode import EpisodeDeclarationError
 from ...intervention.errors import ChunkedForwardConfigError
 from ...intervention.selectors import BaseSelector, FuncSelector, ModuleSelector
@@ -1426,7 +1426,9 @@ def _run_request(request: CaptureRequest) -> ForwardResult:
                 armed_capture(episode_resolved, run_prepared) as capture_callable,
                 pending_admission(facts["meta_admission"]),
             ):
-                trace = capture_with_rescue(
+                # Looked up on the module at call time: the rescue seam is a
+                # documented patch point (tests isolate the sensor from the re-run).
+                trace = _rescue.capture_with_rescue(
                     capture_callable, eligible=facts["rescue_eligible"], model=model
                 )
                 observer.trace = trace
