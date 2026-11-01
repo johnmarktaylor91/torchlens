@@ -17,15 +17,14 @@ from torch import nn
 import torchlens as tl
 from torchlens._ir.container import TupleIndex
 from torchlens._ir.selector_eval import selector_from_spec
+from torchlens._selection.selectors import output_at
 from torchlens.intervention import check_spec_compat
+from torchlens.intervention._resolver_registry import function_registry_key_from_callable
 from torchlens.intervention.errors import (
     MultiMatchWarning,
     OpaqueCallableError,
     ReplayPreconditionError,
     UntrustedCallableError,
-)
-from torchlens.intervention.resolver import (
-    function_registry_key_from_callable,
 )
 from torchlens.intervention.save import (
     _sync_spec_records_from_log,
@@ -33,7 +32,6 @@ from torchlens.intervention.save import (
     resolve_function_registry_key,
     save_intervention,
 )
-from torchlens.intervention.selectors import output_at
 from torchlens.intervention.types import (
     Edit,
     FireRecord,
@@ -916,7 +914,7 @@ def test_red_team_custom_module_side_effect_is_not_imported(
 _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE = [
     ("torchlens._io.tlspec:os.system", "system"),
     ("torchlens._utils:importlib.import_module", "import_module"),
-    ("torchlens.intervention.selectors:builtins.eval", "eval"),
+    ("torchlens._selection.selectors:builtins.eval", "eval"),
     ("torchlens._utils:subprocess.getoutput", "getoutput"),
 ]
 

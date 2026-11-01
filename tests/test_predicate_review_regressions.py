@@ -20,14 +20,14 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._ir.selector_eval import ensure_supported, selector_from_spec
-from torchlens.intervention.errors import (
-    SelectorCapabilityError,
-    SiteResolutionError,
-)
-from torchlens.intervention.selectors import (
+from torchlens._selection.selectors import (
     BaseSelector,
     CompositeSelector,
     SelectorKind,
+)
+from torchlens.intervention.errors import (
+    SelectorCapabilityError,
+    SiteResolutionError,
 )
 from torchlens.intervention.types import TargetSpec
 

@@ -43,8 +43,8 @@ import torchlens as tl
 import torchlens._utils as tlutils
 from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
+from torchlens.intervention._resolver_registry import resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_import_ref
 from torchlens.intervention.save import LazyImportRef
 from torchlens.options import CaptureOptions
 

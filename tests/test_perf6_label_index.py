@@ -20,7 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._ir import selector_eval
-from torchlens.intervention import resolver
+from torchlens._selection import resolver
 
 
 class _Net(nn.Module):

@@ -117,6 +117,10 @@ from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._ir.refs import ParamRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._robustness import UnsupportedTensorVariantError
+from ..._selection.selectors import (
+    BaseSelector,
+    label as make_label_selector,
+)
 from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
 from ..._utils._call_site import CALL_SITE_CLASS_MARKER  # noqa: F401 (rebound helper global)
@@ -144,10 +148,6 @@ from ..._utils.tensor_utils import (
 )
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
-from ...intervention.selectors import (
-    BaseSelector,
-    label as make_label_selector,
-)
 from ...intervention.types import (
     ArgComponent,
     CapturedArgTemplate,

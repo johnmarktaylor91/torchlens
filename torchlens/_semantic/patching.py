@@ -12,9 +12,9 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._selection.selectors import facet
 from .._user_funcs import trace
 from ..errors._base import TorchLensError, TorchLensWarning
-from ..intervention.selectors import facet
 from ..options import CaptureOptions
 from .facets import Facet, MissingGrad
 

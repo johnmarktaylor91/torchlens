@@ -30,13 +30,13 @@ from .._data_classes._trace_grad_sites import (
 )
 from .._data_classes._trace_intervention_records import _DoTransaction
 from .._ir.selector_eval import looks_like_finalized_label, normalize_selector_like
+from .._selection.resolver import _resolve_unchecked
+from .._selection.selectors import CompositeSelector, NotSelector, label
 from ..options import ReplayOptions
 from .audit import record_intervention_event, site_keys_for_labels
 from .hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from .replay import _reset_backward_projection, gradient_edit_replay_text
-from .resolver import _resolve_unchecked
 from .runtime import apply_live_gradient_hooks
-from .selectors import CompositeSelector, NotSelector, label
 from .spec import (
     Recipe,
     Rule,

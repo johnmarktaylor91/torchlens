@@ -373,7 +373,7 @@ def test_vetted_inert_helper_set_admitted() -> None:
 def test_untrusted_callable_refusals_carry_code_and_subject() -> None:
     """R65: every trust-gate refusal names its code and the denied import."""
 
-    from torchlens.intervention.resolver import resolve_import_ref
+    from torchlens.intervention._resolver_registry import resolve_import_ref
 
     with pytest.raises(UntrustedCallableError) as untrusted:
         resolve_import_ref("somemod:some_fn")

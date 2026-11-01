@@ -223,7 +223,7 @@ def test_refusal_site_key_unavailable(pair):
 
     import dataclasses
 
-    from torchlens._selection import Selection
+    from torchlens._selection.selection import Selection
 
     trace_a, trace_b = pair
     resolved = trace_a[tl.units("relu_1_2", IDX)]

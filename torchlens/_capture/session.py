@@ -599,11 +599,11 @@ class CaptureSession:
         if activation_selector is not None:
             live_output_by_raw_index = _live_output_by_raw_index(trace, output_tensors)
             from .._ir.selector_eval import selector_contains_kind
-            from ..intervention.selectors import BaseSelector
+            from .._selection.selectors import BaseSelector
 
             selected: list[int] | str
             if isinstance(activation_selector, BaseSelector):
-                from ..intervention.resolver import _resolve_unchecked
+                from .._selection.resolver import _resolve_unchecked
 
                 selected = sorted(
                     {
@@ -724,7 +724,7 @@ class CaptureSession:
         if gradient_selector is None:
             trace.__dict__.pop("_deferred_retention_selector", None)
             return
-        from ..intervention.selectors import BaseSelector as _BaseSelector
+        from .._selection.selectors import BaseSelector as _BaseSelector
 
         selected_grads: list[int] | str
         if isinstance(gradient_selector, _BaseSelector):
@@ -742,7 +742,7 @@ class CaptureSession:
                 # branch: the public _resolve_sites gate refuses mid-capture,
                 # so the unchecked resolver walks the finalized layer list
                 # directly.
-                from ..intervention.resolver import _resolve_unchecked
+                from .._selection.resolver import _resolve_unchecked
 
                 selected_grads = sorted(
                     {

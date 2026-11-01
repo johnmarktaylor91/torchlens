@@ -13,7 +13,7 @@ from torchlens._capture.predicates import (
     _normalize_capture_decision,
 )
 from torchlens._capture.projections import _build_record_context
-from torchlens.intervention.selectors import BaseSelector
+from torchlens._selection.selectors import BaseSelector
 from torchlens.recording.exceptions import PredicateError
 from torchlens.recording.options import RecordingOptions
 from torchlens.recording.types import CaptureSpec, ModuleStackFrame

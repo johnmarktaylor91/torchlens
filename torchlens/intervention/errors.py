@@ -1,9 +1,17 @@
 """Error ownership for TorchLens intervention APIs."""
 
-from typing import Any, Literal, cast
+from typing import Literal
 
-from .._errors import KeywordConflictError, _actionable_message
-from .._selection import SelectionError
+from .._errors import KeywordConflictError
+from .._selection.errors import (
+    AmbiguousSiteError as AmbiguousSiteError,
+    BindingPreflightError as BindingPreflightError,
+    SelectionError as SelectionError,
+    SelectorCapabilityError as SelectorCapabilityError,
+    SelectorCompositionError as SelectorCompositionError,
+    SiteResolutionError as SiteResolutionError,
+    UnclassifiedSelectorError as UnclassifiedSelectorError,
+)
 from ..errors._base import (
     CaptureError,
     CompatibilityError,
@@ -290,16 +298,6 @@ class SpecMutationError(ConfigurationError, ValueError):
     """Raised when an intervention spec mutator cannot apply a requested change."""
 
 
-class BindingPreflightError(ConfigurationError, ValueError):
-    """Raised when ``spec.bind(model)`` refuses before constructing a binding.
-
-    Bind-time refusals fire before ANY forward runs (surgery memo 3.3 item
-    8): unresolved static anchors, rule classes the capture-free lane cannot
-    execute, and invalid spec/model operands. Branch on
-    ``exc.fields["code"]``, never message text.
-    """
-
-
 class BindingRuntimeError(InterventionError, RuntimeError):
     """Raised by a bound intervention executor at or after call time.
 
@@ -319,68 +317,6 @@ class RegionError(ConfigurationError, ValueError):
     user assertions; every refusal here names the derived violation. Branch
     on ``exc.fields["code"]``, never message text.
     """
-
-
-class SiteResolutionError(ConfigurationError, ValueError):
-    """Raised when future selector resolution cannot identify requested sites."""
-
-
-class SelectorCompositionError(SiteResolutionError):
-    """Raised when selectors that cannot share an address are composed.
-
-    Refusals from ``tl.grad`` and from ``&`` / ``|`` / ``~`` across the
-    activation, gradient and node universes carry a stable ``code`` and a
-    ``remedy`` in ``fields`` (the same fields ``InvalidArgumentError``
-    carries); the message ends with the remedy.
-    """
-
-    def __init__(
-        self,
-        *args: object,
-        code: str | None = None,
-        remedy: str | None = None,
-        **fields: object,
-    ) -> None:
-        """Initialize a selector composition refusal.
-
-        Parameters
-        ----------
-        *args:
-            Message arguments; the first is the human-readable problem.
-        code:
-            Optional stable machine-readable refusal code.
-        remedy:
-            Optional concrete caller action; appended to the message.
-        **fields:
-            Structured diagnostic payload.
-        """
-
-        if code is not None:
-            fields["code"] = code
-        if remedy is not None:
-            fields["remedy"] = remedy
-            if args and isinstance(args[0], str):
-                args = (_actionable_message(args[0], remedy), *args[1:])
-        message = args[0] if args and isinstance(args[0], str) else None
-        super().__init__(message, **cast(dict[str, Any], fields))
-
-
-class SelectorCapabilityError(SiteResolutionError):
-    """Raised when a selector kind cannot be evaluated in a lifecycle.
-
-    The one typed refusal for unsupported ``(kind, lifecycle)`` pairs: for
-    example ``tl.followed_by(...)`` in post-hoc ``find_sites`` (no retroactive
-    window exists on a finished trace) or ``tl.model_input(...)`` as a live hook
-    application site.
-    """
-
-
-class UnclassifiedSelectorError(SiteResolutionError):
-    """Raised when a selector is missing an explicit direction taxonomy bucket."""
-
-
-class AmbiguousSiteError(SiteResolutionError):
-    """Raised when a site query resolves too many sites for the surface."""
 
 
 class RecursiveTracingError(CaptureError, RuntimeError):

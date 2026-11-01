@@ -60,8 +60,8 @@ def test_security_policy_uses_one_callable_safety_authority() -> None:
 def test_fenced_appliance_pin_matches_the_canonical_authority() -> None:
     """The resolver's fenced appliance copy stays equal to the canonical set."""
 
+    from torchlens._selection import resolver
     from torchlens._utils import _callable_safety
-    from torchlens.intervention import resolver
 
     assert not authority_drift(
         (

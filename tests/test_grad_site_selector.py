@@ -16,16 +16,16 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.errors import SelectorCompositionError
-from torchlens.intervention.resolver import (
+from torchlens._selection.resolver import (
     resolve_site_plan,
     split_site_branches,
 )
-from torchlens.intervention.selectors import (
+from torchlens._selection.selectors import (
     GradSelector,
     classify_selector_universe,
     grad_fn_label,
 )
+from torchlens.intervention.errors import SelectorCompositionError
 from torchlens.intervention.types import TargetSpec
 
 

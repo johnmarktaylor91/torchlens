@@ -293,6 +293,10 @@ Key entry points:
   plus fractional inserts `11.5`/`11.75`/`15.5`/`16.5`/`17.5`; steps 1-20 run in order from
   `_postprocess/_executor.py::STEP_REGISTRY`)
 - Portable I/O: `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py`, `torchlens/io/__init__.py`
+- Selection: `torchlens/_selection/` (selectors, resolver, `Selection` and its algebra,
+  the `TargetSpec` persisted form and the site-resolution refusals), one layer below
+  intervention; nothing in it imports `torchlens.intervention` at module level. Public doors
+  stay in `torchlens.intervention`, `.types` and `.errors`.
 - Intervention: `torchlens/intervention/` plus top-level selector/helper aliases. Live
   `trace(intervene=...)` runs on torch, on the eager Paddle preview
   (`torchlens/backends/paddle/interventions.py`; forward-only, builtin helper adapters

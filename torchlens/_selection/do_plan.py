@@ -1,6 +1,6 @@
-"""The ``do(selection, edit)`` plan builder for :mod:`torchlens._selection`.
+"""The ``do(selection, edit)`` plan builder for :mod:`torchlens._selection.selection`.
 
-``torchlens._selection.build_selection_do_plan`` opens the label-index scope
+``torchlens._selection.selection.build_selection_do_plan`` opens the label-index scope
 and calls :func:`_build_selection_do_plan` here, which resolves the target
 (ACT selections only), derives the per-site masked edit and builds the audit
 record. The normative mask-application contract is stated beside
@@ -13,7 +13,8 @@ from typing import Any
 
 import torch
 
-from ._selection import (
+from .resolver import _label_index_scope
+from .selection import (
     Selection,
     SelectionError,
     _apply_invalid,
@@ -33,20 +34,20 @@ def _build_selection_do_plan(
             "do(selection, edit) requires an edit: pass an Edit/Edit "
             "(e.g. tl.zero_ablate()), a hook callable, or a replacement tensor."
         )
-    from .intervention._subspace_projection import subspace_projection_of
+    from ..intervention._subspace_projection import subspace_projection_of
 
     # A bare tl.subspace(...) target is projection-valued: the edit acts on
     # the component along the basis (resolve() still reports the support).
     projection = subspace_projection_of(selection_like)
     if projection is None and getattr(edit, "helper_name", None) == "set_affine_coordinates":
-        from .intervention._affine_source import needs_subspace
+        from ..intervention._affine_source import needs_subspace
 
         # Refuse at do(), before anything is staged: a [k, d] map needs a basis.
         raise needs_subspace(repr(selection_like), code="affine_source_needs_subspace")
     resolved = _resolve_do_target(trace, selection_like)
 
-    from .intervention.masked_edit import _derive_masked_edit
-    from .intervention.types import Edit
+    from ..intervention.masked_edit import _derive_masked_edit
+    from ..intervention.types import Edit
 
     if not isinstance(edit, Edit) and not callable(edit):
         # Raw replacement TENSORS route through the shipped replace_with helper and
@@ -61,7 +62,7 @@ def _build_selection_do_plan(
                 "(e.g. torch.full_like(site_out, c)), or use an edit helper such as "
                 "tl.zero_ablate() or tl.scale()."
             )
-        from .intervention.predicates import replace_with
+        from ..intervention.predicates import replace_with
 
         edit = replace_with(edit)
 
@@ -148,3 +149,21 @@ def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
             "edge selections address edge substitution (stage 3), not node edits.",
         )
     return resolved
+
+
+def build_selection_do_plan(
+    trace: Any, selection_like: Any, edit: Any
+) -> tuple[Selection, list[dict[str, Any]], dict[str, Any]]:
+    """Resolve a selection target and derive the per-site edit plan.
+
+    Returns ``(resolved, [{"op", "entry", "is_leaf", "edit"}, ...], audit_record)``.
+    ACT selections only: PARAM edits route through parameter substitution
+    (``intervention/param_substitution.py`` — the value each consumer sees is
+    substituted on the replay engine, the live parameter is never written);
+    EDGE selections are stage-3 edge-substitution territory.
+    """
+
+    # Building the plan adds, removes and relabels no op, so plain-label terms
+    # resolve through one label index per trace for the whole plan.
+    with _label_index_scope():
+        return _build_selection_do_plan(trace, selection_like, edit)

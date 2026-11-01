@@ -1,7 +1,7 @@
 """Graph-structural selection producers (L6 producer wave, graph slice).
 
 Selects by WHERE OPS SIT IN THE EXECUTED DAG, not by value or by name. Two
-producers, both returning :class:`~torchlens._selection.Selection` queries
+producers, both returning :class:`~torchlens._selection.selection.Selection` queries
 that compose with the full ``| & - ~`` algebra and resolve explicitly
 against one trace:
 
@@ -48,9 +48,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from torchlens._selection import SelectionError
-
-from ._selection import (
+from .errors import SelectionError
+from .selection import (
     Selection,
     Selector,
     _act_entry,
@@ -97,7 +96,7 @@ class _TraceGraph:
     def from_trace(cls, trace: Any) -> _TraceGraph:
         """Build the graph view from one finished trace's executed ops."""
 
-        from .receptive_field._path import _graph_indexes
+        from ..receptive_field._path import _graph_indexes
 
         by_label, parents, children = _graph_indexes(trace)
         order = tuple(
@@ -160,7 +159,7 @@ def _between_label_set(
     is disclosure, never an error).
     """
 
-    from .receptive_field._path import _reachable_labels
+    from ..receptive_field._path import _reachable_labels
 
     descendants: set[str] = set()
     for label in sources:

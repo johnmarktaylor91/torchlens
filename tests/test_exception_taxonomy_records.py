@@ -224,8 +224,8 @@ def test_trace_predicate_type_doors_carry_codes_and_remedies(
 def test_intervention_doors_carry_codes_and_remedies() -> None:
     """Converted intervention-family doors expose codes and remedies."""
 
+    from torchlens.intervention._resolver_registry import resolve_import_ref
     from torchlens.intervention.errors import ReplayPreconditionError
-    from torchlens.intervention.resolver import resolve_import_ref
     from torchlens.intervention.save import _validate_format_version
 
     with pytest.raises(errors.TorchLensError) as exc_info:

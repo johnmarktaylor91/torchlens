@@ -32,7 +32,7 @@ import torch
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
-from torchlens._selection_subspace import BasisProvenance
+from torchlens._selection.subspace import BasisProvenance
 from torchlens.attribution.graph import _neuronpedia_upload as up
 
 KEY = "not-a-real-key"

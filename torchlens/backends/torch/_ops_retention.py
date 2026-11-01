@@ -23,6 +23,9 @@ from ..._data_classes.op import (
 from ..._ir.op_record import amend_lookback_retention
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._ir.refs import TensorRef
+from ..._selection.selectors import (
+    BaseSelector,
+)
 from ..._state import pause_logging
 from ..._utils.arg_handling import copy_arg_tree
 from ..._utils.tensor_utils import (
@@ -31,9 +34,6 @@ from ..._utils.tensor_utils import (
     safe_to,
 )
 from ..._validation_argument_references import active_argument_references
-from ...intervention.selectors import (
-    BaseSelector,
-)
 from ...recording._storage_resolver import _resolve_storage
 from ...recording.exceptions import PredicateError
 from ...recording.types import (

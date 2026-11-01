@@ -25,13 +25,13 @@ from ..._ir.container import (
     TupleIndex,
 )
 from ..._ir.intervention import FireResult
+from ..._selection.selectors import (
+    label as make_label_selector,
+)
 from ..._state import pause_logging
 from ...errors._base import CompatibilityError
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
-from ...intervention.selectors import (
-    label as make_label_selector,
-)
 from ...intervention.types import (
     InterventionDecision,
     TargetSpec,
@@ -423,7 +423,7 @@ def _is_module_exit_only(selector: Any) -> bool:
 
     # Deferred (layer lint): the backend must not eagerly import intervention vocabulary.
     # Both modules are loaded by then, so this costs a sys.modules lookup and no Python call.
-    from ...intervention.selectors import CompositeSelector, ModuleSelector
+    from ..._selection.selectors import CompositeSelector, ModuleSelector
 
     if type(selector) is ModuleSelector:
         return True

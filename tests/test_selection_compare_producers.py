@@ -519,8 +519,8 @@ def test_single_pass_layer_refuses_vacuous_claim(log):
 def test_cross_pass_shape_drift_refuses():
     """A layer whose index space drifts across the window refuses typed."""
 
-    from torchlens._selection import SelectionProvenance, Site, _mask_whole
-    from torchlens._selection_compare import _pass_groups, _PassTerm
+    from torchlens._selection.compare import _pass_groups, _PassTerm
+    from torchlens._selection.selection import SelectionProvenance, Site, _mask_whole
 
     def _entry(pass_index: int, shape: tuple[int, ...]) -> Site:
         return Site(

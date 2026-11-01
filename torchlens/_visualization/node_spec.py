@@ -216,7 +216,7 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
     if not targets:
         return []
 
-    from ..intervention.resolver import _resolve_sites
+    from .._selection.resolver import _resolve_sites
 
     by_label: dict[str, Op] = {}
     for target in targets:

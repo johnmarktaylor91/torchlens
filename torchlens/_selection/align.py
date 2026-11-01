@@ -2,7 +2,7 @@
 
 ``Selection.align_to(target)`` re-binds a selection resolved on
 trace A onto trace B, keyed on the L1 STRUCTURAL SITE KEYS (``op.site_key``,
-``site_key_v1``) that every ACT :class:`~torchlens._selection.Site`
+``site_key_v1``) that every ACT :class:`~torchlens._selection.selection.Site`
 records as its bridging relation. This is the sanctioned cross-run door:
 ``do()`` keeps refusing foreign resolved selections typed
 (``selection_trace_mismatch``) — alignment is EXPLICIT, never a silent
@@ -37,7 +37,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ._selection import Selection
+    from .selection import Selection
 
 __all__ = ["ALIGNMENT_REASONS", "align_resolved_selection"]
 
@@ -65,7 +65,7 @@ def _alignment_invalid(reason: str, message: str, **fields: Any) -> Exception:
         If ``reason`` is outside the closed alignment-reason vocabulary.
     """
 
-    from torchlens._selection import SelectionError
+    from .errors import SelectionError
 
     if reason not in ALIGNMENT_REASONS:
         raise ValueError(f"unknown selection alignment reason: {reason!r}")
@@ -138,7 +138,7 @@ def _target_op_for_entry(entry: Any, target: Any, source_trace: Any = None) -> A
     family stays ambiguous and refuses).
     """
 
-    from ._selection import _find_act_ops
+    from .selection import _find_act_ops
 
     structural_key = entry.structural_site_key
     if structural_key is None:
@@ -197,7 +197,7 @@ def _target_op_for_entry(entry: Any, target: Any, source_trace: Any = None) -> A
 def _join_verdict_for_key(source_trace: Any, target: Any, structural_key: str) -> str:
     """Run the SHIPPED guarded join for one key and return its verdict value."""
 
-    from ._postprocess._site_join import join_site_profiles, site_profile
+    from .._postprocess._site_join import join_site_profiles, site_profile
 
     if source_trace is None:
         return "unjoined"
@@ -226,7 +226,7 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
 
     import dataclasses
 
-    from ._selection import Selection, SelectionProvenance, _site_shape
+    from .selection import Selection, SelectionProvenance, _site_shape
 
     if target is resolved._trace:
         return resolved

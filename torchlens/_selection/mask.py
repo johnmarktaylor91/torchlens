@@ -1,11 +1,11 @@
-"""Canonical internal mask algebra for :mod:`torchlens._selection`.
+"""Canonical internal mask algebra for :mod:`torchlens._selection.selection`.
 
 One site's selected-element set is a :class:`_Mask` over the site's output
 index space, in one of four forms (whole, empty, slices, dense). The
 ``_mask_*`` constructors and set operators normalize to the cheapest form and
 are exact as sets. Masks are internal: any user-facing tensor access returns
 a fresh materialization. The names callers use are re-exported from
-``torchlens._selection``, the home its callers import from.
+``torchlens._selection.selection``, the home its callers import from.
 """
 
 from __future__ import annotations

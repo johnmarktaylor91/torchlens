@@ -45,8 +45,8 @@ from torchlens._runnable import LiteralTorchSymbol, PathFaithfulness
 from torchlens._runnable_execution import _decode_literal
 from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.errors.runnable import RunPreconditionError
+from torchlens.intervention._resolver_registry import resolve_function_registry_key
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_function_registry_key
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 

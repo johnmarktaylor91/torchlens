@@ -134,7 +134,7 @@ def check_met_doors_are_importable_through_their_public_spellings() -> None:
 def check_open_row_term_resolvers_trigger() -> None:
     """Armed flip trigger: the resolver list is still a bare append target."""
 
-    from torchlens import _selection as selection
+    from torchlens._selection import selection
 
     resolvers = selection._TERM_RESOLVERS
     assert type(resolvers) is list, (

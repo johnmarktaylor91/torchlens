@@ -72,7 +72,7 @@ def _resolve_boundary_predicate(trace: Any) -> tuple[Any, Any] | None:
     if predicate_selector is None:
         return None
     from .._ir.selector_eval import selector_contains_kind
-    from .selectors import BaseSelector
+    from .._selection.selectors import BaseSelector
 
     if not isinstance(predicate_selector, BaseSelector):
         return None

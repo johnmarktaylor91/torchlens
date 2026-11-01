@@ -73,7 +73,7 @@ def _function_registry_key(
         Best-effort function identity.
     """
 
-    from torchlens.intervention.resolver import function_registry_key_from_callable
+    from torchlens.intervention._resolver_registry import function_registry_key_from_callable
 
     if func_name in _SAFE_TENSOR_PROPERTY_NAMES:
         return FunctionRegistryKey("torch.Tensor", str(func_name), "method")

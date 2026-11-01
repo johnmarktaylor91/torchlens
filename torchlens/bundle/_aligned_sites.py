@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from ..intervention.resolver import _resolve_sites
+from .._selection.resolver import _resolve_sites
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

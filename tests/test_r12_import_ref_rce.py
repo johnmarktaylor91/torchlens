@@ -11,7 +11,7 @@ executing its top-level code = arbitrary code execution under the DEFAULT
 ``trust_custom_callables=False`` load.
 
 The fix routes every bundle-reachable import ref through the SAME trust gate as the
-function-key resolver (``torchlens.intervention.resolver.resolve_import_ref`` ->
+function-key resolver (``torchlens.intervention._resolver_registry.resolve_import_ref`` ->
 ``resolve_function_registry_key``): a genuinely foreign module default-denies with a typed
 ``UntrustedCallableError`` and is NEVER imported unless the caller opts into
 ``trust_custom_callables=True`` or a matching ``allowed_custom_callable_modules`` entry, the

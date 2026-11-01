@@ -86,13 +86,13 @@ def _direct_terms(source: Any) -> list[str]:
 def _children(source: Any) -> list[Any]:
     """Return the nested selector sources of one node (composites, specs, plans)."""
 
+    from ..intervention.spec import Recipe
     from .selectors import (
         CompositeSelector,
         FollowedBySelector,
         NotSelector,
         PrecededBySelector,
     )
-    from .spec import Recipe
 
     if source is None or isinstance(source, str):
         return []

@@ -22,6 +22,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._selection.selectors import output_at
 from torchlens.intervention._metrics import (
     cosine_distance,
     relative_l1,
@@ -34,7 +35,6 @@ from torchlens.intervention.save import (
     _serialize_value,
     _SerializedState,
 )
-from torchlens.intervention.selectors import output_at
 from torchlens.options import ReplayOptions
 
 

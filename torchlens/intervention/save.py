@@ -24,7 +24,13 @@ from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
 from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._selection.resolver import _resolve_sites
 from .._utils.hashing import sha256_file
+from ..intervention._resolver_registry import (
+    function_registry_key_from_callable,
+    resolve_function_registry_key,
+    resolve_import_ref,
+)
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from .errors import (
     DirectActivationWriteWarning,
@@ -37,12 +43,6 @@ from .errors import (
     UntrustedCallableError,
 )
 from .helpers import HELPER_REGISTRY_VERSION, helper_from_serialized
-from .resolver import (
-    _resolve_sites,
-    function_registry_key_from_callable,
-    resolve_function_registry_key,
-    resolve_import_ref,
-)
 from .spec_compat import (
     SpecCompat,
     TargetManifestDiff,
@@ -2127,7 +2127,7 @@ def _resolve_import_ref(
 ) -> Callable[..., Any]:
     """Resolve a ``module:qualname`` import reference through the shared trust gate.
 
-    Delegates to :func:`torchlens.intervention.resolver.resolve_import_ref` so a
+    Delegates to :func:`torchlens.intervention._resolver_registry.resolve_import_ref` so a
     bundle-supplied import reference obeys the SAME deny-by-default contract as every
     other bundle-reachable callable resolution: fixed torch/operator namespaces and
     TorchLens-owned helpers always resolve (purity-gated), while a genuinely foreign

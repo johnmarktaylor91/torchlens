@@ -17,6 +17,12 @@ public surface, ``__all__``, and static types unchanged.
 
 from typing import Any
 
+from .._selection.selectors import (
+    label_contains,
+    label_matches,
+    model_input,
+    model_output,
+)
 from ._affine_source import set_affine_coordinates
 from ._directions import Direction, fit_direction
 from ._gradient_contract import keep_grad
@@ -63,12 +69,6 @@ from .save import (
     SpecCompat,
     TargetManifestDiff,
     check_spec_compat,
-)
-from .selectors import (
-    label_contains,
-    label_matches,
-    model_input,
-    model_output,
 )
 from .sites import SiteSpec as SiteSpec
 

@@ -786,8 +786,8 @@ def _classify_callable(callable_ref: Any) -> str | None:
 
     if callable_ref is None:
         return "callable_ref_unavailable"
+    from ..intervention._resolver_registry import resolve_function_registry_key
     from ..intervention.errors import ReplayPreconditionError, UntrustedCallableError
-    from ..intervention.resolver import resolve_function_registry_key
 
     try:
         resolve_function_registry_key(callable_ref)

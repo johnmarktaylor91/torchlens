@@ -828,7 +828,7 @@ def _get_op_nums_from_user_labels(
     elif which_layers in [None, "none", "None", "NONE", []]:
         return []
 
-    from ..intervention.selectors import BaseSelector
+    from .._selection.selectors import BaseSelector
 
     if isinstance(which_layers, BaseSelector):
         return sorted(

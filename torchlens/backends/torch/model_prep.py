@@ -2178,8 +2178,8 @@ def _record_predicate_module_boundary_outputs(
     from ..._capture.projections import _record_from_record_context
     from ..._ir.predicate import RetroactiveCaptureDecision
     from ..._ir.selector_eval import selector_contains_kind
+    from ..._selection.selectors import BaseSelector
     from ...intervention.runtime import _peek_module_intervention_parent_labels
-    from ...intervention.selectors import BaseSelector
     from ...recording.types import ActivationRecord
     from .ops import _walk_output_tensors_with_paths
 

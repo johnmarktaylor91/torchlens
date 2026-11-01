@@ -47,8 +47,11 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
-from ._selection_align import align_resolved_selection
-from ._selection_mask import (
+from .._utils.fail_open import fail_open
+from ..errors._base import TorchLensError
+from .align import align_resolved_selection
+from .errors import SelectionError, SelectorCompositionError
+from .mask import (
     _Mask,
     _mask_complement,
     _mask_difference,
@@ -59,11 +62,17 @@ from ._selection_mask import (
     _mask_union,
     _mask_whole,
 )
-from ._utils.fail_open import fail_open
-from .errors._base import ConfigurationError, TorchLensError
+from .resolver import (
+    _iter_sites,
+    _normalize_query,
+    _resolve_branch_sites,
+    multipass_bare_label_message,
+    split_site_branches,
+)
+from .selectors import _grad_selection_refusal
 
 if TYPE_CHECKING:
-    from ._data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
 __all__ = [
     "Selection",
@@ -81,16 +90,6 @@ RelationName = Literal["exact", "upper_bound", "lower_bound", "unknown"]
 _RELATIONS: tuple[str, ...] = ("exact", "upper_bound", "lower_bound", "unknown")
 
 _OPERATOR_SYMBOLS = {"or": "|", "and": "&", "sub": "-"}
-
-
-class SelectionError(ConfigurationError, ValueError):
-    """Carrier class for the closed ``selection_*`` refusal codes.
-
-    Branch on ``exc.fields["code"]`` (``selection_trace_mismatch`` /
-    ``selection_bool_ambiguous`` / ``selection_kind_incompatible`` /
-    ``selection_unresolvable`` / ``selection_apply_invalid`` /
-    ``selection_alignment_invalid``), never on message text.
-    """
 
 
 # ---------------------------------------------------------------------------
@@ -824,8 +823,6 @@ def _check_signals(left_signal: str, right_signal: str) -> None:
     """Refuse forward x backward composition (inherited refusal)."""
 
     if left_signal != right_signal:
-        from .intervention.errors import SelectorCompositionError
-
         raise SelectorCompositionError(
             "Cross-graph composition not supported: a forward selection and a "
             "backward selection cannot be combined."
@@ -1061,8 +1058,6 @@ def _act_entry(op: Any, mask: _Mask, relation: str, source: str) -> Site:
 def _forward_ops(trace: Any) -> tuple[Any, ...]:
     """Return the trace's forward ops in execution order."""
 
-    from .intervention.resolver import _iter_sites
-
     return tuple(_iter_sites(trace, "forward"))
 
 
@@ -1106,13 +1101,9 @@ def _resolve_combinator(node: _Combinator, trace: Any, kind: str) -> Selection:
 def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> Selection:
     """Resolve a lifted selector to whole-site masks over its matched sites."""
 
-    from .intervention.resolver import _normalize_query, _resolve_branch_sites, split_site_branches
-
     matched: list[Any] = []
     for branch in split_site_branches(node.selector):
         if branch.universe == "gradient":
-            from .intervention.selectors import _grad_selection_refusal
-
             raise _grad_selection_refusal(node.selector, code="grad_selection_unsupported")
         branch_selector = _normalize_query(branch.selector)
         matched.extend(_resolve_branch_sites(trace, branch_selector, branch.universe, strict=False))
@@ -1298,8 +1289,6 @@ def _resolve_unit_term(node: _UnitTerm, trace: Any) -> Selection:
     if len(matches) > 1 and len({getattr(op, "layer_label", None) for op in matches}) == 1:
         # A layer-wide spelling of a multi-pass layer names N distinct ops;
         # units() addresses ONE op's index space, so never guess a pass.
-        from .intervention.resolver import multipass_bare_label_message
-
         layer_label = getattr(matches[0], "layer_label", None) or node.site
         pass_indices = sorted(int(getattr(op, "pass_index", 1) or 1) for op in matches)
         raise _unresolvable(
@@ -1530,12 +1519,8 @@ def random_like(
 def _selection_from_selector(selector: Any) -> Selector:
     """Lift a BaseSelector as a selector-term (predicate meaning intact)."""
 
-    from .intervention.resolver import split_site_branches
-
     branches = split_site_branches(selector)
     if any(branch.universe == "gradient" for branch in branches):
-        from .intervention.selectors import _grad_selection_refusal
-
         # Gradient selections are not addressable this release (SPEC 1.3).
         raise _grad_selection_refusal(selector, code="grad_selection_unsupported")
     signal = "backward" if any(branch.universe == "node" for branch in branches) else "forward"
@@ -1606,28 +1591,7 @@ def _apply_invalid(
 # _validate_edited / _masked_factory / _derive_masked_edit live in
 # torchlens/intervention/masked_edit.py; the plan builder itself
 # (_build_selection_do_plan, _resolve_do_target) lives in
-# torchlens/_selection_do_plan.py and is imported lazily below.
-
-
-def build_selection_do_plan(
-    trace: Any, selection_like: Any, edit: Any
-) -> tuple[Selection, list[dict[str, Any]], dict[str, Any]]:
-    """Resolve a selection target and derive the per-site edit plan.
-
-    Returns ``(resolved, [{"op", "entry", "is_leaf", "edit"}, ...], audit_record)``.
-    ACT selections only: PARAM edits route through parameter substitution
-    (``intervention/param_substitution.py`` — the value each consumer sees is
-    substituted on the replay engine, the live parameter is never written);
-    EDGE selections are stage-3 edge-substitution territory.
-    """
-
-    from ._selection_do_plan import _build_selection_do_plan
-    from .intervention.resolver import _label_index_scope
-
-    # Building the plan adds, removes and relabels no op, so plain-label terms
-    # resolve through one label index per trace for the whole plan.
-    with _label_index_scope():
-        return _build_selection_do_plan(trace, selection_like, edit)
+# torchlens/_selection/do_plan.py and is imported lazily below.
 
 
 # ---------------------------------------------------------------------------

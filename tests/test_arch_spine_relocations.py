@@ -13,7 +13,7 @@ historical spelling + pickle-visible identity):
 
 PUBLISHED-CLOSURE HANDOFF (move not executed in C01): the intervention
 triple (``intervention/types`` + ``errors`` + ``selectors``) drags
-``SelectionError`` and ``_SelectionOperand`` out of ``torchlens._selection``
+``SelectionError`` and ``_SelectionOperand`` out of ``torchlens._selection.selection``
 -- "six modules move" vs "drag the selection substrate too" is exactly the
 decision Rule V2 requires publishing, and lane C03 is concurrently
 rewriting those same modules (immutable InterventionSpec). The move rides a
@@ -139,5 +139,5 @@ class TestInterventionTripleHandoff:
         assert "from .._selection import" in errors_source
 
     def test_selectors_depend_on_types(self) -> None:
-        selectors_source = (REPO / "torchlens/intervention/selectors.py").read_text()
+        selectors_source = (REPO / "torchlens/_selection/selectors.py").read_text()
         assert "from .types import" in selectors_source

@@ -379,7 +379,7 @@ def save(
     # (owners disjoint; a slice can only exist after its module imported).
     slice_presenter = sys.modules.get("torchlens._trace_slice")
     if slice_presenter is not None and isinstance(trace, slice_presenter.TraceSlice):
-        from torchlens._selection import SelectionError
+        from torchlens._selection.errors import SelectionError
 
         raise SelectionError(
             "trace.save() does not support TraceSlice: a slice is a VIEW with "

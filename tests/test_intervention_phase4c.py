@@ -8,9 +8,9 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._selection.selectors import output_at
 from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import LiveModeLabelError, SiteResolutionError
-from torchlens.intervention.selectors import output_at
 from torchlens.options import CaptureOptions
 
 

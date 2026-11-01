@@ -12,8 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal, NamedTuple
 
+from .._selection.resolver import _resolve_sites, _site_record, _SiteTable
 from .errors import GraphShapeMismatchError, SiteResolutionError
-from .resolver import _resolve_sites, _site_record, _SiteTable
 from .types import InterventionSpec
 
 __all__ = ["SpecCompat", "TargetManifestDiff", "check_spec_compat"]

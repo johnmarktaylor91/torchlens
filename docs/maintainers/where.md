@@ -157,9 +157,9 @@ TorchLens - extract outs and metadata from PyTorch models. (88 modules, 55795 li
 | `_selection` | Selection / intervention algebra: the dual selection types (L6 stage 1). | 1768 |
 | `_selection_align` | Cross-run selection alignment (L6 stage 4a). | 269 |
 | `_selection_compare` | Comparative selection producers: differential and cross-pass (L6 producer wave). | 956 |
-| `_selection_do_plan` | The ''do(selection, edit)'' plan builder for :mod:'torchlens._selection'. | 150 |
+| `_selection_do_plan` | The ''do(selection, edit)'' plan builder for :mod:'torchlens._selection.selection'. | 150 |
 | `_selection_graph` | Graph-structural selection producers (L6 producer wave, graph slice). | 501 |
-| `_selection_mask` | Canonical internal mask algebra for :mod:'torchlens._selection'. | 177 |
+| `_selection_mask` | Canonical internal mask algebra for :mod:'torchlens._selection.selection'. | 177 |
 | `_selection_subspace` | Subspace selection producer: directions in activation space (L6 producer wave). | 336 |
 | `_selection_values` | Value-based and statistical selection producers (L6 producer wave). | 1179 |
 | `_source_links` | Source-location link formatting helpers. | 110 |
