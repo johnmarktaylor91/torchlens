@@ -243,6 +243,26 @@ def test_nodes_mode_midgraph_dict_keeps_member_ties(tmp_path: Path) -> None:
 
 
 @needs_dot
+@pytest.mark.parametrize("row", ["two_heads", "classifier", "fuse"])
+def test_nodes_mode_svg_draws_every_container_key(tmp_path: Path, row: str) -> None:
+    """Every key on a container edge appears in the drawn SVG, not only in the DOT."""
+
+    if row == "two_heads":
+        trace = tl.trace(TwoHeads(), torch.randn(1, 4), capture=STRUCTURE)
+    elif row == "classifier":
+        trace = tl.trace(_tiny_classifier(), torch.randn(1, 4), capture=STRUCTURE)
+    else:
+        trace = tl.trace(Fuse(), _fuse_inputs(), capture=STRUCTURE)
+    source = _draw(trace, tmp_path, row, "nodes", fmt="svg")
+    svg = (tmp_path / f"{row}.svg").read_text()
+
+    wanted, kept = _keys_kept_in_svg(source, svg)
+
+    assert wanted, "the nodes-mode DOT should carry keyed container edges"
+    assert kept == wanted
+
+
+@needs_dot
 @pytest.mark.heavy
 def test_cluster_mode_draws_the_gpt2_split_box_with_sibling_ordering(tmp_path: Path) -> None:
     """The split tuple's container box is drawn while sibling ordering is on (the default)."""

@@ -234,7 +234,7 @@ def _append_container_overlay_edge(
         Graphviz edge attributes.
     """
 
-    key = (namespace, tail_name, head_name, attrs.get("label", ""))
+    key = (namespace, tail_name, head_name, attrs.get("xlabel", attrs.get("label", "")))
     if key in edge_keys:
         return
     edge_keys.add(key)
@@ -264,7 +264,11 @@ def _container_boundary_edge_attrs(label: str | None) -> dict[str, str]:
         "constraint": "false",
     }
     if label is not None:
-        attrs["label"] = _html_container_edge_label(label)
+        # ``xlabel``, not ``label``: these edges are constraint=false, and dot
+        # 2.43 silently drops the midpoint ``label`` of many such edges (the key
+        # vanished from the picture while the DOT still carried it). An external
+        # label is placed after layout and is always drawn (forcelabels=true).
+        attrs["xlabel"] = _html_container_edge_label(label)
     return attrs
 
 
