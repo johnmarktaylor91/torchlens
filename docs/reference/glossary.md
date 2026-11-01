@@ -749,8 +749,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Bundle.upstream / Bundle.downstream** *(spelling documented-unstable)*
 : `b.upstream(name)` lists every member `name` transitively came after (what fed it), and
   `b.downstream(name)` every member that came after it, nearest first, over the ordering kinds
-  (`fed_by`, `selected_by`, `successor_of`, `forked_from`, `escalates`). Bundle helper-table
-  methods, like
+  (`fed_by`, `selected_by`, `successor_of`, `forked_from`, `escalates`). Bundle methods, like
   `compare`.
 
 **Bundle.token_pairs** *(spelling documented-unstable)*
@@ -765,7 +764,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   text), excluded ids, positions claimed twice, streams whose bindings name different tokenizers,
   and eligible source tokens no verified span covers are reported, never paired. Equal lengths are
   never evidence of matching meaning. A verified row whose evidence now contradicts it refuses
-  `bundle_relation_span_unverified`. A Bundle helper-table method; any reduction over a
+  `bundle_relation_span_unverified`. A Bundle method; any reduction over a
   many-to-one group is the caller's own descriptive comparison.
 
 **Bundle.token_divergence** *(spelling documented-unstable)*
@@ -775,7 +774,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   completion. Typical use is a call and its copy from a steered re-run
   (`b.token_divergence("critique", "cf_critique")`), but any two bound members compare. Refuses
   `bundle_token_divergence_unavailable` (fields `member`, `reason`) when a binding, its completion
-  range or the ids are missing; an unknown name raises `KeyError`. A Bundle helper-table method.
+  range or the ids are missing; an unknown name raises `KeyError`. A Bundle method.
 
 **TokenDivergence** *(`from torchlens.bundle import TokenDivergence`; spelling documented-unstable)*
 : The frozen result of `Bundle.token_divergence`. `original`, `rerun`: the member names.
@@ -837,11 +836,31 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   gate first and refuses typed when the members cannot be aligned; its grade is
   `bundle.comparability(a, b)`, a `tl.types.Relationship`.
 
-**Bundle delta family** *(`delta_map`, `norm_delta`, `output_delta`)*
-: Per-node and per-output distances from a baseline member (the configured baseline, else the
-  first member). Every (baseline, member) pair goes through the comparison gate first, the same
-  predicates as `bundle.at(site).compare()`: no ordering path between them, a shared graph, and proven-equal
-  input values; otherwise the read refuses with the gate's `bundle_gate_*` code.
+**Bundle.store_comparison / Bundle.stored_comparison / Bundle.stored_comparison_names**
+: `b.store_comparison(metric="relative_l2", *, name=None, baseline=None, on="out")` computes the
+  per-node distances of every member from the baseline once (the configured baseline, else the
+  first member) and stamps them on the supergraph under the returned name (the metric's name
+  unless `name` is given; a callable metric needs an explicit name); `b.stored_comparison(name)`
+  reads one back without recomputing (`comparison_unknown` for a name never stored) and
+  `b.stored_comparison_names()` lists the stored names. Session-level state on the built
+  supergraph, never persisted. Every (baseline, member) pair goes through the comparison gate
+  first, the same predicates as `bundle.at(site).compare()`: no ordering path between them, a
+  shared graph, and proven-equal input values; otherwise the read refuses with the gate's
+  `bundle_gate_*` code.
+
+**Bundle.draw**
+: `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction="bottomup",
+  theme=None, show_legend=None, file_format=None, open_viewer=True, graph_overrides=None,
+  node_overrides=None, edge_overrides=None, members=None, metric="relative_l2", on="out")` draws
+  the bundle as one picture beside `b.show()` (one picture per member) and returns the DOT
+  source. `graph="forward"` (default), `"backward"`, `"both"` or `"overlay"` draw the bundle's
+  union op graph for that pass; `nodes="members"` draws one node per member and one edge per
+  relation row (`graph` must stay `"forward"`); `rolled=True` draws the per-layer graph. `theme`
+  takes the `Trace.draw` skin names (default `"torchlens"`). `graph="diff"` draws two members side
+  by side with their aligned sites coloured by `metric` distance on the `on` field: `members=(left,
+  right)` names them (default the baseline and the next member); its defaults are `theme="paper"`,
+  `file_format="svg"` and `path="bundle_diff"`. The diff runs the comparison gate on the rendered
+  pair only.
 
 **Bundle.episode_status** *(spelling documented-unstable)*
 : `b.episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
@@ -3689,7 +3708,7 @@ The sections above describe each surface in depth.
 | `Bundle.comparability` | Return the derived relationship for a pair of members (`tl.types.Relationship`) |
 | `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=` |
 | `Bundle.comparability_table` | Return pairwise relationships for all member pairs |
-| `Bundle.map` | Apply a function independently to each member |
+| `Bundle.map` | Apply a function independently to each member; released effect-table candidates read `"unmeasured"` |
 | `Bundle.rank_changes` | Rank sites by their distance from a baseline member |
 | `BundleComparisonError.severity` | The error's severity class |
 | `CapabilityRow.is_available` | Whether the capability is available in this environment |

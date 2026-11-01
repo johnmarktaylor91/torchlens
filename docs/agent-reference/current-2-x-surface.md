@@ -311,11 +311,11 @@
   `b.token_divergence(original, rerun)` returns `TokenDivergence` (`prompt_divergence`,
   `completion_divergence`, `lengths`, `shared` span rows, `intervened`); unbound members refuse
   `bundle_token_divergence_unavailable`. TorchLens never runs the harness; no `paired_rerun`.
-  `b.upstream(name)` / `b.downstream(name)` (helper-table methods) walk the ordering kinds;
-  `b.at(site)` takes a label or a selector (a member subset is a bundle of those members); `delta_map`/`norm_delta`/
-  `output_delta`/`compare` (and `store_comparison`) now run the comparison gate on every
+  `b.upstream(name)` / `b.downstream(name)` walk the ordering kinds;
+  `b.at(site)` takes a label or a selector (a member subset is a bundle of those members); `compare`,
+  `rank_changes`, `store_comparison` and `draw(graph="diff")` run the comparison gate on every
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
-  `b.token_pairs("critique", "draft")` (helper-table method, relate's argument order) is the one
+  `b.token_pairs("critique", "draft")` (relate's argument order) is the one
   verified alignment read: `.pairs` of `(source_pos, reader_pos)`, `.source_positions`,
   `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);
   only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
@@ -351,7 +351,7 @@
   site-key coordinates and undeclared multi-site candidates (incl. the
   unscoped `tl.head(i)` broadcast) become REFUSED effect rows; the complete
   per-candidate `member_effect_table_v1` (released/refused/failed included)
-  persists and `bundle.effects()`/`measure_members()` serve it (member-axis
+  persists and `bundle.effects()` serves it; `bundle.map(fn)` keys released candidates as `"unmeasured"` (member-axis
   `rank_changes`, explicit session-only tier-c `.to_selection()`).
   `head_ablation_candidates` is the module-scoped v-facet sugar (GQA/MQA
   refuses typed; hand-written-hook oracle beside it). The experiment LEDGER

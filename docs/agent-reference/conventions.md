@@ -72,7 +72,7 @@
   baseline; `torchlens.experiment.sweep_sites` is the serial candidate
   engine (edit=/metric=/retain= REQUIRED, undeclared multi-site candidates
   refused, complete effect table persisted incl. released/refused/failed
-  rows, `bundle.effects()`/`measure_members()` reads);
+  rows, `bundle.effects()` reads, `bundle.map(fn)` keys released candidates `"unmeasured"`);
   `head_ablation_candidates` is the module-scoped v-facet sugar (GQA
   refuses; hand-written-hook oracle in its test file); the experiment
   ledger (`torchlens.experiment.ledger`) is the opt-in event-sourced

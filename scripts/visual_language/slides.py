@@ -1440,7 +1440,7 @@ OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
     (
         "Bundle diff",
         "two traces side by side, white to red by difference",
-        "bundle.show_diff()",
+        "bundle.draw(graph='diff')",
         "docs/reference/glossary.md",
     ),
     (
