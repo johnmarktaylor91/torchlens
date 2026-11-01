@@ -55,7 +55,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `prehook.py` | Pre-hook effect records |
 | `_trace_profile.py` | Trace profiling and timing helpers |
 | `_trace_stats.py` | Trace aggregate stats and backward-pass projections |
-| `_trace_validation.py` | Trace validation and log-entry removal helpers |
+| `_trace_validation.py` | Trace validation, run and backward mixin: thin methods over the record-rebuild destinations, plus the log-entry removal helpers |
 | `_trace_viz.py` | Trace visualization entrypoints |
 | `op.py` | `Op` two-word row facade (`_core`/`_row` over `_trace_core`), tensor save, per-pass fields |
 | `_op_transforms.py` | User-transform apply + train-mode/streaming output validation helpers (split from `op.py`; `op.py` re-exposes them) |
