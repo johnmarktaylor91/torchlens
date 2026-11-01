@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 ValidationReplayState = Literal["available", "passed", "failed", "unavailable", "unverified"]
@@ -333,7 +333,7 @@ class ValidationStatus:
             num_unverified_ops + num_pure_unverified_ops + num_effect_region_ops
         )
         if num_failed_ops:
-            return cls.result(
+            failed = cls.result(
                 passed=False,
                 backend=backend,
                 source=source,
@@ -347,6 +347,7 @@ class ValidationStatus:
                 exempted_reason_counts=exempted_reason_counts,
                 decisions=decisions,
             )
+            return replace(failed, message=_failed_replay_message(decisions))
         if total_unverified_count:
             return cls.unverified(
                 backend=backend,
@@ -584,3 +585,22 @@ __all__ = [
     "has_importer_region_provenance",
     "is_region_replay_annotation",
 ]
+
+
+def _failed_replay_message(decisions: Sequence[Mapping[str, Any]] | None) -> str:
+    """The failed-status message, naming the first failed decision's op and reason.
+
+    A caller reading only ``message`` learns which op failed and why; the
+    per-op record stays in ``decisions``. A failure with no decision rows (or
+    none marked failed) keeps the bare message.
+    """
+
+    for row in decisions or ():
+        if str(row.get("decision", "")) != "failed":
+            continue
+        reason = str(row.get("reason", "") or "unknown")
+        op_label = row.get("op_label")
+        if op_label:
+            return f"Replay validation failed at {op_label} ({reason})."
+        return f"Replay validation failed ({reason})."
+    return "Replay validation failed."
