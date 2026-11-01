@@ -35,6 +35,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._state import pause_logging
 
 _PROVENANCE_MATCH = "no graph/source provenance"
 
@@ -43,6 +44,18 @@ _PROVENANCE_MATCH = "no graph/source provenance"
 _FOREIGN_SIZE_A = torch.tensor(4)
 _FOREIGN_SIZE_B = torch.tensor(6)
 _FOREIGN_OPERAND = torch.ones(24)
+
+
+def _unseen(t: torch.Tensor) -> torch.Tensor:
+    """Copy ``t`` with logging paused: a tensor the capture never sees.
+
+    A pre-forward closure or global tensor is recorded as a ``constant`` source
+    op, so a genuine provenance gap is planted with a tensor first built
+    mid-forward while logging is paused.
+    """
+
+    with pause_logging():
+        return t.clone()
 
 
 class _ProvenancedDynamicSize(nn.Module):
@@ -83,7 +96,7 @@ class _ForeignSize(nn.Module):
             ``x`` reshaped to ``(4, 6)`` via foreign size tensors.
         """
 
-        return x.flatten().reshape(_FOREIGN_SIZE_A, _FOREIGN_SIZE_B)
+        return x.flatten().reshape(_unseen(_FOREIGN_SIZE_A), _unseen(_FOREIGN_SIZE_B))
 
 
 class _ForeignOperand(nn.Module):
@@ -103,7 +116,7 @@ class _ForeignOperand(nn.Module):
             The elementwise sum with the foreign operand.
         """
 
-        return x.flatten() + _FOREIGN_OPERAND  # foreign at add arg1 (data operand)
+        return x.flatten() + _unseen(_FOREIGN_OPERAND)  # foreign at add arg1 (data operand)
 
 
 def _provenance_warnings(model: nn.Module, x: torch.Tensor) -> list[str]:

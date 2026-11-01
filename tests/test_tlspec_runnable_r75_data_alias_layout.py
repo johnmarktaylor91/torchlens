@@ -39,6 +39,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
+from torchlens._state import pause_logging
 from torchlens.options import CaptureOptions
 
 
@@ -174,20 +175,23 @@ class StateDataRootedBranch(nn.Module):
         return x - 1.0
 
 
-# Pre-capture NON-module tensor: no label, no ledger entry, no captured storage, and no
-# state address (a module ATTRIBUTE tensor is address-stamped and owned by the r63 state
-# nets -- its non-canonical layout read already REFUSES at save; a free global like this
-# one is the genuinely unresolvable receiver the fail-closed floor must catch).
+# A tensor the capture never sees: no label, no ledger entry, no captured storage, and
+# no state address (a module ATTRIBUTE tensor is address-stamped and owned by the r63
+# state nets -- its non-canonical layout read already REFUSES at save; a free global is
+# now a recorded ``constant`` source, so the forward copies this one with logging paused
+# to plant the genuinely unresolvable receiver the fail-closed floor must catch).
 _HIDDEN_GLOBAL = torch.randn(2, 4, 8, 8).to(memory_format=torch.channels_last)
 
 
 class HiddenGlobalLayoutBranch(nn.Module):
-    """Fail-closed floor: layout read on a PRE-CAPTURE non-module tensor."""
+    """Fail-closed floor: layout read on a tensor the capture never saw."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Branch on the unlabeled, unresolvable global tensor's layout."""
 
-        if _HIDDEN_GLOBAL.is_contiguous(memory_format=torch.channels_last):
+        with pause_logging():
+            hidden = _HIDDEN_GLOBAL.clone()
+        if hidden.is_contiguous(memory_format=torch.channels_last):
             return x + 10.0
         return x - 10.0
 
@@ -294,7 +298,7 @@ def test_r75_state_data_rooted_read_stays_residual_three(tmp_path: Path) -> None
 def test_r75_unresolvable_receiver_fails_closed(tmp_path: Path) -> None:
     """The fail-closed floor: an unresolvable unlabeled receiver downgrades completeness.
 
-    A pre-capture NON-module tensor has no label, no ledger entry, no captured storage,
+    A tensor the capture never saw has no label, no ledger entry, no captured storage,
     and no state address: no positive rung resolves it, so the read must ceiling the
     artifact UNVERIFIABLE on EVERY run (r73 silently recorded nothing here -- a hidden
     Python-state layout read could steer the branch while the replay claimed VERIFIED).
