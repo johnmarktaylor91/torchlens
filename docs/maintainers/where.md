@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1290 modules, 622926 lines, 0 modules without a docstring.
+83 packages, 1290 modules, 622924 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 64 | 31408 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 64 | 31406 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (64 modules, 31408 lines)
+TorchLens - extract outs and metadata from PyTorch models. (64 modules, 31406 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -141,7 +141,7 @@ TorchLens - extract outs and metadata from PyTorch models. (64 modules, 31408 li
 | `_plain_attr_fidelity` | Plain-attribute fidelity facts for the validation deepcopy and fallback paths. | 334 |
 | `_quantities` | Numeric quantity types with unit-aware display. | 680 |
 | `_record_type` | Readers for a record that may be an ''Op'' or a ''Layer''-like record. | 69 |
-| `_robustness` | Tensor-variant detection and pre-flight guards for ''trace''. | 822 |
+| `_robustness` | Tensor-variant detection and pre-flight guards for ''trace''. | 820 |
 | `_runnable_until` | Stop-frontier and dependency-closure arithmetic for ''run(until=...)''. | 95 |
 | `_save_budget` | Running budget for retained activation bytes, with a typed refusal. | 971 |
 | `_source_links` | Source-location link formatting helpers. | 110 |
