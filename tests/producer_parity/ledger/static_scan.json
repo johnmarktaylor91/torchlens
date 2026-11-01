@@ -3681,6 +3681,46 @@
  },
  {
   "ambiguous": false,
+  "field": "dropped_edge_tensor_args",
+  "file": "torchlens/backends/_constants.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/_constants.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/_constants.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/_constants.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "unattributed_tensor_args",
+  "file": "torchlens/backends/_constants.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "equivalence_class",
   "file": "torchlens/backends/_finalize.py",
   "has_default": false,
@@ -6317,6 +6357,14 @@
   "file": "torchlens/compat/_report.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/conformance/_protocol_cases.py",
+  "has_default": false,
+  "sites": 2,
   "via_getattr": false
  },
  {
