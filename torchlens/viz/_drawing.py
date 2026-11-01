@@ -104,11 +104,11 @@ class Drawing:
         target = self.path
         if target is None or not Path(target).exists():
             suffix = "html" if self.file_format == "html" else self.file_format
-            handle = tempfile.NamedTemporaryFile(
+            with tempfile.NamedTemporaryFile(
                 prefix="tl-drawing-", suffix=f".{suffix}", delete=False
-            )
-            handle.close()
-            target = self.save(handle.name)
+            ) as handle:
+                temp_name = handle.name
+            target = self.save(temp_name)
         _open_viewer(Path(target))
 
     def close(self) -> None:
