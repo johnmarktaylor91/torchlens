@@ -22,10 +22,10 @@ from torch import nn
 import torchlens as tl
 from torchlens import _visualization
 from torchlens._capture_state_helpers import (
+    _reject_opaque_wrappers,
     reset_compiled_model_unwrap_warning_state,
     unwrap_compiled_submodules,
 )
-from torchlens._user_funcs import _reject_opaque_wrappers
 from torchlens._utils._torch_compat import get_dynamo_optimized_module_type
 
 

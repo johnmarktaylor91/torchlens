@@ -4,11 +4,9 @@
 # TORCHLENS_REGEN_LAYER_BASELINE=1 and review the diff.
 module	count
 _autoroute._builtin_input	1
+_capture._input_records	1
 _capture.predicates	3
-_capture.trace	1
 _capture_fingerprint	1
-_chunked_capture_helpers	3
-_chunking	2
 _constants	2
 _data_classes._backend_capability_guards	2
 _data_classes._module_role_hints	6
@@ -76,5 +74,4 @@ recording._storage_resolver	1
 recording.options	1
 recording.types	5
 repgeom._node_visuals	3
-validation	1
 validation.backward	1

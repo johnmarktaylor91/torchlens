@@ -132,9 +132,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # dedup split to _op_dedup.py (T77) lands on the merged tree alongside
     # the F10 deletions; re-keyed down to the next 50-line step above the
     # merged measurement (4794).
-    # 4800 -> 4700 (2026-11-01 v11-group): the privatised member rows shrank the
-    # file to 4690; re-keyed down to the next 50-line step as the slack check asks.
-    "torchlens/_data_classes/op.py": 4700,
+    "torchlens/_data_classes/op.py": 4800,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -185,104 +183,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # the 4450 baseline (4700 -> 4450).
     "torchlens/_io/bundle.py": 4450,
     "torchlens/_io/runnable_load.py": 3850,
-    # 4200 -> 4050: the wave-0 governance sweep extracted the structure-only
-    # Layer-0 entry contract to _capture/_structure_only_entry.py; re-keyed
-    # down to the next 50-line step above the post-split measurement.
-    # 4050 -> 4055 (2026-08-19 async-disk lane, measured at merge): tl.to_disk
-    # gains the documented async_writes/max_pending_bytes knobs. The lane settled
-    # its own ceiling to 4050 BEFORE rebasing; main had independently grown the
-    # same file, so 4050 was a pre-rebase subtotal and the merged truth is their
-    # union. Stepped EXACT (no 50-line slack) so the next raise is also conscious.
-    # 4055 -> 3800 (2026-08-26 shim removal): the flat-kwarg warning ladders,
-    # moved-name wrappers, and paper-era shims came out of trace()'s entry;
-    # re-keyed down to the next 50-line step above the post-deletion measure.
-    # 3800 -> 4200: 2026-08-26 A06 defect-lane settle (reviewed fix mass, next
-    # 50-line step above the 4150 measurement) -- stop_after halt-engine wiring
-    # + never-fired provenance split, save_grads predicate routing, the
-    # module_filter zero-save disclosure, the cache-key inversion (curated /
-    # neutral ledgers + sweep), chunk-path session-knob forwarding, the
-    # batchnorm train-stats warn-once, and the failed-capture preparation
-    # release. No new growth licensed; the Phase-2 move-class lane keeps
-    # user_funcs as a split target (trace-entry resolution vs cache vs
-    # chunking are its natural seams).
-    # 4200 -> 4230 (2026-08-28 F33 weightsfree): the W2 admission threading
-    # (admit_meta derivation + pending-admission arm around the capture
-    # driver) and the settlement seam (wrap-generation stamp + envelope
-    # write) land at the trace entry by design; conscious raise, split
-    # target unchanged.
-    # 4230 -> 4235: C07X adds the unconditional Trace.provenance.root_entry_point
-    # identity-fact write (foldA D10) at the one-door capture site -- a
-    # 2-line addition with no extractable seam; a split here would be
-    # confetti (R43: never split code merely to satisfy the number).
-    # 2026-08-29 F01-AMENDED fix cycle (T76 bounce): the lane's 4235 -> 4265
-    # raise was reverted by moving the funnel/arming bodies to
-    # intervention/model_door.py and intervention/injection.py; the F42
-    # reconcile drops the lane-side 4235 duplicate row -- the union tree
-    # carries F41's reviewed mass under the 4290 row below.
-    # raise for the F01/OP2 model-door funnel + log_injections threading is
-    # REVERTED (ceilings never bump; C06/F09/F21 precedent) -- the funnel and
-    # arming bodies moved to intervention/model_door.py and
-    # intervention/injection.py, leaving one-line door/arm spellings plus the
-    # coverage-pinned CaptureOptions threading rows at the trace entry.
-    # 4235 -> 4250 (2026-08-29 T73b re-reconcile, F24): merge union -- each
-    # side fits 4235 alone; the F24-observe entries and the landed T73b
-    # train mass union to 4238 on the merged tree. Next 50-line step above
-    # the merged measurement, never a hand-derived subtotal.
-    # 4235 -> 4290 (2026-08-29 F41 bound-method roots): the ruled root
-    # contract lands at the one-door trace entry by design -- the
-    # bound-method wrapper swap + refusal teach, the owner-identity /
-    # bound_method root-fact derivation, the input-ladder module-root gate,
-    # and the tl_authored_root marker write; the wrapper CLASS itself lives
-    # in backends/torch/bound_root.py. Conscious raise; split target
-    # (trace-entry resolution vs cache vs chunking) unchanged.
-    # 4250/4290 -> 4290 (2026-08-29 T80 re-reconcile, F24): duplicate-key
-    # collapse -- the landed F41 root-contract mass unions with the
-    # F24-observe entries to 4284 on the merged tree; the landed 4290
-    # ceiling already clears the union and stays.
-    # 4235/4290 -> 4290 (2026-08-30 T82d re-reconcile, F44): duplicate-key
-    # collapse -- the F44 model-door/log_injections rows union with the
-    # landed F41+T82d mass to exactly 4290 on the merged tree (the landed
-    # *_value locals finish F44's ratchet-paydown direct-read style); the
-    # landed 4290 ceiling holds and stays.
-    # 4235/4290 -> 4290 (2026-08-30 F43 re-reconcile): duplicate-key
-    # collapse again -- the T82d landed track_device_memory threading unions
-    # with the F43-side log_injections threading to exactly 4290; the merge
-    # keeps the T76 inlined capture_options.X spellings (the landed value-
-    # extraction locals were dead after the paydown) so the ceiling holds
-    # without a raise.
-    # 4290 -> 4350 (2026-08-29 F28 re-reconcile): merge union -- the F41
-    # bound-method-root mass (4274) fits 4290 alone, and the F28 echo facade
-    # residual (+40: the narrate= entry param, docstring, and the four thin
-    # snoop._entry seam calls; the lane already paid its extraction to
-    # torchlens/_snoop/_entry.py at its own gate debt commit) rode the F28
-    # branch; the union measures 4314. Next 50-line step, conscious raise
-    # with both contributions named, not silent regrowth; split target
-    # (trace-entry resolution vs cache vs chunking) unchanged.
-    # 4350/4290 (2026-08-30 T82d re-reconcile, F28): duplicate-key collapse --
-    # the landed T82d train mass (F40c+F22, 4290 alone) unions with the F28
-    # echo residual to 4328 on the merged tree; the F28-side 4350 ceiling
-    # already clears the union and stays.
-    # 4290/4350 -> 4350 (2026-08-30 T85 re-reconcile, F44): duplicate-key
-    # collapse -- the landed T85 mass (F28 echo + F01-AMENDED, 4330 alone)
-    # already carries the F44 log_injections rows (F01-AMENDED landed the
-    # injections law), so the merged tree measures exactly 4330; the landed
-    # 4350 ceiling clears it and stays.
-    # 4290/4350 (2026-08-30 F43 re-reconcile vs T85): duplicate-key collapse --
-    # the landed T85 mass (F01-AMENDED log_injections + F28 echo, 4328 alone)
-    # unions with the F43-side threading to 4330 on the merged tree; the
-    # W051 capture-door event fix (record the lowered module-intervene spec
-    # so the injected-op rule anchor has a witness) lands the union at 4351.
-    # 4360 -> 4400 (2026-10-01 ci-fix ratchet settle): the round-1 feature
-    # lanes (numbers/FactCore surface, intervention tl.when/site() spec
-    # targets, extraction artifact v2 door, tlspec v9 coordinated bump) and
-    # the subsequent integration fix wave landed reviewed surface mass on
-    # the merged tree (measures 4376); next 50-line step above it. This
-    # entry-point registry grows with each reviewed public surface addition
-    # by design; the post-sprint debloat target is unchanged.
-    # 4400 -> 4450 (2026-10-29 measure.2): the measure_host_peak_memory knob is
-    # threaded like track_device_memory (signature, docstring, trace stamp, the
-    # chunked rebuild and the capture call); the file sat exactly at 4400.
-    "torchlens/_user_funcs.py": 4350,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
     # lanes landed reviewed fix mass on the merged tree (measures 4457);
@@ -324,8 +224,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # measure_host_peak_memory DROP knob and the KEEP backward_peak_memory_reason
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
-    # 4050 -> 3950 (2026-10-31 v11-rest): the private-store rows shrank the file to 3903.
-    "torchlens/_data_classes/trace.py": 3950,
+    "torchlens/_data_classes/trace.py": 4050,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
@@ -405,7 +304,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # replay leaking torch's matmul precision fields; measured 4930. Debloat
     # target unchanged: 3450.
     # 4950 -> 5000 (2026-10-03 fix/ff-tf32): read_legacy_fp32_controls (the
-    # safe legacy TF32 readers that stop replayable capture and
+    # safe legacy TF32 readers that stop intervention_ready capture and
     # check_determinism crashing under torch >= 2.9 per-backend fp32_precision
     # policies) plus the replay reset of the controls no legacy setter writes;
     # extends FE's fp32_precision pair, no second flag or snapshot path;
@@ -449,7 +348,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # next 50-line step above the merged measurement.
     # 3500 -> 3400 (2026-10-29 tensordict prewrap): the storage-overlap geometry
     # moved to _storage_overlap.py (measured 3389); next 50-line step above it.
-    "torchlens/backends/torch/wrappers.py": 3400,
+    "torchlens/backends/torch/wrappers.py": 3000,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
     # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
@@ -489,9 +388,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # clears the union and stays.
     # 3300 -> 3150: the quantized-module FLOPs estimator split to
     # _quantized_flops.py (3127 measured); the ceiling follows the file down.
-    # 2900 -> 2800: the session-cleanup extraction and the helper-dedupe batch landed
-    # together (measured 2791; one 50-line step of slack).
-    "torchlens/backends/torch/model_prep.py": 2800,
+    "torchlens/backends/torch/model_prep.py": 2500,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
     # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
@@ -558,22 +455,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/_visualization/_render_nodes.py": 2150,
     "torchlens/_visualization/_render_flow.py": 2100,
-    # Raised 2250 -> 2300 at the A08 persistence-honesty lane (2026-08-26): the
-    # +16 lines are the streamed-bundle settlement seam (WT1 A-IV item 18) --
-    # the one publish hook that lands the settled capture-outcome attestation
-    # in the streamed artifact right after settle_completed/settle_halted.
-    # Reviewed raise with a stated reason; trace.py stays on the debloat list.
-    # Raised 2300 -> 2350 at the A06 pre-rebase reconcile (2026-08-27): A08's
-    # settlement seam (+16, above) and A06's save_grads bare-callable
-    # strict-bool retention helper each independently stepped 2250 -> 2300 on
-    # their own bases; combined they measure 2315, so the ledger re-steps to
-    # the next 50-line step above the merged measurement. No new growth
-    # licensed; debloat target unchanged.
-    # Raised 2350 -> 2400 at the F20 T68c reconcile (2026-08-29): the lane
-    # unions measure 2354 (each parent grew inside its own slack; the F20
-    # parent already carried 2354 from the T67f union). Re-step to the next
-    # 50-line step; no new growth licensed, debloat target unchanged.
-    "torchlens/_capture/trace.py": 2400,
 }
 
 

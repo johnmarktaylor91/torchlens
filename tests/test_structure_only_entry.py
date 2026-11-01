@@ -70,7 +70,7 @@ def test_non_torch_backend_refuses_explicit_structure_only_typed() -> None:
     """The capability-gate row: a backend without structure_only_capture
     refuses the explicit option instead of silently ignoring it."""
 
-    from torchlens._user_funcs import _enforce_capability_option_gates
+    from torchlens._capture.prepare.dispatch import _enforce_capability_option_gates
     from torchlens.backends.registry import BackendUnsupportedError
 
     mlx_spec = get_backend_spec("mlx")

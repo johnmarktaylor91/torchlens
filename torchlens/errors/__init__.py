@@ -279,7 +279,7 @@ _LAZY_EXCEPTION_PATHS = {
         "DistributedCaptureUnsupportedError",
     ),
     "SaveBudgetExceededError": ("torchlens._save_budget", "SaveBudgetExceededError"),
-    "CaptureOutcomeError": ("torchlens._capture.outcome", "CaptureOutcomeError"),
+    "CaptureOutcomeError": ("torchlens._capture._outcome_types", "CaptureOutcomeError"),
     "GraphvizRenderError": (
         "torchlens._visualization._render_common",
         "GraphvizRenderError",
@@ -292,7 +292,7 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens._visualization.renderers.base",
         "UnsupportedRendererCapabilityError",
     ),
-    "StopSignalSwallowedError": ("torchlens._capture.outcome", "StopSignalSwallowedError"),
+    "StopSignalSwallowedError": ("torchlens._capture._outcome_types", "StopSignalSwallowedError"),
     "PartialCaptureLookupError": ("torchlens._partial", "PartialCaptureLookupError"),
     # Taxonomy closure: user-reachable typed refusals defined in subpackage
     # error modules, bound lazily so every user-facing class has one public

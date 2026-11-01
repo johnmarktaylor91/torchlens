@@ -18,6 +18,7 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.run as capture_run
 import torchlens._postprocess as pp
 from torchlens._capture.outcome import CapturePhase, CaptureStatus, FailureOrigin
 from torchlens.recording import Recorder
@@ -322,7 +323,6 @@ def test_halted_finalize_failure_settles_failed_finalize(monkeypatch) -> None:
 
 
 def test_teardown_failure_demotes_settled_outcome(monkeypatch) -> None:
-    import torchlens._capture.trace as capture_trace
 
     captured: list = []
 
@@ -330,7 +330,7 @@ def test_teardown_failure_demotes_settled_outcome(monkeypatch) -> None:
         captured.append(trace)
         raise RuntimeError("planted teardown failure")
 
-    monkeypatch.setattr(capture_trace, "_clear_saved_activation_dedup_caches", _boom)
+    monkeypatch.setattr(capture_run, "_clear_saved_activation_dedup_caches", _boom)
     # F5: user_funcs' failed-forward handler tolerates the popped
     # ``_out_writer``, so the teardown exception propagates unmasked.
     with pytest.raises(RuntimeError, match="planted teardown failure"):
@@ -592,15 +592,13 @@ def test_hostile_str_fastlog_raise_path_keeps_identity() -> None:
 def test_hostile_str_teardown_failure_still_demotes(monkeypatch) -> None:
     """The demotion note survives a hostile-__str__ teardown exception."""
 
-    import torchlens._capture.trace as capture_trace
-
     captured: list = []
 
     def _boom(trace: object) -> None:
         captured.append(trace)
         raise _HostileStrError("planted hostile teardown")
 
-    monkeypatch.setattr(capture_trace, "_clear_saved_activation_dedup_caches", _boom)
+    monkeypatch.setattr(capture_run, "_clear_saved_activation_dedup_caches", _boom)
     with pytest.raises(_HostileStrError):
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
     trace = captured[0]
@@ -620,15 +618,13 @@ def test_teardown_demotion_carries_the_teardown_error_type(monkeypatch) -> None:
     had to string-parse the free-text reason.
     """
 
-    import torchlens._capture.trace as capture_trace
-
     captured: list = []
 
     def _boom(trace: object) -> None:
         captured.append(trace)
         raise KeyError("planted teardown failure")
 
-    monkeypatch.setattr(capture_trace, "_clear_saved_activation_dedup_caches", _boom)
+    monkeypatch.setattr(capture_run, "_clear_saved_activation_dedup_caches", _boom)
     with pytest.raises(KeyError):
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
     outcome = captured[0].outcome
@@ -651,12 +647,10 @@ def test_teardown_double_fault_never_swallows_an_unwinding_interrupt(monkeypatch
 
     import warnings as warnings_module
 
-    from torchlens._capture import trace as trace_module
-
     def _teardown_bug(*args: object, **kwargs: object) -> None:
         raise ValueError("injected teardown failure")
 
-    monkeypatch.setattr(trace_module, "_cleanup_forward_memory_once", _teardown_bug)
+    monkeypatch.setattr(capture_run, "_cleanup_forward_memory_once", _teardown_bug)
 
     class Interrupting(nn.Module):
         def __init__(self) -> None:
@@ -685,12 +679,10 @@ def test_teardown_failure_on_ordinary_paths_still_propagates(monkeypatch) -> Non
     """Pin: with no control-flow exception unwinding, a post-settlement
     teardown failure itself propagates (the demote-and-raise contract)."""
 
-    from torchlens._capture import trace as trace_module
-
     def _teardown_bug(*args: object, **kwargs: object) -> None:
         raise ValueError("injected teardown failure")
 
-    monkeypatch.setattr(trace_module, "_cleanup_forward_memory_once", _teardown_bug)
+    monkeypatch.setattr(capture_run, "_cleanup_forward_memory_once", _teardown_bug)
 
     class Clean(nn.Module):
         def __init__(self) -> None:

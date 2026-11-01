@@ -594,7 +594,7 @@ class CaptureSession:
             _add_live_gradient_reference_hook,
             _add_tensor_backward_hook,
         )
-        from .trace import _get_op_nums_from_user_labels
+        from ._input_records import _get_op_nums_from_user_labels
 
         activation_selector = getattr(trace, "_deferred_retention_selector", None)
         if activation_selector is not None:

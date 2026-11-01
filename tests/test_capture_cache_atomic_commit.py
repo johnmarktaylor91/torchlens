@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._user_funcs as user_funcs
+import torchlens._capture.prepare.cache as prepare_cache
 
 
 class _CacheModel(nn.Module):
@@ -58,7 +58,7 @@ def test_crash_at_the_legacy_tag_seam_never_leaves_a_torn_entry(tmp_path, monkey
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
     assert first.provenance.cache_hit is False
     entry = _single_entry(tmp_path)
-    secret = user_funcs._capture_cache_secret(entry.parent)
+    secret = prepare_cache._capture_cache_secret(entry.parent)
 
     # A distinct trace object for the SAME key, guaranteed to pickle to
     # different bytes than generation 1.
@@ -71,9 +71,9 @@ def test_crash_at_the_legacy_tag_seam_never_leaves_a_torn_entry(tmp_path, monkey
     # ``raising=False``: the fixed store has no sidecar-tag seam at all, so the
     # injection is vacuous there; against the historical pair-format code it
     # fires between the payload swap and the tag write (the red state).
-    monkeypatch.setattr(user_funcs, "atomic_write_text", crash_before_tag_commit, raising=False)
+    monkeypatch.setattr(prepare_cache, "atomic_write_text", crash_before_tag_commit, raising=False)
     try:
-        user_funcs._store_authenticated_capture_cache(fresh, entry, secret)
+        prepare_cache._store_authenticated_capture_cache(fresh, entry, secret)
     except OSError:
         pass
     monkeypatch.undo()
@@ -97,7 +97,7 @@ def test_crash_at_the_single_commit_preserves_the_old_generation(tmp_path, monke
     x = torch.randn(1, 4)
     tl.trace(model, x, capture=_cache_capture(tmp_path))
     entry = _single_entry(tmp_path)
-    secret = user_funcs._capture_cache_secret(entry.parent)
+    secret = prepare_cache._capture_cache_secret(entry.parent)
     before = entry.read_bytes()
 
     fresh = tl.trace(model, x)
@@ -111,12 +111,12 @@ def test_crash_at_the_single_commit_preserves_the_old_generation(tmp_path, monke
             raise OSError("simulated crash at the atomic commit")
         return real_replace(src, dst, *args, **kwargs)
 
-    monkeypatch.setattr(user_funcs.os, "replace", crash_at_commit)
+    monkeypatch.setattr(prepare_cache.os, "replace", crash_at_commit)
     # b6 R25: a disk failure degrades to warn-and-miss instead of raising out
     # of a capture that already succeeded; the commit must still not tear.
     with warnings.catch_warnings(record=True) as store_warnings:
         warnings.simplefilter("always")
-        stored = user_funcs._store_authenticated_capture_cache(fresh, entry, secret)
+        stored = prepare_cache._store_authenticated_capture_cache(fresh, entry, secret)
     monkeypatch.undo()
     assert stored is False
     assert any("simulated crash at the atomic commit" in str(w.message) for w in store_warnings)

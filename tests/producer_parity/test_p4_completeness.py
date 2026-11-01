@@ -95,13 +95,13 @@ _TORCH_FAMILIES = (
 # the preview acceptance leg).
 _SITE_FAMILIES: dict[tuple[str, str], str] = {
     ("_ops_retention.py", "_replace_event_with_retained_payload"): "lookback_retention",
-    ("_user_funcs.py", "_register_live_tensor_connection"): "graph_edge_insertion",
+    ("run_entry.py", "_register_live_tensor_connection"): "graph_edge_insertion",
     ("model_prep.py", "_record_module_exit_metadata"): "module_exit_intervention",
     (
-        "model_prep.py",
+        "_predicate_forward.py",
         "_record_predicate_module_boundary_outputs",
     ): "module_boundary_retention",
-    ("backend.py", "extract_and_mark_outputs"): "output_parent_promotion",
+    ("_outputs.py", "extract_and_mark_outputs"): "output_parent_promotion",
     ("graph_traversal.py", "_resolve_output_parent_labels"): "late_buffer_output_parent",
 }
 
@@ -545,8 +545,17 @@ def test_static_ast_guard_no_expansion_no_conditional_kwargs() -> None:
     relative_files = (
         "backends/torch/_ops_retention.py",
         "_user_funcs.py",
+        "_capture/run_entry.py",
+        "_capture/prepare/door.py",
+        "_capture/prepare/dispatch.py",
+        "_capture/prepare/cache.py",
+        "_capture/prepare/resolve.py",
+        "_capture/finalize/epilogue.py",
         "backends/torch/model_prep.py",
+        "backends/torch/_predicate_forward.py",
         "backends/torch/backend.py",
+        "backends/torch/_outputs.py",
+        "backends/torch/_failed_session.py",
         "_postprocess/graph_traversal.py",
         "backends/tf/backend.py",
         "backends/tf/interventions.py",

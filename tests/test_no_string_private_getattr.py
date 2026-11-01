@@ -147,7 +147,9 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # DROP-gated `_raw_call_fingerprint` witness; absent on a loaded trace,
     # so the None default is the correct "no sealed fingerprint" reading,
     # which keeps the exact-size input guard.
-    "<root>": 20,
+    # 20 -> 11 (capture seam): nine sites moved verbatim from root modules into
+    # _capture (below, 21 -> 30); the package-wide total is unchanged at 381.
+    "<root>": 11,
     # 24 -> 25 (2026-08-15 r3settle reconcile): bundle.py reads the optional
     # `_runnable` seam (absent on non-runnable traces; None default correct),
     # the same f2bc65a6 idiom already ledgered at <root>.
@@ -223,7 +225,9 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # peak-memory sites converted to direct private reads guarded by
     # try/except AttributeError, net -2 after the new episode/peak-memory
     # additions.
-    "_capture": 21,
+    # 21 -> 30 (capture seam): the nine root-module sites above moved verbatim
+    # into the PREPARE/RUN/FINALIZE modules.
+    "_capture": 30,
     # 25 -> 27 (2026-08-14 fix-wave reconcile, 7f90a885 fix/walkers): the
     # linear ordinal_index cache keys its per-trace memo on the session-time
     # `_backward_projection_revision` counter in grad_fn_call.py (x2); absent

@@ -32,10 +32,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlens._user_funcs import (
-    _run_model_and_save_specified_outs,
-    _validate_forward_pass_torch,
-)
+from torchlens._capture.run_entry import _run_model_and_save_specified_outs
+from torchlens._user_funcs import _validate_forward_pass_torch
 from torchlens.validation.core import validate_saved_outs
 from torchlens.validation.diagnostics import (
     CHECK_PERTURBATION,
