@@ -1097,7 +1097,6 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "backward_ready",
         "inference_only",
         "module_filter",
-        "stop_after",
         "jax_control_flow",
         "jax_max_control_flow_unroll",
         "module_identity_mode",
@@ -3604,9 +3603,9 @@ def _trace_torch_model(
         }
         # The inversion sweep: every CaptureOptions field not hand-curated
         # above and not declared session-neutral enters the key here --
-        # raise_on_nan, track_nonfinite, save_budget, distributed_witness,
-        # measure_python_peak_memory, emit_nvtx, transform, name, and any
-        # future field. Streaming options change what the returned trace
+        # save_budget, distributed_witness, measure_python_peak_memory,
+        # emit_nvtx, transform, name, and any future field (on_nonfinite is
+        # hand-curated above). Streaming options change what the returned trace
         # retains (and where), so they sweep in full as well.
         _sweep_option_fields_into_cache_config(
             cache_config,

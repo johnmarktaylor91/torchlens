@@ -1,7 +1,7 @@
 """A06 capture-options truth: the cache key covers EVERY semantic option.
 
 WALKTHROUGH list-A row 26 (first clause): ``cache=True`` could serve captures
-that never armed ``raise_on_nan`` / ``track_nonfinite`` / ``save_budget`` --
+that never armed ``on_nonfinite`` (then ``raise_on_nan`` / ``track_nonfinite``) / ``save_budget`` --
 the key was a hand-enumerated include-list, so semantic knobs added after it
 silently fell outside it (fail-open on safety options). The key is now
 INVERTED (M(oracles) item 6): every ``CaptureOptions`` field enters the key
@@ -116,8 +116,8 @@ def test_warm_cache_identical_config_hits(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "field_name,flip_value",
     [
-        ("raise_on_nan", True),
-        ("track_nonfinite", True),
+        ("on_nonfinite", "raise"),
+        ("on_nonfinite", "track"),
         ("save_budget", 10**9),
         ("measure_python_peak_memory", True),
         ("save_raw_grads", False),
@@ -170,9 +170,9 @@ def test_failed_capture_never_seeds_the_cache(tmp_path: Path) -> None:
         model.fc.weight.fill_(float("nan"))
     x = torch.randn(2, 4)
     with pytest.raises(CaptureError):
-        _trace(model, x, str(tmp_path), raise_on_nan=True)
+        _trace(model, x, str(tmp_path), on_nonfinite="raise")
     with pytest.raises(CaptureError):
-        _trace(model, x, str(tmp_path), raise_on_nan=True)
+        _trace(model, x, str(tmp_path), on_nonfinite="raise")
 
 
 # ---------------------------------------------------------------------------
@@ -184,15 +184,19 @@ def test_failed_capture_never_seeds_the_cache(tmp_path: Path) -> None:
 def test_plant_neutralized_semantic_field_reopens_wrong_serve(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Removing raise_on_nan from the key reproduces the defect; the sweep is load-bearing."""
+    """Declaring a swept knob neutral reproduces the defect; the sweep is load-bearing.
+
+    ``on_nonfinite`` (the former ``raise_on_nan``) is hand-curated into the key now, so
+    the plant uses ``measure_python_peak_memory``, a field only the sweep keys.
+    """
 
     planted = dict(CAPTURE_CACHE_KEY_NEUTRAL)
-    planted["raise_on_nan"] = "PLANT: pretend this safety knob is session-neutral"
+    planted["measure_python_peak_memory"] = "PLANT: pretend this knob is session-neutral"
     monkeypatch.setattr(user_funcs, "CAPTURE_CACHE_KEY_NEUTRAL", planted)
     model = SmallNet()
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))
-    wrongly_served = _trace(model, x, str(tmp_path), raise_on_nan=True)
+    wrongly_served = _trace(model, x, str(tmp_path), measure_python_peak_memory=True)
     assert wrongly_served.capture_cache_hit is True, (
         "the plant did not reproduce the historical wrong-serve; the sweep is "
         "no longer the mechanism keying semantic options -- update this control"
@@ -208,7 +212,7 @@ def test_plant_neutralized_semantic_field_reopens_wrong_serve(
 
 @pytest.mark.real_model
 def test_warm_cache_semantic_flip_recaptures_distilgpt2(tmp_path: Path) -> None:
-    """R0: distilgpt2 warm cache never serves a raise_on_nan=False capture."""
+    """R0: distilgpt2 warm cache never serves an on_nonfinite="ignore" capture."""
 
     pytest.importorskip("transformers")
     from tests.real_model.r0.families import build_distilgpt2
@@ -218,7 +222,7 @@ def test_warm_cache_semantic_flip_recaptures_distilgpt2(tmp_path: Path) -> None:
     input_ids = torch.randint(0, 512, (1, 8), generator=generator)
     cold = _trace(model, input_ids, str(tmp_path))
     warm = _trace(model, input_ids, str(tmp_path))
-    flipped = _trace(model, input_ids, str(tmp_path), raise_on_nan=True)
+    flipped = _trace(model, input_ids, str(tmp_path), on_nonfinite="raise")
     assert cold.capture_cache_hit is False
     assert warm.capture_cache_hit is True
     assert flipped.capture_cache_hit is False
