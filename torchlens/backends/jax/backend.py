@@ -9,7 +9,7 @@ import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Final, cast
 
 from ..._data_classes._compaction import compact_op_metadata
@@ -686,18 +686,17 @@ class JAXBackend:
         if not status.is_available:
             setattr(trace, "_validation_replay_status", status)
             return status
-        trace._jax_validation_decisions = []
-        trace._jax_validation_first_failure = None
+        log = _JaxValidationLog()
         try:
             if validate_metadata:
                 from ...validation.invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
-            passed = self._validate_jax_equations(trace)
+            passed = self._validate_jax_equations(trace, log)
             if passed and not self._validate_jax_regions(trace):
                 passed = False
                 _record_jax_decision(
-                    trace,
+                    log,
                     "<trace>",
                     "",
                     "metadata",
@@ -705,10 +704,10 @@ class JAXBackend:
                     "capture_inconsistent",
                     "importer-owned region boundary or seam check failed",
                 )
-            status_result = self._validation_status_from_counts(trace, passed=passed)
+            status_result = self._validation_status_from_counts(trace, passed=passed, log=log)
         except Exception as exc:  # noqa: BLE001 - the tripwire reports, never raises
             _record_jax_decision(
-                trace, "<trace>", "", "metadata", "failed", "metadata_invariant_exception"
+                log, "<trace>", "", "metadata", "failed", "metadata_invariant_exception"
             )
             status_result = ValidationStatus.result(
                 passed=False,
@@ -716,7 +715,7 @@ class JAXBackend:
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
                 payload_load_status=getattr(trace, "payload_load_status", None),
                 num_failed_ops=1,
-                decisions=tuple(trace._jax_validation_decisions),
+                decisions=tuple(log.decisions),
             )
             status_result = replace(
                 status_result,
@@ -730,6 +729,7 @@ class JAXBackend:
         trace: Trace,
         *,
         passed: bool,
+        log: _JaxValidationLog | None = None,
     ) -> ValidationStatus:
         """Build aggregate replay status from JAX replay and region counts.
 
@@ -754,7 +754,7 @@ class JAXBackend:
         payload_load_status = getattr(trace, "payload_load_status", None)
         replayed_node_count = len(_jax_equation_ops(trace)) if passed else 0
         unverified_node_count = count_importer_region_annotations(trace) if passed else 0
-        decisions = tuple(getattr(trace, "_jax_validation_decisions", ()))
+        decisions = tuple(log.decisions) if log is not None else ()
         status = ValidationStatus.from_replay_counts(
             backend="jax",
             source=source,
@@ -767,7 +767,7 @@ class JAXBackend:
             ),
             decisions=decisions,
         )
-        first_failure = getattr(trace, "_jax_validation_first_failure", None)
+        first_failure = log.first_failure if log is not None else None
         if status.state == "failed" and first_failure is not None:
             label, func_name, reason = first_failure
             status = replace(
@@ -779,7 +779,7 @@ class JAXBackend:
             )
         return status
 
-    def _validate_jax_equations(self, trace: Trace) -> bool:
+    def _validate_jax_equations(self, trace: Trace, log: _JaxValidationLog | None = None) -> bool:
         """Validate JAX equation captures against materialized trace payloads.
 
         Parameters
@@ -795,11 +795,13 @@ class JAXBackend:
 
         import jax
 
+        if log is None:
+            log = _JaxValidationLog()
         captures = tuple(getattr(trace, "jax_equation_captures", ()))
         equation_ops = _jax_equation_ops(trace)
         if len(captures) != len(equation_ops):
             _record_jax_decision(
-                trace,
+                log,
                 "<trace>",
                 "",
                 "metadata",
@@ -812,7 +814,7 @@ class JAXBackend:
         op_kind_counts = Counter(_jax_op_capture_kind(op) for op in equation_ops)
         if capture_kind_counts != op_kind_counts:
             _record_jax_decision(
-                trace,
+                log,
                 "<trace>",
                 "",
                 "metadata",
@@ -846,7 +848,7 @@ class JAXBackend:
             func_name = str(getattr(op, "func_name", capture.primitive))
             if capture.kind != _jax_op_capture_kind(op):
                 _record_jax_decision(
-                    trace, op_label, func_name, "metadata", "failed", "capture_inconsistent"
+                    log, op_label, func_name, "metadata", "failed", "capture_inconsistent"
                 )
                 return False
             try:
@@ -861,7 +863,7 @@ class JAXBackend:
                 )
             except Exception as exc:  # noqa: BLE001 - name the op, then fail closed
                 _record_jax_decision(
-                    trace,
+                    log,
                     op_label,
                     func_name,
                     "replay",
@@ -872,12 +874,12 @@ class JAXBackend:
                 return False
             if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
                 _record_jax_decision(
-                    trace, op_label, func_name, "replay", "failed", "replay_mismatch"
+                    log, op_label, func_name, "replay", "failed", "replay_mismatch"
                 )
                 return False
             if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
                 _record_jax_decision(
-                    trace,
+                    log,
                     op_label,
                     func_name,
                     "perturbation",
@@ -885,7 +887,7 @@ class JAXBackend:
                     "perturbation_insensitive",
                 )
                 return False
-            _record_jax_decision(trace, op_label, func_name, "replay", "validated", "replay_match")
+            _record_jax_decision(log, op_label, func_name, "replay", "validated", "replay_match")
         return True
 
     def _validate_jax_regions(self, trace: Trace) -> bool:
@@ -3886,8 +3888,16 @@ def _grad_path_for_argnum(argnum: int, local_path: str) -> str:
     return f"inputs.{argnum - 1}{suffix}"
 
 
+@dataclass
+class _JaxValidationLog:
+    """Per-run validation decisions (never stored on the trace: it is not portable state)."""
+
+    decisions: list[dict[str, Any]] = field(default_factory=list)
+    first_failure: tuple[str, str, str] | None = None
+
+
 def _record_jax_decision(
-    trace: Any,
+    log: _JaxValidationLog,
     op_label: str,
     func_name: str,
     phase: str,
@@ -3895,10 +3905,10 @@ def _record_jax_decision(
     reason: str,
     justification: str | None = None,
 ) -> None:
-    """Append one per-op validation decision (torch record shape) to the trace.
+    """Append one per-op validation decision (torch record shape) to the log.
 
-    The first ``failed`` decision is also kept as ``_jax_validation_first_failure``
-    so the status message can name the offending op.
+    The first ``failed`` decision is also kept so the status message can name
+    the offending op.
     """
 
     record: dict[str, Any] = {
@@ -3910,13 +3920,9 @@ def _record_jax_decision(
     }
     if justification is not None:
         record["justification"] = justification
-    decisions = getattr(trace, "_jax_validation_decisions", None)
-    if decisions is None:
-        decisions = []
-        trace._jax_validation_decisions = decisions
-    decisions.append(record)
-    if decision == "failed" and getattr(trace, "_jax_validation_first_failure", None) is None:
-        trace._jax_validation_first_failure = (op_label, func_name, reason)
+    log.decisions.append(record)
+    if decision == "failed" and log.first_failure is None:
+        log.first_failure = (op_label, func_name, reason)
 
 
 def _readable_closure_consts(closed_jaxpr: Any) -> tuple[Any, ...]:
@@ -4709,7 +4715,12 @@ def _perturb_candidates(value: Any) -> tuple[Any, ...]:
         )
     if jnp.issubdtype(array.dtype, jnp.floating):
         magnitude = jnp.max(jnp.abs(array)) + jnp.asarray(1.0, dtype=array.dtype)
-        return (array + magnitude, array - magnitude)
+        candidates: tuple[Any, ...] = (array + magnitude, array - magnitude)
+        if not bool(jnp.all(jnp.isfinite(array))):
+            # A NaN or inf parent absorbs any additive perturbation; finite
+            # replacements are the only candidates that can move the child.
+            candidates = (*candidates, jnp.zeros_like(array), jnp.ones_like(array))
+        return candidates
     return (array,)
 
 
