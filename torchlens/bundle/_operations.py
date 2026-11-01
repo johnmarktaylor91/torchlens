@@ -16,6 +16,17 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from . import Bundle
 
+__all__ = [
+    "accepts_member_name",
+    "bundle_do",
+    "bundle_fork",
+    "bundle_map",
+    "bundle_run",
+    "bundle_show",
+    "effects_table",
+    "record_bundle_operation",
+]
+
 
 def record_bundle_operation(
     self: Bundle,

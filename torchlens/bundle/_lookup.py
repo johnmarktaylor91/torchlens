@@ -11,6 +11,12 @@ if TYPE_CHECKING:
     from ..intervention._topology.topology import Supergraph
     from . import Bundle
 
+__all__ = [
+    "bundle_at",
+    "ensure_supergraph",
+    "is_structurally_consistent",
+]
+
 
 def bundle_at(self: Bundle, site: Any) -> Any:
     """Return the cross-member Super view for ``site`` (gate attached)."""

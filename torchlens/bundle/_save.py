@@ -8,6 +8,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import Bundle
 
+__all__ = [
+    "save_bundle",
+]
+
 
 def save_bundle(
     self: Bundle,
