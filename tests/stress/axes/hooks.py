@@ -82,8 +82,8 @@ def hook_nested_capture(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
     return out
 
 
-def _on_linear(fn: Any, **kwargs: Any) -> dict[str, Any]:
-    return {"intervene": tl.when(tl.func(HOOK_SITE), fn, **kwargs)}
+def _on_linear(fn: Any) -> dict[str, Any]:
+    return {"intervene": tl.when(tl.func(HOOK_SITE), fn)}
 
 
 OPTIONS: tuple[OptionsSpec, ...] = (
@@ -108,9 +108,9 @@ OPTIONS: tuple[OptionsSpec, ...] = (
         trace_kwargs={"intervene": tl.when(tl.model_input(0), hook_scales)},
     ),
     OptionsSpec(
-        "hook_backward_dir",
-        "a scaling hook aimed at linear grads (direction='backward') during capture",
-        trace_kwargs=_on_linear(hook_scales, direction="backward"),
+        "hook_grad_site",
+        "a scaling hook aimed at the linear gradients (tl.grad(site)) during capture",
+        trace_kwargs={"intervene": tl.when(tl.grad(tl.func(HOOK_SITE)), hook_scales)},
     ),
     OptionsSpec(
         "hook_live_final_label",
