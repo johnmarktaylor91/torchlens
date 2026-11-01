@@ -41,8 +41,8 @@ def test_root_budget_is_frozen() -> None:
     """The root-name list is a FROZEN BUDGET (memo s5 namespace rule)."""
 
     rows = surface_rows()
-    assert len(rows) == 114, (
-        f"root surface budget moved: {len(rows)} names (frozen budget 114: "
+    assert len(rows) == 110, (
+        f"root surface budget moved: {len(rows)} names (frozen budget 110: "
         "143 at the C01 freeze, -1 private `_trace` alias retired, +6 by "
         "the A10 facade -- summary/load_extraction into __all__ plus the four "
         "pre-existing lazy namespaces bridge/callbacks/neuro/notebook -- "
@@ -71,7 +71,10 @@ def test_root_budget_is_frozen() -> None:
         "AmbiguousOpLookupError and ReentrantTraceError to tl.errors -- and -2 by the visuals-and-kits rename: "
         "tl.aggregate (now tl.stats.aggregate) and the tl.brainpipe facade "
         "(folded into tl.neuro) left the root; with every area lane merged and "
-        "the table regenerated, the root holds 114 rows. "
+        "the table regenerated, the root holds 114 rows -- and -6 +2 by the "
+        "gradient-site change: the six gradient helpers (scale_grad, zero_grad, "
+        "clamp_grad, clip_grad, add_grad_noise, hook_grad) leave the root while "
+        "tl.grad (the gradient site) and tl.clip_norm join it = 110. "
         "Root growth is a deliberate act: regenerate the table, justify the "
         "new name's layer, and update this pin in the same change."
     )
@@ -138,4 +141,4 @@ def test_every_lazy_name_resolves_in_a_fresh_interpreter() -> None:
         check=False,
     )
     assert result.returncode == 0, f"cold resolution failures:\n{result.stdout}\n{result.stderr}"
-    assert int(result.stdout.strip()) >= 112
+    assert int(result.stdout.strip()) >= 108
