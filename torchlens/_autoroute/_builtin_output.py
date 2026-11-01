@@ -8,6 +8,16 @@ from typing import Any, NoReturn
 
 import torch
 
+from torchlens._autoroute._decode_heads import (
+    _decode_hf_text,
+    _normalized_id2label,
+    _normalized_mapping,
+    _normalized_sequence,
+    _safe_int,
+    _safe_str,
+    _select_tensor_by_head,
+    _tensor_candidates,
+)
 from torchlens._autoroute._decode_spellings import (
     HEAD_KW,
     STYLE_KW,
@@ -15,6 +25,7 @@ from torchlens._autoroute._decode_spellings import (
     UNDETECTED_REMEDY,
 )
 from torchlens._autoroute.output import register
+from torchlens._capture._episode_derivation import _render_container_path
 from torchlens._capture_fingerprint import _never_matching_fragment
 from torchlens._data_classes.trace import ResolvedPostprocessing, Trace
 from torchlens._errors import InvalidArgumentError, PayloadUnavailableError
@@ -151,47 +162,20 @@ def _decode_selected(
 
 
 def decode_trace_output(
-    trace: Trace,
-    *,
-    style: str | None,
-    head: str | None,
-    tokenizer: Any | None,
-    top_n: int,
+    trace: Trace, *, style: str | None, head: str | None, tokenizer: Any | None, top_n: int
 ) -> Any:
-    """Decode a finished trace's retained outputs on demand.
+    """Decode a finished trace's retained outputs on demand; never mutates the trace.
 
-    The read-time door behind ``Trace.decode_output(style=, head=, tokenizer=)``.
-    It works from what the trace kept: the output ops' retained tensors, the
-    persisted ``output_id2label``, the shipped ImageNet bank, and the
-    tokenizer the caller passes. It returns rows and never mutates the trace.
-
-    Parameters
-    ----------
-    trace:
-        Finished trace.
-    style:
-        Decode style, or ``None`` to let the registered detectors pick one.
-    head:
-        Output head to decode (an output container path), or ``None``.
-    tokenizer:
-        Tokenizer for ``hf_text``; ignored by the classification styles.
-    top_n:
-        Maximum rows per batch item for the classification styles.
-
-    Returns
-    -------
-    Any
-        JSON-primitive decoded rows in the same shape as ``trace.decoded_output``.
+    The read-time door behind ``Trace.decode_output(style=, head=, tokenizer=)``,
+    which documents the arguments; ``top_n`` caps the rows per batch item for
+    the classification styles.
 
     Raises
     ------
     PayloadUnavailableError
-        ``decoded_output_unavailable`` when no output tensor was retained.
+        ``decoded_output_unavailable``: nothing retained, or nothing decodable.
     InvalidArgumentError
-        ``decode_head_unknown`` for a head that is not an output head of the
-        trace, ``decode_head_ambiguous`` when several heads qualify and none
-        was named, ``decode_style_unknown`` (``DecodeStyleUnknownError``)
-        for a style no detector resolves.
+        ``decode_head_unknown``, ``decode_head_ambiguous``, ``decode_style_unknown``.
     """
 
     view, heads = _retained_output_view(trace)
@@ -208,11 +192,9 @@ def decode_trace_output(
             f"available heads: {heads_text}",
             code="decode_head_unknown",
             remedy=f"pass one of the available heads as {HEAD_KW}=",
-            argument=HEAD_KW,
-            available_heads=list(heads),
+            **_head_choice(heads),
         )
-    meta = _build_output_meta(trace, style=style, head=head, tokenizer=tokenizer)
-    resolved = _resolve_read_time_style(view, meta)
+    meta, resolved = _resolve_read_time_style(trace, view, style, head, tokenizer)
     logits_info = _select_logits(view, resolved, meta)
     if logits_info is None:
         raise InvalidArgumentError(
@@ -220,20 +202,18 @@ def decode_trace_output(
             f"named; available heads: {heads_text}",
             code="decode_head_ambiguous",
             remedy=f"pass {HEAD_KW}= naming one of the available heads",
-            argument=HEAD_KW,
-            available_heads=list(heads),
+            **_head_choice(heads),
         )
-    logits, _selected_head = logits_info
-    decoded = _decode_selected(logits, resolved, meta, top_n=top_n)
+    decoded = _decode_selected(logits_info[0], resolved, meta, top_n=top_n)
+    if decoded is None and resolved.style == "hf_text":
+        raise DecodeStyleUnknownError(
+            f"{STYLE_KW}='hf_text' needs a tokenizer with a decode method and rank-2 or "
+            "rank-3 logits",
+            code="decode_style_unknown",
+            remedy=f"pass {TOKENIZER_KW}= the model's tokenizer",
+            argument=TOKENIZER_KW,
+        )
     if decoded is None:
-        if resolved.style == "hf_text":
-            raise DecodeStyleUnknownError(
-                f"{STYLE_KW}='hf_text' needs a tokenizer with a decode method and rank-2 or "
-                "rank-3 logits",
-                code="decode_style_unknown",
-                remedy=f"pass {TOKENIZER_KW}= the model's tokenizer",
-                argument=TOKENIZER_KW,
-            )
         raise PayloadUnavailableError(
             f"the retained output does not decode as {resolved.style!r} "
             "(no labels for its width, or not a rank-1 or rank-2 logits tensor)",
@@ -241,6 +221,36 @@ def decode_trace_output(
             remedy=f"pass {HEAD_KW}= the logits head, or a {STYLE_KW} whose labels match",
         )
     return decoded
+
+
+def _head_choice(heads: tuple[str, ...]) -> dict[str, Any]:
+    """Return the ``argument``/``available_heads`` fields of a head refusal."""
+
+    return {"argument": HEAD_KW, "available_heads": list(heads)}
+
+
+def _resolve_read_time_style(
+    trace: Trace, view: Any, style: str | None, head: str | None, tokenizer: Any | None
+) -> tuple[dict[str, Any], ResolvedPostprocessing]:
+    """Build the read-time metadata and resolve the decode style for ``view``.
+
+    A requested built-in style resolves directly; otherwise the registered
+    detectors run over the retained view.
+
+    Raises
+    ------
+    DecodeStyleUnknownError
+        When neither the requested style nor any detector resolves one.
+    """
+
+    meta = _build_output_meta(trace, style=style, head=head, tokenizer=tokenizer)
+    resolved = _resolve_requested_style(meta)
+    if resolved is None:
+        skip = _BUILTIN_DETECTOR_NAMES if style is not None else frozenset()
+        resolved, _detector_name = _resolve_postprocessor_named(view, meta, skip=skip)
+    if resolved is None:
+        refuse_unknown_decode_style(style)
+    return meta, resolved
 
 
 def _retained_output_view(trace: Trace) -> tuple[Any | None, tuple[str, ...]]:
@@ -251,8 +261,6 @@ def _retained_output_view(trace: Trace) -> tuple[Any | None, tuple[str, ...]]:
     ``"0.logits"``), plus the tuple of available head names. ``(None, ())``
     when no output tensor was retained.
     """
-
-    from torchlens._capture._episode_derivation import _render_container_path
 
     tensors: dict[str, torch.Tensor] = {}
     for op in getattr(trace, "output_ops", []) or []:
@@ -266,19 +274,6 @@ def _retained_output_view(trace: Trace) -> tuple[Any | None, tuple[str, ...]]:
     if len(tensors) == 1 and "" in tensors:
         return tensors[""], ("",)
     return tensors, tuple(tensors)
-
-
-def _resolve_read_time_style(view: Any, meta: dict[str, Any]) -> ResolvedPostprocessing:
-    """Resolve the read-time style; a named non-built-in style needs a custom detector."""
-
-    style = meta.get(STYLE_KW)
-    resolved = _resolve_requested_style(meta)
-    if resolved is None:
-        skip = _BUILTIN_DETECTOR_NAMES if style is not None else frozenset()
-        resolved, _detector_name = _resolve_postprocessor_named(view, meta, skip=skip)
-    if resolved is None:
-        refuse_unknown_decode_style(style)
-    return resolved
 
 
 def _resolve_requested_style(meta: dict[str, Any]) -> ResolvedPostprocessing | None:
@@ -578,28 +573,6 @@ def hf_text(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None
     )
 
 
-def _labels_for_resolved(resolved: ResolvedPostprocessing) -> list[str] | None:
-    """Return labels for a resolved postprocessor.
-
-    Parameters
-    ----------
-    resolved:
-        Resolved output postprocessor.
-
-    Returns
-    -------
-    list[str] | None
-        Ordered labels, if available.
-    """
-
-    if resolved.style == "imagenet":
-        return load_imagenet1k_labels()
-    id2label = resolved.config.get("id2label")
-    if isinstance(id2label, dict):
-        return [str(id2label[index]) for index in sorted(id2label)]
-    return None
-
-
 def _select_logits(
     outputs: Any, resolved: ResolvedPostprocessing, meta: dict[str, Any]
 ) -> tuple[torch.Tensor, str] | None:
@@ -624,20 +597,9 @@ def _select_logits(
     by_head = _select_tensor_by_head(outputs, requested)
     if by_head is not None:
         return by_head, str(requested or "output")
-    if hasattr(outputs, "logits"):
-        logits = getattr(outputs, "logits")
-        if isinstance(logits, torch.Tensor):
-            return logits, "logits"
-    if isinstance(outputs, dict) and isinstance(outputs.get("logits"), torch.Tensor):
-        # The read-time view keys retained output tensors by container path.
-        return outputs["logits"], "logits"
-    if _is_hf_model_output(outputs):
-        try:
-            logits = outputs["logits"]
-        except Exception:
-            logits = None
-        if isinstance(logits, torch.Tensor):
-            return logits, "logits"
+    logits = _named_logits(outputs)
+    if logits is not None:
+        return logits, "logits"
     if isinstance(outputs, torch.Tensor):
         return outputs, "output"
     expected = resolved.config.get("num_labels") or meta.get("num_classes")
@@ -647,79 +609,57 @@ def _select_logits(
     return None
 
 
-def _select_tensor_by_head(outputs: Any, output_head: Any) -> torch.Tensor | None:
-    """Select a tensor by explicit live-output head name.
+def _named_logits(outputs: Any) -> torch.Tensor | None:
+    """Return the output's ``logits`` tensor: attribute, mapping key or HF output item.
 
     Parameters
     ----------
     outputs:
-        Live model outputs.
-    output_head:
-        Requested head.
+        Live model outputs or the read-time retained view.
 
     Returns
     -------
     torch.Tensor | None
-        Selected tensor, if found.
+        The ``logits`` tensor, or ``None`` when the output names none.
     """
 
-    if output_head is None:
-        return None
-    if isinstance(output_head, str):
-        if hasattr(outputs, output_head):
-            value = getattr(outputs, output_head)
-            if isinstance(value, torch.Tensor):
-                return value
-        if isinstance(outputs, dict):
-            value = outputs.get(output_head)
-            if isinstance(value, torch.Tensor):
-                return value
-        if output_head.isdigit() and isinstance(outputs, (tuple, list)):
-            index = int(output_head)
-            if 0 <= index < len(outputs) and isinstance(outputs[index], torch.Tensor):
-                return outputs[index]
+    if hasattr(outputs, "logits"):
+        logits = getattr(outputs, "logits")
+        if isinstance(logits, torch.Tensor):
+            return logits
+    if isinstance(outputs, dict) and isinstance(outputs.get("logits"), torch.Tensor):
+        # The read-time view keys retained output tensors by container path.
+        return outputs["logits"]
+    if _is_hf_model_output(outputs):
+        try:
+            logits = outputs["logits"]
+        except Exception:
+            logits = None
+        if isinstance(logits, torch.Tensor):
+            return logits
     return None
 
 
-def _tensor_candidates(
-    outputs: Any, *, expected_width: int | None
-) -> list[tuple[torch.Tensor, str]]:
-    """Collect plausible logits candidates from a live output object.
+def _labels_for_resolved(resolved: ResolvedPostprocessing) -> list[str] | None:
+    """Return labels for a resolved postprocessor.
 
     Parameters
     ----------
-    outputs:
-        Live model outputs.
-    expected_width:
-        Optional expected last dimension.
+    resolved:
+        Resolved output postprocessor.
 
     Returns
     -------
-    list[tuple[torch.Tensor, str]]
-        Candidate tensors and head labels.
+    list[str] | None
+        Ordered labels, if available.
     """
 
-    candidates: list[tuple[torch.Tensor, str]] = []
-    if isinstance(outputs, dict):
-        iterable = [(str(key), value) for key, value in outputs.items()]
-    elif isinstance(outputs, (tuple, list)):
-        iterable = [(str(index), value) for index, value in enumerate(outputs)]
-    else:
-        iterable = []
-    for name, value in iterable:
-        if not isinstance(value, torch.Tensor):
-            continue
-        try:
-            if value.is_nested or value.ndim < 2:
-                continue
-            width = int(value.shape[-1])
-        except Exception:
-            # Exotic tensor subclasses may refuse metadata reads; they are
-            # not logits candidates and must never abort the sniff (R65).
-            continue
-        if expected_width is None or width == expected_width:
-            candidates.append((value, name))
-    return candidates
+    if resolved.style == "imagenet":
+        return load_imagenet1k_labels()
+    id2label = resolved.config.get("id2label")
+    if isinstance(id2label, dict):
+        return [str(id2label[index]) for index in sorted(id2label)]
+    return None
 
 
 def _safe_last_dim(tensor: torch.Tensor) -> int | None:
@@ -783,106 +723,6 @@ def _decode_classification(
                 }
             )
     return rows
-
-
-def _decode_hf_text(logits: torch.Tensor, meta: dict[str, Any]) -> list[dict[str, Any]] | None:
-    """Decode Hugging Face text logits with an attached tokenizer when present.
-
-    Parameters
-    ----------
-    logits:
-        Live logits tensor.
-    meta:
-        Detector metadata.
-
-    Returns
-    -------
-    list[dict[str, Any]] | None
-        JSON-primitive rows.
-    """
-
-    tokenizer = meta.get("tokenizer")
-    if tokenizer is None or not hasattr(tokenizer, "decode"):
-        return None
-    logits_copy = logits.detach().clone()
-    if logits_copy.ndim == 2:
-        # Unbatched `[seq_len, vocab]`: treat as a single batch item.
-        logits_copy = logits_copy.unsqueeze(0)
-    elif logits_copy.ndim != 3:
-        return None
-    # `[batch, seq_len, vocab]`: decode each batch item's own token sequence
-    # independently, never flattening across the batch dimension.
-    token_ids_per_item = torch.argmax(logits_copy, dim=-1).tolist()
-    rows: list[dict[str, Any]] = []
-    for batch_index, token_ids in enumerate(token_ids_per_item):
-        text = tokenizer.decode(token_ids)
-        rows.append(
-            {
-                "batch_item": int(batch_index),
-                "rank": 1,
-                "text": str(text),
-                "token_ids": [int(i) for i in token_ids],
-            }
-        )
-    return rows
-
-
-def _normalized_id2label(value: Any) -> dict[int, str] | None:
-    """Normalize an id-to-label mapping.
-
-    Parameters
-    ----------
-    value:
-        Candidate mapping.
-
-    Returns
-    -------
-    dict[int, str] | None
-        Normalized mapping.
-    """
-
-    if not isinstance(value, dict):
-        return None
-    normalized: dict[int, str] = {}
-    for key, label in value.items():
-        try:
-            normalized[int(key)] = str(label)
-        except (TypeError, ValueError):
-            continue
-    return normalized or None
-
-
-def _normalized_mapping(value: Any) -> dict[str, str] | None:
-    """Normalize a small string mapping for cache keys."""
-
-    if not isinstance(value, dict):
-        return None
-    return {str(key): str(val) for key, val in sorted(value.items(), key=lambda item: str(item[0]))}
-
-
-def _normalized_sequence(value: Any) -> tuple[str, ...] | None:
-    """Normalize a string sequence for cache keys."""
-
-    if not isinstance(value, (list, tuple)):
-        return None
-    return tuple(str(item) for item in value)
-
-
-def _safe_int(value: Any) -> int | None:
-    """Return ``value`` as int when possible."""
-
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _safe_str(value: Any) -> str | None:
-    """Return ``value`` as str when present."""
-
-    if value is None:
-        return None
-    return str(value)
 
 
 def _torchvision_weights_cache_fragment(model: Any, weights: Any) -> dict[str, Any]:
