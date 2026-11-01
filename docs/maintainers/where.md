@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-77 packages, 1178 modules, 603880 lines, 0 modules without a docstring.
+77 packages, 1178 modules, 603882 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -53,7 +53,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 9 | 5104 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 10 | 8024 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 3 | 3429 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 86 | 50587 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 86 | 50589 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8008 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 17 | 7729 |
@@ -1033,7 +1033,7 @@ tinygrad backend preview. (3 modules, 3429 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (86 modules, 50587 lines)
+Torch backend implementation package for TorchLens capture. (86 modules, 50589 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1084,7 +1084,7 @@ Torch backend implementation package for TorchLens capture. (86 modules, 50587 l
 | `_ops_payload_stream` | Forward-time disk streaming of predicate-selected op payloads. | 46 |
 | `_ops_predicate_events` | Predicate event records and graph relationship fields. | 525 |
 | `_ops_predicates` | Predicate output replacement and backend semantics. | 476 |
-| `_ops_retention` | Save budgets, predicate payloads, and lookback retention. | 719 |
+| `_ops_retention` | Save budgets, predicate payloads, and lookback retention. | 721 |
 | `_ops_shared_fields` | Shared operation fields and tensor variation tracking. | 397 |
 | `_param_fingerprint` | Capture-time parameter fingerprints for the replay changed-parameter check. | 73 |
 | `_pinned_graph` | Measure the autograd graph a trace's graph-connected saved activations keep alive. | 93 |
