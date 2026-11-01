@@ -368,8 +368,9 @@ def build_slice_from_selection(trace: Any, selection_like: Any) -> TraceSlice:
 
     The general door: whatever produced the region — ``tl.neighborhood``,
     ``tl.between``, explicit ``tl.units``, or a future motif matcher — its
-    touched-site FAMILY becomes the member set (element masks never shrink
-    a graph region; the family level of the two-level denotation).
+    sites that carry at least one selected element become the member set,
+    each as a whole node (a partial mask never shrinks a node; a site whose
+    mask is empty, as ``-`` or ``~`` can leave it, is not a member).
     """
 
     lifted = _lift(selection_like)
