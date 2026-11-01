@@ -447,14 +447,17 @@ def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
             op.label for op in trace.saved_ops if op.out is not None and not _is_output(op)
         )
         cell.expect(not retained, f"streamed payloads kept in memory: {retained[:8]}")
-    stochastic = _stochastic(cell, trace)
+    # A stochastic forward draws other numbers, and a partner that changes forward_match
+    # (intervene) changes the values downstream of its site: only the payload's frame can
+    # match the plain capture's then (``_expect_streamed_payloads`` makes the same call).
+    frame_only = _stochastic(cell, trace) or cell.changes("forward_match")
     for op in trace.saved_ops:
         if _halted(cell) and _is_output(op):
             continue  # a halted capture's output is the halt frontier, not the model output
         reference = plain[op.label].out
         if reference is None:
             continue
-        if stochastic:  # another forward: only the payload's frame can match the plain one
+        if frame_only:
             got = op.materialize_out()
             cell.expect(
                 _frame_of(got) == _frame_of(reference),
