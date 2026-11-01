@@ -297,7 +297,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return Flops(self.cost.total_flops_forward + self.cost.total_flops_backward)
 
     @property
-    def _cost_flops_by_op_type(self: "Trace") -> _CallableDict:
+    def _cost_flops_by_op_type(self: "Trace") -> "_CallableDict":
         """Group FLOPs by layer type.
 
         Returns:
@@ -404,7 +404,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return None
 
     @property
-    def _cost_macs_by_kind(self: "Trace") -> _CallableDict:
+    def _cost_macs_by_kind(self: "Trace") -> "_CallableDict":
         """Group TRUE forward MACs by layer type.
 
         Returns:
