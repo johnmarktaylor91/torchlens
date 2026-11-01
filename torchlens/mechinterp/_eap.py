@@ -101,11 +101,17 @@ def _validate(method: str, steps: int | None, example_reduction: str) -> int:
 
 
 def _capture(model: Any, inputs: Any, *, intervene: Any = None) -> Any:
-    """Capture ``model`` on ``inputs`` with every op saved and autograd on."""
+    """Capture ``model`` on ``inputs`` with every op saved and autograd on.
+
+    The scores backpropagate through this capture's own graph, so the capture
+    builds a gradient path through frozen weights too (a frozen model fed token
+    ids has none otherwise); a plain ``tl.trace`` never changes those flags.
+    """
 
     from .._user_funcs import trace as capture_trace
+    from ..backends.torch.model_prep import frozen_parameter_gradients
 
-    with torch.enable_grad():
+    with torch.enable_grad(), frozen_parameter_gradients():
         return capture_trace(model, inputs, intervene=intervene)
 
 

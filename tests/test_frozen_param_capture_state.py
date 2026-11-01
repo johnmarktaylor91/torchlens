@@ -201,3 +201,31 @@ def test_fully_frozen_model_captures_and_validates_without_autograd() -> None:
     assert len(trace.params.frozen) == len(FROZEN) + len(TRAINABLE)
     _assert_same_state(before, _param_state(model))
     assert tl.validate(model, x, scope="forward"), last_validation_failure()
+
+
+def test_gradient_analysis_scope_builds_a_path_through_frozen_weights() -> None:
+    """Only an analysis that backpropagates through its own capture flips frozen flags."""
+
+    from torchlens.backends.torch.model_prep import frozen_parameter_gradients
+    from torchlens.mechinterp._eap import _capture
+
+    model, x = _model_and_input()
+    model.requires_grad_(False)
+    before = _param_state(model)
+
+    plain = tl.trace(model, x)
+    assert _ops_reading(plain, "head.weight")[0].grad_fn_class_name is None
+
+    with frozen_parameter_gradients():
+        scoped = tl.trace(model, x)
+    assert all(model.seen_inside_forward.values())
+    assert _ops_reading(scoped, "frozen.weight")[0].grad_fn_class_name is not None
+    assert all(param.trainable is False for param in scoped.params)
+    _assert_same_state(before, _param_state(model))
+
+    analysis = _capture(model, x)
+    assert _ops_reading(analysis, "head.weight")[0].grad_fn_class_name is not None
+    _assert_same_state(before, _param_state(model))
+
+    tl.trace(model, x)
+    assert not any(model.seen_inside_forward.values())

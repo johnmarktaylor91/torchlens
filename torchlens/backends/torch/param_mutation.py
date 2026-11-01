@@ -129,11 +129,13 @@ def frozen_parameter_receiver_context(
 ) -> AbstractContextManager[Any]:
     """Run an in-place op on a frozen prepared Parameter as eager does.
 
-    Capture forces ``requires_grad=True`` on floating prepared Parameters so their
-    reads are gradient-capable. A Parameter frozen by the user
-    (``requires_grad=False``) may legally be mutated in place with grad mode on
-    (EMA weights, fixed tables); under the forced flag autograd would refuse the
-    same call. Operands are scanned positionally, by keyword and inside nested
+    A capture inside ``frozen_parameter_gradients()`` (an analysis that
+    backpropagates through its own capture) sets ``requires_grad=True`` on frozen
+    floating prepared Parameters so their reads are gradient-capable; a plain
+    capture never does, and then this context is a null context. A Parameter
+    frozen by the user (``requires_grad=False``) may legally be mutated in place
+    with grad mode on (EMA weights, fixed tables); under the forced flag autograd
+    would refuse the same call. Operands are scanned positionally, by keyword and inside nested
     containers:
 
     - no operand requires grad: the eager call records no autograd history, so

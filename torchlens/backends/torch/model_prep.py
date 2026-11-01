@@ -10,7 +10,9 @@ import threading
 import time
 import weakref
 from collections import defaultdict, deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import wraps
 from typing import TYPE_CHECKING, Any, cast
 
@@ -625,6 +627,55 @@ def _prepare_model_session(
     install_offload_hook_shims(trace, model)
 
 
+_FROZEN_PARAMETER_GRADIENTS: ContextVar[bool] = ContextVar(
+    "torchlens_frozen_parameter_gradients", default=False
+)
+
+
+@contextmanager
+def frozen_parameter_gradients() -> Iterator[None]:
+    """Let captures in this scope build a gradient path through frozen parameters.
+
+    A plain capture never changes a parameter's ``requires_grad``, so a frozen
+    model fed a non-differentiable input (token ids) records no autograd graph,
+    exactly as eager. An analysis that backpropagates through the graph of its
+    OWN capture (``tl.mechinterp`` edge scores) needs that graph, so inside this
+    scope capture sets ``requires_grad=True`` on frozen floating leaf parameters
+    for the session (``Param.trainable`` still reports the user's flag) and
+    restores the flags at session cleanup. torch may then pick different kernels
+    for that forward, as it would for an eager forward with trainable weights.
+
+    Yields
+    ------
+    None
+        Control for the analysis's capture call.
+    """
+
+    token = _FROZEN_PARAMETER_GRADIENTS.set(True)
+    try:
+        yield
+    finally:
+        _FROZEN_PARAMETER_GRADIENTS.reset(token)
+
+
+def _forces_frozen_parameter_gradients(trace: "Trace", param: nn.Parameter) -> bool:
+    """Return whether this capture sets ``requires_grad`` on frozen ``param``.
+
+    True only inside ``frozen_parameter_gradients()``, outside ``backward_ready``
+    (which keeps the user's flags by contract), for a frozen floating or complex
+    leaf (integer and bool Parameters are never gradient-capable; a non-leaf's
+    flag is read-only).
+    """
+
+    return (
+        _FROZEN_PARAMETER_GRADIENTS.get()
+        and not param.requires_grad
+        and param.is_leaf
+        and not trace._options_backward_ready
+        and (torch.is_floating_point(param) or torch.is_complex(param))
+    )
+
+
 def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any = None) -> None:
     """Create ``Param`` objects and stamp each parameter's session metadata.
 
@@ -635,6 +686,10 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     by identity at the op boundary from the stamped barcode. The user's flag is
     still recorded on ``_tl.requires_grad_before_capture`` (``Param.trainable``,
     and ``_cleanup_model_session`` restores it if the forward itself changed it).
+    The one exception is a capture inside ``frozen_parameter_gradients()``: an
+    analysis that backpropagates through its own capture (edge attribution
+    patching) needs a gradient path through frozen weights, so there floating
+    leaf parameters are set to require grad for the session and restored after.
     """
     if not hasattr(trace, "_param_log_by_pid"):
         raise AttributeError("Trace._param_log_by_pid must be initialized before param logging.")
@@ -684,6 +739,8 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             param_is_lazy = _is_uninitialized_param(param)
 
             requires_grad_before = param.requires_grad
+            if not param_is_lazy and _forces_frozen_parameter_gradients(trace, param):
+                param.requires_grad = True
 
             barcode = make_random_barcode()
             set_param_meta(
