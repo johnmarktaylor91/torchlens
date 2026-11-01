@@ -215,6 +215,7 @@ def _perform_request(
     """Issue one capability request through the public entry."""
 
     import warnings
+    from dataclasses import replace
 
     from ..options import CaptureOptions
 
@@ -223,7 +224,8 @@ def _perform_request(
     if request.kind == "trace_option":
         adapter.trace_with(net, example, **{str(request.option): value})
     elif request.kind == "capture_option":
-        adapter.trace_with(net, example, capture=CaptureOptions(**{str(request.option): value}))
+        capture = replace(CaptureOptions(), **{str(request.option): value})
+        adapter.trace_with(net, example, capture=capture)
     elif request.kind == "record":
         import torchlens as tl
 

@@ -35,7 +35,7 @@ import re
 from dataclasses import dataclass, field, replace
 from importlib import metadata
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ._adapters import RosterModel, resolve_adapter
 from ._cases import UNSUPPORTED_DETAIL_PREFIX
@@ -64,6 +64,9 @@ CAPABILITY_STATES: tuple[str, ...] = ("supported", "unsupported", "untested")
 
 #: File name of the shipped record inside ``torchlens/backends/<backend>/``.
 SCORECARD_FILENAME = "scorecard.json"
+
+#: The stable backend whose scorecard is the graduation reference (SPEC 5, G1).
+REFERENCE_BACKEND = "torch"
 
 _TIERS: tuple[str, ...] = ("C0", "C1", "C2")
 _CLAIM_WORD = re.compile("conformant", flags=re.IGNORECASE)
@@ -298,6 +301,29 @@ def shipped_scorecard(backend: str) -> PreviewScorecard | None:
     return scorecard_from_json(path.read_text(encoding="utf-8"))
 
 
+def reference_scorecard_for(backend: str, card: PreviewScorecard) -> PreviewScorecard | None:
+    """The torch reference card G1 compares ``backend`` against.
+
+    Parameters
+    ----------
+    backend:
+        The backend being scored.
+    card:
+        Its freshly computed or shipped scorecard.
+
+    Returns
+    -------
+    PreviewScorecard | None
+        ``card`` itself when ``backend`` is the reference backend (torch is
+        its own baseline), else the shipped torch record, or ``None`` when
+        none ships.
+    """
+
+    if backend == REFERENCE_BACKEND:
+        return card
+    return shipped_scorecard(REFERENCE_BACKEND)
+
+
 def _adapter_for(report: ConformanceReport, adapter: Any | None) -> Any | None:
     """The adapter the slots are enumerated for (resolved from the report when not given)."""
 
@@ -482,7 +508,7 @@ def scorecard_from_report(
     if protocol is not None:
         torch_card = reference
         if torch_card is None:
-            torch_card = card if report.backend == "torch" else shipped_scorecard("torch")
+            torch_card = reference_scorecard_for(report.backend, card)
         card = replace(
             card, graduation=graduation_items(card, reference=torch_card, repo_root=repo_root)
         )
@@ -571,12 +597,18 @@ def scorecards_differ(shipped: PreviewScorecard, computed: PreviewScorecard) -> 
             continue
         if left.get(key) != right.get(key):
             lines.append(f"{key}: shipped {left.get(key)!r} != computed {right.get(key)!r}")
-    left_cells = {(c["tier"], c["case_id"], c["family"]): c for c in left["cells"]}  # type: ignore[index, union-attr]
-    right_cells = {(c["tier"], c["case_id"], c["family"]): c for c in right["cells"]}  # type: ignore[index, union-attr]
-    for key in sorted(set(left_cells) | set(right_cells)):
-        if left_cells.get(key) != right_cells.get(key):
+    left_cells, right_cells = _cells_by_key(left), _cells_by_key(right)
+    for cell_key in sorted(set(left_cells) | set(right_cells)):
+        if left_cells.get(cell_key) != right_cells.get(cell_key):
             lines.append(
-                f"cell {key}: shipped {left_cells.get(key, {}).get('state', 'absent')} != "
-                f"computed {right_cells.get(key, {}).get('state', 'absent')}"
+                f"cell {cell_key}: shipped {left_cells.get(cell_key, {}).get('state', 'absent')} != "
+                f"computed {right_cells.get(cell_key, {}).get('state', 'absent')}"
             )
     return lines
+
+
+def _cells_by_key(payload: dict[str, Any]) -> dict[tuple[str, str, str], dict[str, Any]]:
+    """A canonical payload's cells keyed on (tier, case_id, family)."""
+
+    cells = cast("list[dict[str, Any]]", payload.get("cells", []))
+    return {(c["tier"], c["case_id"], c["family"]): c for c in cells}

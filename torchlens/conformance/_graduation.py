@@ -133,7 +133,7 @@ def _g1(card: PreviewScorecard, reference: PreviewScorecard | None) -> Graduatio
     if reference is None:
         problems.append("no torch reference scorecard to compare against")
     else:
-        own = {}
+        own: dict[str, set[str]] = {}
         for cell in cells:
             own.setdefault(cell.case_id, set()).add(cell.state)
         torch_passed = {cell.case_id for cell in reference.cells if cell.state == "passed"}
@@ -231,7 +231,7 @@ def _g4(card: PreviewScorecard, repo_root: Path | None) -> GraduationItem:
 def _workflow_files(repo_root: Path | None) -> list[Path] | None:
     """Workflow files under the repository, or ``None`` without a repository."""
 
-    if repo_root is None:
+    if repo_root is None or not repo_root.is_dir():
         return None
     folder = repo_root / ".github" / "workflows"
     if not folder.is_dir():
@@ -343,13 +343,13 @@ def graduation_report(backend: str, *, repo_root: Path | None = None) -> Graduat
         detail ``no shipped scorecard``; the report never writes ``maturity``.
     """
 
-    from ._scorecard import shipped_scorecard
+    from ._scorecard import reference_scorecard_for, shipped_scorecard
 
     card = shipped_scorecard(backend)
     if card is None:
         items = tuple(GraduationItem(id, False, "no shipped scorecard") for id in GRADUATION_IDS)
         return GraduationReport(backend, items)
-    reference = card if backend == "torch" else shipped_scorecard("torch")
+    reference = reference_scorecard_for(backend, card)
     return GraduationReport(
         backend, graduation_items(card, reference=reference, repo_root=repo_root)
     )

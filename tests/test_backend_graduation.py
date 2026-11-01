@@ -176,9 +176,10 @@ def test_g1_unmet_on_failed_not_run_untested_or_missing_reference(tmp_path: Path
     item = _item(graduation_items(untested, reference=card, repo_root=repo), "G1")
     assert not item.met and "untested" in item.detail
     # An ecosystem row that did not run never blocks G1 (it is G3's evidence).
-    eco = _card(
-        cells=_cells({"mlp": "config_built"}) + _cells({"bert": "ecosystem"}, state="not_run")[7:]
+    bert_rows = tuple(
+        cell for cell in _cells({"bert": "ecosystem"}, state="not_run") if cell.family == "bert"
     )
+    eco = _card(cells=_cells({"mlp": "config_built"}) + bert_rows)
     assert _item(graduation_items(eco, reference=card, repo_root=repo), "G1").met
     # A torch-passed cell this backend refuses typed still satisfies G1.
     unsupported = [
