@@ -35,8 +35,8 @@ from torchlens.backends.registry import (
     registered_backend_specs,
     unregister_backend_spec,
 )
-from torchlens.conformance import C0_PROTOCOL_CASES, run_conformance
-from torchlens.conformance._protocol_cases import run_c0_protocol_cases
+from torchlens.conformance import run_conformance
+from torchlens.conformance._protocol_cases import C0_PROTOCOL_CASES, run_c0_protocol_cases
 
 ALL_BACKENDS = ("torch", "tf", "jax", "mlx", "paddle", "tinygrad")
 _SNAKE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
@@ -99,7 +99,7 @@ def test_framework_requirement_is_internally_consistent(backend: str) -> None:
 
     requirement = get_backend_spec(backend).protocol().framework
     assert isinstance(requirement, FrameworkRequirement)
-    assert requirement.consistency_problems() == ()
+    assert requirement._consistency_problems() == ()
     assert requirement.distributions
     if backend == "torch":
         assert requirement.extra == ""
@@ -119,18 +119,18 @@ def test_framework_requirement_range_logic() -> None:
         extra="x",
         excluded=("0.26.5",),
     )
-    assert requirement.admits("0.26.0")
-    assert requirement.admits("0.26.9")
-    assert not requirement.admits("0.27")
-    assert not requirement.admits("0.25.9")
-    assert not requirement.admits("0.26.5")
-    assert not requirement.admits("not-a-version")
+    assert requirement._admits("0.26.0")
+    assert requirement._admits("0.26.9")
+    assert not requirement._admits("0.27")
+    assert not requirement._admits("0.25.9")
+    assert not requirement._admits("0.26.5")
+    assert not requirement._admits("not-a-version")
     bad = FrameworkRequirement(("x",), "1.0", "2.0", "2.5", "0.9", "x")
-    problems = bad.consistency_problems()
+    problems = bad._consistency_problems()
     assert any("tested_through" in problem for problem in problems)
     assert any("pinned" in problem for problem in problems)
     open_ended = FrameworkRequirement(("x",), "1.0", None, "", None, "x")
-    assert any("upper end" in problem for problem in open_ended.consistency_problems())
+    assert any("upper end" in problem for problem in open_ended._consistency_problems())
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)

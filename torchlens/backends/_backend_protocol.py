@@ -189,7 +189,7 @@ class FrameworkRequirement:
     extra: str
     excluded: tuple[str, ...] = ()
 
-    def installed_version(self) -> str | None:
+    def _installed_version(self) -> str | None:
         """The installed framework version, or ``None`` when absent."""
 
         for distribution in self.distributions:
@@ -199,7 +199,7 @@ class FrameworkRequirement:
                 continue
         return None
 
-    def admits(self, version: str) -> bool:
+    def _admits(self, version: str) -> bool:
         """Whether ``version`` lies in ``[minimum, below)`` and is not excluded.
 
         Parameters
@@ -223,7 +223,7 @@ class FrameworkRequirement:
             return False
         return all(candidate != Version(excluded) for excluded in self.excluded)
 
-    def consistency_problems(self) -> tuple[str, ...]:
+    def _consistency_problems(self) -> tuple[str, ...]:
         """Internal contradictions, each as one sentence (empty when consistent)."""
 
         problems: list[str] = []
@@ -231,9 +231,9 @@ class FrameworkRequirement:
             problems.append("distributions is empty")
         if self.below is None and not self.tested_through:
             problems.append("neither below nor tested_through states the range's upper end")
-        if self.tested_through and not self.admits(self.tested_through):
+        if self.tested_through and not self._admits(self.tested_through):
             problems.append(f"tested_through {self.tested_through} lies outside the range")
-        if self.pinned is not None and not self.admits(self.pinned):
+        if self.pinned is not None and not self._admits(self.pinned):
             problems.append(f"pinned {self.pinned} lies outside the range")
         return tuple(problems)
 
@@ -411,10 +411,10 @@ class SpecBackedProtocol:
     def runtime_available(self) -> str | None:
         """Version-range check over the installed distribution; subclasses add the import."""
 
-        installed = self.framework.installed_version()
+        installed = self.framework._installed_version()
         if installed is None:
             return "runtime_missing"
-        if not self.framework.admits(installed):
+        if not self.framework._admits(installed):
             return "runtime_version_unsupported"
         return None
 

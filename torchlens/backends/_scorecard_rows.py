@@ -113,7 +113,7 @@ def _row_for_spec(spec: Any) -> DoctorCheck:
 
     record = read_shipped_scorecard(spec.name)
     framework = _framework_requirement(spec)
-    installed = framework.installed_version() if framework is not None else None
+    installed = framework._installed_version() if framework is not None else None
     maturity = str(_record_value(record, "maturity") or getattr(spec, "maturity", "preview"))
     counts = _counts(record)
     status = _status_for(record, counts, installed=installed)

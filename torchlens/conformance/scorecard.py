@@ -67,8 +67,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         a shipped record is required and missing.
     """
 
-    from ._graduation import graduation_report
-    from ._scorecard import preview_scorecard, shipped_scorecard, shipped_scorecard_path
+    from ._graduation import _graduation_report
+    from ._scorecard import _preview_scorecard, shipped_scorecard, shipped_scorecard_path
 
     args = _parser().parse_args(argv)
     if args.graduation:
@@ -77,9 +77,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"no shipped scorecard for {args.backend}: {shipped_scorecard_path(args.backend)}"
             )
             return 2
-        print(graduation_report(args.backend, repo_root=args.repo_root).render())
+        print(_graduation_report(args.backend, repo_root=args.repo_root).render())
         return 0
-    card = preview_scorecard(args.backend, workdir=args.workdir, repo_root=args.repo_root)
+    card = _preview_scorecard(args.backend, workdir=args.workdir, repo_root=args.repo_root)
     if args.write:
         path = shipped_scorecard_path(args.backend)
         path.parent.mkdir(parents=True, exist_ok=True)

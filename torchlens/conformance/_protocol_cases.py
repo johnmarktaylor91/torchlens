@@ -109,10 +109,10 @@ def run_c0_protocol_cases(backend: str) -> list[CaseResult]:
 
 
 def _framework_requirement_cell(candidate: Any) -> CaseResult:
-    """Range, tested version and pin agree (``FrameworkRequirement.consistency_problems``)."""
+    """Range, tested version and pin agree (``FrameworkRequirement._consistency_problems``)."""
 
     requirement = getattr(candidate, "framework", None)
-    check = getattr(requirement, "consistency_problems", None)
+    check = getattr(requirement, "_consistency_problems", None)
     if not callable(check):
         return _failed(
             "c0_framework_requirement_consistent", "C0", "framework is not a FrameworkRequirement"

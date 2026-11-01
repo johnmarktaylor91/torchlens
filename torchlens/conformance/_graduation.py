@@ -323,15 +323,13 @@ def graduation_items(
     )
 
 
-def graduation_report(backend: str, *, repo_root: Path | None = None) -> GraduationReport:
+def graduation_report(backend: str) -> GraduationReport:
     """The graduation report for one backend from its shipped scorecard.
 
     Parameters
     ----------
     backend:
         Registered backend name.
-    repo_root:
-        Repository root for the file-based items; auto-detected when omitted.
 
     Returns
     -------
@@ -339,6 +337,12 @@ def graduation_report(backend: str, *, repo_root: Path | None = None) -> Graduat
         Six items. Without a shipped record every item is unmet with the
         detail ``no shipped scorecard``; the report never writes ``maturity``.
     """
+
+    return _graduation_report(backend)
+
+
+def _graduation_report(backend: str, *, repo_root: Path | None = None) -> GraduationReport:
+    """:func:`graduation_report` with an explicit repository root (the CLI's ``--repo-root``)."""
 
     from ._scorecard import reference_scorecard_for, shipped_scorecard
 

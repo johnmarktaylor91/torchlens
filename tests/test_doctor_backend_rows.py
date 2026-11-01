@@ -344,4 +344,4 @@ def _distribution_absent(backend: str) -> bool:
 
     spec = get_backend_spec(backend)
     assert spec.protocol is not None
-    return spec.protocol().framework.installed_version() is None
+    return spec.protocol().framework._installed_version() is None

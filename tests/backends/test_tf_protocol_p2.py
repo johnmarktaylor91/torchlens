@@ -54,9 +54,9 @@ def test_tf_protocol_object_is_complete_and_declares_registered_codes() -> None:
     assert protocol_problems(proto, expected_name="tf") == ()
     assert proto.maturity == "preview"
     assert proto.materialization == "eager"
-    assert proto.framework.consistency_problems() == ()
+    assert proto.framework._consistency_problems() == ()
     assert proto.framework.pinned is not None
-    assert proto.framework.admits(proto.framework.pinned)
+    assert proto.framework._admits(proto.framework.pinned)
     assert set(proto.refusal_codes()) <= REFUSAL_CODES
     assert proto.runtime_available() is None
     assert set(proto.trace_options()) == set(proto.capabilities().trace_options)

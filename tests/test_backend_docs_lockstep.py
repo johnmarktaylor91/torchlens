@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 import torchlens.backends as tl_backends
-from torchlens.conformance import shipped_scorecard
+from torchlens.conformance._scorecard import shipped_scorecard
 
 _REPO = Path(__file__).resolve().parents[1]
 _DOCS = _REPO / "docs"

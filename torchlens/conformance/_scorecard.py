@@ -544,9 +544,7 @@ def _framework_version(backend: str) -> str:
     return ""
 
 
-def preview_scorecard(
-    backend: str, *, workdir: str | Path | None = None, repo_root: Path | None = None
-) -> PreviewScorecard:
+def preview_scorecard(backend: str, *, workdir: str | Path | None = None) -> PreviewScorecard:
     """Run the full C0-C2 conformance packs for one backend and score them.
 
     Parameters
@@ -556,9 +554,6 @@ def preview_scorecard(
         ``"paddle"``); ``"torch"`` scores the reference as a baseline.
     workdir:
         Scratch directory for C2 artifacts; a temp dir when omitted.
-    repo_root:
-        Repository root for the file-based graduation items (auto-detected
-        when omitted).
 
     Returns
     -------
@@ -571,6 +566,15 @@ def preview_scorecard(
     ConfigurationError
         ``conformance_backend_unknown`` for a name the runner cannot resolve.
     """
+
+    return _preview_scorecard(backend, workdir=workdir)
+
+
+def _preview_scorecard(
+    backend: str, *, workdir: str | Path | None = None, repo_root: Path | None = None
+) -> PreviewScorecard:
+    """:func:`preview_scorecard` with an explicit repository root for the
+    file-based graduation items (the CLI's ``--repo-root``)."""
 
     from . import _roster_for, run_conformance
 

@@ -37,13 +37,12 @@ from ._adapters import RosterModel, default_roster, resolve_adapter
 from ._cases import CaseResult, run_c0_cases, run_c1_cases, run_c2_cases
 from ._graduation import GraduationItem, GraduationReport, graduation_report
 from ._preview_adapters import PREVIEW_BACKENDS
-from ._protocol_cases import C0_PROTOCOL_CASES, run_c0_protocol_cases
-from ._scorecard import PreviewScorecard, ScorecardCell, preview_scorecard, shipped_scorecard
+from ._protocol_cases import run_c0_protocol_cases
+from ._scorecard import PreviewScorecard, ScorecardCell, preview_scorecard
 
 __tl_layer__ = "L9"
 
 __all__ = [
-    "C0_PROTOCOL_CASES",
     "CaseResult",
     "claim_string",
     "ConformanceReport",
@@ -57,7 +56,6 @@ __all__ = [
     "RosterModel",
     "run_conformance",
     "ScorecardCell",
-    "shipped_scorecard",
 ]
 
 SUITE_VERSION = "torchlens.conformance.v1"
