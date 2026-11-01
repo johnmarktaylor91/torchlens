@@ -37,6 +37,42 @@ from .options import (
 from .types import CaptureSpec, Recording
 
 
+def _require_torch_fastlog_backend(backend: Any) -> None:
+    """Refuse unless the resolved backend binds the torch one-shot Recorder as fastlog."""
+
+    # The capability table gates this surface for EVERY resolution, including
+    # the default torch path: flipping torch's fastlog flag False must refuse
+    # instead of silently running the Recorder anyway.
+    backend_spec = get_backend_spec(str(backend) if backend is not None else "torch")
+    if not backend_spec.capabilities.fastlog:
+        from ..backends._backend_protocol import refusal_code_for_capability
+
+        if str(backend_spec.name) == TORCH_BACKEND_NAME:
+            raise BackendUnsupportedError(
+                "tl.record() refuses: the resolved 'torch' backend declares "
+                "capabilities.fastlog=False, and the registered capability "
+                "table is the load-bearing gate for this surface.",
+                code=refusal_code_for_capability("fastlog"),
+                backend=TORCH_BACKEND_NAME,
+            )
+        raise BackendUnsupportedError(
+            "tl.record() is torch-only in backend v1. Use tl.trace(..., backend='jax') "
+            "for the JAX full-save preview.",
+            code=refusal_code_for_capability("fastlog"),
+            backend=str(backend_spec.name),
+        )
+    # The flag alone never opens the gate: the spec must bind the fastlog
+    # implementing surface, and this entry only runs the torch Recorder —
+    # a foreign implementation cannot be silently substituted with it.
+    fastlog_implementation = require_capability_implementation(backend_spec, "fastlog")
+    if fastlog_implementation is not Recorder:
+        raise BackendUnsupportedError(
+            f"tl.record() cannot dispatch backend {backend_spec.name!r}: its "
+            "registered fastlog implementation is not the torch one-shot "
+            "Recorder, and backend v1 record() has no non-torch dispatch path."
+        )
+
+
 def record(
     model: nn.Module,
     input_args: Any,
@@ -157,37 +193,7 @@ def record(
         Fastlog recording, optionally with the model output.
     """
 
-    # The capability table gates this surface for EVERY resolution, including
-    # the default torch path: flipping torch's fastlog flag False must refuse
-    # instead of silently running the Recorder anyway.
-    backend_spec = get_backend_spec(str(backend) if backend is not None else "torch")
-    if not backend_spec.capabilities.fastlog:
-        from ..backends._backend_protocol import refusal_code_for_capability
-
-        if str(backend_spec.name) == TORCH_BACKEND_NAME:
-            raise BackendUnsupportedError(
-                "tl.record() refuses: the resolved 'torch' backend declares "
-                "capabilities.fastlog=False, and the registered capability "
-                "table is the load-bearing gate for this surface.",
-                code=refusal_code_for_capability("fastlog"),
-                backend=TORCH_BACKEND_NAME,
-            )
-        raise BackendUnsupportedError(
-            "tl.record() is torch-only in backend v1. Use tl.trace(..., backend='jax') "
-            "for the JAX full-save preview.",
-            code=refusal_code_for_capability("fastlog"),
-            backend=str(backend_spec.name),
-        )
-    # The flag alone never opens the gate: the spec must bind the fastlog
-    # implementing surface, and this entry only runs the torch Recorder —
-    # a foreign implementation cannot be silently substituted with it.
-    fastlog_implementation = require_capability_implementation(backend_spec, "fastlog")
-    if fastlog_implementation is not Recorder:
-        raise BackendUnsupportedError(
-            f"tl.record() cannot dispatch backend {backend_spec.name!r}: its "
-            "registered fastlog implementation is not the torch one-shot "
-            "Recorder, and backend v1 record() has no non-torch dispatch path."
-        )
+    _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
     if storage is not None and streaming is not None:
         raise KeywordConflictError(
