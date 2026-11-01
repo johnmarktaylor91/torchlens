@@ -312,34 +312,12 @@ def test_typed_backend_refusal_scores_unsupported() -> None:
 
 
 #: MLX's red cells on its packet roster, keyed ``(case_id, family)``, with the cause
-#: substring each detail must carry. Three causes, none an MLX capture gap:
+#: substring each detail must carry. Two causes, neither an MLX capture gap:
 #: the MLX module tree addresses Sequential children ``block.layers.0`` while the
 #: shared finalization derives ``address_parent`` by splitting the address (the
-#: module-hierarchy invariant catches it); the shared preview option policy raises
-#: without a per-cause refusal code (and ``chunk_paths`` raises untyped); loaded
-#: non-torch traces drop the runtime capture replay needs.
-_MLX_REFUSAL_CODE_REDS: dict[str, str] = {
-    "c1_refusal_backward_capture": "contract is 'backward_capture_unsupported'",
-    "c1_refusal_fastlog": "contract is 'fastlog_unsupported'",
-    "c1_refusal_rng_replay": "contract is 'rng_replay_unsupported'",
-    "c1_refusal_has_streaming": "contract is 'has_streaming_unsupported'",
-    "c1_refusal_structure_only_capture": "contract is 'structure_only_capture_unsupported'",
-    **{
-        f"c1_refusal_trace_option_{name}": "contract is 'trace_option_unsupported'"
-        for name in (
-            "jax_control_flow",
-            "jax_max_control_flow_unroll",
-            "payload_policy",
-            "save_preview",
-            "capture_container_structure",
-            "inference_only",
-            "output_style",
-            "output_head",
-            "chunk_size",
-        )
-    },
-    "c1_refusal_trace_option_chunk_paths": "untyped ChunkedForwardConfigError",
-}
+#: module-hierarchy invariant catches it); loaded non-torch traces drop the runtime
+#: capture replay needs. The shared preview option policy now refuses with the
+#: per-cause code, so every ``c1_refusal_*`` cell passes.
 _MLX_ROSTER_FAMILIES: tuple[str, ...] = (
     "fn_chain_branch",
     "fn_multi_output",
@@ -355,7 +333,6 @@ _MLX_ROSTER_FAMILIES: tuple[str, ...] = (
 MLX_KNOWN_RED_CELLS: dict[tuple[str, str], str] = {
     ("c1_validation_passes", "mod_nested_residual"): "[module_hierarchy]",
     ("c1_validation_names_reason", "mod_nested_residual"): "[module_hierarchy]",
-    **{(case_id, ""): cause for case_id, cause in _MLX_REFUSAL_CODE_REDS.items()},
     **{
         ("c2_validation_after_load", family): "runtime capture data was stripped"
         for family in _MLX_ROSTER_FAMILIES
@@ -564,7 +541,7 @@ def test_mlx_pack_earns_c0_with_its_named_red_cells(tmp_path: Path) -> None:
         assert red[key].state == "failed", red[key]
         assert cause in red[key].detail, (key, red[key].detail)
     assert card.counts["denominator"] == _preview_denominator("mlx")
-    # The refusal-code and validation reds sit in C1, so the ladder stops at C0.
+    # The module-hierarchy validation reds sit in C1, so the ladder stops at C0.
     assert card.highest_tier == "C0"
     assert claim_string(report) == "TorchLens provider API compatible, C0"
     assert "conformant" not in card.to_json().lower()
