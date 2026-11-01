@@ -17,7 +17,7 @@ from __future__ import annotations
 import importlib
 from collections.abc import Callable
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from .._errors import InvalidArgumentError
 from .._trace_state import TraceState
@@ -134,6 +134,12 @@ def settle_armed_gradient_edits(trace: Any, *, pass_index: int) -> None:
     """Write the settle rows of one finished backward pass (one per arming transaction)."""
 
     _plan().settle_armed_gradient_edits(trace, pass_index=pass_index)
+
+
+def apply_gradient_site_edits(trace: Trace, grad: torch.Tensor, tensor_label: str) -> torch.Tensor:
+    """Run the ``tl.grad(site)`` edits that address one op output's gradient (see the plan module)."""
+
+    return cast("torch.Tensor", _plan().apply_gradient_site_edits(trace, grad, tensor_label))
 
 
 def gradient_rule_sites(trace: Any) -> list[Any]:

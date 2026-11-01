@@ -35,6 +35,7 @@ from .audit import record_intervention_event, site_keys_for_labels
 from .hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from .replay import _reset_backward_projection, gradient_edit_replay_text
 from .resolver import _resolve_unchecked
+from .runtime import apply_live_gradient_hooks
 from .selectors import CompositeSelector, NotSelector, label
 from .spec import (
     Recipe,
@@ -53,6 +54,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 __all__ = [
+    "apply_gradient_site_edits",
     "armed_edits",
     "do_signal_plan",
     "gradient_rule_sites",
@@ -543,6 +545,33 @@ def gradient_rule_sites(trace: Any) -> list[Any]:
             for inner in gradient_inners(branch):
                 sites.extend(_resolve_unchecked(ops, inner, strict=False))
     return sites
+
+
+def apply_gradient_site_edits(trace: Trace, grad: torch.Tensor, tensor_label: str) -> torch.Tensor:
+    """Run the ``tl.grad(site)`` edits that address this op output's gradient.
+
+    Parameters
+    ----------
+    trace:
+        Trace the gradient is recorded on (the backwarded trace).
+    grad:
+        Gradient arriving at the op output.
+    tensor_label:
+        Raw label of the op output.
+
+    Returns
+    -------
+    torch.Tensor
+        The gradient after every matching edit (``grad`` when none fired).
+    """
+
+    final_label = trace._raw_to_final_layer_labels.get(tensor_label)
+    layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+    op = layer_dict.get(final_label) if final_label is not None else None
+    if op is None:
+        return grad
+    edited, _records = apply_live_gradient_hooks(grad, trace=trace, op=op)
+    return edited
 
 
 def armed_edits(trace: Trace) -> tuple[Any, ...]:

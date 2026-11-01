@@ -28,6 +28,7 @@ from ..._capture.peak_memory import (
     record_backward_peak,
     reset_peak_rss,
 )
+from ..._data_classes._fork_lineage import _is_fork_relative
 from ..._data_classes.backward_pass import BackwardPass
 from ..._data_classes.func_call_location import FuncCallLocation
 from ..._data_classes.grad_fn import GradFn, _paired_pass_op
@@ -3511,8 +3512,6 @@ def _capture_autograd_engine_call(
     Any
         Return value from ``engine_callable``.
     """
-
-    from .tensor_tracking import _is_fork_relative
 
     # A backward the user directed at one trace (open managed bracket) must
     # not be re-captured by that trace's FORK RELATIVES just because they
