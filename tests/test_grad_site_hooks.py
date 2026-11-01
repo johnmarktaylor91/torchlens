@@ -271,3 +271,17 @@ def test_gradient_edit_fires_at_a_site_save_grads_does_not_select() -> None:
     # The edit fired at mul (not selected for saving), so lin's saved gradient is zero.
     assert torch.equal(trace[lin].grad, torch.zeros(4, 4))
     assert len(_backward_records(trace)) == 1
+
+
+def test_gradient_rule_never_edits_the_activation_at_capture() -> None:
+    model, x = _double()
+    plain = tl.trace(model, x, capture=_CAPTURE)
+    mul, lin = _label(plain, "mul"), _label(plain, "linear")
+    # tl.func("mul") is live-matchable: the forward predicate must still skip it,
+    # because the rule addresses the gradient, not the activation.
+    trace = tl.trace(
+        model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(tl.func("mul")), tl.scale(0))
+    )
+    assert torch.equal(trace[mul].out, plain[mul].out)
+    _backward(trace)
+    assert torch.equal(trace[lin].grad, torch.zeros(4, 4))
