@@ -14,8 +14,10 @@ The skeleton's order (it matters for correctness):
    postprocess, settlement), halted (``StopSignal``), failed (``Exception``)
    or interrupted (``BaseException``), each ending in settlement and handing
    the trace to the FINALIZE stage through ``ForwardResult``.
-7. The ``finally``: the one ``_drop_semantic_output_transients`` site
-   (B1-02), the teardown ladder, the RNG restore and the slot release.
+7. The ``finally``: the ``_drop_semantic_output_transients`` backstop every
+   arm passes through (B1-02; the completed arm drops earlier, right after the
+   decode consumer, in ``finalize.arms.finalize_completed``), the teardown
+   ladder, the RNG restore and the slot release.
 """
 
 import contextlib
@@ -672,8 +674,9 @@ def _teardown_ladder(self: "Trace", run: _RunState) -> None:
 def _finish_run(self: "Trace", run: _RunState) -> None:
     """The outermost ``finally``: transient drop, teardown, RNG restore, slot release."""
 
-    # B1-02: the ONE site every settlement path passes through, placed
-    # before the teardown ladder so a teardown double-fault cannot skip it.
+    # B1-02: the backstop every settlement path passes through (the completed
+    # arm already dropped in ``finalize_completed``; the drop is idempotent),
+    # placed before the teardown ladder so a teardown double-fault cannot skip it.
     _drop_semantic_output_transients(self)
     try:
         _teardown_ladder(self, run)
