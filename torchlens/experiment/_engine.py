@@ -130,8 +130,8 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
     never as one.
     """
 
-    from .._selection import Selection, Selector
-    from ..intervention.selectors import FacetSelector
+    from .._selection.selection import Selection, Selector
+    from .._selection.selectors import FacetSelector
 
     if isinstance(where, FacetSelector):
         # Checked BEFORE the Selection lift: facet selectors resolve through
@@ -175,7 +175,7 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
             unit_digest=str(getattr(resolved, "resolve_digest", "")),
         )
     if isinstance(where, str):
-        from ..intervention.resolver import _resolve_sites
+        from .._selection.resolver import _resolve_sites
 
         table = _resolve_sites(baseline, where, max_fanout=100_000)
         labels = tuple(str(getattr(site, "label", site)) for site in table)
@@ -186,7 +186,7 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
             resolved_site_count=len(labels),
             resolution_digest=_digest(("sites",) + tuple(sorted(labels))),
         )
-    from ..intervention.resolver import _resolve_sites
+    from .._selection.resolver import _resolve_sites
 
     table = _resolve_sites(baseline, where, max_fanout=100_000)
     labels = tuple(str(getattr(site, "label", site)) for site in table)
@@ -251,7 +251,7 @@ def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) 
     executes identically on live_hook and replay.
     """
 
-    from ..intervention.selectors import site as site_selector
+    from .._selection.selectors import site as site_selector
 
     keys: list[str] = []
     for label in labels:
@@ -962,83 +962,3 @@ def bundle_effects(bundle: Bundle, operation_id: str | None = None) -> EffectsVi
         )
     selections = getattr(bundle, "_session_effect_selections", None)
     return EffectsView(table=tables[operation_id], _selections=selections)
-
-
-def bundle_measure_members(
-    bundle: Bundle,
-    *,
-    metric: Callable[[Any], Any],
-    order: str = "member",
-) -> dict[str, Any]:
-    """Recompute a NEW metric over members that still exist — and say so.
-
-    Released candidates are NOT silently re-scored: the report separates
-    ``values`` (live members) from ``unmeasured`` (effect-table candidates
-    with no retained member). ``order="member"`` (default) keys the values
-    by member; ``order="chain"`` also returns ``chain``, the members ordered
-    by the bundle's hash-chained operation ledger (each row: ``seq``,
-    ``operation_id``, ``kind``, ``member``, ``value``; members of one
-    operation in the order it added them), after validating that chain, and
-    ``unchained``, the members no operation recorded (the baseline, members
-    added by hand), which are never placed by a guessed position.
-    """
-
-    if order not in ("member", "chain"):
-        raise BundleExperimentError(
-            f"measure_members(order={order!r}) is not available: use "
-            "order='member' (per member) or order='chain' (by the bundle's "
-            "operation ledger).",
-            code="measure_members_order_unavailable",
-            order=order,
-        )
-    if not callable(metric):
-        raise BundleExperimentError(
-            "measure_members(metric=...) must be a callable(member) -> value",
-            code="site_sweep_metric_invalid",
-        )
-    values = {name: metric(member) for name, member in bundle.members.items()}
-    unmeasured: list[str] = []
-    for table in bundle._effect_tables.values():
-        for row in table.rows:
-            if row.candidate_id == "__baseline__":
-                continue
-            if row.member_name is None or row.member_name not in bundle._members:
-                unmeasured.append(row.candidate_id)
-    report: dict[str, Any] = {"values": values, "unmeasured": sorted(set(unmeasured))}
-    if order == "chain":
-        report.update(_chain_keyed_values(bundle, values))
-    report["order"] = order
-    return report
-
-
-def _chain_keyed_values(bundle: Bundle, values: Mapping[str, Any]) -> dict[str, Any]:
-    """Order measured members by the validated operation chain (``measure_members``)."""
-
-    from ..bundle._lineage import validate_operation_chain
-
-    operations = bundle.history
-    validate_operation_chain(operations)
-    by_id = {operation.operation_id: operation for operation in operations}
-    construction = bundle._member_construction
-    chained: list[tuple[int, int, str]] = []
-    unchained: list[str] = []
-    for position, name in enumerate(values):
-        operation_id = construction.get(name, {}).get("operation_id")
-        operation = by_id.get(operation_id) if isinstance(operation_id, str) else None
-        if operation is None:
-            unchained.append(name)
-        else:
-            chained.append((operation.seq, position, name))
-    chain = []
-    for _seq, _position, name in sorted(chained):
-        operation = by_id[construction[name]["operation_id"]]
-        chain.append(
-            {
-                "seq": operation.seq,
-                "operation_id": operation.operation_id,
-                "kind": operation.kind,
-                "member": name,
-                "value": values[name],
-            }
-        )
-    return {"chain": chain, "unchained": unchained}

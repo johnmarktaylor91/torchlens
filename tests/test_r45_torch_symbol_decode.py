@@ -37,7 +37,7 @@ _PKG_ROOT = Path(torchlens.__file__).resolve().parent
 def _guarded_files() -> list[Path]:
     """r47 secD_1/secF_1: the immunizer now guards the ENTIRE ``torchlens/**/*.py`` package (zero
     per-line exemptions), not just the r45 load/decode subset. The ``.run()`` random-init dtype
-    site (``_runnable_state.py:_torch_dtype``) lived at the package ROOT and was invisible to the
+    site (``_runnable/state.py:_torch_dtype``) lived at the package ROOT and was invisible to the
     r45 ``_io/`` glob -- so its tripwire was vacuous there. Any bare ``getattr(torch, <var>)`` /
     ``hasattr(torch, <var>)`` ANYWHERE in the package reintroduces the PEP-562 lazy-import /
     deprecated-replacement hazard."""
@@ -262,7 +262,7 @@ def resolver_key_hazard_outcomes() -> dict[str, dict[str, object]]:
         import json, sys, warnings
         warnings.simplefilter("error", DeprecationWarning)
         import torch
-        from torchlens.intervention.resolver import resolve_function_registry_key
+        from torchlens.intervention._resolver_registry import resolve_function_registry_key
         from torchlens.intervention.types import FunctionRegistryKey
         lazy = {_LAZY_TORCH_SUBMODULES!r}
         outcomes = {{}}
@@ -483,7 +483,7 @@ def test_tampered_manifest_dtype_refuses_without_import(hazard: str, tmp_path: P
 @pytest.mark.heavy
 def test_tampered_run_slot_dtype_refuses_without_import(hazard: str, tmp_path: Path) -> None:
     """r47 secD_1/secF_1 behavioral belt: the ``.run()`` random-init path resolves a tensor-slot
-    dtype via ``_runnable_state._torch_dtype`` (``_runnable_state.py:908``) -- a package-ROOT site
+    dtype via ``_runnable_state._torch_dtype`` (``_runnable/state.py:908``) -- a package-ROOT site
     the r45 ``_io/`` glob missed. Tampering ``run.tensor_slots[*].dtype`` to a hazardous torch name
     yields a typed refusal (parse-validated at load, defense-in-depth; the run-path belt is also
     ``torch_attr``) with NO ``torch.onnx`` / ``torch._dynamo`` in ``sys.modules`` and NO deprecation

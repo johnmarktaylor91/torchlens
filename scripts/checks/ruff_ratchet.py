@@ -569,7 +569,7 @@ def check_ignored_codes_all_carry_ceilings() -> None:
 #: File-level blanket ruff-noqa directives ("# ruff" + ": noqa") in
 #: torchlens/ (b9 R70 round
 #: 5, F/O pair): each one is a whole-file blind spot no per-code ceiling can
-#: see — a NEW dead import in ops.py / _runnable_execution.py /
+#: see — a NEW dead import in ops.py / _runnable/execution.py /
 #: completeness_witness.py (three of the most change-heavy capture files) is
 #: permanently invisible to F401. SHRINK-ONLY: converting a blanket to
 #: per-line noqa (the repo's own preferred pattern, see

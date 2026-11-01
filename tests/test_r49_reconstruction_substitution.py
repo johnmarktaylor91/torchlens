@@ -33,7 +33,7 @@ from torchlens._ir.container import (
     rebuild_container_from_spec,
     reconstruction_is_lossy_by_type,
 )
-from torchlens._runnable_call_outputs import _spec_node_reconstruction_lossy
+from torchlens._runnable.call_outputs import _spec_node_reconstruction_lossy
 
 
 # ---- dataclass fixtures ----------------------------------------------------------------------

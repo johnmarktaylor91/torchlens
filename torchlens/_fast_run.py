@@ -73,7 +73,7 @@ from ._runnable import (
     TensorSlotRole,
     mark_trace_path_status,
 )
-from ._runnable_attestation import (
+from ._runnable.attestation import (
     _control_witness_source_slot_ids,
     _declared_nondeterministic_sources,
     _descriptor_has_seeded_rng,
@@ -81,27 +81,27 @@ from ._runnable_attestation import (
     _nondeterministic_value_sources,
     _uninit_taint_reaches,
 )
-from ._runnable_call_outputs import (
+from ._runnable.call_outputs import (
     _container_spec_reconstruction_lossy,
     _out_argument_slot_id,
     _output_container_spec,
     _output_not_reproduced,
 )
-from ._runnable_execution import _HOST_RNG_SOURCE_KIND
-from ._runnable_input_aliases import (
+from ._runnable.execution import _HOST_RNG_SOURCE_KIND
+from ._runnable.input_aliases import (
     _input_alias_topology_checks,
     _input_nontensor_tree_contract_checks,
     _input_site_value,
     _input_tree_contract_checks,
     _split_mixed_inputs,
 )
-from ._runnable_input_metadata import (
+from ._runnable.input_metadata import (
     _fast_input_check,
     _input_literal_contract_checks,
     _runtime_mirror_clone,
     _top_level_input_site_contract_checks,
 )
-from ._runnable_input_sites import (
+from ._runnable.input_sites import (
     _INPUT_CHECK_UNAVAILABLE,
     _first_failed_live_input_check,
     _input_derived_layout_stale,
@@ -109,25 +109,25 @@ from ._runnable_input_sites import (
     _model_input_arity_positions,
     _require_loaded_sparse_provider,
 )
-from ._runnable_output_contracts import _call_witness_checks, _post_execution_contract_checks
-from ._runnable_path_faithfulness import _path_faithfulness
-from ._runnable_providers import (
+from ._runnable.output_contracts import _call_witness_checks, _post_execution_contract_checks
+from ._runnable.path_faithfulness import _path_faithfulness
+from ._runnable.providers import (
     _finalize_provider_run,
     _host_rng_unreproduced,
     _seed_run_generators,
     _seeded_fork_devices,
     run_loaded_sparse_trace,
 )
-from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
-from ._runnable_state_context import _ambient_execution_context_restored
-from ._runnable_transaction import _live_runtime_input_leaves
-from ._runnable_verification import (
+from ._runnable.state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
+from ._runnable.state_context import _ambient_execution_context_restored
+from ._runnable.transaction import _live_runtime_input_leaves
+from ._runnable.verification import (
     _contract_check,
     _raise_failed_contract_as_divergence,
     _raise_first_divergence,
     _value_at_path,
 )
-from ._runnable_witness_contracts import (
+from ._runnable.witness_contracts import (
     _tensor_derived_scalar_stale,
     _tensor_derived_scalar_witness_slot_ids,
     _tensor_leaf_paths,

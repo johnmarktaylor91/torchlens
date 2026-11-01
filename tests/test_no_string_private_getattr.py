@@ -130,7 +130,7 @@ _FAIL_CLOSED_PACKAGES = frozenset({"_merged", "distributed"})
 _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # 14 -> 15 (2026-08-14 fix-wave reconcile, f2bc65a6 fix/interv F2): the
     # live-refresh run report reads the optional `_runnable` seam in
-    # _runnable_transaction.py; absent on non-runnable traces, so the None
+    # _runnable/transaction.py; absent on non-runnable traces, so the None
     # default is the correct "no runnable seam" reading.
     # 15 -> 16 (2026-08-15 fw3settle reconcile, fe2444e3 fix/runnable-r4): the
     # fast-provider host-RNG declaration reads the optional `_runnable` seam in
@@ -140,7 +140,7 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # `_primitive_op_profile` store (x2; absent on non-aten / loaded traces,
     # so the None default is the correct "no primitive layer" reading -- the
     # idiom already ledgered at postprocess/validation for that exact field),
-    # and _runnable_transaction.py (79607e17, declared-state snapshot-restore)
+    # and _runnable/transaction.py (79607e17, declared-state snapshot-restore)
     # latches state_compromised onto the optional `_runnable` seam after a
     # failed live restore (absent = the trace never ran, nothing to latch).
     # 19 -> 20 (guarded fast steered rerun): _fast_run.py reads the optional
@@ -148,8 +148,14 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # so the None default is the correct "no sealed fingerprint" reading,
     # which keeps the exact-size input guard.
     # 20 -> 11 (capture seam): nine sites moved verbatim from root modules into
-    # _capture (below, 21 -> 30); the package-wide total is unchanged at 381.
-    "<root>": 11,
+    # _capture (below, 21 -> 30); then 11 -> 8 (runnable package move): the three
+    # transaction.py reads moved with the module from the package root into
+    # torchlens/_runnable/ and are ledgered under "_runnable" below. No site was
+    # added or removed; the package-wide total is unchanged at 381.
+    "<root>": 8,
+    # 0 -> 3 (runnable package move): transaction.py reads the optional
+    # `_runnable` seam (x2) and `_source_model_ref` (x1), moved from <root>.
+    "_runnable": 3,
     # 24 -> 25 (2026-08-15 r3settle reconcile): bundle.py reads the optional
     # `_runnable` seam (absent on non-runnable traces; None default correct),
     # the same f2bc65a6 idiom already ledgered at <root>.
@@ -269,7 +275,13 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # 41 -> 40 (2.36.1 integration): rerun.py's fallback read of the retired
     # _retain_layers_to_save_output_parents flag now reads it from the
     # session-only _rerun_save_request through the instance dict.
-    "intervention": 40,
+    # 40 -> 39 (selection package move): resolver.py and its one read of the
+    # optional `_tracing_finished` flag moved to torchlens/_selection/; the
+    # count moved with it (the `_selection` row below), total unchanged.
+    "intervention": 39,
+    # 0 -> 1 (selection package move): the resolver's `_tracing_finished` read
+    # relocated here from intervention/ (see the 40 -> 39 note above).
+    "_selection": 1,
     # 2 -> 3 (aliased output slots, net-f26): _output_occurrences.py reads the
     # runtime-only `_output_container_specs_by_raw_label` map the backend sets
     # at capture end and the writer contract drops; absent on loaded traces,

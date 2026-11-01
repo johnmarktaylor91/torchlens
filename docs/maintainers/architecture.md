@@ -39,7 +39,7 @@ ones freely. Imports placed inside functions cross the layers in both directions
 | 1. Records | The product types and the internal record shapes | `_data_classes/` (`Trace`, `Op`, `Layer`, `Module`, `ModuleCall`, `Param`, `Buffer`), `_ir/` (`OpEvent`, `OpRecord`, selectors, containers), `_trace_core/` (typed column store), `appliances/` |
 | 2. Capture | Wrapping torch, running the forward pass, logging ops | `backends/` (registry and the torch backend in `backends/torch/`; previews for JAX, TensorFlow, MLX, Paddle, tinygrad), `capture/` (backend-neutral runner, predicates, halt, outcome), `_capture_*.py`, `_chunking.py`, `_input_*.py`, `_robustness.py`, `fastlog/` (sparse predicate recording behind `tl.record`), `distributed/`, `_partial/` |
 | 3. Postprocess | Turning the raw log into a finished graph | `_postprocess/` (steps 0 to 20 plus fractional inserts, order derived from declared read and write contracts) |
-| 4. Persistence and replay | Saving, loading, replaying | `_io/` (bundle writer and reader, `.tlspec` manifest, loaders), `io/` (public administration helpers), `schemas/`, `_runnable.py` and the 18 `_runnable_*.py` root modules (sparse replay behind `Trace.run`), `captured_run.py`, `bundle/` |
+| 4. Persistence and replay | Saving, loading, replaying | `_io/` (bundle writer and reader, `.tlspec` manifest, loaders), `io/` (public administration helpers), `schemas/`, `_runnable/` (the frozen runnable vocabulary in its `__init__.py` and the sparse replay modules behind `Trace.run`), `captured_run.py`, `bundle/` |
 | 5. Analysis and verbs | Everything that reads or edits a finished `Trace` | `validation/` (the tripwire), `intervention/`, `_selection*.py`, `attribution/`, `mechinterp/`, `debug/`, `receptive_field/`, `repgeom/`, `stats/`, `semantic/` (facets), `transforms/`, `checks/`, `_observe/`, `_observability/`, `trackers/`, `_snoop/`, `experiment/`, `_merged/`, `neuro/`, `_extraction/` with `dataset_extraction.py`, `preprocessing/`, `conformance/`, `differential.py` |
 | 6. Presentation and bridges | Rendering, reports, exports, external tools | `visualization/`, `viz/`, `transformer/`, `report/`, `export/`, `_quickstart/`, `agent/`, `_notebook/`, `bridge/`, `callbacks/`, `compat/`, `_ecosystem/`, `examples/`, `_autoroute/`, `_kernel_telemetry.py` |
 | Entry | The public facade | `__init__.py` (lazy attribute table `_LAZY_ATTRS`, `__all__`), `user_funcs.py` (`trace`, `summary`, `render`, validation wrappers) |
@@ -96,10 +96,10 @@ tests; `tests/AGENTS.md` has the full area table.
 | Graph postprocess | (internal, runs inside `tl.trace`) | `_postprocess/` | `test_postprocess_*.py`, `test_loop_*.py`, `test_conditional_*.py` |
 | Product types and lookup | `tl.Trace`, `tl.Op`, `tl.Layer`, `trace[label]` | `_data_classes/`, `_trace_core/`, `appliances/` | `test_metadata*.py`, `test_layer_log.py`, `godobject_oracle/` |
 | Save and load | `Trace.save`, `tl.load`, `tl.io` | `_io/`, `io/`, `schemas/` | `test_io_*.py`, `test_tlspec_*.py`, `release_goldens/` |
-| Replay | `Trace.run`, `torchlens._runnable` | `_runnable_*.py`, `_runnable.py`, `captured_run.py` | `test_runnable_*.py`, `test_run_*.py` |
+| Replay | `Trace.run`, `torchlens._runnable` | `_runnable/`, `captured_run.py` | `test_runnable_*.py`, `test_run_*.py` |
 | Validation | `tl.validate`, `torchlens.validation.validate_forward_pass` | `validation/` | `test_validation*.py`, `test_backward*.py`, `validation_goldens/` |
 | Backward capture | `CaptureOptions(backward_ready=True)`, `trace.draw_backward` | `backends/torch/backward.py`, `validation/backward.py` | `test_backward*.py` |
-| Intervention | `tl.run`, `tl.when`, `Trace.fork`, `fork.do`, `tl.sweep` | `intervention/`, `_trace_state.py` | `test_intervention*.py`, `test_sites.py`, `test_site_sweep_unit_candidates.py` |
+| Intervention | `tl.run`, `tl.when`, `Trace.fork`, `fork.do`, `tl.sweep` | `intervention/`, `_trace_state.py` | `test_intervention*.py`, `test_sites.py` |
 | Bundles and experiments | `tl.Bundle`, `torchlens.experiment` | `bundle/`, `intervention/` (Bundle), `experiment/` | `test_bundle_*.py` |
 | Selection algebra | `tl.Selection`, `tl.units`, `tl.params`, `tl.top_k` | `_selection.py`, `_selection_values.py`, `_selection_graph.py`, `_selection_subspace.py`, `_selection_compare.py` | `test_selection*.py` |
 | Attribution | `tl.attribution` | `attribution/`, `attribution/graph/`, `attribution/onebackward/` | `test_attribution*.py` |
@@ -135,14 +135,14 @@ a lower layer calls upward: `Trace._postprocess` imports `postprocess` inside th
 `backends/torch/wrappers.py` and `_capture/trace.py` about 25 each. A module-level layer
 diagram therefore understates the coupling; read the in-function imports of any module
 before you move it. The four split hubs (`backends/torch/ops.py`,
-`backends/torch/completeness_witness.py`, `validation/invariants.py`, `_runnable_execution.py`)
+`backends/torch/completeness_witness.py`, `validation/invariants.py`, `_runnable/execution.py`)
 import their split modules at the bottom of the file, after their own definitions; a test
 patches a private name on the module that defines it and on every module that binds it
 (`docs/agent-reference/known-gotchas.md`).
 
 **The god objects.** `Trace` is `_data_classes/trace.py` (about 4,000 lines) plus 15
 `_data_classes/_trace_*.py` mixin modules; its behaviour for validation, visualization,
-replay and selection is spread across them and across `_runnable_seam.py`. The torch
+replay and selection is spread across them and across `_runnable/seam.py`. The torch
 capture entry is `_trace_torch_model` in `user_funcs.py`, one function of about 1,300
 lines outside the backend package; `torch_func_decorator` and its nested `wrapped_func` in
 `backends/torch/wrappers.py` are about 900 and 760 lines; the forward runner
@@ -165,9 +165,8 @@ implementation. `viz/` plots activations, `visualization/` renders graphs, `tran
 transformer pictures. `checks/`, `validation/`, `debug/` and four root `_validation_*.py`
 modules all verify something. `errors/` is the public exception package, `_errors.py` the
 internal helpers, and `intervention/errors.py` the intervention catalogue. `facets.py` at
-the root is an alias that replaces itself in `sys.modules` with `_semantic/facets.py`. The
-runnable replay is 18 `_runnable_*.py` root modules rather than a package. Module names in
-`backends/torch/` (`belt.py`, `rescue.py`, `_runnable_seam.py`) do not say what they hold;
+the root is an alias that replaces itself in `sys.modules` with `_semantic/facets.py`.
+Module names in `backends/torch/` (`belt.py`, `rescue.py`) do not say what they hold;
 the generated index gives each one's first docstring line.
 
 ## Where to read next

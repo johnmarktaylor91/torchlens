@@ -56,7 +56,7 @@ _LAZY_ATTRS = {
     "neuro": ("torchlens.neuro", None),
     "clamp": ("torchlens.intervention.helpers", "clamp"),
     "compat": ("torchlens.compat", None),
-    "label_contains": ("torchlens.intervention.selectors", "label_contains"),
+    "label_contains": ("torchlens._selection.selectors", "label_contains"),
     # Dataset extraction (D7/V5): the implementation module is lazy so the
     # manifest/resume machinery costs nothing until first use.
     "dataset_extraction": ("torchlens.dataset_extraction", None),
@@ -67,39 +67,39 @@ _LAZY_ATTRS = {
     "export": ("torchlens.export", None),
     "facets": ("torchlens._semantic", "facets"),
     "recording": ("torchlens.recording", None),
-    "facet": ("torchlens.intervention.selectors", "facet"),
-    "followed_by": ("torchlens.intervention.selectors", "followed_by"),
-    "func": ("torchlens.intervention.selectors", "func"),
-    "func_transform": ("torchlens.intervention.selectors", "func_transform"),
-    "grad": ("torchlens.intervention.selectors", "grad"),
+    "facet": ("torchlens._selection.selectors", "facet"),
+    "followed_by": ("torchlens._selection.selectors", "followed_by"),
+    "func": ("torchlens._selection.selectors", "func"),
+    "func_transform": ("torchlens._selection.selectors", "func_transform"),
+    "grad": ("torchlens._selection.selectors", "grad"),
     "clip_norm": ("torchlens.intervention.helpers", "clip_norm"),
-    "grad_fn": ("torchlens.intervention.selectors", "grad_fn"),
-    "grad_input": ("torchlens.intervention.selectors", "grad_input"),
-    "grad_output": ("torchlens.intervention.selectors", "grad_output"),
+    "grad_fn": ("torchlens._selection.selectors", "grad_fn"),
+    "grad_input": ("torchlens._selection.selectors", "grad_input"),
+    "grad_output": ("torchlens._selection.selectors", "grad_output"),
     "fingerprint": ("torchlens.fingerprint", None),
-    "head": ("torchlens.intervention.selectors", "head"),
-    "in_backward_pass": ("torchlens.intervention.selectors", "in_backward_pass"),
-    "in_module": ("torchlens.intervention.selectors", "in_module"),
-    "model_input": ("torchlens.intervention.selectors", "model_input"),
+    "head": ("torchlens._selection.selectors", "head"),
+    "in_backward_pass": ("torchlens._selection.selectors", "in_backward_pass"),
+    "in_module": ("torchlens._selection.selectors", "in_module"),
+    "model_input": ("torchlens._selection.selectors", "model_input"),
     "intervention": ("torchlens.intervention", None),
     "io": ("torchlens.io", None),
     "load": ("torchlens._io.bundle", "load"),
-    "label": ("torchlens.intervention.selectors", "label"),
+    "label": ("torchlens._selection.selectors", "label"),
     "mean_ablate": ("torchlens.intervention.helpers", "mean_ablate"),
     "merge_ranks": ("torchlens._merged", "merge_ranks"),
     "merge_report": ("torchlens._merged", "merge_report"),
-    "module": ("torchlens.intervention.selectors", "module"),
+    "module": ("torchlens._selection.selectors", "module"),
     "add_noise": ("torchlens.intervention.helpers", "add_noise"),
-    "model_output": ("torchlens.intervention.selectors", "model_output"),
+    "model_output": ("torchlens._selection.selectors", "model_output"),
     "debug": ("torchlens.debug", None),
     "report": ("torchlens.report", None),
     "repgeom": ("torchlens.repgeom", None),
-    "preceded_by": ("torchlens.intervention.selectors", "preceded_by"),
+    "preceded_by": ("torchlens._selection.selectors", "preceded_by"),
     "project_out": ("torchlens.intervention.helpers", "project_out"),
     "project_onto": ("torchlens.intervention.helpers", "project_onto"),
     "record": ("torchlens.recording._record_one_shot", "record"),
     "receptive_field": ("torchlens.receptive_field", None),
-    "label_matches": ("torchlens.intervention.selectors", "label_matches"),
+    "label_matches": ("torchlens._selection.selectors", "label_matches"),
     "clear_cache": ("torchlens._user_funcs", "clear_cache"),
     "release_model": ("torchlens._user_funcs", "release_model"),
     "replace_with": ("torchlens.intervention.predicates", "replace_with"),
@@ -120,11 +120,11 @@ _LAZY_ATTRS = {
     "appliances": ("torchlens.appliances", None),
     "backends": ("torchlens.backends", None),
     "viz": ("torchlens.viz", None),
-    "site": ("torchlens.intervention.selectors", "site"),
-    "at_step": ("torchlens.intervention.selectors", "at_step"),
+    "site": ("torchlens._selection.selectors", "site"),
+    "at_step": ("torchlens._selection.selectors", "at_step"),
     "when": ("torchlens.intervention.spec", "when"),
-    "where": ("torchlens.intervention.selectors", "where"),
-    "without_op": ("torchlens.intervention.selectors", "without_op"),
+    "where": ("torchlens._selection.selectors", "where"),
+    "without_op": ("torchlens._selection.selectors", "without_op"),
     "zero_ablate": ("torchlens.intervention.helpers", "zero_ablate"),
     "Edit": ("torchlens.intervention.types", "Edit"),
     "patch_from": ("torchlens.intervention.helpers", "patch_from"),
@@ -132,33 +132,33 @@ _LAZY_ATTRS = {
     "positions": ("torchlens.intervention._position_edits", "positions"),
     # L6 selection algebra (DOCUMENTED-UNSTABLE pending naming-session
     # ratification; provisional-name protocol).
-    "Selector": ("torchlens._selection", "Selector"),
-    "Selection": ("torchlens._selection", "Selection"),
-    "units": ("torchlens._selection", "units"),
-    "param": ("torchlens._selection", "param"),
-    "random_like": ("torchlens._selection", "random_like"),
+    "Selector": ("torchlens._selection.selection", "Selector"),
+    "Selection": ("torchlens._selection.selection", "Selection"),
+    "units": ("torchlens._selection.selection", "units"),
+    "param": ("torchlens._selection.selection", "param"),
+    "random_like": ("torchlens._selection.selection", "random_like"),
     # L6 value-based + statistical producers (DOCUMENTED-UNSTABLE pending
     # naming-session ratification; provisional-name protocol).
-    "top_k": ("torchlens._selection_values", "top_k"),
-    "top_fraction": ("torchlens._selection_values", "top_fraction"),
-    "threshold": ("torchlens._selection_values", "threshold"),
-    "sign": ("torchlens._selection_values", "sign"),
-    "dead": ("torchlens._selection_values", "dead"),
-    "saturated": ("torchlens._selection_values", "saturated"),
-    "low_variance": ("torchlens._selection_values", "low_variance"),
+    "top_k": ("torchlens._selection.values", "top_k"),
+    "top_fraction": ("torchlens._selection.values", "top_fraction"),
+    "threshold": ("torchlens._selection.values", "threshold"),
+    "sign": ("torchlens._selection.values", "sign"),
+    "dead": ("torchlens._selection.values", "dead"),
+    "saturated": ("torchlens._selection.values", "saturated"),
+    "low_variance": ("torchlens._selection.values", "low_variance"),
     # L6 graph-structural producers (DOCUMENTED-UNSTABLE pending
     # naming-session ratification; provisional-name protocol).
-    "neighborhood": ("torchlens._selection_graph", "neighborhood"),
-    "between": ("torchlens._selection_graph", "between"),
+    "neighborhood": ("torchlens._selection.graph", "neighborhood"),
+    "between": ("torchlens._selection.graph", "between"),
     # L6 comparative producers: differential + cross-pass (DOCUMENTED-UNSTABLE
     # pending naming-session ratification; provisional-name protocol).
-    "changed": ("torchlens._selection_compare", "changed"),
-    "top_changed": ("torchlens._selection_compare", "top_changed"),
-    "stable_across_passes": ("torchlens._selection_compare", "stable_across_passes"),
-    "pass_variance": ("torchlens._selection_compare", "pass_variance"),
+    "changed": ("torchlens._selection.compare", "changed"),
+    "top_changed": ("torchlens._selection.compare", "top_changed"),
+    "stable_across_passes": ("torchlens._selection.compare", "stable_across_passes"),
+    "pass_variance": ("torchlens._selection.compare", "pass_variance"),
     # L6 subspace producer (DOCUMENTED-UNSTABLE pending naming-session
     # ratification; provisional-name protocol).
-    "subspace": ("torchlens._selection_subspace", "subspace"),
+    "subspace": ("torchlens._selection.subspace", "subspace"),
 }
 
 
@@ -523,7 +523,7 @@ def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
     A list entry keys by the selector's spelling; a mapping entry by the user label.
     """
 
-    from .intervention.selectors import FacetSelector
+    from ._selection.selectors import FacetSelector
 
     items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
     return {

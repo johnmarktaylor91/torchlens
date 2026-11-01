@@ -61,7 +61,7 @@ _CAPTURE = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
 
 #: (path suffix, function name) of each counted function, by report key.
 COUNTED: dict[str, tuple[str, str]] = {
-    "resolve_sites": ("torchlens/intervention/resolver.py", "resolve_sites"),
+    "resolve_sites": ("torchlens/_selection/resolver.py", "resolve_sites"),
     "selector_eval_evaluate": ("torchlens/_ir/selector_eval.py", "evaluate"),
     "op_getattribute": ("torchlens/_data_classes/op.py", "__getattribute__"),
     "op_store_cell_get": ("torchlens/_trace_core/op_store.py", "cell_get"),
@@ -178,11 +178,11 @@ def reference_gap(
 #: is reported as context (never a gate; cProfile inflates call-heavy code).
 TIMED: dict[str, tuple[str, str]] = {
     "patch_edges": ("torchlens/mechinterp/_edge_patch.py", "patch_edges"),
-    "resolve_sites": ("torchlens/intervention/resolver.py", "resolve_sites"),
+    "resolve_sites": ("torchlens/_selection/resolver.py", "resolve_sites"),
     "origin_sites_for_hooks": ("torchlens/intervention/replay.py", "_origin_sites_for_hooks"),
     "hook_targets_by_label": ("torchlens/intervention/replay.py", "_hook_targets_by_label"),
     "group_for_site": ("torchlens/intervention/replay.py", "_group_for_site"),
-    "build_selection_do_plan": ("torchlens/_selection.py", "build_selection_do_plan"),
+    "build_selection_do_plan": ("torchlens/_selection/selection.py", "build_selection_do_plan"),
     "run_replay": ("torchlens/intervention/replay.py", "_run_replay"),
 }
 
@@ -225,7 +225,7 @@ def _counts(stats: pstats.Stats) -> dict[str, int]:
 def _counting_selector_kinds(kinds: Counter[str]) -> Iterator[None]:
     """Count the normalized selector kind of every ``resolve_sites`` query."""
 
-    from torchlens.intervention import resolver
+    from torchlens._selection import resolver
 
     original = resolver.resolve_sites
 

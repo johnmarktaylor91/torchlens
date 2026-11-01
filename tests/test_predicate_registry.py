@@ -28,8 +28,8 @@ from torchlens._ir.predicate_registry import (
     coerce_predicate,
     register_predicate,
 )
+from torchlens._selection.selectors import BaseSelector
 from torchlens._trace_selector_helpers import _predicate_cache_key
-from torchlens.intervention.selectors import BaseSelector
 from torchlens.recording.exceptions import PredicateError
 from torchlens.recording.types import CaptureSpec
 
@@ -363,8 +363,8 @@ def test_no_loader_marker_and_pickled_reference_refuses():
         FACET_RECIPE_MARKER_ATTR,
         is_inert_first_party_callable,
     )
+    from torchlens.intervention._resolver_registry import resolve_import_ref
     from torchlens.intervention.errors import UntrustedCallableError
-    from torchlens.intervention.resolver import resolve_import_ref
 
     register_predicate("pickled")(_plain_predicate)
     # No attribute consulted by the restricted loader is set, and the

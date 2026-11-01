@@ -252,7 +252,7 @@ def test_effect_table_survives_save_load_and_unarmed_ledger(tmp_path) -> None:
     assert excinfo.value.fields["code"] == "effects_selection_unavailable"
 
 
-def test_measure_members_reports_unmeasured_and_orders_by_the_chain() -> None:
+def test_map_reports_released_candidates_as_unmeasured() -> None:
     torch.manual_seed(0)
     model = _Tiny().eval()
     x = torch.randn(2, 3)
@@ -266,24 +266,33 @@ def test_measure_members_reports_unmeasured_and_orders_by_the_chain() -> None:
         model=model,
         inputs=x,
     )
-    report = bundle.measure_members(metric=lambda member: len(member.op_labels))
-    assert set(report["values"]) == set(bundle.names)
-    assert len(report["unmeasured"]) == 1  # the released candidate, named
-    chained = bundle.measure_members(metric=_output_metric, order="chain")
-    assert chained["order"] == "chain"
-    assert chained["values"] == bundle.measure_members(metric=_output_metric)["values"]
-    (operation,) = bundle.history
+    report = bundle.map(lambda member: len(member.op_labels))
     (retained,) = [name for name in bundle.names if name != "baseline"]
-    assert chained["chain"] == [
-        {
-            "seq": operation.seq,
-            "operation_id": operation.operation_id,
-            "kind": "site_sweep",
-            "member": retained,
-            "value": chained["values"][retained],
-        }
+    (released,) = [
+        row.candidate_id
+        for row in bundle.effects().rows
+        if row.candidate_id != "__baseline__" and row.member_name != retained
     ]
+    # Live members are measured; the released candidate is keyed by its
+    # candidate id and reads "unmeasured", never re-scored, never dropped.
+    assert {name: report[name] for name in bundle.names} == {
+        name: len(bundle[name].op_labels) for name in bundle.names
+    }
+    assert report[released] == "unmeasured"
+    assert set(report) == set(bundle.names) | {released}
+    # The two-argument idiom keeps the same shape.
+    named = bundle.map(lambda member, name: name)
+    assert named[retained] == retained and named[released] == "unmeasured"
+    # measure_members (kept pending the glossary round-2 ruling) is the
+    # structured form: values, the unmeasured list, and the chain order.
+    measured = bundle.measure_members(metric=lambda member: len(member.op_labels))
+    assert measured["values"] == {name: report[name] for name in bundle.names}
+    assert measured["unmeasured"] == [released] and measured["order"] == "member"
+    chained = bundle.measure_members(metric=_output_metric, order="chain")
+    (operation,) = bundle.history
     assert chained["unchained"] == ["baseline"]
+    assert [row["member"] for row in chained["chain"]] == [retained]
+    assert chained["chain"][0]["operation_id"] == operation.operation_id
     with pytest.raises(BundleExperimentError) as excinfo:
         bundle.measure_members(metric=_output_metric, order="time")
     assert excinfo.value.fields["code"] == "measure_members_order_unavailable"

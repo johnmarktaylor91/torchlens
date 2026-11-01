@@ -127,7 +127,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "link_format_invalid",
         "max_pairs_invalid",
         "metric_name_invalid",
-        "metric_shape_mismatch",
         "metric_tensor_type_invalid",
         "metric_type_invalid",
         "module_call_ambiguous",
@@ -533,7 +532,7 @@ def test_every_enum_member_is_reachable_in_source() -> None:
     texts = _iter_python_texts(_PACKAGE_ROOT)
     dead: list[str] = []
     for enum_cls, declaring in (
-        (RunnableErrorCode, _PACKAGE_ROOT / "_runnable.py"),
+        (RunnableErrorCode, _PACKAGE_ROOT / "_runnable/__init__.py"),
         (MergedErrorCode, _PACKAGE_ROOT / "merged" / "_enums.py"),
     ):
         for member in enum_cls:

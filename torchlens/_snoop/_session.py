@@ -138,7 +138,7 @@ class EchoSession:
         """Resolve the sink, the scope, and the per-pass counters."""
 
         from .._ir.selector_eval import split_followed_by_conjunction
-        from ..intervention.selectors import BaseSelector
+        from .._selection.selectors import BaseSelector
 
         self.options = options
         self.tier = tier

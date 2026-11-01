@@ -10,11 +10,14 @@ public names, so ``torchlens.intervention.save.check_spec_compat`` and
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
+from ._spec_codec import _target_spec_from_json
 from .errors import GraphShapeMismatchError, SiteResolutionError
-from .resolver import _resolve_sites, _site_record, _SiteTable
 from .types import InterventionSpec
+
+if TYPE_CHECKING:
+    from .._selection.resolver import _SiteTable
 
 __all__ = ["SpecCompat", "TargetManifestDiff", "check_spec_compat"]
 
@@ -81,6 +84,7 @@ def _site_keys_for_table(log: Any, table: _SiteTable) -> list[str | None]:
     ``_SiteTable.labels()``: those are layer labels, which a multi-pass layer
     repeats once per pass and which name no single op.
     """
+    from .._selection.resolver import _site_record
 
     keys: list[str | None] = []
     for site in table:
@@ -138,8 +142,7 @@ class _EntryFacts(NamedTuple):
 
 def _resolve_entry(new_log: Any, entry: dict[str, Any], graph_hash: Any) -> _EntryFacts:
     """Resolve one manifest entry's selector on the new log (pure lookup)."""
-
-    from .save import _target_spec_from_json
+    from .._selection.resolver import _resolve_sites
 
     saved_labels = list(entry.get("resolved_labels", []))
     saved_keys_raw = entry.get("resolved_site_keys")

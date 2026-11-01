@@ -5,9 +5,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from torchlens import _runnable_state
-from torchlens._runnable import StateSource
-from torchlens._runnable_state import PreparedRunnableState, _apply_state_metadata_facts
+from torchlens._runnable import StateSource, state as _runnable_state
+from torchlens._runnable.state import PreparedRunnableState, _apply_state_metadata_facts
 from torchlens.errors import StateBindingError
 
 

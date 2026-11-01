@@ -18,7 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._ir.selector_eval import flatten_and_conjuncts, walk_selector
-from torchlens.intervention.selectors import CompositeSelector
+from torchlens._selection.selectors import CompositeSelector
 
 
 def test_chained_or_composition_stays_flat() -> None:

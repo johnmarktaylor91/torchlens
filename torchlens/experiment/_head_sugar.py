@@ -96,7 +96,7 @@ def head_ablation_candidates(
         semantics it cannot prove.
     """
 
-    from ..intervention.selectors import head as head_selector
+    from .._selection.selectors import head as head_selector
 
     n_q, n_kv = _attention_geometry(baseline, module)
     if n_q is None or n_kv is None or n_q != n_kv:

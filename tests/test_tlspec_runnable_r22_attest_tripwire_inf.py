@@ -14,7 +14,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io.runnable import _encode_literal
 from torchlens._runnable import LiteralAtom, LiteralAtomKind, NumericAttestationStatus
-from torchlens._runnable_verification import _decode_literal
+from torchlens._runnable.verification import _decode_literal
 from torchlens.errors.runnable import ReplayValueMismatchError, RunPreconditionError
 from torchlens.options import CaptureOptions
 

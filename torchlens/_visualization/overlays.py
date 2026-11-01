@@ -40,7 +40,7 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
     mapping as an honest ``0``.
     """
 
-    from .._selection import Selection, Selector
+    from .._selection.selection import Selection, Selector
 
     if isinstance(overlay, Selector):
         overlay = overlay._resolve(trace)
@@ -50,7 +50,7 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
             return overlay
         overlay = selection_hook()._resolve(trace)
     if overlay._trace is not trace:
-        from torchlens._selection import SelectionError
+        from torchlens._selection.errors import SelectionError
 
         raise SelectionError(
             "the node_overlay selection is resolved against a DIFFERENT "

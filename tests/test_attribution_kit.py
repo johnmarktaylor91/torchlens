@@ -361,8 +361,8 @@ def test_attribution_kit_lane_is_detachable_from_stage4a_and_capture_core() -> N
         )
     }
     stage4a_files = (
-        "torchlens/_selection.py",
-        "torchlens/_selection_align.py",
+        "torchlens/_selection/selection.py",
+        "torchlens/_selection/align.py",
         "tests/test_selection_algebra.py",
         "tests/test_selection_do.py",
         "tests/test_selection_align.py",

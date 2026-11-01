@@ -23,7 +23,7 @@ from torchlens._runnable import (
     PathFaithfulness,
     StateSource,
 )
-from torchlens._runnable_state import runnable_tensor_byte_digest
+from torchlens._runnable.state import runnable_tensor_byte_digest
 from torchlens.errors import StateBindingError
 from torchlens.options import CaptureOptions
 

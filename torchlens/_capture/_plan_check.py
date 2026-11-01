@@ -263,7 +263,7 @@ def _is_static_selector(selector: Any) -> bool:
 
     from .._ir.selector_eval import first_selector_kind_outside
     from .._postprocess._selective_save import _STATIC_SELECTOR_KINDS
-    from ..intervention.selectors import BaseSelector
+    from .._selection.selectors import BaseSelector
 
     if not isinstance(selector, BaseSelector):
         return False

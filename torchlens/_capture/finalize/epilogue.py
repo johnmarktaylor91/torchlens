@@ -55,7 +55,7 @@ def _render_layer_visualizers(
     """
 
     # Deferred: the site resolver sits above the FINALIZE layer.
-    from ...intervention.resolver import _resolve_sites
+    from ..._selection.resolver import _resolve_sites
 
     output_dir = ensure_trace_visualizer_dir(trace)
     visualizer_dir = output_dir / "visualizers"

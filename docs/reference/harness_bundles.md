@@ -244,7 +244,7 @@ it where you report the number and call the result a descriptive comparison.
   (`verified` or `matched`); every other row is dashed. `nodes="ops"` (the default) keeps the
   bundle's union op graph.
 - Comparisons: members joined by an ordering path (including `fed_by` and `selected_by`) are not
-  comparison operands, and `delta_map`, `norm_delta`, `output_delta` and `compare` run the same
+  comparison operands, and `compare`, `rank_changes`, `store_comparison` and `draw(graph="diff")` run the same
   comparison gate as `b.at(site).compare()`. Two calls on different prompts refuse `bundle_gate_input_values_differ`
   instead of reporting distances between unrelated inputs.
 - `tl.load(path, lazy=True)` on a saved bundle loads every member lazily (tensors stay on disk

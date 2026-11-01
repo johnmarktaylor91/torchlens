@@ -14,9 +14,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._selection.selectors import CompositeSelector, LabelSelector
 from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.intervention.hooks import lower_record_site_target
-from torchlens.intervention.selectors import CompositeSelector, LabelSelector
 
 _N_PASSES = 3
 

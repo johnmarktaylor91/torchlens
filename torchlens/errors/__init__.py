@@ -156,7 +156,7 @@ _LEGACY_EXCEPTION_PATHS = {
         "BatchNormTrainModeWarning",
     ),
     "SpecMutationError": ("torchlens.intervention.errors", "SpecMutationError"),
-    "SelectionError": ("torchlens._selection", "SelectionError"),
+    "SelectionError": ("torchlens._selection.selection", "SelectionError"),
     "SiteResolutionError": ("torchlens.intervention.errors", "SiteResolutionError"),
     "SelectorCompositionError": (
         "torchlens.intervention.errors",

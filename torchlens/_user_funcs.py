@@ -56,6 +56,7 @@ from ._input_coerce import (
     _reject_non_mapping_input_kwargs,
     _reject_unrouted_forward_kwargs,
 )
+from ._selection.selectors import BaseSelector
 from ._utils.tensor_utils import SaveMode
 from .backends.registry import (
     BackendName,
@@ -66,7 +67,6 @@ from .backends.torch.bound_root import (
 from .intervention import model_door as _model_door
 from .intervention._zero_fire import zero_fire_policy_scope
 from .intervention.predicates import InterventionPredicate
-from .intervention.selectors import BaseSelector
 from .options import (
     CaptureOptions,
     EpisodeOptions,

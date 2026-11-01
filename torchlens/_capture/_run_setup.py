@@ -30,13 +30,13 @@ from .._capture_state_helpers import (
 from .._data_classes.trace import Trace
 from .._io.streaming import BundleStreamWriter
 from .._ir.selector_eval import selector_contains_kind
+from .._selection.module_alias_guard import refuse_model_alias_spellings
+from .._selection.selectors import BaseSelector
 from .._trace_state import TraceState
 from .._utils.introspection import _get_code_context
 from ..backends.torch.bound_root import TLBoundMethodRoot
 from ..intervention import injection as _injection
-from ..intervention._module_alias_guard import refuse_model_alias_spellings
 from ..intervention.hooks import normalize_hook_plan, site_universe as _site_universe
-from ..intervention.selectors import BaseSelector
 from ..intervention.types import InterventionDecision
 from ..options import StorageOptions
 from ..recording.options import RecordingOptions

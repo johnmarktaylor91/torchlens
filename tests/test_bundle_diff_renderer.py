@@ -152,7 +152,7 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
 
     bundle = _canonical_bundle()
     outpath = tmp_path / "bundle_diff_clean_vs_zero_relu"
-    dot_source = bundle.show_diff(path=str(outpath), vis_save_only=True)
+    dot_source = bundle.draw(graph="diff", path=str(outpath), open_viewer=False)
     candidate_svg = outpath.with_suffix(".svg")
 
     assert dot_source.startswith("// TorchLens bundle diff")
@@ -161,7 +161,7 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
     assert "aria-label=" in svg_text
     assert "clean vs ablated" in svg_text
     assert "zero_ablate(layer1.0.relu)" not in svg_text
-    assert len(bundle.aligned_pairs("clean", "ablated")) > 0
+    assert len(bundle._aligned_pairs("clean", "ablated")) > 0
 
     candidate_normalized = _normalize_svg(svg_text)
     reference_normalized = _normalize_svg(GOLDEN_SVG.read_text(encoding="utf-8"))
@@ -211,11 +211,11 @@ def test_bundle_diff_caption_uses_selected_members(tmp_path: Path) -> None:
     bundle = tl.Bundle({"base": left, "patched": right}, baseline="base")
 
     outpath = tmp_path / "member_caption"
-    dot_source = bundle.show_diff(
-        left="base",
-        right="patched",
+    dot_source = bundle.draw(
+        graph="diff",
+        members=("base", "patched"),
         path=str(outpath),
-        vis_save_only=True,
+        open_viewer=False,
     )
     svg_text = outpath.with_suffix(".svg").read_text(encoding="utf-8")
 
@@ -265,8 +265,7 @@ def test_bundle_diff_pair_selection_considers_left_delta() -> None:
 
     selected = _select_pairs(
         [(left_high, right_low), (left_low, right_mid)],
-        left_name="left",
-        right_name="right",
+        names=("left", "right"),
         delta_map={
             "node_high": {"left": 9.0, "right": 0.0},
             "node_mid": {"left": 0.0, "right": 5.0},

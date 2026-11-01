@@ -82,7 +82,7 @@ _NEW_FILE_LINE_CAP = 2000
 #:   _io/bundle.py 4450 | backends/torch/backward.py 3800
 #:   bundle/__init__.py 2450 | _capture/trace.py 2200
 #:   _data_classes/trace.py 3750 | options.py 2425 | user_funcs.py 3900
-#:   _runnable_state.py 2700 (L4 D18 mode-aware projector + snapshot-restore)
+#:   _runnable/state.py 2700 (L4 D18 mode-aware projector + snapshot-restore)
 #:   _visualization/_render_edges.py 2350 (portable rolled-edge label placement)
 #: 2026-08-16 L6 merge settle (same debt record): three more ceilings
 #: re-stepped for reviewed L6 selection-algebra / edge-substitution mass
@@ -408,7 +408,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # intermediate-grad dual-spelling resolution here as on jax/tinygrad;
     # merged tree measures 2753. Next 50-line step above it.
     "torchlens/backends/paddle/backend.py": 2800,
-    "torchlens/_runnable_state.py": 2850,
+    "torchlens/_runnable/state.py": 2850,
     "torchlens/_capture/arg_positions.py": 2650,
     "torchlens/backends/jax/jaxpr.py": 2550,
     "torchlens/_capture_state_helpers.py": 2350,
@@ -419,8 +419,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # named, not silent regrowth. Re-keyed 2550 -> 2450 at the 3.0 rename
     # (measured 2435 after the selection and bundle spellings moved out).
     # Re-keyed 2450 -> 2350 on the round-2 batch: ten Bundle members removed
-    # (measured 2338).
-    "torchlens/bundle/__init__.py": 2350,
+    # (measured 2338). Re-keyed 2350 -> 2050 at the Bundle split: label
+    # heuristics and member coercion moved to bundle/_labels.py and
+    # bundle/_members.py, the helper table went (measured 2008).
     # Re-keyed 2400 -> 2100 at the F16/T60 fix cycle (2026-08-29): the file
     # crossed its ceiling (2406), so OpAccessor/LayerAccessor split to
     # _layer_accessors.py (the _layer_spec.py precedent); layer.py re-exports
@@ -445,12 +446,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # forks.11 FK5 midpoint-composed the rolled channel and deleted the tuned
     # head/tail placement classes.
     "torchlens/_visualization/_render_edges.py": 2100,
-    # Re-keyed 2400 -> 2300 at the C03 fix cycle (2026-08-27): the site-key-first
-    # compat checker (check_spec_compat + SpecCompat/TargetManifestDiff and its
-    # private helpers) moved to intervention/spec_compat.py, decomposed under
-    # the complexity ratchet; save.py re-exports the public names. Ceilings
-    # follow files down (R43-F2); save.py stays on the debloat-pass list.
-    "torchlens/intervention/save.py": 2300,
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/_visualization/_render_nodes.py": 2150,

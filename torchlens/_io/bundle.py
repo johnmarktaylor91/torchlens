@@ -389,7 +389,7 @@ def save(
     # (owners disjoint; a slice can only exist after its module imported).
     slice_presenter = sys.modules.get("torchlens._trace_slice")
     if slice_presenter is not None and isinstance(trace, slice_presenter.TraceSlice):
-        from torchlens._selection import SelectionError
+        from torchlens._selection.errors import SelectionError
 
         raise SelectionError(
             "trace.save() does not support TraceSlice: a slice is a VIEW with "
@@ -949,7 +949,7 @@ def _capture_weight_blob_specs(
         mirror of the load door's canonical-label check).
     """
 
-    from .._runnable_state import validate_state_mapping_for_descriptor
+    from .._runnable.state import validate_state_mapping_for_descriptor
 
     state = _capture_source_state(trace, option_name="include_weights")
     validate_state_mapping_for_descriptor(descriptor, state)
@@ -995,7 +995,7 @@ def _capture_nonpersistent_buffer_blob_specs(
         mirror of the load door's canonical-label check).
     """
 
-    from .._runnable_state import validate_nonpersistent_buffer_mapping_for_descriptor
+    from .._runnable.state import validate_nonpersistent_buffer_mapping_for_descriptor
 
     names = sorted(
         {
@@ -1054,8 +1054,8 @@ def _capture_activation_blob_specs(
     """
 
     from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
-    from .._runnable_input_aliases import build_input_attestation_fingerprint
-    from .._runnable_state import runnable_tensor_byte_digest
+    from .._runnable.input_aliases import build_input_attestation_fingerprint
+    from .._runnable.state import runnable_tensor_byte_digest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
     call_id_by_label = {
@@ -1824,7 +1824,7 @@ def _bind_embedded_nonpersistent_buffer_payload(
             )
         embedded[entry.label] = tensor
 
-    from .._runnable_state import bind_embedded_nonpersistent_buffers
+    from .._runnable.state import bind_embedded_nonpersistent_buffers
 
     bind_embedded_nonpersistent_buffers(trace, embedded)
 
@@ -1907,7 +1907,7 @@ def _bind_embedded_weight_payload(
             raise ArtifactError(f"Embedded state blob {blob_path} lacks {_BLOB_TENSOR_KEY!r}.")
         embedded[entry.label] = tensor
 
-    from .._runnable_state import bind_embedded_trace_state
+    from .._runnable.state import bind_embedded_trace_state
 
     bind_embedded_trace_state(trace, embedded)
 
@@ -1942,7 +1942,7 @@ def _bind_archived_activation_payload(
     """
 
     from .._runnable import ActivationPayloadLayerDescriptor, ArchivedActivation
-    from .._runnable_state import runnable_tensor_byte_digest
+    from .._runnable.state import runnable_tensor_byte_digest
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)

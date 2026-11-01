@@ -30,7 +30,7 @@ from ._selector_universe import (
 )
 
 if TYPE_CHECKING:
-    from ..intervention.selectors import BaseSelector
+    from .._selection.selectors import BaseSelector
 
 #: One compiled plan node: a callable closed over its selector's payload and
 #: lane that answers ``matcher(subject)``. Composite nodes hold their children's

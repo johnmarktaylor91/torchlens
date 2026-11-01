@@ -31,7 +31,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness, RunnableErrorCode
-from torchlens._runnable_state import (
+from torchlens._runnable.state import (
     TORCH_MANUAL_SEED_MAX,
     TORCH_MANUAL_SEED_MIN,
     validate_run_seed,

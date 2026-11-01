@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection import _FLIP, SelectionProvenance
+from torchlens._selection.selection import _FLIP, SelectionProvenance
 from torchlens.bundle import Bundle
 from torchlens.errors import SelectionError
 

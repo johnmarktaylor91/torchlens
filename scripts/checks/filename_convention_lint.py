@@ -49,7 +49,6 @@ _LEDGERED_SPRINT_TOKEN_FILES: frozenset[str] = frozenset(
         "test_r18cg_capture_gap.py",
         "test_r18d_report.py",
         "test_r18e_debug.py",
-        "test_r18f_semantic_observers.py",
         "test_r18g_tensor_rng.py",
         "test_r18h_introspect_hash.py",
         "test_r18i2_options_residue.py",

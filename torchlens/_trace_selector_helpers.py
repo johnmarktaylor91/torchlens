@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ._capture.arg_positions import _normalize_func_name
 from ._errors import AmbiguousOpLookupError, ArgumentConflictError, ArgumentTypeError
+from ._selection.selectors import BaseSelector
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
-from .intervention.selectors import BaseSelector
 from .options import SaveOptions
 from .recording.options import PredicateFn
 from .recording.types import RecordContext
@@ -42,8 +42,8 @@ def _split_save_options_and_predicate(
         return None, None
     if isinstance(save_value, SaveOptions):
         return save_value, None
+    from ._selection.selectors import FacetSelector
     from .intervention._facet_save import _facet_save_predicate
-    from .intervention.selectors import FacetSelector
 
     if isinstance(save_value, FacetSelector):
         # Save-only seam: intervene=/bind/hooks= evaluate the facet selector

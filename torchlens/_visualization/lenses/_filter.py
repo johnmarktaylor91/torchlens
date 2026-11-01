@@ -166,7 +166,7 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
     (``align_to``) is the one explicit door for cross-trace reuse.
     """
 
-    from torchlens._selection import Selection, Selector
+    from torchlens._selection.selection import Selection, Selector
 
     if isinstance(selection, Selection):
         resolved: Any = selection

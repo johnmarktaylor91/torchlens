@@ -22,8 +22,8 @@ from typing import Any
 from ... import _state
 from ..._ir.intervention import FireResult
 from ..._ir.predicate import RecordContext
+from ..._selection.selectors import BaseSelector
 from ...intervention.predicates import as_intervention_decision
-from ...intervention.selectors import BaseSelector
 from ...intervention.types import Edit, FireRecord, InterventionDecision, TargetSpec
 from ...recording.exceptions import PredicateError
 from .._protocols.paddle import (

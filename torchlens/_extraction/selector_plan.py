@@ -91,11 +91,11 @@ def _is_selector(value: Any) -> bool:
     Returns
     -------
     bool
-        ``True`` for :class:`~torchlens.intervention.selectors.BaseSelector`
+        ``True`` for :class:`~torchlens._selection.selectors.BaseSelector`
         instances.
     """
 
-    from ..intervention.selectors import BaseSelector
+    from .._selection.selectors import BaseSelector
 
     return isinstance(value, BaseSelector)
 
@@ -152,7 +152,7 @@ def is_selector_request(layers: Any) -> bool:
         door).
     """
 
-    from .._selection import Selector
+    from .._selection.selection import Selector
 
     if isinstance(layers, Selector):
         _refuse_partial_units(layers)

@@ -124,8 +124,8 @@ def resolve_loaded_callables(trace: Any) -> list[Any]:
         names them.
     """
 
+    from ..intervention._resolver_registry import resolve_function_registry_key
     from ..intervention.errors import ReplayPreconditionError, UntrustedCallableError
-    from ..intervention.resolver import resolve_function_registry_key
 
     resolved: list[Any] = []
     for layer in trace._layer_list or ():

@@ -1511,48 +1511,66 @@ recorded: 2026-11-01T04:17:26.416121+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+reason: runnable package move: module path of RunnableTraceState
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.531533+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: runnable package move: module path of RunnableTraceState
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.582542+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: runnable package move: module path of RunnableTraceState
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.641870+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: runnable package move: module path of RunnableTraceState
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.702493+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: runnable package move: module path of RunnableTraceState
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.758575+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: runnable package move: module path of RunnableTraceState
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.831904+00:00
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
 source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
 recorded: 2026-11-01T11:30:18.317755+00:00
----
-generator: tests/surface_oracle
-flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: v11 saved format: group branch onto the batch D head (lane v11-group)
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
 source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
 recorded: 2026-11-01T11:30:18.352915+00:00
----
-generator: tests/surface_oracle
-flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: v11 saved format: group branch onto the batch D head (lane v11-group)
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
 source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
 recorded: 2026-11-01T11:30:18.386859+00:00
----
-generator: tests/surface_oracle
-flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: v11 saved format: group branch onto the batch D head (lane v11-group)
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
 source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
 recorded: 2026-11-01T11:30:18.421882+00:00
----
-generator: tests/surface_oracle
-flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: v11 saved format: group branch onto the batch D head (lane v11-group)
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
 source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
 recorded: 2026-11-01T11:30:18.457132+00:00
----
-generator: tests/surface_oracle
-flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: v11 saved format: group branch onto the batch D head (lane v11-group)
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
 source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
 recorded: 2026-11-01T11:30:18.495655+00:00

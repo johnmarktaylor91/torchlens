@@ -29,7 +29,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "_options_structure_only": StorageBinding(StorageKind.SCALAR),
         "_graph_structure_evidence": StorageBinding(StorageKind.SCALAR),
         "intervention_audit": StorageBinding(StorageKind.SCALAR),
-        "_runnable": StorageBinding(StorageKind.RUNTIME, annotation="<class 'torchlens._runnable_seam.RunnableTraceState'>"),
+        "_runnable": StorageBinding(StorageKind.RUNTIME, annotation="<class 'torchlens._runnable.seam.RunnableTraceState'>"),
         "_fast_run_session": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any | None'),
         "_distributed_plane_p": StorageBinding(StorageKind.RUNTIME, annotation='typing.Any | None'),
         "_health_escape_detector_mode": StorageBinding(StorageKind.RUNTIME),

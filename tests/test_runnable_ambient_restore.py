@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable_state_context import _ambient_execution_context_restored
+from torchlens._runnable.state_context import _ambient_execution_context_restored
 from torchlens._utils import _torch_compat
 
 

@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens._selection_subspace import _basis_digest
+from torchlens._selection.subspace import _basis_digest
 from torchlens.intervention import helpers as helpers_module
 from torchlens.intervention.helpers import rebuild_builtin_helper
 

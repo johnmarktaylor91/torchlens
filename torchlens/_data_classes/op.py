@@ -80,7 +80,7 @@ from .._quantities import (
     as_macs,
 )
 from .._save_budget import SaveBudgetExceededError
-from .._selection import _SelectionOperand
+from .._selection.selection import _SelectionOperand
 from .._trace_core.fact_blocks import OP_FACT_FIELDS
 from .._trace_core.groups import GroupRef
 from .._trace_core.op_store import (
@@ -3465,7 +3465,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def __selection__(self) -> object:
         """Lift this op's whole output as an ACT selection term (one pass)."""
 
-        from .._selection import _selection_from_op
+        from .._selection.selection import _selection_from_op
 
         return _selection_from_op(self)
 

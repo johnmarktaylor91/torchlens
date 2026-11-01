@@ -121,8 +121,8 @@ def test_import_ref_to_the_retired_name_fails_closed_typed() -> None:
 
     from torchlens._errors import FacadeTeachingError
     from torchlens.intervention import helpers
+    from torchlens.intervention._resolver_registry import resolve_import_ref
     from torchlens.intervention.errors import ReplayPreconditionError
-    from torchlens.intervention.resolver import resolve_import_ref
 
     current = resolve_import_ref("torchlens.intervention.helpers:scramble_elements")
     assert current is helpers.scramble_elements

@@ -1257,7 +1257,7 @@ def _inner_selector_matches_op(inner: Any, op: Any) -> bool:
     """
 
     from .._ir.selector_eval import normalize_selector_like
-    from .resolver import _resolve_unchecked
+    from .._selection.resolver import _resolve_unchecked
 
     # Session-only cache in the run state (last_run is never persisted).
     cache: dict[tuple[str, str], bool] = _live_run_ctx().setdefault(

@@ -80,10 +80,10 @@ def test_direction_pin_and_params(model: _TinyLM) -> None:
 
 def test_selected_and_decider_are_ordered_for_the_comparison_gate(model: _TinyLM) -> None:
     bundle = _routed(model)
-    assert bundle.delta_map("relative_l2"), "same model, same input: comparable"
+    assert bundle._delta_map("relative_l2"), "same model, same input: comparable"
     bundle.relate("selected_by", "writer", "router")
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.delta_map("relative_l2")
+        bundle._delta_map("relative_l2")
     assert _code(excinfo) == "bundle_gate_ordering_topology"
 
 

@@ -43,7 +43,7 @@ from torchlens._input_walk import (
     unset_declared_fields,
     walk_input_boundary,
 )
-from torchlens._runnable_witness_contracts import _container_field_names
+from torchlens._runnable.witness_contracts import _container_field_names
 
 _OneField = collections.namedtuple("_OneField", "x")
 _ZeroField = collections.namedtuple("_ZeroField", "")

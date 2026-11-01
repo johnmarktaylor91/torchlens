@@ -28,7 +28,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
-from torchlens._runnable_state import (
+from torchlens._runnable.state import (
     _state_metadata_signature,
     _state_placement_canonical,
 )

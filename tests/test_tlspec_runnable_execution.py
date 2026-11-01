@@ -22,8 +22,8 @@ from torchlens._runnable import (
     StateSource,
     WitnessCompleteness,
 )
-from torchlens._runnable_call_outputs import _fresh_bare_tensor_root
-from torchlens._runnable_state import prepare_runnable_state
+from torchlens._runnable.call_outputs import _fresh_bare_tensor_root
+from torchlens._runnable.state import prepare_runnable_state
 from torchlens.errors import (
     PathDivergenceError,
     PoisonedRunError,
@@ -1336,7 +1336,7 @@ class _C1FieldPair(NamedTuple):
 def test_c1_value_at_path_refuses_dunder_attribute_traversal() -> None:
     """A dunder / non-field attribute component raises AttributeError, never resolves."""
 
-    from torchlens._runnable_verification import _field_getattr, _value_at_path
+    from torchlens._runnable.verification import _field_getattr, _value_at_path
 
     pair = _C1FieldPair(torch.zeros(2), 3)
 
@@ -1360,7 +1360,7 @@ def test_c1_value_at_path_refuses_dunder_attribute_traversal() -> None:
 def test_c1_value_at_path_mapping_and_index_paths_unaffected() -> None:
     """Mapping-key and integer-index traversal still work (attr guard is scoped)."""
 
-    from torchlens._runnable_verification import _value_at_path
+    from torchlens._runnable.verification import _value_at_path
 
     root = {"weird__key__": torch.ones(3), "nested": [torch.zeros(1), {"k": 5}]}
     # Mapping keys use ``[]`` not getattr, so even a dunder-looking KEY is allowed.

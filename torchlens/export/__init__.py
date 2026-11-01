@@ -902,18 +902,18 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
 def _chrome_trace_diff_deltas(bundle: Any) -> tuple[dict[str, dict[str, float]], dict[str, Any]]:
     """Return the per-node deltas and their status for a bundle timeline.
 
-    The timeline (one process per member, one event per supergraph node) never
-    needs the deltas. The deltas are ``bundle.norm_delta()``, which runs the
-    Bundle comparison gate: when the gate refuses (members on different
-    inputs, foreign models, ordering-joined members), only the delta part is
-    refused -- every event's ``delta`` is ``None`` and the status records the
-    gate's stable code and message. The gate is never bypassed.
+    The timeline (one process per member, one event per supergraph node) never needs
+    the deltas. They are the per-node relative L2 distances from the baseline
+    (``Bundle.compare`` with ``metric="relative_l2"``) and run the Bundle comparison
+    gate; when it refuses (members on different inputs, foreign models, ordering-joined
+    members) only the delta part is refused: every event's ``delta`` is ``None`` and the
+    status records the gate's stable code and message. The gate is never bypassed.
     """
 
     from ..intervention.errors import BundleComparisonError
 
     try:
-        return bundle.norm_delta(), {"status": "computed", "operation": "norm_delta"}
+        return bundle._norm_delta(), {"status": "computed", "operation": "norm_delta"}
     except BundleComparisonError as exc:
         return {}, {
             "status": "refused",

@@ -25,7 +25,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import Module
 
-from torchlens._selection import Selection, Selector
+from torchlens._selection.selection import Selection, Selector
 from torchlens.attribution._core import (
     Attribution,
     AttributionError,

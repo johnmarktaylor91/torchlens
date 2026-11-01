@@ -32,12 +32,10 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens import _runnable_state as runnable_state
 from torchlens._runnable import (
     AutocastDeviceContext,
     CallExecutionContext,
     ControlWitness,
-    FunctionRegistryKey,
     InputAttestationFingerprint,
     InputSlotBinding,
     ReadinessStatus,
@@ -48,9 +46,11 @@ from torchlens._runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
     TensorUseSite,
+    state as runnable_state,
 )
-from torchlens._runnable_state import _preflight_random_init_allocation
+from torchlens._runnable.state import _preflight_random_init_allocation
 from torchlens.errors import RunCapabilityUnavailableError
+from torchlens.intervention.types import FunctionRegistryKey
 
 
 class _Tiny(nn.Module):

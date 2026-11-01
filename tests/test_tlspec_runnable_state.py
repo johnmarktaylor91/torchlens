@@ -14,7 +14,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import RunnableErrorCode, StateSlotRole, StateSource, TensorSlotRole
-from torchlens._runnable_state import prepare_runnable_state
+from torchlens._runnable.state import prepare_runnable_state
 from torchlens.errors import StateBindingError
 from torchlens.options import CaptureOptions
 

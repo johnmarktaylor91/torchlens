@@ -512,8 +512,8 @@ def _replayed(clean: Any, site: str, name: str, module: nn.Module) -> Any:
         Replayed fork.
     """
 
+    from torchlens._selection.selectors import label as label_selector
     from torchlens.intervention.helpers import splice_module
-    from torchlens.intervention.selectors import label as label_selector
 
     fork = clean.fork(name)
     fork.attach_hooks(label_selector(site), splice_module(module, input_route="out"))

@@ -63,10 +63,10 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from torchlens._selection import SelectionError
+from torchlens._selection.errors import SelectionError
 
 from .._record_type import first_op
-from .._selection import (
+from .._selection.selection import (
     Selection,
     Site,
     _apply_invalid,
@@ -703,7 +703,7 @@ def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
         the mask does not match the buffer's shape.
     """
 
-    from .._selection import _ParamTerm, units
+    from .._selection.selection import _ParamTerm, units
 
     node = getattr(selection, "_node", None)
     if not isinstance(node, _ParamTerm):

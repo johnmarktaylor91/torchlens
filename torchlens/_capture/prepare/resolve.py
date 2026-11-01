@@ -11,10 +11,10 @@ from typing import Any
 
 from torchlens._data_classes.trace import Trace
 from torchlens._errors import InvalidArgumentError
+from torchlens._selection.selectors import BaseSelector
 from torchlens.intervention._zero_fire import settle_capture_zero_fire
 from torchlens.intervention.audit import rule_signal as _rule_signal
 from torchlens.intervention.hooks import split_site_branches as _split_site_branches
-from torchlens.intervention.selectors import BaseSelector
 
 from ...intervention.hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from ...intervention.predicates import InterventionPredicate
@@ -545,9 +545,7 @@ def _warn_zero_match_capture_selectors(
                 "no intervention fired.",
                 selector=repr(intervene_selector),
             )
-        if isinstance(halt_selector, BaseSelector) and not bool(
-            getattr(trace, "is_stopped", False)
-        ):
+        if isinstance(halt_selector, BaseSelector) and not getattr(trace, "is_stopped", False):
             _record_unmatched("halt", halt_selector)
             warnings.warn(
                 f"Capture-time halt selector {halt_selector!r} matched zero sites; "

@@ -107,7 +107,7 @@ def _refuse_structure_only_conflicts(facts: _StructureOnlyEntryFacts) -> None:
     if halt is not None:
         from .._ir.selector_eval import first_selector_kind_outside
         from .._postprocess._selective_save import _STATIC_SELECTOR_KINDS
-        from ..intervention.selectors import BaseSelector as _BaseSelector
+        from .._selection.selectors import BaseSelector as _BaseSelector
 
         halt_value_suspect: str | None
         if not isinstance(halt, _BaseSelector):

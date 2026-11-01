@@ -11,11 +11,11 @@ from torch import nn
 
 from .._deprecations import MISSING, MissingType
 from .._errors import ArgumentTypeError, InvalidArgumentError
+from .._selection.selectors import BaseSelector, func, label
 from ..bundle import Bundle
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
 from .hooks import HookContext
-from .selectors import BaseSelector, func, label
 from .spec import Recipe, refuse_invalid_loss, site_signal, when
 from .types import Edit
 

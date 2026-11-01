@@ -46,7 +46,8 @@ from ..._input_coerce import (
 from ..._ir.selector_eval import looks_like_finalized_label
 from ..._options_validation import _validate_output_device
 from ..._robustness import check_model_and_input_variants
-from ..._runnable_state_live import capture_observer_bracket
+from ..._runnable.state_live import capture_observer_bracket
+from ..._selection.selectors import BaseSelector, FuncSelector, ModuleSelector
 from ..._trace_selector_helpers import (
     _combine_save_predicates,
     _is_selective_label_save,
@@ -76,7 +77,6 @@ from ...backends.torch.bound_root import (
 )
 from ...errors.episode import EpisodeDeclarationError
 from ...intervention.errors import ChunkedForwardConfigError
-from ...intervention.selectors import BaseSelector, FuncSelector, ModuleSelector
 from ...options import (
     CaptureOptions,
     ReplayOptions,

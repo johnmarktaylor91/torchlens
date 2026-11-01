@@ -23,9 +23,9 @@ if TYPE_CHECKING:
     from torch import nn
 
     from ..._literals import OutputDeviceLiteral
+    from ..._selection.selectors import BaseSelector
     from ..._utils.tensor_utils import SaveMode
     from ...intervention.predicates import InterventionPredicate
-    from ...intervention.selectors import BaseSelector
     from ...options import CaptureOptions, EpisodeOptions, SaveOptions, StorageOptions
     from ...recording.options import HaltPredicateFn, PredicateFn
     from ...types import _ActivationPostfunc, _GradientPostfunc

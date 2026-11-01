@@ -625,7 +625,11 @@ def test_single_classifier_owns_qualname_derivation() -> None:
     tripwire (the r52 raise-vs-not_applicable inconsistency class)."""
 
     package_root = Path(__file__).resolve().parents[1] / "torchlens"
-    source = "\n".join(path.read_text() for path in sorted(package_root.glob("_runnable_*.py")))
+    source = "\n".join(
+        path.read_text()
+        for path in sorted((package_root / "_runnable").glob("*.py"))
+        if path.name != "__init__.py"
+    )
     functions = re.split(r"(?m)^def ", source)
     predicates = (
         "qualname_is_uninitialized_alloc(",

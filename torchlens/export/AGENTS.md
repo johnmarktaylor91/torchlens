@@ -63,7 +63,7 @@ netron outright.
 ## Tests
 
 `tests/test_exports.py`, `tests/test_export_behaviors.py`,
-`tests/test_export_html_minimal.py`, `tests/test_io_export.py`; the netron
+`tests/test_io_export.py`; the netron
 acceptance tiers live in `tests/test_netron_export_*.py` (T1 strict parse +
 checker contract, T3 executed-vendor node harness
 `test_netron_export_harness.mjs`, T4 headless-browser smoke, density/

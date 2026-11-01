@@ -936,12 +936,11 @@ class BundleStreamWriter:
         n_auxiliary_blobs = len(tensor_entries) - n_out_blobs - n_grad_blobs
         layer_list = scrubbed_state.get("_layer_list", [])
         n_layers = len(layer_list) if isinstance(layer_list, list) else 0
-        # Disclose the harvested module-attribute channel (R62): the documented
-        # invariant is that EVERY save writes a custom_attributes_disclosure
-        # entry, and the streaming path now honors the same opt-out and emits
-        # the same embedding warning as Trace.save (the reopened hf_token class:
-        # a canary token used to ship in the streamed bundle with zero
-        # warnings and no way to withhold it).
+        # Disclose the harvested module-attribute channel (R62): the documented invariant is
+        # that EVERY save writes a custom_attributes_disclosure entry, and the streaming path
+        # honors the same opt-out and emits the same embedding warning as Trace.save (the
+        # reopened hf_token class: a canary token used to ship in the streamed bundle with
+        # zero warnings and no way to withhold it).
         from .bundle import (
             _buffer_values_disclosure,
             _custom_attributes_disclosure,

@@ -342,12 +342,12 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
 
 @pytest.mark.smoke
 def test_h9_intervention_colors_only_intervened_pass():
+    from torchlens._selection import resolver
     from torchlens._visualization.node_spec import (
         NodeSpec,
         intervention_site_and_cone_labels,
         make_intervention_node_spec_fn,
     )
-    from torchlens.intervention import resolver
 
     log = tl.trace(RecurrentReLU(), torch.tensor([-1.0, 2.0]))
     ops = list(log._layer_logs["relu_1_1"].ops.values())

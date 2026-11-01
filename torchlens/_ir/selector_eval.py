@@ -37,7 +37,7 @@ behavior changes):
 - ``grad_fn_label`` is its own selector kind (backward exact grad_fn label).
 
 This module is deliberately NOT exported from ``torchlens._ir.__init__``:
-importing it pulls in ``torchlens.intervention.selectors``, and keeping it out
+importing it pulls in ``torchlens._selection.selectors``, and keeping it out
 of the package init avoids an import cycle with ``ir.container``.
 """
 
@@ -47,19 +47,20 @@ from collections.abc import Callable, Iterator, Sequence
 from functools import partial
 from typing import Any, Literal, cast
 
-from ..intervention.errors import (
+from .._selection.errors import (
+    LiveModeLabelError,
     SelectorCapabilityError,
     SelectorCompositionError,
     SiteResolutionError,
 )
-from ..intervention.selectors import (
+from .._selection.selectors import (
     BaseSelector,
     CompositeSelector,
     FollowedBySelector,
     NotSelector,
     PrecededBySelector,
 )
-from ..intervention.types import FrozenTargetSpec, TargetSpec
+from .._selection.target import FrozenTargetSpec, TargetSpec
 from ._selector_nodes import (
     _compile_backward_pass_capture,
     _compile_contains,
@@ -155,7 +156,7 @@ def walk_selector(selector: Any, *, unwrap: bool = False) -> Iterator[Any]:
         payloads of their wrapping selector, not tree children.
     """
 
-    from ..intervention.selectors import GradSelector
+    from .._selection.selectors import GradSelector
 
     # r-b4 R27-6a: iterative pre-order walk -- a deep (nested-binary or
     # deserialized) selector tree must never blow the interpreter stack from a
@@ -989,8 +990,6 @@ def _raise_for_finalized_live_label(selector_kind: str, label_value: str) -> Non
     """Reject finalized-looking label selectors during live capture."""
 
     if looks_like_finalized_label(label_value):
-        from ..intervention.errors import LiveModeLabelError
-
         raise LiveModeLabelError(live_label_error_message(label_value, selector_kind))
 
 
@@ -1298,7 +1297,7 @@ def selector_from_spec(
 def _spec_builders() -> dict[str, _SpecBuilder]:
     """Return the kind-to-builder table (the selector factories import lazily)."""
 
-    from ..intervention.selectors import (
+    from .._selection.selectors import (
         FacetSelector,
         SiteSelector,
         at_step,
@@ -1561,7 +1560,7 @@ def _spec_lookaround(
 def _site_key_matches(selector: Any, rendered_key: Any) -> bool:
     """Match one ``site`` selector against one rendered site key (or None)."""
 
-    from ..intervention.selectors import SiteSelector
+    from .._selection.selectors import SiteSelector
 
     if not isinstance(selector, SiteSelector):
         selector = selector_from_spec("site", selector.selector_value, None)
@@ -1571,7 +1570,7 @@ def _site_key_matches(selector: Any, rendered_key: Any) -> bool:
 def _selector_from_site_table(site_table: Any) -> BaseSelector:
     """Lower a ``find_sites()`` _SiteTable into a label-union selector."""
 
-    from ..intervention.selectors import label
+    from .._selection.selectors import label
 
     site_labels: list[str] = []
     for site in site_table:
@@ -1635,7 +1634,7 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
     if lowered is not selector_like:
         return lowered
     if lifecycle == "live" and hasattr(selector_like, "layer_label"):
-        from ..intervention.selectors import label
+        from .._selection.selectors import label
 
         return label(str(selector_like.layer_label))
     if lifecycle == "live":
@@ -1661,7 +1660,7 @@ def _shorthand_selector_like(selector_like: Any, lifecycle: Lifecycle) -> BaseSe
     """Lower the lifecycle shorthands, or return ``None`` for any other input."""
 
     if isinstance(selector_like, str):
-        from ..intervention.selectors import label, label_contains
+        from .._selection.selectors import label, label_contains
 
         return label(selector_like) if lifecycle == "live" else label_contains(selector_like)
     if type(selector_like).__name__ == "_SiteTable":
@@ -1670,7 +1669,7 @@ def _shorthand_selector_like(selector_like: Any, lifecycle: Lifecycle) -> BaseSe
         # must be a valid address, not a dead end.
         return _selector_from_site_table(selector_like)
     if lifecycle == "capture" and callable(selector_like):
-        from ..intervention.selectors import where
+        from .._selection.selectors import where
 
         return where(selector_like)
     return None

@@ -135,7 +135,7 @@ def op_selector(select: Any) -> Any:
     predicate from the selector algebra and passes through unchanged.
     """
 
-    from ..intervention.selectors import in_module
+    from .._selection.selectors import in_module
 
     if isinstance(select, str):
         return in_module(select)

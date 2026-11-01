@@ -97,7 +97,7 @@ def _carries_capture_introspection(value: object) -> bool:
 
     if getattr(value, "selector", None) is not None:
         return True
-    from ..intervention.selectors import BaseSelector
+    from .._selection.selectors import BaseSelector
 
     return isinstance(value, BaseSelector)
 

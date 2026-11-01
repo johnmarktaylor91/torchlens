@@ -53,7 +53,7 @@ captured Trace.
   do not add code paths that return without restoring it.
 - Stage-4b names and metadata are DOCUMENTED-UNSTABLE and lockstep-indexed in
   `docs/reference/glossary.md`.
-- Cross-layer transcoders on Hugging Face Gemma-2 (`tests/test_ag3_cross_layer_gemma2.py`):
+- Cross-layer transcoders on Hugging Face Gemma-2:
   circuit-tracer's `hook_resid_mid` read is the residual add whose output enters
   `pre_feedforward_layernorm`, keyed by its op label, and `hook_mlp_out` is the
   `post_feedforward_layernorm` output. A module's `input_ops` are layer labels without a pass,
@@ -69,5 +69,4 @@ captured Trace.
 
 ## Tests
 
-`tests/test_attribution.py`, `tests/test_attribution_layer.py`, `tests/test_ag1_attribution_graph.py`, `tests/test_ag2_chunked_assembly.py`, `tests/test_ag2_gemma2_sites.py`, `tests/test_ag3a_read_sites.py`, `tests/test_ag3a_gemma2_facets.py`, `tests/test_ag4_neuronpedia_export.py`, `tests/test_ag4_neuronpedia_upload.py`, `tests/test_ag4_overlay.py`,
-`tests/test_backward_attribution_unchanged.py`.
+`tests/test_attribution.py`, `tests/test_attribution_layer.py`, `tests/test_ag1_attribution_graph.py`, `tests/test_ag2_chunked_assembly.py`, `tests/test_ag2_gemma2_sites.py`, `tests/test_ag3a_read_sites.py`, `tests/test_ag3a_gemma2_facets.py`, `tests/test_ag4_neuronpedia_export.py`, `tests/test_ag4_neuronpedia_upload.py`, `tests/test_ag4_overlay.py`.

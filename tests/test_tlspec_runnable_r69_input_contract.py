@@ -440,7 +440,7 @@ def test_r69_duplicate_same_bit_nan_keys_refuse_ambiguous(tmp_path: Path) -> Non
 
 def test_r69_runtime_duplicate_token_matches_fail_closed() -> None:
     """Bind side: multiple runtime keys encoding to one token fail closed, typed."""
-    from torchlens._runnable_verification import _value_at_path
+    from torchlens._runnable.verification import _value_at_path
 
     n1, n2 = float("nan"), float("nan")
     mapping = {n1: 1, n2: 2}
@@ -537,8 +537,8 @@ def test_r71d_reserved_registry_meta_test() -> None:
 
     import inspect
 
-    import torchlens._runnable_input_metadata
-    import torchlens._runnable_verification
+    import torchlens._runnable.input_metadata
+    import torchlens._runnable.verification
     from torchlens._input_walk import encode_mapping_key, reserved_input_path_components
 
     registry = reserved_input_path_components()
@@ -550,7 +550,7 @@ def test_r71d_reserved_registry_meta_test() -> None:
     for sentinel in registry:
         assert encode_mapping_key(sentinel) != sentinel, sentinel
     # The runtime path resolver still compares canonical tokens only (no decoded lane).
-    bind_source = inspect.getsource(torchlens._runnable_verification._value_at_path)
+    bind_source = inspect.getsource(torchlens._runnable.verification._value_at_path)
     assert "decode_mapping_key" not in bind_source
 
 
@@ -604,8 +604,8 @@ def test_r69_key_codec_is_injective_and_round_trips() -> None:
 def test_r69_classifier_choke_points_source_scan() -> None:
     """Snapshot, literal encode, literal compare, and key codec share the classifier."""
 
-    import torchlens._runnable_input_metadata
-    import torchlens._runnable_verification
+    import torchlens._runnable.input_metadata
+    import torchlens._runnable.verification
     from torchlens import _input_walk
     from torchlens._io import runnable as io_runnable
 
@@ -614,7 +614,7 @@ def test_r69_classifier_choke_points_source_scan() -> None:
         _input_walk.encode_mapping_key,
         io_runnable._encode_literal,
         io_runnable._normalize_numpy_scalars,
-        torchlens._runnable_input_metadata._literal_leaf_equal,
+        torchlens._runnable.input_metadata._literal_leaf_equal,
     ):
         assert "classify_scalar" in inspect.getsource(func), func.__qualname__
 
@@ -624,13 +624,13 @@ def test_r69_classifier_choke_points_source_scan() -> None:
     assert encode_source.index("classify_scalar") < encode_source.index("isinstance(")
 
     # No broad numpy-family admission at the comparison choke point.
-    compare_source = inspect.getsource(torchlens._runnable_input_metadata._literal_leaf_equal)
+    compare_source = inspect.getsource(torchlens._runnable.input_metadata._literal_leaf_equal)
     assert "np.generic" not in compare_source
     assert "isinstance(value, np.generic)" not in compare_source
 
     # Runtime mapping binding is canonical-token-only: the decoded-value lookup
     # lane (``candidate == decoded``) is structurally gone.
-    bind_source = inspect.getsource(torchlens._runnable_verification._value_at_path)
+    bind_source = inspect.getsource(torchlens._runnable.verification._value_at_path)
     assert "candidate == decoded" not in bind_source
     assert "decode_mapping_key" not in bind_source
     assert "encode_mapping_key" in bind_source
@@ -639,7 +639,7 @@ def test_r69_classifier_choke_points_source_scan() -> None:
 def test_r69_snapshot_key_tokens_paths_and_lookup_share_the_authority() -> None:
     """Snapshot ordered-key facts and leaf paths speak encode_mapping_key tokens."""
 
-    from torchlens._runnable_verification import _value_at_path
+    from torchlens._runnable.verification import _value_at_path
 
     value = {2.5: {"inner": 1}, True: 2, "s": 3}
     snapshot = snapshot_input_boundary(value)

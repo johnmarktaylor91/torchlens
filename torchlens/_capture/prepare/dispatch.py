@@ -24,6 +24,7 @@ from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
     reject_selector_outside_kinds,
 )
+from ..._selection.selectors import BaseSelector
 from ..._trace_selector_helpers import (
     _TRACE_OPTION_FILTERED_NAMES,
     _split_save_options_and_predicate,
@@ -46,7 +47,6 @@ from ...backends.registry import (
     resolve_backend_spec,
 )
 from ...intervention.errors import ChunkedForwardConfigError
-from ...intervention.selectors import BaseSelector
 from ...options import (
     CaptureOptions,
     SaveOptions,

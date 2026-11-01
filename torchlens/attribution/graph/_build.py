@@ -31,7 +31,7 @@ from ._result import AttributionGraph, GraphNode
 from ._transcoders import Reader, normalize_transcoders
 
 if TYPE_CHECKING:
-    from ...intervention.selectors import FacetSelector
+    from ..._selection.selectors import FacetSelector
 
 __all__ = ["build_graph"]
 
@@ -339,7 +339,7 @@ def _seed(spec: _SeedSpec) -> Any:
 def _within(labels: list[str]) -> Any:
     """Return the union selection of ``labels`` for ``read(within=...)``."""
 
-    from ..._selection_values import _lift_within
+    from ..._selection.values import _lift_within
 
     return functools.reduce(operator.or_, (_lift_within(label, "read") for label in labels))
 
@@ -359,7 +359,7 @@ def _frozen_label(trace: Any, index: ReadEdgeIndex, name: str) -> str:
 def _frozen_labels(trace: Any, sites: _Sites, frozen: Any) -> list[str]:
     """Return the frozen set: every written MLP output plus the caller's sites."""
 
-    from ...intervention.selectors import FacetSelector
+    from ..._selection.selectors import FacetSelector
 
     labels = list(sites.writes.values())
     for name in [frozen] if isinstance(frozen, FacetSelector) else frozen:

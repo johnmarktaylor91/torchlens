@@ -28,7 +28,7 @@ from ._tl import active_label_session_token
 if TYPE_CHECKING:
     from torch import nn
 
-    from ..._runnable_state_live import CaptureObserverHandle
+    from ..._runnable.state_live import CaptureObserverHandle
     from .backend import TorchBackend
 
 
@@ -91,7 +91,7 @@ def _observer_context(model: nn.Module, policy: WrapPolicy) -> Any:
 
     if policy.carry_state is None:
         return nullcontext(None)
-    from ..._runnable_state_live import capture_observer_bracket
+    from ..._runnable.state_live import capture_observer_bracket
 
     return capture_observer_bracket(
         model, carry_state=policy.carry_state, on_failure=policy.on_failure

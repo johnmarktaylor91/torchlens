@@ -29,8 +29,8 @@ from ._data_classes.param import Param
 from ._data_classes.prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
 from ._quantities import Bytes, Duration, Flops, Macs, Quantity
 from ._runnable import NumericAttestationStatus, PathFaithfulness, ReadinessStatus, RunProvider
-from ._selection import Site
-from ._selection_subspace import BasisProvenance
+from ._selection.selection import Site
+from ._selection.subspace import BasisProvenance
 from .intervention import SpecCompat, TargetManifestDiff
 from .intervention.types import Relationship
 

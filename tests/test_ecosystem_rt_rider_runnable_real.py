@@ -120,7 +120,7 @@ def test_structure_witness_classifies_model_output_as_hf_kind(gpt2_and_inputs):
     ``hf_model_output``, mirroring the capture-side spec builder's dispatch
     order -- the inverted order false-DIVERGED every honest run above."""
 
-    from torchlens._runnable_witness_contracts import _container_kind
+    from torchlens._runnable.witness_contracts import _container_kind
 
     model, input_ids = gpt2_and_inputs
     with torch.no_grad():

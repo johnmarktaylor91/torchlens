@@ -122,7 +122,7 @@
 - Split modules import one another and their hub's constants at their bottoms (they form import
   cycles, so the imports run once every definition exists): `backends/torch/_ops_*` with `ops.py`,
   `backends/torch/_completeness_*` with `completeness_witness.py`, `validation/_invariants_*` with
-  `invariants.py`, and `_runnable_*` with `_runnable_execution.py`. A new module-level name used in a
+  `invariants.py`, and `_runnable_*` with `_runnable/execution.py`. A new module-level name used in a
   split module is imported there. A test patches a helper on the module that defines it and on every
   module that binds it by import, never on the hub alone: a from-import copy does not follow a patch.
   Module state reassigned after import (`completeness_witness._ACTIVE_WITNESS_STATE`) lives in one
@@ -169,7 +169,7 @@
   removed, the next wrap re-patches the class from the recorded C constructor.
 - A trace's staged intervention spec (`Trace._intervention_spec`) is read-only to every engine:
   reruns, append and chunked reruns, failed or interrupted reruns, and `fork()` leave it exactly
-  as staged (`tests/test_state_hygiene_oracles.py`, `tests/test_rerun_hook_staging.py`). Validation
+  as staged (`tests/test_state_hygiene_oracles.py`, `tests/test_helper_tensor_fingerprint.py`). Validation
   cannot see a violation (each rerun is self-consistent with the plan it ran), so the oracles
   compare reruns against an independent expectation. A capture-time `intervene=` predicate that is
   not lowered to module hooks stages per-op entries on FINAL labels, which the live matcher refuses;

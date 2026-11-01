@@ -34,7 +34,7 @@ from ..._postprocess._selective_save import (
     _STATIC_INTERVENTION_SELECTOR_KINDS,
     reject_selector_outside_kinds,
 )
-from ...intervention.selectors import BaseSelector
+from ..._selection.selectors import BaseSelector
 from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
 from ._tensor_leaves import _is_tf_tensor_like, _map_tensor_leaves

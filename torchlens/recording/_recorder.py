@@ -64,8 +64,8 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
         Emits at most one warning for each configured selector slot.
     """
 
+    from .._selection.selectors import BaseSelector
     from ..intervention.hooks import site_universe
-    from ..intervention.selectors import BaseSelector
 
     save_selector = state.options.keep_op
     if isinstance(save_selector, BaseSelector):
@@ -352,7 +352,7 @@ class Recorder:
         # A shared module's alias spelling cannot select one call site; refuse
         # it before any forward, with the error every other door raises.
         # Deferred: intervention sits above fastlog in the layer map.
-        from ..intervention._module_alias_guard import refuse_model_alias_spellings
+        from .._selection.module_alias_guard import refuse_model_alias_spellings
 
         refuse_model_alias_spellings(
             self.model, self.options.keep_op, self.options.intervene, self.options.halt

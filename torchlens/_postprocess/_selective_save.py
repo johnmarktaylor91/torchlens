@@ -10,8 +10,8 @@ from typing import Any
 
 from .._ir.selector_eval import first_selector_kind_outside
 from .._quantities import Bytes
+from .._selection.selectors import BaseSelector
 from ..backends.registry import BackendUnsupportedError
-from ..intervention.selectors import BaseSelector
 from .saved_summary import refresh_pinned_autograd_memory, refresh_saved_module_call_count
 
 _STATIC_SELECTOR_KINDS = frozenset(

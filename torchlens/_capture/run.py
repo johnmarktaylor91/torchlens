@@ -427,7 +427,7 @@ def _snapshot_runnable_state(self: "Trace", run: _RunState) -> None:
     """Record the bound state a runnable descriptor needs, before the forward."""
 
     if bool(getattr(self, "is_replayable", False)):
-        from .._runnable_state import (
+        from .._runnable.state import (
             snapshot_capture_state,
             snapshot_capture_state_signatures,
             snapshot_persistent_buffer_universe,

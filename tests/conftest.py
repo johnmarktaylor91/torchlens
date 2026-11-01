@@ -1358,8 +1358,8 @@ _CAPABILITY_DEPENDENT_CACHES: tuple[tuple[str, str], ...] = (
     # probe restore must clear them too. The census in
     # tests/test_marker_lint.py::test_capability_dependent_caches_are_cleared
     # keeps this list complete.
-    ("torchlens._runnable_state_context", "_fake_tensor_mode_class"),
-    ("torchlens._runnable_state_context", "_count_bounded_fake_tensor_mode_class"),
+    ("torchlens._runnable.state_context", "_fake_tensor_mode_class"),
+    ("torchlens._runnable.state_context", "_count_bounded_fake_tensor_mode_class"),
 )
 
 

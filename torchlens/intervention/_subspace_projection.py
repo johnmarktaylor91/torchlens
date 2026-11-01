@@ -60,8 +60,8 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from .._selection import Selection, Selector, Site, _Combinator, _lift, _Mask
-from .._selection_subspace import _basis_digest, _SubspaceTerm
+from .._selection.selection import Selection, Selector, Site, _Combinator, _lift, _Mask
+from .._selection.subspace import _basis_digest, _SubspaceTerm
 from ._affine_source import AFFINE_SOURCE_NAME, SourceCall, check_source_shape
 from ._subspace_edits import _orthonormal_rows
 from .types import Edit

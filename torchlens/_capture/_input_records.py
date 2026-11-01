@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from .._ir.container_registry import ModelSite, Phase, Role, walk_container
-from .._runnable_seam import runnable_trace_state
+from .._runnable.seam import runnable_trace_state
 from ..backends.registry import (
     get_backend_spec,
 )
@@ -78,7 +78,7 @@ def _get_op_nums_from_user_labels(
     elif which_layers in [None, "none", "None", "NONE", []]:
         return []
 
-    from ..intervention.selectors import BaseSelector
+    from .._selection.selectors import BaseSelector
 
     if isinstance(which_layers, BaseSelector):
         return sorted(

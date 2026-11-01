@@ -301,6 +301,10 @@ Key entry points:
   25 named steps of `_postprocess/_pipeline.py::PIPELINE` in tuple order (each record names
   the step, its home module and the trace fields it reads and writes; there are no ranks)
 - Portable I/O: `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py`, `torchlens/io/__init__.py`
+- Selection: `torchlens/_selection/` (selectors, resolver, `Selection` and its algebra,
+  the `TargetSpec` persisted form and the site-resolution refusals), one layer below
+  intervention; nothing in it imports `torchlens.intervention` at module level. Public doors
+  stay in `torchlens.intervention`, `.types` and `.errors`.
 - Intervention: `torchlens/intervention/` plus top-level selector/helper aliases. Live
   `trace(intervene=...)` runs on torch, on the eager Paddle preview
   (`torchlens/backends/paddle/interventions.py`; forward-only, builtin helper adapters
@@ -308,6 +312,11 @@ Key entry points:
   eager TF preview (static-label, two-level writable layer, fail-closed site reachability;
   see invariant 15). `trace(halt=...)` runs on torch and Paddle; the remaining previews
   refuse typed.
+  Spec persistence is one path: `intervention/save.py` owns the `.tlspec` directory,
+  tensors and manifest; `intervention/_spec_codec.py` holds the one spec-document
+  encoder and decoder with the `format_version` table (`SPEC_FORMAT_VERSIONS`);
+  `intervention/_spec_values.py` holds the value wrapper grammar and the import-ref
+  trust gate. `_io/injection_codec.py` is the separate bundle-row envelope.
 - Visualization encoding channel (UNSTABLE naming, keyword-only): `Trace.draw(color_by=...)`
   fills op nodes from a sequential ramp (field name / scalar builtin / callable), dot-layout-only
   (AUTO forces dot; explicit rank refuses `encoding_requires_dot_layout`), legend-disclosed via

@@ -26,6 +26,7 @@ from typing import Any, Literal
 
 import torch
 
+from .._utils.fail_open import fail_open
 from ..intervention.spec import site_signal
 from ._stats_render import render_core_line, sparkline
 from ._tensor_stats import FamilyEvidence, TensorStats, tensor_stats
@@ -153,7 +154,6 @@ class NarrationObserver:
         """Record one firing; the observed value passes through unchanged."""
 
         from .._state import pause_logging
-        from .._utils.fail_open import fail_open
 
         with pause_logging():
             address = self._address(ctx)

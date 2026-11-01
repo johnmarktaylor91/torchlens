@@ -23,7 +23,7 @@ from torchlens._runnable import (
 from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens._utils.display import identity
 from torchlens.errors import RunnablePreflightError
-from torchlens.intervention.resolver import function_registry_key_from_callable
+from torchlens.intervention._resolver_registry import function_registry_key_from_callable
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
