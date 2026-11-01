@@ -53,6 +53,7 @@ def intervention() -> ModuleType:
         _trace_hooks,
         _trace_run,
         _trace_selection_edits,
+        types,
     )
 
     return _package_of(_trace_edits)
@@ -120,3 +121,27 @@ def trace_slice() -> ModuleType:
     from .. import _trace_slice
 
     return _trace_slice
+
+
+def state() -> ModuleType:
+    """Deferred door to ``torchlens._state`` (the live-trace registry)."""
+
+    from .. import _state
+
+    return _state
+
+
+def ir() -> ModuleType:
+    """Deferred door to ``torchlens._ir``; ``_doors.ir().workspaces`` is the build-state module."""
+
+    from .._ir import workspaces
+
+    return _package_of(workspaces)
+
+
+def runnable() -> ModuleType:
+    """Deferred door to ``torchlens._runnable``; ``_doors.runnable().seam`` is the trace seam."""
+
+    from .._runnable import seam
+
+    return _package_of(seam)
