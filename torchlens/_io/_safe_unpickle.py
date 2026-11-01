@@ -1911,18 +1911,18 @@ class _BundleAllowlistPolicy:
 class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
     """Default-deny unpickler for untrusted TorchLens bundle ``metadata.pkl``.
 
-    The stream is read once and pre-scanned symbolically
-    (:mod:`torchlens._io._pickle_prescan`: allowlist resolution of every global, the
-    allocation belt for every statically known construction, the BUILD-target
-    classification, stream corruption and the opcode ceiling), then loaded by the C
-    ``pickle.Unpickler``. Its ``find_class`` hands back each pre-resolved global, wrapped
+    The stream is read once and pre-scanned by a dry run of the C machine over
+    recording probes (:mod:`torchlens._io._pickle_prescan`: allowlist resolution of
+    every global, the allocation belt for every statically known construction, the
+    BUILD-target classification; the opcode ceiling is counted separately on streams
+    large enough to reach it), then loaded by the C ``pickle.Unpickler``. Its ``find_class`` hands back each pre-resolved global, wrapped
     in a :class:`~torchlens._io._pickle_prescan.GuardedCallable` when a REDUCE will call it so the belt runs on the
     real arguments at call time. A stream shape the pre-scan cannot classify runs
     through :class:`_PurePythonBundleUnpickler` instead, which enforces the same checks
     per opcode; no TorchLens writer produces such a stream. After ``load()``,
     ``load_path`` is ``"c"`` or ``"pure_python"``, ``prescan_opcodes`` the opcode count
-    the pre-scan walked (``0`` when the interpreter ran), ``global_lookups`` the C
-    phase's ``find_class`` calls and ``guarded_calls`` the REDUCEs the guards ran.
+    when the ceiling pass ran (else ``0``), ``global_lookups`` the C phase's
+    ``find_class`` calls and ``guarded_calls`` the REDUCEs the guards ran.
     """
 
     def __init__(
@@ -1932,6 +1932,7 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
         trust_custom_callables: bool = False,
         allowed_custom_callable_modules: Collection[str] | None = None,
         max_opcodes: int | None = None,
+        count_opcodes_above: int = 0,
     ) -> None:
         """Initialize the restricted unpickler.
 
@@ -1952,6 +1953,9 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
             Opcode-count ceiling; a longer stream refuses with
             :class:`~torchlens._io._pickle_prescan.OpcodeCeilingExceeded` before any
             object is built.
+        count_opcodes_above:
+            Only streams longer than this many bytes are counted against the ceiling
+            (below it the ceiling is unreachable, so the count would tax every load).
         """
 
         data = file.read()
@@ -1959,6 +1963,7 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
         super().__init__(io.BytesIO(self._data))
         self._init_policy(trust_custom_callables, allowed_custom_callable_modules)
         self._max_opcodes = max_opcodes
+        self._count_opcodes_above = count_opcodes_above
         self._plan: PrescanPlan | None = None
         self.load_path: str | None = None
         self.prescan_opcodes = 0
@@ -1999,6 +2004,8 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
     def _prescan(self) -> PrescanPlan | None:
         """Return the pre-scan plan, or ``None`` when the interpreter must run instead."""
 
+        if self._max_opcodes is not None and len(self._data) > self._count_opcodes_above:
+            self.prescan_opcodes = count_opcodes(self._data, self._max_opcodes)
         try:
             plan = prescan_stream(
                 self._data,
@@ -2006,19 +2013,15 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
                 construction_refusal=_construction_refusal,
                 build_refusal=_build_refusal,
                 build_type_refusal=_build_type_refusal,
-                max_opcodes=self._max_opcodes,
             )
         except StreamNeedsInterpreter as why:
             self.fallback_reason = str(why)
             return None
-        self.prescan_opcodes = plan.opcode_count
         return plan
 
     def _interpret(self) -> Any:
         """Run the stream through the pure-Python machine (the exact per-opcode checks)."""
 
-        if self._max_opcodes is not None:
-            count_opcodes(self._data, self._max_opcodes)
         interpreter = _PurePythonBundleUnpickler(
             io.BytesIO(self._data),
             trust_custom_callables=self._trust_custom_callables,

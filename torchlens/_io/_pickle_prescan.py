@@ -1,45 +1,39 @@
-"""Static opcode pre-scan for the restricted bundle unpickler.
+"""Pre-scan for the restricted bundle unpickler: the plan the C machine enforces.
 
 The loader runs untrusted ``metadata.pkl`` bytes through the C ``pickle.Unpickler``
 for speed. The C machine exposes only ``find_class`` to a subclass, so the opcode-level
 checks the pure-Python machine used to enforce on BUILD / REDUCE / NEWOBJ / NEWOBJ_EX /
-INST / OBJ are established here first, on a symbolic walk of the opcode stream
-(a tight opcode reader plus a stack model), before any object is built:
+INST / OBJ are established first, by a dry run of the same C machine over recording
+probes, before any real object is built:
 
 * every global reference is resolved through the caller's ``find_class`` policy
-  (refusals fire here, before the C machine starts);
-* every construction opcode whose class and arguments are statically known runs the
-  allocation belt now, with the same refusal text the pure-Python handlers used;
-* every construction whose callable arrives through ``find_class`` is marked so the C
-  phase hands the callable back wrapped in a guard that runs the belt on the real
-  arguments at call time (:class:`torchlens._io._safe_unpickle._GuardedCallable`);
-* every BUILD target is classified: a constant or container can never be a tensor, a
-  resolved global or a statically typed construction is checked here, and a REDUCE
-  result is flagged so its guard checks the real result type before BUILD can reach it;
-* stream corruption (stack underflow, missing memo keys, truncation, unknown opcodes)
-  is refused as :class:`pickle.UnpicklingError`, the family the pure-Python boundary
-  normalised to;
-* persistent ids, extension codes and out-of-band buffers are refused, as both machines
-  refuse them without the corresponding hooks.
+  (refusals fire here) and handed to the dry run as a probe type that only records;
+* every REDUCE on a probe records a site, in execution order; the real run hands that
+  callable back wrapped in a :class:`GuardedCallable` that runs the allocation belt on
+  the real arguments at call time;
+* every NEWOBJ / NEWOBJ_EX / INST / OBJ on a probe runs the allocation belt now, on its
+  literal arguments, with the same refusal text the pure-Python handlers used;
+* every BUILD is classified from the node it lands on: an instance of a constructed
+  class is checked here, a REDUCE result is flagged so its guard checks the real result
+  type before BUILD can reach it;
+* stream corruption surfaces from the dry run as the C machine's own failures and is
+  normalised by the unpickler's boundary, as the pure-Python boundary did;
+* persistent ids, extension codes and out-of-band buffers fail in the dry run as they
+  fail in the real run.
 
-A stream shape the static walk cannot classify (a callable of unknown provenance, a
-constructor with non-literal arguments, a global used both as a value and as a
-callable) raises :class:`StreamNeedsInterpreter`; the unpickler then runs the stream
-through the pure-Python machine, which enforces the same checks per opcode. No
-TorchLens writer produces such a stream, so the fast path is the normal path and the
+A stream shape the dry run cannot classify (a constructed object called, a construction
+with arguments built at run time, a global or a REDUCE result used both as a callable
+and as a value or class) raises :class:`StreamNeedsInterpreter`; the unpickler then runs
+the stream through the pure-Python machine, which enforces the same checks per opcode.
+No TorchLens writer produces such a stream, so the fast path is the normal path and the
 interpreter is the exact fallback, never a weaker one.
 
-Two checks here are deliberately stricter than the pure-Python machine was. A GLOBAL or
-INST opcode whose module line contains a space is refused (no Python module is spelled
-that way, and the two-line form must parse unambiguously), and an explicit memo PUT
-index above the running opcode count is refused (a pickler assigns memo indices
-sequentially; the C machine sizes its memo table from the index, so an absurd index is
-an allocation amplifier the dict-backed pure-Python memo never had).
+The opcode-count ceiling is a separate pass (:func:`count_opcodes`, a tight byte reader),
+run only on streams large enough for the ceiling to be reachable.
 """
 
 from __future__ import annotations
 
-import copyreg
 import io
 import pickle
 import pickletools
@@ -60,8 +54,8 @@ __all__ = [
 
 #: Refusal-text prefix shared with the pure-Python machine's load boundary.
 _CORRUPT = "corrupt or malformed pickle stream: "
-#: Largest literal argument tree concretised for a static construction check; bigger
-#: argument trees are not what a constructor call looks like and take the interpreter.
+#: Largest literal argument tree checked statically for a construction; bigger argument
+#: trees are not what a constructor call looks like and take the interpreter.
 _MAX_STATIC_NODES = 256
 
 ConstructionRefusal = Callable[[str, Any, Any, Any], "str | None"]
@@ -161,93 +155,8 @@ class GuardedCallable:
         return result
 
 
-class _Sym:
-    """One symbolic stack value.
-
-    Literals sit on the stack as themselves. ``kind`` is ``global`` (``pair`` names it,
-    ``value`` is the resolved object), ``container`` (``value`` is the container kind
-    name, ``items`` its member symbols; a dict stores alternating keys and values) or
-    ``obj`` (``producer`` is the callable or class symbol, ``via`` the opcode name,
-    ``site`` the REDUCE site index). ``roles`` records how the value is consumed.
-    """
-
-    __slots__ = ("items", "kind", "pair", "producer", "roles", "site", "value", "via")
-
-    def __init__(
-        self,
-        kind: str,
-        value: Any = None,
-        *,
-        pair: tuple[str, str] | None = None,
-        items: list[Any] | None = None,
-        producer: _Sym | None = None,
-        via: str = "",
-        site: int = -1,
-    ) -> None:
-        self.kind = kind
-        self.value = value
-        self.pair = pair
-        self.items = items
-        self.producer = producer
-        self.via = via
-        self.site = site
-        self.roles: set[str] | None = None
-
-    def tag(self, role: str) -> None:
-        """Record one consumption role (``value``, ``func`` or ``cls``)."""
-
-        if self.roles is None:
-            self.roles = {role}
-        else:
-            self.roles.add(role)
-
-
-class _NotStatic(Exception):
-    """A symbol tree holds a value that is only known at run time."""
-
-
 def _corrupt(detail: str) -> pickle.UnpicklingError:
     return pickle.UnpicklingError(_CORRUPT + detail)
-
-
-def _tag(item: Any, role: str) -> None:
-    """Record a consumption role on a symbol; literals carry none."""
-
-    if isinstance(item, _Sym):
-        item.tag(role)
-
-
-def _is_container(item: Any, kind: str) -> bool:
-    return isinstance(item, _Sym) and item.kind == "container" and item.value == kind
-
-
-def _concrete(sym: Any, budget: list[int]) -> Any:
-    """Return the literal Python value a symbol tree denotes, or raise ``_NotStatic``."""
-
-    budget[0] -= 1
-    if budget[0] < 0:
-        raise _NotStatic("argument tree too large for a static check")
-    if not isinstance(sym, _Sym):
-        return sym
-    if sym.kind == "global":
-        return sym.value
-    if sym.kind != "container":
-        raise _NotStatic("argument built at run time")
-    items = sym.items or []
-    if sym.value == "dict":
-        return {
-            _concrete(items[index], budget): _concrete(items[index + 1], budget)
-            for index in range(0, len(items), 2)
-        }
-    members = [_concrete(item, budget) for item in items]
-    if sym.value == "tuple":
-        return tuple(members)
-    if sym.value == "list":
-        return members
-    try:
-        return set(members) if sym.value == "set" else frozenset(members)
-    except TypeError as exc:
-        raise _NotStatic("unhashable literal member") from exc
 
 
 _UNPACK_H = struct.Struct("<H").unpack_from
@@ -369,451 +278,242 @@ def _iter_opcodes(data: bytes) -> Any:  # noqa: C901 -- one opcode-argument tabl
             return
 
 
-class _Walker:
-    """Symbolic stack machine over one pickle stream."""
+class _Node:
+    """A recorded construction in the dry run: what the C machine will build later."""
+
+    __slots__ = ("args", "called", "cls_real", "items", "kwargs", "planner", "site", "state")
 
     def __init__(
         self,
-        data: bytes,
+        planner: _DryRunPlanner,
+        *,
+        site: int = -1,
+        cls_real: Any = None,
+        args: tuple[Any, ...] = (),
+        kwargs: dict[str, Any] | None = None,
+    ) -> None:
+        self.planner = planner
+        self.site = site
+        self.cls_real = cls_real
+        self.args = args
+        self.kwargs = kwargs
+        self.called = False
+        self.state: Any = None
+        self.items: list[Any] = []
+
+    def __setstate__(self, state: Any) -> None:
+        self.state = state
+        self.planner.on_build(self)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> _Node:
+        return self.planner.on_derived_call(self, args, kwargs)
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        self.items.append(key)
+        self.items.append(value)
+
+    def append(self, value: Any) -> None:
+        self.items.append(value)
+
+    def extend(self, values: Any) -> None:
+        self.items.extend(values)
+
+    def add(self, value: Any) -> None:
+        self.items.append(value)
+
+
+class _ProbeMeta(type):
+    """Metaclass of the recording probes: ``probe(*args)`` is a REDUCE call."""
+
+    _pair: tuple[str, str]
+    _real: Any
+    _planner: _DryRunPlanner
+
+    def __call__(cls, *args: Any, **kwargs: Any) -> Any:
+        return cls._planner.on_reduce(cls, args, kwargs)
+
+
+class _ProbeBase(metaclass=_ProbeMeta):
+    """Base of the recording probes: ``probe.__new__(probe, *args)`` is a construction."""
+
+    __slots__ = ()
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+        return cls._planner.on_construct(cls, args, kwargs)
+
+
+class _DryRunUnpickler(pickle.Unpickler):
+    """C machine whose globals are recording probes; it builds the skeleton, nothing real."""
+
+    def __init__(self, data: bytes, planner: _DryRunPlanner) -> None:
+        super().__init__(io.BytesIO(data))
+        self._planner = planner
+
+    def find_class(self, module: str, name: str) -> Any:
+        return self._planner.probe_for(module, name)
+
+
+class _DryRunPlanner:
+    """Build the plan by running the stream through the C machine on recording probes.
+
+    Every global resolves through the caller's policy (refusals fire here) and is handed
+    to the dry run as a probe type; every REDUCE on a probe records a site in execution
+    order, every NEWOBJ / NEWOBJ_EX / INST / OBJ on a probe runs the construction belt
+    statically on its literal arguments, every BUILD records on its node, and a skeleton
+    walk afterwards finds the probes stored as values and the nodes both called and
+    stored. The dry run executes no admitted code: probes and nodes only record, so its
+    allocation is the stream's own literals, the same class as any pickle parse.
+    """
+
+    def __init__(
+        self,
         *,
         resolve: Callable[[str, str], Any],
         construction_refusal: ConstructionRefusal,
         build_refusal: BuildRefusal,
         build_type_refusal: BuildTypeRefusal,
-        max_opcodes: int | None,
     ) -> None:
-        self.data = data
         self.resolve = resolve
         self.construction_refusal = construction_refusal
         self.build_refusal = build_refusal
         self.build_type_refusal = build_type_refusal
-        self.max_opcodes = max_opcodes
-        self.stack: list[Any] = []
-        self.metastack: list[list[Any]] = []
-        self.memo: dict[int, Any] = {}
         self.resolved: dict[tuple[str, str], Any] = {}
-        self.global_syms: list[_Sym] = []
+        self.probes: dict[tuple[str, str], type] = {}
         self.reduce_sites: list[ReduceSite] = []
-        self.reduce_funcs: list[_Sym] = []
-        self.opcode_count = 0
+        self.called_pairs: set[tuple[str, str]] = set()
+        self.cls_pairs: set[tuple[str, str]] = set()
 
-    # -- stack primitives -------------------------------------------------------------
-
-    def pop(self, opcode: str) -> Any:
-        if not self.stack:
-            raise _corrupt(f"stack underflow on {opcode}")
-        return self.stack.pop()
-
-    def top(self, opcode: str) -> Any:
-        if not self.stack:
-            raise _corrupt(f"stack underflow on {opcode}")
-        return self.stack[-1]
-
-    def pop_mark(self, opcode: str) -> list[Any]:
-        if not self.metastack:
-            raise _corrupt(f"{opcode} without a preceding MARK")
-        items = self.stack
-        self.stack = self.metastack.pop()
-        return items
-
-    def push_container(self, kind: str, items: list[Any]) -> None:
-        for item in items:
-            _tag(item, "value")
-        self.stack.append(_Sym("container", kind, items=items))
-
-    # -- globals ----------------------------------------------------------------------
-
-    def read_global_lines(self, pos: int, opcode: str) -> tuple[str, str]:
-        """Parse the two newline-terminated lines after a GLOBAL / INST opcode byte."""
-
-        first_end = self.data.find(b"\n", pos + 1)
-        second_end = self.data.find(b"\n", first_end + 1) if first_end >= 0 else -1
-        if first_end < 0 or second_end < 0:
-            raise _corrupt(f"truncated {opcode} operand")
-        try:
-            module = self.data[pos + 1 : first_end].decode("utf-8")
-            name = self.data[first_end + 1 : second_end].decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise _corrupt(f"{opcode} operand is not valid UTF-8") from exc
-        if " " in module:
-            raise _corrupt(f"{opcode} module line contains a space")
-        return module, name
-
-    def resolve_global(self, module: str, name: str) -> _Sym:
+    def probe_for(self, module: str, name: str) -> type:
         pair = (module, name)
-        if pair in self.resolved:
-            obj = self.resolved[pair]
-        else:
-            obj = self.resolve(module, name)
-            self.resolved[pair] = obj
-        sym = _Sym("global", obj, pair=pair)
-        self.global_syms.append(sym)
-        return sym
+        probe = self.probes.get(pair)
+        if probe is None:
+            real = self.resolve(module, name)
+            self.resolved[pair] = real
+            probe = _ProbeMeta(
+                "_Probe", (_ProbeBase,), {"_pair": pair, "_real": real, "_planner": self}
+            )
+            self.probes[pair] = probe
+        return probe
 
-    # -- construction opcodes ---------------------------------------------------------
+    def on_reduce(self, probe: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> _Node:
+        pair = probe._pair
+        site = ReduceSite(len(self.reduce_sites), pair, -1)
+        self.reduce_sites.append(site)
+        self.called_pairs.add(pair)
+        return _Node(self, site=site.index, args=args, kwargs=kwargs or None)
 
-    def static_construction(
-        self, opcode: str, cls_sym: Any, args_sym: Any, kwargs_sym: Any | None
-    ) -> None:
-        """Run the allocation belt now for a construction with literal arguments."""
+    def on_derived_call(self, node: _Node, args: tuple[Any, ...], kwargs: dict[str, Any]) -> _Node:
+        if node.site < 0:
+            raise StreamNeedsInterpreter("REDUCE on a constructed object")
+        self.reduce_sites[node.site].result_callable = True
+        node.called = True
+        site = ReduceSite(len(self.reduce_sites), None, node.site)
+        self.reduce_sites.append(site)
+        return _Node(self, site=site.index, args=args, kwargs=kwargs or None)
 
-        if not isinstance(cls_sym, _Sym) or cls_sym.kind != "global":
-            raise StreamNeedsInterpreter(f"{opcode} on a class of unknown provenance")
+    def on_construct(self, probe: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> _Node:
+        pair = probe._pair
+        self.cls_pairs.add(pair)
+        budget = [_MAX_STATIC_NODES]
         try:
-            budget = [_MAX_STATIC_NODES]
-            args = _concrete(args_sym, budget)
-            kwargs = None if kwargs_sym is None else _concrete(kwargs_sym, budget)
+            literal_args = _literal(args, budget)
+            literal_kwargs = _literal(kwargs, budget) if kwargs else None
         except _NotStatic as why:
-            raise StreamNeedsInterpreter(f"{opcode} with non-literal arguments: {why}") from None
-        reason = self.construction_refusal(opcode, cls_sym.value, args, kwargs)
+            raise StreamNeedsInterpreter(
+                f"construction with non-literal arguments: {why}"
+            ) from None
+        opcode = "NEWOBJ_EX" if kwargs else "NEWOBJ"
+        reason = self.construction_refusal(opcode, probe._real, literal_args, literal_kwargs)
         if reason is not None:
             raise pickle.UnpicklingError(reason)
-        cls_sym.tag("cls")
+        return _Node(self, cls_real=probe._real, args=args, kwargs=kwargs or None)
 
-    def op_reduce(self) -> None:
-        args = self.pop("REDUCE")
-        func = self.pop("REDUCE")
-        if not _is_container(args, "tuple"):
-            raise StreamNeedsInterpreter("REDUCE whose argument is not a literal tuple")
-        args.tag("value")
-        if not isinstance(func, _Sym):
-            raise StreamNeedsInterpreter("REDUCE on a literal")
-        if func.kind == "global":
-            site = ReduceSite(len(self.reduce_sites), func.pair, -1)
-        elif func.kind == "obj" and func.via == "REDUCE":
-            site = ReduceSite(len(self.reduce_sites), None, func.site)
-        else:
-            raise StreamNeedsInterpreter("REDUCE on a callable of unknown provenance")
-        func.tag("func")
-        self.reduce_sites.append(site)
-        self.reduce_funcs.append(func)
-        self.stack.append(_Sym("obj", producer=func, via="REDUCE", site=site.index))
-
-    def op_newobj(self, opcode: str) -> None:
-        kwargs = None
-        if opcode == "NEWOBJ_EX":
-            kwargs = self.pop(opcode)
-            if not _is_container(kwargs, "dict"):
-                raise StreamNeedsInterpreter("NEWOBJ_EX whose keywords are not a literal dict")
-            kwargs.tag("value")
-        args = self.pop(opcode)
-        cls = self.pop(opcode)
-        if not _is_container(args, "tuple"):
-            raise StreamNeedsInterpreter(f"{opcode} whose argument is not a literal tuple")
-        args.tag("value")
-        self.static_construction(opcode, cls, args, kwargs)
-        self.stack.append(_Sym("obj", producer=cls, via=opcode))
-
-    def op_inst(self, pos: int) -> None:
-        module, name = self.read_global_lines(pos, "INST")
-        items = self.pop_mark("INST")
-        cls = self.resolve_global(module, name)
-        self.static_construction("INST", cls, _Sym("container", "tuple", items=items), None)
-        for item in items:
-            _tag(item, "value")
-        self.stack.append(_Sym("obj", producer=cls, via="INST"))
-
-    def op_obj(self) -> None:
-        items = self.pop_mark("OBJ")
-        if not items:
-            raise _corrupt("OBJ without a class on the stack")
-        cls, args = items[0], items[1:]
-        self.static_construction("OBJ", cls, _Sym("container", "tuple", items=args), None)
-        for item in args:
-            _tag(item, "value")
-        self.stack.append(_Sym("obj", producer=cls, via="OBJ"))
-
-    def op_build(self) -> None:
-        state = self.pop("BUILD")
-        target = self.top("BUILD")
-        _tag(state, "value")
-        if not isinstance(target, _Sym):
-            return
-        if target.kind == "global":
-            reason = self.build_refusal(target.value)
+    def on_build(self, node: _Node) -> None:
+        if node.site >= 0:
+            self.reduce_sites[node.site].build_target = True
+        elif isinstance(node.cls_real, type):
+            reason = self.build_type_refusal(node.cls_real)
             if reason is not None:
                 raise pickle.UnpicklingError(reason)
-        elif target.kind == "obj":
-            if target.via == "REDUCE":
-                self.reduce_sites[target.site].build_target = True
-            else:
-                producer = target.producer
-                if producer is None or producer.kind != "global":
-                    raise StreamNeedsInterpreter("BUILD on an object of unknown provenance")
-                if isinstance(producer.value, type):
-                    reason = self.build_type_refusal(producer.value)
-                    if reason is not None:
-                        raise pickle.UnpicklingError(reason)
 
-    def op_stack_global(self) -> None:
-        name = self.pop("STACK_GLOBAL")
-        module = self.pop("STACK_GLOBAL")
-        if isinstance(name, _Sym) or isinstance(module, _Sym):
-            raise StreamNeedsInterpreter("STACK_GLOBAL with non-literal operands")
-        if type(name) is not str or type(module) is not str:
-            raise pickle.UnpicklingError("STACK_GLOBAL requires str")
-        self.stack.append(self.resolve_global(module, name))
-
-    # -- the walk ---------------------------------------------------------------------
-
-    def op_put(self, arg: Any, pos: int) -> None:
-        if arg < 0:
-            raise _corrupt("negative PUT argument")
-        if arg > self.opcode_count:
-            raise _corrupt("memo PUT index above the opcode count")
-        self.memo[arg] = self.top("PUT")
-
-    def op_mark(self, arg: Any, pos: int) -> None:
-        self.metastack.append(self.stack)
-        self.stack = []
-
-    def op_empty_list(self, arg: Any, pos: int) -> None:
-        self.stack.append(_Sym("container", "list", items=[]))
-
-    def op_empty_tuple(self, arg: Any, pos: int) -> None:
-        self.stack.append(_Sym("container", "tuple", items=[]))
-
-    def op_empty_dict(self, arg: Any, pos: int) -> None:
-        self.stack.append(_Sym("container", "dict", items=[]))
-
-    def op_empty_set(self, arg: Any, pos: int) -> None:
-        self.stack.append(_Sym("container", "set", items=[]))
-
-    def op_tuple_n(self, count: int) -> None:
-        if len(self.stack) < count:
-            raise _corrupt("stack underflow on TUPLE")
-        items = self.stack[-count:]
-        del self.stack[-count:]
-        self.push_container("tuple", items)
-
-    def op_tuple(self, arg: Any, pos: int) -> None:
-        self.push_container("tuple", self.pop_mark("TUPLE"))
-
-    def op_list(self, arg: Any, pos: int) -> None:
-        self.push_container("list", self.pop_mark("LIST"))
-
-    def op_dict(self, arg: Any, pos: int) -> None:
-        items = self.pop_mark("DICT")
-        if len(items) % 2:
-            raise _corrupt("DICT with an odd number of items")
-        self.push_container("dict", items)
-
-    def op_frozenset(self, arg: Any, pos: int) -> None:
-        self.push_container("frozenset", self.pop_mark("FROZENSET"))
-
-    def op_append(self, arg: Any, pos: int) -> None:
-        value = self.pop("APPEND")
-        self.extend_container(self.top("APPEND"), [value], "list")
-
-    def op_appends(self, arg: Any, pos: int) -> None:
-        items = self.pop_mark("APPENDS")
-        self.extend_container(self.top("APPENDS"), items, "list")
-
-    def op_setitem(self, arg: Any, pos: int) -> None:
-        value = self.pop("SETITEM")
-        key = self.pop("SETITEM")
-        self.extend_container(self.top("SETITEM"), [key, value], "dict")
-
-    def op_setitems(self, arg: Any, pos: int) -> None:
-        items = self.pop_mark("SETITEMS")
-        if len(items) % 2:
-            raise _corrupt("SETITEMS with an odd number of items")
-        self.extend_container(self.top("SETITEMS"), items, "dict")
-
-    def op_additems(self, arg: Any, pos: int) -> None:
-        items = self.pop_mark("ADDITEMS")
-        self.extend_container(self.top("ADDITEMS"), items, "set")
-
-    def op_pop(self, arg: Any, pos: int) -> None:
-        if self.stack:
-            self.stack.pop()
-        else:
-            self.pop_mark("POP")
-
-    def op_pop_mark(self, arg: Any, pos: int) -> None:
-        self.pop_mark("POP_MARK")
-
-    def op_dup(self, arg: Any, pos: int) -> None:
-        self.stack.append(self.top("DUP"))
-
-    def op_global(self, arg: Any, pos: int) -> None:
-        module, global_name = self.read_global_lines(pos, "GLOBAL")
-        self.stack.append(self.resolve_global(module, global_name))
-
-    def op_persid(self, arg: Any, pos: int) -> None:
-        raise pickle.UnpicklingError(
-            "A load persistent id instruction was encountered, "
-            "but no persistent_load function was specified."
-        )
-
-    def op_ext(self, arg: Any, pos: int) -> None:
-        if arg in getattr(copyreg, "_inverted_registry", {}):
-            raise StreamNeedsInterpreter("registered pickle extension code")
-        raise _corrupt(f"unregistered extension code {arg!r}")
-
-    def op_buffer(self, arg: Any, pos: int) -> None:
-        raise pickle.UnpicklingError(
-            "pickle stream refers to out-of-band data but no *buffers* argument was given"
-        )
-
-    def op_proto(self, arg: Any, pos: int) -> None:
-        if arg > pickle.HIGHEST_PROTOCOL:
-            raise _corrupt(f"unsupported pickle protocol: {arg}")
-
-    def op_frame(self, arg: Any, pos: int) -> None:
-        return None
-
-    def op_stop(self, arg: Any, pos: int) -> bool:
-        _tag(self.pop("STOP"), "value")
-        return True
-
-    def extend_container(self, target: Any, items: list[Any], kind: str) -> None:
-        """Record items added to a container; other targets fail or act at run time."""
-
-        for item in items:
-            _tag(item, "value")
-        if _is_container(target, kind) and target.items is not None:
-            target.items.extend(items)
-
-    def run(self) -> PrescanPlan:
-        """Walk every opcode; the literal and memo opcodes are handled inline for speed."""
-
-        ops = _iter_opcodes(self.data)
-        stack = self.stack
-        memo = self.memo
-        max_opcodes = self.max_opcodes
-        count = 0
-        while True:
-            try:
-                name, arg, pos = next(ops)
-            except StopIteration:
-                raise _corrupt("pickle exhausted before seeing STOP") from None
-            except (ValueError, EOFError, OverflowError, struct.error) as exc:
-                # The reader reports truncation, unknown opcodes and bad operands with
-                # these builtins; the C machine would refuse the same bytes.
-                raise _corrupt(f"{type(exc).__name__}: {exc}") from exc
-            count += 1
-            if max_opcodes is not None and count > max_opcodes:
-                raise OpcodeCeilingExceeded(
-                    _CORRUPT + "opcode count exceeds the allocation ceiling"
-                )
-            if name in _CONST_OPCODES:
-                stack.append(arg)
-            elif name == "MEMOIZE":
-                if not stack:
-                    raise _corrupt("stack underflow on MEMOIZE")
-                memo[len(memo)] = stack[-1]
-            elif name in _GET_OPCODES:
-                sym = memo.get(arg)
-                if sym is None:
-                    raise _corrupt(f"missing memo key {arg!r}")
-                stack.append(sym)
-            else:
-                self.opcode_count = count
-                handler = _DISPATCH.get(name)
-                if handler is None:  # pragma: no cover - every pickletools opcode is listed
-                    raise _corrupt(f"unsupported opcode {name}")
-                if handler(self, arg, pos):
-                    break
-                stack = self.stack  # MARK and the mark-popping opcodes swap the list
-        self.opcode_count = count
-        return self.finish()
-
-    def finish(self) -> PrescanPlan:
-        """Decide which callables the C phase wraps; refuse mixed roles to the interpreter."""
-
-        wrap_pairs: set[tuple[str, str]] = set()
-        for site, func in zip(self.reduce_sites, self.reduce_funcs, strict=True):
-            if func.roles != {"func"}:
-                raise StreamNeedsInterpreter("a callable is also used as a value or a class")
-            if func.kind == "global" and func.pair is not None:
-                wrap_pairs.add(func.pair)
-            else:
-                self.reduce_sites[site.derived_from].result_callable = True
-        for sym in self.global_syms:
-            if sym.pair in wrap_pairs and sym.roles != {"func"}:
-                raise StreamNeedsInterpreter("a global is used both as a callable and otherwise")
+    def run(self, data: bytes) -> PrescanPlan:
+        root = _DryRunUnpickler(data, self).load()
+        value_pairs = _walk_values(root)
+        mixed = self.called_pairs & (value_pairs | self.cls_pairs)
+        if mixed:
+            raise StreamNeedsInterpreter(
+                f"globals used both as callables and otherwise: {sorted(mixed)}"
+            )
         return PrescanPlan(
-            opcode_count=self.opcode_count,
+            opcode_count=0,
             resolved=self.resolved,
-            wrap_pairs=frozenset(wrap_pairs),
+            wrap_pairs=frozenset(self.called_pairs),
             reduce_sites=self.reduce_sites,
             construction_refusal=self.construction_refusal,
             build_refusal=self.build_refusal,
         )
 
 
-_DISPATCH: dict[str, Callable[..., Any]] = {
-    "PUT": _Walker.op_put,
-    "BINPUT": _Walker.op_put,
-    "LONG_BINPUT": _Walker.op_put,
-    "MARK": _Walker.op_mark,
-    "EMPTY_LIST": _Walker.op_empty_list,
-    "EMPTY_TUPLE": _Walker.op_empty_tuple,
-    "EMPTY_DICT": _Walker.op_empty_dict,
-    "EMPTY_SET": _Walker.op_empty_set,
-    "TUPLE1": lambda walker, arg, pos: walker.op_tuple_n(1),
-    "TUPLE2": lambda walker, arg, pos: walker.op_tuple_n(2),
-    "TUPLE3": lambda walker, arg, pos: walker.op_tuple_n(3),
-    "TUPLE": _Walker.op_tuple,
-    "LIST": _Walker.op_list,
-    "DICT": _Walker.op_dict,
-    "FROZENSET": _Walker.op_frozenset,
-    "APPEND": _Walker.op_append,
-    "APPENDS": _Walker.op_appends,
-    "SETITEM": _Walker.op_setitem,
-    "SETITEMS": _Walker.op_setitems,
-    "ADDITEMS": _Walker.op_additems,
-    "POP": _Walker.op_pop,
-    "POP_MARK": _Walker.op_pop_mark,
-    "DUP": _Walker.op_dup,
-    "GLOBAL": _Walker.op_global,
-    "STACK_GLOBAL": lambda walker, arg, pos: walker.op_stack_global(),
-    "REDUCE": lambda walker, arg, pos: walker.op_reduce(),
-    "NEWOBJ": lambda walker, arg, pos: walker.op_newobj("NEWOBJ"),
-    "NEWOBJ_EX": lambda walker, arg, pos: walker.op_newobj("NEWOBJ_EX"),
-    "INST": lambda walker, arg, pos: walker.op_inst(pos),
-    "OBJ": lambda walker, arg, pos: walker.op_obj(),
-    "BUILD": lambda walker, arg, pos: walker.op_build(),
-    "PERSID": _Walker.op_persid,
-    "BINPERSID": _Walker.op_persid,
-    "EXT1": _Walker.op_ext,
-    "EXT2": _Walker.op_ext,
-    "EXT4": _Walker.op_ext,
-    "NEXT_BUFFER": _Walker.op_buffer,
-    "READONLY_BUFFER": _Walker.op_buffer,
-    "PROTO": _Walker.op_proto,
-    "FRAME": _Walker.op_frame,
-    "STOP": _Walker.op_stop,
-}
-_CONST_OPCODES = frozenset(
-    {
-        "INT",
-        "BININT",
-        "BININT1",
-        "BININT2",
-        "LONG",
-        "LONG1",
-        "LONG4",
-        "STRING",
-        "BINSTRING",
-        "SHORT_BINSTRING",
-        "BINBYTES",
-        "SHORT_BINBYTES",
-        "BINBYTES8",
-        "BYTEARRAY8",
-        "NONE",
-        "NEWTRUE",
-        "NEWFALSE",
-        "UNICODE",
-        "BINUNICODE",
-        "SHORT_BINUNICODE",
-        "BINUNICODE8",
-        "FLOAT",
-        "BINFLOAT",
-    }
-)
-_GET_OPCODES = frozenset({"GET", "BINGET", "LONG_BINGET"})
+class _NotStatic(Exception):
+    """An argument tree holds a value only the real run knows."""
+
+
+def _literal(value: Any, budget: list[int]) -> Any:
+    """Return ``value`` with probes replaced by their real objects; refuse nodes."""
+
+    budget[0] -= 1
+    if budget[0] < 0:
+        raise _NotStatic("argument tree too large for a static check")
+    if isinstance(value, _Node):
+        raise _NotStatic("argument built at run time")
+    if isinstance(value, _ProbeMeta):
+        return value._real
+    if isinstance(value, (list, tuple)):
+        members = [_literal(item, budget) for item in value]
+        return tuple(members) if isinstance(value, tuple) else members
+    if isinstance(value, dict):
+        return {_literal(k, budget): _literal(v, budget) for k, v in value.items()}
+    if isinstance(value, (set, frozenset)):
+        members = {_literal(item, budget) for item in value}
+        return members if isinstance(value, set) else frozenset(members)
+    return value
+
+
+def _walk_values(root: Any) -> set[tuple[str, str]]:
+    """Return the probe pairs stored as values; refuse a node that is called and stored."""
+
+    value_pairs: set[tuple[str, str]] = set()
+    seen: set[int] = set()
+    stack: list[Any] = [root]
+    while stack:
+        value = stack.pop()
+        kind = type(value)
+        if kind is list or kind is tuple or kind is set or kind is frozenset:
+            if id(value) in seen:
+                continue
+            seen.add(id(value))
+            stack.extend(value)
+        elif kind is dict:
+            if id(value) in seen:
+                continue
+            seen.add(id(value))
+            stack.extend(value.keys())
+            stack.extend(value.values())
+        elif kind is _Node:
+            if id(value) in seen:
+                continue
+            seen.add(id(value))
+            if value.called:
+                raise StreamNeedsInterpreter("a callable result is also stored as a value")
+            stack.extend(value.args)
+            if value.kwargs:
+                stack.extend(value.kwargs.values())
+            if value.state is not None:
+                stack.append(value.state)
+            stack.extend(value.items)
+        elif kind is _ProbeMeta:
+            value_pairs.add(value._pair)
+    return value_pairs
 
 
 def _next_opcode(ops: Any) -> tuple[Any, Any, int]:
@@ -850,9 +550,8 @@ def prescan_stream(
     construction_refusal: ConstructionRefusal,
     build_refusal: BuildRefusal,
     build_type_refusal: BuildTypeRefusal,
-    max_opcodes: int | None = None,
 ) -> PrescanPlan:
-    """Walk ``data`` symbolically and return the plan the C phase enforces.
+    """Return the plan the C phase enforces for ``data``.
 
     Parameters
     ----------
@@ -864,12 +563,10 @@ def prescan_stream(
         ``(opcode, callable_or_class, args, kwargs) -> reason | None``: the allocation
         belt for a construction with literal arguments.
     build_refusal:
-        ``(target_object) -> reason | None`` for a BUILD applied to a resolved global.
+        ``(target_object) -> reason | None`` for a BUILD applied to a REDUCE result.
     build_type_refusal:
         ``(target_class) -> reason | None`` for a BUILD applied to an instance a class
         construction produced.
-    max_opcodes:
-        Opcode-count ceiling; exceeding it raises :class:`OpcodeCeilingExceeded`.
 
     Raises
     ------
@@ -879,12 +576,10 @@ def prescan_stream(
         The stream must run through the pure-Python machine instead.
     """
 
-    walker = _Walker(
-        data,
+    planner = _DryRunPlanner(
         resolve=resolve,
         construction_refusal=construction_refusal,
         build_refusal=build_refusal,
         build_type_refusal=build_type_refusal,
-        max_opcodes=max_opcodes,
     )
-    return walker.run()
+    return planner.run(data)

@@ -121,9 +121,9 @@ LOAD_PROVENANCE_TRANSIENT_ATTRS: tuple[str, ...] = (
 # bound allocation -- a pickle of tiny values expands its byte size into RSS
 # BEFORE any structural check can refuse it. This is the same lesson the JSON
 # boundary's ``_MAX_JSON_NODES`` prescan already encodes, carried to the sibling
-# pickle boundary. The unpickler's pre-scan counts opcodes as it walks the stream
-# (no object allocation) with an early stop, so its own worst case is bounded CPU,
-# never unbounded memory.
+# pickle boundary. The unpickler counts opcodes with a tight byte reader (no object
+# allocation) with an early stop, so its own worst case is bounded CPU, never
+# unbounded memory.
 #
 # CALIBRATION (r6 R60-F1 recalibration): the original 64M value was derived
 # from a ~5x bytes->RSS expansion assumption, but the measured worst case for
@@ -136,6 +136,9 @@ LOAD_PROVENANCE_TRANSIENT_ATTRS: tuple[str, ...] = (
 # count would be a multi-hundred-MB pickle, an order of magnitude beyond the
 # largest real traces (tensor payloads live in separate safetensors blobs).
 _MAX_METADATA_PKL_OPCODES = 24_000_000
+# Count opcodes only on files large enough for the ceiling to be reachable: below this
+# the count would tax every real load for a ceiling no stream that size can hit.
+_METADATA_PKL_PRESCAN_BYTES = 8 * 1024**2
 # Belt bound on the persisted PARTIAL failure-reason sentinel (B8-12).
 _MAX_PARTIAL_REASON_CHARS = 200
 _BLOB_TENSOR_KEY = "data"
@@ -161,6 +164,7 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
         trust_custom_callables: bool = False,
         allowed_custom_callable_modules: Collection[str] | None = None,
         max_opcodes: int | None = None,
+        count_opcodes_above: int = 0,
     ) -> None:
         """Initialize the restricted unpickler.
 
@@ -173,7 +177,9 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
         allowed_custom_callable_modules:
             Optional narrow allowlist of foreign modules whose callables may load.
         max_opcodes:
-            Opcode-count ceiling enforced by the pre-scan (``None`` leaves it off).
+            Opcode-count ceiling enforced before the load (``None`` leaves it off).
+        count_opcodes_above:
+            Byte size above which the ceiling is counted (below it, unreachable).
         """
 
         super().__init__(
@@ -181,6 +187,7 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
             trust_custom_callables=trust_custom_callables,
             allowed_custom_callable_modules=allowed_custom_callable_modules,
             max_opcodes=max_opcodes,
+            count_opcodes_above=count_opcodes_above,
         )
 
     def load(self) -> Any:
@@ -1529,6 +1536,7 @@ def _load_trace_payload(
                 trust_custom_callables=trust_custom_callables,
                 allowed_custom_callable_modules=allowed_custom_callable_modules,
                 max_opcodes=_MAX_METADATA_PKL_OPCODES,
+                count_opcodes_above=_METADATA_PKL_PRESCAN_BYTES,
             ).load()
         if not isinstance(scrubbed_state, dict):
             # R65/F10: without this guard a corrupt/hostile payload escapes

@@ -120,7 +120,9 @@ def _load_unified_bundle(
                     "structurally implausible artifact."
                 )
             bundle = _RenameAwareUnpickler(
-                handle, max_opcodes=_bundle_module._MAX_METADATA_PKL_OPCODES
+                handle,
+                max_opcodes=_bundle_module._MAX_METADATA_PKL_OPCODES,
+                count_opcodes_above=_bundle_module._METADATA_PKL_PRESCAN_BYTES,
             ).load()
     except OpcodeCeilingExceeded:
         raise _bundle_module._opcode_ceiling_error(legacy_pickle_path) from None
