@@ -63,7 +63,6 @@ from torchlens.backends.torch._failed_session import (
 from torchlens.backends.torch._outputs import (
     _OUTPUT_ATTRIBUTION_REMEDY as _OUTPUT_ATTRIBUTION_REMEDY,
     _assign_nested_input_value as _assign_nested_input_value,
-    _container_path_to_address as _container_path_to_address,
     _dedupe_output_addresses as _dedupe_output_addresses,
     _is_direct_registered_buffer_output as _is_direct_registered_buffer_output,
     _model_input_output_label as _model_input_output_label,

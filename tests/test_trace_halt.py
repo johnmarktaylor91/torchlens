@@ -104,3 +104,72 @@ def test_halted_trace_validation_skips_full_model_output_only() -> None:
     )
 
     assert trace.validate_forward_pass([torch.full((1, 3), 123.0)]) is True
+
+
+class _WeightsBeforeHaltModel(nn.Module):
+    """A constant table computed before the halt op and consumed only after it."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Scale the activation by a table that was built ahead of it."""
+
+        weights = torch.ones(3) * 2
+        return torch.relu(x) * weights
+
+
+def test_trace_halt_keeps_values_awaiting_consumers() -> None:
+    """A halted capture keeps every op that ran, consumers pending or not.
+
+    The weights table is input-disconnected and, at the halt, childless (its
+    consumer never ran), so the orphan flood from inputs and the halt frontier
+    pruned it as dead computation: the halted trace started at the relu while
+    the complete trace started at the ones op, and the "honest prefix" promise
+    of a HALTED outcome broke on the first op.
+    """
+
+    model = _WeightsBeforeHaltModel()
+    x = torch.ones(1, 3)
+    plain = tl.trace(model, x)
+    halted = tl.trace(model, x, halt=_halt_on_relu)
+    assert halted.halted is True
+    order = lambda trace: [  # noqa: E731
+        op.func_name for op in sorted(trace.ops, key=lambda op: op.raw_index)
+    ]
+    plain_names, halted_names = order(plain), order(halted)
+    assert halted_names == ["ones", "__mul__", "relu"]
+    assert plain_names[: len(halted_names)] == halted_names
+    assert len(halted_names) < len(plain_names)
+
+
+class _NestedBeforeHaltModel(nn.Module):
+    """Two module calls before the halt op, so the recording journals boundaries."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.l1 = nn.Linear(4, 4)
+        self.block = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run two linears, the relu the halt fires on, then a scale."""
+
+        return self.block(self.l1(x)) * 2
+
+
+def test_halted_recording_to_trace_keeps_no_module_boundary_rows() -> None:
+    """A halted ``record().to_trace()`` keeps the ops that ran and nothing else.
+
+    The sparse recorder journals module enter/exit markers as op-lane rows
+    with no parents and no children. The halted carve-out that keeps every
+    childless op (``test_trace_halt_keeps_values_awaiting_consumers``) must not
+    resurrect those markers: they minted ``module_enter_N`` layers with no
+    function and shifted every later label away from the live halted capture.
+    """
+
+    torch.manual_seed(0)
+    model = _NestedBeforeHaltModel().eval()
+    x = torch.randn(2, 4)
+    live = tl.trace(model, x, halt=_halt_on_relu)
+    cooked = tl.record(model, x, save=tl.func("relu"), halt=_halt_on_relu, seed=3).to_trace()
+    assert live.halted is True and cooked.halted is True
+    assert [op.func_name for op in cooked.ops] == ["linear", "linear", "relu"]
+    assert [op.label for op in cooked.ops] == [op.label for op in live.ops]
+    assert cooked.halt_frontier == live.halt_frontier == "relu_1_3"

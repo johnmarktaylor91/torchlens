@@ -432,7 +432,7 @@ def compute_preview_input_output_distances(trace: Trace) -> None:
 
     Notes
     -----
-    This mirrors ``postprocess.graph_traversal._mark_layer_depths`` but
+    This mirrors ``postprocess._layer_depths._mark_layer_depths`` but
     resolves labels through an explicit op index instead of
     ``Trace.__getitem__`` (whose finished-mode lookup returns ``Layer``
     objects, not the ops the flood must mutate). Lineage sets are normalized
