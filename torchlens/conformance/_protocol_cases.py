@@ -33,7 +33,7 @@ here so a later change is one edit.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import fields as dataclass_fields
+from dataclasses import dataclass, fields as dataclass_fields
 from pathlib import Path
 from typing import Any
 
@@ -219,13 +219,21 @@ def shape_metadata_problems(trace: Any, host_copy: Any) -> tuple[str, ...]:
         payload = getattr(op, "out", None)
         if shape is None or payload is None:
             continue
-        try:
-            got = tuple(host_copy(payload).shape)
-        except Exception:  # noqa: BLE001 - a non-array payload is outside this check
+        got = _payload_shape(payload, host_copy)
+        if got is None:
             continue
         if tuple(shape) != got:
             problems.append(f"{op.label}: recorded shape {tuple(shape)} != payload {got}")
     return tuple(problems)
+
+
+def _payload_shape(payload: Any, host_copy: Any) -> tuple[int, ...] | None:
+    """The host-copied payload's shape; ``None`` for a non-array payload (outside this check)."""
+
+    try:
+        return tuple(host_copy(payload).shape)
+    except Exception:  # noqa: BLE001 - a non-array payload is outside this check
+        return None
 
 
 def silent_gap_reason(trace: Any) -> str | None:
@@ -719,14 +727,28 @@ def _validate_after_load_problems(protocol: Any, replay_loaded: Any, reference: 
     return validation_status_problems(protocol.validate(replay_loaded, _as_output_list(reference)))
 
 
+@dataclass(frozen=True)
+class C2Reload:
+    """One row's saved-and-reloaded pair for the protocol C2 cells.
+
+    Parameters
+    ----------
+    trace:
+        The live trace that was saved.
+    loaded:
+        The reloaded trace.
+    replay_loaded:
+        The reload ``c2_validation_after_load`` validates (see
+        :func:`load_for_replay`); ``None`` validates ``loaded``.
+    """
+
+    trace: Any
+    loaded: Any
+    replay_loaded: Any = None
+
+
 def run_c2_protocol_row_cases(
-    adapter: Any,
-    model: RosterModel,
-    trace: Any,
-    loaded: Any,
-    reference: Any,
-    *,
-    replay_loaded: Any = None,
+    adapter: Any, model: RosterModel, reload: C2Reload, reference: Any
 ) -> list[CaseResult]:
     """The per-row protocol C2 cells: payload equality and validation after load.
 
@@ -736,15 +758,10 @@ def run_c2_protocol_row_cases(
         The resolved adapter (must expose a protocol view).
     model:
         The roster row.
-    trace:
-        The live trace that was saved.
-    loaded:
-        The reloaded trace.
+    reload:
+        The live trace, its reload and the replay reload.
     reference:
         The direct-run reference output.
-    replay_loaded:
-        The reload ``c2_validation_after_load`` validates (see
-        :func:`load_for_replay`); ``None`` validates ``loaded``.
 
     Returns
     -------
@@ -760,14 +777,16 @@ def run_c2_protocol_row_cases(
             "c2_payload_values_equal",
             "C2",
             model,
-            lambda: payload_equality_problems(trace, loaded, protocol.host_copy),
+            lambda: payload_equality_problems(reload.trace, reload.loaded, protocol.host_copy),
         ),
         _guarded(
             "c2_validation_after_load",
             "C2",
             model,
             lambda: _validate_after_load_problems(
-                protocol, loaded if replay_loaded is None else replay_loaded, reference
+                protocol,
+                reload.loaded if reload.replay_loaded is None else reload.replay_loaded,
+                reference,
             ),
         ),
     ]

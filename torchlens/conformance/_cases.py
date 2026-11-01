@@ -393,7 +393,7 @@ def run_c2_cases(
 
     import warnings
 
-    from ._protocol_cases import load_for_replay, run_c2_protocol_row_cases
+    from ._protocol_cases import C2Reload, load_for_replay, run_c2_protocol_row_cases
 
     skipped = _unavailable_rows(adapter, roster, "C2", C2_MODEL_CASES)
     if skipped is not None:
@@ -435,10 +435,8 @@ def run_c2_cases(
             run_c2_protocol_row_cases(
                 adapter,
                 model,
-                trace,
-                loaded,
+                C2Reload(trace, loaded, load_for_replay(adapter, trace, path, loaded)),
                 reference,
-                replay_loaded=load_for_replay(adapter, trace, path, loaded),
             )
         )
     return results
