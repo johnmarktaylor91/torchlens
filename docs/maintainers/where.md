@@ -75,7 +75,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experiment` | torchlens.experiment — multi-run experiments as first-class objects. | 5 | 2280 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 333 |
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
-| `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5233 |
+| `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5828 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 68 | 31773 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
@@ -316,7 +316,7 @@ Core data structures for representing a logged forward pass. (77 modules, 38902 
 | `_trace_accessors` | Trace accessor helpers. | 658 |
 | `_trace_annotations` | Trace annotation family: user notes and tags on a finished trace (record rebuild destination; empty until its bodies move in). | 5 |
 | `_trace_components` | Declared Trace field-to-component ownership map ( decomposition). | 613 |
-| `_trace_export` | Trace export mixin. | 730 |
+| `_trace_export` | Trace export mixin. | 189 |
 | `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 846 |
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 334 |
 | `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 734 |
@@ -325,12 +325,12 @@ Core data structures for representing a logged forward pass. (77 modules, 38902 
 | `_trace_intervention_records` | Envelope fields of one ''do'' intervention event. | 127 |
 | `_trace_inventory` | Trace-level inventory builders: structural sites table and bill of materials. | 246 |
 | `_trace_missing_attrs` | The canonical refusal for an attribute a ''Trace'' does not have. | 122 |
-| `_trace_narrate` | Post-hoc narration mixin for ''Trace'' (snoop ). | 41 |
+| `_trace_narrate` | Post-hoc narration mixin for ''Trace'' (snoop ). | 46 |
 | `_trace_pristine` | The pristine reading of a Trace, derived from the evidence it carries. | 171 |
 | `_trace_profile` | Trace model-profile helpers. | 190 |
 | `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 218 |
 | `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays (record rebuild destination; empty until its bodies move in). | 5 |
-| `_trace_stack` | Order-aligned activation stacking for completed traces. | 169 |
+| `_trace_stack` | Order-aligned activation stacking for completed traces. | 175 |
 | `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__'' (record rebuild destination; empty until its bodies move... | 5 |
 | `_trace_stats` | Trace computed stats mixin. | 1312 |
 | `_trace_stats_grad_fn_site` | Pure helpers behind the Trace grad-fn site and fire-timing rollups. | 128 |
@@ -1532,7 +1532,7 @@ Experimental Dagua rendering bridge exports. (2 modules, 950 lines)
 
 ### `torchlens.export`
 
-Static export helpers for TorchLens logs. (15 modules, 5233 lines)
+Static export helpers for TorchLens logs. (15 modules, 5828 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1549,7 +1549,7 @@ Static export helpers for TorchLens logs. (15 modules, 5233 lines)
 | `_netron_records` | Netron export projection records (netron ). | 504 |
 | `_registry` | The export-target registry: ONE L7 door for every exporter ( item 17). | 125 |
 | `_report` | The single-file offline HTML trace report (B5, treescope memo s6). | 722 |
-| `_trace_tables` | Trace table export functions reached from the records through ''_data_classes._doors.export'' (record rebuild destination; empty until it... | 5 |
+| `_trace_tables` | Trace tabular export and decoded-output functions (record rebuild destination). | 600 |
 | `_trackers` | Tracker-sink export targets (bridge tier; subpackage promotion, item 18). | 507 |
 
 ### `torchlens.export._model_explorer`
@@ -1845,7 +1845,7 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 | `_factcore` | FactCore: the ONE numbers substrate (sumfam item 7, megaplan ). | 467 |
 | `_flops_report` | The one-call paper number: ''flops'' (costreport -). | 412 |
 | `_health` | Serialized HealthFacts + the three-state nonfinite verdict (sumfam 8). | 303 |
-| `_narrate` | Trace narration functions reached from the records through ''_data_classes._doors.report'' (record rebuild destination; empty until its b... | 5 |
+| `_narrate` | Trace post-hoc narration function (record rebuild destination). | 23 |
 | `_profile` | Unified performance and resource profile tables for completed traces. | 1033 |
 | `_profile_source_line` | Source-line grouping for ''Trace.profile(group_by="source_line")''. | 154 |
 | `_registry` | The report-family SurfaceRegistry (sumfam -, item 16). | 444 |

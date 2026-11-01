@@ -1,8 +1,7 @@
 """Trace visualization mixin."""
 
 from collections.abc import Callable, Iterable, Mapping
-from html import escape
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from .._visualization.code_panel import CodePanelOption
@@ -14,7 +13,6 @@ if TYPE_CHECKING:
 else:
     _TraceMixinBase = object
 from .._deprecations import MISSING, MissingType
-from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
@@ -26,36 +24,9 @@ from .._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
-from ..intervention.types import FireRecord
-from ._nonfinite import (
-    coverage_gap_note,
-    first_nonfinite_layer,
-    nonfinite_coverage,
-    nonfinite_op_labels,
-)
+from . import _doors
+from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from .module import Module
-
-
-def _flatten_backward_fire_ref(value: Any) -> tuple["FireRecord", ...]:
-    """Return fire records stored on a backward call reference.
-
-    Parameters
-    ----------
-    value:
-        FireRecord, tuple of records, or another value.
-
-    Returns
-    -------
-    tuple[FireRecord, ...]
-        Fire records contained in ``value``.
-    """
-
-    if isinstance(value, FireRecord):
-        return (value,)
-    if isinstance(value, tuple):
-        return tuple(item for item in value if isinstance(item, FireRecord))
-    return ()
 
 
 class TraceVisualizationMixin(_TraceMixinBase):
@@ -79,13 +50,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             rendering is explicitly disabled with ``vis_mode="none"``.
         """
 
-        if kwargs.get("vis_mode") == "none":
-            return None
-        if kind == "repr":
-            return repr(self)
-        if kind == "html":
-            return self._repr_html_()
-        return cast("str | None", self.draw(**kwargs))
+        return _doors.visualization()._trace_draw.show(self, kind=kind, **kwargs)
 
     def draw(
         self: "Trace",
@@ -274,36 +239,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
             Graphviz DOT source, renderer-specific output, or renderer object
             when ``return_graph=True``.
         """
-        from .._visualization._render_dot import draw as _impl
 
-        if view is not MISSING:
-            vis_mode = cast(VisModeLiteral, view)
-        if depth is not MISSING:
-            vis_call_depth = cast(int, depth)
-        if renderer is not MISSING:
-            vis_renderer = cast(VisRendererLiteral, renderer)
-        if layout is not MISSING:
-            vis_node_placement = cast(VisNodePlacementLiteral, layout)
-        if node_style is not MISSING:
-            node_mode = cast(VisNodeModeLiteral, node_style)
-        if vis_mode not in ("none", "rolled", "unrolled"):
-            # Name the spelling the caller used and every accepted value; the
-            # renderer-level check downstream never sees "none" or "view".
-            mode_argument = "view" if view is not MISSING else "vis_mode"
-            raise InvalidArgumentError(
-                f"{mode_argument} must be 'none', 'rolled', or 'unrolled'; received {vis_mode!r}",
-                code="visualization_mode_invalid",
-                remedy=f"pass {mode_argument}='none', 'rolled', or 'unrolled'",
-                argument=mode_argument,
-            )
-        if vis_mode == "none":
-            return None
-
-        return _impl(
+        return _doors.visualization()._trace_draw.draw(
             self,
+            view=view,
+            depth=depth,
+            renderer=renderer,
+            layout=layout,
+            node_style=node_style,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
-            vis_outpath=path,
+            path=path,
             vis_graph_overrides=vis_graph_overrides,
             module=module,
             node_mode=node_mode,
@@ -318,12 +264,12 @@ class TraceVisualizationMixin(_TraceMixinBase):
             vis_grad_edge_overrides=vis_grad_edge_overrides,
             vis_module_overrides=vis_module_overrides,
             vis_save_only=vis_save_only,
-            vis_fileformat=file_format,
-            show_buffer_layers=show_buffers,
+            file_format=file_format,
+            show_buffers=show_buffers,
             direction=direction,
             vis_node_placement=vis_node_placement,
             vis_renderer=vis_renderer,
-            vis_theme=theme,
+            theme=theme,
             vis_intervention_mode=vis_intervention_mode,
             vis_show_cone=vis_show_cone,
             code_panel=code_panel,
@@ -368,9 +314,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             This log, allowing chained calls before ``draw``.
         """
 
-        self._node_overlay_scores = dict(scores)
-        self._node_overlay_name = name
-        return self
+        return _doors.visualization()._trace_draw.add_node_overlay(self, scores=scores, name=name)
 
     def animate_ops(self: "Trace", site: Any) -> str:
         """Return a minimal HTML animation for repeated ops at ``site``.
@@ -392,47 +336,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             If the requested site cannot be resolved.
         """
 
-        label = str(getattr(site, "layer_label", site))
-        base_label = label.split(":", 1)[0]
-        if base_label not in self._layer_logs:
-            raise KeyError(f"Unknown layer site {label!r}.")
-        layer = self._layer_logs[base_label]
-        pass_entries = list(getattr(layer, "ops", ()) or [])
-        if not pass_entries:
-            pass_entries = [self[label]]
-        frames = [
-            {
-                "pass": int(getattr(entry, "pass_number", index + 1) or index + 1),
-                "label": str(getattr(entry, "layer_label", base_label)),
-                "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
-                "memory": str(getattr(entry, "activation_memory", "")),
-            }
-            for index, entry in enumerate(pass_entries)
-        ]
-        frame_markup = "".join(
-            "<li data-frame='{idx}'>{label} pass {call_index}: {shape} {memory}</li>".format(
-                idx=index,
-                label=escape(str(frame["label"])),
-                call_index=frame["pass"],
-                shape=escape(str(frame["shape"] or "scalar")),
-                memory=escape(str(frame["memory"])),
-            )
-            for index, frame in enumerate(frames)
-        )
-        return (
-            "<div class='tl-pass-animation' data-site='"
-            + escape(base_label)
-            + "'><button type='button' data-action='play'>Play</button>"
-            + "<button type='button' data-action='pause'>Pause</button><ol>"
-            + frame_markup
-            + "</ol><script>(function(){var root=document.currentScript.parentElement;"
-            + "var items=root.querySelectorAll('li');var i=0,t=null;"
-            + "function show(){items.forEach(function(x,j){x.style.display=j===i?'':'none';});}"
-            + "show();root.querySelector('[data-action=play]').onclick=function(){"
-            + "if(t)return;t=setInterval(function(){i=(i+1)%items.length;show();},500);};"
-            + "root.querySelector('[data-action=pause]').onclick=function(){clearInterval(t);t=null;};"
-            + "})();</script></div>"
-        )
+        return _doors.visualization()._trace_draw.animate_ops(self, site=site)
 
     @property
     def nonfinite_ops(self: "Trace") -> tuple[str, ...]:
@@ -499,55 +403,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             module, shape, dtype, parents, and source location.
         """
 
-        # ``kind="saved"`` skips ops that retained no payload. The raising
-        # ``kind="trace"`` gate contradicted this method's own contract ("the first
-        # SAVED non-finite out"): on any selective-save capture it hit an unsaved op
-        # and raised ValueError, which took ``print(trace)``, ``_repr_html_``, and
-        # ``report.explain`` down with it -- in exactly the mode the performance guide
-        # recommends for large models. Skipping is honest only because the clean
-        # answer below names how many ops could not be examined.
-        layer = first_nonfinite_layer(self, kind="saved")
-        if layer is not None:
-            stack = getattr(layer, "code_context", None) or []
-            location = "source unavailable"
-            if stack:
-                frame = stack[0]
-                file_path = str(getattr(frame, "file", "unknown"))
-                line_number = getattr(frame, "line_number", "unknown")
-                if link_format == "terminal":
-                    # link_format="terminal" is the EXPLICIT escape opt-in
-                    # (pinned register contract); the tty auto-gate governs
-                    # only default/auto call sites.
-                    location = terminal_file_line_link(file_path, line_number, enable_links=True)
-                elif link_format == "html":
-                    location = vscode_file_line_link(file_path, line_number)
-                elif link_format == "text":
-                    location = file_line_text(file_path, line_number)
-                else:
-                    raise InvalidArgumentError(
-                        "link_format must be 'terminal', 'html', or 'text'; "
-                        f"received {link_format!r}",
-                        code="link_format_invalid",
-                        remedy="pass link_format='terminal', 'html', or 'text'",
-                        argument="link_format",
-                    )
-            parents = ", ".join(getattr(layer, "parents", None) or []) or "none"
-            module = getattr(layer, "module", None) or "no module"
-            return (
-                f"First non-finite saved out is in layer {layer.layer_label} "
-                f"(op {getattr(layer, 'func_name', 'unknown')}, module {module}), "
-                f"shape={getattr(layer, 'shape', None)}, "
-                f"dtype={getattr(layer, 'dtype', None)}, parents={parents}, "
-                f"source={location}."
-            )
-        # A scoped clean answer must not read like a whole-capture one: ops that
-        # retained no payload, and payloads whose dtype has no runnable ``isfinite``
-        # (quantized, sparse), are both named. fp8 is NOT in that class -- it is
-        # widened exactly and really is checked.
-        return (
-            "No non-finite tensor values found in saved outs"
-            f"{coverage_gap_note(self, kind='saved')}."
-        )
+        return _doors.report()._trace_summary.first_nonfinite(self, link_format=link_format)
 
     def draw_backward(
         self: "Trace",
@@ -600,19 +456,18 @@ class TraceVisualizationMixin(_TraceMixinBase):
         str
             Graphviz DOT source.
         """
-        from .._visualization._render_entrypoints import render_backward_graph as _impl
 
-        return _impl(
+        return _doors.visualization()._trace_draw.draw_backward(
             self,
-            vis_outpath=path,
+            path=path,
             vis_graph_overrides=vis_graph_overrides,
             node_spec_fn=node_spec_fn,
             collapsed_node_spec_fn=collapsed_node_spec_fn,
             vis_node_mode=vis_node_mode,
             vis_edge_overrides=vis_edge_overrides,
             vis_save_only=vis_save_only,
-            vis_fileformat=file_format,
-            direction=vis_direction,
+            file_format=file_format,
+            vis_direction=vis_direction,
             code_panel=code_panel,
             vis_mode=vis_mode,
             bwd=bwd,
@@ -653,21 +508,20 @@ class TraceVisualizationMixin(_TraceMixinBase):
         str
             Graphviz DOT source.
         """
-        from .._visualization._render_entrypoints import render_combined_graph as _impl
 
-        return _impl(
+        return _doors.visualization()._trace_draw.draw_combined(
             self,
-            vis_outpath=path,
+            path=path,
             vis_graph_overrides=vis_graph_overrides,
             node_spec_fn=node_spec_fn,
             backward_node_spec_fn=backward_node_spec_fn,
             vis_edge_overrides=vis_edge_overrides,
             vis_save_only=vis_save_only,
-            vis_fileformat=file_format,
-            direction=vis_direction,
+            file_format=file_format,
+            vis_direction=vis_direction,
             vis_mode=vis_mode,
             intervening_cluster=intervening_cluster,
-            show_buffer_layers=show_buffers,
+            show_buffers=show_buffers,
             bwd=bwd,
             show_legend=show_legend,
         )
@@ -694,13 +548,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
             Graphviz DOT source.
         """
 
-        from .._visualization.fastlog_preview import preview_fastlog as _impl
-
-        return _impl(
-            self,
-            predicate=predicate,
-            keep_op=keep_op,
-            **kwargs,
+        return _doors.visualization()._trace_draw.preview_fastlog(
+            self, predicate=predicate, keep_op=keep_op, **kwargs
         )
 
     def last_run_records(self: "Trace") -> tuple["FireRecord", ...]:
@@ -712,28 +561,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             Immutable snapshot of matching intervention fire records.
         """
 
-        ctx = getattr(self, "last_run", None)
-        if not isinstance(ctx, dict):
-            return ()
-        timestamp = ctx.get("timestamp")
-        if not isinstance(timestamp, (int, float)):
-            return ()
-        records = []
-        for layer in ([] if self.__dict__.get("_tl_cleaned_up", False) else self._layer_list) or []:
-            for record in getattr(layer, "edits", []) or []:
-                record_timestamp = getattr(record, "timestamp", None)
-                if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
-                    records.append(record)
-        for grad_fn in (
-            {} if self.__dict__.get("_tl_cleaned_up", False) else self._grad_fn_logs
-        ).values():
-            calls = getattr(getattr(grad_fn, "calls", None), "_list", [])
-            for call in calls:
-                for record in _flatten_backward_fire_ref(getattr(call, "fire_record", None)):
-                    record_timestamp = getattr(record, "timestamp", None)
-                    if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
-                        records.append(record)
-        return tuple(records)
+        return _doors.visualization()._trace_draw.last_run_records(self)
 
     def _repr_html_(self: "Trace") -> str:
         """Return the notebook HTML representation for this model log.
@@ -757,18 +585,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
         (memo 3.6) -- appending the summary there would duplicate the
         render treescope owns.
         """
-        from .._notebook.cards import BRIDGE_SENTINEL_HTML, trace_repr_html
 
-        card = trace_repr_html(self)
-        if card == BRIDGE_SENTINEL_HTML:
-            return card
-        if not getattr(self, "_tracing_finished", False):
-            return card
-        try:
-            summary_html = self.summary()._repr_html_()
-        except Exception:  # noqa: BLE001 - a repr must never raise; the card still renders
-            summary_html = ""
-        return card + summary_html
+        return _doors.report()._trace_summary.repr_html(self)
 
     def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a named keyword
         self: "Trace",
@@ -851,55 +669,26 @@ class TraceVisualizationMixin(_TraceMixinBase):
             totals, capture facts, and the
             render/print/to_pandas/to_markdown/to_html result API.
         """
-        one_call_only = {
-            "input_shape": input_shape,
-            "execution_mode": execution_mode,
-            "grad_mode": grad_mode,
-        }
-        offending = sorted(name for name, value in one_call_only.items() if value is not None)
-        if offending:
-            raise InvalidArgumentError(
-                f"trace.summary() reports an EXISTING capture; {', '.join(offending)} "
-                "only make sense on the one-call door that runs the forward.",
-                code="summary_one_call_only",
-                remedy="use tl.summary(model, x, ...) for one-call execution options",
-            )
-        new_kwargs: dict[str, Any] = {}
-        for name, value in (
-            ("view", view),
-            ("depth", depth),
-            ("filter", filter),
-            ("buffers", buffers),
-            ("fold_repeats", fold_repeats),
-            ("flop_convention", flop_convention),
-            ("units", units),
-            ("style", style),
-        ):
-            if value is not None:
-                new_kwargs[name] = value
-        from ..report._summary_config import resolve_config
-        from ..report._summary_result import build_rebuilt_summary
 
-        config = resolve_config(
-            level=level if level is not None else "auto",
-            columns=columns,
-            **new_kwargs,
-            **({"max_rows": max_rows} if max_rows is not None else {}),
-            **unsupported,
-        )
-        if not self._tracing_finished:  # a cleaned trace raises trace_cleaned_up here
-            raise CaptureNotActiveError(
-                "trace.summary() cannot run before the forward pass is complete; "
-                "a partial capture has no summary (repr(trace) shows the live op count).",
-                code="trace_not_finished",
-                remedy="call summary() after trace(...) has returned; use repr(trace) mid-forward",
-                operation="summary",
-            )
-        return build_rebuilt_summary(
+        return _doors.report()._trace_summary.summary(
             self,
-            config,
-            execution_note=_execution_note,
-            input_synthesis=_input_synthesis,
+            level=level,
+            view=view,
+            depth=depth,
+            columns=columns,
+            filter=filter,
+            buffers=buffers,
+            fold_repeats=fold_repeats,
+            max_rows=max_rows,
+            flop_convention=flop_convention,
+            units=units,
+            style=style,
+            input_shape=input_shape,
+            execution_mode=execution_mode,
+            grad_mode=grad_mode,
+            _execution_note=_execution_note,
+            _input_synthesis=_input_synthesis,
+            **unsupported,
         )
 
     def render_dagua_graph(
@@ -927,21 +716,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
         str
             Serialized Dagua graph output or the rendered artifact path.
         """
-        from ..experimental.dagua._bridge import render_trace_with_dagua as _impl
 
-        return cast(
-            str,
-            _impl(
-                self,
-                vis_mode=vis_mode,
-                vis_call_depth=vis_call_depth,
-                path=path,
-                vis_save_only=vis_save_only,
-                file_format=file_format,
-                show_buffers=show_buffers,
-                vis_direction=vis_direction,
-                theme=theme,
-            ),
+        return _doors.visualization()._trace_draw.render_dagua_graph(
+            self,
+            vis_mode=vis_mode,
+            vis_call_depth=vis_call_depth,
+            path=path,
+            vis_save_only=vis_save_only,
+            file_format=file_format,
+            show_buffers=show_buffers,
+            vis_direction=vis_direction,
+            theme=theme,
         )
 
     def to_dagua_graph(
@@ -965,9 +750,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
         Any
             Dagua graph object.
         """
-        from ..experimental.dagua import trace_to_dagua_graph as _impl
 
-        return _impl(
+        return _doors.visualization()._trace_draw.to_dagua_graph(
             self,
             vis_mode=vis_mode,
             vis_call_depth=vis_call_depth,
@@ -984,6 +768,5 @@ class TraceVisualizationMixin(_TraceMixinBase):
         TorchLensRenderAudit
             Audit of used and unused fields in the visualization bridge.
         """
-        from ..experimental.dagua._bridge import build_render_audit as _impl
 
-        return _impl(self)
+        return _doors.visualization()._trace_draw.visualization_field_audit(self)

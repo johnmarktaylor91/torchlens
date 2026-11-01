@@ -9153,6 +9153,14 @@
  },
  {
   "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/report/_trace_summary.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/stats/_aggregate.py",
   "has_default": false,
