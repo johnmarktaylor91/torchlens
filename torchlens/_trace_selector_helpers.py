@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ._capture.arg_positions import _normalize_func_name
 from ._errors import AmbiguousOpLookupError, ArgumentConflictError, ArgumentTypeError
-from .backends.registry import _BACKEND_CAPABILITIES, _trace_option_names
+from .backends import registry as _backend_registry
 from .intervention.selectors import BaseSelector
 from .options import SaveOptions
 from .recording.options import PredicateFn
@@ -735,8 +735,8 @@ def _combine_save_predicates(
     return cast(PredicateFn, predicate)
 
 
-_TRACE_OPTION_FILTERED_NAMES: tuple[str, ...] = _trace_option_names(
-    capability for capability in _BACKEND_CAPABILITIES if not capability.gated
+_TRACE_OPTION_FILTERED_NAMES: tuple[str, ...] = _backend_registry._trace_option_names(
+    c for c in _backend_registry._BACKEND_CAPABILITIES if not c.gated
 )
 """Every option of every non-gated capability record: the dispatcher's strip/refuse list."""
 
