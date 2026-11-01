@@ -14,6 +14,7 @@ documenting the intentional fastlog divergence:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -423,7 +424,7 @@ def test_activation_transform_readback_and_persisted_audit(tmp_path: Path) -> No
     )
     metadata = json.loads((bundle_path / "metadata.json").read_text(encoding="utf-8"))
     assert "named_transform" in metadata["_settings_reprs"]["activation_transform"]
-    assert "0x" not in metadata["_settings_reprs"]["activation_transform"]
+    assert re.search(r"0x[0-9a-fA-F]", metadata["_settings_reprs"]["activation_transform"]) is None
     assert metadata["settings"]["history_size"] == 3
     assert "activation_transform" not in metadata["settings"]
     loaded = tl.load(bundle_path)
