@@ -159,7 +159,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # merged tree; next 50-line step above it. Conscious raise, not drift;
     # the duplicate relabel/module-building code this same commit removed
     # already kept the net growth well under the commit's own diff size.
-    "torchlens/backends/jax/backend.py": 4650,
+    "torchlens/backends/jax/backend.py": 4400,
     # 4600 -> 4650: the L8 C2-recording settle above re-stepped bundle to 4600
     # but the merged file MEASURES 4603 -- the settle's own re-step was three
     # lines short, red on main since the merge. Reconciled to the next 50-line
@@ -449,7 +449,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # conditional relabel epilogue and intermediate-grad dual-spelling
     # resolution fixes here as on jax; merged tree measures 3375. Next
     # 50-line step above it; conscious raise, not drift.
-    "torchlens/backends/tinygrad/backend.py": 3400,
+    "torchlens/backends/tinygrad/backend.py": 3250,
     # 3250 -> 2600 (2026-11-01 preview-protocol union): the intermediate-tap
     # observers moved to _tap_observers.py and the derived-gradient oracle
     # helpers to _grad_oracle.py (measured 2573); next 50-line step above it.
