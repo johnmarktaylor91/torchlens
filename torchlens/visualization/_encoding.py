@@ -181,9 +181,8 @@ _DERIVED_COMPOSITE_INPUTS: dict[str, tuple[str, ...]] = {
     "module_call_depth": ("modules",),
 }
 
-#: ``pass_index`` is the Layer's single-pass convenience property over the
-#: op field ``pass_number``; both read per pass.
-_PER_PASS_FIELDS = frozenset({"func_duration", "fx_call_index", "pass_number", "pass_index"})
+#: ``pass_index`` is the Layer's single-pass property over the op field ``pass_number``.
+_PER_PASS_FIELDS = frozenset({"func_duration", "fx_call_index", "pass_index"})
 
 _SHAPE_FIELDS = frozenset({"shape", "transformed_out_shape"})
 
