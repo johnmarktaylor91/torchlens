@@ -5,6 +5,8 @@ recorder still call by name.
 """
 
 import copy
+import dataclasses
+import inspect
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -383,6 +385,29 @@ def _run_model_and_save_specified_outs(
 
 _REQUEST_POSITIONALS = frozenset({"model", "input_args", "input_kwargs"})
 
+_PLAN_DEFAULTS: dict[str, Any] = {
+    name: parameter.default
+    for name, parameter in inspect.signature(_run_model_and_save_specified_outs).parameters.items()
+    if parameter.default is not inspect.Parameter.empty
+}
+"""Default value of every run keyword, read once from the keyword adapter's signature."""
+
+
+def _with_plan_defaults(request: CaptureRequest) -> CaptureRequest:
+    """Complete the request's plan with the adapter defaults for any keyword the door left out.
+
+    The door builds the plan from its resolved state; refresh-only keywords
+    (``_resolved_layer_nums_to_save``, ``_resolved_grad_layer_nums_to_save``,
+    ``_refresh_projection_capture``) are supplied only by the refresh path, so a
+    plain capture's plan takes the adapter's defaults for them.
+    """
+
+    plan = dict(request.plan or {})
+    missing = {name: value for name, value in _PLAN_DEFAULTS.items() if name not in plan}
+    if not missing:
+        return request
+    return dataclasses.replace(request, plan={**missing, **plan})
+
 
 def _configure_runtime_context(r: SimpleNamespace) -> None:
     """Reset and configure the process-global capture runtime context.
@@ -601,7 +626,7 @@ def run_capture(request: CaptureRequest) -> ForwardResult:
         The populated trace with the arm it settled on (``completed``, or
         ``halted`` when a halt predicate returned a partial trace).
     """
-    trace = _run_resolved_request(_resolved_request(request))
+    trace = _run_resolved_request(_resolved_request(_with_plan_defaults(request)))
     return ForwardResult(
         trace=trace,
         request=request,

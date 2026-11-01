@@ -29,11 +29,8 @@ from ..._utils.introspection import (
     nested_assign,
 )
 from ...recording.types import CaptureSpec, StorageIntent
+from ._ops_containers import _walk_output_tensors_with_paths, runnable_output_losslessness
 from .buffer_writes import reconcile_buffer_writes
-from .ops import (
-    _walk_output_tensors_with_paths,
-    runnable_output_losslessness,
-)
 
 if TYPE_CHECKING:
     from torchlens.backends.torch.backend import TorchBackend
