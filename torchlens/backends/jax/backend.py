@@ -9,7 +9,7 @@ import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from typing import Any, Final, NamedTuple, cast
 
 from ..._capture._nonfinite_prefix import strip_raw_label_suffix
@@ -77,7 +77,6 @@ from ...validation.status import (
     ValidationStatus,
     count_importer_region_annotations,
 )
-from .._constants import CONSTANT_PARENT_PAYLOAD_REASON, CONSTANT_PRODUCER_LEAF_REASON
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
     JAX_PREVIEW_TRACE_OPTION_POLICY,
@@ -105,6 +104,12 @@ from ._trace_graph_helpers import (
     _saved_region_boundary_outputs,
     _saved_single_output,
     _values_close,
+)
+from ._validation_log import (
+    _JaxValidationLog,
+    _JaxVerdict,
+    _record_jax_constant_leaves,
+    _record_jax_decision,
 )
 from .jaxpr import (
     ALL_JAX_EQUATION_KINDS,
@@ -3945,80 +3950,6 @@ def _grad_path_for_argnum(argnum: int, local_path: str) -> str:
     if argnum == 0:
         return f"params{suffix}"
     return f"inputs.{argnum - 1}{suffix}"
-
-
-@dataclass
-class _JaxValidationLog:
-    """Per-run validation decisions (never stored on the trace: it is not portable state)."""
-
-    decisions: list[dict[str, Any]] = field(default_factory=list)
-    first_failure: tuple[str, str, str] | None = None
-    exempted_reason_counts: dict[str, int] = field(default_factory=dict)
-
-
-class _JaxVerdict(NamedTuple):
-    """The phase, decision and reason of one per-op validation decision."""
-
-    phase: str
-    decision: str
-    reason: str
-
-
-def _record_jax_decision(
-    log: _JaxValidationLog,
-    op_label: str,
-    func_name: str,
-    verdict: _JaxVerdict,
-    justification: str | None = None,
-) -> None:
-    """Append one per-op validation decision (torch record shape) to the log.
-
-    The first ``failed`` decision is also kept so the status message can name
-    the offending op.
-    """
-
-    record: dict[str, Any] = {
-        "op_label": op_label,
-        "func_name": func_name,
-        "phase": verdict.phase,
-        "decision": verdict.decision,
-        "reason": verdict.reason,
-    }
-    if justification is not None:
-        record["justification"] = justification
-    log.decisions.append(record)
-    if verdict.decision == "failed" and log.first_failure is None:
-        log.first_failure = (op_label, func_name, verdict.reason)
-
-
-def _record_jax_constant_leaves(trace: Trace, log: _JaxValidationLog) -> None:
-    """Record the constants rule's named leaf decisions for ``constant`` source ops.
-
-    A closure constant has no equation to replay (its saved payload is the
-    record) and nothing upstream to perturb, so it is exempted under the two
-    reasons the constants rule names (item 3).
-    """
-
-    for op in trace.layer_list:
-        if str(getattr(op, "func_name", "")) != "constant":
-            continue
-        label = str(getattr(op, "label", ""))
-        _record_jax_decision(
-            log,
-            label,
-            "constant",
-            _JaxVerdict("replay", "exempted", CONSTANT_PRODUCER_LEAF_REASON),
-            "closure constant: its saved payload is the record",
-        )
-        _record_jax_decision(
-            log,
-            label,
-            "constant",
-            _JaxVerdict("perturbation", "exempted", CONSTANT_PARENT_PAYLOAD_REASON),
-            "closure constant: no upstream op to perturb",
-        )
-        for reason in (CONSTANT_PRODUCER_LEAF_REASON, CONSTANT_PARENT_PAYLOAD_REASON):
-            log.exempted_reason_counts[reason] = log.exempted_reason_counts.get(reason, 0) + 1
 
 
 def _readable_closure_consts(closed_jaxpr: Any) -> tuple[Any, ...]:
