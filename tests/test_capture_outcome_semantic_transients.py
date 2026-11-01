@@ -209,7 +209,7 @@ def test_plain_pickle_never_carries_the_live_tokenizer(halt: bool) -> None:
     """
 
     model = _model_with_tokenizer()
-    kwargs = {"halt": tl.func("relu")} if halt else {}
+    kwargs = {"stop_after": tl.func("relu")} if halt else {}
     trace = tl.trace(
         model,
         torch.ones(1, 3),

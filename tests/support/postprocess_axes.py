@@ -397,16 +397,15 @@ def _axis_lookback(tmp_dir: str, *, streaming: bool, transform: bool) -> Any:
     kwargs: dict[str, Any] = {"save": tl.func("relu")}
     if streaming:
         kwargs["storage"] = tl.to_disk(Path(tmp_dir) / "lookback.tlspec")
+    capture_fields: dict[str, Any] = {"lookback": 2, "lookback_payload_policy": "detached_raw"}
     if transform:
         # Capture transforms compose with the independent save predicate.
-        kwargs["capture"] = tl.options.CaptureOptions(
-            activation_transform=lambda t: t.detach() * 1.0
-        )
+        capture_fields["activation_transform"] = lambda t: t.detach() * 1.0
     return tl.trace(
         model,
         model_input,
         **kwargs,
-        capture=tl.options.CaptureOptions(lookback=2, lookback_payload_policy="detached_raw"),
+        capture=tl.options.CaptureOptions(**capture_fields),
     )
 
 
