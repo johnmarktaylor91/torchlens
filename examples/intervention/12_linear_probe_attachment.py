@@ -2,7 +2,7 @@
 
 What this demonstrates
 ----------------------
-Hooks can collect side-channel readouts through ``ctx.run_ctx`` while leaving
+Hooks can collect side-channel readouts through ``ctx.run_state`` while leaving
 the out unchanged.
 
 How to run
@@ -49,7 +49,7 @@ def main() -> None:
     def readout(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Store probe scores and leave the out unchanged."""
 
-        ctx.run_ctx.setdefault("probe_scores", []).append(probe(out).detach())
+        ctx.run_state.setdefault("probe_scores", []).append(probe(out).detach())
         return out
 
     edited = log.fork("probe")
