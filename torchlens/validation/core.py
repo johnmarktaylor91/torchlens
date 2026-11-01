@@ -73,6 +73,15 @@ from ._replay_device import (
 )
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
 from ._replay_warnings import replay_warnings_ignored
+from ._saved_outs_steps import (
+    _check_metadata_invariants_recorded,
+    _fail_bfs_incomplete,
+    _fail_dispatch_census,
+    _fail_output_count_mismatch,
+    _finish_run_status,
+    _record_dispatch_census_decision,
+    _reset_run_diagnostics,
+)
 from ._script_metadata_proof import script_metadata_only_proof
 from ._shift_probe import LIFT_MIN_ENTRY_STRATEGY, VALUE_STEP_STRATEGIES, lift_min_entry_values
 from ._source_provenance import check_source_provenance
@@ -871,24 +880,7 @@ def _validate_saved_outs_run(
     # test stays green, so the entry point proves the judge on known
     # sentinel pairs before trusting any verdict it produces.
     _comparator_self_test()
-
-    # Diagnostics side-channel: clear any stale failure from a prior run so a
-    # report reflects THIS validation only. ADD-ONLY -- never affects the result.
-    from .diagnostics import (
-        CHECK_COMPLETENESS,
-        CHECK_GROUND_TRUTH,
-        CHECK_OUTPUT_MISSING,
-        ValidationFailure,
-        describe_tensor_mismatch,
-        record_validation_failure,
-        reset_validation_diagnostics,
-        reset_validation_failure,
-    )
-
-    reset_validation_failure(self)
-    # THIS-run semantics for the diagnostics ledger too (b8 B8-43): only the
-    # failure slot was reset here, so diagnostics accumulated across runs.
-    reset_validation_diagnostics(self)
+    _reset_run_diagnostics(self)
     # Per-run cache for the orphan-arg sweep; stale entries from a previous
     # validation of a since-mutated trace must never leak into this run.
     self.__dict__.pop(_ORPHAN_CANDIDATE_INDEX_KEY, None)
@@ -896,184 +888,128 @@ def _validate_saved_outs_run(
 
     dispatch_count_result = _dispatch_op_count_matches_capture(self)
     if dispatch_count_result.failed:
-        dispatch_count = getattr(self, "_validation_dispatch_op_count")
-        captured_count = int(
-            getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
-        )
-        pruned_count = int(getattr(self, "_validation_pruned_dispatchable_op_count", 0))
-        buffer_write_count = int(getattr(self, "_validation_buffer_write_dispatch_op_count", 0))
-        message = (
-            "Validation dispatcher op count does not match captured operation count: "
-            f"{dispatch_count} dispatched vs {captured_count} captured "
-            f"+ {pruned_count} orphan-pruned + {buffer_write_count} buffer-write."
-        )
-        if verbose:
-            print(message)
-        record_validation_failure(
-            self,
-            ValidationFailure(
-                check_name=CHECK_COMPLETENESS,
-                message=message,
-                extra={
-                    "dispatch_op_count": dispatch_count,
-                    "captured_op_count": captured_count,
-                    "orphan_pruned_op_count": pruned_count,
-                    "buffer_write_op_count": buffer_write_count,
-                },
-            ),
-        )
-        decision_recorder.record(
-            op_label=None,
-            func_name=None,
-            phase="metadata",
-            decision="failed",
-            reason=dispatch_count_result.reason,
-        )
-        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-        setattr(self, "_validation_replay_status", status)
-        return status
-    if dispatch_count_result.decision == "validated":
-        # Positive census coverage is part of the verdict record: a passed
-        # status now carries auditable evidence the dispatch census matched.
-        decision_recorder.record(
-            op_label=None,
-            func_name=None,
-            phase="metadata",
-            decision="validated",
-            reason=dispatch_count_result.reason,
-        )
-    elif dispatch_count_result.decision == "unverified":
-        # Round-26 W3-4a: an UNVERIFIED census result used to be silently
-        # DISCARDED, so nothing in the trace recorded that the completeness
-        # backstop never ran. It is now recorded on the add-only diagnostics
-        # side-channel so the fact is auditable per-trace. It deliberately
-        # does NOT flip the aggregate verdict: (1) ``dispatch_op_count_
-        # witness_empty`` is the documented correct-by-design carve-out for
-        # captures whose only ops legitimately dispatch nothing (see
-        # ``_dispatch_op_count_matches_capture``; hard-failing it false-fails
-        # a correct model with a locked regression test), and (2)
-        # ``dispatch_op_count_not_collected`` is every Trace-method validation
-        # of a capture that ran without the shadow witness -- flipping those
-        # to non-passed would break the method's bool contract on every
-        # correct model. The silent-drop class the census exists to catch is
-        # instead caught structurally on this path by the orphan-arg sweep
-        # (``_check_unattributed_arg_slots``) and the hardened
-        # ``graph_connectivity`` invariant; the census stays the authoritative
-        # backstop on the public ``torchlens.validation.validate_forward_pass`` path,
-        # which always collects it.
-        from .diagnostics import ValidationDiagnostic, record_validation_diagnostic
-
-        record_validation_diagnostic(
-            self,
-            ValidationDiagnostic(
-                check_name="completeness_census_unverified",
-                message=(
-                    "The aten dispatch census did not run for this validation "
-                    f"({dispatch_count_result.reason}); completeness is backstopped "
-                    "structurally, not by dispatch counting."
-                ),
-                extra={"reason": dispatch_count_result.reason},
-            ),
-        )
+        return _fail_dispatch_census(self, decision_recorder, dispatch_count_result, verbose)
+    _record_dispatch_census_decision(self, decision_recorder, dispatch_count_result)
 
     # Initial check: logged outputs must match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
     if not getattr(self, "halted", False):
-        if len(self.output_layers) != len(ground_truth_output_tensors):
-            message = (
-                "Trace output boundary count does not match ground truth: "
-                f"{len(self.output_layers)} logged vs {len(ground_truth_output_tensors)} expected."
-            )
+        failed_status = _check_ground_truth_outputs(
+            self, ground_truth_output_tensors, verbose, decision_recorder
+        )
+        if failed_status is not None:
+            return failed_status
+
+    validated_op_labels = _replay_parents_from_seeds(self, verbose, decision_recorder)
+    if validated_op_labels is None:
+        return _finish_run_status(self, decision_recorder)
+
+    # Completeness check: BFS must visit every op in the graph, counted at
+    # PASS-QUALIFIED grain. Counting bare layer labels let a phantom extra
+    # pass of a legitimate multi-pass layer hide behind its reached siblings
+    # whenever the metadata invariants were skipped.
+    expected_ops = {op.label for op in self.layer_list}
+    if len(validated_op_labels) < len(expected_ops):
+        return _fail_bfs_incomplete(
+            self, decision_recorder, validated_op_labels, expected_ops, verbose
+        )
+
+    _check_metadata_invariants_recorded(
+        self, decision_recorder, resolved_callables, validate_metadata
+    )
+    # Source-less tensor args replay fine from saved args; a gap records a failure here.
+    check_source_provenance(self, decision_recorder, verbose)
+    return _finish_run_status(self, decision_recorder)
+
+
+def _check_ground_truth_outputs(
+    self: "Trace",
+    ground_truth_output_tensors: list[torch.Tensor],
+    verbose: bool,
+    decision_recorder: ValidationDecisionRecorder,
+) -> ValidationStatus | None:
+    """Compare every logged output against ground truth; return the failed status, else None."""
+    from .diagnostics import (
+        CHECK_GROUND_TRUTH,
+        CHECK_OUTPUT_MISSING,
+        ValidationFailure,
+        describe_tensor_mismatch,
+        record_validation_failure,
+    )
+
+    if len(self.output_layers) != len(ground_truth_output_tensors):
+        return _fail_output_count_mismatch(
+            self, ground_truth_output_tensors, verbose, decision_recorder
+        )
+    output_label_counts: dict[str, int] = defaultdict(int)
+    for i, output_layer_label in enumerate(self.output_layers):
+        output_layer = _resolve_output_entry_for_index(
+            self, output_layer_label, output_label_counts
+        )
+        if output_layer.out is None:
             if verbose:
-                print(message)
+                print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
             record_validation_failure(
                 self,
                 ValidationFailure(
                     check_name=CHECK_OUTPUT_MISSING,
-                    message=message,
-                    extra={
-                        "logged_output_count": len(self.output_layers),
-                        "ground_truth_output_count": len(ground_truth_output_tensors),
-                    },
+                    op_label=output_layer_label,
+                    message=f"output layer #{i} has no saved out",
                 ),
             )
-            decision_recorder.record(
-                op_label=None,
-                func_name=None,
-                phase="ground_truth",
-                decision="failed",
-                reason="output_count_mismatch",
-            )
-            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-            setattr(self, "_validation_replay_status", status)
-            return status
-        output_label_counts: dict[str, int] = defaultdict(int)
-        for i, output_layer_label in enumerate(self.output_layers):
-            output_layer = _resolve_output_entry_for_index(
-                self, output_layer_label, output_label_counts
-            )
-            if output_layer.out is None:
-                if verbose:
-                    print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
-                record_validation_failure(
-                    self,
-                    ValidationFailure(
-                        check_name=CHECK_OUTPUT_MISSING,
-                        op_label=output_layer_label,
-                        message=f"output layer #{i} has no saved out",
-                    ),
-                )
-                decision_recorder.record(
-                    op_label=output_layer_label,
-                    func_name=getattr(output_layer, "func_name", None),
-                    phase="ground_truth",
-                    decision="failed",
-                    reason="output_missing",
-                )
-                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-                setattr(self, "_validation_replay_status", status)
-                return status
-            if not _ground_truth_output_matches_saved(
-                output_layer.out, ground_truth_output_tensors[i]
-            ):
-                if verbose:
-                    print(
-                        f"The {i}th output layer, {output_layer_label}, does not "
-                        "match the ground truth output tensor."
-                    )
-                record_validation_failure(
-                    self,
-                    describe_tensor_mismatch(
-                        output_layer.out,
-                        ground_truth_output_tensors[i],
-                        check=CHECK_GROUND_TRUTH,
-                        op_label=output_layer_label,
-                        func_name=getattr(output_layer, "func_name", None),
-                        message=f"output #{i} does not match ground truth",
-                    ),
-                )
-                decision_recorder.record(
-                    op_label=output_layer_label,
-                    func_name=getattr(output_layer, "func_name", None),
-                    phase="ground_truth",
-                    decision="failed",
-                    reason="ground_truth_mismatch",
-                )
-                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-                setattr(self, "_validation_replay_status", status)
-                return status
             decision_recorder.record(
                 op_label=output_layer_label,
                 func_name=getattr(output_layer, "func_name", None),
                 phase="ground_truth",
-                decision="validated",
-                reason="ground_truth_matched",
+                decision="failed",
+                reason="output_missing",
             )
+            return _finish_run_status(self, decision_recorder)
+        if not _ground_truth_output_matches_saved(output_layer.out, ground_truth_output_tensors[i]):
+            if verbose:
+                print(
+                    f"The {i}th output layer, {output_layer_label}, does not "
+                    "match the ground truth output tensor."
+                )
+            record_validation_failure(
+                self,
+                describe_tensor_mismatch(
+                    output_layer.out,
+                    ground_truth_output_tensors[i],
+                    check=CHECK_GROUND_TRUTH,
+                    op_label=output_layer_label,
+                    func_name=getattr(output_layer, "func_name", None),
+                    message=f"output #{i} does not match ground truth",
+                ),
+            )
+            decision_recorder.record(
+                op_label=output_layer_label,
+                func_name=getattr(output_layer, "func_name", None),
+                phase="ground_truth",
+                decision="failed",
+                reason="ground_truth_mismatch",
+            )
+            return _finish_run_status(self, decision_recorder)
+        decision_recorder.record(
+            op_label=output_layer_label,
+            func_name=getattr(output_layer, "func_name", None),
+            phase="ground_truth",
+            decision="validated",
+            reason="ground_truth_matched",
+        )
+    return None
 
-    # BFS backward from outputs + internally terminated layers. A parent is
-    # enqueued once at least one validated child proves a path to the boundary;
-    # validated_child_edges_for_each_layer records all proved child edges for
-    # diagnostics and later completeness checks.
+
+def _replay_parents_from_seeds(
+    self: "Trace", verbose: bool, decision_recorder: ValidationDecisionRecorder
+) -> set[str] | None:
+    """Replay parents breadth-first from the seed ops; return reached op labels, or None on failure.
+
+    BFS backward from outputs + internally terminated layers. A parent is
+    enqueued once at least one validated child proves a path to the boundary;
+    validated_child_edges_for_each_layer records all proved child edges for
+    diagnostics and later completeness checks.
+    """
     validated_child_edges_for_each_layer: dict[str, set[str]] = defaultdict(set)
     seed_ops: dict[str, Op] = {}
     seed_output_label_counts: dict[str, int] = defaultdict(int)
@@ -1106,84 +1042,8 @@ def _validate_saved_outs_run(
                 decision_recorder,
             )
         if parents_valid.failed:
-            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-            setattr(self, "_validation_replay_status", status)
-            return status
-
-    # Completeness check: BFS must visit every op in the graph, counted at
-    # PASS-QUALIFIED grain. Counting bare layer labels let a phantom extra
-    # pass of a legitimate multi-pass layer hide behind its reached siblings
-    # whenever the metadata invariants were skipped.
-    expected_ops = {op.label for op in self.layer_list}
-    if len(validated_op_labels) < len(expected_ops):
-        unreached = expected_ops - validated_op_labels
-        if verbose:
-            print(
-                f"All saved outs were accurate, but some ops were not reached (check "
-                f"that child args logged accurately): {unreached}"
-            )
-        record_validation_failure(
-            self,
-            ValidationFailure(
-                check_name=CHECK_COMPLETENESS,
-                message=(
-                    f"BFS reached {len(validated_op_labels)}/{len(expected_ops)} ops; "
-                    f"{len(unreached)} unreached (e.g. {sorted(unreached)[:3]})"
-                ),
-                extra={"n_unreached": len(unreached)},
-            ),
-        )
-        decision_recorder.record(
-            op_label=None,
-            func_name=None,
-            phase="metadata",
-            decision="failed",
-            reason="bfs_incomplete",
-        )
-        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-        setattr(self, "_validation_replay_status", status)
-        return status
-
-    # Metadata invariant checks (after out validation ops) read the loaded
-    # artifact as loaded: the replay-phase callables are released first.
-    from ._loaded_callables import release_loaded_callables
-
-    release_loaded_callables(resolved_callables or [])
-    if validate_metadata:
-        from .invariants import check_metadata_invariants
-
-        try:
-            check_metadata_invariants(self)
-        except Exception as invariant_error:
-            # ADD-ONLY: record the firing invariant on the side-channel, then
-            # RE-RAISE unchanged. The invariant remains a hard tripwire -- this
-            # only captures its identity for downstream reporting.
-            from .diagnostics import (
-                CHECK_METADATA_INVARIANT,
-                ValidationFailure,
-                record_validation_failure,
-            )
-
-            record_validation_failure(
-                self,
-                ValidationFailure(
-                    check_name=CHECK_METADATA_INVARIANT,
-                    message=f"{type(invariant_error).__name__}: {invariant_error}",
-                ),
-            )
-            decision_recorder.record(
-                op_label=None,
-                func_name=None,
-                phase="metadata",
-                decision="failed",
-                reason="metadata_invariant_exception",
-            )
-            raise
-    # Source-less tensor args replay fine from saved args; a gap records a failure here.
-    check_source_provenance(self, decision_recorder, verbose)
-    status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-    setattr(self, "_validation_replay_status", status)
-    return status
+            return None
+    return validated_op_labels
 
 
 def validate_parents_of_saved_layer(
