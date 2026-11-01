@@ -189,7 +189,6 @@ unit = op.receptive_field.center_unit(batch_index=0)
 # Highlight the ancestor cone in the graph drawing.
 trace.draw(
     node_spec_fn=tl.receptive_field.node_spec(op, unit=unit),
-    vis_save_only=True,
     file_format="svg",
 )
 

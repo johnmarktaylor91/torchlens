@@ -251,7 +251,7 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
             torch.compile(_Tiny(), backend="eager"),
             input_tensor,
             visualization=tl.options.VisualizationOptions(
-                container_path=str(graph_path), save_only=True, file_format="svg"
+                container_path=str(graph_path), file_format="svg"
             ),
         )
     assert "_orig_mod" not in graph_path.with_suffix(".svg").read_text()

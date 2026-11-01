@@ -118,11 +118,10 @@ def test_rank_render_ir_semantic_golden(tmp_path: Path) -> None:
     try:
         source = trace.draw(
             path=str(tmp_path / "rank_semantics"),
-            vis_save_only=True,
             file_format="svg",
-            vis_node_placement="rank",
+            layout="rank",
             order_siblings=False,
-        )
+        ).dot
     finally:
         trace.cleanup()
     assert source is not None

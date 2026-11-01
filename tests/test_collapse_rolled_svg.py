@@ -272,10 +272,9 @@ def _real_rolled_op_count(trace):
 def _rolled_draw(trace, tmp_path, tag, level):
     out = tmp_path / f"{tag}_{level}"
     trace.draw(
-        vis_save_only=True,
         file_format="svg",
         collapse=level,
-        vis_mode="rolled",
+        rolled=True,
         path=str(out),
     )
     return str(out) + ".svg"
@@ -490,7 +489,6 @@ def test_unrolled_conservation_unchanged(fixture, tmp_path):
     plan = trace.collapse_plan(mode="max")
     out = tmp_path / f"{fixture}_unrolled"
     trace.draw(
-        vis_save_only=True,
         file_format="svg",
         collapse="max",
         path=str(out),

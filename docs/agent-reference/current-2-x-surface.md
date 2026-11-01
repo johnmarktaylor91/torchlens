@@ -169,9 +169,8 @@
   gold); derived-semantics claims (`decode_output`/`output_table`) refuse
   `nongold_semantics_unavailable` on synthesized values and the first raw `Layer.out`
   read warns once per trace (`nongold_raw_value_read`, internal readers ack via
-  `torchlens._quickstart.internal_read()`). `render(model, ...)` (home
-  `torchlens._user_funcs.render`; `tl.render` root spelling awaits the F35 registration
-  sweep) is a curated facade over the resolver + `Trace.draw`: metadata-only pinned
+  `torchlens._quickstart.internal_read()`). `tl.draw(model, ...)` (home
+  `torchlens._quickstart.draw`; the root export rides the glossary regeneration) is a curated facade over the resolver + `Trace.draw`: metadata-only pinned
   eval/no-grad capture with flags/RNG/norm-buffers restored and state-dict-hash
   verified, `collapse="auto"` as its default (by design: THERE ONLY -- `Trace.draw`
   keeps `"none"`), detached `Drawing` (owns DOT/bytes/path/provenance/receipt,
@@ -322,7 +321,7 @@
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
   `torchlens._visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
   `torchlens._visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
-  and key (member lists only where members differ), and `trace.draw_backward(theme="dark")`
+  and key (member lists only where members differ), and `trace.draw(graph="backward", theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiment_ledger.md`):
@@ -432,7 +431,7 @@
   with channels active. Typed refusals: `encoding_source_invalid`, `encoding_value_invalid`
   (bools and non-scalar tensors refuse — a bool is not a magnitude), `encoding_callable_error`
   (chains the user exception), `encoding_requires_dot_layout`.
-- `Trace.draw(size_by=..., scale="sqrt"|"linear")` (UNSTABLE spellings, keyword-only) is the
+- `Trace.draw(size_by=..., size_scale="sqrt"|"linear")` (UNSTABLE spellings, keyword-only) is the
   wave-1 SIZE channel, shipped with the D4 DEFAULT APPLIED (D4 unruled at merge: sqrt scale +
   conservative area-only mapping + typed refusal on rolled varying sources). Sources: a scalar
   record field, the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
@@ -491,7 +490,7 @@
   only pathological inputs (raw ops above 20x the constant) still decline outright
   (`collapse_pathological_skip`; `collapse_plan()` refuses `collapse_plan_unavailable`;
   the schedule degrades to one full-graph step). Context reductions (`module=` focus,
-  `vis_call_depth`, rolled mode) genuinely re-admit the quality planner.
+  `depth=`, rolled mode) genuinely re-admit the quality planner.
 - The committed collapse reference SVGs (`docs/images/collapse`) are rendered with libpango
   1.52. Hosts with an older Pango (1.44, the Ubuntu 20.04 packages) lay text out at different
   widths, so `scripts/render_collapse_reference.py --check` and the schema-lockstep
@@ -1586,9 +1585,9 @@
   `Gemma2RMSNorm` serves `inv_rms` (its `rsqrt` output). Doc of record:
   `docs/reference/attribution.md`.
 - Attribution graph overlay and uploads (DOCUMENTED-UNSTABLE):
-  `tl.attribution.overlay(trace, graph, *, reduce="abs_sum", graph_value=None)` paints each
-  site holding feature or error nodes with the `reduce` total of its nodes' influence
-  (`graph_value="activation"`: feature activations) for `trace.draw(color_by=...)`.
+  `trace.draw(color_by=graph)` paints each site holding feature or error nodes with the
+  `abs_sum` total of its nodes' influence (a site-to-value mapping paints feature activations
+  or any other quantity).
   `tl.attribution.graph.upload_to_neuronpedia(exported, *, api_key)` publishes the dict
   `to_neuronpedia` returned (or its file) through Neuronpedia's documented two-step upload and
   returns the page URL; `Direction.upload_to_neuronpedia(*, api_key, scan, vector_label,

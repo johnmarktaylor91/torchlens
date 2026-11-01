@@ -91,11 +91,10 @@ def _render_and_parse(
     torch.manual_seed(0)
     trace = tl.trace(model, x)
     dot = trace.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / name),
         **kwargs,
-    )
+    ).dot
     parsed = parse_layout_json(run_layout_json(dot, "dot"), engine="dot", dot_source=dot)
     return dot, parsed, audit_layout(parsed)
 
@@ -154,7 +153,7 @@ def test_parallel_same_pair_arg_edges_merge_into_one_edge(tmp_path: Path) -> Non
 
     n = 6
     dot, parsed, result = _render_and_parse(
-        _CollapsedFan(n), torch.zeros(1, 3, 8, 8), tmp_path, "samepair", vis_call_depth=1
+        _CollapsedFan(n), torch.zeros(1, 3, 8, 8), tmp_path, "samepair", depth=1
     )
     assert result.hard_violation_count == 0, result.describe("samepair")
     # Full row inventory on the midpoint channel...
@@ -175,7 +174,7 @@ def test_rolled_mode_high_fanin_relocates(tmp_path: Path) -> None:
     """The rolled (Layer) counting branch honors the same fan-in gate."""
 
     dot, parsed, result = _render_and_parse(
-        _FanCat(8), torch.zeros(1, 3, 8, 8), tmp_path, "fanrolled", vis_mode="rolled"
+        _FanCat(8), torch.zeros(1, 3, 8, 8), tmp_path, "fanrolled", rolled=True
     )
     assert result.hard_violation_count == 0, result.describe("fanrolled")
     assert len(_arg_texts(parsed, ("edge-midpoint",))) == 8

@@ -185,10 +185,9 @@ def _validate_fold_repeats(value: FoldRepeatsLiteral) -> None:
 # ``'yes'`` or ``'no'`` used to be accepted silently, and ``'no'``/``'false'``
 # truthily meant ON (R64-F3).
 _VISUALIZATION_BOOL_FIELDS = (
-    "save_only",
+    "rolled",
+    "open_viewer",
     "show_cone",
-    "for_paper",
-    "return_graph",
     "order_siblings",
 )
 

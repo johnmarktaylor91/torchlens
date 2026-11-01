@@ -56,7 +56,7 @@ def test_orphan_models_render_and_validate_with_either_visibility(
     trace = tl.trace(model, torch.ones(1, 4), capture=tl.options.CaptureOptions(keep_orphans=True))
     assert trace.graph.orphans
 
-    dot = trace.draw(show_orphans=show_orphans, return_graph=True, vis_save_only=True)
+    dot = trace.draw(show_orphans=show_orphans).dot
     source = dot.source if isinstance(dot, graphviz.Digraph) else str(dot)
 
     assert ("cluster_orphans" in source) is show_orphans
@@ -67,7 +67,7 @@ def test_show_orphans_renders_island_cluster() -> None:
     """``show_orphans=True`` emits a dashed orphan cluster with the island nodes."""
 
     trace = _orphan_trace()
-    dot = trace.draw(show_orphans=True, return_graph=True, vis_save_only=True)
+    dot = trace.draw(show_orphans=True).dot
     source = dot.source if isinstance(dot, graphviz.Digraph) else str(dot)
 
     assert "cluster_orphans" in source
@@ -79,7 +79,7 @@ def test_orphans_hidden_by_default() -> None:
     """Without ``show_orphans`` the island stays out of the rendered graph."""
 
     trace = _orphan_trace()
-    dot = trace.draw(return_graph=True, vis_save_only=True)
+    dot = trace.draw().dot
     source = dot.source if isinstance(dot, graphviz.Digraph) else str(dot)
 
     assert "cluster_orphans" not in source
@@ -110,7 +110,7 @@ def test_default_orphans_warn_instead_of_rendering_empty_cluster() -> None:
     trace = tl.trace(WithOrphanIsland(), torch.ones(1, 4))
 
     with pytest.warns(UserWarning, match="re-trace with keep_orphans=True"):
-        dot = trace.draw(show_orphans=True, return_graph=True, vis_save_only=True)
+        dot = trace.draw(show_orphans=True).dot
     source = dot.source if isinstance(dot, graphviz.Digraph) else str(dot)
 
     assert not trace.graph.orphans
@@ -122,7 +122,7 @@ def test_orphans_do_not_mask_num_ops_self_consistency_failure(show_orphans: bool
     """A bad aggregate count still fails regardless of orphan visibility."""
 
     trace = _orphan_trace()
-    trace.draw(show_orphans=show_orphans, return_graph=True, vis_save_only=True)
+    trace.draw(show_orphans=show_orphans)
     assert check_metadata_invariants(trace) is True
 
     trace.num_ops += 1
@@ -150,7 +150,7 @@ def test_sf63_orphan_label_display_never_leaks_the_placeholder() -> None:
     # Pre-fix record truth: the persisted field still ships the placeholder.
     assert all(record.get("label") is None for record in trace.orphan_records)
     # Display truth: real labels render inside the island cluster...
-    dot = trace.draw(show_orphans=True, vis_save_only=True, return_graph=True)
+    dot = trace.draw(show_orphans=True).dot
     source = dot.source if hasattr(dot, "source") else str(dot)
     for orphan_label in ("randn_1_1", "mul_1_2"):
         assert orphan_label in source

@@ -2,7 +2,7 @@
 
 The quickstart package (workstream F17; quickstart panel memo of record
 2026-08-26) owns the three-rung input ladder shared by ``tl.summary``,
-``tl.render``, and ``tl.trace``:
+``tl.draw``, and ``tl.trace``:
 
 - rung 1 (gold): a real input -- TorchLens guesses nothing;
 - rung 2: ``input_shape=`` -- your shape, synthesized values, disclosed;
@@ -18,6 +18,7 @@ stable spellings are the verbs themselves.
 
 from __future__ import annotations
 
+from ..viz._drawing import Drawing
 from ._gate import (
     internal_read,
     is_gold,
@@ -34,7 +35,7 @@ from ._provenance import (
     provenance_to_record,
     trace_input_provenance,
 )
-from ._render import Drawing, render
+from ._render import draw
 from ._resolve import ResolvedInputs, attach_provenance, resolve_inputs
 
 __tl_layer__ = "FACADE"
@@ -44,8 +45,8 @@ __tl_layer__ = "FACADE"
 #: on the root facade). Keys are requested ``tl.<name>`` spellings; values
 #: are ``(home_module, attribute)`` rows in ``_LAZY_ATTRS`` form.
 ROOT_SURFACE_REGISTRATION: dict[str, tuple[str, str]] = {
-    "render": ("torchlens._user_funcs", "render"),
-    "Drawing": ("torchlens._quickstart", "Drawing"),
+    "draw": ("torchlens._user_funcs", "draw"),
+    "Drawing": ("torchlens.viz", "Drawing"),
 }
 
 __all__ = [
@@ -63,7 +64,7 @@ __all__ = [
     "parse_input_size",
     "provenance_from_record",
     "provenance_to_record",
-    "render",
+    "draw",
     "require_gold",
     "resolve_inputs",
     "resolve_rung",

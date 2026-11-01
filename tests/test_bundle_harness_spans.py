@@ -458,7 +458,6 @@ def test_members_render_draws_rows_as_labelled_edges(tmp_path: Path, model: _Tin
         bundle,
         nodes="members",
         path=str(tmp_path / "members"),
-        vis_save_only=True,
         file_format="svg",
     )
     assert source is not None

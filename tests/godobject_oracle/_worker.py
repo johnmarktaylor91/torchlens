@@ -45,11 +45,10 @@ def main() -> int:
             trace = tl.trace(model, model_input)
             for vis_mode in ("unrolled", "rolled"):
                 source = trace.draw(
-                    vis_save_only=True,
                     file_format="svg",
                     path=str(Path(tmp) / f"{key}_{vis_mode}"),
-                    vis_mode=vis_mode,
-                )
+                    rolled=vis_mode == "rolled",
+                ).dot
                 renders[f"viz_{key}_{vis_mode}.gv"] = source
     print(json.dumps(renders))
     return 0

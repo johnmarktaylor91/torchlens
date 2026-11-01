@@ -849,7 +849,7 @@ def test_cleaned_trace_refuses_typed_and_settles_unknown():
         "summary": lambda: trace.summary(),
         "iteration": lambda: list(trace),
         "getitem": lambda: trace["relu_1_2"],
-        "draw": lambda: trace.draw(vis_save_only=True),
+        "draw": lambda: trace.draw(),
         "receptive_fields": lambda: trace.receptive_fields(),
     }
     for name, reader in readers.items():

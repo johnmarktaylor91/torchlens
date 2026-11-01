@@ -8,9 +8,7 @@ import torchlens._data_classes.trace as trace_module
 
 EXPECTED_MODELLOG_METHODS = {
     "draw",
-    "render_dagua_graph",
     "to_dagua_graph",
-    "visualization_field_audit",
     "to_pandas",
     "save_new_outs",
     # validate_saved_outs is the validation-core function spelling; the Trace

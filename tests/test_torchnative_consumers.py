@@ -125,7 +125,6 @@ def test_draw_color_by_device_time(mlp_log, tmp_path: Path) -> None:
 
     _synthetic_join_for(mlp_log)
     mlp_log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         color_by="device_time",
@@ -141,7 +140,6 @@ def test_draw_color_by_device_time_refuses_without_join(mlp_log, tmp_path: Path)
 
     with pytest.raises(TorchLensError) as excinfo:
         mlp_log.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / "graph"),
             color_by="device_time",
@@ -155,7 +153,6 @@ def test_draw_size_by_device_time(mlp_log, tmp_path: Path) -> None:
 
     _synthetic_join_for(mlp_log)
     mlp_log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         size_by="device_time",

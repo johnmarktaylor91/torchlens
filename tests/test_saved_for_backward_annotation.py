@@ -69,11 +69,10 @@ def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def test_opt_in_adds_rows_and_default_stays_clean(tmp_path: Path) -> None:
@@ -115,7 +114,7 @@ def test_rolled_multipass_rows_disclose_cross_pass_totals(tmp_path: Path) -> Non
     trace = tl.trace(LoopMlp(), torch.randn(2, 4))
 
     rolled = ROW_RE.findall(
-        _draw(trace, tmp_path / "rolled", vis_mode="rolled", show_saved_for_backward=True)
+        _draw(trace, tmp_path / "rolled", rolled=True, show_saved_for_backward=True)
     )
     unrolled = ROW_RE.findall(_draw(trace, tmp_path / "unrolled", show_saved_for_backward=True))
 

@@ -574,10 +574,9 @@ def test_rolled_forward_graph_supports_grad_arrows(tmp_path: Path) -> None:
     )
     trace[trace.output_layers[0]].out.backward()
     dot = trace.draw(
-        vis_mode="rolled",
+        rolled=True,
         path=str(tmp_path / "rolled_grad"),
         file_format="dot",
-        vis_save_only=True,
-    )
+    ).dot
 
     assert GRADIENT_ARROW_COLOR in dot

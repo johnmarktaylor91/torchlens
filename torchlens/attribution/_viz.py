@@ -1,4 +1,4 @@
-"""Graph overlay bridging attribution results onto ``Trace.draw`` encoding channels."""
+"""The ``color_by=`` resolution of attribution results on ``Trace.draw``."""
 
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ from torch import Tensor
 from torchlens.attribution._core import Attribution, AttributionError
 
 _OverlayReduce: TypeAlias = Literal["abs_sum", "abs_mean", "sum", "max"]
-_GraphValue: TypeAlias = Literal["influence", "activation"]
-_GRAPH_VALUES = ("influence", "activation")
 _DOCS_POINTER = "See docs/reference/attribution.md, section Attribution graphs."
 
 _REDUCERS: dict[str, Callable[[Tensor], float]] = {
@@ -99,7 +97,7 @@ def _graph_entries(trace: Any, graph: Any, graph_value: str, reduce: str) -> dic
             f"The attribution graph holds nodes at {unknown[:3]!r}, which this trace has no "
             "module output or layer label for, so the graph was not built from this trace. "
             "Remedy: draw the trace the graph was built from, "
-            "trace.draw(color_by=tl.attribution.overlay(trace, graph)).",
+            "trace.draw(color_by=graph).",
             code="attribution_overlay_graph_mismatch",
         )
     return {
@@ -108,29 +106,12 @@ def _graph_entries(trace: Any, graph: Any, graph_value: str, reduce: str) -> dic
     }
 
 
-def _check_graph_value(source: Any, graph_value: Any) -> str | None:
-    """The graph value to paint for ``source`` (``None`` for non-graph sources)."""
+def _graph_value_for(source: Any) -> str | None:
+    """``"influence"`` for an attribution graph source, ``None`` otherwise."""
 
     from torchlens.attribution.graph._result import AttributionGraph
 
-    if not isinstance(source, AttributionGraph):
-        if graph_value is not None:
-            raise _overlay_refusal(
-                f"graph_value={graph_value!r} applies only when the source is an "
-                f"AttributionGraph; this source is a {type(source).__name__}. "
-                "Remedy: drop graph_value, tl.attribution.overlay(trace, results).",
-                code="attribution_overlay_argument_invalid",
-            )
-        return None
-    if graph_value is None:
-        return "influence"
-    if graph_value not in _GRAPH_VALUES:
-        raise _overlay_refusal(
-            f"graph_value={graph_value!r} is not one of {list(_GRAPH_VALUES)}. "
-            'Remedy: tl.attribution.overlay(trace, graph, graph_value="activation").',
-            code="attribution_overlay_argument_invalid",
-        )
-    return str(graph_value)
+    return "influence" if isinstance(source, AttributionGraph) else None
 
 
 def _entry_items(source: Any) -> list[tuple[str, Any]]:
@@ -234,74 +215,50 @@ def _classify_entries(
     return module_values, label_values
 
 
-def overlay(
-    trace: Any,
-    source: Any,
-    *,
-    reduce: _OverlayReduce = "abs_sum",
-    graph_value: _GraphValue | None = None,
-) -> Callable[[Any], float | None]:
-    """Build a ``color_by`` callable painting attribution values onto a graph.
+def attribution_color_by(trace: Any, source: Any) -> Callable[[Any], float | None]:
+    """Build the ``color_by`` callable that paints attribution values onto a graph.
 
-    The returned callable maps rendered nodes to scalar magnitudes:
-    nodes that are the output of an attributed module (or match an attributed
-    layer label) receive that layer's reduced value, and every other node
-    returns ``None`` (drawn unencoded, disclosed by the legend's ``n/a`` note).
-    A module fired several times paints its per-layer TOTAL on every node of
-    that module; per-pass splits are not claimed.
+    This is what ``trace.draw(color_by=<attribution result>)`` resolves to.
+    The callable maps rendered nodes to scalar magnitudes: nodes that are
+    the output of an attributed module (or match an attributed layer label)
+    receive that layer's ``abs_sum`` value, and every other node returns
+    ``None`` (drawn unencoded, disclosed by the legend's ``n/a`` note). A
+    module fired several times paints its per-layer TOTAL on every node of
+    that module; per-pass splits are not claimed. Another reduction is a
+    mapping the caller computes and passes to ``color_by`` directly.
 
     An :class:`~torchlens.attribution.graph.AttributionGraph` source paints
-    each site holding feature or error nodes (the MLP a feature's transcoder
-    reads, the MLP output an error node completes) with the ``reduce``
-    total of its nodes' values over every position: by default each node's
-    influence on the logits (circuit-tracer's rule, the quantity
-    :meth:`AttributionGraph.to_neuronpedia` prunes by), or with
-    ``graph_value="activation"`` the feature activations, which leaves
-    sites holding only error nodes unpainted. Token and logit nodes paint
-    nothing. Documented-unstable.
+    each site holding feature or error nodes with the ``abs_sum`` of its
+    nodes' influence on the logits (circuit-tracer's rule, the quantity
+    :meth:`AttributionGraph.to_neuronpedia` prunes by). Token and logit nodes
+    paint nothing.
 
     Parameters
     ----------
     trace
-        Trace the overlay will be drawn on; keys are validated against it.
+        Trace the picture is drawn on; keys are validated against it.
     source
         One layer-scoped :class:`AttributionResult` (``extra['layer']``
-        present), an iterable of them, or a mapping from
+        present), an iterable of them, a mapping from
         ``model.named_modules()`` name or trace layer label to a result,
-        tensor, or real scalar; or an
-        :class:`~torchlens.attribution.graph.AttributionGraph` built from
+        tensor, or real scalar, or an :class:`AttributionGraph` built from
         ``trace``.
-    reduce
-        Closed-vocabulary reduction for tensor values: ``"abs_sum"``
-        (default), ``"abs_mean"``, ``"sum"``, or ``"max"``; for a graph it
-        reduces the node values at each site.
-    graph_value
-        For a graph source only: ``"influence"`` (what ``None`` means) or
-        ``"activation"``.
-
-    Returns
-    -------
-    Callable[[Any], float | None]
-        Named callable for ``trace.draw(color_by=...)``.
 
     Raises
     ------
     AttributionError
-        If ``reduce`` is unknown, or a key matches neither a module output
-        nor a layer label on ``trace``; ``attribution_overlay_argument_invalid``
-        for a ``graph_value`` that is unknown or given with a non-graph
-        source; ``attribution_overlay_graph_mismatch`` for a graph whose
+        If a key matches neither a module output nor a layer label on
+        ``trace``; ``attribution_overlay_graph_mismatch`` for a graph whose
         sites are not on ``trace``.
     """
 
-    if reduce not in _REDUCERS:
-        raise AttributionError(f"reduce must be one of {sorted(_REDUCERS)}; received {reduce!r}")
-    painted = _check_graph_value(source, graph_value)
+    reduce = "abs_sum"
+    painted = _graph_value_for(source)
     if painted is not None:
         source = _graph_entries(trace, source, painted, reduce)
     module_values, label_values = _classify_entries(trace, source, reduce)
 
-    def attribution_overlay(node: Any) -> float | None:
+    def attribution(node: Any) -> float | None:
         """Return the attributed magnitude for one rendered node."""
 
         if getattr(node, "is_input", False) or getattr(node, "is_output", False):
@@ -314,7 +271,7 @@ def overlay(
                 return module_values[address]
         return None
 
-    return attribution_overlay
+    return attribution
 
 
-__all__ = ["overlay"]
+__all__ = ["attribution_color_by"]

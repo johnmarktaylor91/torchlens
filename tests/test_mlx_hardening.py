@@ -604,8 +604,7 @@ def test_mlx_trace_draw_smokes(tmp_path: Path) -> None:
     rendered = trace.draw(
         path=str(tmp_path / "mlx_trace"),
         file_format="pdf",
-        vis_save_only=True,
-    )
+    ).dot
 
     assert rendered is not None
     assert (tmp_path / "mlx_trace.pdf").exists()

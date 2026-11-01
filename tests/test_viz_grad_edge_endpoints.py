@@ -197,10 +197,10 @@ def _assert_edges_attach(dot: str, *, expect_gradient_edges: bool) -> None:
 
 
 _FORWARD_VIEWS: dict[str, dict[str, Any]] = {
-    "unrolled": {"vis_mode": "unrolled"},
-    "rolled": {"vis_mode": "rolled"},
-    "unrolled_collapsed": {"vis_mode": "unrolled", "vis_call_depth": 1},
-    "rolled_collapsed": {"vis_mode": "rolled", "vis_call_depth": 1},
+    "unrolled": {"rolled": False},
+    "rolled": {"rolled": True},
+    "unrolled_collapsed": {"rolled": False, "depth": 1},
+    "rolled_collapsed": {"rolled": True, "depth": 1},
 }
 
 _MODELS: dict[str, Callable[[], nn.Module]] = {
@@ -218,10 +218,9 @@ def test_grad_edges_attach_to_forward_nodes_unrolled_and_rolled(tmp_path: Path) 
         for view in ("unrolled", "rolled"):
             dot = trace.draw(
                 path=str(tmp_path / view),
-                vis_save_only=True,
                 file_format="dot",
-                vis_mode=view,
-            )
+                rolled=view == "rolled",
+            ).dot
             _assert_edges_attach(dot, expect_gradient_edges=True)
     finally:
         trace.cleanup()
@@ -238,10 +237,9 @@ def test_grad_edges_attach_in_every_forward_view(
     try:
         dot = trace.draw(
             path=str(tmp_path / f"{model_name}_{view_name}"),
-            vis_save_only=True,
             file_format="dot",
             **_FORWARD_VIEWS[view_name],
-        )
+        ).dot
         _assert_edges_attach(dot, expect_gradient_edges=True)
     finally:
         trace.cleanup()
@@ -255,10 +253,9 @@ def test_grad_edges_attach_with_repeat_folding(tmp_path: Path, model_name: str) 
     try:
         dot = trace.draw(
             path=str(tmp_path / f"{model_name}_folded"),
-            vis_save_only=True,
             file_format="dot",
             fold_repeats=True,
-        )
+        ).dot
         _assert_edges_attach(dot, expect_gradient_edges=False)
     finally:
         trace.cleanup()
@@ -274,11 +271,11 @@ def test_combined_ties_attach_to_forward_nodes(tmp_path: Path, model_name: str) 
 
     trace = _traced_with_grads(_MODELS[model_name]())
     try:
-        dot = trace.draw_combined(
+        dot = trace.draw(
+            graph="combined",
             path=str(tmp_path / f"{model_name}_combined"),
-            vis_save_only=True,
             file_format="dot",
-        )
+        ).dot
         _assert_edges_attach(dot, expect_gradient_edges=True)
         declared, edges = _dot_nodes_and_edges(dot)
         ties = [edge for edge in edges if edge[2].get("constraint") == "false"]
@@ -295,12 +292,12 @@ def test_backward_graph_edges_attach(tmp_path: Path, model_name: str, view: str)
 
     trace = _traced_with_grads(_MODELS[model_name]())
     try:
-        dot = trace.draw_backward(
+        dot = trace.draw(
+            graph="backward",
             path=str(tmp_path / f"{model_name}_backward_{view}"),
-            vis_save_only=True,
             file_format="dot",
-            vis_mode=view,
-        )
+            rolled=view == "rolled",
+        ).dot
         _assert_edges_attach(dot, expect_gradient_edges=False)
     finally:
         trace.cleanup()

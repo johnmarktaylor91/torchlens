@@ -55,7 +55,6 @@ def _render_with_sidecar(trace, tmp_path: Path, stem: str) -> tuple[str, str]:
         trace,
         path=outpath,
         file_format="svg",
-        vis_save_only=True,
     )
     svg = (tmp_path / f"{stem}.svg").read_text()
     census = (tmp_path / f"{stem}.census.txt").read_text()

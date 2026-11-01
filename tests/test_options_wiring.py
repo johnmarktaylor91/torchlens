@@ -90,7 +90,7 @@ def test_removed_flat_trace_kwargs_refuse(flat_kwargs: dict[str, Any]) -> None:
 def test_visualization_canonical_kwargs_route_without_deprecation() -> None:
     """Canonical visualization kwargs should route to render settings without warnings."""
 
-    options = VisualizationOptions(view="rolled", depth=2, layout="dot", node_style="profiling")
+    options = VisualizationOptions(rolled=True, depth=2, layout="dot", node_style="profiling")
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
         assert options.view == "rolled"

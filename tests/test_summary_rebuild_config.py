@@ -105,7 +105,7 @@ def test_columns_bundle_exact_and_deltas(toy_trace) -> None:
 def test_filter_discloses_coverage_and_preserves_totals(toy_trace) -> None:
     """Filters are presentation-only: coverage named, totals whole-model."""
 
-    filtered = toy_trace.summary(filter="fc1")
+    filtered = toy_trace.summary(where="fc1")
     assert "showing" in filtered
     assert "visible coverage" in filtered
     full = toy_trace.summary()

@@ -15,11 +15,10 @@ def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _nested_model() -> nn.Module:
@@ -55,7 +54,7 @@ def test_collapse_fn_overrides_call_depth(tmp_path: Any) -> None:
 
         return module_log.address == "0"
 
-    dot = _render_dot(log, tmp_path, vis_call_depth=1000, collapse_fn=collapse_fn)
+    dot = _render_dot(log, tmp_path, depth=1000, collapse_fn=collapse_fn)
 
     assert "shape=box3d" in dot
     assert "@0" in dot
@@ -74,7 +73,7 @@ def test_call_depth_unchanged_when_no_collapse_fn(tmp_path: Any) -> None:
 
     log = tl.trace(_nested_model(), torch.randn(1, 4))
 
-    dot = _render_dot(log, tmp_path, vis_call_depth=1)
+    dot = _render_dot(log, tmp_path, depth=1)
 
     assert dot.count("shape=box3d") == 1
     assert "@0" in dot

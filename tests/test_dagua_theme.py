@@ -15,7 +15,26 @@ def test_dagua_renderer_requires_experimental_opt_in() -> None:
     """Core renderer rejects Dagua before the experimental module is imported."""
 
     script = textwrap.dedent(
-        '\nimport torch\nfrom torch import nn\nimport torchlens as tl\n\nclass M(nn.Module):\n    def forward(self, x):\n        return x + 1\n\nlog = tl.trace(M(), torch.ones(1), save=None)\ntry:\n    try:\n        log.draw(vis_renderer="dagua", vis_save_only=True, file_format="svg")\n    except RuntimeError as exc:\n        message = "opt in via `from torchlens.experimental import dagua` first"\n        raise SystemExit(0 if message in str(exc) else 2)\n    raise SystemExit(1)\nfinally:\n    log.cleanup()\n'
+        """
+import torch
+from torch import nn
+import torchlens as tl
+
+class M(nn.Module):
+    def forward(self, x):
+        return x + 1
+
+log = tl.trace(M(), torch.ones(1), save=None)
+try:
+    try:
+        log.draw(renderer="dagua", file_format="svg")
+    except RuntimeError as exc:
+        message = "opt in via `from torchlens.experimental import dagua` first"
+        raise SystemExit(0 if message in str(exc) else 2)
+    raise SystemExit(1)
+finally:
+    log.cleanup()
+"""
     )
     result = subprocess.run(
         [sys.executable, "-c", script],
@@ -31,7 +50,7 @@ def test_trace_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
     model = example_models.AestheticFrozenMix().eval()
     log = trace_fn(model, torch.rand(1, 8), save=None)
     try:
-        graph = dagua.trace_to_dagua_graph(log, vis_mode="unrolled", direction="leftright")
+        graph = dagua.trace_to_dagua_graph(log, rolled=False, direction="leftright")
         labels = [graph.node_labels[i] for i in range(graph.num_nodes)]
         assert any("trainable" in label.lower() for label in labels)
         assert any(node_type == "frozen_params" for node_type in graph.node_types)
@@ -52,11 +71,10 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
     out = tmp_path / "residual.svg"
     try:
         log.draw(
-            vis_renderer="dagua",
+            renderer="dagua",
             theme="torchlens",
-            vis_mode="unrolled",
+            rolled=False,
             direction="leftright",
-            vis_save_only=True,
             file_format="svg",
             path=str(out),
         )

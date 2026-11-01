@@ -54,11 +54,10 @@ def _draw(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor, **kwargs
 
     trace = tl.trace(model, x)
     return trace.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / name),
         **kwargs,
-    )
+    ).dot
 
 
 def test_arrowhead_oracle_known_bad(tmp_path: Path) -> None:

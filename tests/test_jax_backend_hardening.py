@@ -1184,7 +1184,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.autograd.num_backward_edges is None
 
     outpath = tmp_path / "jax_graph"
-    dot = trace.draw(path=str(outpath), vis_save_only=True, file_format="dot")
+    dot = trace.draw(path=str(outpath), file_format="dot").dot
     assert isinstance(dot, str)
 
     audit_path = tmp_path / "jax_audit.tlspec"

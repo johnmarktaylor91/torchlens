@@ -826,10 +826,9 @@ def peek_graph(
         save=None,
     )
     trace.draw(
-        vis_mode=view,
         path=str(container_path),
+        rolled=view == "rolled",
         file_format=file_format,
-        vis_save_only=True,
     )
     return None
 

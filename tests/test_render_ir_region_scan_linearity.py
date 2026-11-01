@@ -109,7 +109,7 @@ def test_region_build_scans_each_collection_a_bounded_number_of_times(
             monkeypatch.setattr(module, "finalize_forward_regions", counting_finalize)
 
     trace = tl.trace(ModuleRichModel(), torch.rand(2, 6))
-    trace.draw(return_graph=True, vis_save_only=True)
+    trace.draw()
 
     assert region_counts, "finalize_forward_regions was never reached"
     regions = max(region_counts)

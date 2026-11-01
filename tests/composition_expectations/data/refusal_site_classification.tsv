@@ -789,12 +789,11 @@ torchlens._semantic._norm_reconstruction:_refuse:NormReconstructionError::1	CONT
 torchlens._quickstart._plan:resolve_rung:ArgumentConflictError::1	CONTRACTED	input_rung_conflict	quickstart ladder XOR law (F17); coded, remedy, contract row
 torchlens._quickstart._grammar:_refuse:InvalidArgumentError::1	CONTRACTED	input_size_invalid	quickstart input_size= grammar refusals (F17); per-call codes input_size_invalid/input_size_unknown_binding/input_dtype_ambiguous, all contracted
 torchlens._quickstart._resolve:_resolve_inferred:ShapeInferenceError::1	CONTRACTED	input_inference_failed	zero-arg rung teaching refusal with diary + ordered remedies (F17)
-torchlens._quickstart._render:_check_collisions:KeywordConflictError::1	CONTRACTED	render_kwarg_collision	curated render dial collision (F17 D12)
 torchlens._quickstart._ladder:_trace_via_ladder:InvalidArgumentError::1	CONTRACTED	input_ladder_backend_unsupported	non-torch backend cannot synthesize/infer inputs (F17)
 torchlens.intervention._super._base:_TensorBearing._require_immutable_param_evidence:ParamEvidenceMissingError::1	CONTRACTED	checkpoint_series_live_params	A-CKPT checkpoint live-ref guard: coded, contract-doc row, structured remedy; user-reachable on any cross-member Bundle param read
 torchlens._quickstart._gate:require_gold:CaptureNotActiveError::1	CONTRACTED	nongold_semantics_unavailable	capability gate hard refusal on synthesized-value traces (F17 D7)
-torchlens._quickstart._render:_render_dot_source:CaptureNotActiveError::1	CONTRACTED	render_engine_unavailable	graphviz package missing at detached re-render (F17)
-torchlens._quickstart._render:_render_dot_source:CaptureNotActiveError::2	CONTRACTED	render_engine_unavailable	graphviz pipeline failure at detached re-render (F17)
+torchlens.viz._drawing:_render_dot_source:CaptureNotActiveError::1	CONTRACTED	render_engine_unavailable	graphviz package missing at detached re-render (F17)
+torchlens.viz._drawing:_render_dot_source:CaptureNotActiveError::2	CONTRACTED	render_engine_unavailable	graphviz pipeline failure at detached re-render (F17)
 torchlens.export._netron:_validate_options:ConfigurationError::1	CONTRACTED	netron_granularity_invalid	closed granularity vocabulary teaching refusal (netron memo D-11/D-13); coded + remedy
 torchlens.export._netron:_validate_options:ConfigurationError::2	CONTRACTED	netron_granularity_invalid	module-depth positive-int gate (netron memo DISSENT D1 interim default); coded + remedy
 torchlens.export._netron:netron:ConfigurationError::1	CONTRACTED	netron_path_or_open_required	path=None without open=True has nothing to do; teaching refusal names both doors
@@ -1001,7 +1000,6 @@ torchlens.attribution._viz:_entry_items:AttributionError::1	KNOWN-GAP		pre-F06 a
 torchlens.attribution._viz:_entry_items:AttributionError::2	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
 torchlens.attribution._viz:_entry_items:AttributionError::3	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
 torchlens.attribution._viz:_reduce_value:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
-torchlens.attribution._viz:overlay:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
 torchlens.attribution._noise_tunnel:_validate_noise_bank_coverage:AttributionError::1	CONTRACTED	noise_bank_invalid	F06 up-front tunnel bank-coverage refusal (a defective bank is tunnel configuration, not a child failure)
 torchlens.attribution._noise_tunnel:noise_tunnel._call_sample:AttributionError::1	INTERNAL	noise_tunnel_route_unbound	F06 internal invariant tripwire; fires only on TorchLens contract breaches, coded for diagnostics (T51 union fix)
 torchlens.attribution._text:text:AttributionError::3	INTERNAL	text_auto_ladder_empty	F06 internal invariant tripwire; fires only on TorchLens contract breaches, coded for diagnostics (T51 union fix)
@@ -1624,8 +1622,6 @@ torchlens.attribution.graph._neuronpedia:_check_graph:AttributionError:_export_r
 torchlens.attribution.graph._neuronpedia:_check_graph:AttributionError:_export_refusal:2	CONTRACTED	attribution_graph_export_unsupported	attribution graphs in Neuronpedia's schema (AG-4 lane); coded with a runnable Remedy and a contract-doc row
 torchlens.attribution.graph._neuronpedia:_check_graph:AttributionError:_export_refusal:3	CONTRACTED	attribution_graph_export_unsupported	attribution graphs in Neuronpedia's schema (AG-4 lane); coded with a runnable Remedy and a contract-doc row
 torchlens.attribution._viz:_graph_entries:AttributionError:_overlay_refusal:1	CONTRACTED	attribution_overlay_graph_mismatch	attribution graph overlay (AG-4 lane); coded with a runnable Remedy and a contract-doc row
-torchlens.attribution._viz:_check_graph_value:AttributionError:_overlay_refusal:1	CONTRACTED	attribution_overlay_argument_invalid	attribution graph overlay (AG-4 lane); coded with a runnable Remedy and a contract-doc row
-torchlens.attribution._viz:_check_graph_value:AttributionError:_overlay_refusal:2	CONTRACTED	attribution_overlay_argument_invalid	attribution graph overlay (AG-4 lane); coded with a runnable Remedy and a contract-doc row
 torchlens.attribution.graph._neuronpedia:_check_metadata:AttributionError:_contract_refusal:1	CONTRACTED	attribution_graph_contract_invalid	attribution graphs in Neuronpedia's schema (AG-4 lane); coded with a runnable Remedy and a contract-doc row
 torchlens.attribution.graph._neuronpedia:_check_metadata:AttributionError:_contract_refusal:2	CONTRACTED	attribution_graph_contract_invalid	attribution graphs in Neuronpedia's schema (AG-4 lane); coded with a runnable Remedy and a contract-doc row
 torchlens.attribution.graph._neuronpedia:_check_metadata:AttributionError:_contract_refusal:3	CONTRACTED	attribution_graph_contract_invalid	attribution graphs in Neuronpedia's schema (AG-4 lane); coded with a runnable Remedy and a contract-doc row

@@ -64,9 +64,7 @@ def _boxes(address: str) -> Callable[[object], bool]:
 
 
 def _dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
-    return str(
-        trace.draw(path=str(tmp_path / name), vis_save_only=True, file_format="dot", **kwargs)
-    )
+    return str(trace.draw(path=str(tmp_path / name), file_format="dot", **kwargs).dot)
 
 
 def _node_count(source: str) -> int:
@@ -135,7 +133,7 @@ def test_bundle_draws_one_node_in_both_backends(tmp_path: Path, engine: str) -> 
             f"bundle-{engine}",
             collapse="auto",
             collapse_fn=_boxes("body"),
-            vis_node_placement=engine,
+            layout=engine,
         )
         plain = _dot(trace, tmp_path, f"plain-{engine}", collapse_fn=_boxes("body"))
     finally:

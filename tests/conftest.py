@@ -1657,9 +1657,6 @@ def _threads_stopped_after_test() -> Iterator[None]:
 #: is a repo-root collision risk for a test that omits the argument.
 _DRAW_DEFAULT_OUTPATH_TARGETS: tuple[tuple[type, str, str], ...] = (
     (TraceVisualizationMixin, "draw", "modelgraph"),
-    (TraceVisualizationMixin, "draw_backward", "backward_modelgraph"),
-    (TraceVisualizationMixin, "draw_combined", "combined_modelgraph"),
-    (TraceVisualizationMixin, "render_dagua_graph", "graph.gv"),
 )
 
 
@@ -1698,13 +1695,13 @@ def _defaults_with_replacement(func: Any, param_name: str, value: object) -> tup
 def _draw_default_outpath_in_tmp_path(tmp_path: Path) -> Iterator[None]:
     """Redirect every ``vis_outpath``-defaulting draw entrypoint into ``tmp_path``.
 
-    ``Trace.draw`` / ``draw_backward`` / ``draw_combined`` /
-    ``render_dagua_graph`` default their output-path argument to a bare
-    relative basename (``"modelgraph"``, ``"backward_modelgraph"``,
-    ``"combined_modelgraph"``, ``"graph.gv"``). Graphviz resolves that
+    ``Trace.draw`` defaults its output-path argument to a bare relative
+    basename (``"modelgraph"``; ``graph="backward"`` and ``"combined"`` use
+    ``"backward_modelgraph"`` and ``"combined_modelgraph"`` off the same
+    ``path`` parameter). Graphviz resolves that
     relative path against the process's current working directory, which
     under xdist is the repo root shared by every worker: two tests that both
-    omit the argument (about 21 files call ``draw(vis_save_only=True)`` with
+    omit the argument (about 21 files call ``draw()`` with
     no ``vis_outpath=``) raced to write and read the same file ("dot: can't
     open .../modelgraph", nightly fast tier, 2026-10-03).
 
