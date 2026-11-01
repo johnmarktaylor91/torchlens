@@ -109,8 +109,8 @@ def payload_core(record: Any, *, identity: str | None = None, max_width: int | N
         return f"{_metadata_core(record)} {FREED}"
     if not isinstance(payload, torch.Tensor):
         return f"{_metadata_core(record)} {PREVIEW_BACKEND}"
-    from ..stats import tensor_stats
     from ..stats._stats_render import render_core_line
+    from ..stats._tensor_stats import tensor_stats
 
     return render_core_line(tensor_stats(payload, identity=identity), max_width=max_width)
 
@@ -335,9 +335,9 @@ def param_repr_line(param: Any) -> str:
 
     import torch
 
-    from ..stats import tensor_stats
     from ..stats._envelope import envelope_line
     from ..stats._stats_render import render_core_line
+    from ..stats._tensor_stats import tensor_stats
 
     live = fail_open(lambda: param._peek_live_param(cache=False), lambda _error: None)
     if isinstance(live, torch.Tensor):
@@ -397,8 +397,8 @@ def buffer_repr_line(buffer: Any) -> str:
 
     initial = getattr(buffer, "initial_value", None)
     if isinstance(initial, torch.Tensor):
-        from ..stats import tensor_stats
         from ..stats._stats_render import render_core_line
+        from ..stats._tensor_stats import tensor_stats
 
         core = render_core_line(tensor_stats(initial, identity=getattr(buffer, "address", None)))
         basis = "snapshot at capture"

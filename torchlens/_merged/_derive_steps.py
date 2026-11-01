@@ -10,13 +10,16 @@ module never imports the engine and the import graph stays acyclic.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from ..distributed._audit import MembershipLineageVerdict, verify_membership_lineages
 from ..distributed._ledger import InstallEpoch, membership_digest_for_ranks
+from ._boundary_rules import P2P_KINDS
 from ._enums import BoundaryConsistency, MergeAlignment, MergedErrorCode, MergeValueStatus
 from ._errors import MergedFinding, MergeInputError
-from ._evidence import P2P_KINDS, RankEvidence
+
+if TYPE_CHECKING:
+    from ._evidence import RankEvidence
 
 GroupUid = tuple[str, int]
 """``(membership_digest, lifetime_ordinal)``: one communicator lifetime."""
