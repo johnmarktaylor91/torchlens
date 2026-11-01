@@ -11,6 +11,7 @@ from typing import Any, Literal, TypeAlias, cast
 from .._capture._nonfinite_prefix import strip_raw_label_suffix
 from .._data_classes._compaction import compact_op_metadata
 from .._data_classes._site_key import SiteKeyMinter
+from .._data_classes.layer import Layer
 from .._data_classes.module import ModuleAccessor
 from .._data_classes.trace import Trace
 from .._ir.op_record import amend_preview_output_parent_mark
@@ -22,7 +23,7 @@ from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from .._quantities import Bytes
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from ._constants import ConstantLedger, apply_constants_rule
-from ._finalize_layers import _attach_op_to_layer, _count_trace_ops
+from ._finalize_totals import _count_trace_ops, _update_param_totals_from_layers
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -35,6 +36,27 @@ MetadataTopLevelPredicate: TypeAlias = Callable[
 ]
 OpTopLevelPredicate: TypeAlias = Callable[[str], bool]
 TrainingModeResolver: TypeAlias = Callable[[dict[str, Any]], bool]
+
+
+def _attach_op_to_layer(
+    trace: Trace,
+    op_log: Any,
+    enrich_layer: LayerEnrichmentHook | None,
+) -> None:
+    """Attach one finalized op to its layer log, creating the layer on first sight."""
+
+    layer_log = trace.layer_logs.get(op_log.layer_label)
+    layer_created = layer_log is None
+    if layer_log is None:
+        layer_log = Layer(op_log)
+    layer_log.ops[op_log.pass_index] = op_log
+    layer_log.call_labels.append(op_log.label)
+    if op_log.num_passes != 1:
+        layer_log.num_passes = op_log.num_passes
+    if layer_created:
+        if enrich_layer is not None:
+            enrich_layer(layer_log, op_log)
+        trace.layer_logs[op_log.layer_label] = layer_log
 
 
 def finalize_single_pass_trace(
@@ -799,43 +821,6 @@ def _attach_param_usage(
         if op_log.layer_label not in layer_membership:
             trace.layers_with_params[param.barcode].append(op_log.layer_label)
             layer_membership.add(op_log.layer_label)
-
-
-def _update_param_totals_from_layers(trace: Trace) -> None:
-    """Recompute trace parameter totals on a parameter-identity basis.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ``param_logs`` registry is already populated.
-
-    Returns
-    -------
-    None
-        Trace-level parameter counters are updated when parameters are present.
-
-    Notes
-    -----
-    Totals derive from ``trace.param_logs`` (the deduped-by-identity param
-    registry), not from summing each op's own ``num_param_tensors`` across
-    unique layer labels: a param reused by more than one op/layer (a tied
-    weight, or a composite op decomposed into several primitive ops that
-    each separately attach it) is counted once per referencing layer by the
-    per-op sum, inflating the total past the true unique-param count and
-    tripping the ``trace_self_consistency`` invariant's parameter-identity
-    check (``num_param_tensors != len(param_logs)``).
-    """
-
-    if trace.param_source != "none":
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
-        trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
-        )
-        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.has_params}
-        )
 
 
 def numel_from_shape(shape: Any) -> int:
