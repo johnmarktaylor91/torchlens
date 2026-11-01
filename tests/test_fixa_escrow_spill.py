@@ -268,9 +268,17 @@ def test_resnet50_batch1_op_label_selective_save_completes():
 
     model = torchvision.models.resnet50(weights="IMAGENET1K_V1").eval()
     x = torch.randn(1, 3, 224, 224, generator=torch.Generator().manual_seed(1))
-    capture = _detached(layers_to_save=["conv2d_10_30"])
+    # The label is resolved from the graph (the tenth conv2d op), never
+    # hard-coded: label numbering shifts whenever the op count before it does.
+    structure = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="none"))
+    convs = [op for op in structure.layer_list if op.layer_type == "conv2d"]
+    assert len(convs) > 9, "expected more than nine conv2d ops on resnet50"
+    label = convs[9].layer_label
+    capture = _detached(layers_to_save=[label])
     log = tl.trace(model, x, capture=capture)
-    op = log["conv2d_10_30"]
+    op = log[label]
+    assert op.layer_type == "conv2d"
+    assert op.output_of_modules, "the tenth conv2d op must be a module output"
     assert torch.equal(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
 
 

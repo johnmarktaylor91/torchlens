@@ -55,7 +55,6 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 | (none) | Unmarked tests — a large majority (20,538/24,471, 84%, measured 2026-10-16) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
 | `rare` | Always excluded by default unless explicitly selected. |
 | `optional` | Requires an optional dependency or runtime. |
-| `requires_assertions` | Needs Python `assert`; skipped under `python -O`. |
 | `backend_parity` | Active backend-substrate parity gate. |
 | `backend_jax` | Requires the optional JAX runtime. |
 | `backend_mlx` | Requires the optional MLX runtime. |
