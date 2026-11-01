@@ -487,6 +487,20 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "tutorial fence executed by tests/test_jax_docs_page.py under the backend_jax "
         "marker (needs the jax runtime)"
     ),
+    "backends/mlx.md": (
+        "tutorial fences executed by tests/test_backend_docs_lockstep.py under the "
+        "backend_mlx marker (needs the mlx runtime: macOS, or Linux with "
+        "TORCHLENS_RUN_UNSTABLE_MLX_TESTS=1)"
+    ),
+    "backends/paddle.md": (
+        "tutorial fences executed by tests/test_paddle_docs_tutorial.py and "
+        "tests/test_backend_docs_lockstep.py under the backend_paddle marker "
+        "(needs the paddle runtime)"
+    ),
+    "backends/tinygrad.md": (
+        "tutorial fences executed by tests/test_backend_docs_lockstep.py under the "
+        "backend_tinygrad marker (needs the tinygrad runtime)"
+    ),
     "backward.md": "pending execution coverage (queued: backward capture snippets)",
     "buffers.md": "pending execution coverage",
     "containers.md": "pending execution coverage",

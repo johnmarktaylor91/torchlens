@@ -63,15 +63,15 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | Capability | State | Refusal code when requested |
 |---|---|---|
 | Forward capture (`tl.trace`) | supported | |
-| Replay validation (`validate_trace`, status object with per-op reasons) | supported | |
-| Payload materialization (`save` / `load` with array payloads) | supported | |
-| Static-label interventions (`intervene=`, `halt=`) | supported | |
-| Intermediate derived gradients (`grad_options=`) | supported | |
-| Backward capture (`save_grads`, `backward_ready`) | not yet proven | `backward_capture_unsupported` |
-| Fastlog | not yet proven | `fastlog_unsupported` |
-| RNG replay (`save_rng`) | not yet proven | `rng_replay_unsupported` |
-| Streaming | not yet proven | `streaming_unsupported` |
-| Structure-only capture | not yet proven | `structure_only_capture_unsupported` |
+| Replay validation (`has_validation_replay`; `validate_trace`, status object with per-op reasons) | supported | |
+| Payload materialization (`payload_materialization`; `save` / `load` with array payloads) | supported | |
+| Static-label interventions (`interventions`; `intervene=`, `halt=`) | supported | |
+| Intermediate derived gradients (`intermediate_derived_grads`; `grad_options=`) | supported | |
+| Backward capture (`backward_capture`; `save_grads`, `backward_ready`) | not yet proven | `backward_capture_unsupported` |
+| Fastlog (`fastlog`) | not yet proven | `fastlog_unsupported` |
+| RNG replay (`rng_replay`; `save_rng`) | not yet proven | `rng_replay_unsupported` |
+| Streaming (`has_streaming`) | not yet proven | `streaming_unsupported` |
+| Structure-only capture (`structure_only_capture`) | not yet proven | `structure_only_capture_unsupported` |
 | Explicit `random_seed=` | unsupported | `explicit_seed_unsupported` |
 | Trace options outside `module_identity_mode`, `grad_options` | unsupported | `trace_option_unsupported` |
 | `mx.compile` / `mx.grad` / `mx.vmap` wrappers as the traced entry | unsupported | typed refusal at entry |

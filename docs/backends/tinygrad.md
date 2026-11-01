@@ -84,6 +84,7 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | `interventions` | untested | refusal `interventions_unsupported` |
 | `rng_replay` | untested | refusal `rng_replay_unsupported` |
 | `has_streaming` | untested | refusal `streaming_unsupported` |
+| `structure_only_capture` | untested | refusal `structure_only_capture_unsupported` |
 | Closure constant with a readable buffer | supported | recorded as a parentless `buffer` op with payload (`tinygrad_constant_kind="closure"`) |
 | Literal producer (`Tensor.ones`, `Tensor.full`, scalar `const`) | supported | parentless op with payload (`tinygrad_constant_kind="literal"`) |
 | Closure constant with no readable buffer (`Tensor(ndarray)` not realized) | unsupported | refusal `constant_unrealizable` naming the op |

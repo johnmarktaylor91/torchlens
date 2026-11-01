@@ -49,7 +49,7 @@ object, never a bare boolean.
 | `structure_only_capture` | supported | `structure_only=True`. |
 | `has_validation_replay` | supported | Ground-truth rerun plus per-op replay and perturbation. |
 | `payload_materialization` | supported | Loaded payloads materialize as tensors. |
-| `intermediate_derived_grads` | not yet proven | Torch records true gradients through `backward_capture`; the derived-gradient path is a preview-backend feature torch does not implement. |
+| `intermediate_derived_grads` | unsupported | Refuses with `intermediate_derived_grads_unsupported`: torch records true gradients through `backward_capture`; the derived-gradient path is a preview-backend feature torch does not implement. |
 
 Torch cannot log `torch.compile`, TorchScript or `torch.export` artifacts (log the eager source
 module), and fused kernels expose no hidden internal tensors.
