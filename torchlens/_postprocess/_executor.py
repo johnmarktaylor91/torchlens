@@ -17,6 +17,7 @@ import torch
 from .._utils import hashing as _hashing, tensor_utils as _tensor_utils
 from .._utils.display import _vtimed
 from . import (
+    _layer_depths,
     control_flow,
     finalization,
     graph_traversal,
@@ -95,7 +96,7 @@ def _run_step_4(ctx: StepContext) -> None:
     """Step 4: write the optional input/output distance metadata."""
 
     with _vtimed(ctx.trace, "  Step 4: Input/output distances"):
-        graph_traversal._mark_layer_depths(ctx.trace)
+        _layer_depths._mark_layer_depths(ctx.trace)
 
 
 def _should_run_step_4(ctx: StepContext) -> bool:
