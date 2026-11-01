@@ -5,6 +5,7 @@ byte-determinism seam for ``metadata.pkl``, consumed by the bundle and
 streaming writers, independent of the scrub walk itself.
 """
 
+import enum
 import pickle
 import struct
 from typing import Any
@@ -45,7 +46,7 @@ class _CanonicalMetadataPickler(pickle._Pickler):
     """
 
     def reducer_override(self, obj: Any) -> Any:
-        """Return the canonical reduction for exact set/frozenset and plain tensor values.
+        """Return the canonical reduction for set/frozenset, Enum members and plain tensors.
 
         A plain dense ``torch.Tensor`` is emitted through the TorchLens-owned
         inline reduction (``_inline_tensor``: raw bytes, dtype, shape,
@@ -61,6 +62,16 @@ class _CanonicalMetadataPickler(pickle._Pickler):
             if inline is not None:
                 return inline
             return NotImplemented
+        if isinstance(obj, enum.Enum):
+            # By VALUE on every interpreter. CPython 3.11.0 through 3.11.3 reduce an
+            # Enum member as ``getattr(cls, name)`` (by name); every other supported
+            # release reduces ``cls(value)``. The by-name form changes the bytes and
+            # reaches ``builtins.getattr`` in the restricted loader, which admits the
+            # Enum CLASS as a global but never ``getattr`` on it, so a save on those
+            # interpreters failed its own dry-run reload. Same shape as
+            # ``Enum.__reduce_ex__`` elsewhere, so the bytes match the 3.10 goldens;
+            # ``cls(value)`` also resolves aliases and combined ``Flag`` values.
+            return (cls, (obj._value_,))
         if cls is frozenset or cls is set:
             members_list = list(obj)
             if any(isinstance(member, float) and member != member for member in members_list):
