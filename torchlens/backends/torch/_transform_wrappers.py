@@ -248,7 +248,7 @@ def transform_builder_decorator(
 
             trace = cast(Any, _state._active_trace)
             capture_start_time = time.time()
-            save_rng = getattr(trace, "save_rng_states", False)
+            save_rng = trace._options_save_rng
             rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
             autocast_state = log_current_autocast_state()
             func_call_id = _state.next_func_call_id()
@@ -357,7 +357,7 @@ def direct_transform_decorator(
             inner_fn=user_fn,
         )
         capture_start_time = time.time()
-        save_rng = getattr(trace, "save_rng_states", False)
+        save_rng = trace._options_save_rng
         rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()

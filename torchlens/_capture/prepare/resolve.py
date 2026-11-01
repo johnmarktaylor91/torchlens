@@ -265,7 +265,7 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         decision = getattr(intervene_request, "decision", None)
         hook = getattr(decision, "hook", None) if decision is not None else None
         edit_name = getattr(
-            hook, "helper_name", getattr(hook, "__name__", type(intervene_request).__name__)
+            hook, "name", getattr(hook, "__name__", type(intervene_request).__name__)
         )
         edit_names = (str(edit_name),)
         selection_repr = repr(getattr(intervene_request, "selector", intervene_request))

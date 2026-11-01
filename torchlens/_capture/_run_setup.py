@@ -262,14 +262,14 @@ def _construct_trace(r: SimpleNamespace) -> Trace:
         distributed_witness=r.distributed_witness,
         save_budget=r.save_budget,
         input_transform=r.transform,
-        raw_input=r.raw_input,
+        input=r.raw_input,
         save_raw_input=r.save_raw_input,
         batch_render=r.batch_render,
         output_transform=r.output_transform,
         save_transformed_output=r.save_transformed_output,
         layer_visualizers=r.layer_visualizers,
         save_visualizations=r.save_visualizations,
-        facet_registry_snapshot=facets_mod.snapshot(r.recipes),
+        facet_functions=facets_mod.snapshot(r.recipes),
     )
 
 

@@ -66,7 +66,7 @@ def _structure_only_forward_boundary(trace: "Trace") -> "contextlib.AbstractCont
     lazy import keeps this backend-neutral module torch-light.
     """
 
-    if bool(getattr(trace, "structure_only", False)):
+    if bool(trace._options_structure_only):
         return _weightsfree_and_belt_boundary(trace)
     return contextlib.nullcontext()
 
@@ -297,7 +297,7 @@ def _backend_name_for_trace(trace: "Trace") -> BackendName:
         for old or partially constructed trace objects.
     """
 
-    return cast(BackendName, getattr(trace, "backend", "torch"))
+    return cast(BackendName, trace._provenance_backend)
 
 
 def _capture_backend_from_registry(
