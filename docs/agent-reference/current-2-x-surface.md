@@ -315,6 +315,9 @@
   `b.at(site)` takes a label or a selector (a member subset is a bundle of those members); `compare`,
   `rank_changes`, `store_comparison` and `draw(graph="diff")` run the comparison gate on every
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
+  `b.draw("bundle.svg", graph="forward", node_overrides={"relu_1_1": {"fillcolor": "#ffeeaa"}})`
+  draws the merged bundle graph (one picture; `Trace.draw` spellings, `combined` for both passes,
+  `nodes="members"` for the member relation graph) and returns the DOT source.
   `b.token_pairs("critique", "draft")` (relate's argument order) is the one
   verified alignment read: `.pairs` of `(source_pos, reader_pos)`, `.source_positions`,
   `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);

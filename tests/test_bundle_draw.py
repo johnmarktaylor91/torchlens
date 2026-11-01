@@ -51,8 +51,13 @@ def test_bundle_draw_returns_dot_for_the_union_graph(tmp_path: Path) -> None:
     if shutil.which("dot") is None:
         pytest.skip("graphviz dot not installed")
     bundle = _pair()
-    dot = bundle.draw(path=str(tmp_path / "union"), open_viewer=False, file_format="svg")
+    dot = bundle.draw(
+        str(tmp_path / "union.svg"),
+        node_overrides={"linear_1_1": {"fillcolor": "#ffeeaa"}},
+        open_viewer=False,
+    )
     assert isinstance(dot, str) and "digraph" in dot
+    assert "#ffeeaa" in dot
     assert (tmp_path / "union.svg").exists()
 
 
