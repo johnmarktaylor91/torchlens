@@ -84,6 +84,7 @@ from ._tl import (
     set_tensor_label,
 )
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
+from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
 from .aliasing import _tensors_alias
 from .buffer_writes import (
     record_op_buffer_writes,
@@ -1919,21 +1920,7 @@ def torch_func_decorator(
             # help there, confirmed by direct instrumentation). Translate torch's
             # own crash into the same typed, disclosed refusal the fast path
             # raises, rather than let a cryptic RuntimeError escape.
-            if (
-                pauses_owned_modes
-                and not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
-                and "already associated to a python object" in str(exc)
-            ):
-                raise TensorSubclassUnsupportedError(
-                    f"torchlens could not construct the Tensor subclass via "
-                    f"{func_name!r} even after pausing its own dispatch mode on this "
-                    f"torch build (original torch error: {exc}). "
-                    "Remedy: upgrade torch (HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE reports "
-                    "False here), or avoid this construction while other TorchLens "
-                    "instrumentation observes the same forward on this build.",
-                    code="subclass_ctor_under_dispatch_mode_unsupported",
-                    func_name=func_name,
-                ) from exc
+            _raise_if_subclass_ctor_under_dispatch_mode(exc, func_name, pauses_owned_modes)
             raise
         finally:
             # Markers close FIRST so the range covers the user op, not the
