@@ -239,10 +239,14 @@ class _CoreCoherence:
         self._check_unique_correlation_key(entry, index)
 
     def _check_group_rank_presence(self, entry: dict[str, Any], index: int) -> None:
-        # my_group_rank None-ness is UNIFORM per group within one rank core.
-        # Without this, stripping my_group_rank from one boundary of a
-        # slice-witnessed join silently deleted its value_divergence finding
-        # (R18-2; findings must never disappear by record deletion).
+        """Refuse a group whose boundaries mix ``my_group_rank`` presence and absence.
+
+        Presence is uniform per group within one rank core. Without this,
+        stripping ``my_group_rank`` from one boundary of a slice-witnessed join
+        silently deleted its value_divergence finding (R18-2; findings must
+        never disappear by record deletion).
+        """
+
         uid = group_uid(entry["correlation"])
         is_absent = entry["group"].get("my_group_rank") is None
         if self._group_rank_presence.mixed(uid, is_absent):
@@ -254,6 +258,8 @@ class _CoreCoherence:
             )
 
     def _check_group_seq_latch(self, entry: dict[str, Any], index: int) -> None:
+        """Refuse a ``c10d_group_seq`` sequence that breaks the recorder's latch shape."""
+
         disclosed = SEQ_READ_FAILED_TOKEN in entry["disclosures"]
         defect = self._seq_latch.observe(entry["c10d_group_seq"], disclosed)
         if defect is None:
@@ -278,9 +284,13 @@ class _CoreCoherence:
         raise _refuse(detail, source=self._source)
 
     def _check_install_epoch(self, entry: dict[str, Any], index: int) -> None:
-        # A rank has exactly ONE install epoch; a boundary claiming a
-        # different one is a forged record trying to promote (or demote) its
-        # own lifetime completeness independently of the rank's arming record.
+        """Refuse a boundary whose install epoch differs from the rank record's.
+
+        A rank has exactly ONE install epoch; a boundary claiming a different
+        one is a forged record trying to promote (or demote) its own lifetime
+        completeness independently of the rank's arming record.
+        """
+
         claimed = entry["lifetime_evidence"]["install_epoch"]
         if claimed != self._install_epoch:
             raise _refuse(
@@ -291,6 +301,8 @@ class _CoreCoherence:
             )
 
     def _check_unique_correlation_key(self, entry: dict[str, Any], index: int) -> None:
+        """Refuse a correlation key already seen in this rank core."""
+
         key = correlation_key(entry["correlation"])
         if key in self._seen_keys:
             raise _refuse(
