@@ -487,9 +487,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `ArtifactError` and marks the temp bundle `PARTIAL`, and finalization waits for every
   pending write before the bundle publishes. `tl.record` streaming stays synchronous and
   refuses an explicit `async_writes=True`. The model output the forward returns stays in
-  memory (the output op's payload may alias it), and `trace.run(...)` on a streamed trace
-  re-captures every payload into RAM: the bundle keeps the original capture until the trace
-  is saved again. A `path` that already exists refuses with `bundle_save_failed`.
+  memory (the output op's payload may alias it). A streamed trace does not run: `trace.run(...)`
+  on it refuses `trace_option_unsupported` (every run door, `inputs=` and `fast=True` included),
+  because a run would re-capture every payload into RAM while the bundle kept the first
+  capture; capture again with `to_disk` to a new path, or without `to_disk`, and run that trace
+  (a trace loaded from the bundle runs through its loaded providers). A `path` that already
+  exists refuses with `bundle_save_failed`, as does `Trace.save` or `Bundle.save` to an existing
+  path without `overwrite=True`.
 
 **Capture cache**
 : The opt-in `cache=True` content-hash store of finished captures. A hit requires the model's
