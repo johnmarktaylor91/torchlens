@@ -332,7 +332,7 @@ def _stochastic(cell: Cell, trace: Any) -> bool:
     from tests.behaviour.cases import _draws_random_numbers
 
     return cell.case.has("stochastic") or any(
-        _draws_random_numbers(op.func_name) for op in trace.ops
+        _draws_random_numbers(f"func:{op.func_name}") for op in trace.ops
     )
 
 
