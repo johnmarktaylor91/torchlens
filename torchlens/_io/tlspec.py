@@ -19,7 +19,7 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._utils.hashing import sha256_file
 from ..backends.registry import get_backend_spec
-from . import TLSPEC_VERSION, ArtifactError
+from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
 from ._durability import _restrict_mode, fsync_dir, fsync_tree
 from ._tlspec_json_helpers import (
     _hash_named_tensor_meta,
@@ -256,7 +256,7 @@ class _TlSpecWriter:
         body_filename = "body.safetensors"
         try:
             if target_path.exists() and not overwrite:
-                raise FileExistsError(f"Bundle path already exists: {target_path}")
+                refuse_bundle_exists(target_path, overwritable=True)
             tmp_path.mkdir(parents=True)
             _restrict_mode(tmp_path, 0o700)
             # Sweepable from birth: mark the staging dir PARTIAL so a SIGKILL
@@ -321,7 +321,7 @@ class _TlSpecWriter:
                 # success). Mirror ``torchlens/_io/bundle.py`` and refuse
                 # instead of live-destroying a concurrently-published artifact.
                 if not overwrite:
-                    raise FileExistsError(f"Bundle path already exists: {target_path}")
+                    refuse_bundle_exists(target_path, overwritable=True)
                 backup_path = target_path.parent / f"{target_path.name}.bak.{uuid.uuid4().hex}"
                 os.replace(target_path, backup_path)
             os.replace(tmp_path, target_path)

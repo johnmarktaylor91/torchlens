@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import pytest
 import torch
+from support.sampling import sampling_draws
 from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import population
-from torchlens.intervention.stochastic import sampling_records
 
 
 class _Toy(nn.Module):
@@ -174,10 +174,9 @@ def test_population_mean_records_a_deterministic_note() -> None:
     fork = log.fork()
     fork.do(tl.label(_SITE), tl.mean_ablate(donors, dim=None))
     assert torch.allclose(fork[_SITE].out, baseline + 1.0)
-    record = sampling_records(fork)[-1]
-    assert record["stochastic"] is False
-    assert record["base_seed"] is None
-    assert record["replacement_mode"] == "evidence_mean"
+    record = sampling_draws(fork)[-1]
+    assert record.draw_indices == (), "a mean draws nothing"
+    assert record.base_seed is None
 
 
 def test_saved_mean_fill_spec_refuses_as_renamed() -> None:

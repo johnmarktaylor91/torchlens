@@ -32,18 +32,16 @@ from .._ir.container import (
     resolve_container_type,
 )
 from .._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
-from .._utils.alias_footprint import touched_bytes_relation
-from .._utils.rng import (
-    aten_qualname_is_seeded_rng,
+from .._utils._uninit_alloc import (
     deterministic_fill_governs,
     qualname_is_uninit_growth_resize,
     qualname_is_uninit_size_gated_alloc,
     qualname_is_uninit_total_writer,
     qualname_is_uninitialized_alloc,
-    restore_host_rng,
-    snapshot_host_rng,
     uninit_new_call_is_size_form,
 )
+from .._utils.alias_footprint import touched_bytes_relation
+from .._utils.rng import aten_qualname_is_seeded_rng, restore_host_rng, snapshot_host_rng
 from ..errors import (
     PathDivergenceError,
     ReattachError,
@@ -361,7 +359,32 @@ _ALLOWED_TORCH_SYMBOL_TYPES: tuple[type, ...] = (
 )
 
 
-__all__ = ["raise_analysis_run_unavailable", "run_live_trace", "run_loaded_sparse_trace"]
+def refuse_truncated_rerun(trace: Any) -> None:
+    """Refuse ``run()`` on a TRUNCATED (``until=``) run product, on every provider.
+
+    L4 3.3.2: the poison bit alone does not refuse a re-run; the transaction's
+    inherited-status leg would silently settle UNVERIFIABLE instead, which is
+    exactly the silence the capability table forbids.
+    """
+
+    if trace.__dict__.get("_run_truncation_skipped_raw_labels") is None:
+        return
+    raise RunCapabilityUnavailableError(
+        "This Trace is a TRUNCATED run product (until=): it covers only "
+        "the executed prefix, so re-running it would replay a cut "
+        "forward. Run the ORIGINAL source trace instead (with or "
+        "without until=).",
+        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+        detection_stage="truncated_result_rerun",
+    )
+
+
+__all__ = [
+    "raise_analysis_run_unavailable",
+    "refuse_truncated_rerun",
+    "run_live_trace",
+    "run_loaded_sparse_trace",
+]
 
 # Late imports (after this module's own definitions): the split modules import this
 # module's classes and constants back, so they must exist before the splits load.

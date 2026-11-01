@@ -72,6 +72,12 @@
   when the disk falls behind, a failed write raises typed `ArtifactError` + PARTIAL, finalize
   drains before publish, and bundles are byte-identical to sync. `async_writes=False` opts out;
   `tl.record` streaming stays synchronous and refuses an explicit `True`.
+- A streamed (`to_disk`) trace does not run: every `trace.run(...)` door refuses
+  `trace_option_unsupported`, because a run would re-capture every payload into RAM while the
+  bundle on disk kept the first capture. Capture again with `to_disk` to a new path, or without
+  `to_disk`, and run that trace; a trace loaded from the bundle runs through its loaded providers.
+  `Trace.save` and `Bundle.save` to an existing path refuse `bundle_save_failed` (typed, no builtin
+  `FileExistsError`) unless `overwrite=True`.
 - On torch >= 2.6 (`HAS_SET_STANCE`), every capture holds
   `torch.compiler.set_stance("force_eager")` scoped to the forward (entered inside
   `prepare_compiled_capture`; skipped when `torch._dynamo` was never imported), so compiled plain
@@ -236,6 +242,20 @@
   value: an in-place write through `param.data` (its own version counter on the same storage) or
   through a numpy or raw-storage alias. A replaced parameter object is never read by replay (the
   template keeps the captured one). Pinned in `tests/test_replay_param_changed.py`.
+- Replay at source records and random sources: a model-input leaf and a buffer record have no
+  callable, so a hook aimed at one fires on the captured (or threaded) value and the edit
+  propagates from there; a random-source op (`randn_like`, `dropout`, ...) with no recorded RNG
+  state (`save_rng_states` off) keeps its captured draw when none of its arguments changed in the
+  replay, so an edit at it edits the value the trace holds, not a fresh draw (a random site that
+  was itself edited at capture holds a post-edit value, so its replay re-executes the draw, seeded
+  only when RNG states were saved). A trace loaded from a
+  saved file carries no callables at any level, so every replay edit on it refuses
+  `ReplayPreconditionError` naming that condition (remedy: re-capture in-process with
+  `replayable=True`, or `trace.run(model, inputs)`). A torch failure inside a replayed
+  callable (an edit that drives an index lookup past its table) is re-raised as
+  `ReplayPreconditionError` naming the op that raised and the edit origins, the torch error
+  chained as `__cause__`, with nothing committed. Pinned in
+  `tests/test_replay_source_and_stochastic_origins.py`.
 - A model that builds a thread pool lazily in `forward` loses one pool per capture to the capture's
   attribute restore; a later garbage collection that frees it inside another capture ends its idle
   workers there, and the thread check then marks that capture unverified. This errs only one way: a

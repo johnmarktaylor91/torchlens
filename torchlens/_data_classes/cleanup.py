@@ -27,12 +27,13 @@ import torch
 
 from .._constants import MODEL_LOG_FIELD_ORDER
 from .._trace_core.groups import GroupRef
+from .._utils._cuda_probe import _is_cuda_available
 from .._utils.collections import remove_entry_from_list
 from .._utils.display import cleanup_trace_visualizer_dir
-from .._utils.tensor_utils import _is_cuda_available, capture_touched_cuda
+from .._utils.tensor_utils import capture_touched_cuda
 from ..intervention.types import ParentRef, Unsupported
 from ._state_adapter import state_items
-from .op import Op
+from .op import Op, _detach_op_husk
 
 if TYPE_CHECKING:
     from .trace import Trace
@@ -206,7 +207,6 @@ def _trim_host_allocator() -> None:
 def _clear_entry_attributes(log_entry: Op) -> None:
     """Clear all instance attributes from a Op entry."""
     from .._trace_core.op_store import mark_op_row_released
-    from .op import _detach_op_husk
 
     # Whole-row release: tell any active step audit the per-cell reads and
     # deletes below are the op's removal husking (a row-lifecycle event

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 from ._capture.arg_positions import _normalize_func_name
 from ._errors import AmbiguousOpLookupError, ArgumentConflictError, ArgumentTypeError
 from ._selection.selectors import BaseSelector
-from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
+from .backends import registry as _backend_registry
 from .options import SaveOptions
 from .recording.options import PredicateFn
 from .recording.types import RecordContext
@@ -735,11 +735,10 @@ def _combine_save_predicates(
     return cast(PredicateFn, predicate)
 
 
-_TRACE_OPTION_FILTERED_NAMES = (
-    *PUBLIC_OPTION_SPINE_TRACE_OPTIONS,
-    "jax_static_argnums",
-    "grad_options",
+_TRACE_OPTION_FILTERED_NAMES: tuple[str, ...] = _backend_registry._trace_option_names(
+    c for c in _backend_registry._BACKEND_CAPABILITIES if not c.gated
 )
+"""Every option of every non-gated capability record: the dispatcher's strip/refuse list."""
 
 
 def _trace_module_addresses(trace: Any) -> list[str]:

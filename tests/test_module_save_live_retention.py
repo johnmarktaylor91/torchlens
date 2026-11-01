@@ -376,8 +376,13 @@ def test_module_exit_bound_addresses_classification(selector, expected):
     assert selector_eval.module_exit_bound_addresses(selector) == expected
 
 
+@pytest.mark.heavy
 def test_module_exit_bound_addresses_survives_deep_trees():
-    """A long ``&`` chain is classified without recursing per nesting level."""
+    """A long ``&`` chain is classified without recursing per nesting level.
+
+    Building and classifying a 5,000-deep chain measures beyond the smoke
+    budget, so this cell is tiered heavy.
+    """
 
     selector = tl.module("a")
     for _ in range(5000):

@@ -1,4 +1,4 @@
-"""Regression guard for the thread-leak tripwire in ``tests/conftest.py``.
+"""Regression guard for the thread-leak tripwire in ``tests/_leak_guards.py``.
 
 A thread a test leaves running can exit inside a later test's capture window,
 where ``capture_escape_guard`` sees ``threading.active_count()`` change and marks
@@ -18,14 +18,14 @@ from types import ModuleType
 
 import pytest
 
-_CONFTEST = Path(__file__).resolve().parent / "conftest.py"
+_LEAK_GUARDS = Path(__file__).resolve().parent / "_leak_guards.py"
 
 
-def _root_conftest(request: pytest.FixtureRequest) -> ModuleType:
+def _leak_guards(request: pytest.FixtureRequest) -> ModuleType:
     for plugin in request.config.pluginmanager.get_plugins():
-        if getattr(plugin, "__file__", None) == str(_CONFTEST):
+        if getattr(plugin, "__file__", None) == str(_LEAK_GUARDS):
             return plugin
-    raise AssertionError("tests/conftest.py is not registered as a plugin")
+    raise AssertionError("tests/_leak_guards.py is not registered as a plugin")
 
 
 def test_thread_start_site_is_recorded_for_test_threads() -> None:
@@ -53,14 +53,14 @@ def test_pool_worker_is_attributed_to_the_submitter() -> None:
 def test_left_running_thread_is_reported_until_joined(request: pytest.FixtureRequest) -> None:
     """``owned_threads_left`` names a live test-started thread and drops it once joined."""
 
-    conftest = _root_conftest(request)
+    guards = _leak_guards(request)
     before = set(threading.enumerate())
     stop = threading.Event()
     thread = threading.Thread(target=stop.wait, name="leak-guard-left", daemon=True)
     thread.start()
     try:
-        assert conftest.owned_threads_left(before) == [thread]
+        assert guards.owned_threads_left(before) == [thread]
     finally:
         stop.set()
         thread.join(timeout=30)
-    assert conftest.owned_threads_left(before) == []
+    assert guards.owned_threads_left(before) == []

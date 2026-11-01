@@ -11,6 +11,7 @@ today's tree passes and every later change can only hold or tighten.
 | `import-contracts` | `layering.py` | import-linter's `forbidden` contracts between the layers of `torchlens/_architecture.py` | `.importlinter` at the repository root |
 | `file-cap` | `file_cap.py` | Package files over 800 lines and functions over 60 lines | `file_cap_allowlist.txt` |
 | `id-lint` | `id_lint.py` | Private planning ids (walk rulings, tracker items, review rounds, findings, sprint features, memo items) in package comments and strings and in `docs/` | `baselines.json` (`id_lint`) |
+| `tier-durations` | `tier_durations.py` | The slowest measured test of every bounded test file fits its tier budget (`scripts/tier_durations.py check`) | `tests/tiers/durations.csv` and `durations.meta.json` |
 
 ## The import graph
 

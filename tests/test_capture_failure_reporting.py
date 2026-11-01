@@ -17,6 +17,7 @@ Pins the B8-35/B8-44/B8-45/R16-4b fixes in ``backends/torch/backend.py``:
 
 from __future__ import annotations
 
+import sys
 import warnings
 
 import pytest
@@ -158,3 +159,58 @@ def test_cleanup_double_fault_still_raises_the_primary_error(monkeypatch):
         f"cleanup double-fault not disclosed on the primary: notes={notes}"
     )
     assert getattr(exc, "partial_log", None) is not None
+
+
+class _NoNotesError(ValueError):
+    """A primary error without PEP 678 notes: drives the 3.10 warning fallback everywhere."""
+
+    add_note = None  # type: ignore[assignment]
+
+
+def test_cleanup_double_fault_warning_points_at_the_users_trace_line(monkeypatch):
+    """Where notes do not exist, the double-fault warning blames the user's ``trace`` call.
+
+    The note helper has one home (``annotate_guarded``); every arm hands it the
+    dynamic ``user_stacklevel``, so the fallback ``RuntimeWarning`` names the
+    user's own line, not the stage frame that noticed the double fault.
+    """
+
+    from torchlens.backends.torch.backend import TorchBackend
+
+    class _FailingModel(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            x = torch.relu(x)
+            raise _NoNotesError("primary-user-error")
+
+    real_cleanup = TorchBackend.cleanup_failed_forward_session
+
+    def raising_cleanup(self, session, model_tuple, exc):
+        real_cleanup(self, session, model_tuple, exc)
+        raise KeyError("secondary-cleanup-error")
+
+    monkeypatch.setattr(TorchBackend, "cleanup_failed_forward_session", raising_cleanup)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(_NoNotesError, match="primary-user-error"):
+            tl.trace(_FailingModel(), torch.ones(2))  # the line the warning must name
+    call_line = sys._getframe(0).f_lineno - 1
+    double_fault = [w for w in caught if "secondary-cleanup-error" in str(w.message)]
+    assert len(double_fault) == 1, [str(w.message) for w in caught]
+    assert double_fault[0].category is RuntimeWarning
+    assert double_fault[0].filename == __file__
+    assert double_fault[0].lineno == call_line
+
+
+def test_note_helper_fallback_points_at_the_callers_caller():
+    """``annotate_guarded`` with ``user_stacklevel(1)`` blames the first frame outside the package."""
+
+    from torchlens._utils._exception_notes import annotate_guarded
+    from torchlens._utils.display import user_stacklevel
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        annotate_guarded(_NoNotesError("x"), "the note", stacklevel=user_stacklevel(1))
+    call_line = sys._getframe(0).f_lineno - 1
+    assert [str(w.message) for w in caught] == ["the note"]
+    assert caught[0].filename == __file__
+    assert caught[0].lineno == call_line

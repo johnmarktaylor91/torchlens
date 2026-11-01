@@ -58,7 +58,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # 102 -> 101 (2026-10-05 rung-1 splittests): the two 2026-10-04 test
     # sites got explicit strict/pairwise fixes and one older site had burned
     # down (same pinned ruff 0.15.4, isolated mode, CI scope).
-    "B905": 101,
+    "B905": 100,
     "B028": 2,
     # 2026-08-16 fixwave-7: all 17 B023 sites fixed (loop vars bound via
     # keyword defaults / class attributes at definition time) -- the

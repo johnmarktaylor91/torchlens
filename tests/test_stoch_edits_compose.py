@@ -149,10 +149,10 @@ def test_compose_threads_leaf_path_into_derived_seeds() -> None:
     plan_b = sample_from(donors, seed=5)
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), compose(tl.patch_from(plan_a), tl.patch_from(plan_b)))
-    from torchlens.intervention.stochastic import sampling_records
+    from support.sampling import sampling_draws
 
-    records = sampling_records(fork)
+    records = sampling_draws(fork)
     assert len(records) == 2
-    assert records[0]["derived_seed"] != records[1]["derived_seed"], (
+    assert records[0].derived_seed != records[1].derived_seed, (
         "distinct donor groups + leaf paths separate the draws"
     )

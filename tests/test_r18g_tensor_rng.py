@@ -14,14 +14,14 @@ import numpy as np
 import pytest
 import torch
 
-from torchlens._utils import rng as rngmod
-from torchlens._utils._rng_channels import call_site_argcount
 from torchlens._utils.rng import (
     AutocastRestore,
     execute_with_restored_rng_autocast,
     host_nondeterminism_monitor,
+    inventory_types as rng_inventory_types,
     log_current_autocast_state,
 )
+from torchlens._utils.rng.channels import call_site_argcount
 from torchlens._utils.tensor_utils import (
     _copy_tensor_payload,
     copy_tensor_payload,
@@ -281,7 +281,7 @@ _F5_GEN = np.random.default_rng(0)
 
 
 def test_f5_global_name_cache_retains_code_and_globals(monkeypatch):
-    monkeypatch.setattr(rngmod, "_NUMPY_RNG_METHODS_NEED_FRAME_DIGEST", True)
+    monkeypatch.setattr(rng_inventory_types, "_NUMPY_RNG_METHODS_NEED_FRAME_DIGEST", True)
     monitor = host_nondeterminism_monitor(None)
 
     holder: dict = {}

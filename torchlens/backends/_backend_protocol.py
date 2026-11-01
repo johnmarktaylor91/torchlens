@@ -35,6 +35,8 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from packaging.version import InvalidVersion, Version
 
+from ._errors import BackendUnsupportedError
+
 __tl_layer__ = "L2"
 
 Maturity = Literal["preview", "stable"]
@@ -167,6 +169,19 @@ def refusal_code_for_capability(flag: str) -> str:
     """
 
     return REFUSABLE_CAPABILITY_FLAGS[flag]
+
+
+def refuse_backward_capture_unsupported(spec: Any) -> None:
+    """Refuse a backward capture on a backend without the ``backward_capture`` capability."""
+
+    if spec.capabilities.backward_capture:
+        return
+    raise BackendUnsupportedError(
+        f"Backend {spec.name!r} does not support backward capture.",
+        code=refusal_code_for_capability("backward_capture"),
+        remedy="use trace.autograd.derived_grads when this backend exposes leaf-level derived gradients",
+        backend=spec.name,
+    )
 
 
 @dataclass(frozen=True)

@@ -32,9 +32,12 @@ import torch.nn as nn
 
 import torchlens as tl
 import torchlens._capture.run as capture_run
-from torchlens._utils import rng as rng_module
 from torchlens._utils._torch_compat import autocast_is_enabled
-from torchlens._utils.rng import AutocastRestore, host_nondeterminism_monitor
+from torchlens._utils.rng import (
+    AutocastRestore,
+    host_nondeterminism_monitor,
+    monitor_state as rng_monitor_state,
+)
 
 # Surfaces the monitor patches that are NOT also decorated by ``wrap_torch`` (the torch
 # RNG capture wrappers legitimately outlive a capture until ``unwrap_torch()``).
@@ -69,7 +72,7 @@ def _profile_slots_clean():
     yield
     sys.setprofile(None)
     threading.setprofile(None)
-    rng_module._PATCH_STACKS.clear()
+    rng_monitor_state._PATCH_STACKS.clear()
 
 
 def _tiny_model() -> nn.Module:
@@ -97,7 +100,7 @@ def test_base_exception_during_arm_leaks_nothing(monkeypatch):
     assert _surface_leaks(before) == []
     assert sys.getprofile() is None
     assert threading.getprofile() is None
-    assert rng_module._ACTIVE_MONITOR is None
+    assert rng_monitor_state._ACTIVE_MONITOR is None
 
 
 def test_base_exception_after_profile_install_leaks_nothing(monkeypatch):
@@ -197,7 +200,7 @@ def test_patch_stacks_do_not_grow_across_captures():
     model = _tiny_model()
     for _ in range(3):
         tl.trace(model, torch.randn(1, 4), capture=tl.options.CaptureOptions(replayable=True))
-    assert rng_module._PATCH_STACKS == {}
+    assert rng_monitor_state._PATCH_STACKS == {}
 
 
 def test_in_window_thread_hook_self_uninstalls_after_teardown():
