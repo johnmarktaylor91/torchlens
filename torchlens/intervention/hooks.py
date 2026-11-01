@@ -920,8 +920,6 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
             code="facet_selector_fanout",
             site_count=len(written),
         ),
-        # Frames: this helper, expand_facet_hook_entries, the attach_hooks body,
-        # the record's thin attach_hooks method, then the caller.
         stacklevel=5,
     )
 
