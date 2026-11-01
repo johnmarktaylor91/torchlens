@@ -153,7 +153,9 @@ def test_two_process_golden_reproduces_every_draw() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(tl.__file__)))
     outputs = []
     for hash_seed in ("1", "2"):
-        env = dict(os.environ, PYTHONHASHSEED=hash_seed, PYTHONPATH=root)
+        # The child imports tests/support, so the tests directory joins the path.
+        search_path = os.pathsep.join((root, os.path.join(root, "tests")))
+        env = dict(os.environ, PYTHONHASHSEED=hash_seed, PYTHONPATH=search_path)
         completed = subprocess.run(
             [sys.executable, "-c", _TWO_PROCESS_SCRIPT],
             capture_output=True,

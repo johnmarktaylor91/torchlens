@@ -112,7 +112,7 @@ def test_door_flags_match_the_old_helpers() -> None:
     for spec in (pop_elementwise, pop_axis):
         assert spec.is_batch_independent is True and spec.portability == "opaque_audit"
         assert "batch_coherent" not in dict(spec.metadata)
-        assert dict(spec.kwargs).population_identity == donors.identity
+        assert dict(spec.kwargs)["population_identity"] == donors.identity
     for spec in (self_global, self_axis, pop_elementwise, pop_axis):
         assert spec.name == "mean_ablate"
         assert dict(spec.metadata)["stochastic"] is False
