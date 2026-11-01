@@ -8,26 +8,17 @@ from typing import Any
 
 from .._deprecations import MISSING
 from .registry import (
+    _GATED_TRACE_OPTION_FLAGS,
     BackendCapabilityConformanceError,
     BackendSpec,
     BackendUnsupportedError,
     require_capability_implementation,
 )
 
-TRACE_OPTION_CAPABILITY_GATES: dict[str, str] = {
-    "intervene": "interventions",
-    "halt": "interventions",
-    "facets": "interventions",
-    "storage": "has_streaming",
-    "streaming": "has_streaming",
-    "save_grads": "backward_capture",
-    "backward_ready": "backward_capture",
-    "save_rng": "rng_replay",
-    "seed": "rng_replay",
-    "structure_only": "structure_only_capture",
-}
+TRACE_OPTION_CAPABILITY_GATES: dict[str, str] = dict(_GATED_TRACE_OPTION_FLAGS)
 """Public trace options whose support is owned by a ``BackendCapabilities`` flag.
 
+Derived from the registry's gated capability records, in their table order.
 The rejection helpers below consult this map so the registered capability table
 is the load-bearing authority: an option listed here is rejected for a backend
 exactly when the named capability flag is ``False``. The ``True`` direction is
@@ -91,8 +82,8 @@ class OptionCapabilityRow:
         Public gated trace option.
     coarse_flag:
         The ``BackendCapabilities`` flag that owns the option TODAY (the
-        migration inventory named by the memo: ``_options.py``'s ten-onto-
-        five mapping).
+        registry's gated capability records, projected onto options by
+        ``TRACE_OPTION_CAPABILITY_GATES``).
     supported:
         Operation-grain support truth. Currently projected from the coarse
         flag; the split refines this value without changing row ids.
