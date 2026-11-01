@@ -27,7 +27,7 @@ def _is_attribution_source(source: Any) -> bool:
         return bool(source) and all(isinstance(item, Attribution) for item in source)
     try:
         from ..attribution.graph import AttributionGraph
-    except ImportError:  # pragma: no cover - optional kit
+    except ImportError:
         return False
     return isinstance(source, AttributionGraph)
 
