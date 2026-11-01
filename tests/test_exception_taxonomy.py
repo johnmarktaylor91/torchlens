@@ -1146,7 +1146,7 @@ def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyP
     predicate.decision = InterventionDecision(  # type: ignore[attr-defined]
         action="transform", hook=lambda out, *, ctx: out
     )
-    from torchlens import _capture_intervention
+    from torchlens._capture.prepare import resolve as _capture_intervention
 
     monkeypatch.setattr(_capture_intervention, "split_site_branches", _raise_typed_refusal)
 
@@ -1306,9 +1306,9 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "projected output's size cannot be read and converted by the caller to "
         "the typed op_allocation_preflight refusal"
     ),
-    "torchlens._user_funcs._CaptureCacheEntryOverCeilingError": (
+    "torchlens._capture.prepare.cache._CaptureCacheEntryOverCeilingError": (
         "private mid-stream byte-ceiling abort signal; raised and caught inside the "
-        "capture-cache writer, never escapes user_funcs"
+        "capture-cache writer, never escapes the capture cache module"
     ),
     "torchlens._utils.rng._NotADigestableRng": (
         "private RNG-classifier signal; caught inside the witness classifier"

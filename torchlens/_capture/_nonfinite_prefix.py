@@ -262,8 +262,8 @@ def maybe_finalize_nonfinite_prefix(
         Whether the prefix finalization ran to completion.
     """
 
+    from .finalize.settle import _extract_and_mark_outputs
     from .outcome import StopRequest
-    from .trace import _extract_and_mark_outputs
 
     stop_request = trace.__dict__.get("_stop_requested")
     if not (

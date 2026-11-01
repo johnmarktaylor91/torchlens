@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.prepare.door as prepare_door
 import torchlens._user_funcs as user_funcs
 from torchlens import _visualization
 from torchlens.options import VisualizationOptions
@@ -150,6 +151,8 @@ def stubbed_runner(
         dummy_log.save_budget = kwargs.get("save_budget", "auto")
         dummy_logs.append(dummy_log)
         return dummy_log
+
+    monkeypatch.setattr(prepare_door, "_run_model_and_save_specified_outs", _fake_runner)
 
     monkeypatch.setattr(user_funcs, "_run_model_and_save_specified_outs", _fake_runner)
     return captured_calls, dummy_logs

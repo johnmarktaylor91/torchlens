@@ -85,6 +85,10 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_io._load_validators": "L3",
     # -- L2 ENGINE ----------------------------------------------------------
     "_capture": "L2",
+    # The PREPARE stage resolves intervention, autoroute and selective-save
+    # requests, so it sits at their tier inside the L2 engine package.
+    "_capture.prepare": "L4",
+    "_capture.run_entry": "L4",
     "backends": "L2",
     "_ir": "L2",
     "recording": "L2",
@@ -103,8 +107,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_robustness": "L2",
     "_input_coerce": "L2",
     "_input_walk": "L2",
-    "_chunking": "L2",
-    "_chunked_capture_helpers": "L2",
+    "_chunking": "L4",
+    "_chunked_capture_helpers": "L4",
     "_capture_state_helpers": "L2",
     "_capture_fingerprint": "L2",
     "_utils": "L1",

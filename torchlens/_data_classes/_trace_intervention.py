@@ -1671,7 +1671,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             weight-fingerprint evidence differs.
         """
 
-        from .._user_funcs import _fingerprint_model_weights, _qualname_for_model
+        from .._capture_state_helpers import _fingerprint_model_weights, _qualname_for_model
         from ..intervention.errors import ModelMismatchError
 
         # F41 (foldA D10/D11): the root entry-point fact joins this gate

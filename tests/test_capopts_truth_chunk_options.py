@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._user_funcs as user_funcs
+import torchlens._capture.prepare.door as prepare_door
 from torchlens._save_budget import SaveBudgetExceededError
 from torchlens.options import CaptureOptions
 
@@ -39,7 +39,7 @@ class SmallNet(nn.Module):
 def _recursive_capture_options_keywords() -> set[str]:
     """Extract the keyword names of the chunk path's CaptureOptions rebuild."""
 
-    tree = ast.parse(inspect.getsource(user_funcs))
+    tree = ast.parse(inspect.getsource(prepare_door))
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.Assign)
@@ -51,7 +51,7 @@ def _recursive_capture_options_keywords() -> set[str]:
             return {kw.arg for kw in node.value.keywords if kw.arg is not None}
     raise AssertionError(
         "the chunk path's recursive_capture_options = CaptureOptions(...) "
-        "assignment was not found in torchlens._user_funcs; if the chunk path "
+        "assignment was not found in torchlens._capture.prepare.door; if the chunk path "
         "was restructured, re-point this oracle at the new rebuild site"
     )
 
@@ -73,7 +73,7 @@ def test_chunk_path_rebuild_covers_every_capture_option_field() -> None:
     assert not dropped, (
         f"CaptureOptions fields silently dropped by the chunked rebuild: "
         f"{sorted(dropped)}; route each through recursive_capture_options in "
-        "torchlens/_user_funcs.py (forward the resolved value, or reset it "
+        "torchlens/_capture/prepare/door.py (forward the resolved value, or reset it "
         "explicitly with a comment saying why)"
     )
     unknown = rebuilt - field_names

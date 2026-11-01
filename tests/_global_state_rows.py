@@ -112,7 +112,7 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # catches (captures are single-threaded by design).
         ("torchlens/_capture/_episode_join.py", "_ACTIVE_JOIN_SESSION"),
         ("torchlens/_capture/_episode_coupling.py", "_ACTIVE_COUPLING"),
-        ("torchlens/_capture/trace.py", "_ACTIVE_CAPTURE_BACKEND"),
+        ("torchlens/_capture/run.py", "_ACTIVE_CAPTURE_BACKEND"),
         ("torchlens/experimental/__init__.py", "_STOP_AFTER_SITE"),
         # Live active_intervention_context publication stack (fixwave-5):
         # entries are pushed at context entry and spliced out on unwind, so a
@@ -332,7 +332,7 @@ _WARN_ONCE_STATE = frozenset(
         ("torchlens/backends/torch/ops.py", "_UNSUPPORTED_OUTPUT_CONTAINER_WARNED"),
         # BatchNorm train-mode running-stats disclosure fires once per process
         # (user_funcs warn-once flag, C02 lovely tranche).
-        ("torchlens/_user_funcs.py", "_BATCHNORM_TRAIN_STATS_WARNED"),
+        ("torchlens/_capture/prepare/door.py", "_BATCHNORM_TRAIN_STATS_WARNED"),
         ("torchlens/_data_classes/op.py", "_WARNED_REFERENCE_SAVE_MODE"),
         ("torchlens/distributed/_lifecycle.py", "_AUTO_ARM_DEGRADATION"),
         ("torchlens/recording/_storage_resolver.py", "_WARNED_REFERENCE_SAVE_MODE"),

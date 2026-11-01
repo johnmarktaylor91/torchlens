@@ -5,6 +5,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.run as capture_run
 
 
 class _NestedTraceModel(nn.Module):
@@ -76,9 +77,7 @@ def test_nested_trace_in_pre_admission_reserved_window_refuses(
     while the outer capture still completes cleanly.
     """
 
-    import torchlens._capture.trace as capture_trace
-
-    real_prep = capture_trace.prepare_compiled_capture
+    real_prep = capture_run.prepare_compiled_capture
     probe: dict[str, object] = {}
 
     def hostile_prep(model: nn.Module) -> object:
@@ -93,13 +92,13 @@ def test_nested_trace_in_pre_admission_reserved_window_refuses(
                 probe["nested"] = "refused"
         return real_prep(model)
 
-    monkeypatch.setattr(capture_trace, "prepare_compiled_capture", hostile_prep)
+    monkeypatch.setattr(capture_run, "prepare_compiled_capture", hostile_prep)
     outer = tl.trace(nn.ReLU(), torch.ones(1, 2))
     assert probe.get("nested") == "refused", f"nested capture outcome: {probe.get('nested')}"
     assert any(op.func_name == "relu" for op in outer.compute_ops)
 
     # The refused nested entry must not have poisoned admission: a fresh
     # capture afterwards works.
-    monkeypatch.setattr(capture_trace, "prepare_compiled_capture", real_prep)
+    monkeypatch.setattr(capture_run, "prepare_compiled_capture", real_prep)
     recovered = tl.trace(nn.ReLU(), torch.ones(1, 2))
     assert any(op.func_name == "relu" for op in recovered.compute_ops)
