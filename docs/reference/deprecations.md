@@ -67,9 +67,9 @@ unaffected.
 | `log_forward_pass` | `trace` | removed |
 | `validate_model_activations` | `validate(scope="forward")` | removed |
 | `validate_saved_activations` | `validate(scope="saved")` | removed |
-| `render_graph` | `Trace.draw()` (or `torchlens.visualization.show_model_graph`, itself a moved top-level alias below) | removed |
-| `render_model_graph` | `Trace.draw()` (or `torchlens.visualization.show_model_graph`, itself a moved top-level alias below) | removed |
-| `draw_model_graph` | `Trace.draw()` (or `torchlens.visualization.show_model_graph`, itself a moved top-level alias below) | removed |
+| `render_graph` | `Trace.draw()` (or `torchlens.draw`, the top-level spelling below) | removed |
+| `render_model_graph` | `Trace.draw()` (or `torchlens.draw`, the top-level spelling below) | removed |
+| `draw_model_graph` | `Trace.draw()` (or `torchlens.draw`, the top-level spelling below) | removed |
 | `ModelHistory` | `Trace` | removed |
 | `get_model_structure` | structure trace accessors | removed |
 | `show_model_structure` | structure trace accessors | removed |
@@ -84,9 +84,9 @@ unaffected.
 | `validate_backward_pass` | `torchlens.validation.validate_backward_pass` | removed |
 | `validate_saved_activations` | `torchlens.validate(scope="saved")` | removed |
 | `summary` | `torchlens.summary` | removed |
-| `show_model_graph` | `torchlens.visualization.show_model_graph` | removed |
-| `draw_backward` | `torchlens.visualization.draw_backward` | removed |
-| `draw_combined` | `torchlens.visualization.draw_combined` | removed |
+| `show_model_graph` | `torchlens.draw` | removed |
+| `draw_backward` | `torchlens.draw` | removed; pass `graph="backward"` |
+| `draw_combined` | `torchlens.draw` | removed; pass `graph="combined"` |
 | `load_intervention_spec` | `torchlens.io.load_intervention_spec` | removed |
 | `ModuleInputSnapshot` | `torchlens.types.ModuleInputSnapshot` | removed |
 | `PreHookEffect` | `torchlens.types.PreHookEffect` | removed |
