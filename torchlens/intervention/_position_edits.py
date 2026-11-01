@@ -146,7 +146,7 @@ def positions(
             remedy="pass the token axis, e.g. axis=1 for (batch, tokens, hidden)",
             argument="axis",
         )
-    inner = normalize_hook(edit, direction="forward")
+    inner = normalize_hook(edit)
     inner_name = getattr(edit, "helper_name", getattr(edit, "__qualname__", type(edit).__name__))
 
     def factory() -> Callable[..., torch.Tensor]:
