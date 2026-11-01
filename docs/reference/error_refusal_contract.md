@@ -53,8 +53,8 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
   `NarrationConfigError(ConfigurationError)`, `NarrationStatsError(CaptureError)` (snoop);
   `FittedArtifactError(ConfigurationError, RuntimeError)`;
   `RenderError(TorchLensError, RuntimeError)`; `RankRenderEndpointError(GraphvizRenderError)`.
-- semantic output decode: `OutputStyleUnknownError(InvalidArgumentError)` (code
-  `output_style_unknown`).
+- semantic output decode: `DecodeStyleUnknownError(InvalidArgumentError)` (code
+  `decode_style_unknown`).
 - warning categories: `PluginLoadWarning(TorchLensWarning)` (soft plugin-load failures) and
   `SynthesizedValueReadWarning(TorchLensWarning)` (first raw value read on a trace whose inputs
   were synthesized).
@@ -169,7 +169,9 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `profiler_join_op_types_unmatched` | WARNING code (`TorchLensWarning`, contract row in `docs/reference/warning_contract.md`): `tl.bridge.profiler.join` left op types unmatched because their outermost event count is not a multiple of their layer count or implies a different number of forwards than the other op types; the events are disclosed, never guessed | Profile whole forward passes only, under one profiler, of the model the trace was captured from |
 | `profiler_session_invalid` | Profiler session argument misuse: borrowed mode without a profiler, owned mode with one, profiler_kwargs on a borrowed session, or an unknown mode/availability token (`ProfilerSessionError`) | Fix the session() arguments |
 | `device_time_unavailable` | A device-time column was explicitly requested (hot_path/profile/draw `device_time`, `KernelProfileReport` reads) on a capture whose Kineto join did not reach `joined` -- no joined session, CPU-only session, or failed extraction (`ProfilerSessionError`) | Capture through `torchlens.report.kernel_profile` (owned session) on a CUDA host; on CPU-only hosts host-clock columns are the honest alternative |
-| `output_style_unknown` | `CaptureOptions(output_style=...)` names a style no built-in or registered custom output detector resolves (refused before the forward when no custom detector is registered); the message carries a did-you-mean over the built-in styles | Pass `classification`, `imagenet`, `imagenet1k`, or `hf_text`, or register a detector that resolves the style with `tl._autoroute.output.register(...)` |
+| `decode_style_unknown` | `Trace.decode_output(style=...)` names a style no built-in or registered custom output detector resolves, or `style='hf_text'` has no usable tokenizer (`DecodeStyleUnknownError`); the message carries a did-you-mean over the built-in styles | Pass `classification`, `imagenet`, `imagenet1k`, or `hf_text` (with `tokenizer=`), or register a detector that resolves the style with `tl._autoroute.output.register(...)` |
+| `decode_head_unknown` | `Trace.decode_output(head=...)` names a head that is not one of the trace's output heads (`InvalidArgumentError`); `fields["available_heads"]` lists them | Pass one of the available heads (output container paths such as `logits`, `0`, `0.logits`) |
+| `decode_head_ambiguous` | `Trace.decode_output(style=...)` found several qualifying output heads and none was named (`InvalidArgumentError`); `fields["available_heads"]` lists them | Pass `head=` naming one of the available heads |
 | `overhead_arms_invalid` | The paired overhead protocol was invoked with too few measured pairs or negative warmup -- a zero-rep "measurement" is not a measurement (`ObservabilityError`) | Use reps >= 3 (11 is the default) and warmup >= 0 |
 | `flops_crosscheck_witness_failed` | The detached FLOP cross-check's two executions produced different outputs, so their dispatch formulas describe different programs and no comparison is honest (`CaptureError`) | Run in eval mode or seed the model so both executions follow one program, then re-run `tl.report.flops_vs_dispatch` |
 | `profiler_session_nested` | A profiler session is already active; there is ONE session engine and ONE activation knob (`ProfilerSessionError`) | Close the active session first, or add markers inside it via region() |

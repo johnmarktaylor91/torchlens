@@ -5,6 +5,25 @@
 
 ### Behavior changes
 
+- **output decode**: `CaptureOptions.output_style` is gone. Output decoding is not a capture
+  option: every capture runs the automatic detector pass (Hugging Face `config.id2label`
+  classifiers, verified ImageNet models, and text models traced through
+  `tl.bridge.transformers.trace_text`, whose attached tokenizer now switches text decoding on
+  by itself). To force a style, decode again from the retained outputs at read time:
+  `trace.decode_output(style="imagenet")`, `trace.output_table(style="classification")`, or
+  `trace.decode_output(style="hf_text", tokenizer=tok)`; a custom detector registered with
+  `tl._autoroute.output.register(...)` reads `meta["style"]` (was `meta["output_style"]`) and
+  serves `decode_output(style="my_style")`. The read-time result is returned, not stored in
+  `decoded_output`. An unknown style refuses `decode_style_unknown`
+  (`tl.errors.DecodeStyleUnknownError`; was `output_style_unknown` /
+  `OutputStyleUnknownError`).
+- **output decode**: `CaptureOptions.output_head` is gone. Name the head of a multi-output
+  model at read time instead: `trace.decode_output(head="logits")` or
+  `trace.output_table(head="0")`, where the head is an output container path (`"logits"`,
+  `"0"`, `"0.logits"`). A head that is not an output head refuses `decode_head_unknown`; several
+  qualifying heads with none named refuse `decode_head_ambiguous`; both list the available
+  heads. The automatic pass keeps recording the head it selected in
+  `trace.output_postprocessor.selected_output_head`.
 - **root namespaces**: `tl.mechinterp`, `tl.semantic` and `tl.tviz` are not root attributes;
   in a fresh process they raise a typed `AttributeError` (code `facade_redirect`) that names
   the import. Import the subpackage (`import torchlens.mechinterp`) and call

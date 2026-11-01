@@ -2848,12 +2848,22 @@ deprecation shim owed*
   attention node's `flops` label field or `flops` overlay row is followed by
   the note.
 
-**`output_style_unknown`** — *unstable — no deprecation shim owed*
-: The typed refusal `tl.errors.OutputStyleUnknownError` (an `InvalidArgumentError`
-  subclass) for a `CaptureOptions(output_style=...)` no detector can resolve, with a did-you-mean over the built-in styles
-  (`classification`, `imagenet`, `imagenet1k`, `hf_text`). It refuses before
-  the forward when no custom output detector is registered, and after the
-  capture when registered custom detectors all declined the style.
+**`decode_style_unknown`** — *unstable — no deprecation shim owed*
+: The typed refusal `tl.errors.DecodeStyleUnknownError` (an `InvalidArgumentError`
+  subclass) for a `Trace.decode_output(style=...)` no built-in or registered custom output
+  detector resolves, with a did-you-mean over the built-in styles (`classification`,
+  `imagenet`, `imagenet1k`, `hf_text`). The same code refuses `style="hf_text"` without a
+  usable `tokenizer=`. Output decoding is read-time only: the capture runs the automatic
+  detector pass with no option, and `CaptureOptions` has no decode field.
+
+**`decode_head_unknown`** — *unstable — no deprecation shim owed*
+: `Trace.decode_output(head=...)` named a head that is not one of the trace's output heads
+  (the output container paths such as `"logits"`, `"0"`, `"0.logits"`); the refusal lists the
+  available heads in `fields["available_heads"]`.
+
+**`decode_head_ambiguous`** — *unstable — no deprecation shim owed*
+: `Trace.decode_output(style=...)` found several qualifying output heads and none was named;
+  pass `head=` one of the heads the refusal lists.
 
 **tl.bridge.transformers.register_attention(model=None)** — *unstable — no deprecation shim owed*
 : Registers TorchLens as a Hugging Face attention backend: one call puts a
@@ -4056,7 +4066,7 @@ alphabetical order.
 | `Trace.conditional_edge_call_indices` | Dict mapping (parent, child, conditional id, branch kind) to the sorted pass indices in which that branch-entry edge occurred |
 | `Trace.conditional_records` | List of `ConditionalEvent` records, one per conditional statement observed during capture |
 | `Trace.conditionals` | Accessor for the conditional records, looked up by integer ordinal or stable label |
-| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; raise if no decoded output was captured |
+| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output`; raise if nothing was captured and no output tensor is retained |
 | `Trace.decoded_output` | The decoded model output captured at trace time, such as top-k labels per batch item, or `None` |
 | `Trace.DEFAULT_FILL_STATE` | Class-level dict of the default fill value for each Trace field, derived from the field policy table |
 | `Trace.derived_grads` | Accessor for leaf-level gradients derived explicitly or by a non-torch backend |

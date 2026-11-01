@@ -1283,8 +1283,8 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="data-outputs",
         title="Outputs as decoded rows",
-        rule="output_transform turns the output into label and score rows; output_style decodes "
-        "a model that carries its labels.",
+        rule="output_transform turns the output into label and score rows; a model that carries "
+        "its labels decodes automatically, and decode_output(style=, head=) re-decodes on demand.",
         panels=(
             Panel(
                 "a",

@@ -73,10 +73,9 @@ run preparation behind a no-allocation readiness capability gate.
 Provisional semantic I/O examples (review-day names):
 
 ```python
-classifier_trace = tl.trace(
-    model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
-)
+classifier_trace = tl.trace(model, x)
 classifier_trace.output_table(k=5)
+classifier_trace.decode_output(style="classification", head="logits")  # read-time override
 
 input_trace = tl.trace(
     model,
@@ -92,7 +91,6 @@ image_trace = tl.trace(
     capture=tl.options.CaptureOptions(input_transform=image_batch_to_tensor),
     save=mds_layers,
     save_raw_input=True,
-    output_style="classification",
 )
 image_trace.model_profile
 image_trace.output_table(k=5)

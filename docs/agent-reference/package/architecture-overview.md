@@ -70,10 +70,9 @@ trace.draw(show_containers="nodes")
 Provisional semantic I/O surface (review-day names):
 
 ```python
-log = tl.trace(
-    model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
-)
+log = tl.trace(model, x)
 log.output_table(k=5)
+log.decode_output(style="classification", head="logits")  # read-time override
 log.to_pandas(include_decoded_output_summary=True)
 
 input_log = tl.trace(
@@ -90,7 +89,6 @@ image_log = tl.trace(
     capture=tl.options.CaptureOptions(input_transform=image_batch_to_tensor),
     save=mds_layers,
     save_raw_input=True,
-    output_style="classification",
 )
 image_log.model_profile
 image_log.output_table(k=5)
