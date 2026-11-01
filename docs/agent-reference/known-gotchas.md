@@ -229,3 +229,12 @@
   attribute restore; a later garbage collection that frees it inside another capture ends its idle
   workers there, and the thread check then marks that capture unverified. This errs only one way: a
   false "unverified", never a false "verified".
+- Direct `module.forward(x)` calls and the fast run: such a call skips `Module.__call__` and so
+  every torch hook, which the fast live run uses to collect sites, apply staged steering and fold
+  the call fingerprint. Capture's session `forward` wrapper records the modules it entered that
+  way (`ModuleCaptureWorkspace.direct_forward_addresses`, told apart by the caller frame through
+  `_utils/_module_call_dispatch.py`, gated by `HAS_MODULE_CALL_DISPATCH_FRAME`), and the fast run
+  routes exactly those through a per-run instance `forward` (`_fast_live_direct.py`), restored by
+  identity after each run; every other module stays on hooks. A direct call capture did not
+  record (its input never made one, or the flag is False) is still refused as
+  `run_capability_unavailable` at stage `fast_live_module_hook_unobserved`.

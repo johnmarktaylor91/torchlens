@@ -18,6 +18,7 @@ from torchlens._runnable import ContractCheck, ReadinessReport
 from . import _state
 from ._call_fingerprint import fingerprinting, install_module_token_hooks
 from ._data_classes._trace_accessors import boundary_label_rows
+from ._fast_live_direct import build_direct_forward_routes, direct_forward_routes_installed
 from ._fast_live_plans import (
     _FastOutputPlan,
     _pair_output_leaves,
@@ -1063,6 +1064,11 @@ class _FastLiveSession:
         # post-intervention value, exactly as capture saves it. The plan
         # refuses typed (fast_rerun_target_unsupported) before any hook or wipe.
         self.steer_plan = SteerPlan(trace, model)
+        # Modules capture entered by a direct ``forward()`` call fire no hook;
+        # each run routes exactly those through a per-run ``forward`` wrapper.
+        self.direct_routes = build_direct_forward_routes(
+            trace, model, modules, plan_addresses, self.steer_plan.modules
+        )
         _drop_uncollected_payloads(trace, supported_labels)
         self.function_names = frozenset(plan.address_or_name for plan in self.function_plans)
         # The ordered call fingerprint sealed at capture time is the structure
@@ -1272,9 +1278,11 @@ class _FastLiveSession:
                     RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
                     f"Captured module call {plan.address_or_name!r} call "
                     f"{plan.call_index or 1} exited inside {address!r} without firing a "
-                    "forward hook; the model reaches it by a direct forward() call that "
-                    "torch module hooks cannot observe, so the fast run cannot collect "
-                    "that site. The full run captures it.",
+                    "forward hook: the model reaches it by a direct forward() call, which "
+                    "torch module hooks cannot observe, and the capture recorded no such "
+                    "call to route (its input never made one, the trace kept no capture "
+                    "record, or HAS_MODULE_CALL_DISPATCH_FRAME is False), so the fast run "
+                    "cannot collect that site. The full run captures it.",
                     affected_op_labels=plan.op_labels,
                 )
                 return
@@ -1452,7 +1460,8 @@ class _FastLiveSession:
         if seed is not None:
             set_random_seed(seed)
         truncation = None
-        with self.activated(), self.steer_plan.context(), fingerprinting() as fingerprint:
+        routes = direct_forward_routes_installed(self.direct_routes, weakref.ref(self))
+        with self.activated(), self.steer_plan.context(), routes, fingerprinting() as fingerprint:
             try:
                 if isinstance(input_args, list):
                     output = model(*input_args, **dict(input_kwargs))

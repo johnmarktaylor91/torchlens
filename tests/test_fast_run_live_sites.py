@@ -209,16 +209,24 @@ class DirectForwardModel(nn.Module):
         return self.parent(x) + 1
 
 
-def test_fast_run_names_a_direct_forward_call_as_a_capability_refusal() -> None:
-    """A hook-invisible module call is refused as unobservable, not as a path change."""
+def test_fast_run_names_an_unrecorded_direct_forward_call_as_a_capability_refusal() -> None:
+    """A direct forward() call with no capture record is refused as unobservable.
+
+    Capture records the modules it entered by a direct call and the fast run
+    routes those; without the record (here removed by hand, as on a torch where
+    ``HAS_MODULE_CALL_DISPATCH_FRAME`` is False) the call stays hook-invisible
+    and is refused as a capability gap, not as a path change.
+    """
 
     model = DirectForwardModel()
     trace = tl.trace(model, torch.arange(6.0).view(2, 3))
+    trace._module_capture_ws.direct_forward_addresses.clear()  # noqa: SLF001
     with pytest.raises(RunCapabilityUnavailableError) as info:
         trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
     assert info.value.fields["code"] == "run_capability_unavailable"
     assert "forward()" in str(info.value)
     assert "parent.inner" in str(info.value)
+    assert "recorded no such call" in str(info.value)
 
 
 class DistributionOutput(nn.Module):
