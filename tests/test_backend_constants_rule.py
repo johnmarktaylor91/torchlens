@@ -18,7 +18,6 @@ import numpy as np
 import pytest
 import torch
 from torch import nn
-from torchlens.fastlog.types import CaptureSpec
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
@@ -52,6 +51,7 @@ from torchlens.backends._finalize import (
     mark_output_label,
 )
 from torchlens.backends.registry import BackendUnsupportedError
+from torchlens.recording.types import CaptureSpec
 
 
 class _NumpyBackend:
