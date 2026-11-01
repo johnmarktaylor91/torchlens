@@ -75,15 +75,21 @@ class RosterRow:
 
 
 def _relu(a: np.ndarray) -> np.ndarray:
+    """NumPy reference for the rectified linear unit."""
+
     return np.maximum(a, 0)
 
 
 def _softmax(a: np.ndarray, axis: int = -1) -> np.ndarray:
+    """NumPy reference for a numerically stable softmax along ``axis``."""
+
     e = np.exp(a - a.max(axis=axis, keepdims=True))
     return e / e.sum(axis=axis, keepdims=True)
 
 
 def _x() -> Any:
+    """The shared 2x4 input as an MLX array."""
+
     import mlx.core as mx
 
     return mx.array(X24)
@@ -91,9 +97,13 @@ def _x() -> Any:
 
 # ----------------------------------------------------------------- functions
 def _build_chain_branch() -> tuple[Any, Any]:
+    """The chain_branch row: add, multiply and maximum as a plain function."""
+
     import mlx.core as mx
 
     def chain(v: Any) -> Any:
+        """Add one, multiply by the input and rectify."""
+
         a = v + 1.0
         m = a * v
         return mx.maximum(m, 0.0)
@@ -102,24 +112,34 @@ def _build_chain_branch() -> tuple[Any, Any]:
 
 
 def _chain_branch_intermediates() -> dict[str, Any]:
+    """Expected intermediates of the chain_branch row."""
+
     a = X24 + 1
     return {"add": a, "multiply": a * X24, "maximum": _relu(a * X24)}
 
 
 def _build_multi_output() -> tuple[Any, Any]:
+    """The multi_output row: a function returning a sum and a scaled copy."""
+
     def multi(v: Any) -> Any:
+        """Return the input's sum and twice the input."""
+
         return v.sum(), v * 2.0
 
     return multi, _x()
 
 
 def _build_loop3() -> tuple[Any, Any]:
+    """The loop3 row: three matmul, add, maximum steps with closure weights."""
+
     import mlx.core as mx
 
     weight = mx.array(W44)
     bias = mx.array(B4)
 
     def loop(v: Any) -> Any:
+        """Apply the shared affine-relu step three times."""
+
         for _ in range(3):
             v = mx.maximum(mx.matmul(v, weight) + bias, 0.0)
         return v
@@ -128,6 +148,8 @@ def _build_loop3() -> tuple[Any, Any]:
 
 
 def _loop3_intermediates() -> dict[str, Any]:
+    """Expected intermediates of the loop3 row, one list per op kind."""
+
     h = X24
     matmuls, adds, relus = [], [], []
     for _ in range(3):
@@ -139,9 +161,13 @@ def _loop3_intermediates() -> dict[str, Any]:
 
 
 def _build_norm_softmax() -> tuple[Any, Any]:
+    """The norm_softmax row: mean-variance normalisation then softmax."""
+
     import mlx.core as mx
 
     def norm_softmax(v: Any) -> Any:
+        """Normalise over the last axis and apply softmax."""
+
         mu = mx.mean(v, axis=-1, keepdims=True)
         var = mx.var(v, axis=-1, keepdims=True)
         n = (v - mu) / mx.sqrt(var + 1e-5)
@@ -151,6 +177,8 @@ def _build_norm_softmax() -> tuple[Any, Any]:
 
 
 def _norm_softmax_intermediates() -> dict[str, Any]:
+    """Expected intermediates of the norm_softmax row."""
+
     mu = X24.mean(-1, keepdims=True)
     var = X24.var(-1, keepdims=True)
     n = (X24 - mu) / np.sqrt(var + 1e-5)
@@ -158,15 +186,21 @@ def _norm_softmax_intermediates() -> dict[str, Any]:
 
 
 def _build_reshape_transpose() -> tuple[Any, Any]:
+    """The reshape_transpose row: reshape, transpose and a matmul with ones."""
+
     import mlx.core as mx
 
     def reshape_t(v: Any) -> Any:
+        """Reshape to 4x2, transpose and multiply by a column of ones."""
+
         return mx.transpose(v.reshape(4, 2)) @ mx.ones((4, 1))
 
     return reshape_t, _x()
 
 
 def _reshape_transpose_intermediates() -> dict[str, Any]:
+    """Expected intermediates of the reshape_transpose row."""
+
     return {
         "reshape": X24.reshape(4, 2),
         "transpose": X24.reshape(4, 2).T,
@@ -176,9 +210,13 @@ def _reshape_transpose_intermediates() -> dict[str, Any]:
 
 
 def _build_where_clip() -> tuple[Any, Any]:
+    """The where_clip row: a leaky relu by ``where`` followed by ``clip``."""
+
     import mlx.core as mx
 
     def where_clip(v: Any) -> Any:
+        """Leaky-rectify with ``where`` and clip to [-1, 1]."""
+
         leaky = mx.where(v > 0, v, 0.1 * v)
         return mx.clip(leaky, -1.0, 1.0)
 
@@ -186,12 +224,16 @@ def _build_where_clip() -> tuple[Any, Any]:
 
 
 def _where_clip_intermediates() -> dict[str, Any]:
+    """Expected intermediates of the where_clip row."""
+
     leaky = np.where(X24 > 0, X24, np.float32(0.1) * X24)
     return {"greater": X24 > 0, "where": leaky, "clip": np.clip(leaky, -1.0, 1.0)}
 
 
 # ------------------------------------------------------------------- modules
 def _build_mlp() -> tuple[Any, Any]:
+    """The mlp row: a seeded two-layer ``nn.Sequential`` perceptron."""
+
     import mlx.core as mx
     import mlx.nn as nn
 
@@ -200,10 +242,14 @@ def _build_mlp() -> tuple[Any, Any]:
 
 
 def _build_shared_twice() -> tuple[Any, Any]:
+    """The shared_twice row: one linear layer applied twice with a relu between."""
+
     import mlx.core as mx
     import mlx.nn as nn
 
     class Shared(nn.Module):
+        """One linear layer applied twice."""
+
         def __init__(self) -> None:
             super().__init__()
             self.lin = nn.Linear(4, 4)
@@ -216,10 +262,14 @@ def _build_shared_twice() -> tuple[Any, Any]:
 
 
 def _build_cnn() -> tuple[Any, Any]:
+    """The cnn row: conv, relu, max-pool, flatten and a linear head."""
+
     import mlx.core as mx
     import mlx.nn as nn
 
     class CNN(nn.Module):
+        """Conv, relu, max-pool, flatten, linear."""
+
         def __init__(self) -> None:
             super().__init__()
             self.conv = nn.Conv2d(1, 2, 3, padding=1)
@@ -235,10 +285,14 @@ def _build_cnn() -> tuple[Any, Any]:
 
 
 def _build_nested_residual() -> tuple[Any, Any]:
+    """The nested_residual row: a residual gelu block followed by layer norm."""
+
     import mlx.core as mx
     import mlx.nn as nn
 
     class Nested(nn.Module):
+        """Residual gelu block followed by a layer norm."""
+
         def __init__(self) -> None:
             super().__init__()
             self.block = nn.Sequential(nn.Linear(4, 4), nn.GELU())
@@ -371,7 +425,11 @@ def ecosystem_not_run_reason() -> str | None:
 
 
 def _build_mlx_lm(repo: str) -> Callable[[], tuple[Any, Any]]:
+    """A builder loading the mlx-lm checkpoint ``repo`` with a short token prompt."""
+
     def build() -> tuple[Any, Any]:
+        """Load the model and tokenizer, then encode the fixed prompt."""
+
         import mlx.core as mx
         from mlx_lm import load
 

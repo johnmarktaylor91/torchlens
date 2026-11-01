@@ -49,24 +49,34 @@ LN_EPS = 1e-5
 
 # ------------------------------------------------------------------ NumPy oracle
 def _relu(a: np.ndarray) -> np.ndarray:
+    """NumPy reference for the rectified linear unit."""
+
     return np.maximum(a, 0).astype(np.float32)
 
 
 def _softmax(a: np.ndarray, axis: int = -1) -> np.ndarray:
+    """NumPy reference for a numerically stable softmax along ``axis``."""
+
     shifted = np.exp(a - a.max(axis=axis, keepdims=True))
     return (shifted / shifted.sum(axis=axis, keepdims=True)).astype(np.float32)
 
 
 def _gelu(a: np.ndarray) -> np.ndarray:
+    """NumPy reference for the exact (erf) GELU."""
+
     erf = np.vectorize(math.erf, otypes=[np.float64])
     return (0.5 * a * (1.0 + erf(a / math.sqrt(2.0)))).astype(np.float32)
 
 
 def _linear(a: np.ndarray, weight: np.ndarray, bias: np.ndarray) -> np.ndarray:
+    """NumPy reference for ``torch.nn.Linear`` (weight is [out, in])."""
+
     return (a @ weight.T + bias).astype(np.float32)
 
 
 def _layer_norm(a: np.ndarray) -> np.ndarray:
+    """NumPy reference for layer normalisation without affine parameters."""
+
     mean = a.mean(-1, keepdims=True)
     var = a.var(-1, keepdims=True)
     return ((a - mean) / np.sqrt(var + LN_EPS)).astype(np.float32)
@@ -86,6 +96,8 @@ def _conv2d_same3(image: np.ndarray, weight: np.ndarray, bias: np.ndarray) -> np
 
 
 def _max_pool2(a: np.ndarray) -> np.ndarray:
+    """NumPy reference for a non-overlapping 2x2 max pool."""
+
     batch, channels, height, width = a.shape
     blocks = a.reshape(batch, channels, height // 2, 2, width // 2, 2)
     return blocks.max(axis=(3, 5)).astype(np.float32)
@@ -93,12 +105,16 @@ def _max_pool2(a: np.ndarray) -> np.ndarray:
 
 # ------------------------------------------------------------------ models
 def _tensor(array: np.ndarray) -> Any:
+    """Copy a NumPy array into a torch tensor."""
+
     import torch
 
     return torch.from_numpy(array.copy())
 
 
 def _set_linear(layer: Any, weight: np.ndarray, bias: np.ndarray) -> None:
+    """Load fixed NumPy weights into a ``torch.nn.Linear`` layer."""
+
     import torch
 
     with torch.no_grad():
@@ -107,10 +123,16 @@ def _set_linear(layer: Any, weight: np.ndarray, bias: np.ndarray) -> None:
 
 
 def _build_chain_branch() -> tuple[Any, Any]:
+    """The chain_branch row: add, multiply and relu in a module forward."""
+
     from torch import nn
 
     class ChainBranch(nn.Module):
+        """Add one, multiply by the input and rectify."""
+
         def forward(self, v: Any) -> Any:
+            """Add one, multiply by the input and rectify."""
+
             a = v + 1.0
             m = a * v
             return nn.functional.relu(m)
@@ -119,19 +141,29 @@ def _build_chain_branch() -> tuple[Any, Any]:
 
 
 def _build_multi_output() -> tuple[Any, Any]:
+    """The multi_output row: a module returning a sum and a scaled copy."""
+
     from torch import nn
 
     class MultiOutput(nn.Module):
+        """Return the input's sum and twice the input."""
+
         def forward(self, v: Any) -> Any:
+            """Return the input's sum and twice the input."""
+
             return v.sum(), v * 2.0
 
     return MultiOutput().eval(), _tensor(X24)
 
 
 def _build_loop3() -> tuple[Any, Any]:
+    """The loop3 row: three matmul, add, relu steps over buffer weights."""
+
     from torch import nn
 
     class Loop3(nn.Module):
+        """Three affine-relu steps sharing one weight and bias buffer."""
+
         weight: Any
         bias: Any
 
@@ -141,6 +173,8 @@ def _build_loop3() -> tuple[Any, Any]:
             self.register_buffer("bias", _tensor(B4))
 
         def forward(self, v: Any) -> Any:
+            """Apply the shared affine-relu step three times."""
+
             import torch
 
             for _ in range(3):
@@ -151,10 +185,16 @@ def _build_loop3() -> tuple[Any, Any]:
 
 
 def _build_norm_softmax() -> tuple[Any, Any]:
+    """The norm_softmax row: mean-variance normalisation then softmax."""
+
     from torch import nn
 
     class NormSoftmax(nn.Module):
+        """Normalise over the last dimension and apply softmax."""
+
         def forward(self, v: Any) -> Any:
+            """Normalise over the last dimension and apply softmax."""
+
             import torch
 
             mu = torch.mean(v, dim=-1, keepdim=True)
@@ -166,10 +206,16 @@ def _build_norm_softmax() -> tuple[Any, Any]:
 
 
 def _build_reshape_transpose() -> tuple[Any, Any]:
+    """The reshape_transpose row: reshape, transpose and a matmul with ones."""
+
     from torch import nn
 
     class ReshapeTranspose(nn.Module):
+        """Reshape to 4x2, transpose and multiply by a column of ones."""
+
         def forward(self, v: Any) -> Any:
+            """Reshape to 4x2, transpose and multiply by a column of ones."""
+
             import torch
 
             return torch.matmul(torch.reshape(v, (4, 2)).transpose(0, 1), torch.ones(4, 1))
@@ -178,6 +224,8 @@ def _build_reshape_transpose() -> tuple[Any, Any]:
 
 
 def _build_mlp() -> tuple[Any, Any]:
+    """The mlp row: a two-layer ``Sequential`` perceptron with fixed weights."""
+
     from torch import nn
 
     mlp = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
@@ -187,14 +235,20 @@ def _build_mlp() -> tuple[Any, Any]:
 
 
 def _build_shared_twice() -> tuple[Any, Any]:
+    """The shared_twice row: one linear layer applied twice with a relu between."""
+
     from torch import nn
 
     class SharedTwice(nn.Module):
+        """One linear layer applied twice."""
+
         def __init__(self) -> None:
             super().__init__()
             self.lin = nn.Linear(4, 4)
 
         def forward(self, v: Any) -> Any:
+            """Apply the linear layer, relu, then the same layer again."""
+
             return self.lin(nn.functional.relu(self.lin(v)))
 
     model = SharedTwice()
@@ -203,10 +257,14 @@ def _build_shared_twice() -> tuple[Any, Any]:
 
 
 def _build_cnn() -> tuple[Any, Any]:
+    """The cnn row: conv, relu, max-pool, flatten and a linear head."""
+
     import torch
     from torch import nn
 
     class SmallCnn(nn.Module):
+        """Conv, relu, max-pool, flatten, linear."""
+
         def __init__(self) -> None:
             super().__init__()
             self.conv = nn.Conv2d(1, 2, 3, padding=1)
@@ -214,6 +272,8 @@ def _build_cnn() -> tuple[Any, Any]:
             self.fc = nn.Linear(18, 3)
 
         def forward(self, v: Any) -> Any:
+            """Convolve, rectify, pool, flatten and project."""
+
             h = self.pool(nn.functional.relu(self.conv(v)))
             return self.fc(torch.flatten(h, 1))
 
@@ -224,15 +284,21 @@ def _build_cnn() -> tuple[Any, Any]:
 
 
 def _build_nested_residual() -> tuple[Any, Any]:
+    """The nested_residual row: a residual gelu block followed by layer norm."""
+
     from torch import nn
 
     class NestedResidual(nn.Module):
+        """Residual gelu block followed by a layer norm."""
+
         def __init__(self) -> None:
             super().__init__()
             self.block = nn.Sequential(nn.Linear(4, 4), nn.GELU())
             self.ln = nn.LayerNorm(4, eps=LN_EPS, elementwise_affine=False)
 
         def forward(self, v: Any) -> Any:
+            """Add the block's output to the input and normalise."""
+
             return self.ln(v + self.block(v))
 
     model = NestedResidual()
@@ -249,7 +315,11 @@ def _build_constants() -> tuple[Any, Any]:
     closure_weight = _tensor(W44)
 
     class ClosureConstant(nn.Module):
+        """Matmul with a closure weight plus a literal ``full`` constant."""
+
         def forward(self, v: Any) -> Any:
+            """Multiply by the closure weight and add the literal shift."""
+
             shift = torch.full((1, 4), 0.5)
             return torch.matmul(v, closure_weight) + shift
 
@@ -262,7 +332,11 @@ def _build_random_forward() -> tuple[Any, Any]:
     from torch import nn
 
     class RandomForward(nn.Module):
+        """Scale the input and apply training-mode dropout."""
+
         def forward(self, v: Any) -> Any:
+            """Scale by two and apply dropout with ``training=True``."""
+
             return nn.functional.dropout(v * 2.0, p=0.5, training=True)
 
     return RandomForward(), _tensor(X24)
@@ -390,6 +464,8 @@ _CONFIG_BUILT: tuple[
 
 # ------------------------------------------------------------------ ecosystem
 def _build_resnet18_imagenet() -> tuple[Any, Any]:
+    """The resnet18_imagenet ecosystem row: torchvision weights and a fixed image."""
+
     import torch
     from torchvision.models import ResNet18_Weights, resnet18
 
@@ -398,6 +474,8 @@ def _build_resnet18_imagenet() -> tuple[Any, Any]:
 
 
 def _build_mobilenet_v3_small_imagenet() -> tuple[Any, Any]:
+    """The mobilenet_v3_small_imagenet ecosystem row: torchvision weights and a fixed image."""
+
     import torch
     from torchvision.models import MobileNet_V3_Small_Weights, mobilenet_v3_small
 

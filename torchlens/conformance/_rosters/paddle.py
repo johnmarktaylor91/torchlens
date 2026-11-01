@@ -47,20 +47,28 @@ def _param(shape: tuple[int, ...], scale: float = 0.3) -> np.ndarray:
 
 
 def _relu(value: np.ndarray) -> np.ndarray:
+    """NumPy reference for the rectified linear unit."""
+
     return np.maximum(value, 0.0)
 
 
 def _softmax(value: np.ndarray) -> np.ndarray:
+    """NumPy reference for a numerically stable softmax along ``axis``."""
+
     shifted = np.exp(value - value.max(axis=-1, keepdims=True))
     return shifted / shifted.sum(axis=-1, keepdims=True)
 
 
 def _gelu(value: np.ndarray) -> np.ndarray:
+    """NumPy reference for the exact (erf) GELU."""
+
     erf = np.vectorize(math.erf)
     return (0.5 * value * (1.0 + erf(value / math.sqrt(2.0)))).astype(np.float32)
 
 
 def _layer_norm(value: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+    """NumPy reference for layer normalisation without affine parameters."""
+
     mean = value.mean(axis=-1, keepdims=True)
     var = value.var(axis=-1, keepdims=True)
     return (value - mean) / np.sqrt(var + eps)
@@ -84,6 +92,8 @@ def _conv(x: np.ndarray, weight: np.ndarray, bias: np.ndarray, padding: int) -> 
 
 
 def _max_pool2d(value: np.ndarray, size: int) -> np.ndarray:
+    """NumPy reference for a non-overlapping ``size`` x ``size`` max pool."""
+
     n, c, h, w = value.shape
     return value.reshape(n, c, h // size, size, w // size, size).max(axis=(3, 5))
 
@@ -116,9 +126,13 @@ def _set_linear(layer: Any, weight: np.ndarray, bias: np.ndarray) -> None:
 
 
 def _fn_chain_branch() -> tuple[Any, Any]:
+    """The fn_chain_branch row: add, multiply and relu as a plain function."""
+
     import paddle
 
     def chain(v: Any) -> Any:
+        """Add one, multiply by the input and rectify."""
+
         a = v + 1.0
         m = a * v
         return paddle.nn.functional.relu(m)
@@ -127,21 +141,29 @@ def _fn_chain_branch() -> tuple[Any, Any]:
 
 
 def _fn_multi_output() -> tuple[Any, Any]:
+    """The fn_multi_output row: a function returning a sum and a scaled copy."""
+
     import paddle
 
     def multi(v: Any) -> Any:
+        """Return the input's sum and twice the input."""
+
         return v.sum(), v * 2.0
 
     return multi, paddle.to_tensor(_X24)
 
 
 def _fn_loop3() -> tuple[Any, Any]:
+    """The fn_loop3 row: three matmul, add, relu steps with closure weights."""
+
     import paddle
 
     weight = paddle.to_tensor(_W44)
     bias = paddle.to_tensor(_B4)
 
     def loop(v: Any) -> Any:
+        """Apply the shared affine-relu step three times."""
+
         for _ in range(3):
             v = paddle.nn.functional.relu(paddle.matmul(v, weight) + bias)
         return v
@@ -150,6 +172,8 @@ def _fn_loop3() -> tuple[Any, Any]:
 
 
 def _loop3_intermediates() -> dict[str, list[np.ndarray]]:
+    """Expected intermediates of the fn_loop3 row, one list per op kind."""
+
     value = _X24
     matmuls: list[np.ndarray] = []
     relus: list[np.ndarray] = []
@@ -161,9 +185,13 @@ def _loop3_intermediates() -> dict[str, list[np.ndarray]]:
 
 
 def _fn_norm_softmax() -> tuple[Any, Any]:
+    """The fn_norm_softmax row: mean-variance normalisation then softmax."""
+
     import paddle
 
     def norm_softmax(v: Any) -> Any:
+        """Normalise over the last axis and apply softmax."""
+
         mu = paddle.mean(v, axis=-1, keepdim=True)
         var = paddle.var(v, axis=-1, unbiased=False, keepdim=True)
         n = (v - mu) / paddle.sqrt(var + 1e-5)
@@ -173,9 +201,13 @@ def _fn_norm_softmax() -> tuple[Any, Any]:
 
 
 def _fn_reshape_transpose() -> tuple[Any, Any]:
+    """The fn_reshape_transpose row: reshape, transpose and a matmul with ones."""
+
     import paddle
 
     def reshape_t(v: Any) -> Any:
+        """Reshape to 4x2, transpose and multiply by a column of ones."""
+
         return paddle.matmul(
             paddle.transpose(paddle.reshape(v, [4, 2]), [1, 0]), paddle.ones([4, 1])
         )
@@ -184,11 +216,15 @@ def _fn_reshape_transpose() -> tuple[Any, Any]:
 
 
 def _fn_constants_planted() -> tuple[Any, Any]:
+    """The fn_constants_planted row: a closure weight and a literal ``full`` constant."""
+
     import paddle
 
     weight = paddle.to_tensor(_W44)
 
     def planted(v: Any) -> Any:
+        """Multiply by the closure weight and scale by a literal constant."""
+
         return paddle.matmul(v, weight) * paddle.full([1, 4], 0.5, dtype="float32")
 
     return planted, paddle.to_tensor(_X24)
@@ -199,6 +235,8 @@ _MLP_W2, _MLP_B2 = _param((3, 2), 0.4), _param((2,), 0.05)
 
 
 def _mod_mlp() -> tuple[Any, Any]:
+    """The mod_mlp row: a two-layer ``Sequential`` perceptron with fixed weights."""
+
     import paddle
 
     model = paddle.nn.Sequential(paddle.nn.Linear(4, 3), paddle.nn.ReLU(), paddle.nn.Linear(3, 2))
@@ -211,14 +249,20 @@ _SHARED_W, _SHARED_B = _param((4, 4)), _param((4,), 0.1)
 
 
 def _mod_shared_twice() -> tuple[Any, Any]:
+    """The mod_shared_twice row: one linear layer applied twice with a relu between."""
+
     import paddle
 
     class Shared(paddle.nn.Layer):
+        """One linear layer applied twice."""
+
         def __init__(self) -> None:
             super().__init__()
             self.lin = paddle.nn.Linear(4, 4)
 
         def forward(self, v: Any) -> Any:
+            """Apply the linear layer, relu, then the same layer again."""
+
             return self.lin(paddle.nn.functional.relu(self.lin(v)))
 
     model = Shared()
@@ -231,9 +275,13 @@ _CNN_FC_W, _CNN_FC_B = _param((18, 3), 0.2), _param((3,), 0.1)
 
 
 def _mod_cnn() -> tuple[Any, Any]:
+    """The mod_cnn row: conv, relu, max-pool, flatten and a linear head."""
+
     import paddle
 
     class CNN(paddle.nn.Layer):
+        """Conv, relu, max-pool, flatten, linear."""
+
         def __init__(self) -> None:
             super().__init__()
             self.conv = paddle.nn.Conv2D(1, 2, 3, padding=1)
@@ -241,6 +289,8 @@ def _mod_cnn() -> tuple[Any, Any]:
             self.fc = paddle.nn.Linear(18, 3)
 
         def forward(self, v: Any) -> Any:
+            """Convolve, rectify, pool, flatten and project."""
+
             h = self.pool(paddle.nn.functional.relu(self.conv(v)))
             return self.fc(paddle.flatten(h, 1))
 
@@ -252,6 +302,8 @@ def _mod_cnn() -> tuple[Any, Any]:
 
 
 def _cnn_intermediates() -> dict[str, np.ndarray]:
+    """Expected intermediates of the mod_cnn row."""
+
     conv = _conv(_IMG, _CNN_W, _CNN_B, padding=1)
     pooled = _max_pool2d(_relu(conv), 2)
     return {
@@ -265,15 +317,21 @@ _NEST_W, _NEST_B = _param((4, 4)), _param((4,), 0.1)
 
 
 def _mod_nested_residual() -> tuple[Any, Any]:
+    """The mod_nested_residual row: a residual gelu block followed by layer norm."""
+
     import paddle
 
     class Nested(paddle.nn.Layer):
+        """Residual gelu block followed by a layer norm."""
+
         def __init__(self) -> None:
             super().__init__()
             self.block = paddle.nn.Sequential(paddle.nn.Linear(4, 4), paddle.nn.GELU())
             self.ln = paddle.nn.LayerNorm(4)
 
         def forward(self, v: Any) -> Any:
+            """Add the block's output to the input and normalise."""
+
             return self.ln(v + self.block(v))
 
     model = Nested()
@@ -282,6 +340,8 @@ def _mod_nested_residual() -> tuple[Any, Any]:
 
 
 def _nested_intermediates() -> dict[str, np.ndarray]:
+    """Expected intermediates of the mod_nested_residual row."""
+
     hidden = _gelu(_X24 @ _NEST_W + _NEST_B)
     return {
         "functional.gelu": hidden,
@@ -294,6 +354,8 @@ _CONV3_W, _CONV3_B = _param((2, 1, 3, 3, 3), 0.2), _param((2,), 0.1)
 
 
 def _conv_layer_model(rank: int) -> tuple[Any, Any]:
+    """A ``rank``-dimensional convolution layer with fixed weights and its input."""
+
     import paddle
 
     layer: Any
@@ -463,6 +525,8 @@ def config_built_specs() -> tuple[PaddleRowSpec, ...]:
 
 
 def _config_built_rows() -> tuple[RosterModel, ...]:
+    """The config_built rows as ``RosterModel`` records."""
+
     return tuple(
         _row(
             family=spec.family,
@@ -497,7 +561,11 @@ ECOSYSTEM_CHECKPOINTS: dict[str, str] = {
 
 
 def _vision_model(name: str) -> Callable[[], tuple[Any, Any]]:
+    """A builder loading the pretrained ``paddle.vision`` model ``name``."""
+
     def build() -> tuple[Any, Any]:
+        """Load the pretrained model in eval mode with a fixed synthetic image."""
+
         import paddle
         from paddle.vision import models
 
@@ -510,6 +578,8 @@ def _vision_model(name: str) -> Callable[[], tuple[Any, Any]]:
 
 
 def _ecosystem_rows() -> tuple[RosterModel, ...]:
+    """The pretrained ecosystem rows as ``RosterModel`` records."""
+
     return tuple(
         _row(
             family=name,

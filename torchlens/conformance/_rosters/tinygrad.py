@@ -103,10 +103,14 @@ def _row(
 
 
 def _np_relu(value: np.ndarray) -> np.ndarray:
+    """NumPy reference for the rectified linear unit."""
+
     return np.maximum(value, 0.0)
 
 
 def _np_softmax(value: np.ndarray) -> np.ndarray:
+    """NumPy reference for a numerically stable softmax over the last axis."""
+
     shifted = value - value.max(axis=-1, keepdims=True)
     exp = np.exp(shifted)
     return exp / exp.sum(axis=-1, keepdims=True)
@@ -116,9 +120,13 @@ def _np_softmax(value: np.ndarray) -> np.ndarray:
 
 
 def _build_chain_branch() -> tuple[Any, Any]:
+    """The chain_branch row: add, multiply and relu as a plain function."""
+
     from tinygrad import Tensor
 
     def chain(value: Any) -> Any:
+        """Add one, multiply by the input and rectify."""
+
         added = value + 1.0
         product = added * value
         return product.relu()
@@ -127,21 +135,29 @@ def _build_chain_branch() -> tuple[Any, Any]:
 
 
 def _build_multi_output() -> tuple[Any, Any]:
+    """The multi_output row: a function returning a sum and a scaled copy."""
+
     from tinygrad import Tensor
 
     def multi(value: Any) -> Any:
+        """Return the input's sum and twice the input."""
+
         return value.sum(), value * 2.0
 
     return multi, Tensor(_INPUT)
 
 
 def _build_loop3() -> tuple[Any, Any]:
+    """The loop3 row: three matmul, add, relu steps with closure weights."""
+
     from tinygrad import Tensor
 
     weight = Tensor(_W44.tolist())
     bias = Tensor(_B4.tolist())
 
     def loop(value: Any) -> Any:
+        """Apply the shared affine-relu step three times."""
+
         for _ in range(3):
             value = (value.matmul(weight) + bias).relu()
         return value
@@ -150,9 +166,13 @@ def _build_loop3() -> tuple[Any, Any]:
 
 
 def _build_norm_softmax() -> tuple[Any, Any]:
+    """The norm_softmax row: mean-variance normalisation then softmax."""
+
     from tinygrad import Tensor
 
     def norm_softmax(value: Any) -> Any:
+        """Normalise over the last axis and apply softmax."""
+
         mean = value.mean(axis=-1, keepdim=True)
         var = ((value - mean) ** 2).mean(axis=-1, keepdim=True)
         normed = (value - mean) / (var + 1e-5).sqrt()
@@ -162,9 +182,13 @@ def _build_norm_softmax() -> tuple[Any, Any]:
 
 
 def _build_reshape_transpose() -> tuple[Any, Any]:
+    """The reshape_transpose row: reshape, transpose and a matmul with ones."""
+
     from tinygrad import Tensor
 
     def reshape_transpose(value: Any) -> Any:
+        """Reshape to 4x2, transpose and multiply by a column of ones."""
+
         return value.reshape(4, 2).transpose(0, 1).matmul(Tensor.ones(4, 1))
 
     return reshape_transpose, Tensor(_INPUT)
@@ -182,18 +206,24 @@ def _linear(weight: np.ndarray, bias: np.ndarray) -> Any:
 
 
 def _build_mlp_linear() -> tuple[Any, Any]:
+    """The mlp_linear row: two closure linear layers with a relu between."""
+
     from tinygrad import Tensor
 
     first = _linear(_W43, _B3)
     second = _linear(_W32, _B2)
 
     def mlp(value: Any) -> Any:
+        """Apply the first layer, relu, then the second layer."""
+
         return second(first(value).relu())
 
     return mlp, Tensor(_INPUT)
 
 
 def _build_shared_twice() -> tuple[Any, Any]:
+    """The shared_twice row: one linear layer applied twice with a relu between."""
+
     from tinygrad import Tensor
 
     class Shared:
@@ -209,6 +239,8 @@ def _build_shared_twice() -> tuple[Any, Any]:
 
 
 def _build_cnn() -> tuple[Any, Any]:
+    """The cnn row: conv, relu, max-pool, flatten and a linear head."""
+
     from tinygrad import Tensor, nn
 
     class Cnn:
@@ -228,6 +260,8 @@ def _build_cnn() -> tuple[Any, Any]:
 
 
 def _build_nested_residual() -> tuple[Any, Any]:
+    """The nested_residual row: a residual gelu block followed by layer norm."""
+
     from tinygrad import Tensor, nn
 
     class Nested:
@@ -244,17 +278,23 @@ def _build_nested_residual() -> tuple[Any, Any]:
 
 
 def _build_constants_plant() -> tuple[Any, Any]:
+    """The constants_plant row: a closure weight plus a literal ``ones`` constant."""
+
     from tinygrad import Tensor
 
     weight = Tensor(_W44.tolist())
 
     def constants(value: Any) -> Any:
+        """Multiply by the closure weight and add a literal ones row."""
+
         return value.matmul(weight) + Tensor.ones(1, 4)
 
     return constants, Tensor(_INPUT)
 
 
 def _build_random_linear() -> tuple[Any, Any]:
+    """The random_linear row: a seeded ``nn.Linear`` with random parameters."""
+
     from tinygrad import Tensor, nn
 
     Tensor.manual_seed(0)
@@ -263,6 +303,8 @@ def _build_random_linear() -> tuple[Any, Any]:
 
 
 def _build_random_conv() -> tuple[Any, Any]:
+    """The random_conv row: a seeded ``nn.Conv2d`` with random parameters."""
+
     from tinygrad import Tensor, nn
 
     Tensor.manual_seed(0)
@@ -271,6 +313,8 @@ def _build_random_conv() -> tuple[Any, Any]:
 
 
 def _build_random_layernorm() -> tuple[Any, Any]:
+    """The random_layernorm row: a seeded ``nn.LayerNorm`` over the input."""
+
     from tinygrad import Tensor, nn
 
     Tensor.manual_seed(0)
@@ -283,15 +327,21 @@ def _build_random_layernorm() -> tuple[Any, Any]:
 
 
 def _intermediates_chain() -> dict[str, Any]:
+    """Expected output of the chain_branch row."""
+
     added = _INPUT + 1.0
     return {"output": _np_relu(added * _INPUT)}
 
 
 def _intermediates_multi() -> dict[str, Any]:
+    """Expected outputs of the multi_output row."""
+
     return {"output": [np.asarray(_INPUT.sum(), dtype=np.float32), _INPUT * 2.0]}
 
 
 def _intermediates_loop3() -> dict[str, Any]:
+    """Expected output of the loop3 row."""
+
     value = _INPUT
     for _ in range(3):
         value = _np_relu(value @ _W44 + _B4)
@@ -299,24 +349,34 @@ def _intermediates_loop3() -> dict[str, Any]:
 
 
 def _intermediates_norm_softmax() -> dict[str, Any]:
+    """Expected output of the norm_softmax row."""
+
     mean = _INPUT.mean(axis=-1, keepdims=True)
     var = ((_INPUT - mean) ** 2).mean(axis=-1, keepdims=True)
     return {"output": _np_softmax((_INPUT - mean) / np.sqrt(var + 1e-5))}
 
 
 def _intermediates_reshape_transpose() -> dict[str, Any]:
+    """Expected output of the reshape_transpose row."""
+
     return {"output": _INPUT.reshape(4, 2).T @ np.ones((4, 1), dtype=np.float32)}
 
 
 def _intermediates_mlp() -> dict[str, Any]:
+    """Expected output of the mlp_linear row."""
+
     return {"output": _np_relu(_INPUT @ _W43 + _B3) @ _W32 + _B2}
 
 
 def _intermediates_shared() -> dict[str, Any]:
+    """Expected output of the shared_twice row."""
+
     return {"output": _np_relu(_INPUT @ _W44 + _B4) @ _W44 + _B4}
 
 
 def _intermediates_cnn() -> dict[str, Any]:
+    """Expected output of the cnn row, convolved by hand in NumPy."""
+
     padded = np.pad(_IMG, ((0, 0), (0, 0), (1, 1), (1, 1)))
     conv = np.zeros((1, 2, 6, 6), dtype=np.float32)
     for out_channel in range(2):
@@ -331,6 +391,8 @@ def _intermediates_cnn() -> dict[str, Any]:
 
 
 def _intermediates_nested() -> dict[str, Any]:
+    """Expected output of the nested_residual row (tanh-approximate gelu)."""
+
     hidden = _INPUT @ _W44 + _B4
     gelu = 0.5 * hidden * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (hidden + 0.044715 * hidden**3)))
     residual = _INPUT + gelu
@@ -340,6 +402,8 @@ def _intermediates_nested() -> dict[str, Any]:
 
 
 def _intermediates_constants() -> dict[str, Any]:
+    """Expected output of the constants_plant row."""
+
     return {"output": _INPUT @ _W44 + np.ones((1, 4), dtype=np.float32)}
 
 
@@ -761,6 +825,8 @@ _PYTHON_INVENTORIES: dict[str, tuple[str, ...] | None] = {
 
 
 def _default_device() -> str | None:
+    """tinygrad's default device name, or ``None`` when tinygrad is absent."""
+
     try:
         from tinygrad import Device
     except ImportError:
@@ -821,6 +887,8 @@ def _ecosystem_builder(family: str) -> Callable[[], tuple[Any, Any]]:
     """A builder that names the not-run reason until the ecosystem flag is on."""
 
     def build() -> tuple[Any, Any]:
+        """Raise the not-run reason; the ecosystem row has no runnable definition yet."""
+
         raise RuntimeError(
             f"{family}: {ECOSYSTEM_NOT_RUN_REASON}"
             if not ecosystem_enabled()
