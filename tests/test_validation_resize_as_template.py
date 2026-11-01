@@ -157,7 +157,7 @@ def test_receiver_blind_resize_still_fails_perturbation(
         assert status.state == "failed"
         failure = get_validation_failure(trace)
         assert failure is not None
-        assert failure.check == "perturbation"
+        assert failure.check_name == "perturbation"
         assert failure.func_name == func_name
         assert receiver_label in failure.extra["perturbed_parents"]
     finally:

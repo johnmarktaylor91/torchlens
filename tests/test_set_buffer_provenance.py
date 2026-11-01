@@ -139,7 +139,7 @@ def _graph(model: nn.Module) -> tuple[str, list[tuple[str, tuple[str, ...], Any]
         trace = tl.trace(
             model,
             torch.rand(4),
-            capture=CaptureOptions(layers_to_save="all", save_arg_values=True, random_seed=0),
+            capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
         )
     try:
         rows = [
@@ -212,7 +212,7 @@ def test_shifting_a_view_on_the_same_storage_is_not_a_host_write() -> None:
         trace = tl.trace(
             model,
             torch.rand(4),
-            capture=CaptureOptions(layers_to_save="all", save_arg_values=True, random_seed=0),
+            capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
         )
     try:
         # The default capture rolls the buffer back after the forward.
@@ -292,7 +292,7 @@ def test_storage_overload_capture_charges_the_saved_storage_copy() -> None:
             _SetStorageView(),
             torch.rand(4),
             capture=CaptureOptions(
-                layers_to_save="all", save_arg_values=True, random_seed=0, save_budget=1 << 30
+                layers_to_save="all", save_args=True, seed=0, save_budget=1 << 30
             ),
         )
     try:
