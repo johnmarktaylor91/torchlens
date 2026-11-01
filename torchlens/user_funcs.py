@@ -168,9 +168,13 @@ from .fastlog.types import CaptureSpec
 from .intervention import injection as _injection, model_door as _model_door
 from .intervention._module_alias_guard import refuse_model_alias_spellings
 from .intervention._zero_fire import settle_capture_zero_fire, zero_fire_policy_scope
-from .intervention.audit import rule_signal
+from .intervention.audit import rule_signal as _rule_signal
 from .intervention.errors import ChunkedForwardConfigError
-from .intervention.hooks import normalize_hook_plan, site_universe, split_site_branches
+from .intervention.hooks import (
+    normalize_hook_plan,
+    site_universe as _site_universe,
+    split_site_branches as _split_site_branches,
+)
 from .intervention.predicates import InterventionPredicate
 from .intervention.resolver import resolve_sites
 from .intervention.selectors import BaseSelector
@@ -1384,12 +1388,12 @@ def _warn_zero_match_capture_selectors(
             # counter for the after-backward reconciliation.
             defer_backward_intervention = any(
                 universe != "activation"
-                for universe, _branch in split_site_branches(intervene_selector)
+                for universe, _branch in _split_site_branches(intervene_selector)
             )
         if isinstance(intervene_selector, BaseSelector) and intervene_selector_fired_nowhere(
             trace, intervene_selector
         ):
-            _record_unmatched("intervene", intervene_selector, rule_signal(intervene_selector))
+            _record_unmatched("intervene", intervene_selector, _rule_signal(intervene_selector))
             settle_capture_zero_fire(
                 f"Capture-time intervention selector {intervene_selector!r} matched zero sites; "
                 "no intervention fired.",
@@ -1835,7 +1839,7 @@ def _run_model_and_save_specified_outs(
         and selector_contains_kind(candidate_intervene_selector, "module")
         and isinstance(candidate_intervene_decision, InterventionDecision)
         and candidate_intervene_decision.hook is not None
-        and site_universe(candidate_intervene_selector) == "activation"
+        and _site_universe(candidate_intervene_selector) == "activation"
     ):
         module_intervene_selector = candidate_intervene_selector
         # .selector is non-None only for single-rule specs, so rules[0] is
