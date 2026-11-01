@@ -43,7 +43,6 @@ correctly never fires for edges.
 from __future__ import annotations
 
 import dataclasses
-import hashlib
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -57,6 +56,7 @@ from .._selection import (
     _trace_edge_records,
     edge_address_of,
 )
+from ._replay_values import tensor_content_digest
 from .masked_edit import _validate_edited
 from .types import Edit
 
@@ -64,25 +64,6 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 __all__ = ["apply_edge_substitution_do"]
-
-
-def tensor_content_digest(value: torch.Tensor) -> str:
-    """Return the sha256 of a tensor's raw element bytes (dtype-agnostic).
-
-    The bytes are read through a flat ``uint8`` view of the contiguous
-    payload, so the digest is byte-identical to the historical
-    ``numpy().tobytes()`` spelling for every numpy-representable dtype and
-    additionally covers dtypes numpy cannot represent (``bfloat16``,
-    ``float8``). Two tensors of the same shape and dtype digest equal iff
-    they are bitwise equal (NaN payloads included); the digest carries no
-    shape or dtype, so callers compare digests only within one site.
-    """
-
-    payload = value.detach().cpu().contiguous()
-    if payload.numel() == 0:
-        return hashlib.sha256(b"").hexdigest()
-    raw = payload.view(-1).view(torch.uint8)
-    return hashlib.sha256(raw.numpy().tobytes()).hexdigest()
 
 
 def _value_digest(value: torch.Tensor) -> str:

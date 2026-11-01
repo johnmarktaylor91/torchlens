@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final, Literal, TypeAlias, cast
 
 from ..errors._base import ConfigurationError
+from ._backend_names import TORCH_BACKEND_NAME as TORCH_BACKEND_NAME
 from ._protocol import CaptureBackend
 
 BackendName: TypeAlias = Literal["torch", "mlx", "jax", "tinygrad", "paddle", "tf", "fake"] | str
@@ -15,14 +16,6 @@ BackendName: TypeAlias = Literal["torch", "mlx", "jax", "tinygrad", "paddle", "t
 The ``"fake"`` literal is reserved for tests and downstream conformance fixtures
 that register process-local specs; TorchLens intentionally does not ship a
 default fake backend.
-"""
-
-TORCH_BACKEND_NAME: Final[BackendName] = "torch"
-"""Canonical registry name of the default torch backend.
-
-Public (non-``backends``) code that branches on backend identity must compare
-against this constant, never a hard-coded literal — the backend-literal gate
-in ``tests/test_backend_registry.py`` enforces it.
 """
 
 JAX_BACKEND_NAME: Final[BackendName] = "jax"

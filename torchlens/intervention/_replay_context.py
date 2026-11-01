@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from .edge_substitution import tensor_content_digest
+from ._replay_values import tensor_content_digest
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
