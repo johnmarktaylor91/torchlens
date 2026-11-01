@@ -176,6 +176,48 @@ def _keys_kept_in_svg(source: str, svg: str) -> tuple[list[str], list[str]]:
     return [key for _, _, key in wanted], kept
 
 
+def test_nodes_mode_names_a_submodule_dict_returned_as_model_output(tmp_path: Path) -> None:
+    """A dict a submodule returns as the model output is drawn as the model-output sink."""
+
+    trace = tl.trace(TwoHeads(), torch.randn(1, 4), capture=STRUCTURE)
+    source = _draw(trace, tmp_path, "two_heads", "nodes")
+
+    assert "dict[2] (model output)" in source
+    assert "(call output)" not in source
+    into_sink = _edges_into(source, "container_node_0")
+    # One solid keyed edge per head; no dashed member-of tie on a boundary container.
+    assert len(into_sink) == 2
+    assert all("style=solid" in attrs and "arrowhead=none" not in attrs for attrs in into_sink)
+    assert {re.search(r'POINT-SIZE="8">([^<]*)<', a).group(1) for a in into_sink} == {  # type: ignore[union-attr]
+        "logits",
+        "box",
+    }
+
+
+def test_nodes_mode_model_output_record_gets_no_member_ties(tmp_path: Path) -> None:
+    """A ``ModelOutput`` the root module returns has keyed sink edges only."""
+
+    trace = tl.trace(_tiny_classifier(), torch.randn(1, 4), capture=STRUCTURE)
+    source = _draw(trace, tmp_path, "classifier", "nodes")
+
+    assert "SequenceClassifierOutput (model output)" in source
+    into_sink = _edges_into(source, "container_node_0")
+    assert len(into_sink) == 3
+    assert not any("arrowhead=none" in attrs for attrs in into_sink)
+
+
+def test_nodes_mode_midgraph_dict_keeps_member_ties(tmp_path: Path) -> None:
+    """A mid-graph container still gets dashed member-of ties and the call-output role."""
+
+    trace = tl.trace(MidGraph(), torch.randn(1, 4), capture=STRUCTURE)
+    source = _draw(trace, tmp_path, "midgraph", "nodes")
+
+    assert "dict[2] (call output)" in source
+    into_node = _edges_into(source, "container_node_0")
+    assert len(into_node) == 2
+    assert all("arrowhead=none" in attrs and "style=dashed" in attrs for attrs in into_node)
+
+
 @needs_dot
 @pytest.mark.heavy
 def test_cluster_mode_draws_the_gpt2_split_box_with_sibling_ordering(tmp_path: Path) -> None:

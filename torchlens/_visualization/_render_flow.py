@@ -806,6 +806,10 @@ def _container_nodes_and_overlay_edges(
 ) -> tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge]]:
     """Return render-only container nodes and non-dataflow overlay edges.
 
+    A record that is a model input or model output is drawn as that boundary
+    container (role label and keyed source or sink edges) even when a
+    submodule also returned it, so it never gets mid-graph member-of ties.
+
     Parameters
     ----------
     trace:
@@ -831,44 +835,34 @@ def _container_nodes_and_overlay_edges(
     for record in records.values():
         if not isinstance(record, ContainerRecord):
             continue
+        boundary = [
+            snapshot
+            for snapshot in record.snapshots
+            if snapshot.role in {Role.MODEL_INPUT, Role.MODEL_OUTPUT}
+        ]
+        drawn = boundary or [
+            snapshot for snapshot in record.snapshots if snapshot.role == Role.CALL_OUTPUT
+        ]
+        if not drawn:
+            continue
         node_name = _container_record_node_name(record)
-        selected_snapshot: ContainerSnapshot | None = None
-        for snapshot in record.snapshots:
-            if snapshot.role not in {Role.MODEL_INPUT, Role.MODEL_OUTPUT, Role.CALL_OUTPUT}:
-                continue
-            if selected_snapshot is None:
-                selected_snapshot = snapshot
-                owner_key = _container_record_owner_key(
+        nodes_by_name.setdefault(
+            node_name,
+            ContainerOverlayNode(
+                args=_container_record_node_args(record, drawn[0], node_name),
+                owner_key=_container_record_owner_key(
                     trace,
                     record,
                     vis_call_depth=vis_call_depth,
                     collapse_fn=collapse_fn,
-                )
-                nodes_by_name.setdefault(
-                    node_name,
-                    ContainerOverlayNode(
-                        args=_container_record_node_args(record, snapshot, node_name),
-                        owner_key=owner_key,
-                    ),
-                )
-            if snapshot.role in {Role.MODEL_INPUT, Role.MODEL_OUTPUT}:
-                _append_boundary_container_edges(
-                    trace,
-                    snapshot,
-                    node_name,
-                    collapsed_container_nodes,
-                    edge_keys,
-                    edges,
-                )
-            elif snapshot.role == Role.CALL_OUTPUT:
-                _append_member_of_container_edges(
-                    trace,
-                    snapshot,
-                    node_name,
-                    collapsed_container_nodes,
-                    edge_keys,
-                    edges,
-                )
+                ),
+            ),
+        )
+        append_edges = (
+            _append_boundary_container_edges if boundary else _append_member_of_container_edges
+        )
+        for snapshot in drawn:
+            append_edges(trace, snapshot, node_name, collapsed_container_nodes, edge_keys, edges)
     return list(nodes_by_name.values()), edges
 
 
