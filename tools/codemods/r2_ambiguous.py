@@ -2979,6 +2979,8 @@ PARAM_ROWS = (
     ParamRow(("CometSink.__init__",), "experiment", "comet_experiment"),
     ParamRow(("MergedTrace.__init__",), "handles", "rank_handles"),
     ParamRow(("summary", "trace", "TraceVisualizationMixin.summary"), "input_size", "input_shape"),
+    # Round 2 spelling. srp_fidelity_probe's keyword (a tuple of candidate sizes) was renamed
+    # again afterwards, to candidate_num_components; this row records round 2 only.
     ParamRow(
         ("classical_mds", "PCA.__init__", "srp", "srp_fidelity_probe"),
         "n_components",

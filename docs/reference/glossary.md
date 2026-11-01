@@ -3361,6 +3361,7 @@ describe each surface in depth.
 | --- | --- |
 | `axis_roles=` | field and constructor keyword of `ReceptiveField` |
 | `bin_edges=` | field and constructor keyword of `HistogramPoint` |
+| `candidate_num_components=` | keyword of `tl.transforms.srp_fidelity_probe`: the candidate numbers of output components (projection widths k) to probe, one report row each |
 | `comet_experiment=` | keyword of `tl.trackers.CometSink`: the Comet experiment to log to |
 | `draw_index=` | keyword of `tl.attribution.CausalAuditSet` |
 | `extra_facets=` | keyword of `tl.facets.snapshot` |
@@ -3381,7 +3382,7 @@ describe each surface in depth.
 | `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
-| `num_components=` | keyword of `tl.repgeom.classical_mds`, `tl.stats.PCA`, `tl.transforms.srp` and `tl.transforms.srp_fidelity_probe`: the number of components (output dimensions) to return |
+| `num_components=` | keyword of `tl.repgeom.classical_mds`, `tl.stats.PCA` and `tl.transforms.srp`: the number of components (output dimensions) to return |
 | `num_examples=` | keyword of `tl.mechinterp.TrajectoryStats` |
 | `num_heads=` | keyword of `FacetSpec.heads`: number of attention heads to split into |
 | `num_kv_heads=` | keyword of `tl.mechinterp.HeadWeightViews` |
