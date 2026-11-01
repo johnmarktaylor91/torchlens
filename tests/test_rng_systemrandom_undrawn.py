@@ -27,11 +27,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens._utils.rng import (
-    _NotADigestableRng,
-    _rng_exempt_instances,
-    host_nondeterminism_monitor,
-)
+from torchlens._utils.rng import host_nondeterminism_monitor
+from torchlens._utils.rng.inventory_types import _NotADigestableRng, _rng_exempt_instances
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False, seed=1)

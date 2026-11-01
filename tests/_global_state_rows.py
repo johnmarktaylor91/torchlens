@@ -120,17 +120,17 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # ledger catches.
         ("torchlens/intervention/runtime.py", "_CONTEXT_ENTRIES"),
         ("torchlens/_utils/introspection.py", "_FUNC_CALL_LOCATION"),
-        ("torchlens/_utils/rng.py", "_ACTIVE_MONITOR"),
+        ("torchlens/_utils/rng/monitor_state.py", "_ACTIVE_MONITOR"),
         # Live monitor patches per (id(holder), name), spliced back on window
         # unwind -- a survivor past monitor exit is exactly the leak class this
         # row exists to catch (d327e3aa's non-LIFO restore bug).
-        ("torchlens/_utils/rng.py", "_PATCH_STACKS"),
+        ("torchlens/_utils/rng/monitor_state.py", "_PATCH_STACKS"),
         # CUDA RNG snapshot retry latch: set by a failed generator read, RE-ARMED
         # at every capture entry by set_random_seed (grind p5, B2P3-16). It was
         # misfiled as an immutable capability memo, which contractually forbade
         # ever recovering from a TRANSIENT read failure (busy device, momentary
         # OOM) -- a capture-fidelity latch, not a fact of the torch build.
-        ("torchlens/_utils/rng.py", "_cuda_rng_unusable"),
+        ("torchlens/_utils/rng/streams.py", "_cuda_rng_unusable"),
         # Accumulate/drain fence for in-flight cpu_async D2H copies (R36-1):
         # armed per copy on the wrapper hot path, drained at the capture
         # finalize seam and on the failure-scrub arms.
@@ -472,7 +472,7 @@ _CAPABILITY_PROBE_STATE = frozenset(
         # One-shot warm of torch's lazy torch._compile/torch._dynamo cascade,
         # fired by the RNG monitor BEFORE its window arms (hunt-b8 F1).
         ("torchlens/_utils/_torch_compat.py", "_LAZY_TORCH_IMPORTS_WARMED"),
-        ("torchlens/_utils/tensor_utils.py", "_cuda_available"),
+        ("torchlens/_utils/_cuda_probe.py", "_cuda_available"),
         # floor2 fix (2026-10-01): torch 2.1.2-floor capability probes --
         # GradientEdge (one-backward tuple-output signature), the
         # tuple-dim overload of reduce ops, CPU half-precision kernel
@@ -1012,6 +1012,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_deploy_env.py", "__all__"),
         ("torchlens/_distributed.py", "__all__"),
         ("torchlens/_episode_spec.py", "__all__"),
+        ("torchlens/_extract_refusals.py", "__all__"),
         ("torchlens/_extraction/__init__.py", "__all__"),
         ("torchlens/_extraction/callable_identity.py", "__all__"),
         ("torchlens/_extraction/context.py", "__all__"),
@@ -1474,6 +1475,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/transformer/_wording.py", "__all__"),
         ("torchlens/types.py", "__all__"),
         ("torchlens/_utils/__init__.py", "__all__"),
+        ("torchlens/_utils/rng/__init__.py", "__all__"),
         ("torchlens/_utils/_multipass_access.py", "__all__"),
         ("torchlens/_utils/_torch_compat.py", "__all__"),
         ("torchlens/_utils/env_flags.py", "__all__"),

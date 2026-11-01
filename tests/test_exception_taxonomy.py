@@ -1331,7 +1331,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "private mid-stream byte-ceiling abort signal; raised and caught inside the "
         "capture-cache writer, never escapes the capture cache module"
     ),
-    "torchlens._utils.rng._NotADigestableRng": (
+    "torchlens._utils.rng.inventory_types._NotADigestableRng": (
         "private RNG-classifier signal; caught inside the witness classifier"
     ),
     "torchlens._io.runnable._UnsupportedLiteralError": (

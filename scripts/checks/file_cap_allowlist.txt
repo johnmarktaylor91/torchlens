@@ -3,7 +3,7 @@
 # when it drops under the cap, lower a count when it shrinks, never add or raise one
 # without a one-line reason in the commit message. Regenerate with
 # `python scripts/checks/file_cap.py --update` (it never raises a recorded count).
-torchlens/__init__.py::_extract_layers_with_trace	66
+torchlens/__init__.py::_extract_layers_with_trace	62
 torchlens/_capture/_episode_coupling.py::attest_coupling	86
 torchlens/_capture/_episode_derivation.py::_derive_step_column	91
 torchlens/_capture/_episode_derivation.py::_licensed_positions	65
@@ -39,7 +39,7 @@ torchlens/_capture/prepare/chunked.py::_append_chunk_trace_state	73
 torchlens/_capture/prepare/chunked.py::plan_chunks	76
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	180
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	126
-torchlens/_capture/prepare/door.py	1455
+torchlens/_capture/prepare/door.py	1144
 torchlens/_capture/prepare/resolve.py::_record_capture_intervention_event	72
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	132
 torchlens/_capture/projections.py	1597
@@ -104,9 +104,9 @@ torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	101
 torchlens/_data_classes/_trace_stack.py::TraceStackMixin.stack	90
 torchlens/_data_classes/_trace_stats.py	1771
 torchlens/_data_classes/_trace_stats.py::TraceStatsMixin.collapse_plan	69
-torchlens/_data_classes/_trace_validation.py	1441
+torchlens/_data_classes/_trace_validation.py	1425
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin._batch_remove_log_entries	67
-torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	529
+torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	525
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.validate_forward_pass	65
 torchlens/_data_classes/_trace_validation.py::_warn_pending_value_edits_on_new_input_run	64
 torchlens/_data_classes/_trace_viz.py	989
@@ -138,7 +138,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1083
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3916
+torchlens/_data_classes/trace.py	3915
 torchlens/_data_classes/trace.py::Trace.__getstate__	111
 torchlens/_data_classes/trace.py::Trace.__init__	366
 torchlens/_data_classes/trace.py::Trace.__setstate__	337
@@ -209,7 +209,7 @@ torchlens/_io/_safe_unpickle.py	1983
 torchlens/_io/_safe_unpickle.py::SafeBundleUnpickler.find_class	322
 torchlens/_io/_safe_unpickle.py::_alloc_refusal_reason	91
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
-torchlens/_io/bundle.py	4358
+torchlens/_io/bundle.py	4352
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64
 torchlens/_io/bundle.py::_bind_archived_activation_payload	111
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	87
@@ -221,12 +221,11 @@ torchlens/_io/bundle.py::_contains_nested_blob_refs	69
 torchlens/_io/bundle.py::_fast_copy_tensor_blob	66
 torchlens/_io/bundle.py::_load_trace_payload	177
 torchlens/_io/bundle.py::_load_unified_tlspec	96
-torchlens/_io/bundle.py::_preflight_unified_trace_body_index	64
 torchlens/_io/bundle.py::_preflight_unified_trace_manifest	90
 torchlens/_io/bundle.py::_scrub_trace_for_bundle	66
 torchlens/_io/bundle.py::cleanup_tmp	120
 torchlens/_io/bundle.py::load	168
-torchlens/_io/bundle.py::save	649
+torchlens/_io/bundle.py::save	648
 torchlens/_io/bundle_container.py::_load_unified_bundle	81
 torchlens/_io/bundle_container.py::_load_unified_bundle_directory	98
 torchlens/_io/bundle_metadata.py::_load_gated_member_relations	88
@@ -531,7 +530,7 @@ torchlens/_trace_core/op_store.py::OpRowStore.__init__	72
 torchlens/_trace_core/op_store.py::_evict_payloads_in_cell	72
 torchlens/_trace_core/relation_views.py::freeze_op_relation_views	140
 torchlens/_trace_core/relation_views.py::freeze_trace_relation_views	79
-torchlens/_trace_selector_helpers.py	835
+torchlens/_trace_selector_helpers.py	834
 torchlens/_trace_selector_helpers.py::_make_layers_to_save_predicate	76
 torchlens/_training_validation.py::validate_training_compatibility	69
 torchlens/_user_funcs.py::trace	245
@@ -550,7 +549,6 @@ torchlens/_utils/_callable_safety.py	1635
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
-torchlens/_utils/_rng_channels.py	845
 torchlens/_utils/_torch_compat.py	4658
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	65
@@ -577,22 +575,22 @@ torchlens/_utils/introspection.py::_get_code_context	189
 torchlens/_utils/introspection.py::_search_stack_for_vars_of_type	70
 torchlens/_utils/introspection.py::get_arg_tensors_for_resolution	74
 torchlens/_utils/introspection.py::get_vars_of_type_from_obj	80
-torchlens/_utils/rng.py	5080
-torchlens/_utils/rng.py::_build_host_nondeterminism_registry	107
-torchlens/_utils/rng.py::_call_site_time_arg_proof	74
-torchlens/_utils/rng.py::host_nondeterminism_monitor.__init__	114
-torchlens/_utils/rng.py::host_nondeterminism_monitor._classify_c_call	107
-torchlens/_utils/rng.py::host_nondeterminism_monitor._deep_inventory_frame_reachable	332
-torchlens/_utils/rng.py::host_nondeterminism_monitor._digest_rng_instance	61
-torchlens/_utils/rng.py::host_nondeterminism_monitor._inert_gc_children	146
-torchlens/_utils/rng.py::host_nondeterminism_monitor._install_profile_hooks	77
-torchlens/_utils/rng.py::host_nondeterminism_monitor._make_profile_hook	106
-torchlens/_utils/rng.py::host_nondeterminism_monitor._make_profile_hook.hook	91
-torchlens/_utils/rng.py::host_nondeterminism_monitor._numpy_frame_candidate_children	165
-torchlens/_utils/rng.py::host_nondeterminism_monitor._snapshot_numpy_frame_rngs	103
-torchlens/_utils/rng.py::host_nondeterminism_monitor._sweep_model_generators	371
-torchlens/_utils/rng.py::host_nondeterminism_monitor._teardown	79
-torchlens/_utils/tensor_utils.py	1958
+torchlens/_utils/rng/call_sites.py::_call_site_time_arg_proof	74
+torchlens/_utils/rng/deep_inventory.py::_deep_inventory_frame_reachable	332
+torchlens/_utils/rng/digest.py::_digest_rng_instance	61
+torchlens/_utils/rng/generator_sweep.py::_sweep_model_generators	371
+torchlens/_utils/rng/inventory_walk.py::_inert_gc_children	146
+torchlens/_utils/rng/monitor.py	1574
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor.__init__	114
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._classify_c_call	107
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._install_profile_hooks	77
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._make_profile_hook	106
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._make_profile_hook.hook	91
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._snapshot_numpy_frame_rngs	103
+torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._teardown	77
+torchlens/_utils/rng/numpy_frames.py::_numpy_frame_candidate_children	165
+torchlens/_utils/rng/registry.py::_build_host_nondeterminism_registry	107
+torchlens/_utils/tensor_utils.py	1900
 torchlens/_utils/tensor_utils.py::_clone_tensor_payload	74
 torchlens/_utils/tensor_utils.py::_copy_tensor_payload	105
 torchlens/_utils/tensor_utils.py::tensor_nanequal	181
@@ -959,7 +957,7 @@ torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wra
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py	890
 torchlens/backends/torch/backend.py::TorchBackend.fetch_label_move_input_tensors	153
-torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	89
+torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
 torchlens/backends/torch/backward.py	4261
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	95
@@ -1172,6 +1170,7 @@ torchlens/intervention/_hooks_support.py::make_live_site_proxy	67
 torchlens/intervention/_module_boundary.py::_apply_module_boundary_live_hooks	84
 torchlens/intervention/_patch_mapping.py::apply_position_map	72
 torchlens/intervention/_position_edits.py::positions	86
+torchlens/intervention/_replay_cone.py::cone_of_effect	65
 torchlens/intervention/_rerun_ledger.py::_build_ledger_record	66
 torchlens/intervention/_resolver_registry.py::resolve_function_registry_key	401
 torchlens/intervention/_resolver_registry.py::resolve_function_registry_key._enforce_foreign_trust	69
@@ -1220,14 +1219,12 @@ torchlens/intervention/regions.py	1052
 torchlens/intervention/regions.py::_evaluate_instance	106
 torchlens/intervention/regions.py::apply_region_do	106
 torchlens/intervention/regions.py::region	101
-torchlens/intervention/replay.py	1890
+torchlens/intervention/replay.py	1814
 torchlens/intervention/replay.py::_commit_replay_updates	83
 torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	125
 torchlens/intervention/replay.py::_run_differentiable_replay	62
-torchlens/intervention/replay.py::_run_replay	202
-torchlens/intervention/replay.py::_threaded_buffer_value	97
-torchlens/intervention/replay.py::cone_of_effect	65
+torchlens/intervention/replay.py::_run_replay	153
 torchlens/intervention/rerun.py	1692
 torchlens/intervention/rerun.py::_append_rerun	104
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
@@ -1261,7 +1258,7 @@ torchlens/intervention/stochastic.py::resample_rows_from.factory._hook	88
 torchlens/intervention/stochastic.py::sample_from	73
 torchlens/intervention/stochastic.py::set_direction_mean	144
 torchlens/intervention/sweep.py::sweep	177
-torchlens/intervention/types.py	829
+torchlens/intervention/types.py	861
 torchlens/inventory.py::SiteInventory.resolve	71
 torchlens/inventory.py::sites_of_trace	65
 torchlens/io/__init__.py::detect_tlspec_format	67

@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import contextlib
-import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from types import TracebackType
@@ -54,13 +53,3 @@ class _RunState:
         """Return the payload the backend's session cleanups take."""
 
         return (self.model, self.input_tensors, (self.input_args, self.input_kwargs))
-
-
-def _attach_note(exc: BaseException, note: str) -> None:
-    """Attach ``note`` to ``exc`` (PEP 678), or warn on Python 3.10 without notes."""
-
-    add_note = getattr(exc, "add_note", None)
-    if add_note is not None:
-        add_note(note)
-    else:  # Python 3.10: no PEP 678 notes -- surface via warning.
-        warnings.warn(note, RuntimeWarning, stacklevel=3)

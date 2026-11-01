@@ -1,6 +1,7 @@
 """Capture-cache lookup and store for the PREPARE stage.
 
-Moved verbatim from ``torchlens._user_funcs`` by the capture seam.
+Moved verbatim from ``torchlens._user_funcs`` by the capture seam; the door's
+cache-key resolution moved verbatim from ``prepare.door``.
 """
 
 import os
@@ -10,20 +11,28 @@ import tempfile
 import time
 import warnings
 from collections.abc import Mapping
-from dataclasses import fields as dataclass_fields
+from dataclasses import fields as dataclass_fields, replace
 from pathlib import Path
 from typing import Any, cast
 
+from torchlens import _state
+
+from ..._autoroute._builtin_output import semantic_output_cache_key
 from ..._capture_state_helpers import (
     _capture_cache_dir,
+    _capture_cache_key,
+    _facet_recipe_cache_key,
     _prepare_log_for_capture_cache,
 )
 from ..._data_classes.trace import (
     Trace,
 )
 from ..._trace_selector_helpers import (
+    _predicate_cache_key,
     _stable_cache_fragment,
 )
+from .chunked import normalize_chunk_paths
+from .request import _DoorState
 
 # --------------------------------------------------------------------------- #
 # Capture-cache integrity (``trace(..., cache=True)``)                         #
@@ -611,3 +620,112 @@ def _store_capture_cache_entry(trace: Trace, path: Path, secret: Any) -> None:
     _prepare_log_for_capture_cache(trace)
     if _store_authenticated_capture_cache(trace, path, secret):
         _evict_capture_cache(path.parent, keep=path)
+
+
+def _resolve_cache_key(state: _DoorState) -> _DoorState:
+    """Name the trace and, when caching, derive the cache key, path and secret."""
+    capture_options = state.capture_options
+    name = capture_options.name
+    log_name = name if name is not None else _state._auto_name(state.model)
+    state = replace(state, log_name=log_name)
+    if not capture_options.cache:
+        return state
+    config = _curated_cache_config(state)
+    # The inversion sweep: every CaptureOptions field not hand-curated
+    # above and not declared session-neutral enters the key here --
+    # raise_on_nan, track_nonfinite, save_budget, distributed_witness,
+    # measure_python_peak_memory, emit_nvtx, transform, name, and any
+    # future field. Streaming options change what the returned trace
+    # retains (and where), so they sweep in full as well.
+    _sweep_option_fields_into_cache_config(
+        config,
+        capture_options,
+        prefix="capture_option",
+        curated=CAPTURE_CACHE_KEY_CURATED,
+        neutral=CAPTURE_CACHE_KEY_NEUTRAL,
+    )
+    _sweep_option_fields_into_cache_config(
+        config,
+        state.streaming_options,
+        prefix="streaming_option",
+    )
+    cache_key = _capture_cache_key(state.model, state.input_args, state.input_kwargs, config)
+    cache_root, cache_secret = _prepare_capture_cache_dir(capture_options.cache_dir)
+    return replace(
+        state,
+        cache_key=cache_key,
+        cache_path=cache_root / f"{cache_key}.pkl",
+        cache_secret=cache_secret,
+    )
+
+
+# Cache-key curation notes (the rows below, in order):
+# * stop_after compiles INTO the halt slot, but its never-fired policy
+#   differs by provenance, so the two spellings must not share a key:
+#   a completed halt= capture could otherwise satisfy a stop_after=
+#   request whose cold run would have refused stop_after_never_fired.
+# * Capability / payload-policy options that change WHAT is captured or
+#   stored in the returned trace. Omitting any of these let a second
+#   trace() with a different capability silently return an earlier cached
+#   trace built with the wrong capability (e.g. asked replayable=True,
+#   got a cached False). Include them so a capability change misses the cache;
+#   callables are repr-keyed (conservative -- a distinct object misses rather
+#   than risking a false hit), matching how output_transform is keyed.
+# * A cached capture without the measure_host_peak_memory opt-in holds no CPU peak.
+def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
+    """Hand-curated cache-key rows; ``_resolve_cache_key`` sweeps the remaining fields in."""
+    opts = state.capture_options
+    args = state.args
+    cache_config = {
+        "layers_to_save": state.requested_layers_to_save,
+        "keep_orphans": opts.keep_orphans,
+        "output_device": opts.output_device,
+        "save_args": opts.save_args,
+        "capture_tensor_grad_hooks": opts.capture_tensor_grad_hooks,
+        "save_grads": repr(state.save_grads_policy),
+        "save_source_context": opts.save_source_context,
+        "save_rng": opts.save_rng,
+        "source_context_lines": opts.source_context_lines,
+        "compute_input_output_distances": opts.compute_input_output_distances,
+        "detach_saved_activations": opts.detach_saved_activations,
+        "save_mode": state.save_mode_value,
+        "recurrence_detection": opts.recurrence_detection,
+        "backward_ready": state.train_mode_value,
+        "inference_only": state.inference_only_value,
+        "chunk_size": state.normalized_chunk_size,
+        "chunk_paths": normalize_chunk_paths(state.chunk_paths_value),
+        "capture_container_structure": opts.capture_container_structure,
+        "output_transform": _stable_cache_fragment(opts.output_transform),
+        "semantic_output_cache_key": semantic_output_cache_key(state.model),
+        "facets": _facet_recipe_cache_key(state.facet_recipes),
+        "save_predicate": _predicate_cache_key(state.save_predicate),
+        "intervene": _predicate_cache_key(args.intervene),
+        "halt": _predicate_cache_key(state.halt),
+        "stop_after": _stable_cache_fragment(state.stop_after_site),
+        "replayable": opts.replayable,
+        "structure_only": opts.structure_only,
+        "track_device_memory": opts.track_device_memory,
+        "measure_host_peak_memory": opts.measure_host_peak_memory,
+        "log_injections": opts.log_injections,
+        "save_raw_input": repr(state.save_raw_input_policy),
+        "save_transformed_output": repr(state.save_raw_output_policy),
+        "save_raw_activations": state.save_options.save_raw_activations,
+        "save_raw_gradients": state.save_options.save_raw_gradients,
+        "activation_transform": _stable_cache_fragment(state.save_options.activation_transform),
+        "grad_transform": _stable_cache_fragment(state.save_options.grad_transform),
+        "seed": opts.seed,
+        "module_filter": _stable_cache_fragment(opts.module_filter),
+        "layer_visualizers": _stable_cache_fragment(opts.layer_visualizers),
+        "save_visualizations": _stable_cache_fragment(opts.save_visualizations),
+        "optimizer": repr(opts.optimizer),
+        "hooks": _stable_cache_fragment(opts.hooks),
+        "lookback": args.lookback,
+        "lookback_payload_policy": args.lookback_payload_policy,
+        "jax_control_flow": opts.jax_control_flow,
+        "jax_max_control_flow_unroll": opts.jax_max_control_flow_unroll,
+        "module_identity_mode": opts.module_identity_mode,
+        "payload_policy": opts.payload_policy,
+        "save_preview": opts.save_preview,
+        "profile": state.profile_enabled,
+    }
+    return cache_config

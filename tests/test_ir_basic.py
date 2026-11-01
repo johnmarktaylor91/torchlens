@@ -7,7 +7,6 @@ import subprocess
 import sys
 from dataclasses import FrozenInstanceError, fields, is_dataclass
 from typing import get_type_hints
-from unittest.mock import patch
 
 import pytest
 
@@ -524,9 +523,10 @@ def test_capture_events_mutation_and_label_reservation() -> None:
     assert events.raw_layer_type_counter == {"linear": 2, "relu": 1}
 
 
-def test_ir_imports_without_torch_module() -> None:
+def test_ir_imports_without_torch_module(monkeypatch: pytest.MonkeyPatch) -> None:
     """Assert importing IR succeeds when torch is absent from sys.modules."""
-    with patch.dict(sys.modules, {"torch": None}):
+    with monkeypatch.context() as patched:
+        patched.setitem(sys.modules, "torch", None)
         module = importlib.import_module("torchlens._ir")
 
     assert module.TensorRef is TensorRef

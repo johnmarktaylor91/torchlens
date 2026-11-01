@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 import torch
+from support.sampling import sampling_draws
 from torch import nn
 
 import torchlens as tl
 from torchlens.intervention import population, resample_rows_from
 from torchlens.intervention.population import PerRowDatums
-from torchlens.intervention.stochastic import sampling_records
 
 
 class _OneBlock(nn.Module):
@@ -38,12 +38,10 @@ def test_eligible_count_is_the_eligible_class_size() -> None:
     pool = population(torch.stack([row + k for k in range(7)]), origin="rows")
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), resample_rows_from(pool, seed=1, axis=0))
-    record = sampling_records(fork)[-1]
-    assert record["population_count"] == 7
-    assert record["eligible_count"] == 7, "eligible_count is the class size, not the draw"
-    assert record["distinct_donor_count"] == len(set(record["donor_ids"]))
-    assert record["distinct_donor_count"] <= min(7, len(record["donor_ids"]))
-    assert len(record["donor_ids"]) == 3
+    record = sampling_draws(fork)[-1]
+    assert record.population_count == 7
+    assert record.eligible_count == 7, "eligible_count is the class size, not the draw"
+    assert len(record.draw_indices) == 3
 
 
 @pytest.mark.smoke
@@ -68,8 +66,7 @@ def test_eligible_count_under_agreement_is_the_union_of_row_classes() -> None:
             matching=PerRowDatums(["A", "B", "A"]),
         ),
     )
-    record = sampling_records(fork)[-1]
-    assert record["eligible_count"] == 5, "A (3) + B (2); C never eligible"
-    assert record["agreement_class_size"] == 2, "the smallest class in play"
-    assert all(index in (0, 1, 2) for index in (record["donor_ids"][0], record["donor_ids"][2]))
-    assert record["donor_ids"][1] in (3, 4)
+    record = sampling_draws(fork)[-1]
+    assert record.eligible_count == 5, "A (3) + B (2); C never eligible"
+    assert all(index in (0, 1, 2) for index in (record.draw_indices[0], record.draw_indices[2]))
+    assert record.draw_indices[1] in (3, 4)

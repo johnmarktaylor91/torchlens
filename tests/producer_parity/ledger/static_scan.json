@@ -4018,14 +4018,6 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_utils/_rng_channels.py",
-  "has_default": false,
-  "sites": 3,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
   "file": "torchlens/_utils/_torch_compat.py",
   "has_default": false,
   "sites": 15,
@@ -4130,18 +4122,50 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_utils/rng.py",
+  "file": "torchlens/_utils/rng/channels.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 3,
   "via_getattr": false
  },
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_utils/rng.py",
+  "file": "torchlens/_utils/rng/generator_sweep.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_utils/rng/generator_sweep.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_utils/rng/inventory_types.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_utils/rng/inventory_walk.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_utils/rng/registry.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -7650,10 +7674,42 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
+  "file": "torchlens/intervention/_replay_cone.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "func_call_id",
   "file": "torchlens/intervention/_replay_context.py",
   "has_default": false,
   "sites": 4,
   "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "is_edited",
+  "file": "torchlens/intervention/_replay_sites.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/intervention/_replay_sites.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/intervention/_replay_sites.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": false,
@@ -7852,7 +7908,7 @@
   "field": "func_call_id",
   "file": "torchlens/intervention/replay.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -7884,7 +7940,7 @@
   "field": "parents",
   "file": "torchlens/intervention/replay.py",
   "has_default": true,
-  "sites": 3,
+  "sites": 2,
   "via_getattr": true
  },
  {

@@ -27,7 +27,8 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 transformers = pytest.importorskip("transformers")
 
-pytestmark = [pytest.mark.heavy, pytest.mark.real_model]
+# ``heavy`` is applied per test: one test below is ``slow`` (a tier never combined with heavy).
+pytestmark = pytest.mark.real_model
 
 _TRANSFORMERS_MAJOR = int(transformers.__version__.split(".")[0])
 
@@ -51,6 +52,7 @@ def _skip_unless_cached(name: str):
         pytest.skip(f"{name} not in the offline HF cache")
 
 
+@pytest.mark.heavy
 def test_distilgpt2_real_weights_twin() -> None:
     """The launch blocker's direct closure: real-weights checkpoint vs meta
     config twin — digest EQUAL, >=800 claims CORROBORATED (memo headline:
@@ -75,6 +77,7 @@ def test_distilgpt2_real_weights_twin() -> None:
     assert len(real_trace._layer_list) == len(meta_trace._layer_list)
 
 
+@pytest.mark.heavy
 def test_bert_config_twin_buffer_parity() -> None:
     """Class-matched in-code config twin: buffer parity, zero fabricated
     writes, no host-escape flag, CORROBORATED (memo acceptance: 307/307
@@ -157,6 +160,7 @@ def test_llama_7b_flagship_structural_anchors() -> None:
     assert envelope is not None and envelope["substrate"] == "meta"
 
 
+@pytest.mark.heavy
 def test_decoder_with_attention_mask_refuses_value_branch() -> None:
     """8.2 row (every leg): any decoder + attention_mask is a typed
     value-branch refusal — the mask, not the architecture and not the
@@ -194,6 +198,7 @@ def test_decoder_with_attention_mask_refuses_value_branch() -> None:
     ), f"expected a typed refusal family, got {excinfo.value!r}"
 
 
+@pytest.mark.heavy
 def test_llama_2l_input_ids_only_twin_green() -> None:
     """8.2 flagship-family row on the installed leg: input_ids-only 2-layer
     llama twin passes the full gate (the 4.x legs need W1-AC, measured green
@@ -235,6 +240,7 @@ def test_llama_2l_input_ids_only_twin_green() -> None:
     "escape",
     ["nonzero", "masked_select", "bool_index", "unique"],
 )
+@pytest.mark.heavy
 def test_value_limitation_matrix_refuses_typed(escape: str) -> None:
     """8.1 item 8: ops with no meta kernel / value-dependent selection refuse
     typed with the user's line named; static topk succeeds (declared shape)."""
@@ -271,6 +277,7 @@ def test_value_limitation_matrix_refuses_typed(escape: str) -> None:
     ), f"{escape}: expected the typed teaching family, got {excinfo.value!r}"
 
 
+@pytest.mark.heavy
 def test_static_topk_succeeds_with_declared_shape() -> None:
     import torch.nn as nn
 

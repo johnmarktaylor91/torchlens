@@ -780,15 +780,18 @@ def test_bundle_load_raises_on_checksum_tamper(tmp_path: Path) -> None:
         load(bundle_path)
 
 
-def test_bundle_save_overwrite_false_wraps_file_exists_error(tmp_path: Path) -> None:
-    """Existing target paths should fail unless ``overwrite=True``."""
+def test_bundle_save_overwrite_false_refuses_typed(tmp_path: Path) -> None:
+    """Existing target paths refuse ``bundle_save_failed`` unless ``overwrite=True``."""
 
     bundle_path, trace = _save_bundle(tmp_path)
 
     with pytest.raises(ArtifactError) as excinfo:
         trace.save(bundle_path)
 
-    assert isinstance(excinfo.value.__cause__, FileExistsError)
+    assert excinfo.value.fields.get("code") == "bundle_save_failed"
+    assert str(excinfo.value).startswith(f"Bundle path already exists: {bundle_path}")
+    assert "overwrite=True" in excinfo.value.fields.get("remedy", "")
+    assert excinfo.value.__cause__ is None
 
 
 def test_bundle_save_overwrite_true_replaces_existing_bundle(tmp_path: Path) -> None:

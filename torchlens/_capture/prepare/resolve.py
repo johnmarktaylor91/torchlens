@@ -1,6 +1,7 @@
 """Intervention spec, hook-plan normalization and selector checks for the PREPARE stage.
 
-Moved verbatim from ``torchlens._capture_intervention and torchlens._user_funcs`` by the capture seam.
+Moved verbatim from ``torchlens._capture_intervention and torchlens._user_funcs`` by the capture seam;
+the door's predicate refusals and selector resolution moved verbatim from ``prepare.door``.
 """
 
 from __future__ import annotations
@@ -10,16 +11,27 @@ from dataclasses import replace
 from typing import Any
 
 from torchlens._data_classes.trace import Trace
-from torchlens._errors import InvalidArgumentError
+from torchlens._errors import ArgumentTypeError, InvalidArgumentError
 from torchlens._selection.selectors import BaseSelector
 from torchlens.intervention._zero_fire import settle_capture_zero_fire
 from torchlens.intervention.audit import rule_signal as _rule_signal
 from torchlens.intervention.hooks import split_site_branches as _split_site_branches
 
+from ..._trace_selector_helpers import (
+    _combine_save_predicates,
+    _is_selective_label_save,
+    _layers_to_save_has_negative_index,
+    _layers_to_save_live_subset,
+    _layers_to_save_mentions_identity,
+    _layers_to_save_mentions_output,
+    _layers_to_save_needs_final_resolution,
+    _make_layers_to_save_predicate,
+)
 from ...intervention.hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from ...intervention.predicates import InterventionPredicate
 from ...intervention.spec import Recipe, Rule, _canonical_repr
 from ...intervention.types import InterventionDecision, InterventionSpec, TargetSpec
+from .request import _DoorArgs, _DoorState
 
 
 def _intervene_rule_pairs(intervene_predicate: Any) -> list[tuple[Any, Any]]:
@@ -578,3 +590,123 @@ def _warn_zero_match_capture_selectors(
         trace.__dict__.pop("_tl_save_selector_fire_count", None)
         if not defer_backward_intervention:
             trace.__dict__.pop("_tl_intervene_selector_fire_count", None)
+
+
+def _refuse_predicate_shapes(args: _DoorArgs) -> None:
+    """Refuse non-callable predicates and out-of-range lookback settings."""
+    if args.intervene is not None and not callable(args.intervene):
+        raise ArgumentTypeError(
+            f"intervene received non-callable type {type(args.intervene).__name__}",
+            code="intervention_predicate_type_invalid",
+            remedy="pass a predicate callable such as tl.when(...) or None",
+            argument="intervene",
+            received_type=type(args.intervene).__name__,
+        )
+    if args.halt is not None and not callable(args.halt):
+        raise ArgumentTypeError(
+            f"halt received non-callable type {type(args.halt).__name__}",
+            code="halt_predicate_type_invalid",
+            remedy="pass a predicate callable or None",
+            argument="halt",
+            received_type=type(args.halt).__name__,
+        )
+    if not isinstance(args.lookback, int) or not 0 <= args.lookback <= 1024:
+        raise InvalidArgumentError(
+            f"lookback={args.lookback!r} is not an integer in the supported range [0, 1024]",
+            code="lookback_invalid",
+            remedy="set lookback to an integer from 0 through 1024 inclusive",
+            argument="lookback",
+        )
+    if args.lookback_payload_policy not in {
+        "metadata_only",
+        "detached_raw",
+        "transformed",
+        "grad_connected",
+        "disk_spilled",
+    }:
+        raise InvalidArgumentError(
+            f"lookback_payload_policy={args.lookback_payload_policy!r} is not supported",
+            code="lookback_payload_policy_invalid",
+            remedy=(
+                "set lookback_payload_policy to 'metadata_only', 'detached_raw', "
+                "'transformed', 'grad_connected', or 'disk_spilled'"
+            ),
+            argument="lookback_payload_policy",
+        )
+
+
+def _resolve_selectors(state: _DoorState) -> _DoorState:
+    """Resolve the save and gradient selectors into live predicates and deferred requests."""
+    layers_to_save = state.layers_to_save
+    grads_to_save_resolved = state.grads_to_save_resolved
+    save_predicate = state.save_predicate
+    if type(layers_to_save) is str:
+        layers_to_save = layers_to_save.lower()
+    if type(grads_to_save_resolved) is str:
+        grads_to_save_resolved = grads_to_save_resolved.lower()
+    requested_layers_to_save = layers_to_save
+    uses_deferred_gradients = grads_to_save_resolved not in ["all", "none", None, []]
+    uses_deferred_activation = _is_selective_label_save(layers_to_save) and (
+        _layers_to_save_mentions_output(layers_to_save)
+        or _layers_to_save_has_negative_index(layers_to_save)
+        or _layers_to_save_mentions_identity(layers_to_save)
+        # Integer ordinals and final-label-shaped strings are defined against
+        # FINAL layer numbering, which orphan removal renumbers after capture;
+        # they must resolve post-postprocess, never against raw indexes.
+        or _layers_to_save_needs_final_resolution(layers_to_save)
+    )
+    live_layers_to_save = (
+        _layers_to_save_live_subset(layers_to_save) if uses_deferred_activation else layers_to_save
+    )
+    needs_live_output_projection = (
+        _is_selective_label_save(layers_to_save)
+        and state.should_save_grads
+        and not uses_deferred_activation
+    )
+    uses_selective_layers_to_save = _is_selective_label_save(layers_to_save)
+    if uses_selective_layers_to_save and not uses_deferred_activation:
+        layers_predicate = _make_layers_to_save_predicate(layers_to_save)
+        save_predicate = _combine_save_predicates(save_predicate, layers_predicate)
+        layers_to_save = "all"
+    elif uses_deferred_activation and live_layers_to_save is not None:
+        layers_predicate = _make_layers_to_save_predicate(live_layers_to_save)
+        save_predicate = _combine_save_predicates(save_predicate, layers_predicate)
+    return replace(
+        state,
+        layers_to_save=layers_to_save,
+        requested_layers_to_save=requested_layers_to_save,
+        save_predicate=save_predicate,
+        grads_to_save_resolved=grads_to_save_resolved,
+        uses_deferred_gradients=uses_deferred_gradients,
+        uses_deferred_activation=uses_deferred_activation,
+        needs_live_output_projection=needs_live_output_projection,
+        uses_selective_layers_to_save=uses_selective_layers_to_save,
+    )
+
+
+def _validate_predicate_capabilities(state: _DoorState) -> None:
+    """Refuse followed_by predicates in slots whose capability cannot honor them."""
+    save_predicate = state.save_predicate
+    intervene = state.args.intervene
+    halt = state.halt
+    if save_predicate is not None or intervene is not None or halt is not None:
+        from ..predicates import validate_followed_by_capability
+
+    if save_predicate is not None:
+        validate_followed_by_capability(
+            save_predicate,
+            api_name="trace(save=...)",
+            supports_retroactive=True,
+        )
+    if intervene is not None:
+        validate_followed_by_capability(
+            intervene,
+            api_name="trace(intervene=...)",
+            supports_retroactive=False,
+        )
+    if halt is not None:
+        validate_followed_by_capability(
+            halt,
+            api_name="trace(halt=...)",
+            supports_retroactive=False,
+        )

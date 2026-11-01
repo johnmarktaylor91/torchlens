@@ -30,7 +30,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
 from .hooks import _UNIVERSE_SIGNAL, NormalizedHookEntry, split_site_branches
-from .types import Edit, FireRecord
+from .types import Edit, FireRecord, SamplingRecord
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -90,22 +90,19 @@ def build_fire_record(
     tuple_index: int | None = None,
     edge_address: tuple | None = None,
     replaced: bool | None = None,
+    sampling: tuple[SamplingRecord, ...] | None = None,
 ) -> FireRecord:
     """Mint one FireRecord with the uniform disclosure lift (the ONE builder).
 
-    Every write door routes here. The builder owns exactly the disclosures
-    the eight historical construction sites applied inconsistently:
-
-    - ``seed``: lifted from the helper's declared kwargs when the caller does
-      not pass one (only the live-forward site did this before).
-    - ``determinism_note``: new ``ledger_notes`` appended to ``run_ctx``
-      during the fire, beyond ``previous_notes`` (only the live-forward site
-      lifted these; replay/edge/param fires dropped them).
-    - ``timestamp``: always stamped (monotonic clock), which is what lets a
-      door bound the records of ONE transaction.
-
-    Parameters mirror :class:`FireRecord`; ``run_ctx``/``previous_notes``
-    feed the note lift and are not stored.
+    Every write door routes here. The builder owns the disclosures the eight
+    historical construction sites applied inconsistently: ``seed`` lifted from the
+    helper's declared kwargs when the caller passes none; ``determinism_note`` from
+    the ``ledger_notes`` appended to ``run_ctx`` during the fire beyond
+    ``previous_notes``; ``timestamp`` always stamped (monotonic clock), which lets
+    a door bound the records of ONE transaction; ``sampling`` popped from the typed
+    draws the stochastic verbs queued on ``run_ctx["sampling_draws"]``, so no draw
+    stays session-side or reaches a later record. Parameters mirror
+    :class:`FireRecord`; ``run_ctx``/``previous_notes`` feed the lift, not the record.
     """
 
     if edit_name is None and edit is not None:
@@ -117,6 +114,8 @@ def build_fire_record(
         new_notes = tuple(run_ctx.get("ledger_notes", ()))[len(previous_notes) :]
         if new_notes:
             determinism_note = "; ".join(str(note) for note in new_notes)
+    if sampling is None:
+        sampling = tuple((run_ctx.pop("sampling_draws", None) if run_ctx else None) or ())
     return FireRecord(
         target_label=target_label,
         call_label=call_label,
@@ -137,6 +136,7 @@ def build_fire_record(
         tuple_index=tuple_index,
         edge_address=edge_address,
         replaced=replaced,
+        sampling=sampling,
     )
 
 

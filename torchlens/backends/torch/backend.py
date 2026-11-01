@@ -20,6 +20,7 @@ from ..._ir.intervention import FireResult, FunctionEventInput
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._utils._cuda_probe import _is_cuda_available
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.arg_handling import (
     INPUT_WAS_PARAMETER_ATTR,
@@ -31,7 +32,7 @@ from ..._utils.introspection import (
     get_vars_of_type_from_obj,
 )
 from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
-from ..._utils.tensor_utils import _is_cuda_available, safe_copy
+from ..._utils.tensor_utils import safe_copy
 from ...recording.types import ModuleStackFrame
 from . import _tl
 from ._completeness_finalize import capture_completeness_witness
@@ -328,14 +329,13 @@ class TorchBackend:
         if not input_kwargs:
             input_kwargs = {}
 
-        # Detect device from first param or buffer. A model with NO parameters
-        # and NO buffers pins no device: eager execution runs each op on its
-        # operands' devices, so the inputs must stay exactly where the caller
-        # put them (``None`` = no move). The historical ``"cpu"`` fallback
-        # silently dragged CUDA inputs to the CPU and computed the whole
-        # forward there -- first observed on real H200 hardware when the
-        # CUPTI correlation matrix came back empty because the "CUDA" capture
-        # had launched zero kernels.
+        # Detect device from first param or buffer. A model with NO parameters and
+        # NO buffers pins no device: eager execution runs each op on its operands'
+        # devices, so the inputs must stay exactly where the caller put them
+        # (``None`` = no move). The historical ``"cpu"`` fallback silently dragged
+        # CUDA inputs to the CPU and computed the whole forward there -- first seen
+        # on real H200 hardware when the CUPTI correlation matrix came back empty
+        # because the "CUDA" capture had launched zero kernels.
         # Meta state never pins a device either: offload-hooked models
         # (accelerate device_map / cpu/disk offload, lane F37) hold meta
         # params between forwards, the hooks place inputs on the real

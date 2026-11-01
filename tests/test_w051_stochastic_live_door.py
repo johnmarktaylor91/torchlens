@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import pytest
 import torch
+from support.sampling import sampling_draws
 from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens.intervention import population, sample_from
 from torchlens.intervention.population import OneDatum
-from torchlens.intervention.stochastic import _mint_donor_group_id, sampling_records
+from torchlens.intervention.stochastic import _mint_donor_group_id
 
 
 class _TwoBlock(nn.Module):
@@ -39,9 +40,9 @@ class _TwoBlockWithPrologue(_TwoBlock):
 
 def _coordinates(trace: tl.Trace) -> list[tuple[tuple, list[int]]]:
     return [
-        (tuple(row["logical_firing_coordinate"]), row["donor_ids"])
-        for row in sampling_records(trace)
-        if row["share_draw"] == "per_firing"
+        (tuple(row.logical_firing_coordinate), row.draw_indices)
+        for row in sampling_draws(trace)
+        if row.share_draw == "per_firing"
     ]
 
 

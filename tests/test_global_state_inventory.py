@@ -572,7 +572,7 @@ _HOT_STATE_SUBSET_PREFIXES = (
     "torchlens/backends/torch/",
     "torchlens/_capture/",
     "torchlens/recording/",
-    "torchlens/_utils/rng.py",
+    "torchlens/_utils/rng/",
     "torchlens/_utils/_torch_compat.py",
 )
 

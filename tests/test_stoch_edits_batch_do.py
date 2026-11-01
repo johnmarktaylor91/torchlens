@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import pytest
 import torch
+from support.sampling import sampling_draws
 from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import population, sample_from
-from torchlens.intervention.stochastic import sampling_records
 
 
 class _TwoBlock(nn.Module):
@@ -89,10 +89,10 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
             (log["relu_2_4"].__selection__(), tl.patch_from(plan)),
         ]
     )
-    records = sampling_records(fork)
+    records = sampling_draws(fork)
     assert len(records) == 2
-    assert records[0]["donor_group_id"] == records[1]["donor_group_id"]
-    assert records[0]["donor_ids"] == records[1]["donor_ids"], "per_group shares the draw"
+    assert records[0].donor_group_id == records[1].donor_group_id
+    assert records[0].draw_indices == records[1].draw_indices, "per_group shares the draw"
     # Content-digest minting: the same declared inputs reconstruct the same
     # group key (the derived-seed law's rerun-reproducibility half) ...
     plan_a = sample_from(donors, seed=3, share_draw="per_group")
@@ -111,8 +111,8 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
             (log["relu_2_4"].__selection__(), tl.patch_from(plan_b)),
         ]
     )
-    two_plan_records = sampling_records(fork_two)[-2:]
-    group_ids = {row["donor_group_id"] for row in two_plan_records}
+    two_plan_records = sampling_draws(fork_two)[-2:]
+    group_ids = {row.donor_group_id for row in two_plan_records}
     assert len(group_ids) == 2, "kwargs coincidence never shares a donor group"
     assert all(gid.startswith(f"{plan_a.donor_group_id}#") for gid in group_ids)
     fork_three = log.fork()
@@ -122,7 +122,7 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
             (log["relu_1_2"].__selection__(), tl.patch_from(plan_a)),
         ]
     )
-    reversed_ids = {row["donor_group_id"] for row in sampling_records(fork_three)[-2:]}
+    reversed_ids = {row.donor_group_id for row in sampling_draws(fork_three)[-2:]}
     assert reversed_ids == group_ids, "clause order never moves a donor group"
 
 

@@ -1284,6 +1284,7 @@
     "func_call_id": "keep",
     "grad_kind": "keep",
     "replaced": "keep",
+    "sampling": "keep",
     "seed": "keep",
     "signal": "keep",
     "site_label": "keep",
@@ -4005,5 +4006,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "48ecba601e3bff1f18928b6762654c7df5d56abf4c17ff48213a04849ecd4879"
+ "writer_contract_digest": "bf712f3e3abf8f25845de30aa2984e051fb0675a76ea23c78be31b26925833ac"
 }
