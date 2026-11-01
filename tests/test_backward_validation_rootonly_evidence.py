@@ -117,7 +117,7 @@ def test_root_only_model_backward_verdict_is_disclosed_unverifiable() -> None:
     ]
     assert "backward_validation_no_module_output_evidence" in codes
     failure = last_validation_failure()
-    assert failure is not None and failure.check == CHECK_BACKWARD
+    assert failure is not None and failure.check_name == CHECK_BACKWARD
     assert failure.extra["reason"] == "no_module_output_evidence"
 
 

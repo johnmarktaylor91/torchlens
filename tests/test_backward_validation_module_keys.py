@@ -36,7 +36,7 @@ def _validate_backward(model: nn.Module, inputs: Any, **kwargs: Any) -> bool:
 
 def _reason() -> str:
     failure = last_validation_failure()
-    assert failure is not None and failure.check == CHECK_BACKWARD
+    assert failure is not None and failure.check_name == CHECK_BACKWARD
     return failure.extra["reason"]
 
 

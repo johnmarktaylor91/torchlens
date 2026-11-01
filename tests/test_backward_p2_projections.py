@@ -398,18 +398,20 @@ def test_forward_op_on_a_first_order_gradient_keeps_creator_orders_consistent() 
         check_metadata_invariants(trace)
         inferred_ids = {
             grad_fn.grad_fn_object_id
-            for grad_fn in trace.grad_fns
+            for grad_fn in trace.autograd.grad_fns
             if grad_fn.creator_object_id is None and grad_fn.order == 2
         }
         assert inferred_ids, "the penalty's forward nodes were not inferred into order 2"
         creations = [
-            grad_fn for grad_fn in trace.grad_fns if grad_fn.creator_object_id in inferred_ids
+            grad_fn
+            for grad_fn in trace.autograd.grad_fns
+            if grad_fn.creator_object_id in inferred_ids
         ]
         assert creations
         assert {grad_fn.order for grad_fn in creations} == {3}
         assert all(
             grad_fn.order == trace.grad_fn_logs[grad_fn.creator_object_id].order + 1
-            for grad_fn in trace.grad_fns
+            for grad_fn in trace.autograd.grad_fns
             if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )
     finally:

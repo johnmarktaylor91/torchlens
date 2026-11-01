@@ -132,7 +132,8 @@ def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
     gradient, say) is inferred into the highest order among the nodes it feeds.
     The two rules run to a fixed point: inferring a node upward re-derives the
     orders of the nodes its own differentiation created, so every
-    creator-attributed order stays ``creator.order + 1`` (AGT-1485).
+    creator-attributed order stays ``creator.order + 1`` even when the
+    creator itself was only inferred.
     """
 
     for grad_fn_record in grad_fn_logs.values():

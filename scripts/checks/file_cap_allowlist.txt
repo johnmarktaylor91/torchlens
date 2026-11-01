@@ -1591,7 +1591,7 @@ torchlens/validation/_pristine.py::pristine_torch_oracle	68
 torchlens/validation/backward.py	823
 torchlens/validation/backward.py::_clone_inputs_with_grad	64
 torchlens/validation/backward.py::_sum_tensors	74
-torchlens/validation/backward.py::validate_backward_pass	288
+torchlens/validation/backward.py::validate_backward_pass	285
 torchlens/validation/consolidated.py::_intervention_report	69
 torchlens/validation/consolidated.py::validate	248
 torchlens/validation/core.py	5156

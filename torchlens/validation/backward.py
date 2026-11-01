@@ -6,7 +6,7 @@ import random
 import warnings
 from collections import OrderedDict
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 import torch
 from torch import nn
@@ -337,7 +337,7 @@ def _record_backward_failure(
     record_validation_failure(
         trace,
         ValidationFailure(
-            check=CHECK_BACKWARD,
+            check_name=CHECK_BACKWARD,
             op_label=op_label,
             message=message,
             extra={"reason": reason},
@@ -417,36 +417,49 @@ def _warn_and_skip_appended_trace_validation(trace: Any) -> bool:
     return False
 
 
-def _snapshot_backward_model_state(
-    model: nn.Module,
-) -> tuple[
-    OrderedDict[str, torch.Tensor],
-    tuple[tuple[nn.Parameter, bool], ...],
-    tuple[tuple[nn.Parameter, Any], ...],
-    bool,
-]:
+class _BackwardModelState(NamedTuple):
+    """Model state taken before the stock and candidate passes and restored after them."""
+
+    state_dict: OrderedDict[str, torch.Tensor]
+    leaf_flags: tuple[tuple[nn.Parameter, bool], ...]
+    held_grads: tuple[tuple[nn.Parameter, Any], ...]
+    original_training: bool
+
+
+def _snapshot_backward_model_state(model: nn.Module) -> _BackwardModelState:
     """Snapshot model values, parameter leaf flags, held gradients and training mode."""
     state_dict = _clone_state_dict_with_metadata(model)
     leaf_flags = _leaf_parameter_flags(model)
     # The passes reset .grad; the caller's accumulated grads are reattached by
     # reference at the end, never written into.
     held_grads = held_parameter_grads(model)
-    original_training = model.training
-    return state_dict, leaf_flags, held_grads, original_training
+    return _BackwardModelState(state_dict, leaf_flags, held_grads, model.training)
+
+
+def _restore_backward_model_state(model: nn.Module, state: _BackwardModelState) -> None:
+    """Restore only what a pass changed: values, leaf flags and training mode."""
+    # An unconditional in-place restore moves every tensor's version counter
+    # and breaks a graph the caller holds across validation.
+    restore_state_dict_if_changed(model, state.state_dict, load_state_dict_restore)
+    _restore_leaf_parameters(state.leaf_flags)
+    _restore_training_mode(model, state.original_training)
 
 
 def _run_stock_backward(
     model: nn.Module,
-    stock_inputs: Any,
-    stock_kwargs: dict[str, Any],
+    stock_call: tuple[Any, dict[str, Any]],
     loss_fn: Callable[[Any], torch.Tensor],
     seed: int,
-    state_dict: OrderedDict[str, torch.Tensor],
-    validate_layer_grads: bool,
+    layer_grad_snapshot: OrderedDict[str, torch.Tensor] | None,
 ) -> tuple[Any, Any, Any]:
-    """Compute pristine stock gradients and optional module-output evidence."""
+    """Compute pristine stock gradients and optional module-output evidence.
+
+    ``layer_grad_snapshot`` is the state-dict snapshot the module-output evidence
+    pass restores from; ``None`` runs a plain stock backward without that evidence.
+    """
     from ._pristine import pristine_torch_oracle
 
+    stock_inputs, stock_kwargs = stock_call
     stock_module_grads = None
     stock_identity_addresses = None
     stock_reached_keys = None
@@ -458,7 +471,7 @@ def _run_stock_backward(
     # the comparison passed vacuously. Refuse (fail-closed) if the
     # wrappers cannot be removed because a capture is active.
     with pristine_torch_oracle():
-        if validate_layer_grads:
+        if layer_grad_snapshot is not None:
             from ._stock_layer_grads import _stock_layer_grads
 
             (
@@ -467,11 +480,10 @@ def _run_stock_backward(
                 stock_reached_keys,
             ) = _stock_layer_grads(
                 model,
-                stock_inputs,
-                stock_kwargs,
+                stock_call,
                 loss_fn=loss_fn,
                 seed=seed,
-                state_dict_snapshot=state_dict,
+                state_dict_snapshot=layer_grad_snapshot,
             )
         else:
             stock_loss = loss_fn(model(*stock_inputs, **stock_kwargs))
@@ -483,20 +495,11 @@ def _capture_backward_candidate(
     model: nn.Module,
     inputs: tuple[Any, dict[str, Any]],
     model_device: torch.device | None,
-    state_dict: OrderedDict[str, torch.Tensor],
-    leaf_flags: tuple[tuple[nn.Parameter, bool], ...],
-    original_training: bool,
     seed: int,
     trace_fn: Callable[..., Any],
 ) -> Any:
-    """Restore stock-pass state and capture the candidate forward pass."""
+    """Capture the candidate forward pass on the restored model."""
     input_args, input_kwargs = inputs
-    # Restore only what the stock pass changed: an unconditional in-place
-    # restore moves every tensor's version counter and breaks a graph the
-    # caller holds across validation.
-    restore_state_dict_if_changed(model, state_dict, load_state_dict_restore)
-    _restore_leaf_parameters(leaf_flags)
-    _restore_training_mode(model, original_training)
     set_random_seed(seed)
     logged_inputs, logged_kwargs = _prepare_inputs_for_backward(
         input_args, input_kwargs, model_device
@@ -635,7 +638,7 @@ def validate_backward_pass(
             "before validation",
         )
         return False
-    state_dict, leaf_flags, held_grads, original_training = _snapshot_backward_model_state(model)
+    model_state = _snapshot_backward_model_state(model)
     trace = None
     try:
         set_random_seed(seed)
@@ -647,7 +650,11 @@ def validate_backward_pass(
 
         try:
             stock_module_grads, stock_identity_addresses, stock_reached_keys = _run_stock_backward(
-                model, stock_inputs, stock_kwargs, loss_fn, seed, state_dict, validate_layer_grads
+                model,
+                (stock_inputs, stock_kwargs),
+                loss_fn,
+                seed,
+                model_state.state_dict if validate_layer_grads else None,
             )
         except CaptureNotActiveError as pristine_error:
             warnings.warn(
@@ -667,15 +674,10 @@ def validate_backward_pass(
             return False
         expected_param_grads = _param_grads(model)
 
+        # Restore only what the stock pass changed before the candidate runs.
+        _restore_backward_model_state(model, model_state)
         trace = _capture_backward_candidate(
-            model,
-            (input_args, input_kwargs),
-            model_device,
-            state_dict,
-            leaf_flags,
-            original_training,
-            seed,
-            trace_fn,
+            model, (input_args, input_kwargs), model_device, seed, trace_fn
         )
         logged_output = _reconstruct_candidate_output_for_loss(trace)
         logged_loss = loss_fn(logged_output)
@@ -814,10 +816,8 @@ def validate_backward_pass(
                 break
         return params_passed
     finally:
-        restore_state_dict_if_changed(model, state_dict, load_state_dict_restore)
-        _restore_leaf_parameters(leaf_flags)
-        _restore_training_mode(model, original_training)
+        _restore_backward_model_state(model, model_state)
         model.zero_grad(set_to_none=True)
-        reattach_parameter_grads(held_grads)
+        reattach_parameter_grads(model_state.held_grads)
         if trace is not None:
             trace.cleanup()

@@ -53,7 +53,7 @@ def _validate() -> bool:
 def _recorded() -> ValidationFailure:
     failure = last_validation_failure()
     assert failure is not None, "a False backward verdict left no failure record"
-    assert failure.check == CHECK_BACKWARD
+    assert failure.check_name == CHECK_BACKWARD
     return failure
 
 
@@ -72,7 +72,7 @@ def _tamper_observed_param_grads(monkeypatch: pytest.MonkeyPatch, edit: Any) -> 
 
 
 def test_passing_backward_validation_clears_a_stale_record() -> None:
-    record_validation_failure(None, ValidationFailure(check="stale", message="an earlier run"))
+    record_validation_failure(None, ValidationFailure(check_name="stale", message="an earlier run"))
     assert _validate() is True
     assert last_validation_failure() is None
 

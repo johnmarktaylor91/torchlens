@@ -345,8 +345,7 @@ def _candidate_root_module(trace: Any) -> Any | None:
 
 def _stock_layer_grads(
     model: nn.Module,
-    input_args: Any,
-    input_kwargs: Mapping[str, Any],
+    stock_call: tuple[Any, Mapping[str, Any]],
     *,
     loss_fn: Callable[[Any], torch.Tensor],
     seed: int,
@@ -360,10 +359,8 @@ def _stock_layer_grads(
     ----------
     model:
         Model to execute.
-    input_args:
-        Positional inputs.
-    input_kwargs:
-        Keyword inputs.
+    stock_call:
+        Positional inputs and keyword inputs, as one pair.
     loss_fn:
         Loss function mapping model output to a scalar tensor.
     seed:
@@ -381,6 +378,7 @@ def _stock_layer_grads(
     from .._utils.rng import set_random_seed
     from ._live_model_state import load_state_dict_restore, restore_state_dict_if_changed
 
+    input_args, input_kwargs = stock_call
     collector = _StockModuleGradCollector()
     collector.install(model)
     try:
