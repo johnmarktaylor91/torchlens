@@ -38,7 +38,7 @@ class _LifecycleModel(nn.Module):
         return torch.relu(x) + 1
 
 
-def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return a zero-valued out.
 
     Parameters
@@ -54,7 +54,7 @@ def _zero_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
         Zero-valued out with the same shape as ``out``.
     """
 
-    del hook
+    del ctx
     return out * 0
 
 

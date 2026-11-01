@@ -247,13 +247,13 @@ def _substituted_value(
     context = hooks_module.make_hook_context(
         name=helper_name,
         timing="post",
-        direction="forward",
+        signal="forward",
         op=None,
         run_context={},
         args=(consumed,),
         kwargs={},
     )
-    substituted = hook_callable(consumed, hook=context)
+    substituted = hook_callable(consumed, ctx=context)
     substituted = _validate_edited(substituted, consumed, site_label)
     return substituted, helper_spec, helper_name
 

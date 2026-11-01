@@ -126,8 +126,8 @@ def test_non_orthonormal_basis_is_orthonormalised_keeping_sign() -> None:
 def test_callable_edit_receives_the_coordinates() -> None:
     seen: list[tuple[int, ...]] = []
 
-    def _hook(coords: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        del hook
+    def _hook(coords: torch.Tensor, *, ctx: Any) -> torch.Tensor:
+        del ctx
         seen.append(tuple(coords.shape))
         return coords + 1.0
 
@@ -304,7 +304,7 @@ def test_partial_axis_population_refuses_and_full_rows_run() -> None:
 def test_shape_changing_callable_refuses() -> None:
     fork = _trace().fork()
     with pytest.raises(InvalidArgumentError) as caught:
-        fork.do(_subspace_sel(), lambda c, *, hook: c.sum(dim=-1))
+        fork.do(_subspace_sel(), lambda c, *, ctx: c.sum(dim=-1))
     assert caught.value.fields["code"] == "subspace_edit_unsupported"
 
 

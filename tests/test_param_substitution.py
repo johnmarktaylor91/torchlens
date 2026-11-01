@@ -462,7 +462,7 @@ def test_substitution_survives_later_push(capture):
     fork.do(tl.param("fc1.weight"), tl.scale(0.0))
     after_do = fork.output_ops[0].out.clone()
 
-    def _noop(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def _noop(out: torch.Tensor, *, ctx) -> torch.Tensor:
         return out
 
     fork.do(tl.func("relu"), _noop)

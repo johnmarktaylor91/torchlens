@@ -52,7 +52,7 @@ class TinyMLP(nn.Module):
         return self.net(x)
 
 
-def _zero_hook(activation: torch.Tensor, *, hook: object) -> torch.Tensor:
+def _zero_hook(activation: torch.Tensor, *, ctx: object) -> torch.Tensor:
     """Return a zero-valued activation for hook benchmarks.
 
     Parameters
@@ -68,7 +68,7 @@ def _zero_hook(activation: torch.Tensor, *, hook: object) -> torch.Tensor:
         Zero-valued activation.
     """
 
-    del hook
+    del ctx
     return activation * 0
 
 

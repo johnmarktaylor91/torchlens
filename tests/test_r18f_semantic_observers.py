@@ -198,7 +198,7 @@ def test_backward_record_span_direction_enforced() -> None:
     torch.manual_seed(12)
     model = _LinearRelu()
     x = torch.randn(2, 3)
-    tap = tl.observers.tap(tl.grad_fn(name="relu"), direction="backward")
+    tap = tl.observers.tap(tl.grad_fn(name="relu"), signal="backward")
 
     with (
         tl.observers.span("fwd_only", direction="forward"),
@@ -211,7 +211,7 @@ def test_backward_record_span_direction_enforced() -> None:
 
     assert tap.records
     record = tap.records[0]
-    assert record.direction == "backward"
+    assert record.signal == "backward"
     assert "fwd_only" not in record.span_names
     assert "bwd_ok" in record.span_names
 
@@ -222,7 +222,7 @@ def test_forward_record_span_direction_enforced() -> None:
     torch.manual_seed(12)
     model = _LinearRelu()
     x = torch.randn(2, 3)
-    tap = tl.observers.tap(tl.func("relu"), direction="forward")
+    tap = tl.observers.tap(tl.func("relu"), signal="forward")
 
     with (
         tl.observers.span("bwd_only", direction="backward"),
@@ -232,7 +232,7 @@ def test_forward_record_span_direction_enforced() -> None:
 
     assert tap.records
     record = tap.records[0]
-    assert record.direction == "forward"
+    assert record.signal == "forward"
     assert "bwd_only" not in record.span_names
     assert "fwd_ok" in record.span_names
 

@@ -91,7 +91,7 @@ class SiteReader:
         self.values = []
         self.bound = tl.when(site, self._keep).bind(model)
 
-    def _keep(self, out, *, hook):
+    def _keep(self, out, *, ctx):
         self.values.append(out)
         return out  # unchanged: the binding only reads
 

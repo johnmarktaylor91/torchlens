@@ -356,7 +356,7 @@ def test_binding_reentrant_call_refuses(toy) -> None:
     model, x = toy
     holder: dict[str, BoundModel] = {}
 
-    def _evil(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def _evil(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Re-enter the executing binding (forbidden)."""
 
         return holder["bound"](x)

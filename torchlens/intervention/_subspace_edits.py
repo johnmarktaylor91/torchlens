@@ -175,10 +175,10 @@ def subspace_ablate(
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook for this subspace ablation."""
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Replace the in-subspace component of ``out``."""
 
-            del hook
+            del ctx
             kept = out - _project(out, rows, axis)
             if mode == "zero":
                 return kept
@@ -246,10 +246,10 @@ def subspace_interchange(
 
         donor_hook = donor_spec()
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Swap the in-subspace component for the donor's."""
 
-            donor = donor_hook(out, hook=hook).to(dtype=out.dtype)
+            donor = donor_hook(out, ctx=ctx).to(dtype=out.dtype)
             return out - _project(out, rows, axis) + _project(donor, rows, axis)
 
         return _hook

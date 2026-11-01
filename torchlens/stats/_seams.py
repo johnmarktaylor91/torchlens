@@ -122,7 +122,7 @@ class NarrationObserver:
 
     Mounts exactly like a tap
     (``capture=CaptureOptions(intervention_ready=True, hooks=echo_obs)``,
-    the ``site``/``direction``/``__call__(out, *, hook)`` protocol) and
+    the ``site``/``signal``/``__call__(out, *, ctx)`` protocol) and
     returns the observed value unchanged. Each firing appends one
     ``address -> core`` line to ``lines`` and forwards it to ``sink`` when
     given. Stats computation and rendering run under ``pause_logging`` so
@@ -142,14 +142,14 @@ class NarrationObserver:
             f"EchoObserver(site={self.site!r}, {len(self.lines)} lines echoed, style={self.style})"
         )
 
-    def __call__(self, out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def __call__(self, out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Record one firing; the observed value passes through unchanged."""
 
         from .._state import pause_logging
         from .._utils.fail_open import fail_open
 
         with pause_logging():
-            address = self._address(hook)
+            address = self._address(ctx)
             # Never break a forward from an echo: degrade to the typed token.
             core = fail_open(
                 lambda: render_core_line(tensor_stats(out, identity=address), style=self.style),
@@ -177,7 +177,7 @@ def narrate(
     site: Any,
     *,
     sink: Callable[[str], None] | None = None,
-    direction: Literal["forward", "backward", "both"] = "forward",
+    signal: Literal["forward", "backward", "both"] = "forward",
     style: Literal["ascii", "unicode"] = "ascii",
 ) -> NarrationObserver:
     """Create an echo observer (the live line density) for one site.
@@ -196,8 +196,8 @@ def narrate(
     sink:
         Optional per-line consumer (e.g. ``print`` or a logger method);
         lines always also accumulate on ``observer.lines``.
-    direction:
-        Hook direction, as on ``tl.observers.tap``.
+    signal:
+        Hook signal, as on ``tl.observers.tap``.
     style:
         Rendering style for the echoed cores.
 
@@ -207,4 +207,4 @@ def narrate(
         Callable observer for the ``hooks=`` surface.
     """
 
-    return NarrationObserver(site=site, signal=direction, sink=sink, style=style)
+    return NarrationObserver(site=site, signal=signal, sink=sink, style=style)

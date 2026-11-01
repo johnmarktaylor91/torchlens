@@ -324,7 +324,7 @@ def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Pat
         "from pathlib import Path\n"
         "SENTINEL = Path(__file__).with_name('sentinel')\n"
         "SENTINEL.write_text('imported')\n"
-        "def hook(out, *, hook):\n"
+        "def hook(out, *, ctx):\n"
         "    return out * 0\n"
     )
     sys.path.insert(0, str(tmp_path))
@@ -377,7 +377,7 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
         "SENTINEL = Path(__file__).with_name('helper_sentinel')\n"
         "SENTINEL.write_text('imported')\n"
         "def make_hook():\n"
-        "    def hook(out, *, hook):\n"
+        "    def hook(out, *, ctx):\n"
         "        return out * 0\n"
         "    return hook\n"
     )
@@ -608,7 +608,7 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
 
     log = _log()
 
-    def opaque_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def opaque_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Return out unchanged.
 
         Parameters
@@ -624,7 +624,7 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
             Input out.
         """
 
-        del hook
+        del ctx
         return out
 
     log.attach_hooks({tl.func("relu"): opaque_hook}, confirm_mutation=True)

@@ -66,7 +66,7 @@ def test_builtin_helper_spec_pickle_rebuilds_factory() -> None:
     assert restored.helper_name == spec.helper_name
     assert restored.factory is not None
     hook = restored()
-    out = hook(torch.ones(3), hook=None)
+    out = hook(torch.ones(3), ctx=None)
     assert torch.equal(out, torch.zeros(3))
 
 
@@ -77,7 +77,7 @@ def test_builtin_helper_spec_pickle_preserves_args() -> None:
     restored = pickle.loads(pickle.dumps(spec))
     assert restored.args == spec.args
     hook = restored()
-    out = hook(torch.ones(3), hook=None)
+    out = hook(torch.ones(3), ctx=None)
     assert torch.allclose(out, torch.full((3,), 0.5))
 
 

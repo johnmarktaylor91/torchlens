@@ -114,7 +114,7 @@ def positions(
     ----------
     edit:
         Any same-shape forward edit (``tl.zero_ablate()``, ``tl.steer(...)``,
-        ``tl.patch_from(...)``, or a hook callable taking ``(out, *, hook)``).
+        ``tl.patch_from(...)``, or a hook callable taking ``(out, *, ctx)``).
     positions:
         An int, a non-empty list of ints, a slice, a per-row ``(batch,)``
         integer tensor, or ``"first"`` / ``"last"`` (the first / last REAL token
@@ -152,10 +152,10 @@ def positions(
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook restricting the inner edit to the positions."""
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Apply the inner edit, keeping it only at the selected positions."""
 
-            edited = inner(out, hook=hook)
+            edited = inner(out, ctx=ctx)
             if not isinstance(edited, torch.Tensor) or edited.shape != out.shape:
                 raise HookValueError(
                     f"at_positions needs a same-shape edit; {inner_name!r} returned "

@@ -240,7 +240,7 @@ class Edit:
         Returns
         -------
         Callable[..., Any]
-            Hook callable with signature ``hook(out, *, hook)``.
+            Hook callable with signature ``hook(out, *, ctx)``.
 
         Raises
         ------

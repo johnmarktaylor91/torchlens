@@ -53,7 +53,7 @@ def _new_state() -> _SerializedState:
     return _SerializedState(tensor_entries=[], tensor_refs={})
 
 
-def _top_level_bwd_hook(grad: torch.Tensor, *, hook: object) -> torch.Tensor:
+def _top_level_bwd_hook(grad: torch.Tensor, *, ctx: object) -> torch.Tensor:
     """Import-resolvable backward hook used for the bwd_hook round-trip test.
 
     Parameters
@@ -69,7 +69,7 @@ def _top_level_bwd_hook(grad: torch.Tensor, *, hook: object) -> torch.Tensor:
         A zeroed gradient.
     """
 
-    del hook
+    del ctx
     return torch.zeros_like(grad)
 
 

@@ -52,17 +52,17 @@ class TwoLinear(nn.Module):
         return self.fc2(self.fc1(x))
 
 
-def _rejecting_replace_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _rejecting_replace_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Replace the module output with a fresh attr-rejecting tensor."""
 
-    del hook
+    del ctx
     return torch.zeros_like(out).as_subclass(RejectingTensor)
 
 
-def _plain_replace_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _plain_replace_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Replace the module output with a fresh ordinary tensor."""
 
-    del hook
+    del ctx
     return torch.zeros_like(out)
 
 

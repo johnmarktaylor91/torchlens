@@ -152,11 +152,11 @@ def set_affine_coordinates(weight: torch.Tensor, *, bias: torch.Tensor | None = 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the hook; it computes only when a subspace projection calls it."""
 
-        def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             """Return ``out @ weight.T + bias``; refuse a whole-site call."""
 
-            if not isinstance(hook, SourceCall):
-                layer_log = getattr(hook, "op", None) or {}
+            if not isinstance(ctx, SourceCall):
+                layer_log = getattr(ctx, "op", None) or {}
                 raise needs_subspace(
                     str(layer_log.get("layer_label") or "<unknown site>"),
                     code="affine_source_needs_subspace",

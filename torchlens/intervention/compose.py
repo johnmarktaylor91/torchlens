@@ -165,16 +165,16 @@ def compose(*edits: Any) -> Edit:
 
         leaf_hooks = [leaf.factory() for leaf in leaves if leaf.factory is not None]
 
-        def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Apply every leaf in order; a leaf failure aborts the whole fire."""
 
             current = out
             for index, leaf_hook in enumerate(leaf_hooks):
                 # Thread the composed-leaf path for the derived-seed law (D6):
                 # two stochastic leaves inside one compose cannot collide.
-                hook.ctx["compose_leaf_path"] = (index,)
+                ctx.ctx["compose_leaf_path"] = (index,)
                 try:
-                    current = leaf_hook(current, hook=hook)
+                    current = leaf_hook(current, ctx=ctx)
                 except Exception as exc:
                     if isinstance(exc, HookValueError):
                         raise
@@ -196,7 +196,7 @@ def compose(*edits: Any) -> Edit:
                         leaf_index=index,
                         leaf_name=leaves[index].helper_name,
                     )
-            hook.ctx.pop("compose_leaf_path", None)
+            ctx.ctx.pop("compose_leaf_path", None)
             return current
 
         return _hook

@@ -2,7 +2,7 @@
 
 ``tl.swap_with(<string label>)`` was publicly documented as working (README,
 docs/for-ai-agents.md, docs/intervention_api.md) but was dead code: the only
-resolution path depended on ``hook.run_ctx["swap_sources"]``, a dict that no
+resolution path depended on ``ctx.run_ctx["swap_sources"]``, a dict that no
 execution path (live, replay, or rerun) ever populated. Every string-label
 call therefore raised a confusing ``HookValueError`` deep inside hook
 execution, only if/when the helper actually fired.

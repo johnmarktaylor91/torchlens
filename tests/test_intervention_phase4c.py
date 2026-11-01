@@ -219,7 +219,7 @@ class _MultiOpModuleModel(torch.nn.Module):
         return self.tail(self.block(x))
 
 
-def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: tl.HookContext) -> torch.Tensor:
     """Return a zeroed out.
 
     Parameters
@@ -238,7 +238,7 @@ def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
     return out * 0
 
 
-def _identity_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+def _identity_hook(out: torch.Tensor, *, ctx: tl.HookContext) -> torch.Tensor:
     """Return an out unchanged.
 
     Parameters
@@ -415,10 +415,10 @@ def test_unsupported_capture_selector_kind_fails_loudly() -> None:
 def test_hook_body_type_error_is_not_reclassified() -> None:
     """A TypeError raised by user hook code propagates unchanged."""
 
-    def broken_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+    def broken_hook(out: torch.Tensor, *, ctx: tl.HookContext) -> torch.Tensor:
         """Raise a user-authored TypeError after successful argument binding."""
 
-        del out, hook
+        del out, ctx
         raise TypeError("body bug")
 
     with pytest.raises(TypeError, match="body bug"):

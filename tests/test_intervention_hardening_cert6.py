@@ -38,7 +38,7 @@ from torchlens.intervention.selectors import output_at
 from torchlens.options import ReplayOptions
 
 
-def _identity_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _identity_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return the activation unchanged."""
 
     return out

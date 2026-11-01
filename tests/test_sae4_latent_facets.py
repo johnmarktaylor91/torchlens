@@ -140,7 +140,7 @@ def test_facet_read_door_returns_the_encoder_activation(setup) -> None:
 
 
 def _recording_hook(seen: list[torch.Tensor]):
-    def _hook(latents: torch.Tensor, *, hook=None) -> torch.Tensor:
+    def _hook(latents: torch.Tensor, *, ctx=None) -> torch.Tensor:
         seen.append(latents.detach().clone())
         return latents
 
