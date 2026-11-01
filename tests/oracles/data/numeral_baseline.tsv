@@ -8164,6 +8164,7 @@ test-docstrings	tests/test_neuro_pkg_namespace.py	16
 test-docstrings	tests/test_neuro_pkg_rdms.py	15
 test-docstrings	tests/test_neuro_pkg_rdms.py	24.2
 test-docstrings	tests/test_neuro_pkg_rdms.py	56.3
+test-docstrings	tests/test_no_string_private_getattr.py	11
 test-docstrings	tests/test_no_string_private_getattr.py	67
 test-docstrings	tests/test_no_string_private_getattr.py	96
 test-docstrings	tests/test_node_label_dtype.py	16.
