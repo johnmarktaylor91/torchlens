@@ -6,9 +6,10 @@ that compose with the full ``| & - ~`` algebra and resolve explicitly
 against one trace:
 
 - ``neighborhood(of, hops, direction)`` — every op within N dataflow hops
-  of a seed region (S3): the seed's touched sites plus everything reachable
-  through at most ``hops`` parent/child edges in the requested direction.
-  Only seed sites with a nonempty element mask seed the traversal.
+  of a seed region (S3): the seed's sites that carry at least one selected
+  element, plus everything reachable through at most ``hops`` parent/child
+  edges in the requested direction. A seed site whose mask is empty (as
+  ``-`` or ``~`` can leave it) seeds nothing.
 
 - ``between(sources, sinks)`` — the executed sub-DAG carrying influence
   from the source region to the sink region (S4): exactly the ops lying on

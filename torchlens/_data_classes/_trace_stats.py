@@ -1811,9 +1811,9 @@ class TraceStatsMixin(_TraceMixinBase):
         producer's hits — the sites where it carries at least one selected
         element become the member set, each as a whole node (a partial mask
         never shrinks a node; a site whose mask is empty is not a member),
-        presented with the
-        same explicit-boundary :class:`~torchlens.types.TraceSlice`
-        contract as :meth:`between`. DOCUMENTED-UNSTABLE spelling.
+        presented with the same explicit-boundary
+        :class:`~torchlens.types.TraceSlice` contract as :meth:`between`.
+        DOCUMENTED-UNSTABLE spelling.
 
         Parameters
         ----------
