@@ -285,11 +285,11 @@ class TestCudaProbeGating:
     def test_no_cuda_calls_when_unavailable(self) -> None:
         """On a CPU-only run, ``empty_cache`` and ``is_available`` see at most one call."""
 
-        from torchlens._utils import tensor_utils
+        from torchlens._utils import _cuda_probe
 
         # Reset the module-level cache so we observe the first call this test
         # makes (the conftest may have warmed it up earlier in the session).
-        tensor_utils._cuda_available = None
+        _cuda_probe._cuda_available = None
 
         with (
             mock.patch.object(torch.cuda, "is_available", return_value=False) as fake_avail,
@@ -300,7 +300,7 @@ class TestCudaProbeGating:
             torchlens.trace(model, x)
 
         # The cached helper consults torch.cuda.is_available at most once
-        # for this process; subsequent tensor_utils._is_cuda_available()
+        # for this process; subsequent _cuda_probe._is_cuda_available()
         # calls reuse the cached False value.
         assert fake_avail.call_count <= 1, (
             "torch.cuda.is_available was queried "
@@ -312,18 +312,18 @@ class TestCudaProbeGating:
         )
 
         # The cache must have been populated to the False value we forced.
-        assert tensor_utils._cuda_available is False
+        assert _cuda_probe._cuda_available is False
 
     def test_cached_value_short_circuits_subsequent_lookups(self) -> None:
         """Once cached, ``_is_cuda_available`` does not reach the torch API again."""
 
-        from torchlens._utils import tensor_utils
+        from torchlens._utils import _cuda_probe
 
-        tensor_utils._cuda_available = None
+        _cuda_probe._cuda_available = None
         with mock.patch.object(torch.cuda, "is_available", return_value=False) as fake_avail:
-            assert tensor_utils._is_cuda_available() is False
-            assert tensor_utils._is_cuda_available() is False
-            assert tensor_utils._is_cuda_available() is False
+            assert _cuda_probe._is_cuda_available() is False
+            assert _cuda_probe._is_cuda_available() is False
+            assert _cuda_probe._is_cuda_available() is False
 
         assert fake_avail.call_count == 1, (
             "Repeated ``_is_cuda_available`` calls must reuse the cached value; "
@@ -346,9 +346,9 @@ class TestCudaProbeGating:
         a GPU training loop dropping the warm allocator arena).
         """
 
-        from torchlens._utils import tensor_utils
+        from torchlens._utils import _cuda_probe
 
-        tensor_utils._cuda_available = None
+        _cuda_probe._cuda_available = None
         # Don't mock torch.cuda.is_available so the genuine probe is used.
         with mock.patch.object(
             torch.cuda, "empty_cache", wraps=torch.cuda.empty_cache

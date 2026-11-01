@@ -32,18 +32,16 @@ from .._ir.container import (
     resolve_container_type,
 )
 from .._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
-from .._utils.alias_footprint import touched_bytes_relation
-from .._utils.rng import (
-    aten_qualname_is_seeded_rng,
+from .._utils._uninit_alloc import (
     deterministic_fill_governs,
     qualname_is_uninit_growth_resize,
     qualname_is_uninit_size_gated_alloc,
     qualname_is_uninit_total_writer,
     qualname_is_uninitialized_alloc,
-    restore_host_rng,
-    snapshot_host_rng,
     uninit_new_call_is_size_form,
 )
+from .._utils.alias_footprint import touched_bytes_relation
+from .._utils.rng import aten_qualname_is_seeded_rng, restore_host_rng, snapshot_host_rng
 from ..errors import (
     PathDivergenceError,
     ReattachError,

@@ -55,12 +55,7 @@ from .stop import StopDirective
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 from .._utils.display import _timed_phase, _vprint
-from .._utils.rng import (
-    host_rng_advanced,
-    log_current_rng_states,
-    set_rng_from_saved_states,
-    snapshot_host_rng,
-)
+from .._utils.rng import RngStreamsRestore, host_rng_advanced, snapshot_host_rng
 from ._forward_helpers import (
     _backend_name_for_trace,
     _capture_backend_from_registry,
@@ -242,17 +237,8 @@ def _snapshot_user_rng() -> Callable[[], None]:
     windows). The reseed POLICY itself (the fenced R21 fork) is unchanged.
     """
 
-    pre_capture_rng_states = log_current_rng_states()
-    rng_restore_pending = [True]
-
-    def _restore_user_global_rng() -> None:
-        """Restore the user's pre-capture global RNG streams exactly once."""
-
-        if rng_restore_pending[0]:
-            rng_restore_pending[0] = False
-            set_rng_from_saved_states(pre_capture_rng_states)
-
-    return _restore_user_global_rng
+    # The one restore door: construction snapshots, ``restore`` writes back once.
+    return RngStreamsRestore().restore
 
 
 def _claim_slot_and_seed(self: "Trace", run: _RunState, reservation_resume: object | None) -> None:

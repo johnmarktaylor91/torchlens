@@ -7,7 +7,7 @@ from typing import Any
 
 import torch
 
-from .._utils.rng import (
+from .._utils._uninit_alloc import (
     deterministic_fill_governs,
     qualname_is_uninit_growth_resize,
     qualname_is_uninit_size_gated_alloc,

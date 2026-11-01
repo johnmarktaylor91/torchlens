@@ -147,7 +147,7 @@ capture entry is `_trace_torch_model` in `user_funcs.py`, one function of about 
 lines outside the backend package; `torch_func_decorator` and its nested `wrapped_func` in
 `backends/torch/wrappers.py` are about 900 and 760 lines; the forward runner
 `run_and_log_inputs_through_model` in `_capture/trace.py` about 860. `validation/core.py` is
-5,200 lines and `_utils/rng.py` 5,080. Changes to capture semantics usually touch three of
+5,200 lines and the host-nondeterminism monitor `_utils/rng/monitor.py` about 1,600. Changes to capture semantics usually touch three of
 these at once.
 
 **Five record shapes for one op.** An executed call is represented as `ir.events.OpEvent`

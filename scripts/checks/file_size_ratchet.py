@@ -51,7 +51,7 @@ _NEW_FILE_LINE_CAP = 2000
 #: one requires a stated reason in the same change. When a file drops to
 #: <= 2000 lines, DELETE its row (the staleness check below enforces this).
 #: 2026-08-15 fixwave-3 settle: nine ceilings re-rounded up (validation/core,
-#: utils/rng, _io/bundle, user_funcs, backends/torch/{backward,model_prep},
+#: _io/bundle, user_funcs, backends/torch/{backward,model_prep},
 #: visualization/auto_collapse, _capture_state_helpers, capture/trace) — the
 #: census was taken per-lane while 12 fix lanes merged in parallel, so each
 #: lane's fix growth landed after its territory's ceiling was frozen.
@@ -140,7 +140,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # so sys.modules-based detection missed them) land at the one
     # TORCH_RNG_SURFACE chokepoint; next 50-line step above the measured
     # 5065.
-    "torchlens/_utils/rng.py": 5100,
     # 4600 -> 4350 (2026-08-27 C05 fix cycle): the segment descriptor/label
     # family split to _segment_descriptors.py under R43; re-keyed down to the
     # next 50-line step above the post-split measurement (4326).
