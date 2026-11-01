@@ -111,8 +111,8 @@ def test_budget_findings_fail_bounded_files_and_ignore_unbounded_ones() -> None:
         td.FileRow("tests/test_gone.py", 1, 90.0, 90.0, "missing"),
     ]
     failures, warnings = td.budget_findings(rows, {"workers": 1})
-    assert [f.split(":")[0] for f in failures] == ["tests/test_over.py"]
-    assert [w.split(":")[0] for w in warnings] == ["tests/test_heavy.py"]
+    assert [f.split(":")[0] for f in failures] == ["tests/test_over.py", "tests/test_heavy.py"]
+    assert warnings == []  # at factor 1 the quiet line is the fail line
     failures, warnings = td.budget_findings(rows, {"workers": 8})
     assert failures == []
     assert [w.split(":")[0] for w in warnings] == ["tests/test_over.py", "tests/test_heavy.py"]
