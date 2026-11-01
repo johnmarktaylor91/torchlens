@@ -785,7 +785,7 @@ def _helper_identity(helper: Edit | None) -> tuple[Any, ...] | None:
 
     return (
         helper.name,
-        helper.kind,
+        helper.signal,
         helper.portability,
         tuple(render_value(arg) for arg in helper.args),
         tuple((key, render_value(value)) for key, value in helper.kwargs),
