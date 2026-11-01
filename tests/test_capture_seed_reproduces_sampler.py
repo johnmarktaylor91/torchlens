@@ -1,6 +1,6 @@
 """Capture reproduces a sampling forward at the seed it discloses.
 
-``tl.trace`` seeds torch's engines once per capture (``random_seed=`` or the
+``tl.trace`` seeds torch's engines once per capture (``seed=`` or the
 fresh auto seed disclosed on ``trace.random_seed``) and restores the host
 stream afterwards, so a plain forward at that seed must produce the captured
 output bit for bit. The sampler here is the Gumbel-softmax draw
@@ -45,11 +45,11 @@ def _plain_at(model: nn.Module, x: torch.Tensor, seed: int) -> torch.Tensor:
 
 
 def test_explicit_seed_capture_matches_plain_forward_at_that_seed() -> None:
-    """``random_seed=s`` reproduces ``torch.manual_seed(s); model(x)`` exactly."""
+    """``seed=s`` reproduces ``torch.manual_seed(s); model(x)`` exactly."""
 
     model, x = _build()
     want = _plain_at(model, x, 7)
-    trace = tl.trace(model, x.clone(), capture=tl.options.CaptureOptions(random_seed=7))
+    trace = tl.trace(model, x.clone(), capture=tl.options.CaptureOptions(seed=7))
     assert trace.random_seed == 7
     assert torch.equal(trace.output_ops[0].out, want)
     assert torch.equal(trace["exponential_1_3"].out, trace["exponential_1_3"].out.clone())

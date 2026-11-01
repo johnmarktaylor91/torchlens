@@ -16,7 +16,10 @@ def _staged_user_entries(trace: Any) -> tuple[list[Any], Any]:
     of the user hook list; the value specs come back exactly as staged.
     """
 
-    staged_spec = getattr(trace, "_intervention_spec", None)
+    try:
+        staged_spec = trace._intervention_spec
+    except AttributeError:
+        staged_spec = None
     staged_user_hooks = [
         hook_spec
         for hook_spec in getattr(staged_spec, "hook_specs", ())
