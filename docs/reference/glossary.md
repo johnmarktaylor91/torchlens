@@ -1171,7 +1171,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   refuses `do_loss_without_gradient_site`, and a callable that raises writes an `error` envelope,
   detaches the hooks this call attached, and re-raises. `engine="set_only"` arms the gradient rules
   on the trace itself for its own `trace.backward(loss)`. `attach_hooks(tl.grad(s), edit)`
-  registers the sticky rule without a rerun. A saved trace keeps the armed rules and records their
+  registers the sticky rule without a rerun; when the trace holds no live backward graph its
+  `attach_hooks` history row carries `armed_for="next_rerun"` (the rule waits for the next rerun's
+  backward). A saved trace keeps the armed rules and records their
   count in `annotations["armed_gradient_edits"]`.
 
 **Replay verbs**
