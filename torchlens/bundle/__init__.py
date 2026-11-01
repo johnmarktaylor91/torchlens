@@ -1663,10 +1663,10 @@ class Bundle:
             label = str(left_site.layer_label)
             right_label = aligned.get(label, {}).get(right_name, label)
             try:  # exact label: a bare string would be a substring selector
-                right_site = _resolve_sites(right_log, _exact_label(right_label), max_fanout=1)
+                right_sites = _resolve_sites(right_log, _exact_label(right_label), max_fanout=1)
             except Exception:  # noqa: BLE001 - missing sites are not common sites
                 continue
-            right_site = right_site.first()
+            right_site = right_sites.first()
             left_out = getattr(left_site, on, None)
             right_out = getattr(right_site, on, None)
             if not isinstance(left_out, torch.Tensor) or not isinstance(

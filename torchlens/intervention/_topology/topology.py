@@ -32,7 +32,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..errors import BundleComparisonError
+from ...errors import BundleComparisonError  # the public errors namespace, outside the import cycle
 
 if TYPE_CHECKING:
     from ..._data_classes.layer import Layer
@@ -319,13 +319,15 @@ def _preferential_topological_order(
                 heapq.heappush(queue, (preferred_positions.get(child, fallback_start), child))
 
     if len(ordered) != len(node_names):
-        raise _cycle_refusal(node_names - set(ordered), edges)
+        raise _cycle_refusal(node_names - set(ordered), edges, code="bundle_gate_model_axis_unmet")
     return ordered
 
 
 def _cycle_refusal(
     unresolved: set[str],
     edges: dict[tuple[str, str], set[str]],
+    *,
+    code: str,
 ) -> BundleComparisonError:
     """Return the typed refusal for ordering edges that form a cycle.
 
@@ -335,6 +337,8 @@ def _cycle_refusal(
         Nodes the topological sort could not place (the cycle participants).
     edges:
         Ordering edge map, each edge naming the members that carry it.
+    code:
+        The refusal code, passed at the raise site (``bundle_gate_model_axis_unmet``).
 
     Returns
     -------
@@ -354,7 +358,7 @@ def _cycle_refusal(
         f"member. Contradictory first-pass edges: {cyclic_edges}. Remedy: "
         "bundle captures of the same model computation (see "
         "Bundle.comparability), or use per-member reads such as Bundle.map.",
-        code="bundle_gate_model_axis_unmet",
+        code=code,
         operation="supergraph",
         cyclic_edges=cyclic_edges,
     )
