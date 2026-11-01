@@ -6370,6 +6370,14 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/backends/torch/_module_aliases.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
   "file": "torchlens/backends/torch/_module_boundary_adoption.py",
   "has_default": false,
   "sites": 1,
