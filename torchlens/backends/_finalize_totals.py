@@ -13,7 +13,7 @@ def _count_trace_ops(trace: Trace) -> int:
 
     return sum(
         1
-        for op_log in trace.layer_list
+        for op_log in trace._layer_list
         if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
     )
 
@@ -33,7 +33,7 @@ def _update_param_totals_from_layers(trace: Trace) -> None:
 
     Notes
     -----
-    Totals derive from ``trace.param_logs`` (the deduped-by-identity param
+    Totals derive from ``trace._param_logs`` (the deduped-by-identity param
     registry), not from summing each op's own ``num_param_tensors`` across
     unique layer labels: a param reused by more than one op/layer (a tied
     weight, or a composite op decomposed into several primitive ops that
@@ -43,13 +43,13 @@ def _update_param_totals_from_layers(trace: Trace) -> None:
     check (``num_param_tensors != len(param_logs)``).
     """
 
-    if trace.param_source != "none":
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
+    if trace._provenance_param_source != "none":
+        trace._num_param_tensors = len(trace._param_logs)
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
+            param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.has_params}
+        trace._num_layers_with_params = len(
+            {op.layer_label for op in trace._layer_list if op.has_params}
         )

@@ -26,7 +26,7 @@ model = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 2))
 x = mx.array([[0.5, -1.0, 2.0, 0.25], [1.0, 1.0, -1.0, 0.0]])
 
 trace = tl.trace(model, x, backend="mlx")
-print([op.func_name for op in trace.layer_list])  # ['input', 'linear', 'gelu', 'linear']
+print([op.func_name for op in trace])  # ['input', 'linear', 'gelu', 'linear']
 print(trace.output_ops[0].shape)  # (2, 2)
 
 status = tl.backends.spec("mlx").validate_trace(trace)

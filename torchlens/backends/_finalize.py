@@ -46,18 +46,18 @@ def _attach_op_to_layer(
 ) -> None:
     """Attach one finalized op to its layer log, creating the layer on first sight."""
 
-    layer_log = trace.layer_logs.get(op_log.layer_label)
+    layer_log = trace._layer_logs.get(op_log.layer_label)
     layer_created = layer_log is None
     if layer_log is None:
         layer_log = Layer(op_log)
-    layer_log.ops[op_log.pass_index] = op_log
+    layer_log.ops[op_log.pass_number] = op_log
     layer_log.call_labels.append(op_log.label)
     if op_log.num_passes != 1:
         layer_log.num_passes = op_log.num_passes
     if layer_created:
         if enrich_layer is not None:
             enrich_layer(layer_log, op_log)
-        trace.layer_logs[op_log.layer_label] = layer_log
+        trace._layer_logs[op_log.layer_label] = layer_log
 
 
 def finalize_single_pass_trace(
@@ -165,7 +165,7 @@ def finalize_single_pass_trace(
             _attach_param_usage(trace, op_log, param_usage_membership)
         _attach_op_to_layer(trace, op_log, enrich_layer)
 
-    trace.num_ops = _count_trace_ops(trace)
+    trace._num_ops = _count_trace_ops(trace)
     if compute_input_output_distances is None:
         compute_input_output_distances = bool(trace._options_mark_layer_depths)
     trace._options_mark_layer_depths = bool(compute_input_output_distances)

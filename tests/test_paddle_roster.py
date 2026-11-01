@@ -58,15 +58,15 @@ def test_roster_row_inventory_intermediates_and_validation(family: str) -> None:
     spec = _ROW_SPECS[family]
     trace = _capture(family)
 
-    assert tuple(op.func_name for op in trace.layer_list) == spec.kinds
+    assert tuple(op.func_name for op in trace._layer_list) == spec.kinds
     for kind, expected in spec.intermediates.items():
-        ops = [op for op in trace.layer_list if op.func_name == kind]
+        ops = [op for op in trace._layer_list if op.func_name == kind]
         values = expected if isinstance(expected, list) else [expected]
         assert len(ops) == len(values), f"{family}:{kind}"
         for index, (op, value) in enumerate(zip(ops, values, strict=True)):
             _assert_close(op.out, np.asarray(value, dtype=np.float32), f"{family}:{kind}[{index}]")
     if spec.has_constants:
-        assert any(not list(op.parents) and op.func_name != "input" for op in trace.layer_list)
+        assert any(not list(op.parents) and op.func_name != "input" for op in trace._layer_list)
     protocol_factory = get_backend_spec("paddle").protocol
     assert protocol_factory is not None
     status = protocol_factory().validate(trace, None)

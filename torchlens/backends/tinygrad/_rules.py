@@ -242,7 +242,7 @@ def tinygrad_constant_ops(trace: Any) -> dict[str, ConstantKind]:
     """
 
     kinds: dict[str, ConstantKind] = {}
-    for op in getattr(trace, "layer_list", ()):
+    for op in getattr(trace, "_layer_list", ()):
         annotations = getattr(op, "annotations", None) or {}
         kind = annotations.get(CONSTANT_KIND_ANNOTATION)
         if kind in ("closure", "literal"):

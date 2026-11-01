@@ -259,7 +259,7 @@ def test_paddle_validation_unregistered_layer_tensor_is_a_recorded_constant() ->
     model = _ClosureTensorLayer()
     trace = tl.trace(model, _layer_input(), backend="paddle")
 
-    constant = next(op for op in trace.layer_list if op.layer_type == "constant")
+    constant = next(op for op in trace._layer_list if op.type == "constant")
     assert list(constant.parents) == []
     assert (constant.out.numpy() == model.__dict__["hidden"].numpy()).all()
     add = next(c for c in trace._paddle_op_captures if c.op_name.endswith("add"))
@@ -292,7 +292,7 @@ def test_paddle_validation_tensor_built_during_forward_still_fails() -> None:
     model.__dict__["hidden"] = paddle.ones([3], dtype="float32")  # stale pre-forward value
     trace = tl.trace(model, _layer_input(), backend="paddle")
 
-    assert not [op for op in trace.layer_list if op.layer_type == "constant"]
+    assert not [op for op in trace._layer_list if op.type == "constant"]
     add = next(c for c in trace._paddle_op_captures if c.op_name.endswith("add"))
     assert any("unlabeled tensor input" in marker for marker in add.capture_gap_markers)
     assert PaddleBackend().validate_trace(trace) is False

@@ -536,9 +536,9 @@ def test_jax_nnx_explicit_function_root_keeps_raw_callable_behavior() -> None:
         backend="jax",
         capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
     )
-    assert trace.module_identity_mode == "function_root"
+    assert trace.options.module_identity_mode == "function_root"
     assert [module.address for module in trace.modules] == ["self"]
-    constants = [op for op in trace.layer_list if op.func_name == "constant"]
+    constants = [op for op in trace._layer_list if op.func_name == "constant"]
     assert constants, "NNX parameters closed over by the raw callable are constant ops"
     assert all(op.out is not None for op in constants)
 

@@ -1062,7 +1062,7 @@ def _torch_backend_spec() -> BackendSpec:
             backward_capture=True,
             has_validation_replay=True,
             fastlog=True,
-            interventions=True,
+            can_intervene=True,
             rng_replay=True,
             payload_materialization=True,
             has_streaming=True,
@@ -1078,7 +1078,7 @@ def _torch_backend_spec() -> BackendSpec:
         capability_implementations={
             "backward_capture": _torch_backward_capture_implementation,
             "fastlog": _torch_fastlog_implementation,
-            "interventions": _torch_interventions_implementation,
+            "can_intervene": _torch_interventions_implementation,
             "rng_replay": _torch_rng_replay_implementation,
             "has_streaming": _torch_streaming_implementation,
             "structure_only_capture": _torch_structure_only_implementation,

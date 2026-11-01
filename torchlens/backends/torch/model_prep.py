@@ -1115,14 +1115,14 @@ def _record_module_entry_build_data(
         trace._code_context_cache = code_context_cache
     code_context = _get_code_context(
         num_context_lines=trace.num_context_lines,
-        source_loading_enabled=trace.save_code_context,
+        source_loading_enabled=trace._options_save_source_context,
         context_cache=code_context_cache,
     )
     trace._module_capture_ws.module_build_data.setdefault("module_code_contexts", {})[
         module_call_label_str
     ] = code_context
     call_stack = [
-        f"{frame.address}:{frame.pass_index}"
+        f"{frame.address}:{frame.pass_number}"
         for frame in trace._module_capture_ws.exhaustive_module_stack[:-1]
     ]
     trace._module_capture_ws.module_build_data.setdefault("module_call_stacks", {})[
@@ -1382,16 +1382,16 @@ def _attach_live_fire_results(
     fire_results = _pop_tensor_live_fire_results(tensor)
     if fire_results:
         fields_dict["fire_results"] = fire_results
-        fields_dict["interventions"] = [
+        fields_dict["edits"] = [
             result.fire_record for result in fire_results if result.fire_record is not None
         ]
-        fields_dict["intervention_replaced"] = any(result.replaced for result in fire_results)
+        fields_dict["is_edited"] = any(result.replaced for result in fire_results)
         # Fire results only mint replacement-event evidence when the live-fire
         # machinery is actually armed for THIS capture; a stale
         # ``_tl_live_fire_results`` attribute leaked from an earlier intervened
         # trace stays unledgered, so validation refuses the placeholder it
         # would otherwise launder into a plain capture.
-        if fields_dict["intervention_replaced"] and _live_intervention_machinery_armed():
+        if fields_dict["is_edited"] and _live_intervention_machinery_armed():
             _note_replacement_event(trace, raw_label, origin="live_fire")
 
 
@@ -1705,7 +1705,7 @@ def _ensure_module_output_tensor_logged(
         }
     )
     _attach_live_fire_results(trace, tensor, fields_dict, raw_label)
-    trace.op_equivalence_classes[raw_label].add(raw_label)
+    trace._graph_op_equivalence_classes[raw_label].add(raw_label)
     new_entry = _make_layer_log_entry(
         trace, tensor, fields_dict, (), {}, trace._options_activation_transform
     )

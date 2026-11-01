@@ -54,7 +54,7 @@ def _append_intervention_events(
     """Record a live-fire replacement event for every replaced emitted op."""
 
     for event in emitted:
-        if event.intervention_replaced:
+        if event.is_edited:
             events.append_intervention(
                 InterventionAppliedEvent(
                     label_raw=event.label_raw,

@@ -344,7 +344,7 @@ def _c1_parity_and_repeat_cases(
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             repeat_net, repeat, _ = _run_capture(adapter, model)
-        if len(repeat.layer_list) == len(trace.layer_list):
+        if len(repeat._layer_list) == len(trace._layer_list):
             results.append(_passed("c1_deterministic_repeat", "C1", model))
         else:
             results.append(
@@ -402,8 +402,8 @@ def _c2_reload_cases(trace: Any, loaded: Any, model: RosterModel) -> tuple[list[
             )
         ], False
     results = [_passed("c2_reload_is_distinct", "C2", model)]
-    if getattr(loaded, "_conformance_field_lost", False) or len(loaded.layer_list) != len(
-        trace.layer_list
+    if getattr(loaded, "_conformance_field_lost", False) or len(loaded._layer_list) != len(
+        trace._layer_list
     ):
         results.append(
             _failed("c2_structure_equal", "C2", "reloaded structure differs from live", model)
