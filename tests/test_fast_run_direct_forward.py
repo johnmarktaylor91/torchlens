@@ -15,9 +15,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests.classics_corpus._loader import build_entry, corpus_entries
+from torchlens._fast_live_steer import refusal_code
 from torchlens._utils._module_call_dispatch import forward_entered_through_module_call
 from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
 from torchlens.backends.torch._tl import get_module_meta
+from torchlens.errors import PathDivergenceError
 
 pytestmark = pytest.mark.skipif(
     not HAS_MODULE_CALL_DISPATCH_FRAME, reason="torch build cannot tell a direct forward() call"
@@ -250,3 +253,51 @@ def test_fast_run_steers_through_a_module(parent_type: type[nn.Module]) -> None:
     assert not torch.equal(plain, fast[0])
     _assert_no_routed_forward(model)
     assert _hook_count(model) == baseline
+
+
+def _urbandriver() -> tuple[nn.Module, Any]:
+    """Build the corpus model that ends ``return self.embedding.forward(indices)``."""
+
+    (entry,) = [e for e in corpus_entries() if e.id == "urbandriver"]
+    return build_entry(entry)
+
+
+def test_fast_run_routes_urbandriver_past_its_direct_forward_call() -> None:
+    """urbandriver's directly called embedding is routed and its sites collected.
+
+    Before routing, the fast run refused at that call
+    (``fast_live_module_hook_unobserved``). It now collects the embedding and
+    its parent and runs on; a later, unrelated divergence on this model (see
+    the strict xfail below) is the only refusal left.
+    """
+
+    model, inputs = _urbandriver()
+    trace = tl.trace(model, inputs)
+    assert any(address.endswith("embedding") for address in _marked(model))
+    try:
+        trace.run(inputs=inputs, fast=True)
+    except PathDivergenceError as exc:
+        assert refusal_code(exc) == "conditional_arm_divergence:fast_live_function_path"
+    session = trace.__dict__["_fast_run_session"]
+    assert session.module_index >= 2
+    _assert_no_routed_forward(model)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=PathDivergenceError,
+    reason=(
+        "after the routed embedding, the live functional path diverges from the "
+        "captured function plan around LocalMLP's F.relu(x, inplace=True) "
+        "(expected '__getitem__', got 'relu'); not a direct-forward() gap"
+    ),
+)
+def test_fast_run_reruns_urbandriver() -> None:
+    """The corpus model reruns fast and equals the full rerun."""
+
+    model, inputs = _urbandriver()
+    trace = tl.trace(model, inputs)
+    full_trace = tl.trace(model, inputs)
+    fast = trace.run(inputs=inputs, fast=True)
+    full = full_trace.run(inputs=inputs)
+    _assert_same(full.output, fast.output)
