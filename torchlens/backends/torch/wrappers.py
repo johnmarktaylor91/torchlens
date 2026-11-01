@@ -944,10 +944,6 @@ def _call_unlogged_off_owner(
     wrapped_func: Callable[..., Any],
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
-    *,
-    observe_operands: bool,
-    needs_device_injection: bool,
-    is_detached_propagation_func: bool,
 ) -> Any:
     """Run a wrapped call that no trace owns on this thread, unrecorded.
 
@@ -959,9 +955,9 @@ def _call_unlogged_off_owner(
     steady state, so the disarmed path pays one bool read.
     """
 
-    if _state._nonowner_belt_armed and observe_operands:
+    if _state._nonowner_belt_armed and _state._active_trace is not None:
         observe_nonowner_operands(args, kwargs)
-    if needs_device_injection:
+    if func_name in _DEVICE_CONSTRUCTOR_NAMES:
         kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
     try:
         out = func(*args, **kwargs)
@@ -969,7 +965,7 @@ def _call_unlogged_off_owner(
         out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
         if out is STILL_DECLINED:
             raise
-    if is_detached_propagation_func and has_detached_saved_activations():
+    if func_name in _DETACHED_ACTIVATION_PROPAGATION_FUNCS and has_detached_saved_activations():
         propagate_detached_saved_activation(
             func_name,
             _collect_tensor_args(args, kwargs),
@@ -979,7 +975,6 @@ def _call_unlogged_off_owner(
 
 
 def _call_inside_functorch_transform(
-    trace: Any,
     func: Callable[..., Any],
     func_name: str,
     wrapped_func: Callable[..., Any],
@@ -997,7 +992,7 @@ def _call_inside_functorch_transform(
 
     if not _state._functorch_warning_emitted:
         _state._functorch_warning_emitted = True
-        trace._raw_transform_escape_detected = True
+        _state._active_trace._raw_transform_escape_detected = True
         _warn_functorch_region_not_logged()
     shadow_witness = _state._completeness_witness_mode == "shadow"
     edge_ctx: Any = nullcontext()
@@ -1046,7 +1041,6 @@ def _call_print_func(
     func_name: str,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
-    arg_tensorlike: Any,
 ) -> Any:
     """Format a captured tensor, recording the host string escape first.
 
@@ -1059,7 +1053,7 @@ def _call_print_func(
     original torch string function unchanged.
     """
 
-    for stringified in arg_tensorlike:
+    for stringified in _collect_tensor_args(args, kwargs):
         record_host_string_escape_source(trace, stringified)
     if string_escape_is_owner_thread(trace):
         return print_override(args[0], func_name)
@@ -1278,16 +1272,7 @@ def torch_func_decorator(
         owner_thread_id = _state._active_owner_thread_id
         current_thread_id = threading.get_ident()
         if active_trace is None or owner_thread_id != current_thread_id:
-            return _call_unlogged_off_owner(
-                func,
-                func_name,
-                wrapped_func,
-                args,
-                kwargs,
-                observe_operands=active_trace is not None,
-                needs_device_injection=needs_device_injection,
-                is_detached_propagation_func=is_detached_propagation_func,
-            )
+            return _call_unlogged_off_owner(func, func_name, wrapped_func, args, kwargs)
 
         trace = cast(Any, active_trace)
         if has_inplace_signature and not args:
@@ -1302,9 +1287,7 @@ def torch_func_decorator(
         # Warn once per forward pass so the user knows their Trace is
         # missing whatever runs inside the transform.
         if _is_inside_functorch_transform():
-            return _call_inside_functorch_transform(
-                trace, func, func_name, wrapped_func, args, kwargs
-            )
+            return _call_inside_functorch_transform(func, func_name, wrapped_func, args, kwargs)
 
         # Skip logging inside a Dynamo-traced region, for the same reason as the
         # functorch guard above: TorchLens' internal operations (safe_copy,
@@ -1395,7 +1378,7 @@ def torch_func_decorator(
 
         # Intercept print functions to show TorchLens label info in repr.
         if is_print_func and arg_tensorlike:
-            return _call_print_func(trace, func, func_name, args, kwargs, arg_tensorlike)
+            return _call_print_func(trace, func, func_name, args, kwargs)
 
         # Snapshot args before the call in case in-place ops mutate them.
         if trace.save_arg_values:

@@ -23,6 +23,7 @@ from torchlens.backends.torch._tl import (
     begin_label_session,
     end_label_session,
 )
+from torchlens.backends.torch.instrument import WrapPolicy
 
 pytestmark = pytest.mark.smoke
 
@@ -110,9 +111,11 @@ def test_cleanup_skipped_when_arm_already_retired_the_session(no_session: Any) -
 def test_cleanup_runs_when_the_body_raises(no_session: Any) -> None:
     backend = _Backend()
     model = _model()
-    with pytest.raises(RuntimeError, match="forward failed"):
-        with instrument.instrumented(backend, object(), model, (model, None, None)):
-            raise RuntimeError("forward failed")
+    with (
+        pytest.raises(RuntimeError, match="forward failed"),
+        instrument.instrumented(backend, object(), model, (model, None, None)),
+    ):
+        raise RuntimeError("forward failed")
     assert [name for name, _ in backend.calls] == ["once", "session", "cleanup"]
     assert active_label_session_token() is None
 
@@ -124,19 +127,15 @@ def test_observer_restores_before_release_and_runs_on_failure(no_session: Any) -
     assert isinstance(bn, nn.BatchNorm1d)
     before = bn.running_mean.clone()
     failures: list[str] = []
-    with pytest.raises(RuntimeError, match="boom"):
-        with instrument.instrumented(
-            backend,
-            object(),
-            model,
-            (model, None, None),
-            carry_state=False,
-            on_failure=lambda: failures.append("released"),
-        ) as handle:
-            assert handle.observer is not None
-            bn.running_mean.add_(1.0)
-            model.train()
-            raise RuntimeError("boom")
+    policy = WrapPolicy(carry_state=False, on_failure=lambda: failures.append("released"))
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        instrument.instrumented(backend, object(), model, (model, None, None), policy) as handle,
+    ):
+        assert handle.observer is not None
+        bn.running_mean.add_(1.0)
+        model.train()
+        raise RuntimeError("boom")
     assert torch.equal(bn.running_mean, before)
     assert not model.training
     assert failures == ["released"]
@@ -148,7 +147,7 @@ def test_observer_handle_gets_the_trace_on_success(no_session: Any) -> None:
     model = _model()
     trace = object()
     with instrument.instrumented(
-        backend, trace, model, (model, None, None), carry_state=False
+        backend, trace, model, (model, None, None), WrapPolicy(carry_state=False)
     ) as handle:
         assert handle.observer is not None
         assert handle.observer.trace is None
@@ -166,15 +165,14 @@ def test_unwrap_only_after_a_completed_capture(
     with instrument.instrumented(backend, object(), model, (model, None, None)):
         pass
     assert unwraps == []
-    with instrument.instrumented(
-        backend, object(), model, (model, None, None), unwrap_when_done=True
-    ) as handle:
+    unwrap = WrapPolicy(unwrap_when_done=True)
+    with instrument.instrumented(backend, object(), model, (model, None, None), unwrap) as handle:
         assert handle.unwrap_when_done is True
         assert unwraps == []
     assert unwraps == [1]
-    with pytest.raises(RuntimeError, match="no unwrap"):
-        with instrument.instrumented(
-            backend, object(), model, (model, None, None), unwrap_when_done=True
-        ):
-            raise RuntimeError("no unwrap")
+    with (
+        pytest.raises(RuntimeError, match="no unwrap"),
+        instrument.instrumented(backend, object(), model, (model, None, None), unwrap),
+    ):
+        raise RuntimeError("no unwrap")
     assert unwraps == [1]

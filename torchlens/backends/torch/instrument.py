@@ -19,18 +19,37 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager, nullcontext
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..._capture.stages import InstrumentedModel
-from ..._capture_state_helpers import CompiledCapturePrep, prepare_compiled_capture
-from ..._runnable_state_live import CaptureObserverHandle, capture_observer_bracket
 from ._tl import active_label_session_token
 
 if TYPE_CHECKING:
     from torch import nn
 
-    from ..._capture.stages import CaptureRequest
+    from ..._runnable_state_live import CaptureObserverHandle
     from .backend import TorchBackend
+
+
+@dataclass(frozen=True, slots=True)
+class WrapPolicy:
+    """What the bracket does around RUN's forward besides preparing the model.
+
+    ``carry_state=None`` leaves the pure-observer bracket to the caller (the
+    door owns it today); ``False`` snapshots and restores buffers, training
+    flags, plain attributes and RNG; ``True`` keeps forward-equivalent state
+    and records attribute writes only. ``on_failure`` runs after the observer
+    restore when the body raises. ``unwrap_when_done`` calls
+    ``unwrap_torch()`` after a completed capture.
+    """
+
+    carry_state: bool | None = None
+    on_failure: Callable[[], None] | None = None
+    unwrap_when_done: bool = False
+
+
+_DEFAULT_POLICY = WrapPolicy()
 
 
 def _resolve_cleanup_payload(cleanup_payload: Any) -> Any:
@@ -67,16 +86,27 @@ def _cleanup_if_open(
         backend.cleanup_model_session(trace, _resolve_cleanup_payload(cleanup_payload))
 
 
-def _observer_context(
-    model: nn.Module,
-    carry_state: bool | None,
-    on_failure: Callable[[], None] | None,
-) -> Any:
+def _observer_context(model: nn.Module, policy: WrapPolicy) -> Any:
     """The pure-observer bracket when asked for, else a no-op context."""
 
-    if carry_state is None:
+    if policy.carry_state is None:
         return nullcontext(None)
-    return capture_observer_bracket(model, carry_state=carry_state, on_failure=on_failure)
+    from ..._runnable_state_live import capture_observer_bracket
+
+    return capture_observer_bracket(
+        model, carry_state=policy.carry_state, on_failure=policy.on_failure
+    )
+
+
+def _enter_compiled_prep(stack: ExitStack, model: nn.Module) -> Any:
+    """Enter the compiled-capture preparation and return its site record."""
+
+    from ..._capture_state_helpers import CompiledCapturePrep, prepare_compiled_capture
+
+    compiled_prep = stack.enter_context(prepare_compiled_capture(model))
+    if not isinstance(compiled_prep, CompiledCapturePrep):
+        compiled_prep = CompiledCapturePrep(sites=(), force_eager_stance=False)
+    return compiled_prep
 
 
 def _unwrap_after_success() -> None:
@@ -93,11 +123,7 @@ def instrumented(
     trace: Any,
     model: nn.Module,
     cleanup_payload: Any,
-    request: CaptureRequest | None = None,
-    *,
-    carry_state: bool | None = None,
-    on_failure: Callable[[], None] | None = None,
-    unwrap_when_done: bool = False,
+    policy: WrapPolicy = _DEFAULT_POLICY,
 ) -> Iterator[InstrumentedModel]:
     """Prepare ``model`` for one capture and restore everything on exit.
 
@@ -109,21 +135,15 @@ def instrumented(
 
     ``cleanup_payload`` is what ``TorchBackend.cleanup_model_session`` takes on
     exit, or a zero-argument callable returning it (RUN knows the input tensors
-    only after entering). ``carry_state=None`` leaves the pure-observer bracket
-    to the caller; ``False`` snapshots and restores buffers, training flags,
-    plain attributes and RNG; ``True`` keeps forward-equivalent state and
-    records attribute writes only. ``request`` is unused today and kept so RUN
-    can pass it.
+    only after entering). ``policy`` chooses the observer bracket, the failure
+    callback and the unwrap (:class:`WrapPolicy`).
     """
 
-    del request
     with ExitStack() as stack:
         observer: CaptureObserverHandle | None = stack.enter_context(
-            _observer_context(model, carry_state, on_failure)
+            _observer_context(model, policy)
         )
-        compiled_prep = stack.enter_context(prepare_compiled_capture(model))
-        if not isinstance(compiled_prep, CompiledCapturePrep):
-            compiled_prep = CompiledCapturePrep(sites=(), force_eager_stance=False)
+        compiled_prep = _enter_compiled_prep(stack, model)
         backend.prepare_model_once(model)
         backend.prepare_model_session(trace, model)
         opened_token = active_label_session_token()
@@ -133,10 +153,10 @@ def instrumented(
             compiled_prep=compiled_prep,
             observer=observer,
             label_session=opened_token,
-            unwrap_when_done=unwrap_when_done,
+            unwrap_when_done=policy.unwrap_when_done,
         )
         yield handle
         if observer is not None and observer.trace is None:
             observer.trace = trace
-    if unwrap_when_done:
+    if policy.unwrap_when_done:
         _unwrap_after_success()

@@ -987,7 +987,7 @@ torchlens/backends/torch/_outputs.py::_promote_layers_to_save_output_parent	127
 torchlens/backends/torch/_outputs.py::extract_and_mark_outputs	159
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	113
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	63
-torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	76
+torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	75
 torchlens/backends/torch/_predicate_forward.py::_record_predicate_module_boundary_outputs	144
 torchlens/backends/torch/_tl.py	1813
 torchlens/backends/torch/_tl.py::set_tensor_label	63
@@ -1079,15 +1079,15 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2978
+torchlens/backends/torch/wrappers.py	2961
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	115
 torchlens/backends/torch/wrappers.py::_propagate_mutation_label_to_storage_aliases	98
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	129
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	102
 torchlens/backends/torch/wrappers.py::decorate_all_once	68
 torchlens/backends/torch/wrappers.py::get_arg_names	68
-torchlens/backends/torch/wrappers.py::torch_func_decorator	831
-torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	676
+torchlens/backends/torch/wrappers.py::torch_func_decorator	820
+torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	665
 torchlens/bridge/_sae_export.py::write_delphi	93
 torchlens/bridge/_sae_export.py::write_sae_dashboard	112
 torchlens/bridge/_sae_latents.py::logged_splice_trace	86

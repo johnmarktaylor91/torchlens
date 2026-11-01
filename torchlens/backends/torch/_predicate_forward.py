@@ -247,9 +247,7 @@ def _predicate_module_enter(trace: Trace, state: Any, frame: Any, halt_only: boo
 def _predicate_module_exit(
     trace: Trace,
     state: Any,
-    frame: Any,
-    halt_only: bool,
-    skipped_spec: Any,
+    entry: tuple[Any, bool, Any],
     out: Any,
     active_model_exc: BaseException | None,
 ) -> None:
@@ -259,6 +257,7 @@ def _predicate_module_exit(
     the module raised, if any; a predicate failure then attaches as a
     predicate failure instead of replacing it, and the echo frame is abandoned.
     """
+    frame, halt_only, skipped_spec = entry
     from ..._capture.predicates import _evaluate_halt, _module_capture_spec
     from ..._capture.projections import _build_record_context, append_projected_event
 
@@ -370,7 +369,9 @@ def _predicate_module_forward(
         )
         return out
     finally:
-        _predicate_module_exit(trace, state, frame, halt_only, skipped_spec, out, sys.exc_info()[1])
+        _predicate_module_exit(
+            trace, state, (frame, halt_only, skipped_spec), out, sys.exc_info()[1]
+        )
 
 
 def _predicate_event_was_appended(trace: Trace, label_raw: str) -> bool:
