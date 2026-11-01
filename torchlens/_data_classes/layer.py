@@ -54,6 +54,8 @@ from .._io.state_keys import refuse_callable_shadowing_state_keys
 from .._ir.refs import DtypeRef
 from .._quantities import Bytes, Duration, Flops, Macs
 from .._selection.selection import _selection_from_layer, _SelectionOperand
+from .._trace_core.op_store import DetachedOpStore
+from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPLE_VIEW_FIELDS
 from . import _doors
 
 # LayerAccessor is re-exported (not used here) so every historical
@@ -169,11 +171,6 @@ from ._layer_spec import (  # noqa: E402
 def _build_layer_view_types() -> dict[str, type]:
     """Map each Layer stored relation field to its immutable view type."""
 
-    from .._trace_core.relation_views import (
-        LAYER_FROZENSET_VIEW_FIELDS,
-        LAYER_TUPLE_VIEW_FIELDS,
-    )
-
     view_types: dict[str, type] = dict.fromkeys(LAYER_TUPLE_VIEW_FIELDS, tuple)
     view_types.update(dict.fromkeys(LAYER_FROZENSET_VIEW_FIELDS, frozenset))
     view_types["equivalent_ops"] = frozenset
@@ -208,8 +205,6 @@ def _layer_relations_finished(layer: "Layer") -> bool:
         store = core.ops if core is not None else None
     if store is None:
         return True
-    from .._trace_core.op_store import DetachedOpStore
-
     return bool(
         getattr(store, "frozen", False)
         or getattr(store, "dataflow_edges", None) is not None
