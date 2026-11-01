@@ -1092,7 +1092,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.grad_input` / `tl.grad_output` (backward event tensors), `tl.in_backward_pass`
   (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
   the former `intervening` alias is removed). These are NODE selectors: they address an
-  autograd node and its `grad_input` tuple, resolved against `trace.grad_fn_logs` after
+  autograd node and its `grad_input` tuple, resolved against `trace.autograd.grad_fns` after
   `log_backward()`. The gradient of a forward site's output is addressed with `tl.grad(site)`
   instead (see **tl.grad**).
 

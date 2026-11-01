@@ -54,9 +54,9 @@ def test_cooked_recording_stamps_structural_grouper_and_numbers_passes(model_cls
 
     assert cooked.options.grouping_policy["detector"] == "grouper_v1"
     assert cooked.options.grouping_policy["requested"] == "structural"
-    assert exhaustive.grouping_policy["detector"] == "callsite_v1"
+    assert exhaustive.options.grouping_policy["detector"] == "callsite_v1"
     passes = _pass_indices(cooked)
     assert passes, "the cooked trace must contain ops"
     for layer, (declared, indices) in passes.items():
         assert sorted(indices) == list(range(1, declared + 1)), layer
-    assert cooked.num_ops == exhaustive.num_ops
+    assert cooked._num_ops == exhaustive._num_ops
