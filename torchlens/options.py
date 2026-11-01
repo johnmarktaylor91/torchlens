@@ -502,8 +502,9 @@ class CaptureOptions:
         cache_dir:
             Optional directory for content-hash cache entries.
         module_filter:
-            Optional THIRD save gate composed (AND) with ``save=``: an op's payload is retained only when the
-            save selection picks it AND this predicate returns truthy. The
+            Optional THIRD save gate composed (AND) with ``save=``: an op's
+            payload is retained only when the save selection picks it AND this
+            predicate returns truthy. The
             predicate receives an op-record namespace (the legacy-shaped
             ``SimpleNamespace`` of captured op fields such as ``func_name``,
             ``layer_label``, and ``modules``), NEVER an
@@ -1759,17 +1760,11 @@ def merge_capture_options(
             ),
         ),
     )
-    selection = (
-        getattr(capture, "_layers_to_save", "all")
-        if _layers_to_save is MISSING
-        else _layers_to_save
-    )
-    object.__setattr__(merged, "_layers_to_save", selection)
-    object.__setattr__(
-        merged,
-        "_layers_to_save_explicit",
-        _layers_to_save is not MISSING or getattr(capture, "_layers_to_save_explicit", False),
-    )
+    explicit = _layers_to_save is not MISSING or getattr(capture, "_layers_to_save_explicit", False)
+    if _layers_to_save is MISSING:
+        _layers_to_save = getattr(capture, "_layers_to_save", "all")
+    object.__setattr__(merged, "_layers_to_save", _layers_to_save)
+    object.__setattr__(merged, "_layers_to_save_explicit", explicit)
     return merged
 
 

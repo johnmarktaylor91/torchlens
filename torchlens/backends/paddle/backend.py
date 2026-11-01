@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from ... import _state
 from ..._capture.outcome import StopRequest, stamp_backend_finalized
+from ..._capture.output_readback import returned, stopped
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
@@ -380,11 +381,10 @@ class PaddleBackend:
         module_identity_mode = _resolve_optional_capture_field(
             capture, "module_identity_mode", module_identity_mode
         )
-        # layers_to_save/keep_orphans/output_device/detach_saved_activations/
-        # save_arg_values/save_code_context/save_rng_states/
-        # recurrence_detection/compute_input_output_distances/verbose/
-        # backward_ready/save_raw_input/batch_render/save_raw_output/
-        # save_visualizations are CaptureOptions-native fields: the
+        # keep_orphans/output_device/detach_saved_activations/save_arg_values/
+        # save_code_context/save_rng_states/recurrence_detection/verbose/
+        # compute_input_output_distances/backward_ready/save_raw_input/batch_render/
+        # save_raw_output/save_visualizations are CaptureOptions-native fields: the
         # ``capture_options.<field>`` reads above already resolved each one to
         # its concrete (non-MISSING) default via ``merge_capture_options``,
         # with the same backend-local defaults this block used to re-apply.
@@ -557,22 +557,18 @@ class PaddleBackend:
                 halt_signal = exc
                 output = exc.frontier_output
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-            from ..._capture.output_readback import returned, stopped
-
+            trace._output_slot = stopped(halt_signal.reason) if halt_signal else returned(output)
             trace._paddle_capture_gap_markers.extend(
                 f"{PARAMETER_WRITE_MARKER}: {address}"
                 for address in self._param_write_guard.written_addresses(trace)
             )
             if halt_signal is not None:
-                trace._output_slot = stopped(halt_signal.reason)
                 trace.halted = True
-                trace.halt_reason = halt_signal.reason
-                trace.halt_frontier = halt_signal.reason
+                trace.halt_reason = trace.halt_frontier = halt_signal.reason
                 trace.raw_output = None
             elif intervention_runtime is not None:
                 intervention_runtime.warn_if_zero_matches()
             if halt_signal is None:
-                trace._output_slot = returned(output)
                 trace.raw_output = output_transform(output) if callable(output_transform) else None
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
