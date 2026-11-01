@@ -102,7 +102,6 @@ class MetadataInvariantError(_ActionableErrorMixin, ValidationError, ValueError)
             Optional stable refusal code from the error-refusal contract,
             carried on ``fields["code"]``.
         """
-
         text = f"[{check_name}] {message}"
         if code is None:
             super().__init__(text)
@@ -404,6 +403,9 @@ _check_journal_seq_invariants = _rebind_function(
 )
 _check_backward_event_flow_invariants = _rebind_function(
     _invariants_backward_flow._check_backward_event_flow_invariants, globals()
+)
+_projected_backward_records = _rebind_function(
+    _invariants_backward_flow._projected_backward_records, globals()
 )
 _intervention_spec_is_armed = _rebind_function(
     _invariants_backward_flow._intervention_spec_is_armed, globals()
