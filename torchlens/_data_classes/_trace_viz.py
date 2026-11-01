@@ -151,56 +151,45 @@ class TraceVisualizationMixin(_TraceMixinBase):
         vis_intervention_mode, vis_show_cone, code_panel, order_siblings, show_containers,
         container_max_inline, show_input_transform_summary, show_orphans:
             Forwarded unchanged to :func:`torchlens._visualization._render_dot.draw`.
-            ``show_orphans=True`` renders orphan (island) ops -- captured but unreachable
-            from both inputs and outputs -- as a dashed, greyed cluster of edgeless nodes,
-            instead of omitting them. Orphans must have been retained at capture time
-            (capture with ``keep_orphans=True``).
-            ``show_buffers`` accepts ``"never"``, ``"meaningful"``, or
-            ``"always"``. ``direction`` accepts ``"bottomup"``, ``"topdown"``,
-            ``"leftright"``, or ``"rightleft"``.
-            ``show_containers`` accepts ``False`` (default: the plain graph; container
-            paths stay on the node labels), ``"labels"`` (adds the key or index as a
-            small label on each edge into a container leaf), ``"collapsed"`` (``"labels"``
-            plus: an unrolled container with more than ``container_max_inline`` leaves of
-            identical shape folds into one dashed summary box), or ``"nodes"`` (``"collapsed"``
-            plus one dashed record node per container, grey source and sink edges carrying
-            the keys, dashed member-of ties for mid-graph containers, and a dotted box
-            around an op-returned tuple whose leaves share one module). Any string setting
-            forces the ``dot`` engine; the removed ``"auto"`` and ``"cluster"`` spellings
-            refuse with the replacement named.
-            ``vis_outpath=None`` (the default) writes a collision-safe file in
-            the current directory -- ``modelgraph.<format>``, then
-            ``modelgraph-2.<format>``, ``modelgraph-3.<format>`` -- and always
-            prints its path, so a bare ``draw()`` never overwrites an earlier
-            picture. An explicit path is written exactly (overwriting) and is
-            printed only when the trace is verbose.
+            ``show_orphans=True`` renders orphan (island) ops -- captured but unreachable from both
+            inputs and outputs -- as a dashed, greyed cluster of edgeless nodes instead of omitting
+            them; orphans must have been retained at capture time (``keep_orphans=True``).
+            ``show_buffers`` accepts ``"never"``, ``"meaningful"``, or ``"always"``. ``direction``
+            accepts ``"bottomup"``, ``"topdown"``, ``"leftright"``, or ``"rightleft"``.
+            ``show_containers`` accepts ``False`` (default: the plain graph), ``"labels"`` (the key
+            or index on each edge into a container leaf), ``"collapsed"`` (``"labels"`` plus the
+            fold of an unrolled same-shape container over ``container_max_inline`` leaves into one
+            dashed box) or ``"nodes"`` (``"collapsed"`` plus one dashed record node per container
+            with keyed source and sink edges, member-of ties, and the dotted box around a
+            single-module tuple); a string setting forces the ``dot`` engine, and the removed
+            ``"auto"`` and ``"cluster"`` refuse naming the replacement (``docs/containers.md``).
+            ``vis_outpath=None`` (the default) writes a collision-safe file in the current
+            directory -- ``modelgraph.<format>``, then ``modelgraph-2.<format>``,
+            ``modelgraph-3.<format>`` -- and always prints its path, so a bare ``draw()`` never
+            overwrites an earlier picture. An explicit path is written exactly (overwriting) and
+            is printed only when the trace is verbose.
         collapse:
-            Smart module-collapse mode. ``"none"`` preserves the full graph,
-            ``"auto"`` uses the v2 readability-targeted engine, and ``"max"``
-            aggressively condenses eligible modules and segment boxes. A float
-            in ``[0.0, 1.0]`` selects a deterministic monotone schedule:
-            ``0.0`` is equivalent to ``"none"``, ``1.0`` is equivalent to
-            ``"max"``, and larger values never increase the visible node count
-            or uncollapse a collapsed unit. ``"auto"`` is the first schedule
-            point whose visible count enters the readable band, while its
-            current implementation remains unchanged for compatibility.
+            Smart module-collapse mode. ``"none"`` preserves the full graph, ``"auto"`` uses the
+            v2 readability-targeted engine, and ``"max"`` aggressively condenses eligible modules
+            and segment boxes. A float in ``[0.0, 1.0]`` selects a deterministic monotone
+            schedule: ``0.0`` is equivalent to ``"none"``, ``1.0`` is equivalent to ``"max"``, and
+            larger values never increase the visible node count or uncollapse a collapsed unit.
+            ``"auto"`` is the first schedule point whose visible count enters the readable band,
+            while its current implementation remains unchanged for compatibility.
         fold_repeats:
-            Repeat-fold policy. ``None`` preserves the default policy: off for
-            ``collapse="none"`` and band-pressure two-pass folding for
-            ``"auto"``/``"max"``. ``True`` folds every eligible repeated run,
-            including standalone folding with ``collapse="none"``. ``False``
-            disables run folding.
+            Repeat-fold policy. ``None`` preserves the default policy: off for ``collapse="none"``
+            and band-pressure two-pass folding for ``"auto"``/``"max"``. ``True`` folds every
+            eligible repeated run, including standalone folding with ``collapse="none"``.
+            ``False`` disables run folding.
         fold_patterns:
-            Declarative user-named pattern folding (DOCUMENTED-UNSTABLE
-            spelling; collapse memo D11). ``None`` = off; ``"idiomatic"``
-            selects the curated conv-bn-relu preset; a mapping declares named
-            linear paths (for example ``{"ConvBnRelu": "conv2d > batch_norm
-            > relu"}``; exact repetition ``atom{k}``; an atom naming an
-            earlier pattern inlines it). Matched instances render as dashed
-            ``PATTERN '<name>' -- N ops`` chips; honesty-refused sites are
-            counted and disclosed. v1 supports the pattern-only view
-            (``collapse="none"``); combining with automatic collapse refuses
-            typed (``pattern_collapse_combination_unsupported``).
+            Declarative user-named pattern folding (DOCUMENTED-UNSTABLE spelling; collapse memo
+            D11). ``None`` = off; ``"idiomatic"`` selects the curated conv-bn-relu preset; a mapping
+            declares named linear paths (for example ``{"ConvBnRelu": "conv2d > batch_norm >
+            relu"}``; exact repetition ``atom{k}``; an atom naming an earlier pattern inlines it).
+            Matched instances render as dashed ``PATTERN '<name>' -- N ops`` chips; honesty-refused
+            sites are counted and disclosed. v1 supports the pattern-only view
+            (``collapse="none"``); combining with automatic collapse refuses typed
+            (``pattern_collapse_combination_unsupported``).
         show_legend:
             Tri-state legend visibility. ``None`` (default) is AUTO: no
             legend unless an encoding channel is active, in which case a
