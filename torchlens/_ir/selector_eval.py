@@ -58,7 +58,6 @@ from ..intervention.selectors import (
     BaseSelector,
     CompositeSelector,
     FollowedBySelector,
-    GradSelector,
     NotSelector,
     PrecededBySelector,
 )
@@ -139,6 +138,8 @@ def walk_selector(selector: Any, *, unwrap: bool = False) -> Iterator[Any]:
         ``preceded_by`` inner predicates are NOT descended into; they are
         payloads of their wrapping selector, not tree children.
     """
+
+    from ..intervention.selectors import GradSelector
 
     # r-b4 R27-6a: iterative pre-order walk -- a deep (nested-binary or
     # deserialized) selector tree must never blow the interpreter stack from a
@@ -1661,8 +1662,11 @@ def selector_from_spec(
 
     from ..intervention.selectors import (
         FacetSelector,
+        SiteSelector,
+        at_step,
         func,
         func_transform,
+        grad,
         grad_fn,
         grad_fn_label,
         grad_input,
@@ -1726,8 +1730,6 @@ def selector_from_spec(
                 )
         raise SiteResolutionError(f"Unsupported facet selector payload {value!r}.")
     if kind == "site":
-        from ..intervention.selectors import SiteSelector
-
         payload = dict(value or {})
         return SiteSelector(
             payload.get("key"),
@@ -1754,8 +1756,6 @@ def selector_from_spec(
             raise SiteResolutionError("backward_pass target specs require an integer pass index.")
         return in_backward_pass(value)
     if kind == "episode_step":
-        from ..intervention.selectors import at_step
-
         if isinstance(value, Sequence) and not isinstance(value, str):
             return at_step(*(int(step) for step in value))
         raise SiteResolutionError(
@@ -1764,8 +1764,6 @@ def selector_from_spec(
             remedy="rebuild the selector with at_step(<step indices>)",
         )
     if kind == "grad":
-        from ..intervention.selectors import grad
-
         if isinstance(value, str):
             return grad(value)
         return grad(normalize_selector_like(value, lifecycle=lifecycle))

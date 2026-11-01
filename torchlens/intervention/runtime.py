@@ -15,6 +15,7 @@ import torch
 from .. import _state
 from .._capture.arg_positions import _normalize_func_name
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
+from .._errors import InvalidArgumentError
 from .._ir.intervention import FireResult
 from .._state import pause_logging
 from .._utils.arg_handling import copy_arg_tree
@@ -27,13 +28,17 @@ from ._module_boundary import (
     _record_tensor_live_fire_results as _record_tensor_live_fire_results,
     _replace_tensor_outputs as _replace_tensor_outputs,
 )
+from .audit import build_fire_record
 from .errors import HookSignatureError, HookValueError
 from .hooks import (
     HookContext,
     NormalizedHookEntry,
+    _target_operands,
+    gradient_inner,
     live_backward_selector_matches,
     live_selector_matches_site,
     make_hook_context,
+    split_site_branches,
 )
 from .types import FireRecord
 
@@ -282,8 +287,6 @@ def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookConte
         return
     if not _GRADIENT_CALLBACK_PARAMETERS.issubset(parameters):
         return
-    from .._errors import InvalidArgumentError
-
     site = _site_name(hook_context)
     address = hook_context.op.get("address")
     module = str(address) if isinstance(address, str) and address else "<module>"
@@ -644,8 +647,6 @@ def _tensor_content_probe(value: Any) -> tuple[Any, ...] | None:
 
     if not isinstance(value, torch.Tensor):
         return None
-    from .._state import pause_logging
-
     try:
         with pause_logging():
             numel = int(value.numel())
@@ -955,8 +956,6 @@ def _has_matching_input_routed_intervention(
         return False
     if not _helper_routes_inputs(hook):
         return False
-    from .hooks import split_site_branches
-
     activation = [
         target for universe, target in split_site_branches(selector) if universe == "activation"
     ]
@@ -1497,8 +1496,6 @@ def _fire_gradient_entry(
         or (version_before is not None and _tensor_version(grad) != version_before)
         or _content_probe_mutated(probe_before, _tensor_content_probe(grad))
     )
-    from .audit import build_fire_record
-
     record = build_fire_record(
         target_label=site_label,
         call_label=site_label,
@@ -1602,8 +1599,6 @@ def _gradient_target_matches(trace: Any, target: Any, op: Any, pass_index: int |
     bool
         Whether the target matches.
     """
-
-    from .hooks import _target_operands, gradient_inner
 
     inner = gradient_inner(target)
     if inner is not None:
@@ -2095,8 +2090,6 @@ def _build_live_fire_record(
         Immutable fire record appended to the eventual layer pass.
     """
 
-    from .audit import build_fire_record
-
     return build_fire_record(
         target_label=site._layer_label_raw,
         call_label=site._layer_label_raw,
@@ -2153,8 +2146,6 @@ def _build_live_backward_fire_record(
     FireRecord
         Immutable backward fire record.
     """
-
-    from .audit import build_fire_record
 
     tuple_index = _first_replaced_tuple_index(previous, current)
     label = str(getattr(grad_fn_handle, "label", ""))

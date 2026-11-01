@@ -56,6 +56,7 @@ from .hooks import (
 )
 from .resolver import _label_index_scope
 from .runtime import _execute_hook
+from .spec import is_gradient_site
 from .types import (
     CapturedArgTemplate,
     FireRecord,
@@ -236,8 +237,6 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
     InvalidArgumentError
         ``replay_gradient_edit_unsupported`` naming the gradient sites.
     """
-
-    from .spec import is_gradient_site
 
     spec = trace._intervention_spec
     targets = [hook_spec.site_target for hook_spec in getattr(spec, "hook_specs", ())]

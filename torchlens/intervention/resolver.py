@@ -15,10 +15,12 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .._ir.selector_eval import (
+    _is_grad_fn,
     _label_site_index,
     ensure_supported,
     evaluate,
     normalize_selector_like,
+    selector_contains_kind,
     walk_selector,
 )
 from .._utils._callable_safety import (
@@ -32,13 +34,17 @@ from .._utils._callable_safety import (
     real_callable_module,
     unsafe_callable_reason,
 )
-from .._utils._torch_compat import resolve_runnable_torch_alias
+from .._utils._torch_compat import (
+    get_variable_functions_class,
+    resolve_runnable_torch_alias,
+)
 from .._utils._torch_symbols import torch_attr
 from ._module_alias_guard import refuse_trace_alias_spellings
 from .errors import (
     AmbiguousSiteError,
     MultiMatchWarning,
     ReplayPreconditionError,
+    SelectorCompositionError,
     SiteResolutionError,
     UntrustedCallableError,
 )
@@ -103,8 +109,6 @@ def _internal_torch_builtin_key(
         otherwise ``None``.
     """
 
-    from .._utils._torch_compat import get_variable_functions_class
-
     # r-b4 R26-2: routed through _torch_compat (HAS_VARIABLE_FUNCTIONS_CLASS) --
     # namespace drift used to silently downgrade the recorded replay key to the
     # public torch wrapper (a different argument convention); it now flips the
@@ -154,8 +158,6 @@ def _resolve_internal_torch_builtin_key(
         or qualname != key.qualname
     ):
         return None
-    from .._utils._torch_compat import get_variable_functions_class
-
     resolved = getattr(get_variable_functions_class(), qualname, None)
     return cast(Callable[..., Any], resolved) if callable(resolved) else None
 
@@ -814,8 +816,6 @@ class _SiteTable:
 
         if self._signals is not None:
             return self._signals
-        from .._ir.selector_eval import _is_grad_fn
-
         return tuple("backward" if _is_grad_fn(site) else "forward" for site in self._sites)
 
     def __repr__(self) -> str:
@@ -1314,8 +1314,6 @@ def _guard_episode_step_query(log: Trace, selector: Any) -> None:
         ``episode_step_unstamped`` on stamp-less episode artifacts.
     """
 
-    from .._ir.selector_eval import selector_contains_kind
-
     if not isinstance(selector, BaseSelector) or not selector_contains_kind(
         selector, "episode_step", unwrap=True
     ):
@@ -1559,8 +1557,6 @@ def pass_filter_accepts(pass_filter: Any, pass_index: int) -> bool:
 def _misplaced_qualifier(selector: Any, *, code: str) -> Exception:
     """Build the refusal for a pass qualifier nested inside a gradient expression."""
 
-    from .errors import SelectorCompositionError
-
     return SelectorCompositionError(
         f"{selector!r} nests a backward pass qualifier inside a gradient expression "
         "(under ~ or within a nested group); a pass qualifier filters a whole gradient "
@@ -1627,8 +1623,6 @@ def _unwrap_gradient(selector: Any) -> Any:
 
 def _branch_for(operand: Any) -> SelectorBranch:
     """Classify one union operand into its universe branch."""
-
-    from .errors import SelectorCompositionError
 
     universe = classify_selector_universe(operand)
     if universe in (None, "activation"):

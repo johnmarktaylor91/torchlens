@@ -10,6 +10,7 @@ from typing import Any, Literal, TypeAlias, cast
 
 import torch
 
+from .._errors import InvalidArgumentError, PayloadUnavailableError
 from .._ir.selector_eval import (
     _UPFRONT_UNSUPPORTED_KINDS,
     _capability_error,
@@ -20,6 +21,7 @@ from .._ir.selector_eval import (
     normalize_selector_like,
 )
 from .._state import pause_logging
+from ..errors import TorchLensWarning
 from .errors import (
     HelperMountError,
     HookSignatureError,
@@ -952,8 +954,6 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
         return
     import warnings
 
-    from ..errors import TorchLensWarning
-
     homes = list(dict.fromkeys(_display_label(log, home) for home, _ in written))
     facet_names = ", ".join(dict.fromkeys(name for _, name in written))
     shown = ", ".join(homes[:4]) + (f" and {len(homes) - 4} more" if len(homes) > 4 else "")
@@ -1167,8 +1167,6 @@ def _refuse_legacy_backward_hook_spec(hook_spec: HookSpec) -> None:
         return
     if site_universe(hook_spec.site_target) != "activation":
         return
-    from .._errors import InvalidArgumentError
-
     site = hook_spec.site_target
     raise InvalidArgumentError(
         f"A stored hook at {site!r} was staged with the removed direction="
@@ -1421,8 +1419,6 @@ def _validate_helper_mount(
             )
     if helper_spec.signal != "forward":
         return
-    from .._errors import InvalidArgumentError
-
     raise InvalidArgumentError(
         f"{helper_spec.name} reads recorded forward activations and cannot edit the "
         f"{'gradient' if universe == 'gradient' else 'autograd-node gradient'} at "
@@ -1581,8 +1577,6 @@ def _scoped_facet_view(record: Any, selector: FacetSelector) -> Any:
         if selector.module_address is not None:
             _refuse_multi_call_module(selector, str(record_address), call_addresses)
         return None
-    from .._errors import PayloadUnavailableError
-
     try:
         return getattr(record, "facets", None)
     except PayloadUnavailableError:
@@ -1617,8 +1611,6 @@ def _refuse_multi_call_module(
     every call of the module, so no call-qualified selector can edit one call;
     each call's facets are read at its call-qualified address.
     """
-
-    from .._errors import InvalidArgumentError
 
     raise InvalidArgumentError(
         f"{selector!r} is scoped to module {address!r}, which ran {len(call_addresses)} "

@@ -13,6 +13,7 @@ from .._deprecations import MISSING, MissingType
 from .._errors import ArgumentTypeError, InvalidArgumentError
 from ..bundle import Bundle
 from ..errors import TorchLensWarning
+from ..options import CaptureOptions
 from .hooks import HookContext
 from .selectors import BaseSelector, func, label
 from .spec import Recipe, refuse_invalid_loss, site_signal, when
@@ -307,8 +308,6 @@ def _backward_ready_trace_kwargs(
 
     if loss is None:
         return trace_kwargs
-    from ..options import CaptureOptions
-
     capture = trace_kwargs.get("capture")
     if capture is None:
         capture = CaptureOptions(backward_ready=True)

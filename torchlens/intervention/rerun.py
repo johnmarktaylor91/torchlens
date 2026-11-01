@@ -21,6 +21,7 @@ from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from .._utils._torch_compat import tensor_has_named_dims
 from .._utils.hashing import compute_graph_shape_hash
+from ..backends.torch.backward import _register_forward_grad_fn
 from ..options import ReplayOptions, merge_replay_options
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from ._rerun_predicate import (
@@ -227,8 +228,6 @@ def _adopt_rerun_backward_graph(trace: Trace, new_log: Trace) -> None:
 
     if not getattr(trace, "backward_ready", False):
         return
-    from ..backends.torch.backward import _register_forward_grad_fn
-
     new_log._refresh_projection_target_ref = weakref.ref(trace)
     _RERUN_GRAPH_SOURCES[trace] = new_log
     # The redirected hooks pass the one-owner-per-label check against the

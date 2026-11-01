@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, cast
 
 from .._errors import ArgumentTypeError
-from .types import TargetSpec
+from .errors import SelectorCompositionError, UnclassifiedSelectorError
+from .types import FrozenTargetSpec, TargetSpec
 
 #: A latent facet name, ``"<sae name>[k]"`` or ``"<sae name>[j,k]"`` (see
 #: ``FacetSelector.latent``); matched for display only, never for resolution.
@@ -125,11 +126,7 @@ class BaseSelector:
 
         if not isinstance(other, BaseSelector) and hasattr(other, "__selection__"):
             return NotImplemented
-        from .._ir.selector_eval import contains_followed_by
-
-        if contains_followed_by(self) or contains_followed_by(other):
-            from .errors import SelectorCompositionError
-
+        if _any_followed_by(self, other):
             raise SelectorCompositionError(
                 "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
                 "OR-composed followed_by selectors cannot be evaluated safely."
@@ -154,11 +151,7 @@ class BaseSelector:
 
         if not isinstance(other, str):
             return NotImplemented
-        from .._ir.selector_eval import contains_followed_by
-
-        if contains_followed_by(self):
-            from .errors import SelectorCompositionError
-
+        if _any_followed_by(self):
             raise SelectorCompositionError(
                 "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
                 "OR-composed followed_by selectors cannot be evaluated safely."
@@ -176,18 +169,12 @@ class BaseSelector:
             universe and returns a gradient address).
         """
 
-        from .._ir.selector_eval import contains_followed_by
-
-        if contains_followed_by(self):
-            from .errors import SelectorCompositionError
-
+        if _any_followed_by(self):
             raise SelectorCompositionError(
                 "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
                 "negated followed_by selectors cannot be evaluated safely."
             )
         if classify_selector_universe(self) == "mixed":
-            from .errors import SelectorCompositionError
-
             raise SelectorCompositionError(
                 f"~{self!r} negates a union of addresses in different universes "
                 "(activation, gradient, node); its complement is not one address set.",
@@ -1797,10 +1784,16 @@ _NODE_KINDS = frozenset({"grad_fn", "grad_fn_label", "grad_kind", "intervening",
 _QUALIFIER_KINDS = frozenset({"backward_pass"})
 
 
+def _any_followed_by(*selectors: Any) -> bool:
+    """Return whether any operand's selector tree contains ``tl.followed_by``."""
+
+    from .._ir.selector_eval import contains_followed_by
+
+    return any(contains_followed_by(selector) for selector in selectors)
+
+
 def _grad_refusal(problem: str, *, code: str, remedy: str) -> Exception:
     """Build one coded ``tl.grad`` construction refusal."""
-
-    from .errors import SelectorCompositionError
 
     return SelectorCompositionError(problem, code=code, remedy=remedy)
 
@@ -1880,8 +1873,6 @@ def _normalize_grad_inner(site: Any) -> str | BaseSelector:
         Coded refusal for nested, Selection, list/mapping or other non-site
         inputs (facet and node refusals come from the tree check).
     """
-
-    from .types import FrozenTargetSpec
 
     if isinstance(site, (str, BaseSelector)):
         return site
@@ -2032,8 +2023,6 @@ _CONNECTIVE_KINDS = frozenset({"and", "or", "not"})
 def _leaf_universe(kind: str) -> SelectorUniverse | None:
     """Return the universe of one leaf selector kind."""
 
-    from .errors import UnclassifiedSelectorError
-
     if kind == "grad":
         return "gradient"
     if kind in _NODE_KINDS:
@@ -2051,8 +2040,6 @@ def _leaf_universe(kind: str) -> SelectorUniverse | None:
 
 def _connective_children(sel: Any) -> tuple[str, tuple[Any, ...]] | None:
     """Return ``(operator, children)`` for an and/or/not node, else ``None``."""
-
-    from .types import FrozenTargetSpec
 
     if isinstance(sel, CompositeSelector):
         return sel.operator, tuple(sel.selectors)
@@ -2093,9 +2080,6 @@ def classify_selector_universe(sel: Any) -> SelectorUniverse | None:
     UnclassifiedSelectorError
         For a selector type with no universe bucket.
     """
-
-    from .errors import UnclassifiedSelectorError
-    from .types import FrozenTargetSpec
 
     if isinstance(sel, str):
         return None
@@ -2151,8 +2135,6 @@ def _and_universe(
     right_sel: Any,
 ) -> SelectorUniverse | None:
     """Combine two ``&`` operands' universes, refusing pairs that share no site."""
-
-    from .errors import SelectorCompositionError
 
     if left is None or right is None:
         other = right if left is None else left
@@ -2276,7 +2258,6 @@ def _check_composition(
     """
 
     from .._ir.selector_eval import contains_followed_by, flatten_and_conjuncts
-    from .errors import SelectorCompositionError
 
     a_universe = classify_selector_universe(a)
     b_universe = classify_selector_universe(b)

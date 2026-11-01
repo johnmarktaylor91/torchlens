@@ -29,12 +29,11 @@ import uuid
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
+from .hooks import _UNIVERSE_SIGNAL, NormalizedHookEntry, split_site_branches
 from .types import Edit, FireRecord
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
-    from .hooks import NormalizedHookEntry
-
 _UNSET: Any = object()
 
 #: Closed transaction-status vocabulary (documented-unstable). ``"armed"``
@@ -445,8 +444,6 @@ def rule_signal(target: Any) -> str:
     str
         ``"forward"``, ``"backward"`` or ``"both"``.
     """
-
-    from .hooks import _UNIVERSE_SIGNAL, split_site_branches
 
     signals = {_UNIVERSE_SIGNAL[universe] for universe, _ in split_site_branches(target)}
     return signals.pop() if len(signals) == 1 else "both"

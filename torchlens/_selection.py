@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
+from ._selection_align import align_resolved_selection
 from ._selection_mask import (
     _Mask,
     _mask_complement,
@@ -58,6 +59,7 @@ from ._selection_mask import (
     _mask_union,
     _mask_whole,
 )
+from ._utils.fail_open import fail_open
 from .errors._base import ConfigurationError, TorchLensError
 
 if TYPE_CHECKING:
@@ -214,8 +216,6 @@ def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
     entries (and any address the trace cannot place) keep the canonical
     site-key sort, appended after placed entries deterministically.
     """
-
-    from ._utils.fail_open import fail_open
 
     placed = _canonical_entry_order(entries)
 
@@ -375,8 +375,6 @@ class Selection:
             ``grouping_stamp_mismatch`` / ``site_key_unavailable`` /
             ``site_not_in_target`` / ``index_space_mismatch``).
         """
-
-        from ._selection_align import align_resolved_selection
 
         return align_resolved_selection(self, target)
 

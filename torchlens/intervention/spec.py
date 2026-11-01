@@ -45,6 +45,7 @@ from ._content_identity import (
     tensor_version,
 )
 from .predicates import as_intervention_decision
+from .selectors import BaseSelector, CompositeSelector
 from .types import Edit, InterventionDecision
 
 AddressClass = Literal["structural", "recorded", "value_dependent"]
@@ -121,8 +122,6 @@ def classify_where(target: Any) -> AddressClass:
         ``"value_dependent"`` fail-closed -- their body is opaque, so no lane
         may assume it reads structure only.
     """
-
-    from .selectors import BaseSelector
 
     if isinstance(target, BaseSelector):
         from .._ir.selector_eval import selector_contains_kind
@@ -308,8 +307,6 @@ def _join_union(operands: list[Any]) -> Any | None:
         return None
     if len(operands) == 1:
         return operands[0]
-    from .selectors import CompositeSelector
-
     return CompositeSelector("or", tuple(operands))
 
 
@@ -344,8 +341,6 @@ def _canonical_repr(value: Any, *, exact: bool = False) -> str:
     if isinstance(value, InterventionDecision):
         hook_repr = _canonical_repr(value.hook, exact=exact)
         return f"decision:{value.action}:{hook_repr}:direction={_RULE_ID_TAIL}"
-    from .selectors import BaseSelector
-
     if isinstance(value, BaseSelector):
         return f"selector:{value!r}"
     if callable(value):
