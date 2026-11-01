@@ -395,10 +395,8 @@ class DryRun:
         """
 
         from .._visualization.fastlog_live import draw
-        from ..viz._drawing import Drawing
 
-        source = draw(self, **kwargs)
-        return Drawing(dot=source, file_format=str(kwargs.get("vis_fileformat", "pdf")))
+        return draw(self, **kwargs)
 
     def summary(self) -> str:
         """Return a concise human-readable dry-run summary."""
