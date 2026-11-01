@@ -101,6 +101,7 @@ DOORS = {
 
 
 def _door_name(func: ast.expr) -> str | None:
+    # Cohesion: recognize the supported call syntax together, including lazy public doors.
     if isinstance(func, ast.Call):
         if isinstance(func.func, ast.Name) and func.func.id == "cast" and func.args:
             return _door_name(func.args[-1])
@@ -423,6 +424,8 @@ def _visible_capture_uses(
 ) -> list[tuple[ast.Call, ast.keyword]]:
     """Require one binding and exclusively visible same-function capture uses."""
 
+    # Safety: binding, scope and use checks stay together so ambiguous rewrites fail closed.
+
     direct = _capture_door_use(ctor, parents)
     if direct is not None:
         return [direct]
@@ -482,6 +485,8 @@ def _extract_capture_selection(
 ) -> None:
     """Move removed CaptureOptions fields, reporting every ambiguous migration."""
 
+    # Cohesion: coordinate nested edits in one pass so deletions cannot erase save= additions.
+
     parents = {id(child): node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
     aliases = {
         alias.asname
@@ -530,6 +535,8 @@ def rewrite_source(
     result: list[str] | None = None,
 ) -> bool:
     """Rewrite one Python source block, preserving surrounding document text."""
+
+    # Essential edit state machine: all migrations share one ordered edit accumulator.
 
     try:
         tree = ast.parse(source)
@@ -600,6 +607,8 @@ def rewrite_source(
 def rewrite_document(path: Path, apply: bool, counts: Counter, reports: list[str]) -> bool:
     """Apply the Python migration to Markdown fences and notebook code cells."""
 
+    # Cohesion: retain each container format while sharing the Python block rewrite.
+
     source = path.read_text()
     changed = False
 
@@ -634,6 +643,7 @@ def rewrite_document(path: Path, apply: bool, counts: Counter, reports: list[str
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Cohesion: traverse source containers and aggregate one review report for the invocation.
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("roots", nargs="+")
     parser.add_argument("--apply", action="store_true")
