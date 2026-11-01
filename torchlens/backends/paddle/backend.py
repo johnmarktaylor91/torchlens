@@ -23,7 +23,6 @@ from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
-    InterventionAppliedEvent,
     ModuleFrame,
     OpEvent,
     OutputRef,
@@ -71,6 +70,11 @@ from .._protocols.paddle import (
     PADDLE_REFUSAL_OPTION,
     PADDLE_REFUSAL_RUNTIME_MODE,
     PADDLE_REFUSAL_SEED,
+)
+from ._capture_helpers import (
+    _append_intervention_events,
+    _intermediate_grad_record,
+    _paddle_facet_snapshot,
 )
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .constants_rule import (
@@ -505,25 +509,7 @@ class PaddleBackend:
         trace._paddle_capture_gap_markers = []
         trace._paddle_intervention_runtime = intervention_runtime
         if facet_recipes is not None:
-            if callable(facet_recipes):
-                facet_recipes = (facet_recipes,)
-            try:
-                recipe_tuple = tuple(facet_recipes)
-            except TypeError as exc:
-                raise BackendUnsupportedError(
-                    "paddle backend trace(facets=...) requires an iterable of recipe callables.",
-                    code=PADDLE_REFUSAL_OPTION,
-                    option="facets",
-                ) from exc
-            if not all(callable(recipe) for recipe in recipe_tuple):
-                raise BackendUnsupportedError(
-                    "paddle backend trace(facets=...) requires recipe callables.",
-                    code=PADDLE_REFUSAL_OPTION,
-                    option="facets",
-                )
-            from ..._semantic import facets as facets_mod
-
-            trace.facet_registry_snapshot = facets_mod.snapshot(recipe_tuple)
+            trace.facet_registry_snapshot = _paddle_facet_snapshot(facet_recipes)
         trace.backend_runtime_version = str(getattr(self.paddle, "__version__", ""))
         trace.backend_runtime_config = {"version": trace.backend_runtime_version}
         trace.backend_runtime_device_summary = {}
@@ -586,22 +572,7 @@ class PaddleBackend:
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
-            if use_object_module and module_tree is not None:
-                trace.param_logs = ParamAccessor(paddle_param_logs(module_tree, trace))
-                trace.num_param_tensors = len(trace.param_logs)
-                trace.num_params = sum(param.num_params for param in trace.param_logs)
-                trace.num_params_trainable = sum(
-                    param.num_params for param in trace.param_logs if param.is_trainable
-                )
-                trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-                trace.param_source = "native-module"
-            else:
-                trace.param_logs = ParamAccessor({})
-                trace.num_param_tensors = 0
-                trace.num_params = 0
-                trace.num_params_trainable = 0
-                trace.num_params_frozen = 0
-                trace.param_source = "none"
+            _attach_paddle_param_logs(trace, module_tree if use_object_module else None)
             self._finish_trace(trace, module_tree if use_object_module else None)
             apply_static_label_save_policy(trace, save_predicate, backend_name="paddle")
             if grad_options is not None:
@@ -870,28 +841,7 @@ class PaddleBackend:
             if candidate.grad is None:
                 continue
             op = ops[0]
-            records[op.label] = IntermediateDerivedGradRecord(
-                op_label=op.label,
-                layer_label=op.layer_label,
-                aval=(
-                    f"Tensor(shape={tuple(getattr(candidate.grad, 'shape', ()))}, "
-                    f"dtype={getattr(candidate.grad, 'dtype', None)})"
-                ),
-                dtype_ref=DtypeRef(
-                    backend="paddle", name=str(getattr(candidate.grad, "dtype", ""))
-                ),
-                grad=candidate.grad,
-                provenance={
-                    "backend": "paddle",
-                    "kind": "intermediate_derived_gradient",
-                    "mechanism": "paddle.grad_tap_replay",
-                    "loss_id": _callable_identity(grad_options.loss_fn),
-                    "save_predicate_id": "trace.saved_ops",
-                    "status": "exact",
-                    "match_key": "func_call_id+parents+module_stack",
-                    "max_intermediate_grads": grad_options.max_intermediate_grads,
-                },
-            )
+            records[op.label] = _intermediate_grad_record(op, candidate.grad, grad_options)
         if len(records) > grad_options.max_intermediate_grads:
             raise BackendUnsupportedError(
                 "Paddle intermediate derived gradients are capped at "
@@ -1114,18 +1064,11 @@ class PaddleBackend:
         expected_output = op.out
         intervention = getattr(capture, "intervention", None)
         if intervention is not None:
-            # Narrow user-intervention carve-out (tripwire doctrine):
-            # the replay target switches to the pre-hook value ONLY
-            # when trace-level evidence corroborates a genuine live
-            # fire. A capture-side record without corroboration is a
-            # forged/mispresented stamp and fails outright.
-            if not _paddle_intervention_corroborated(trace, capture, op):
-                failed = validation_decision(
-                    label, OUTCOME_FAILED, REASON_USER_INTERVENTION, "fire not corroborated"
-                )
+            failed, expected_output = _intervened_replay_target(
+                trace, capture, op, label, expected_output
+            )
+            if failed is not None:
                 return failed, None, intervention
-            if intervention.raw_first_output is not None:
-                expected_output = intervention.raw_first_output
         rebuilt = _rebuild_inputs(capture, ops_by_label)
         if not rebuilt.ok:
             failed = validation_decision(
@@ -1287,19 +1230,7 @@ class PaddleBackend:
             emitted.append(event)
             self.tensor_store.set_label_if_unlabeled(tensor, site.label_raw)
         events.extend(tuple(emitted))
-        for event in emitted:
-            if event.intervention_replaced:
-                events.append_intervention(
-                    InterventionAppliedEvent(
-                        label_raw=event.label_raw,
-                        kind="replaced",
-                        origin="live_fire",
-                        timestamp=time.time(),
-                        run_token=events.run_nonce,
-                        target_seq=event.seq,
-                        target_func_call_id=func_call_id,
-                    )
-                )
+        _append_intervention_events(events, emitted, func_call_id)
         if runtime is not None and runtime.halt is not None:
             for output_index, (path, tensor) in enumerate(final_outputs):
                 if output_index in alias_indices:
@@ -2057,6 +1988,27 @@ def paddle_param_logs(tree: PaddleModuleTree, trace: Trace) -> dict[str, Param]:
     return param_logs
 
 
+def _attach_paddle_param_logs(trace: Trace, module_tree: PaddleModuleTree | None) -> None:
+    """Populate the trace's parameter logs and counts from the captured tree."""
+
+    if module_tree is not None:
+        trace.param_logs = ParamAccessor(paddle_param_logs(module_tree, trace))
+        trace.num_param_tensors = len(trace.param_logs)
+        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace.num_params_trainable = sum(
+            param.num_params for param in trace.param_logs if param.is_trainable
+        )
+        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+        trace.param_source = "native-module"
+    else:
+        trace.param_logs = ParamAccessor({})
+        trace.num_param_tensors = 0
+        trace.num_params = 0
+        trace.num_params_trainable = 0
+        trace.num_params_frozen = 0
+        trace.param_source = "none"
+
+
 def _paddle_metadata_top_level(
     address: str,
     metadata: dict[str, Any],
@@ -2237,6 +2189,34 @@ def _paddle_intervention_corroborated(trace: Trace, capture: Any, op: Any) -> bo
         if record_call_id is None or record_call_id == intervention.func_call_id:
             return True
     return False
+
+
+def _intervened_replay_target(
+    trace: Trace, capture: Any, op: Any, label: str | None, expected_output: Any
+) -> tuple[dict[str, Any] | None, Any]:
+    """Settle the replay target of a capture carrying an intervention record.
+
+    Returns
+    -------
+    tuple[dict[str, Any] | None, Any]
+        The failed decision when the fire is not corroborated (else ``None``)
+        and the output the replay must reproduce.
+    """
+
+    # Narrow user-intervention carve-out (tripwire doctrine):
+    # the replay target switches to the pre-hook value ONLY
+    # when trace-level evidence corroborates a genuine live
+    # fire. A capture-side record without corroboration is a
+    # forged/mispresented stamp and fails outright.
+    if not _paddle_intervention_corroborated(trace, capture, op):
+        failed = validation_decision(
+            label, OUTCOME_FAILED, REASON_USER_INTERVENTION, "fire not corroborated"
+        )
+        return failed, expected_output
+    intervention = capture.intervention
+    if intervention.raw_first_output is not None:
+        return None, intervention.raw_first_output
+    return None, expected_output
 
 
 def _paddle_loaded_replay_unavailable(trace: Trace) -> bool:
