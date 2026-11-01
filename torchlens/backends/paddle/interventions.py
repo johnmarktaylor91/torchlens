@@ -197,21 +197,7 @@ class PaddleInterventionRuntime:
             )
         replaced = replacement is not tensor
         self.fire_count += 1
-        fire_record = FireRecord(
-            target_label=ctx.label_raw,
-            call_label=ctx.label_raw,
-            func_call_id=ctx.func_call_id,
-            container_path=container_path,
-            engine="paddle_wrapper",
-            helper=helper_spec,
-            site_label=ctx.label_raw,
-            timing="post",
-            signal="forward",
-            helper_name=helper_spec.helper_name if helper_spec is not None else None,
-            timestamp=time.time(),
-            call_index=ctx.raw_index,
-            replaced=replaced,
-        )
+        fire_record = _fire_record(ctx, container_path, helper_spec, replaced)
         fire_result = FireResult(
             plan_id=f"paddle-intervene-{self.fire_count}",
             site_label=ctx.label_raw,
@@ -417,3 +403,25 @@ __all__ = [
     "PaddleInterventionCapture",
     "PaddleInterventionRuntime",
 ]
+
+
+def _fire_record(
+    ctx: RecordContext, container_path: tuple[Any, ...], helper_spec: Edit | None, replaced: bool
+) -> FireRecord:
+    """Fire metadata of one applied Paddle intervention."""
+
+    return FireRecord(
+        target_label=ctx.label_raw,
+        call_label=ctx.label_raw,
+        func_call_id=ctx.func_call_id,
+        container_path=container_path,
+        engine="paddle_wrapper",
+        helper=helper_spec,
+        site_label=ctx.label_raw,
+        timing="post",
+        signal="forward",
+        helper_name=helper_spec.helper_name if helper_spec is not None else None,
+        timestamp=time.time(),
+        call_index=ctx.raw_index,
+        replaced=replaced,
+    )

@@ -355,11 +355,7 @@ def _parent_perturbations_change_output(
         return _is_factory_or_source_capture(capture)
     if set(rebuilt.parent_values) <= constant_labels:
         return True
-    saved_output = (
-        baseline_output
-        if baseline_output is not None
-        else _saved_payload(ops_by_label[capture.label_raw])
-    )
+    saved_output = _perturbation_baseline(baseline_output, ops_by_label, capture)
     output_path = _capture_output_path(capture)
     attempted = False
     for parent_label, parent_value in rebuilt.parent_values.items():
@@ -368,23 +364,63 @@ def _parent_perturbations_change_output(
         paths = rebuilt.leaf_paths_by_parent.get(parent_label, ())
         if not paths:
             continue
-        for candidate in _perturb_candidates(parent_value):
-            attempted = True
-            args, kwargs = _replace_template_paths(
-                tuple(getattr(capture, "args_template", ())),
-                dict(getattr(capture, "kwargs_template", {})),
-                dict.fromkeys(paths, candidate),
-                rebuilt,
-            )
-            try:
-                with _state.pause_logging(), backend.paddle.no_grad():
-                    perturbed = capture.func(*args, **kwargs)
-            except Exception:
-                continue
-            perturbed_output = _value_at_path(perturbed, output_path)
-            if not _payloads_close(perturbed_output, saved_output):
-                return True
+        tried, changed = _perturb_parent(
+            backend, capture, rebuilt, paths, parent_value, output_path, saved_output
+        )
+        attempted = attempted or tried
+        if changed:
+            return True
     return not attempted and _is_factory_or_source_capture(capture)
+
+
+def _perturbation_baseline(
+    baseline_output: Any, ops_by_label: Mapping[str, Any], capture: Any
+) -> Any:
+    """The output perturbed replays are compared against (explicit baseline or saved payload)."""
+
+    return (
+        baseline_output
+        if baseline_output is not None
+        else _saved_payload(ops_by_label[capture.label_raw])
+    )
+
+
+def _perturb_parent(
+    backend: Any,
+    capture: Any,
+    rebuilt: RebuiltPaddleInputs,
+    paths: tuple[tuple[Any, ...], ...],
+    parent_value: Any,
+    output_path: Any,
+    saved_output: Any,
+) -> tuple[bool, bool]:
+    """Perturb one value parent through every candidate.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        Whether any candidate replay was attempted, and whether one changed
+        the output.
+    """
+
+    attempted = False
+    for candidate in _perturb_candidates(parent_value):
+        attempted = True
+        args, kwargs = _replace_template_paths(
+            tuple(getattr(capture, "args_template", ())),
+            dict(getattr(capture, "kwargs_template", {})),
+            dict.fromkeys(paths, candidate),
+            rebuilt,
+        )
+        try:
+            with _state.pause_logging(), backend.paddle.no_grad():
+                perturbed = capture.func(*args, **kwargs)
+        except Exception:
+            continue
+        perturbed_output = _value_at_path(perturbed, output_path)
+        if not _payloads_close(perturbed_output, saved_output):
+            return attempted, True
+    return attempted, False
 
 
 def _capture_gap_markers(trace: Any) -> tuple[str, ...]:
