@@ -79,7 +79,7 @@ def test_root_budget_is_frozen() -> None:
         "new name's layer, and update this pin in the same change."
     )
     in_all = [row for row in rows if row.in_all]
-    assert len(in_all) == len(torchlens.__all__) == 87, (
+    assert len(in_all) == len(torchlens.__all__) == 83, (
         "__all__ budget moved -- update U-PUBLIC-OPERATIONS and this pin in "
         "the same deliberate change"
     )
