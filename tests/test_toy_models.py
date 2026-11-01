@@ -1777,14 +1777,12 @@ def test_gelu_model(default_input1):
 def test_trace_layers_to_save(default_input1):
     """Test layers_to_save parameter selectively saves outs."""
     model = example_models.SimpleFF()
-    mh = trace(model, default_input1, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    mh = trace(model, default_input1, save="all")
     all_labels = mh.layer_labels
     assert len(all_labels) > 0
 
     # Save only the first layer
-    mh_partial = trace(
-        model, default_input1, capture=tl.options.CaptureOptions(layers_to_save=[all_labels[0]])
-    )
+    mh_partial = trace(model, default_input1, save=[all_labels[0]])
     # The layer list should still track all layers
     assert len(mh_partial.layer_labels) > 0
     # But only the requested layer should have saved outs
@@ -2069,7 +2067,7 @@ def test_output_layer_saved_with_layers_to_save() -> None:
         torch.nn.Linear(5, 2),
     )
     x = torch.rand(2, 5)
-    mh = trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["relu"]))
+    mh = trace(model, x, save=["relu"])
     for label in mh.output_layers:
         entry = mh[label]
         assert entry.out is not None, f"Output layer {label} should have out"
@@ -2088,7 +2086,7 @@ def test_stochastic_depth_layers_to_save():
     model.train()
     x = torch.rand(2, 5)
     # layers_to_save accepts substring selectors on both absorbed and two-pass paths.
-    mh = trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["linear"]))
+    mh = trace(model, x, save=["linear"])
     assert mh is not None
     assert len(mh.layer_labels) > 0
     # Linear layers should have saved outs

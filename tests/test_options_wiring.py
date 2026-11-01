@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions, VisualizationOptions
+from torchlens.options import VisualizationOptions
 
 
 class _TinyModel(nn.Module):
@@ -55,7 +55,7 @@ def test_trace_grouped_capture_options_route_warning_free() -> None:
         log = tl.trace(
             _TinyModel(),
             _input(),
-            capture=CaptureOptions(layers_to_save="all"),
+            save="all",
         )
     try:
         labels, saved = _capture_summary(log)

@@ -398,12 +398,10 @@ def _axis_lookback(tmp_dir: str, *, streaming: bool, transform: bool) -> Any:
     if streaming:
         kwargs["storage"] = tl.to_disk(Path(tmp_dir) / "lookback.tlspec")
     if transform:
-        # capture= carries the activation transform (save= is the predicate), so the
-        # relu selection moves to capture.layers_to_save when a transform rides.
+        # Capture transforms compose with the independent save predicate.
         kwargs["capture"] = tl.options.CaptureOptions(
             activation_transform=lambda t: t.detach() * 1.0
         )
-        kwargs["capture"] = tl.options.CaptureOptions(layers_to_save=tl.func("relu"))
     return tl.trace(
         model,
         model_input,
@@ -418,7 +416,7 @@ def _axis_deferred_retention() -> Any:
     # A final-label-only selector (negative index) defers the retention
     # decision to step 11.75 (resolve_deferred_retention), the axis that
     # populates its save_activation write family.
-    return tl.trace(model, model_input, capture=tl.options.CaptureOptions(layers_to_save=[-2, -1]))
+    return tl.trace(model, model_input, save=[-2, -1])
 
 
 def _axis_transform_streaming(tmp_dir: str) -> Any:

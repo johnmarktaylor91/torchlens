@@ -51,9 +51,7 @@ _SAVE_SPELLING = re.compile(r"save=(\[[^\]]*\]|tl\.\w+\([^)]*\)|'[^']*')")
 def test_save_list_form_runs_and_matches_layers_to_save(net) -> None:
     model, x = net
     by_save = tl.trace(model, x, save=["layer1", "fc"])
-    by_capture = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save=["layer1", "fc"])
-    )
+    by_capture = tl.trace(model, x, save=["layer1", "fc"])
     assert _saved_labels(by_save) == _saved_labels(by_capture)
     torch.testing.assert_close(by_save["fc"].out, model(x))
     assert _saved_labels(tl.trace(model, x, save="all")) == _saved_labels(tl.trace(model, x))
@@ -71,17 +69,13 @@ def test_save_type_refusal_remedies_all_run(net) -> None:
         assert _saved_labels(trace), spelling
 
 
-def test_save_selection_conflict_remedies_run(net) -> None:
+def test_save_selection_composes_with_other_capture_options(net) -> None:
     model, x = net
-    capture = tl.options.CaptureOptions(layers_to_save=["fc"])
-    with pytest.raises(errors.ArgumentConflictError) as exc_info:
-        tl.trace(model, x, save=["layer1"], capture=capture)
-    assert exc_info.value.fields["code"] == "save_selection_conflict"
-    calls = re.findall(r"tl\.trace\([^`]*?\)(?= without| and|$)", exc_info.value.fields["remedy"])
-    assert len(calls) == 2
-    namespace = {"tl": tl, "model": model, "x": x, "CaptureOptions": tl.options.CaptureOptions}
-    for call in calls:
-        assert _saved_labels(eval(call, namespace)), call
+    trace = tl.trace(model, x, save=["fc"], capture=tl.options.CaptureOptions(save_args=True))
+    assert trace["fc"].has_saved_activation
+    assert all(
+        op.has_saved_activation is False for op in trace.layer_list if op.layer_type == "relu"
+    )
 
 
 def test_activations_by_address_lists_existing_addresses(net) -> None:
@@ -188,8 +182,8 @@ def _head_slices(trace: Any, head: int) -> list[torch.Tensor]:
 @pytest.mark.heavy
 def test_unscoped_head_reports_the_sites_it_writes() -> None:
     model, ids = _gpt2()
-    capture = tl.options.CaptureOptions(layers_to_save="all", save_args=True)
-    clean = tl.trace(model, ids, capture=capture)
+    capture = tl.options.CaptureOptions(save_args=True)
+    clean = tl.trace(model, ids, capture=capture, save="all")
     edited = clean.fork("ablated")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

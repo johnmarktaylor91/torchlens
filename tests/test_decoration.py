@@ -1078,7 +1078,7 @@ class TestEdgeCases:
             result2 = trace_fn(
                 model,
                 torch.randn(5),
-                capture=tl.options.CaptureOptions(layers_to_save=[all_labels[1]]),
+                save=[all_labels[1]],
             )
             assert result2 is not None
 

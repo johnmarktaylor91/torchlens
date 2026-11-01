@@ -363,7 +363,7 @@ class TestActivationMethods:
         trace = tl.trace(
             model,
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(layers_to_save=[]),
+            save=[],
         )
         grad_table = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"

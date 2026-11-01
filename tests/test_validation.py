@@ -711,13 +711,13 @@ def test_trace_clears_nested_cached_tensor_labels_between_sessions() -> None:
         model,
         x,
         save=None,
-        capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+        capture=tl.options.CaptureOptions(inference_only=True),
     )
     second_trace = tl.trace(
         model,
         x,
         save=None,
-        capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+        capture=tl.options.CaptureOptions(inference_only=True),
     )
 
     assert second_trace.num_ops > 0
@@ -788,14 +788,14 @@ def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
                 model,
                 x,
                 save=None,
-                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+                capture=tl.options.CaptureOptions(inference_only=True),
             )
         with pytest.warns(UserWarning, match="closure or forward-global tensor"):
             second_trace = tl.trace(
                 model,
                 x,
                 save=None,
-                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+                capture=tl.options.CaptureOptions(inference_only=True),
             )
 
         assert second_trace.num_ops > 0
@@ -846,7 +846,7 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
                 model,
                 x,
                 save=None,
-                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+                capture=tl.options.CaptureOptions(inference_only=True),
             )
 
         assert second_trace.num_ops > 0
@@ -6288,9 +6288,8 @@ def test_backward_invariants_exempt_dead_branch_layers() -> None:
         log = tl.trace(
             model_cls(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(
-                backward_ready=True, layers_to_save="all", save_mode="reference"
-            ),
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
+            save="all",
         )
         try:
             log.log_backward(log.output_ops[0].out.sum())
@@ -6324,9 +6323,8 @@ def test_dead_branch_exemption_does_not_disarm_contributing_backpointers() -> No
     log = tl.trace(
         DeadBranch(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(
-            backward_ready=True, layers_to_save="all", save_mode="reference"
-        ),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
+        save="all",
     )
     try:
         log.log_backward(log.output_ops[0].out.sum())
@@ -7733,7 +7731,7 @@ class TestValidationBugfixes:
 
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        log = trace_fn(model, x, save="all")
         assert log is not None
 
 

@@ -281,11 +281,12 @@ def test_trace_under_no_grad_keeps_saved_values() -> None:
 
     model, x = _model_and_input()
     with torch.no_grad():
-        implied = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        implied = tl.trace(model, x, save="all")
         plain = tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(layers_to_save="all", inference_only=False),
+            capture=tl.options.CaptureOptions(inference_only=False),
+            save="all",
         )
     try:
         assert implied.inference_only is True

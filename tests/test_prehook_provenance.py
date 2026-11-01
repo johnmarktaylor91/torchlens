@@ -99,7 +99,8 @@ def test_in_place_mutation_truthful_snapshots_and_validation_replay() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(save_args=True, layers_to_save="all"),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     call = _call(trace)
 
@@ -226,7 +227,8 @@ def test_opaque_object_tensor_mutation_downgrades_provenance_fail_closed() -> No
     trace = tl.trace(
         model,
         _Box(torch.tensor([-2.0, 1.0])),
-        capture=tl.options.CaptureOptions(save_args=True, layers_to_save="all"),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     call = _call(trace)
     effect = call.forward_pre_hook_effects[0]

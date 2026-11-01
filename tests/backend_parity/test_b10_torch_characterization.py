@@ -218,7 +218,7 @@ def test_forward_exception_restores_capture_state() -> None:
     x = torch.ones(2, 2)
 
     with pytest.raises(RuntimeError, match="boom during forward"):
-        tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        tl.trace(model, x, save="all")
 
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None
@@ -227,7 +227,7 @@ def test_forward_exception_restores_capture_state() -> None:
     followup = tl.trace(
         _FiveOpTraceModel(),
         torch.ones(2, 2),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     assert followup.num_ops == 4
 
@@ -262,7 +262,8 @@ def test_selective_layers_to_save_uses_fast_pass_save_new_outs() -> None:
     trace = tl.trace(
         _SelectiveFastPassModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save=["relu"], seed=1703),
+        capture=tl.options.CaptureOptions(seed=1703),
+        save=["relu"],
     )
 
     saved = [(layer.func_name, layer.has_saved_activation) for layer in trace.layer_list]
@@ -321,9 +322,7 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
     """Buffer reconciliation emits the initial source before the in-place write version."""
 
     model = _BufferMutationModel()
-    trace = tl.trace(
-        model, torch.ones(2, 2), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    trace = tl.trace(model, torch.ones(2, 2), save="all")
     buffer_versions = [layer for layer in trace.layer_list if layer.is_buffer]
 
     assert len(buffer_versions) == 2
@@ -348,12 +347,14 @@ def test_dropout_two_pass_rng_alignment_matches_full_trace() -> None:
     full = tl.trace(
         _DropoutTwoPassModel().train(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=1704),
+        capture=tl.options.CaptureOptions(seed=1704),
+        save="all",
     )
     selective = tl.trace(
         _DropoutTwoPassModel().train(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["dropout"], seed=1704),
+        capture=tl.options.CaptureOptions(seed=1704),
+        save=["dropout"],
     )
 
     assert selective.capture_mode == "exhaustive"

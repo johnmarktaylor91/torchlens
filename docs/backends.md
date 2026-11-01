@@ -77,7 +77,6 @@ Declared future options:
 | `jax_max_control_flow_unroll` | JAX control-flow unroll safety limit |
 | `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad, MLX, Paddle, and TensorFlow support raw `function_root` and callable object `object_module` |
 | `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad/MLX/Paddle/TF use `array_payloads` |
-| `save_preview` | Future non-torch save preview flag; JAX/tinygrad/MLX/Paddle/TF support static-label `save=` |
 
 Capability epochs keep the public API, `CaptureOptions`, backend specs, per-backend capability
 mirrors, cache keys, docs, and tests changing together.

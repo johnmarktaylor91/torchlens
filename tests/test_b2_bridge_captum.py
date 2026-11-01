@@ -42,7 +42,7 @@ def _setup(out_dim: int | None = 3) -> tuple[nn.Module, tuple[torch.Tensor, ...]
     torch.manual_seed(0)
     model = _TwoInputs(out_dim).eval()
     inputs = (torch.randn(2, 3), torch.randn(2, 3))
-    log = tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, inputs, save="all")
     return model, inputs, log
 
 
@@ -135,7 +135,7 @@ def test_single_input_forwards_a_bare_tensor() -> None:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(3, 2)).eval()
     x = torch.randn(2, 3)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     direct = captum_attr.Saliency(model).attribute(x, target=0)
     bridged = tl.bridge.captum.attribute(log, captum_attr.Saliency(model), 0)
     _assert_same(bridged, direct)
@@ -162,7 +162,7 @@ def test_keyword_only_input_refuses_instead_of_dropping_it() -> None:
         model,
         (torch.randn(2, 3),),
         input_kwargs={"b": torch.randn(2, 3)},
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     with pytest.raises(InvalidArgumentError) as info:
         tl.bridge.captum.attribute(log, captum_attr.Saliency(model), 0)

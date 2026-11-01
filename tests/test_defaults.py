@@ -162,9 +162,7 @@ def test_trace_defaults_are_stable(
 
     captured_calls, dummy_logs = stubbed_runner
 
-    result = tl.trace(
-        _TinyModel(), _tiny_input(), capture=tl.options.CaptureOptions(layers_to_save=None)
-    )
+    result = tl.trace(_TinyModel(), _tiny_input(), save=None)
 
     assert result is dummy_logs[-1]
     assert captured_calls[-1]["layers_to_save"] is None
@@ -196,11 +194,11 @@ def test_trace_accepts_explicit_opt_in_overrides(
         _TinyModel(),
         _tiny_input(),
         capture=tl.options.CaptureOptions(
-            layers_to_save=None,
             compute_input_output_distances=True,
             save_source_context=True,
             recurrence_detection=False,
         ),
+        save=None,
     )
 
     assert result is dummy_logs[-1]
@@ -285,7 +283,7 @@ def test_log_model_metadata_forces_metadata_defaults(monkeypatch: pytest.MonkeyP
     # canonical nested capture spelling (grind b4 R48-3 fix); assert the same
     # metadata-only contract through the nested options object.
     capture_options = saved_kwargs["capture"]
-    assert capture_options.layers_to_save is None
+    assert saved_kwargs["save"] is None
     assert capture_options.compute_input_output_distances is True
     assert "layers_to_save" not in saved_kwargs
     assert "compute_input_output_distances" not in saved_kwargs

@@ -632,9 +632,8 @@ def test_output_descendants_complete_when_distances_disabled() -> None:
     trace = trace_fn(
         _SharedMultiOutputModel(),
         torch.ones(1),
-        capture=tl.options.CaptureOptions(
-            compute_input_output_distances=False, layers_to_save="all"
-        ),
+        capture=tl.options.CaptureOptions(compute_input_output_distances=False),
+        save="all",
     )
     expected_outputs = set(trace.output_layers)
     shared = next(op for op in trace.ops if op.func_name == "__mul__")
@@ -649,7 +648,7 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
     trace = trace_fn(
         nn.Sequential(nn.Linear(2, 2), nn.ReLU()),
         torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     expected = len(
         {
@@ -1498,7 +1497,8 @@ def valid_mh_and_ground_truth():
     mh = trace_fn(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     ground_truth = [mh[label].out.clone() for label in mh.output_layers]
     return mh, ground_truth
@@ -1934,7 +1934,8 @@ def test_transpose_positional_args_expose_salient_dims():
     trace = tl.trace(
         _TransposeModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     op = next(o for o in trace.layer_list if "transpose" in o.func_name)
     assert op.func_config.get("dim0") == 0

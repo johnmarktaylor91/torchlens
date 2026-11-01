@@ -577,7 +577,7 @@
   alias-aware, but this is not a general OOM guarantee: the forward, transform-only deltas, and
   cross-device temporaries can allocate first. A float sets another fraction, an int an absolute
   cap, and `None` disables it. Predicate-selected disk-only saves are exempt; exhaustive
-  `capture=tl.options.CaptureOptions(layers_to_save="all")` plus `to_disk(...)` remains budgeted
+  `save="all"` plus `to_disk(...)` remains budgeted
   until postprocess eviction (the former bare flat
   `layers_to_save=` kwarg is removed). Unmeasurable auto
   devices warn on first charge and require an absolute budget for enforcement. The reported figure

@@ -58,7 +58,7 @@ config = GPT2Config(
 )
 model = GPT2LMHeadModel(config).eval()
 input_ids = torch.randint(0, 512, (1, 6), generator=torch.Generator().manual_seed(0))
-trace = tl.trace(model, input_ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+trace = tl.trace(model, input_ids, save="all")
 
 lens = TunedLens.from_model(model).eval()
 blocks = [f"transformer.h.{i}" for i in range(config.n_layer)]

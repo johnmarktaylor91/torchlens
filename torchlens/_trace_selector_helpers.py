@@ -101,7 +101,7 @@ def _route_save_label_selection(
 
     The list form documented on ``tl.trace`` (layer names, pass-qualified labels,
     module addresses, integer indexes, substrings, ``'all'``/``'none'``) selects
-    exactly what ``capture=CaptureOptions(layers_to_save=...)`` selects;
+    the same internal label-selection machinery;
     ``save='stats'`` becomes the reduce-and-discard ``_SaveTransforms``.
 
     Parameters
@@ -120,10 +120,6 @@ def _route_save_label_selection(
     tuple[Any, CaptureOptions]
         ``(save value left for predicate/_SaveTransforms splitting, capture options)``.
 
-    Raises
-    ------
-    ArgumentConflictError
-        ``save_selection_conflict`` when ``capture=`` also sets ``layers_to_save``.
     """
 
     if isinstance(save_value, str) and save_value.lower() == "stats":
@@ -133,23 +129,10 @@ def _route_save_label_selection(
         return stats_save_options(), _flatten_stage_names_in_options(capture_options, model)
     if not _is_save_label_selection(save_value):
         return save_value, _flatten_stage_names_in_options(capture_options, model)
-    from ._errors import ArgumentConflictError
-    from ._option_receipt import _field_is_explicit
     from .options import merge_capture_options
 
-    if capture is not None and _field_is_explicit(capture, "layers_to_save"):
-        raise ArgumentConflictError(
-            "save= and capture=CaptureOptions(layers_to_save=...) both select layers",
-            code="save_selection_conflict",
-            remedy=(
-                f"keep one selection: tl.trace(model, x, save={save_value!r}) without "
-                "capture.layers_to_save, or tl.trace(model, x, capture=CaptureOptions("
-                f"layers_to_save={capture.layers_to_save!r}))"
-            ),
-            arguments=("save", "capture.layers_to_save"),
-        )
     selection = save_value if isinstance(save_value, str) else list(cast(Iterable[Any], save_value))
-    merged = merge_capture_options(capture=capture_options, layers_to_save=selection)
+    merged = merge_capture_options(capture=capture_options, _layers_to_save=selection)
     return None, _flatten_stage_names_in_options(merged, model)
 
 
@@ -175,7 +158,7 @@ def _flatten_stage_names_in_options(capture_options: CaptureOptions, model: Any)
         ``capture_options``, or a copy with the rewritten ``layers_to_save``.
     """
 
-    selection = getattr(capture_options, "layers_to_save", None)
+    selection = capture_options._layers_to_save
     named_modules = getattr(model, "named_modules", None)
     if not callable(named_modules) or not isinstance(selection, (str, list, tuple)):
         return capture_options
@@ -187,10 +170,15 @@ def _flatten_stage_names_in_options(capture_options: CaptureOptions, model: Any)
     from ._option_receipt import _explicit_fields
 
     values = capture_options.as_dict()
-    values["layers_to_save"] = rewritten[0] if isinstance(selection, str) else rewritten
+    selection = rewritten[0] if isinstance(selection, str) else rewritten
     return cast(
         "CaptureOptions",
-        type(capture_options)._from_values(values, _explicit_fields(capture_options)),
+        type(capture_options)._from_values(
+            values,
+            _explicit_fields(capture_options),
+            _layers_to_save=selection,
+            _layers_to_save_explicit=capture_options._layers_to_save_explicit,
+        ),
     )
 
 

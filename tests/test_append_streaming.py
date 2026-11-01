@@ -48,10 +48,10 @@ def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
         model,
         torch.randn(1, 3),
         capture=CaptureOptions(
-            layers_to_save="all",
             save_grads=True,
             intervention_ready=True,
         ),
+        save="all",
         storage=tl.to_disk(tmp_path / "streaming_bundle.tl"),
     )
 
@@ -85,7 +85,8 @@ def test_append_rerun_on_callback_streaming_trace_raises() -> None:
     trace = tl.trace(
         model,
         torch.randn(1, 3),
-        capture=CaptureOptions(layers_to_save="all", intervention_ready=True),
+        capture=CaptureOptions(intervention_ready=True),
+        save="all",
         storage=StorageOptions(on_save=_sink),
     )
 
@@ -102,7 +103,8 @@ def test_append_rerun_on_loaded_streaming_trace_works(tmp_path: Path) -> None:
     tl.trace(
         model,
         torch.randn(1, 3),
-        capture=CaptureOptions(layers_to_save="all", intervention_ready=True),
+        capture=CaptureOptions(intervention_ready=True),
+        save="all",
         storage=tl.to_disk(bundle_path),
     )
     loaded = tl.load(bundle_path)

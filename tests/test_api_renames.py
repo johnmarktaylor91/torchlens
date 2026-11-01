@@ -266,7 +266,7 @@ def test_visualization_defaults_preserve_per_function_behavior(
     tl.trace(
         _TinyModel(),
         _tiny_input(),
-        capture=CaptureOptions(layers_to_save=None),
+        save=None,
     )
     assert dummy_log.render_calls == []
 
@@ -296,7 +296,7 @@ def test_streaming_options_group_supports_every_field(
         tl.trace(
             _TinyModel(),
             _tiny_input(),
-            capture=CaptureOptions(layers_to_save="all"),
+            save="all",
             storage=StorageOptions(**option_kwargs),
         )
 

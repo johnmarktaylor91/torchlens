@@ -33,7 +33,7 @@ def repeated():
     model = GPT2LMHeadModel(config).eval().double()
     rep = torch.tensor([[5, 9, 12, 9, 30, 41], [7, 8, 20, 33, 2, 50]])  # row 0 repeats 9 inside R
     ids = torch.cat([torch.full((2, 1), 63), rep, rep], dim=1)
-    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, ids, save="all")
     yield trace
     trace.cleanup()
 

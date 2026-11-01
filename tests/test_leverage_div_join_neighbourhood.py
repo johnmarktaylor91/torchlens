@@ -26,7 +26,7 @@ from torchlens._postprocess._site_join import (
     site_profile,
 )
 
-_SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
+_SAVE_ALL = {"capture": tl.options.CaptureOptions()}
 
 
 def _capture_pair():

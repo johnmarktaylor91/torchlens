@@ -508,12 +508,9 @@ def pluck(
         If ``layer`` does not resolve or did not produce a saved tensor.
     """
 
-    from .options import CaptureOptions
-
     # an explicit site rides the door's stop_after=, where the trace
     # validates it; without one the trace reads the ambient site itself.
-    capture = CaptureOptions(layers_to_save=[layer])
-    trace = _resolve_top_level("trace")(model, inputs, capture=capture, stop_after=stop_after)
+    trace = _resolve_top_level("trace")(model, inputs, save=[layer], stop_after=stop_after)
     return _out_from_log(trace, layer)
 
 
@@ -619,9 +616,9 @@ def _extract_layers_with_trace(
         model,
         x,
         capture=_LazyCaptureOptions(
-            layers_to_save=list(layer_plan.values()),
             detach_saved_activations=detach_saved_activations,
         ),
+        save=list(layer_plan.values()),
     )
     outputs: dict[str, _torch.Tensor] = {}
     views: dict[str, _Any] = {}

@@ -76,7 +76,7 @@ def artifact(tmp_path):
         stimulus_ids=[f"img{i}" for i in range(4)],
         progress=False,
     )
-    trace = tl.trace(model, stimuli, capture=tl.options.CaptureOptions(layers_to_save=["conv"]))
+    trace = tl.trace(model, stimuli, save=["conv"])
     return out_dir, trace
 
 
@@ -141,9 +141,7 @@ class TestSiteMatrixRoutes:
         """A metadata-only trace teaches how to get payloads."""
 
         model = _SmallCNN().eval()
-        trace = tl.trace(
-            model, torch.rand(2, 3, 8, 8), capture=tl.options.CaptureOptions(layers_to_save="none")
-        )
+        trace = tl.trace(model, torch.rand(2, 3, 8, 8), save="none")
         with pytest.raises(torchlens.errors.FeatureShapingError) as excinfo:
             features.site_matrix(trace, "conv")
         assert excinfo.value.fields["code"] == "feature_site_payload_unavailable"

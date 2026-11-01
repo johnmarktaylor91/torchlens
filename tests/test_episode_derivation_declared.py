@@ -145,7 +145,7 @@ def test_none_kind_status_only_ledger_admits_value_free_save():
         episode=EpisodeOptions(
             stepped_module=model.step, num_steps=N_STEPS, step_output_kind="none"
         ),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     ledger = trace.episode
     assert ledger is not None
@@ -233,7 +233,7 @@ def test_value_free_save_still_refuses_for_evidence_kinds():
             episode=EpisodeOptions(
                 stepped_module=model.step, num_steps=N_STEPS, step_output_kind="digest"
             ),
-            capture=tl.options.CaptureOptions(layers_to_save="none"),
+            save="none",
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
     assert "step_output_kind='none'" in str(excinfo.value)

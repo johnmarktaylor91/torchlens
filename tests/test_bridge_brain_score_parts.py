@@ -113,9 +113,7 @@ def test_non_scalar_score_refuses() -> None:
 
 def test_per_layer_returns_score_parts_for_every_layer() -> None:
     model = nn.Sequential(nn.Linear(3, 4), nn.ReLU())
-    log = tl.trace(
-        model, torch.randn(5, 3), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(5, 3), save="all")
 
     def benchmark(out: torch.Tensor, layer: str) -> _FakeScore:
         return _ceiled()

@@ -388,7 +388,8 @@ def test_conditional_then_children_merge_across_multipass_layerlog() -> None:
     trace = tl.trace(
         _AlternatingRecurrentModel(),
         torch.ones(1, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_source_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
+        save="all",
     )
     conditional_id = trace.conditional_records[0].id
     parent_layer = next(
@@ -410,7 +411,8 @@ def test_conditional_then_invariant_catches_derived_view_corruption() -> None:
     trace = tl.trace(
         _AlternatingRecurrentModel(),
         torch.ones(1, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_source_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
+        save="all",
     )
     parent_layer = next(
         layer for layer in trace.layer_logs.values() if layer.conditional_then_children

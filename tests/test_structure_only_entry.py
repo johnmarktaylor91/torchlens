@@ -167,7 +167,7 @@ def test_value_free_structured_halt_stays_legal() -> None:
     ("description", "trace_kwargs", "capture_kwargs"),
     [
         ("save predicate", {"save": tl.func("relu")}, {}),
-        ("explicit layers_to_save", {}, {"layers_to_save": "all"}),
+        ("explicit save all", {"save": "all"}, {}),
         ("save_grads", {}, {"save_grads": True}),
         ("save_args", {}, {"save_args": True}),
         ("save_raw_input", {}, {"save_raw_input": True}),
@@ -199,7 +199,8 @@ def test_explicit_metadata_only_save_stays_legal() -> None:
     log = tl.trace(
         TwoLayer(),
         torch.randn(2, 4),
-        capture=CaptureOptions(structure_only=True, layers_to_save="none"),
+        capture=CaptureOptions(structure_only=True),
+        save="none",
     )
     assert log.structure_only is True
 

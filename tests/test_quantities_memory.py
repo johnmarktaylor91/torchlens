@@ -47,7 +47,8 @@ def _trace_memory_model() -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=CaptureOptions(save_grads="all"),
+        save="all",
     )
 
 

@@ -211,9 +211,8 @@ def test_intervene_only_mutates_forward_output_without_saving_site() -> None:
         LinearRelu(),
         torch.ones(1, 4),
         intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(
-            layers_to_save="none", output_transform=lambda output: output
-        ),
+        capture=tl.options.CaptureOptions(output_transform=lambda output: output),
+        save="none",
     )
     output = log.raw_output
 
@@ -264,7 +263,8 @@ def test_save_new_outs_rebuilds_child_versions_and_validates_alias_mutation() ->
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
     log.save_new_outs(model, new_x, layers_to_save="all")
@@ -283,7 +283,8 @@ def test_selective_fast_save_rebuilds_versions_without_unsaved_out_postprocess()
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save=["mul"],
     )
 
     assert log._replay_arg_version_data_complete
@@ -304,7 +305,8 @@ def test_selective_fast_save_without_arg_values_marks_replay_versions_incomplete
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_args=False),
+        capture=tl.options.CaptureOptions(save_args=False),
+        save=["mul"],
     )
 
     assert not log._replay_arg_version_data_complete

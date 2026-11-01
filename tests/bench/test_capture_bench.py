@@ -322,7 +322,7 @@ def _run_capture_cells(
             workload.model,
             list(workload.args),
             input_kwargs=workload.kwargs or None,
-            capture=tl.options.CaptureOptions(layers_to_save=["relu"]),
+            save=["relu"],
         )
 
     try:
@@ -490,10 +490,10 @@ def test_gradient_selector_deferred_retention_peak_memory(
             model,
             x,
             capture=tl.options.CaptureOptions(
-                layers_to_save="all",
                 save_grads=["linear"],
                 backward_ready=True,
             ),
+            save="all",
         )
         trace[trace.output_layers[0]].out.sum().backward()
         assert any(op.has_grad and op.layer_type == "linear" for op in trace.layer_list)

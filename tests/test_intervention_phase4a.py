@@ -61,7 +61,8 @@ def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:
     tl.trace(
         _TinyInterventionModel(),
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True, layers_to_save=[]),
+        capture=CaptureOptions(intervention_ready=True),
+        save=[],
     )
 
 

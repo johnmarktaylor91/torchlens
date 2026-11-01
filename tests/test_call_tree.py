@@ -95,7 +95,7 @@ def _trace() -> tl.Trace:
     return tl.trace(
         CallTreeModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
 
 

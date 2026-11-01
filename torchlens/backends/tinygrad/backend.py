@@ -361,7 +361,7 @@ class TinygradBackend:
         # see the matching comment in ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            layers_to_save=layers_to_save,
+            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -379,7 +379,7 @@ class TinygradBackend:
             save_visualizations=save_visualizations,
             module_identity_mode=module_identity_mode,
         )
-        layers_to_save = capture_options.layers_to_save
+        layers_to_save = capture_options._layers_to_save
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations

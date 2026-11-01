@@ -218,7 +218,8 @@ def test_copy_policies_pause_logging_for_internal_tensor_ops() -> None:
     log = tl.trace(
         CopyDuringLoggingModel(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True, seed=123),
+        capture=tl.options.CaptureOptions(save_args=True, seed=123),
+        save="all",
     )
 
     layer_types = [op.layer_type for op in log.layer_list]
@@ -301,7 +302,8 @@ def test_nested_container_inplace_arg_snapshot_preserves_pre_call_value() -> Non
     log = tl.trace(
         ForeachNestedMutationModel(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True, seed=123),
+        capture=tl.options.CaptureOptions(save_args=True, seed=123),
+        save="all",
     )
 
     foreach = log["foreachadd_1_2"]
@@ -357,7 +359,8 @@ def test_followed_by_saves_only_conv_feeding_relu_with_matching_payload() -> Non
     full = tl.trace(
         model,
         x.clone(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=123),
+        capture=tl.options.CaptureOptions(seed=123),
+        save="all",
     )
     log = _retro_trace(model, x.clone(), tl.func("relu"))
     saved = _saved_conv_ops(log)

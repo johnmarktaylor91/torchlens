@@ -63,7 +63,7 @@ def test_residual_recipe_rejects_non_transformer_named_block() -> None:
     log = tl.trace(
         _ScaleBlock(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     facets = log.modules["self"].facets
 
@@ -79,7 +79,7 @@ def test_residual_recipe_marks_genuine_transformer_block() -> None:
     log = tl.trace(
         _GenuineBlock(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     facets = log.modules["self"].facets
 

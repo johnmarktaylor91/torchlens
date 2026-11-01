@@ -191,9 +191,7 @@ def test_metadata_only_capture_is_never_charged() -> None:
     never going to allocate anything.
     """
 
-    trace = tl.trace(
-        _model(), _input(), capture=CaptureOptions(save_budget=64, layers_to_save="none")
-    )
+    trace = tl.trace(_model(), _input(), capture=CaptureOptions(save_budget=64), save="none")
     assert len(trace.layer_labels) > 0
     assert trace.num_saved_ops == 0
 
@@ -266,7 +264,7 @@ def test_refusal_message_names_footprint_site_and_remedies() -> None:
     # (raises ArgumentTypeError) or the deprecated bare layers_to_save= kwarg.
     assert "save='all'" not in message
     assert "layers_to_save='none' (the graph" not in message
-    assert "capture=tl.options.CaptureOptions(layers_to_save='none')" in message
+    assert "save='none'" in message
 
 
 def test_refusal_names_the_configured_source_not_a_bare_number() -> None:
@@ -342,9 +340,9 @@ def test_aliasing_raw_and_transformed_payloads_are_charged_once() -> None:
         torch.randn(8),
         capture=CaptureOptions(
             save_budget=40,
-            layers_to_save=tl.func("relu"),
             activation_transform=lambda tensor: tensor,
         ),
+        save=tl.func("relu"),
     )
     relu = next(op for op in trace.layer_list if getattr(op, "func_name", None) == "relu")
     assert relu.out is relu.transformed_out
@@ -791,7 +789,8 @@ def test_output_parent_promotion_is_charged() -> None:
     trace = tl.trace(
         _model(),
         _input(),
-        capture=CaptureOptions(layers_to_save=["relu"], save_budget=10_000_000),
+        capture=CaptureOptions(save_budget=10_000_000),
+        save=["relu"],
     )
     ledger = trace._save_budget_accountant.ledgers["cpu"]
     # relu_1 (selected, 2 KB) + linear_2 (promoted output parent, 2 KB).

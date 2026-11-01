@@ -147,7 +147,7 @@ def gpt2_trace():
     model = build_gpt2("eager").eval()
     torch.manual_seed(1)
     x = torch.randint(0, 500, (2, 8))
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     try:
         yield log
     finally:

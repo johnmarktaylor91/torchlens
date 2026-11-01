@@ -32,7 +32,8 @@ def test_layer_norm_input_facet_resolves_on_default_backend() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     ln_module = log.modules["1"]
 
@@ -67,7 +68,8 @@ def test_rms_norm_input_facet_resolves_on_default_backend() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     norm_module = log.modules["1"]
 
@@ -86,7 +88,8 @@ def test_embedding_indices_facet_resolves_on_default_backend() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     embedding_module = log.modules["self"]
 
@@ -111,7 +114,8 @@ def test_first_input_spec_falls_back_when_forward_args_absent() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     ln_module = log.modules["1"]
 

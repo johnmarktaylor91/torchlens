@@ -502,7 +502,8 @@ def test_rerun_fast_refresh_keeps_every_pass_of_a_multi_pass_layer_distinct() ->
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     assert log.layer_logs["add_1_3"].num_passes == 2
 

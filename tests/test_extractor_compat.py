@@ -32,7 +32,7 @@ def _first_internal_label(model: nn.Module, x: torch.Tensor) -> str:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     for label in log.layer_labels:
         if not label.startswith(("input", "output")):
