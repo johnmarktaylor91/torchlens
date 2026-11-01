@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 
 from torchlens.backends.registry import BackendUnsupportedError
 
@@ -366,7 +366,7 @@ class _PaddleWrapperRegistry:
         for class_name, op_name in PADDLE_CONV_LAYER_OPS.items():
             layer_cls = getattr(nn, class_name, None)
             original = getattr(layer_cls, "forward", None) if layer_cls is not None else None
-            if original is None or (layer_cls, "forward") in self._originals:
+            if layer_cls is None or original is None or (layer_cls, "forward") in self._originals:
                 continue
             self._originals[(layer_cls, "forward")] = original
             layer_cls.forward = _conv_layer_wrapper(original, op_name, backend)
@@ -436,7 +436,7 @@ class _PaddleWrapperRegistry:
 
             observer = _ACTIVE_TAP_OBSERVER
             if observer is not None:
-                observe_call = observer.call
+                observe_call = cast(Any, observer).call
                 return observe_call(original, op_name, args, kwargs)
             if not _state._logging_enabled:
                 return original(*args, **kwargs)
@@ -456,7 +456,7 @@ class _PaddleWrapperRegistry:
             finally:
                 trace._paddle_capture_depth = depth
             module_stack = tuple(getattr(trace, "_paddle_module_stack", ()))
-            emit = backend.emit_paddle_operation
+            emit = cast(Any, backend).emit_paddle_operation
             return emit(trace, op_name, original, args, kwargs, output, module_stack=module_stack)
 
         setattr(owner, name, wrapper)
@@ -500,7 +500,7 @@ def _conv_layer_wrapper(original: Any, op_name: str, backend: object) -> Any:
             trace._paddle_capture_depth = depth
         call_args, call_kwargs = conv_layer_call(layer, op_name, x)
         module_stack = tuple(getattr(trace, "_paddle_module_stack", ()))
-        emit = backend.emit_paddle_operation
+        emit = cast(Any, backend).emit_paddle_operation
         return emit(
             trace,
             op_name,

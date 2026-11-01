@@ -737,7 +737,7 @@ class MLXBackend:
                 continue
             self.tensor_store.set_label(output, reserved.label_raw)
             if policy.save_payload:
-                session._mlx_saved_payloads.append(output)
+                cast(Any, session)._mlx_saved_payloads.append(output)
             parents, parent_arg_positions, edge_uses = self._parent_edges(
                 func_event_input.args,
                 dict(func_event_input.kwargs),
@@ -951,7 +951,10 @@ class MLXBackend:
         trace._mlx_external_arrays = external_array_ids(model, self.is_tensor)
         trace._mlx_unwrapped_intermediates = 0
         trace._pre_forward_rng_states = None
-        trace.random_seed = cast(int, seed) if seed is not None else random.randint(1, 4294967294)
+        # Trace.random_seed is declared without an annotation (mypy infers None).
+        cast(Any, trace).random_seed = (
+            cast(int, seed) if seed is not None else random.randint(1, 4294967294)
+        )
         self.tensor_store.clear()
         # R07: the try owns the wrap call itself -- a raise anywhere between
         # wrapper install and the forward (session prep, input normalization,

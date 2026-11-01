@@ -2179,7 +2179,7 @@ def _alias_to_primary(tree: PaddleModuleTree) -> dict[str, str]:
     return aliases
 
 
-def _constant_capture_decision(label: str, op: Any) -> dict[str, Any]:
+def _constant_capture_decision(label: str | None, op: Any) -> dict[str, Any]:
     """The decision for a closure-constant capture: an exempted leaf with a saved payload.
 
     SPEC 2 rule 3 / FORKS F-L: a closure constant has no function and nothing
