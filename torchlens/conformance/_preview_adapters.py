@@ -541,9 +541,21 @@ class PreviewBackendAdapter:
         return framework_unavailable_reason(self.framework)
 
     def default_roster(self) -> tuple[RosterModel, ...]:
-        """This backend's zero-network config-built roster (never claim-eligible)."""
+        """This backend's roster: ``_rosters/<backend>.py`` when it exists, else the inline rows.
 
-        return _ROSTERS[self.name]()
+        A backend's own roster module owns its rows (config-built always,
+        ecosystem rows behind the switch); the inline zero-network rows stay
+        the fallback for a backend that has not shipped one.
+        """
+
+        try:
+            module = importlib.import_module(f"{__package__}._rosters.{self.name}")
+        except ModuleNotFoundError as exc:
+            if exc.name != f"{__package__}._rosters.{self.name}":
+                raise
+            return _ROSTERS[self.name]()
+        rows: tuple[RosterModel, ...] = module.roster()
+        return rows
 
     def capabilities(self) -> dict[str, bool]:
         """Declared capability flags exercised by the packs.

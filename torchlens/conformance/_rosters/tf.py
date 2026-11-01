@@ -8,12 +8,12 @@ Framework imports and checkpoint downloads occur only inside builders.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import fields
 from typing import Any
 
 import numpy as np
 
 from .._adapters import RosterModel
+from . import ecosystem_enabled
 
 __tl_layer__ = "L9"
 
@@ -22,12 +22,6 @@ _X24 = _RNG.standard_normal((2, 4)).astype(np.float32)
 _W44 = (_RNG.standard_normal((4, 4)) * 0.5).astype(np.float32)
 _B4 = _RNG.standard_normal((4,)).astype(np.float32)
 _IMG = _RNG.standard_normal((1, 6, 6, 1)).astype(np.float32)
-_ROSTER_FIELDS = frozenset(field.name for field in fields(RosterModel))
-
-
-def _row(**spec: Any) -> RosterModel:
-    """Build a roster row, passing only the fields this RosterModel version declares."""
-    return RosterModel(**{key: value for key, value in spec.items() if key in _ROSTER_FIELDS})
 
 
 def _config(
@@ -454,6 +448,26 @@ ECOSYSTEM_FAMILIES: tuple[str, ...] = tuple(
 )
 
 
+def config_built_roster() -> tuple[RosterModel, ...]:
+    """The per-change rows: no network, no claim."""
+    return tuple(RosterModel(**spec) for spec in ROW_SPECS if spec["group"] == "config_built")
+
+
+def ecosystem_roster() -> tuple[RosterModel, ...]:
+    """The pinned pretrained rows that can run (parked families are declared, not run)."""
+    parked: tuple[str, ...] = ()
+    return tuple(
+        RosterModel(**spec)
+        for spec in ROW_SPECS
+        if spec["group"] == "ecosystem" and spec["family"] not in parked
+    )
+
+
 def roster() -> tuple[RosterModel, ...]:
-    """Return the ordered roster without constructing models or downloading weights."""
-    return tuple(_row(**spec) for spec in ROW_SPECS)
+    """The scored roster: config-built rows, plus ecosystem rows when switched on.
+
+    Constructs no model and downloads nothing; builders do that when called.
+    """
+    if ecosystem_enabled():
+        return config_built_roster() + ecosystem_roster()
+    return config_built_roster()

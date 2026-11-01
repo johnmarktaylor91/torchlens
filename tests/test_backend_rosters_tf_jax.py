@@ -55,7 +55,44 @@ def test_roster_preserves_spec_order_and_model_type(backend_name: str) -> None:
     rows = backend.roster()
     assert isinstance(rows, tuple)
     assert all(isinstance(row, backend.RosterModel) for row in rows)
-    assert tuple(row.family for row in rows) == tuple(spec["family"] for spec in backend.ROW_SPECS)
+    assert tuple(row.family for row in rows) == tuple(
+        spec["family"] for spec in backend.ROW_SPECS if spec["group"] == "config_built"
+    )
+
+
+@pytest.mark.parametrize("backend_name", ("tf", "jax"))
+def test_ecosystem_rows_join_only_behind_the_switch(
+    backend_name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ecosystem rows are scored only when switched on; parked families never run."""
+    from torchlens.conformance._rosters import ECOSYSTEM_ENV
+
+    backend = _BACKENDS[backend_name]
+    monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
+    assert all(row.group == "config_built" for row in backend.roster())
+    monkeypatch.setenv(ECOSYSTEM_ENV, "1")
+    parked = getattr(backend, "PARKED_ECOSYSTEM_FAMILIES", ())
+    expected = tuple(
+        spec["family"]
+        for spec in backend.ROW_SPECS
+        if spec["group"] == "config_built" or spec["family"] not in parked
+    )
+    assert tuple(row.family for row in backend.roster()) == expected
+
+
+@pytest.mark.parametrize("backend_name", ("tf", "jax"))
+def test_preview_adapter_scores_the_backend_roster_module(
+    backend_name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The preview adapter's default roster is the backend's ``_rosters`` module."""
+    from torchlens.conformance._preview_adapters import PreviewBackendAdapter
+    from torchlens.conformance._rosters import ECOSYSTEM_ENV
+
+    monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
+    adapter_rows = PreviewBackendAdapter(backend_name).default_roster()
+    assert tuple(row.family for row in adapter_rows) == tuple(
+        row.family for row in _BACKENDS[backend_name].roster()
+    )
 
 
 @pytest.mark.parametrize("backend_name", ("tf", "jax"))
