@@ -139,7 +139,12 @@ def test_sweep_gradient_site_without_loss_stays_armed() -> None:  # A32
         names=["zero"],
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
-    assert bundle["zero"].intervention_audit[-1]["status"] == "armed"
+    envelopes = [
+        row
+        for row in bundle["zero"].state_history
+        if isinstance(row, dict) and row.get("op") == "intervention_event"
+    ]
+    assert envelopes[-1]["status"] == "armed"
 
 
 @requires_grad_sites
