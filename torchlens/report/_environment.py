@@ -21,8 +21,7 @@ from torch import nn
 
 from .. import _state
 from .._constants import get_orig_torch_funcs
-from .._utils import _torch_compat as _tc
-from .._utils._subprocess import run_bounded_subprocess
+from .._utils import _subprocess as _sp, _torch_compat as _tc
 from .._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS, get_torch_capability_snapshot
 from .._utils.introspection import nested_getattr
 
@@ -231,7 +230,7 @@ def _probe_graphviz() -> _EnvironmentCheck:
         # grandchild survived the "bounded" probe for the life of the box;
         # the shared runner tears down the whole process group.
 
-        completed = run_bounded_subprocess(
+        completed = _sp.run_bounded_subprocess(
             ["dot", "-V"],
             check=False,
             capture_output=True,

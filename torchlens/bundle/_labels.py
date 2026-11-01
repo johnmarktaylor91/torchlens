@@ -20,6 +20,16 @@ _BARE_LAYER_LABEL_RE = re.compile(r"^.+_\d+$")
 _PASS_CALL_RE = re.compile(r"^(.+):(\d+)$")
 _COMMON_PARAM_SUFFIXES = (".weight", ".bias")
 _COMMON_BUFFER_SUFFIXES = (".running_mean", ".running_var", ".num_batches_tracked")
+
+
+class AmbiguousLabelError(KeyError):
+    """Raised when ``Bundle.at`` finds a label in multiple accessors."""
+
+
+# Defined here so this leaf never imports the package at call time (layering:
+# the import kept ``_labels`` inside the big cycle); pickles and the error
+# registry keep the facade home.
+AmbiguousLabelError.__module__ = "torchlens.bundle"
 BUNDLE_ACCESSOR_NAMES = (
     "ops",
     "layers",
@@ -54,8 +64,6 @@ def label_view(bundle: Bundle, site: str) -> Any:
     KeyError
         If the label is absent from every accessor.
     """
-
-    from . import AmbiguousLabelError
 
     preferred_names = preferred_accessor_names(site)
     for accessor_name in preferred_names:

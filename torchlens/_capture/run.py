@@ -174,7 +174,7 @@ def _begin_capture(
         input_kwargs,
     )
     backend.set_capture_producer_policy(self, self._options_mode)
-    if getattr(self, "_source_model_ref", None) is None:
+    if self._source_model_ref is None:
         # Needed so unlabeled output tensors that are direct registered-buffer
         # reads (``forward`` returning ``self.running_mean`` untouched) can be
         # identified during output extraction. The exhaustive door sets this

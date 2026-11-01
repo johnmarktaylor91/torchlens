@@ -15,8 +15,9 @@ from typing import Any
 import torch
 
 from .._errors import UserTransformError
+from .._io.format_errors import ArtifactError
 
-# _io / _state / _training_validation sit at or above this module's layer
+# _state / _training_validation sit at or above this module's layer
 # (arch-spine layer lint): their names defer inside the one function each
 # serves rather than importing eagerly here.
 
@@ -243,8 +244,6 @@ def validate_streaming_transform_output(
     None
         Raises if streaming cannot serialize the transformed value.
     """
-
-    from .._io import ArtifactError
 
     if not streaming_active:
         return

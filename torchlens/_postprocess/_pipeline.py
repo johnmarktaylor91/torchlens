@@ -585,7 +585,6 @@ def _check_step_postcondition(ctx: StepContext, step: PipelineStep) -> None:
 
     violation = None if step.postcondition is None else step.postcondition(ctx)
     if violation is not None:
-        # In-function: validation/__init__ imports _user_funcs, which reaches this module.
         from ..validation.invariants import MetadataInvariantError
 
         raise MetadataInvariantError(

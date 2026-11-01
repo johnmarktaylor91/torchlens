@@ -1278,6 +1278,11 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens._io; this row records the post-split defining file"
     ),
+    "torchlens.bundle._labels.AmbiguousLabelError": (
+        "registered in torchlens.errors under the preserved runtime home "
+        "torchlens.bundle; this row records the defining file (moved into the "
+        "label leaf so the leaf stops importing the package)"
+    ),
     "torchlens._registry.kernel.RegistryError": (
         "private registry-kernel refusal (C01); surfaced through typed "
         "domain-door errors, never caught by kernel class in user code — "

@@ -3,7 +3,7 @@
 # when it drops under the cap, lower a count when it shrinks, never add or raise one
 # without a one-line reason in the commit message. Regenerate with
 # `python scripts/checks/file_cap.py --update` (it never raises a recorded count).
-torchlens/__init__.py::_extract_layers_with_trace	66
+torchlens/__init__.py::_extract_layers_with_trace	62
 torchlens/_capture/_episode_coupling.py::attest_coupling	86
 torchlens/_capture/_episode_derivation.py::_derive_step_column	91
 torchlens/_capture/_episode_derivation.py::_licensed_positions	65
@@ -138,7 +138,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1083
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3916
+torchlens/_data_classes/trace.py	3915
 torchlens/_data_classes/trace.py::Trace.__getstate__	111
 torchlens/_data_classes/trace.py::Trace.__init__	366
 torchlens/_data_classes/trace.py::Trace.__setstate__	337
@@ -209,7 +209,7 @@ torchlens/_io/_safe_unpickle.py	1983
 torchlens/_io/_safe_unpickle.py::SafeBundleUnpickler.find_class	322
 torchlens/_io/_safe_unpickle.py::_alloc_refusal_reason	91
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
-torchlens/_io/bundle.py	4358
+torchlens/_io/bundle.py	4352
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64
 torchlens/_io/bundle.py::_bind_archived_activation_payload	111
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	87
@@ -221,7 +221,6 @@ torchlens/_io/bundle.py::_contains_nested_blob_refs	69
 torchlens/_io/bundle.py::_fast_copy_tensor_blob	66
 torchlens/_io/bundle.py::_load_trace_payload	177
 torchlens/_io/bundle.py::_load_unified_tlspec	96
-torchlens/_io/bundle.py::_preflight_unified_trace_body_index	64
 torchlens/_io/bundle.py::_preflight_unified_trace_manifest	90
 torchlens/_io/bundle.py::_scrub_trace_for_bundle	66
 torchlens/_io/bundle.py::cleanup_tmp	120
@@ -430,7 +429,7 @@ torchlens/_quickstart/_primitive.py::capture_concrete	82
 torchlens/_quickstart/_render.py::_render_finished_trace	74
 torchlens/_quickstart/_render.py::render	111
 torchlens/_registry/kernel.py::Registry.register	88
-torchlens/_robustness.py	821
+torchlens/_robustness.py	820
 torchlens/_robustness.py::_iter_tensors_with_paths	88
 torchlens/_robustness.py::_maybe_admit_meta	63
 torchlens/_robustness.py::check_model_and_input_variants	268
@@ -958,7 +957,7 @@ torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wra
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py	890
 torchlens/backends/torch/backend.py::TorchBackend.fetch_label_move_input_tensors	153
-torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	89
+torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
 torchlens/backends/torch/backward.py	4261
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	95
@@ -1064,7 +1063,7 @@ torchlens/bridge/shap.py::explain	68
 torchlens/bridge/transformers.py	804
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	62
 torchlens/bridge/transformers.py::trace_text	67
-torchlens/bundle/__init__.py	1997
+torchlens/bundle/__init__.py	1993
 torchlens/bundle/__init__.py::Bundle.rank_changes	78
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
 torchlens/bundle/_compare_gate.py::require_comparable	143
