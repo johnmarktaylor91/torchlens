@@ -17,6 +17,11 @@ from torchlens._ir.capture_events import CaptureEvents
 from .. import _state
 from .._capture.config import InternalCaptureConfig
 from .._capture.outcome import safe_exception_repr, safe_exception_str
+from .._capture.output_readback import (
+    forward_failed as output_forward_failed,
+    returned as output_returned,
+    stopped as output_stopped,
+)
 from .._capture.predicates import _save_selector_matches, validate_followed_by_capability
 from .._capture.projections import (
     RecordingState,
@@ -572,6 +577,7 @@ class Recorder:
             if self._echo_session is not None:
                 # Halted is not failed: no crash tail, one typed disclosure.
                 self._echo_session.note_line("-- echo: capture halted (not failed) --")
+            object.__setattr__(self._state.recording, "_output", output_stopped(halt_exc.reason))
             output = None
             return output
         except Exception as exc:
@@ -593,6 +599,9 @@ class Recorder:
             partial_build_failed = False
             try:
                 partial = self._mark_recording_failed(trace, exc)
+                object.__setattr__(
+                    partial, "_output", output_forward_failed(safe_exception_str(exc))
+                )
                 self._failed = True
                 self._recording = partial
                 if forward_disposition == "attach_partial":
@@ -634,6 +643,7 @@ class Recorder:
             "num_ops",
             max(self._state.recording.num_ops, self._next_pass_index),
         )
+        object.__setattr__(self._state.recording, "_output", output_returned(output))
         return output
 
     def _absorb_pass_events(self, trace: Trace) -> None:

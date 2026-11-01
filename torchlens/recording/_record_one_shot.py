@@ -9,6 +9,7 @@ from torch import nn
 
 from torchlens.backends.registry import BackendUnsupportedError
 
+from .._capture.output_readback import returned as output_returned
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
 from .._errors import ArgumentTypeError
@@ -128,8 +129,7 @@ def record(
     narrate: Any | None = None,
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
-    return_output: bool = False,
-) -> Recording | GenerationRecording | tuple[Any, Recording | GenerationRecording]:
+) -> Recording | GenerationRecording:
     """Record one model forward pass with capture predicates.
 
     ``record(save=...)`` is the one predicate spelling and matches
@@ -161,9 +161,8 @@ def record(
     on_forward_error:
         Controls failed-forward handling. ``"raise"`` preserves the historical
         behavior, ``"attach_partial"`` attaches ``exc.partial_recording`` and
-        re-raises, and ``"return_partial"`` returns a failed partial Recording.
-        With ``return_output=True``, the returned output is ``None`` because no
-        valid model output exists on failure.
+        re-raises, and ``"return_partial"`` returns a failed partial Recording,
+        whose ``output`` refuses with ``output_forward_failed``.
     intervene:
         Optional predicate-time intervention slot evaluated on operation contexts.
     stop_after:
@@ -209,14 +208,13 @@ def record(
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
         ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
-    return_output:
-        Whether to return ``(model_output, recording)``; with
-        ``generate_kwargs`` the output is ``generate()``'s own return value.
 
     Returns
     -------
-    Recording | tuple[Any, Recording]
-        Fastlog recording, optionally with the model output.
+    Recording | GenerationRecording
+        The recording (a ``GenerationRecording`` with ``generate_kwargs``). Its
+        ``output`` is the model's return value (``generate()``'s own return value
+        with ``generate_kwargs``), held in memory only.
     """
 
     # The capability table gates this surface for EVERY resolution, including
@@ -305,10 +303,8 @@ def record(
                 "detach_saved_activations": detach_saved_activations,
             },
         )
-        generation = enrich_generation(generation, postprocess)
-        if return_output:
-            return output, generation
-        return generation
+        object.__setattr__(generation.recording, "_output", output_returned(output))
+        return enrich_generation(generation, postprocess)
     with Recorder(
         model,
         save=save,
@@ -335,10 +331,8 @@ def record(
         narrate=narrate,
         detach_saved_activations=detach_saved_activations,
     ) as recorder:
-        output = recorder(input_args, input_kwargs)
+        recorder(input_args, input_kwargs)
     result = recorder.recording
     if postprocess != "none":
         result = result.enrich(postprocess)
-    if return_output:
-        return output, result
     return result

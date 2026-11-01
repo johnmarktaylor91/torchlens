@@ -3,8 +3,7 @@
 The common steering case: ``tl.when(tl.module("model.layers.0"), tl.steer(v))`` on a causal
 LM whose ``use_cache`` is on. A module site is not an ``in_module`` region, so the region
 refusal for exits into returned cache tensors (``region_exit_address_underivable``) must
-never reach it. Every door (``tl.trace(intervene=)``, ``tl.record(intervene=,
-return_output=True)``, ``spec.bind(model)(ids)`` and ``spec.bind(model).generate(...)``)
+never reach it. Every door (``tl.trace(intervene=)``, ``tl.record(intervene=)``, ``spec.bind(model)(ids)`` and ``spec.bind(model).generate(...)``)
 must match an eager ``register_forward_hook`` oracle that applies the same edit to the
 block's hidden-state output.
 
@@ -243,16 +242,16 @@ def test_trace_intervene_matches_hook(name: str, helper: Callable, edit: Callabl
 
 @pytest.mark.parametrize(("name", "helper", "edit"), _EDITS, ids=_EDIT_IDS)
 def test_record_intervene_matches_hook(name: str, helper: Callable, edit: Callable) -> None:
-    """``tl.record(intervene=, return_output=True)`` returns the hook oracle's logits."""
+    """``tl.record(intervene=).output`` is the hook oracle's logits."""
 
     model, address = _tiny_causal_lm()
-    output, _recording = tl.record(
+    _recording = tl.record(
         model,
         _IDS,
         save=tl.module(address),
         intervene=tl.when(tl.module(address), helper()),
-        return_output=True,
     )
+    output = _recording.output
     _assert_steered(output.logits, model, address, edit)
 
 

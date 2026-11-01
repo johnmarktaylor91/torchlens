@@ -62,7 +62,7 @@ def _op_compute_indexes(recording: tl.Recording) -> list[int | None]:
 def _as_recording(
     result: tl.Recording | tuple[Any, tl.Recording],
 ) -> tl.Recording:
-    """Narrow record() results when return_output=False is used."""
+    """Narrow record() results to the Recording."""
 
     if isinstance(result, tuple):
         return result[1]

@@ -174,16 +174,13 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
         assert relu_layer.interventions[0].timing == "post"
         assert relu_layer.interventions[0].direction == "forward"
     else:
-        output, recording = cast(
-            tuple[torch.Tensor, Recording],
-            tl.record(
-                LinearRelu(),
-                torch.ones(1, 4),
-                save=tl.func("linear"),
-                intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
-                return_output=True,
-            ),
+        recording = tl.record(
+            LinearRelu(),
+            torch.ones(1, 4),
+            save=tl.func("linear"),
+            intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
         )
+        output = cast(torch.Tensor, recording.output)
         assert torch.equal(output, torch.zeros_like(output))
         assert len(recording.records) == 1
         payload = recording.records[0].ram_payload

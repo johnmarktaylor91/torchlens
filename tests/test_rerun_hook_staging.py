@@ -265,7 +265,8 @@ def test_record_with_intervene_is_stable_across_calls(steered: dict[str, Any]) -
     model, x = steered["model"], steered["x"]
     spec = _spec()
     for _ in range(_REPEATS):
-        output, _recording = tl.record(model, x, save=_save(), intervene=spec, return_output=True)
+        _recording = tl.record(model, x, save=_save(), intervene=spec)
+        output = _recording.output
         assert torch.equal(output, steered["out"])
         assert _torch_hook_count(model) == steered["baseline"]
 

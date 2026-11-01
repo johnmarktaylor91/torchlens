@@ -532,6 +532,9 @@ class Recording(TraceLike):
     _outcome: Any | None = field(default=None, repr=False, compare=False)
     # The resolved settings record behind ``options`` (a ``RecordingSettings``).
     _options: Any | None = field(default=None, repr=False, compare=False)
+    # The live model output behind ``output`` (an ``OutputSlot``); memory only,
+    # never persisted or pickled.
+    _output: Any | None = field(default=None, repr=False, compare=False)
 
     @classmethod
     def _build(cls: type[Recording], **values: Any) -> Recording:
@@ -565,6 +568,34 @@ class Recording(TraceLike):
         }
         values.update(changes)
         return type(self)._build(**values)
+
+    @property
+    def output(self) -> Any:
+        """Return the model's return value, exactly as the model returned it.
+
+        The tensor, tuple, dict, Hugging Face output object or distribution the
+        forward returned (for a multi-pass ``Recorder``, the last pass's). Held in
+        memory only.
+
+        Returns
+        -------
+        Any
+            The model output.
+
+        Raises
+        ------
+        PayloadUnavailableError
+            ``output_not_stored`` on a recording loaded from disk or unpickled,
+            ``output_forward_failed`` on a failed partial recording
+            (``on_forward_error="return_partial"``), and
+            ``output_capture_stopped`` when ``stop_after=`` ended the capture
+            before the model returned. Never returns ``None`` for a missing
+            output.
+        """
+
+        from .._capture.output_readback import read_output
+
+        return read_output(self._output, owner="Recording")
 
     @property
     def options(self) -> RecordingSettings:
@@ -1347,6 +1378,29 @@ class Recording(TraceLike):
                 "halted-capture path"
             ),
         )
+
+
+def _recording_getstate(self: Recording) -> list[Any]:
+    """Pickle every field except the memory-only model output."""
+
+    return [
+        None if item.name == "_output" else object.__getattribute__(self, item.name)
+        for item in dataclasses.fields(self)
+    ]
+
+
+def _recording_setstate(self: Recording, state: list[Any]) -> None:
+    """Restore a pickled Recording field by field."""
+
+    for item, value in zip(dataclasses.fields(self), state, strict=True):
+        object.__setattr__(self, item.name, value)
+
+
+# Assigned after the class body: ``dataclass(slots=True, frozen=True)`` installs
+# its own pickling pair on Python 3.10 even when the class defines one, and that
+# pair would pickle the live model output.
+Recording.__getstate__ = _recording_getstate  # type: ignore[method-assign,assignment]
+Recording.__setstate__ = _recording_setstate  # type: ignore[method-assign,assignment]
 
 
 def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:

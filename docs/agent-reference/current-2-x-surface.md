@@ -6,7 +6,7 @@
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
   about 1.0 to 1.2x a plain forward hook and exact, also through HF `generate()` with the KV
   cache (`bound.generate(...)`).
-  `tl.record(..., intervene=spec, return_output=True)` is the lighter evidence path (about
+  `tl.record(..., intervene=spec)` (output in `recording.output`) is the lighter evidence path (about
   1 ms per op against about 3 ms for `tl.trace` on the tested CPU decoders). A pure
   `tl.module(...)` save selector (or a `|` union of them, or one intersected with any selector by
   `&`) escrows only the ops inside matching module passes; joining it with a non-module term by
@@ -46,8 +46,8 @@
   scrub rebinds the group row once for all members, and caller mutation is
   impossible — this supersedes the historical fresh-mutable-copy-per-read barrier.
 - Steering many forwards or a generation loop: `spec.bind(model)` (capture-free, about 1x a
-  plain hook, works with HF `generate()` and the KV cache), `tl.record(..., intervene=spec,
-  return_output=True)` per forward when activations are needed as evidence, and one full
+  plain hook, works with HF `generate()` and the KV cache), `tl.record(..., intervene=spec)`
+  per forward when activations are needed as evidence (the output is `recording.output`), and one full
   `tl.trace(..., intervene=spec)` as the correctness oracle. Trace-then-rerun
   (`trace.run(model, x)` on a module-targeted staged spec) is a fast path too: the guarded
   fast engine, about 1.5x a plain hook, with the trace's saved sites refreshed. Recipe:

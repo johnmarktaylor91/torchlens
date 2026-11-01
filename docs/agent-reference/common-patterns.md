@@ -2,8 +2,8 @@
 
 Cost first: to steer or patch a model over many forwards or through HF `generate()`, use the
 capture-free `tl.when(site, action).bind(model)` (about 1x a plain forward hook) instead of a
-`tl.trace` per step; use `tl.record(..., intervene=..., return_output=True)` when each step also
-needs recorded activations. Which path costs what, and what each reuse path refuses:
+`tl.trace` per step; use `tl.record(..., intervene=...)` (output in `recording.output`) when each step
+also needs recorded activations. Which path costs what, and what each reuse path refuses:
 [Performance: choosing a fast path](../guides/fast_paths.md).
 
 ```python
@@ -141,9 +141,9 @@ prompts), pick the path by what you need back. Build the spec once; every path t
   off); `.last_report` counts the firings. A binding selects ops structurally
   (`tl.func("relu") & tl.in_module("1")`, `tl.module("1")`); it refuses final or short labels such
   as `tl.label("relu_1_2")` when bound, because labels are assigned after a capture.
-- Steering plus activations as evidence: `tl.record(model, x, save=..., intervene=spec,
-  return_output=True)` once per forward. It returns the model output and a sparse `Recording`
-  and is the cheapest path that also captures.
+- Steering plus activations as evidence: `tl.record(model, x, save=..., intervene=spec)` once
+  per forward. It returns a sparse `Recording` whose `output` is the model output, and is the
+  cheapest path that also captures.
 - Activations across a whole generation, without steering:
   `tl.record(model, ids, save=..., generate_kwargs={"max_new_tokens": 16, "do_sample": False})`
   (DOCUMENTED-UNSTABLE). One real cached `generate()` runs and every forward it issues is one
@@ -186,8 +186,9 @@ logits = steered(ids).logits
 tokens = steered.generate(ids, max_new_tokens=5, do_sample=False, use_cache=True)
 assert steered.last_report.num_fires == 5  # one firing per generated token
 
-# Steering plus evidence: one tl.record per forward returns the output and the recording.
-out, rec = tl.record(lm, ids, save=site, intervene=spec, return_output=True)
+# Steering plus evidence: one tl.record per forward; rec.output is the model output.
+rec = tl.record(lm, ids, save=site, intervene=spec)
+out = rec.output
 steered_mlp = rec.to_trace().find_sites(site).first().out  # the steered site output
 assert torch.equal(out.logits, logits)
 

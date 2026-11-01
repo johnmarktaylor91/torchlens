@@ -709,17 +709,14 @@ def _run_capture(
         trace.log_backward(output_op.out.sum())
         return trace, None, None
     if config == "backward_record":
-        output, recording = cast(
-            tuple[torch.Tensor, Recording],
-            tl.record(
-                model,
-                input_tensor.requires_grad_(True),
-                save=_save_all_ops,
-                return_output=True,
-                recording=tl.options.RecordingOptions(include_source_events=True),
-                capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True, seed=_SEED),
-            ),
+        recording = tl.record(
+            model,
+            input_tensor.requires_grad_(True),
+            save=_save_all_ops,
+            recording=tl.options.RecordingOptions(include_source_events=True),
+            capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True, seed=_SEED),
         )
+        output = cast(torch.Tensor, recording.output)
         recording.backward(output.sum(), save_grads=True)
         return recording, None, output
     if config == "disk_exhaustive":

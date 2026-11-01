@@ -35,7 +35,17 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   by `save=` fails explicitly. `tl.record` installs gradient hooks only when `backward_ready=True`,
   `save_grads=` or `default_grad=` is given; without one, `Recording.backward()` refuses with
   code `recording_backward_not_requested`. `tl.record` and `Recorder` build it; `Recording` has no
-  public constructor.
+  public constructor. `tl.record` always returns one object.
+
+**Recording.output** *(spelling pending ratification)*
+: The model's return value exactly as the model returned it (tensor, tuple, dict, Hugging Face
+  output object, distribution); for a multi-pass `Recorder`, the last pass's. With
+  `generate_kwargs=`, `GenerationRecording.output` (and its `recording.output`) is what
+  `generate()` returned. Held in memory only: a recording loaded from disk or unpickled refuses
+  with `output_not_stored`, a failed partial recording (`on_forward_error="return_partial"`)
+  with `output_forward_failed`, and a capture that `stop_after=` ended before the model
+  returned with `output_capture_stopped` (all `PayloadUnavailableError`); it never returns
+  `None` for a missing output.
 
 **Recording.options / RecordingSettings** *(record class spelling pending ratification)*
 : `Recording.options` returns a `tl.types.RecordingSettings`, the read-only record of the settings
