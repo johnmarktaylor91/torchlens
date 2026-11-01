@@ -18,7 +18,8 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `input_structure`, `input_object_id`, `model_object_id`, `param_hash_quick`, `param_hash_full`,
   `param_source`, `root_entry_point`, `owner_thread_id`, `thread_count_start`, `thread_count_end`,
   `thread_activity_detected`, `distributed_scope`, `observer_spans`, `is_appended`, ...) and
-  `trace.provenance.summary()` renders the capture-provenance text block; `trace.options` is the
+  the capture-provenance text block keeps an interim private spelling
+  (`trace.provenance._summary()`) until its public name is decided; `trace.options` is the
   stored snapshot of the capture options (`mode`, `save`, `save_grads`, `save_mode`, `save_args`,
   `save_raw_input`, `save_transformed_output`, `save_rng`, `save_source_context`,
   `source_context_lines`, `backward_ready`, `inference_only`, `structure_only`, `grouping`,

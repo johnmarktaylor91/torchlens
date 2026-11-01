@@ -26,7 +26,7 @@ _REMOVED_KWARGS: dict[str, tuple[object, str]] = {
     "mode": ("unrolled", "level='op'"),
     "print_to": (print, "report.print("),
     "count_fma_as_two": (False, "flop_convention="),
-    "show_input_preprocessing_details": (True, "trace.provenance.summary()"),
+    "show_input_preprocessing_details": (True, "trace.provenance._summary()"),
 }
 
 #: removed legacy level= preset -> token the refusal must name
