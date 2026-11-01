@@ -13,3 +13,5 @@ VisDirectionLiteral = Literal["bottomup", "topdown", "leftright", "rightleft"]
 VisNodePlacementLiteral = Literal["auto", "dot", "rank"]
 VisRendererLiteral = Literal["graphviz", "dagua"]
 VisInterventionModeLiteral = Literal["node_mark", "as_node"]
+#: ``Trace.draw(highlight=...)`` values: the one place they are spelled.
+DrawHighlightLiteral = Literal["interventions"]

@@ -730,15 +730,6 @@ def rank_sites(view: HistoryView, stream: str = "activation") -> list[tuple[str,
     return rows
 
 
-def contact_sheet_pages(
-    view: HistoryView, stream: str = "activation", *, tiles_per_page: int = 12
-) -> int:
-    """Number of contact-sheet pages under deterministic full pagination."""
-
-    ranked = rank_sites(view, stream)
-    return max(1, math.ceil(len(ranked) / tiles_per_page))
-
-
 def _draw_tile(
     svg: _Svg,
     view: HistoryView,
@@ -783,6 +774,44 @@ def _draw_tile(
     svg.text(x + 4, y + h - 4, badge, size=7, color=color)
 
 
+class ContactSheet(str):
+    """One contact-sheet page: the SVG text plus where it sits in the pagination.
+
+    A ``str`` subclass, so every string use of the SVG keeps working (write it,
+    search it, compare it); the page facts ride along as attributes and the
+    notebook displays it inline.
+
+    Attributes
+    ----------
+    page:
+        Zero-based index of this page.
+    page_count:
+        Number of pages the full sheet has at this ``tiles_per_page`` (at least
+        1); the "N of M" footer prints the same number.
+    """
+
+    page: int
+    page_count: int
+
+    def __new__(cls, svg: str, *, page: int, page_count: int) -> ContactSheet:
+        """Wrap ``svg`` with its page index and the sheet's page count."""
+
+        obj = str.__new__(cls, svg)
+        obj.page = page
+        obj.page_count = page_count
+        return obj
+
+    def __getnewargs_ex__(self) -> tuple[tuple[str], dict[str, int]]:
+        """Keep the page facts through pickle and ``copy``."""
+
+        return (str(self),), {"page": self.page, "page_count": self.page_count}
+
+    def _repr_svg_(self) -> str:
+        """Inline SVG for notebook display."""
+
+        return str(self)
+
+
 def render_contact_sheet(
     view: HistoryView,
     stream: str = "activation",
@@ -790,13 +819,16 @@ def render_contact_sheet(
     page: int = 0,
     tiles_per_page: int = 12,
     width: int = 900,
-) -> str:
+) -> ContactSheet:
     """Render one page of the ranked overview contact sheet (D24).
 
     Hierarchically ordered tiles (catalog order within equal rank), ranked
     by :data:`RANKING_SCORE` with nonfinite events first; a mandatory
     "N of M" footer and deterministic full pagination -- there is no
-    hidden top-N truncation, only numbered pages.
+    hidden top-N truncation, only numbered pages. The returned
+    :class:`ContactSheet` is the SVG text and carries ``page`` and
+    ``page_count``, so a caller learns how many pages to ask for from the
+    first one.
 
     Raises
     ------
@@ -844,7 +876,7 @@ def render_contact_sheet(
         f"(rank: {RANKING_SCORE}; nonfinite first)",
         size=9,
     )
-    return svg.to_string()
+    return ContactSheet(svg.to_string(), page=page, page_count=pages)
 
 
 def render_detail(
@@ -944,10 +976,10 @@ def color_by_watch(
 
 __all__ = [
     "RANKING_SCORE",
+    "ContactSheet",
     "HistoryView",
     "SeriesPoint",
     "color_by_watch",
-    "contact_sheet_pages",
     "rank_sites",
     "render_contact_sheet",
     "render_detail",

@@ -30,7 +30,8 @@ Shape rules (normative, from the fold):
   (:data:`torchlens.intervention.audit.EXECUTION_EFFECTS`).
 - **The census travels with exported figures**: the per-lane census renders
   into the figure's disclosure caption (C05's rendered-artifact rule) and
-  :func:`render_surgery` writes the full text beside every saved figure.
+  ``Trace.draw(highlight="interventions")`` (:func:`draw_interventions`)
+  writes the full text beside every saved figure.
 - **CREDIT rows** ride the census (D01's acknowledgment list).
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.
@@ -63,8 +64,8 @@ __all__ = [
     "SurgeryMark",
     "SurgeryTransaction",
     "effect_wording",
+    "draw_interventions",
     "make_surgery_mark_spec_fn",
-    "render_surgery",
     "splice_box_lines",
     "surgery_census",
     "surgery_facts",
@@ -619,20 +620,36 @@ def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
     return make_surgery_mark_spec_fn(trace, facts), lines
 
 
-def render_surgery(trace: Trace, **user_kwargs: Any) -> Any:
+def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
     """Draw ``trace`` under the surgery lens; the census travels with it.
 
-    A thin door over the standard lens resolution (never a new view kind):
-    the marks and the caption census render through ``Trace.draw``, and when
-    a figure lands on disk the full census text is written beside it as
+    The body of ``Trace.draw(highlight="interventions")``: a thin door over
+    the standard lens resolution (never a new view kind). The marks and the
+    caption census render through ``Trace.draw``, and when a figure lands on
+    disk the full census text is written beside it as
     ``<outpath>.census.txt`` -- the per-lane record cannot be separated from
     the exported picture.
+
+    Parameters
+    ----------
+    trace:
+        The trace to draw.
+    user_kwargs:
+        The ``Trace.draw`` keywords the caller passed explicitly (never
+        ``highlight``); they win over the lens members.
+
+    Returns
+    -------
+    Any
+        Whatever ``Trace.draw`` returns for the resolved keywords.
     """
 
     from .lenses._resolve import draw_with_lens
 
     result = draw_with_lens(trace, "surgery", **user_kwargs)
-    if not user_kwargs.get("return_graph", False):
+    # Nothing was written when the draw returned the graph object or drew
+    # nothing (view="none"); a census then would sit beside a stale figure.
+    if result is not None and not user_kwargs.get("return_graph", False):
         outpath = user_kwargs.get("path")
         if outpath is None:
             # A bare draw chose a collision-safe name: the census

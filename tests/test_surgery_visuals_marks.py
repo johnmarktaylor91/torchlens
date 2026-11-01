@@ -22,7 +22,6 @@ from torchlens._visualization.surgery_visuals import (
     MARK_BASES,
     MARK_KINDS,
     make_surgery_mark_spec_fn,
-    render_surgery,
     splice_box_lines,
     surgery_census,
     surgery_facts,
@@ -188,8 +187,8 @@ def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
     log = tl.trace(model, x, capture=_CAPTURE)
     fork = log.fork()
     fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
-    source = render_surgery(
-        fork,
+    source = fork.draw(
+        highlight="interventions",
         vis_mode="unrolled",
         path=str(tmp_path / "surgery_passes"),
         file_format="svg",
@@ -358,13 +357,13 @@ def test_surgery_lens_refuses_without_audit_evidence(chain_capture) -> None:
 
 
 @pytest.mark.heavy
-def test_render_surgery_census_travels_with_figure(chain_capture, tmp_path) -> None:
+def test_highlight_interventions_census_travels_with_figure(chain_capture, tmp_path) -> None:
     """The census renders INTO the figure and the sidecar travels beside it."""
 
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
     outpath = str(tmp_path / "surgery_fig")
-    render_surgery(fork, path=outpath, file_format="svg", vis_save_only=True)
+    fork.draw(outpath, highlight="interventions", file_format="svg", vis_save_only=True)
     figure = tmp_path / "surgery_fig.svg"
     sidecar = tmp_path / "surgery_fig.census.txt"
     assert figure.exists()
@@ -378,6 +377,62 @@ def test_render_surgery_census_travels_with_figure(chain_capture, tmp_path) -> N
         assert credit in census_text
     assert _REPLAY_WORDING in census_text
     _assert_no_banned_verbs(census_text)
+
+
+@pytest.mark.heavy
+def test_bare_highlight_draw_writes_census_beside_written_file(
+    chain_capture, tmp_path, monkeypatch
+) -> None:
+    """A bare draw picks a collision-safe name; each census lands beside its figure."""
+
+    _model, _x, log = chain_capture
+    fork = _edited_fork(log)
+    monkeypatch.chdir(tmp_path)
+    fork.draw(highlight="interventions", file_format="svg", vis_save_only=True)
+    fork.draw(highlight="interventions", file_format="svg", vis_save_only=True)
+    figures = sorted(path.name for path in tmp_path.glob("*.svg"))
+    censuses = sorted(path.name for path in tmp_path.glob("*.census.txt"))
+    assert len(figures) == 2, figures
+    assert censuses == sorted(name[: -len(".svg")] + ".census.txt" for name in figures)
+    for census in censuses:
+        assert _REPLAY_WORDING in (tmp_path / census).read_text()
+
+
+def test_unknown_highlight_refuses_naming_allowed_values(chain_capture, tmp_path) -> None:
+    """An unknown highlight refuses typed before anything is drawn."""
+
+    _model, _x, log = chain_capture
+    for bad in ("intervention", "surgery", True):
+        with pytest.raises(InvalidArgumentError) as excinfo:
+            log.draw(str(tmp_path / "never"), highlight=bad, vis_save_only=True)
+        assert excinfo.value.fields["code"] == "draw_highlight_invalid"
+        assert excinfo.value.fields["argument"] == "highlight"
+        assert "'interventions'" in str(excinfo.value)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_highlight_interventions_refuses_without_audit_evidence(chain_capture, tmp_path) -> None:
+    """An un-edited trace has no recorded surgery to highlight."""
+
+    _model, _x, log = chain_capture
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        log.draw(str(tmp_path / "never"), highlight="interventions", vis_save_only=True)
+    assert excinfo.value.fields["code"] == "surgery_evidence_missing"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_render_surgery_is_removed() -> None:
+    """``trace.draw(highlight="interventions")`` replaced it, with no alias."""
+
+    import torchlens._visualization as visualization
+    import torchlens._visualization.surgery_visuals as surgery_visuals
+
+    with pytest.raises(ImportError):
+        from torchlens._visualization.surgery_visuals import render_surgery  # noqa: F401
+    with pytest.raises(ImportError):
+        from torchlens._visualization import render_surgery  # noqa: F401,F811
+    assert not hasattr(surgery_visuals, "render_surgery")
+    assert "render_surgery" not in visualization.__all__
 
 
 # ---------------------------------------------------------------------------

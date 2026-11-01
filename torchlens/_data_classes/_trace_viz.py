@@ -18,6 +18,7 @@ from .._errors import InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    DrawHighlightLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -139,6 +140,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         stack_by: str | bool | Callable[[Any], Any] | None = None,
         show_redundant_args: bool = False,
         show_saved_for_backward: bool = False,
+        highlight: DrawHighlightLiteral | None = None,
     ) -> Any:
         """Render the computational graph for this model log.
 
@@ -267,6 +269,18 @@ class TraceVisualizationMixin(_TraceMixinBase):
             sums and the row discloses ``(total across passes)``. Composes
             with ``color_by="autograd_memory"`` for a ramp over the same
             quantity.
+        highlight:
+            Keyword-only. Named highlight drawn over the graph. ``None`` (the
+            default) draws the plain graph. ``"interventions"`` draws the
+            surgery lens: every recorded intervention is marked on its node
+            (solid border = recorded fact, dashed = heuristic attribution),
+            the caption carries the per-lane census, and when a figure is
+            written the full census text lands beside it as
+            ``<path>.census.txt`` (beside the collision-safe file a bare draw
+            chose). A trace with no recorded intervention refuses
+            ``surgery_evidence_missing``; any other value refuses
+            ``draw_highlight_invalid`` naming the allowed values. The other
+            keywords you pass win over the lens's own settings.
 
         Returns
         -------
@@ -274,6 +288,13 @@ class TraceVisualizationMixin(_TraceMixinBase):
             Graphviz DOT source, renderer-specific output, or renderer object
             when ``return_graph=True``.
         """
+        if highlight is not None:
+            from .._visualization._highlight import draw_highlighted, explicit_draw_kwargs
+
+            # locals() is read before any parameter below is reassigned.
+            explicit = explicit_draw_kwargs(TraceVisualizationMixin.draw, locals())
+            return draw_highlighted(self, highlight, explicit)
+
         from .._visualization._render_dot import draw as _impl
 
         if view is not MISSING:

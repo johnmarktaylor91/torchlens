@@ -47,7 +47,9 @@ from torchlens.viz import contact_sheet
 from torchlens.trackers import HistoryView
 
 view = HistoryView.from_collector(collector)
-svg = contact_sheet(view)          # page 0
+sheet = contact_sheet(view)        # page 0: the SVG text
+for page in range(1, sheet.page_count):
+    contact_sheet(view, page=page)  # every later page
 ```
 
 Tiles are ranked by the named score `nonfinite_first_drift_v1`: sites with
