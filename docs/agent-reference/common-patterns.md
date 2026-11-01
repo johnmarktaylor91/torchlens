@@ -135,31 +135,44 @@ print(tl.compat.report(model, x).to_markdown())
 
 ### Gradient sites
 
-A gradient is a site: `tl.grad("relu_3")` is the gradient of relu_3's OUTPUT, bare `"relu_3"` is its
-activation, `tl.grad("relu_3") | "relu_3"` is both. No site door takes a pass keyword.
+A gradient is a site: `tl.grad("relu_1_2")` is the gradient of relu_1_2's OUTPUT, bare `"relu_1_2"` is
+its activation, `tl.grad(s) | s` is both. No site door takes a pass keyword.
 
 ```python
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_grads="all"))
 
-# Block the gradient at relu_3 in one call: rerun with the edit armed, then backward.
-r = trace.do(tl.grad("relu_3"), tl.scale(0), model=model, x=x,
-             loss=lambda t: t["output_1"].out.sum())
-assert r["relu_3"].grad.abs().sum() == 0
-assert r.intervention_audit[-1]["status"] == "fired"
+
+def loss(t):
+    return t[t.output_layers[0]].out.sum()
+
+
+# Block the gradient at relu_1_2 in one call: rerun with the edit armed, then backward.
+r = trace.do(tl.grad("relu_1_2"), tl.scale(0), model=model, x=x, loss=loss)
+assert r["relu_1_2"].grad.abs().sum() == 0
 
 # Two steps: arm now (status "armed"), apply on the next backward.
-r = trace.do(tl.grad("relu_3"), tl.clamp(low=-1.0, high=1.0), model=model, x=x)
-r.intervention_audit[-1]["status"]                   # "armed"
-r.backward(r["output_1"].out.sum())                  # fires
+r = trace.do(tl.grad("relu_1_2"), tl.clamp(low=-1.0, high=1.0), model=model, x=x)
+assert r.intervention_audit[-1]["status"] == "armed"
+r.backward(loss(r))  # fires
 
-# Both: halve the activation on the rerun and the gradient on the backward.
-r = trace.do(tl.grad("relu_3") | "relu_3", tl.scale(0.5), model=model, x=x,
-             loss=lambda t: t["output_1"].out.sum())
+# Both: halve every relu's activation on the rerun and its gradient on the backward.
+relus = tl.func("relu")
+r = trace.do(tl.grad(relus) | relus, tl.scale(0.5), model=model, x=x, loss=loss)
 
-# Refusals: no model/x (replay cannot edit gradients), nested address, activation-only edit.
-trace.do(tl.grad("relu_3"), tl.scale(0))             # replay_gradient_edit_unsupported
-tl.grad(tl.grad("relu_3"))                           # grad_selector_nested
-trace.do(tl.grad("relu_3"), tl.patch_from(other))    # edit_signal_mismatch
+# Refusals, each before any mutation: no model/x (replay cannot edit gradients),
+# a nested address, an activation-only edit on a gradient site.
+refusals = [
+    lambda: trace.do(tl.grad("relu_1_2"), tl.scale(0)),  # replay_gradient_edit_unsupported
+    lambda: tl.grad(tl.grad("relu_1_2")),  # grad_selector_nested
+    lambda: trace.do(tl.grad("relu_1_2"), tl.patch_from(trace), model=model, x=x),  # edit_signal_mismatch
+]
+for attempt in refusals:
+    try:
+        attempt()
+    except Exception as exc:
+        print(type(exc).__name__)
+    else:
+        raise AssertionError("expected a refusal")
 ```
 
 ### Steering many forwards / generation
