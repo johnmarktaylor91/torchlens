@@ -1,9 +1,10 @@
 """Execute every user notebook with nbclient and report each failure by notebook and cell.
 
-The user notebooks are ``notebooks/*.ipynb`` plus every ``examples/**/*.ipynb`` (the
-developer audit notebooks under ``notebooks/audit/`` are not part of this set). Each
-notebook runs in its own child process with a per-cell timeout and a whole-notebook
-timeout, so a hung kernel cannot stall the run. The nightly CI leg runs this script;
+The user notebooks are ``notebooks/*.ipynb``, the learning path ``notebooks/learn/*.ipynb``
+and every ``examples/**/*.ipynb`` (the developer audit notebooks under ``notebooks/audit/``
+are not part of this set). Each notebook runs in its own child process with a per-cell
+timeout and a whole-notebook timeout, so a hung kernel cannot stall the run. The nightly
+CI leg runs this script;
 locally it needs the ``test`` extra (nbclient, ipykernel)::
 
     python scripts/run_notebooks.py -j 2
@@ -55,6 +56,7 @@ def user_notebooks(root: Path = REPO_ROOT) -> list[Path]:
     """Return the user notebooks in a stable order."""
 
     notebooks = sorted((root / "notebooks").glob("*.ipynb"))
+    notebooks += sorted((root / "notebooks" / "learn").glob("*.ipynb"))
     notebooks += sorted((root / "examples").rglob("*.ipynb"))
     return notebooks
 

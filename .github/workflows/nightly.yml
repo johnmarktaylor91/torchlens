@@ -2167,8 +2167,9 @@ jobs:
   notebooks:
     # Walk late.18: nothing executed the user notebooks, so eight of them (the
     # README's ten-minute tutorial included) rotted unnoticed through two rename
-    # rounds. This leg executes every user notebook (notebooks/*.ipynb plus
-    # examples/**/*.ipynb; the developer audit notebooks are not in the set)
+    # rounds. This leg executes every user notebook (notebooks/*.ipynb, the
+    # learning path notebooks/learn/*.ipynb and examples/**/*.ipynb; the
+    # developer audit notebooks are not in the set)
     # with nbclient, one kernel per notebook, a per-cell and a whole-notebook
     # timeout, and names the notebook and cell of every failure. Nightly only:
     # the HF model downloads and about six minutes of execution do not belong
@@ -2216,7 +2217,7 @@ jobs:
           path: ${{ runner.temp }}/hf-cache
           # Keyed on the notebooks: a notebook edit that pulls a new model
           # refreshes the cache; the restore key reuses the last one meanwhile.
-          key: notebooks-hf-${{ hashFiles('notebooks/*.ipynb', 'examples/**/*.ipynb') }}
+          key: notebooks-hf-${{ hashFiles('notebooks/*.ipynb', 'notebooks/learn/*.ipynb', 'examples/**/*.ipynb') }}
           restore-keys: notebooks-hf-
 
       - name: Execute every user notebook
