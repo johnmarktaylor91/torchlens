@@ -11,7 +11,6 @@ from typing import Any, cast
 
 from ... import _state
 from ..._capture.outcome import StopRequest, stamp_backend_finalized
-from ..._capture.output_readback import returned, stopped
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
@@ -45,7 +44,7 @@ from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
-from ...recording.types import CaptureSpec
+from ...recording.types import CaptureSpec, returned, stopped
 from ...validation.status import ValidationReplaySource, ValidationStatus
 from .._finalize import (
     attach_function_root_module,

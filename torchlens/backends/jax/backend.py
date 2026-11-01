@@ -582,7 +582,7 @@ class JAXBackend:
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        from ..._capture.output_readback import returned
+        from ...recording.types import returned
 
         trace._output_slot = returned(output)
         trace.raw_output = output_transform(output) if callable(output_transform) else None

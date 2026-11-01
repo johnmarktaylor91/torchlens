@@ -508,7 +508,7 @@ class TinygradBackend:
                 "tinygrad backend preview requires at least one tinygrad Tensor output."
             )
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        from ..._capture.output_readback import returned
+        from ...recording.types import returned
 
         trace._output_slot = returned(output)
         trace.raw_output = output_transform(output) if callable(output_transform) else None

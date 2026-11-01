@@ -9,7 +9,6 @@ from torch import nn
 
 from torchlens.backends.registry import BackendUnsupportedError
 
-from .._capture.output_readback import returned as output_returned
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
 from .._errors import ArgumentTypeError
@@ -27,7 +26,7 @@ from ._generation import GenerationRecording, enrich_generation, record_generati
 from ._recorder import Recorder
 from ._validation import validate_postprocess
 from .options import HaltPredicateFn, PredicateFn, RecordingOptions
-from .types import Recording
+from .types import Recording, returned as output_returned
 
 _RECORDING_DOOR_FIELDS: tuple[str, ...] = (
     "default_op",

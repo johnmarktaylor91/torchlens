@@ -141,7 +141,7 @@ def _resolve_storage_intent(options: _RecordingConfig) -> StorageIntent:
 def _empty_recording(options: _RecordingConfig) -> Recording:
     """Create an empty lazy Recording for a predicate capture session."""
 
-    from ..recording.options import RecordingSettings
+    from ..recording.types import RecordingSettings
 
     return Recording._build(
         records=[],

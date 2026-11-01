@@ -17,11 +17,6 @@ from torchlens._ir.capture_events import CaptureEvents
 from .. import _state
 from .._capture.config import InternalCaptureConfig
 from .._capture.outcome import safe_exception_repr, safe_exception_str
-from .._capture.output_readback import (
-    forward_failed as output_forward_failed,
-    returned as output_returned,
-    stopped as output_stopped,
-)
 from .._capture.predicates import _save_selector_matches, validate_followed_by_capability
 from .._capture.projections import (
     RecordingState,
@@ -51,7 +46,14 @@ from .options import (
     _RecordingConfig,
     _resolve_recording_config,
 )
-from .types import CaptureSpec, Recording, _mark_recording_halted
+from .types import (
+    CaptureSpec,
+    Recording,
+    _mark_recording_halted,
+    forward_failed as output_forward_failed,
+    returned as output_returned,
+    stopped as output_stopped,
+)
 
 
 def _rank_prefixed_streaming_options(

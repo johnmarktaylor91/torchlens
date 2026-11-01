@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from ._quickstart._grammar import InputSpec
     from ._quickstart._provenance import InputProvenance
     from ._trace_slice import TraceSlice
-    from .recording.options import RecordingSettings
+    from .recording.types import RecordingSettings
 
 _ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
 _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
@@ -132,7 +132,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "MergeValueStatus": ("torchlens._merged._enums", "MergeValueStatus"),
     "MergedTrace": ("torchlens._merged._presenter", "MergedTrace"),
     "PartialTrace": ("torchlens._partial", "PartialTrace"),
-    "RecordingSettings": ("torchlens.recording.options", "RecordingSettings"),
+    "RecordingSettings": ("torchlens.recording.types", "RecordingSettings"),
     "TraceSlice": ("torchlens._trace_slice", "TraceSlice"),
     "register_container": ("torchlens._ir.container", "register_container"),
 }

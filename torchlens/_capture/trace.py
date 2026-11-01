@@ -1505,7 +1505,7 @@ def _finalize_halted_trace(
     self.halt_reason = halt_exc.reason
     self.halt_frontier = halt_exc.reason
     self.raw_output = None
-    from .output_readback import stopped
+    from ..recording.types import stopped
 
     self._output_slot = stopped(halt_exc.reason)
     if not postprocess:
@@ -2042,7 +2042,7 @@ def run_and_log_inputs_through_model(
         drain_pending_nonfinite(self)
         backend.finalize_forward_session(self, self._raw_graph_ws)
 
-        from .output_readback import returned
+        from ..recording.types import returned
 
         self._output_slot = returned(outputs)
         output_transform = getattr(self, "_output_transform", None)

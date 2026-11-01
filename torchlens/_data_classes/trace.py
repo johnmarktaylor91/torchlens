@@ -51,13 +51,13 @@ from torch import nn
 if TYPE_CHECKING:
     from torchlens._runnable import ReadinessReport
 
-    from .._capture.output_readback import OutputSlot
     from .._io.streaming import BundleStreamWriter
     from .._runnable import (
         ArchivedActivation,
         SparseRunDescriptor,
     )
     from ..debug._audit import HealthReport
+    from ..recording.types import OutputSlot
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
 
@@ -907,7 +907,7 @@ class Trace(
             ended the capture before the model returned.
         """
 
-        from .._capture.output_readback import read_output
+        from ..recording.types import read_output
 
         return read_output(self._output_slot, owner="Trace")
 

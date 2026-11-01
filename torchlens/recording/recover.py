@@ -527,7 +527,7 @@ def _recording_from_records(
     status: Literal["complete", "halted", "partial_error", "recovered"] = (
         "recovered" if recovered else "halted" if halted else "complete"
     )
-    from .options import RecordingSettings
+    from .types import RecordingSettings
 
     return Recording._build(
         records=records,

@@ -1344,7 +1344,7 @@ class _FastLiveSession:
             self._poison_and_raise(self.failure)
         if truncation is not None:
             truncation = self._settle_truncated_prefix(until, input_args, input_kwargs)
-            from ._capture.output_readback import stopped
+            from .recording.types import stopped
 
             self.trace._output_slot = stopped("live run ended at until=")
         else:
@@ -1637,7 +1637,7 @@ class _FastLiveSession:
         # is stored when an output transform exists; the save scope is
         # otherwise untouched, so a sparse save stays sparse on a rerun.
         output_transform = self.output_transform
-        from ._capture.output_readback import returned
+        from .recording.types import returned
 
         self.trace._output_slot = returned(output)
         self.trace.raw_output = output_transform(output) if output_transform is not None else None
