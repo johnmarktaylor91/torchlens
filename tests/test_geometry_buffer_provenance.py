@@ -189,6 +189,9 @@ def test_resize_is_one_in_place_write_produced_by_the_resize(name: str, state: s
     assert any(version_label in parents for _, parents, _ in rows)
 
 
+# 44 validated captures: the family measured over the unmarked 5s-tier aggregate
+# budget on a loaded 8-CPU gate host (20.2s), so it carries the 5-20s tier.
+@pytest.mark.heavy
 @pytest.mark.parametrize("state", list(_ENTRY_STATES))
 @pytest.mark.parametrize("name", _DEFINED_FROM_EVERY_STATE)
 def test_geometry_write_validates_from_every_entry_state(name: str, state: str) -> None:
