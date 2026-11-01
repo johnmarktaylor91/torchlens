@@ -1093,8 +1093,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   identity is typed, never the label alone), `~tl.grad(s)` normalises to `tl.grad(~s)`, and
   `tl.grad(s) & tl.in_backward_pass(n)` restricts the gradient branch to pass `n`. `&` across
   universes refuses `selector_cross_universe_and` (`tl.grad(s) & s`, `s & tl.grad_fn(...)`,
-  `tl.grad(s) & tl.grad_fn(...)`), and a pass qualifier on a bare activation selector refuses
-  `selector_signal_mismatch`. A gradient site resolves its inner selector exactly as the
+  `tl.grad(s) & tl.grad_fn(...)`), `~` over a union that spans universes refuses
+  `selector_cross_universe_not` (negate inside each branch: `tl.grad(~a) | ~a`), and a pass
+  qualifier on a bare activation selector refuses `selector_signal_mismatch`. A gradient site resolves its inner selector exactly as the
   activation door does (zero matches refuse); a matched op the loss never reaches is a
   `no_fire`, never a resolution error and never a zero tensor. `Trace.find_sites(tl.grad(s))`
   returns the matched forward sites with `signal="backward"`.
