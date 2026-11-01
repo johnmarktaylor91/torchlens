@@ -379,22 +379,22 @@ def trace_overview_card(trace: Any) -> Card:
     logs too.
     """
 
-    layers = len(getattr(trace, "layer_logs", {}) or {})
-    ops = getattr(trace, "num_ops", 0)
+    layers = len(trace._layer_logs or {})
+    ops = trace._num_ops
     try:
         layers_saved = trace._layers_saved
     except AttributeError:
         layers_saved = False
     save_level = "all" if layers_saved else "selected"
-    if getattr(trace, "num_saved_ops", 0) == 0:
+    if len(getattr(trace, "saved_ops", ())) == 0:
         save_level = "metadata only"
     # Text links only: card leaves are DATA and escape at the leaf
     # boundary, so an HTML-formatted link would render as raw markup.
     nonfinite = trace.first_nonfinite(link_format="text")
-    title = str(getattr(trace, "trace_label", None) or trace.model_label)
+    title = str(getattr(trace, "name", None) or trace.model_name)
     state = str(getattr(getattr(trace, "state", None), "name", "UNKNOWN"))
     key_index = CardCollection(
-        children=tuple(CardKey(f"log[{label!r}]") for label in list(trace.layer_logs or {})[:64]),
+        children=tuple(CardKey(f"log[{label!r}]") for label in list(trace._layer_logs or {})[:64]),
         budget=20,
     )
     return Card(

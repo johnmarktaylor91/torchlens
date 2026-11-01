@@ -277,7 +277,7 @@ def test_fast_run_routes_urbandriver_past_its_direct_forward_call() -> None:
     try:
         trace.run(inputs=inputs, fast=True)
     except PathDivergenceError as exc:
-        assert refusal_code(exc) == "conditional_arm_divergence:fast_live_function_path"
+        assert refusal_code(exc) == "conditional_arm_mismatch:fast_live_function_path"
     session = trace.__dict__["_fast_run_session"]
     assert session.module_index >= 2
     _assert_no_routed_forward(model)

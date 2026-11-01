@@ -271,7 +271,7 @@ def trace(
     capture:
         Grouped capture options (``CaptureOptions``). The one spelling for
         every capture knob (``layers_to_save``, ``random_seed``,
-        ``intervention_ready``, ``verbose``, ``structure_only``, ...); the
+        ``replayable``, ``verbose``, ``structure_only``, ...); the
         former flat kwargs are removed.
     intervene:
         Optional predicate returning an intervention decision for
@@ -312,8 +312,8 @@ def trace(
         grouping), ``"strict_shapes"`` (reserved; refuses typed until its
         own reviewed design lands), ``"fold_sites"`` (the D1 folding axis;
         refuses typed on plain captures until an affirmative D1 ruling).
-        The requested value is recorded on ``trace.grouping`` and the
-        policy that actually ran on ``trace.grouping_policy``. Distinct
+        The requested value is recorded on ``trace.options.grouping`` and the
+        policy that actually ran on ``trace.options.grouping_policy``. Distinct
         from the display-only ``fold_repeats`` viz knob, which folds
         repeated module runs at RENDER time and never changes grouping.
     narrate:

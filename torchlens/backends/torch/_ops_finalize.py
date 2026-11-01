@@ -80,7 +80,7 @@ def _cache_trace_predicate_context(
     contexts[
         _trace_predicate_context_key(
             ctx.raw_label or ctx.label,
-            ctx.pass_index,
+            ctx.pass_number,
             container_path,
         )
     ] = ctx
@@ -97,7 +97,7 @@ def _pop_trace_predicate_context(
         return None
     key = _trace_predicate_context_key(
         str(fields_dict["_label_raw"]),
-        int(fields_dict.get("pass_index", 0)),
+        int(fields_dict.get("pass_number", 0)),
         tuple(fields_dict.get("container_path", ())),
     )
     return contexts.pop(key, None)
@@ -155,7 +155,7 @@ def _evaluate_trace_save_predicate(
     decisions[
         (
             raw_label,
-            int(fields_dict.get("pass_index", 0)),
+            int(fields_dict.get("pass_number", 0)),
             tuple(fields_dict.get("container_path", ())),
         )
     ] = spec
@@ -224,7 +224,7 @@ def _make_layer_log_entry(
     fire_results = tuple(fields_dict.pop("fire_results", ()))
 
     keep_by_predicate = True
-    module_filter = getattr(self, "module_filter", None)
+    module_filter = getattr(self, "_module_filter", None)
     if module_filter is not None:
         keep_by_predicate = bool(module_filter(_module_filter_namespace(fields_dict)))
     layer_nums_to_save = cast(Any, self._layer_nums_to_save)
@@ -264,7 +264,7 @@ def _make_layer_log_entry(
                     predicate_ctx,
                     activation_transform,
                 )
-    if predicate_spec is not None and self.save_arg_values and not fields_dict["has_saved_args"]:
+    if predicate_spec is not None and self._options_save_args and not fields_dict["has_saved_args"]:
         # Admit BEFORE the clones allocate (r8 R34, sol 2).
         arg_reservations = _admit_saved_args_budget(self, fields_dict, t_args, t_kwargs)
         fields_dict["has_saved_args"] = True
@@ -389,10 +389,10 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
     Raises
     ------
     CaptureError
-        If ``self.raise_on_nan`` is enabled and ``tensor`` contains NaN or Inf.
+        If ``self._options_on_nonfinite`` is enabled and ``tensor`` contains NaN or Inf.
     """
 
-    if not getattr(self, "raise_on_nan", False):
+    if not self._options_on_nonfinite:
         return
     try:
         with pause_logging():

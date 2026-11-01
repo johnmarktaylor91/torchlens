@@ -41,7 +41,7 @@ def test_pretrained_row_captures_matches_and_validates(family: str) -> None:
     reference = model(image).numpy()
     trace = tl.trace(model, (image,), backend="paddle")
 
-    output = [op for op in trace.layer_list if op.func_name == "functional.linear"][-1]
+    output = [op for op in trace._layer_list if op.func_name == "functional.linear"][-1]
     np.testing.assert_allclose(output.out.numpy(), reference, rtol=1e-4, atol=1e-4)
     factory = get_backend_spec("paddle").protocol
     assert factory is not None

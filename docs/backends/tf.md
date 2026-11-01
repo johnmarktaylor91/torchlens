@@ -35,7 +35,7 @@ print(status.state)
 | backward_capture | unsupported | True backward graphs are deferred. |
 | has_validation_replay | supported | Live replay reports its verification coverage. |
 | fastlog | unsupported | Sparse recording is deferred. |
-| interventions | supported | Static-label eager replacements use the writable wrapper layer. |
+| can_intervene | supported | Static-label eager replacements use the writable wrapper layer. |
 | rng_replay | unsupported | RNG replay is not declared. |
 | payload_materialization | supported | Dense numeric and boolean array payloads can be persisted. |
 | has_streaming | unsupported | Streaming capture is deferred. |

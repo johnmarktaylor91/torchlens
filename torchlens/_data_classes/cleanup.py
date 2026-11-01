@@ -93,8 +93,8 @@ def cleanup(self: "Trace") -> None:
     # fails toward the historical flush).
     touched_cuda = capture_touched_cuda(self)
     # GC-1: Release parameter references to allow model GC.
-    if hasattr(self, "param_logs"):
-        for pl in self.param_logs:
+    if "_param_logs" in self.__dict__:
+        for pl in self._param_logs:
             pl._release_param_ref()
     # Materialize the M8 Layer mirror fields BEFORE husking the ops that back
     # them: a user-held Layer keeps exactly the readable metadata the dict-era
@@ -102,7 +102,7 @@ def cleanup(self: "Trace") -> None:
     # the dict era, so post-cleanup memory is unchanged).
     from .layer import materialize_layer_mirrors
 
-    for layer_log in (self.__dict__.get("layer_logs") or {}).values():
+    for layer_log in (self.__dict__.get("_layer_logs") or {}).values():
         materialize_layer_mirrors(layer_log)
     # First, clear all attributes from each Op entry.
     # This breaks the Op -> Trace circular reference
@@ -126,9 +126,9 @@ def cleanup(self: "Trace") -> None:
         "_module_logs",
         "_buffer_accessor",
         "_param_logs_by_module",
-        "layer_logs",
-        "layer_dict_all_keys",
-        "layer_dict_main_keys",
+        "_layer_logs",
+        "_layer_dict_all_keys",
+        "_layer_dict_main_keys",
         "_orphan_labels",
         "_loaded_from_bundle",
         "_source_bundle_manifest_sha256",
@@ -534,7 +534,7 @@ def _scrub_layer_log_conditional_fields(
         replacements_no_pass: Optional pass-stripped removed-label -> survivor
             substitutions.
     """
-    for layer_log in getattr(self, "layer_logs", {}).values():
+    for layer_log in self._layer_logs.values():
         if "conditional_entry_children" not in getattr(layer_log, "__dict__", {}):
             continue
         # Layer is dict-backed (no normalizing descriptors until M8), so the
@@ -589,17 +589,17 @@ def _scrub_conditional_fields_after_removal(
 
     _scrub_layer_log_conditional_fields(self, labels_to_remove_no_pass, replacements_no_pass)
 
-    self.conditional_arm_entry_edges = _filter_conditional_arm_entry_edges(
-        self.conditional_arm_entry_edges,
+    self._graph_conditional_arm_entry_edges = _filter_conditional_arm_entry_edges(
+        self._graph_conditional_arm_entry_edges,
         labels_to_remove,
         replacement_labels,
     )
-    self.conditional_edge_call_indices = _filter_conditional_edge_call_indices(
-        self.conditional_edge_call_indices,
+    self._graph_conditional_edge_call_indices = _filter_conditional_edge_call_indices(
+        self._graph_conditional_edge_call_indices,
         labels_to_remove_no_pass,
         replacements_no_pass,
     )
-    for conditional_event in self.conditional_records:
+    for conditional_event in self._graph_conditional_records:
         if replacement_labels is not None:
             # Substitute IN PLACE (never drop): ``_arm_bool_indices`` and
             # ``_bool_layers_raw`` are index-aligned with ``bool_layers``, so
@@ -697,13 +697,13 @@ def _scrub_intervention_fields_after_removal(
         )
         interventions = [
             record
-            for record in getattr(layer_entry, "interventions", [])
+            for record in getattr(layer_entry, "edits", [])
             if not _record_mentions_removed_label(record, labels_to_remove)
         ]
         if hasattr(layer_entry, "_internal_set"):
-            layer_entry._internal_set("interventions", interventions)
+            layer_entry._internal_set("edits", interventions)
         else:
-            layer_entry.interventions = interventions
+            layer_entry.edits = interventions
 
     self.state_history = [
         record
@@ -872,8 +872,8 @@ def _remove_log_entry_references(
 
     _scrub_conditional_fields_after_removal(self, {layer_to_remove}, self, replacement_labels)
 
-    self.conditional_branch_edges = _substitute_conditional_branch_edges(
-        self.conditional_branch_edges, {layer_to_remove}, replacement_labels
+    self._graph_conditional_branch_edges = _substitute_conditional_branch_edges(
+        self._graph_conditional_branch_edges, {layer_to_remove}, replacement_labels
     )
     # Now any nested fields.
 
@@ -886,12 +886,12 @@ def _remove_log_entry_references(
         if len(tensor_labels) > 0
     }
 
-    for _equiv_group, equiv_tensor_labels in self.op_equivalence_classes.items():
+    for _equiv_group, equiv_tensor_labels in self._graph_op_equivalence_classes.items():
         if layer_to_remove in equiv_tensor_labels:
             equiv_tensor_labels.remove(layer_to_remove)
-    self.op_equivalence_classes = {
+    self._graph_op_equivalence_classes = {
         equiv_group: tensor_labels
-        for equiv_group, tensor_labels in self.op_equivalence_classes.items()
+        for equiv_group, tensor_labels in self._graph_op_equivalence_classes.items()
         if len(tensor_labels) > 0
     }
 

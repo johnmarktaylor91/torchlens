@@ -47,7 +47,7 @@ Use `include_activations=True` independently to archive exactly the existing cap
 selection as `selected_activation_v2` (with physical `InputAttestationFingerprint` eligibility
 records). Inspect it through `Trace.archived_activations`; never use those blobs as DAG inputs.
 Eligible original-input/capture-equivalent-state runs byte-attest raw saved slots (`attested` or
-transactional `numeric_attestation_failed`), while changed-input (logical or physical),
+transactional `replay_value_mismatch`), while changed-input (logical or physical),
 random/non-equivalent-state, and nondeterministic-capture-context runs are `not_applicable`;
 `attested` always implies `verified`.
 `trace.run(inputs=..., seed=..., on_divergence="raise")` reports readiness, state source,
@@ -56,7 +56,7 @@ Use `on_divergence="return"` only when a permanently poisoned diagnostic result 
 through `RunnableErrorCode`; the complete frozen taxonomy is in
 `docs/reference/runnable_tlspec_contract.md`. r37: overlapping/unprovable distinct-object state
 alias topology and zero-tensor-leaf or instance-stateful container outputs refuse at save
-(`state_alias_topology_unsupported` / `missing_output_container_contract`); tied live-identity
+(`state_alias_topology_unsupported` / `output_container_contract_missing`); tied live-identity
 state stages as one alias-group allocation; persisted context values validate at parse
 (`context_field_invalid`); non-global host RNG/entropy/clock touches permanently ceiling replay
 (r39: numpy instances via a chained `sys`/`threading.setprofile` classifier + a cheap

@@ -35,7 +35,7 @@ def _loaded_round_trip(tmp_path: Path) -> tl.Trace:
 def _functionful_layer(trace: tl.Trace):
     """Return a layer the func block actually validates (linear/relu)."""
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         if layer.func_name in {"linear", "relu"}:
             return layer
     raise AssertionError("fixture trace lost its linear/relu layers")
@@ -52,7 +52,7 @@ def test_loaded_trace_with_blanked_func_name_still_fails(tmp_path: Path) -> None
     """The loaded arm keeps the func_name half of the tripwire armed."""
 
     loaded = _loaded_round_trip(tmp_path)
-    _functionful_layer(loaded).ops[0].func_name = ""
+    _functionful_layer(loaded).func_name = ""
     with pytest.raises(MetadataInvariantError, match="func_name is empty"):
         check_metadata_invariants(loaded)
 
@@ -61,7 +61,7 @@ def test_loaded_trace_with_none_sentinel_func_name_still_fails(tmp_path: Path) -
     """The 'none' sentinel stays name corruption on loaded artifacts too."""
 
     loaded = _loaded_round_trip(tmp_path)
-    _functionful_layer(loaded).ops[0].func_name = "none"
+    _functionful_layer(loaded).func_name = "none"
     with pytest.raises(MetadataInvariantError):
         check_metadata_invariants(loaded)
 
@@ -70,7 +70,7 @@ def test_loaded_trace_with_nonnull_func_is_tampering(tmp_path: Path) -> None:
     """func never persists, so a non-None func on a loaded artifact fails."""
 
     loaded = _loaded_round_trip(tmp_path)
-    _functionful_layer(loaded).ops[0].func = torch.relu
+    _functionful_layer(loaded).func = torch.relu
     with pytest.raises(MetadataInvariantError, match="non-None func"):
         check_metadata_invariants(loaded)
 
@@ -80,7 +80,7 @@ def test_live_trace_with_nulled_func_still_fails() -> None:
 
     trace = tl.trace(nn.Sequential(nn.Linear(4, 3), nn.ReLU()), torch.randn(2, 4))
     try:
-        _functionful_layer(trace).ops[0].func = None
+        _functionful_layer(trace).func = None
         with pytest.raises(MetadataInvariantError, match="func is not callable"):
             check_metadata_invariants(trace)
     finally:

@@ -1014,8 +1014,8 @@ def test_save_argument_door_is_typed_and_names_runnable_spellings() -> None:
     x = torch.randn(2)
     saved_all = tl.trace(nn.Identity(), x, save="all")
     default = tl.trace(nn.Identity(), x)
-    assert [op.label for op in saved_all.layer_list if op.has_saved_activation] == [
-        op.label for op in default.layer_list if op.has_saved_activation
+    assert [op.label for op in saved_all._layer_list if op.has_saved_activation] == [
+        op.label for op in default._layer_list if op.has_saved_activation
     ]
 
 
@@ -1317,7 +1317,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._io.runnable._UnsupportedLiteralError": (
         "private save-time literal-classifier signal; converted to typed refusals"
     ),
-    "torchlens._utils._dynamo_explain_shapes._DynamoExplainOutputError": (
+    "torchlens.debug._dynamo_explain_shapes._DynamoExplainOutputError": (
         "private dynamo-explain probe failure; caught inside the capability probe"
     ),
     "torchlens._capture.projections.LiveOpViewFieldNotYetWritten": (

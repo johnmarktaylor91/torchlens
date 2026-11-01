@@ -34,7 +34,7 @@ def _finish_run_status(
     self: Trace, decision_recorder: ValidationDecisionRecorder
 ) -> ValidationStatus:
     """Freeze the recorder into this run's status and stash it on the trace."""
-    status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+    status = decision_recorder.as_status(backend=str(self._provenance_backend))
     setattr(self, "_validation_replay_status", status)
     return status
 
@@ -57,9 +57,7 @@ def _fail_dispatch_census(
 ) -> ValidationStatus:
     """Record a dispatch census mismatch and return the failed status."""
     dispatch_count = getattr(self, "_validation_dispatch_op_count")
-    captured_count = int(
-        getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
-    )
+    captured_count = int(getattr(self, "_validation_captured_dispatchable_op_count", self._num_ops))
     pruned_count = int(getattr(self, "_validation_pruned_dispatchable_op_count", 0))
     buffer_write_count = int(getattr(self, "_validation_buffer_write_dispatch_op_count", 0))
     message = (

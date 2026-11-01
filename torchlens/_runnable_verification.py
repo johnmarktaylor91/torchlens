@@ -681,11 +681,11 @@ def _input_error(
 def _op_for_label(trace: Any, label: str) -> Any | None:
     """Resolve a descriptor op label against a fork's lookup aliases."""
 
-    layer_dict = getattr(trace, "layer_dict_all_keys", {}) or {}
+    layer_dict = trace._layer_dict_all_keys or {}
     if label in layer_dict:
         return layer_dict[label]
     return next(
-        (op for op in getattr(trace, "layer_list", ()) if str(getattr(op, "label", "")) == label),
+        (op for op in trace._layer_list if str(getattr(op, "label", "")) == label),
         None,
     )
 
@@ -699,7 +699,7 @@ def _op_for_slot(trace: Any, slot_id: str) -> Any | None:
 def _run_fork_name(trace: Any) -> str:
     """Return a process-unique monotonic Trace label for a run transaction."""
 
-    base_name = trace.trace_label or "trace"
+    base_name = trace.name or "trace"
     return f"{base_name}_fork_{next(_RUN_FORK_COUNTER)}"
 
 

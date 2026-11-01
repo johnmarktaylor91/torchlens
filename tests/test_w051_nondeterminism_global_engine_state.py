@@ -130,7 +130,7 @@ def test_torchlens_own_state_bookkeeping_never_self_marks() -> None:
     seam = tl.trace(
         _LinearNoBias().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )._runnable
     assert not seam.host_rng_consumed
     assert seam.host_rng_replayable_reads == ()
@@ -171,12 +171,12 @@ def test_get_draw_set_capture_requires_the_capture_seed(
     random.seed(1234)
     np.random.seed(1234)
     torch.manual_seed(1234)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     seam = trace._runnable
     assert seam.host_rng_consumed
     assert not seam.host_rng_unreplayable
     assert not seam.rng_monitor_uncertain
-    capture_seed = trace.random_seed
+    capture_seed = trace.options.seed
     assert isinstance(capture_seed, int)
 
     bundle = tmp_path / f"{model_class.__name__}.tlspec"

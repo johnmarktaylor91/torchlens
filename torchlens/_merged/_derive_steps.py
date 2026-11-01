@@ -10,22 +10,29 @@ module never imports the engine and the import graph stays acyclic.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from ..distributed._audit import MembershipLineageVerdict, verify_membership_lineages
-from ..distributed._ledger import InstallEpoch, membership_digest_for_ranks
+from ..distributed._ledger import InstallEpoch
 from ._boundary_rules import P2P_KINDS
 from ._enums import BoundaryConsistency, MergeAlignment, MergedErrorCode, MergeValueStatus
 from ._errors import MergedFinding, MergeInputError
+from ._rules import (
+    COLLECTIVE_CHANNEL,
+    ChannelKey,
+    CorrelationKey,
+    GroupUid,
+    armed_before_any_group,
+    channel_key,
+    correlation_key,
+    group_uid,
+    membership_digest_bound,
+    ranks_outside_membership,
+    recorded_members,
+)
 
 if TYPE_CHECKING:
     from ._evidence import RankEvidence
-
-GroupUid = tuple[str, int]
-"""``(membership_digest, lifetime_ordinal)``: one communicator lifetime."""
-
-ChannelKey = tuple[str, int, str]
-"""``(membership_digest, lifetime_ordinal, channel)``: one join channel."""
 
 ChannelRecords = dict[int, list[tuple[int, int]]]
 """Per-rank ``(seq_abs, boundary_index)`` records on one channel."""
@@ -67,7 +74,7 @@ def _guard_scope(evidence: Mapping[int, RankEvidence]) -> None:
         for index, entry in enumerate(evidence[rank].boundaries):
             kind = entry["kind"]
             channel = entry["correlation"]["channel"]
-            if kind in P2P_KINDS or channel != "coll":
+            if kind in P2P_KINDS or channel != COLLECTIVE_CHANNEL:
                 raise MergeInputError(
                     f"Rank {rank} boundary {index} is a point-to-point boundary "
                     f"(kind={kind!r}, channel={channel!r}). C1 merges symmetric "
@@ -116,10 +123,10 @@ def check_membership_authority(
     """
 
     for rank in input_ranks:
-        seen_correlation_keys: set[tuple[str, int, str, int]] = set()
+        seen_correlation_keys: set[CorrelationKey] = set()
         for entry in evidence[rank].boundaries:
-            members = tuple(int(member) for member in entry["group"]["global_ranks"])
-            if rank not in members:
+            members = recorded_members(entry)
+            if ranks_outside_membership((rank,), members):
                 raise MergeInputError(
                     f"Rank {rank} presents a collective boundary for membership {members}, "
                     "but presence must be a subset of the recorded membership.",
@@ -127,47 +134,22 @@ def check_membership_authority(
                     rank=rank,
                 )
             correlation = entry["correlation"]
-            # The digest is definitionally sha256(sorted(global_ranks)) and freely
-            # recomputable; an incoherent pair rebinds this boundary's joins,
-            # ordinals, and audit row to another communicator's membership.
-            if correlation["membership_digest"] != membership_digest_for_ranks(members):
+            if not membership_digest_bound(correlation, members):
                 raise MergeInputError(
                     f"Rank {rank} presents a boundary whose membership_digest does "
                     f"not equal the digest of its own recorded membership {members}.",
                     code=MergedErrorCode.MERGED_SCHEMA_INVALID,
                     rank=rank,
                 )
-            correlation_key = _correlation_key(correlation)
-            if correlation_key in seen_correlation_keys:
+            key = correlation_key(correlation)
+            if key in seen_correlation_keys:
                 raise MergeInputError(
-                    f"Rank {rank} presents duplicate correlation key {correlation_key}; "
+                    f"Rank {rank} presents duplicate correlation key {key}; "
                     "rank-local issue sequence values must be unique.",
                     code=MergedErrorCode.MERGED_SCHEMA_INVALID,
                     rank=rank,
                 )
-            seen_correlation_keys.add(correlation_key)
-
-
-def _correlation_key(correlation: Mapping[str, Any]) -> tuple[str, int, str, int]:
-    """Return a boundary's ``(membership_digest, lifetime_ordinal, channel, seq)`` key.
-
-    Parameters
-    ----------
-    correlation:
-        The boundary's shape-checked correlation mapping.
-
-    Returns
-    -------
-    tuple[str, int, str, int]
-        The rank-local correlation key, normalised to ``str``/``int``.
-    """
-
-    return (
-        str(correlation["membership_digest"]),
-        int(correlation["lifetime_ordinal"]),
-        str(correlation["channel"]),
-        int(correlation["seq"]),
-    )
+            seen_correlation_keys.add(key)
 
 
 def audit_membership_lineages(
@@ -326,9 +308,8 @@ def build_group_table(
     findings: list[MergedFinding] = []
     for rank in input_ranks:
         for entry in evidence[rank].boundaries:
-            correlation = entry["correlation"]
-            uid = (correlation["membership_digest"], correlation["lifetime_ordinal"])
-            members = tuple(int(r) for r in entry["group"]["global_ranks"])
+            uid = group_uid(entry["correlation"])
+            members = recorded_members(entry)
             backend = entry["group"].get("backend")
             if uid in group_members and group_members[uid] != members:
                 findings.append(
@@ -386,11 +367,10 @@ def collect_channel_records(
     for rank in input_ranks:
         for index, entry in enumerate(evidence[rank].boundaries):
             correlation = entry["correlation"]
-            digest = correlation["membership_digest"]
-            if digest in conflicted_memberships:
+            channel = channel_key(correlation)
+            if channel[0] in conflicted_memberships:
                 continue  # no join AND no gap for a conflicted membership (1.3)
-            channel_key = (digest, correlation["lifetime_ordinal"], correlation["channel"])
-            per_channel.setdefault(channel_key, {}).setdefault(rank, []).append(
+            per_channel.setdefault(channel, {}).setdefault(rank, []).append(
                 (int(correlation["seq"]), index)
             )
     return per_channel
@@ -519,7 +499,7 @@ def absolute_seq_mismatch(
     armed_seq_abs = {
         rank: seq_abs
         for rank, seq_abs in seq_abs_by_rank.items()
-        if evidence[rank].install_epoch == "armed_before_any_group"
+        if armed_before_any_group(evidence[rank].install_epoch)
     }
     if len(set(armed_seq_abs.values())) <= 1:
         return None

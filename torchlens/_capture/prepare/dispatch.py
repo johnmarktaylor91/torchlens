@@ -91,7 +91,7 @@ def _trace_mlx_model(
     num_context_lines: int | MissingType,
     compute_input_output_distances: bool | MissingType,
     recurrence_detection: bool | MissingType,
-    intervention_ready: bool | MissingType,
+    replayable: bool | MissingType,
     hooks: Any | None | MissingType,
     capture: CaptureOptions | None,
     save: SaveOptions | None,
@@ -147,7 +147,7 @@ def _trace_mlx_model(
         mark_layer_depths=MISSING,
         detach_saved_activations=MISSING,
         recurrence_detection=recurrence_detection,
-        intervention_ready=intervention_ready,
+        replayable=replayable,
         hooks=hooks,
         unwrap_when_done=MISSING,
         verbose=verbose,
@@ -168,12 +168,12 @@ def _trace_mlx_model(
         save_raw_activations=save_raw_activations,
         save_raw_grads=save_raw_grads,
     )
-    if capture_options.intervention_ready:
+    if capture_options.replayable:
         raise BackendUnsupportedError(
-            "MLX backend does not support intervention_ready=True: post-capture "
+            "MLX backend does not support replayable=True: post-capture "
             "rerun readiness requires PyTorch autograd integration not present in "
             "MLX. Live static-label trace(intervene=tl.when(...)) IS supported; "
-            "omit intervention_ready or set False."
+            "omit replayable or set False."
         )
     if capture_options.hooks:
         raise BackendUnsupportedError(
@@ -273,7 +273,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # ``capture=CaptureOptions(...)`` call fail with "does not support:
     # capture" regardless of content; the real per-field support/rejection
     # already happens downstream in ``_trace_mlx_model`` (e.g.
-    # ``capture_options.intervention_ready``, ``capture_options.hooks``).
+    # ``capture_options.replayable``, ``capture_options.hooks``).
     reject_extra_trace_kwargs(
         {
             "lookback": kwargs["lookback"],
@@ -356,7 +356,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         num_context_lines=kwargs.get("num_context_lines", MISSING),
         compute_input_output_distances=kwargs.get("compute_input_output_distances", MISSING),
         recurrence_detection=kwargs.get("recurrence_detection", MISSING),
-        intervention_ready=kwargs.get("intervention_ready", MISSING),
+        replayable=kwargs.get("replayable", MISSING),
         hooks=kwargs.get("hooks", MISSING),
         capture=kwargs["capture"],
         save=save_options,

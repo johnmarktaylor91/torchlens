@@ -228,7 +228,7 @@ def _fired_capture_records(trace: Trace) -> tuple[list[str], int, list[Any]]:
     fired_records: list[Any] = []
     for label in trace.op_labels:
         op = trace.ops[label]
-        records = getattr(op, "interventions", None) or ()
+        records = op.edits or ()
         if records:
             fired_labels.append(label)
             fire_count += len(records)
@@ -267,7 +267,7 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         edit_names = tuple(str(rule["action"]) for rule in rules)
         selection_repr = " | ".join(str(rule["where"]) for rule in rules)
         fired_action_reprs = {
-            _canonical_repr(record.helper) for record in fired_records if record.helper is not None
+            _canonical_repr(record.edit) for record in fired_records if record.edit is not None
         }
         zero_fire_rule_ids = tuple(
             str(rule["rule_id"]) for rule in rules if str(rule["action"]) not in fired_action_reprs
@@ -277,7 +277,7 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         decision = getattr(intervene_request, "decision", None)
         hook = getattr(decision, "hook", None) if decision is not None else None
         edit_name = getattr(
-            hook, "helper_name", getattr(hook, "__name__", type(intervene_request).__name__)
+            hook, "name", getattr(hook, "__name__", type(intervene_request).__name__)
         )
         edit_names = (str(edit_name),)
         selection_repr = repr(getattr(intervene_request, "selector", intervene_request))
@@ -442,7 +442,7 @@ def intervene_selector_fired_nowhere(trace: Trace, selector: Any) -> bool:
         getattr(trace, "_tl_intervene_selector_fire_count", 0)
     ):
         return False
-    fanout = len(getattr(trace, "layer_list", ()) or ()) + 1
+    fanout = len(trace._layer_list or ()) + 1
     for universe, branch in branches:
         if universe != "gradient":
             continue
@@ -557,7 +557,9 @@ def _warn_zero_match_capture_selectors(
                 "no intervention fired.",
                 selector=repr(intervene_selector),
             )
-        if isinstance(halt_selector, BaseSelector) and not bool(getattr(trace, "halted", False)):
+        if isinstance(halt_selector, BaseSelector) and not bool(
+            getattr(trace, "is_stopped", False)
+        ):
             _record_unmatched("halt", halt_selector)
             warnings.warn(
                 f"Capture-time halt selector {halt_selector!r} matched zero sites; "
@@ -570,10 +572,7 @@ def _warn_zero_match_capture_selectors(
             from .._input_records import _get_op_nums_from_user_labels
 
             try:
-                matched: Any = _get_op_nums_from_user_labels(
-                    trace,
-                    layers_to_save_request,
-                )
+                matched: Any = _get_op_nums_from_user_labels(trace, layers_to_save_request)
             except InvalidArgumentError:
                 # The post-capture lookup is loud for unknown keys; here the
                 # capture already completed, so an unknown name IS the

@@ -122,7 +122,7 @@ class NarrationObserver:
     """Live stats-line echo mounted on the shipped observer surface.
 
     Mounts exactly like a tap
-    (``capture=CaptureOptions(intervention_ready=True, hooks=echo_obs)``,
+    (``capture=CaptureOptions(replayable=True, hooks=echo_obs)``,
     the ``site``/``__call__(out, *, ctx)`` protocol) and returns the observed
     value unchanged. :attr:`signal` is derived from the site: ``tl.grad(site)``
     narrates the gradient of the site's output on each backward pass. Each firing appends one
@@ -193,7 +193,7 @@ def narrate(
         obs = tl.stats.narrate(tl.func("relu"), sink=print)
         tl.trace(model, x,
                  capture=tl.options.CaptureOptions(
-                     intervention_ready=True, hooks=obs))
+                     replayable=True, hooks=obs))
 
     Parameters
     ----------

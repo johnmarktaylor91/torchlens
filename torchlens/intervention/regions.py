@@ -48,6 +48,7 @@ from typing import Any
 
 import torch
 
+from .._record_type import record_type
 from .errors import RegionError
 from .types import Edit
 
@@ -170,7 +171,7 @@ class RegionTarget:
     def trace(self) -> Any:
         """The trace the region is bound to."""
 
-        return self._slice.source_trace
+        return self._slice._source_trace
 
     @property
     def labels(self) -> tuple[str, ...]:
@@ -410,7 +411,7 @@ def region(slice_: Any, *, exits: Any = None) -> RegionTarget:
         )
     graph = slice_._graph
     members = slice_._member_set
-    trace = slice_.source_trace
+    trace = slice_._source_trace
 
     # Convexity: between(R, R) <= R, in the shipped address algebra.
     from .._selection_graph import _between_label_set
@@ -437,7 +438,7 @@ def region(slice_: Any, *, exits: Any = None) -> RegionTarget:
     for parent, child in slice_.boundary_out_edges:
         child_op = graph.ops[child]
         if (
-            getattr(child_op, "layer_type", None) == "buffer"
+            record_type(child_op, None) == "buffer"
             and getattr(child_op, "buffer_value_changed", None) is False
         ):
             continue
@@ -516,7 +517,7 @@ def _check_effect_closure(region_target: RegionTarget) -> dict[str, Any]:
     # effect of the writing member.
     for edge in region_target.boundary.exits:
         child_op = graph.ops[edge.child]
-        if getattr(child_op, "layer_type", None) == "buffer":
+        if record_type(child_op, None) == "buffer":
             changed = getattr(child_op, "buffer_value_changed", None)
             if changed is not False:
                 _refuse_buffer(edge.parent, getattr(child_op, "buffer_write_kind", None), changed)
@@ -680,7 +681,7 @@ def _evaluate_instance(
         edge = next(e for e in instance.exits if e.parent == label)
         exit_values[label] = _consumed_value(trace, graph.ops[edge.parent], graph.ops[edge.child])
 
-    is_splice = isinstance(edit, Edit) and edit.helper_name == "splice_module"
+    is_splice = isinstance(edit, Edit) and edit.name == "splice_module"
     if is_splice and dict(edit.metadata).get("input_route") == "in":
         module = edit.args[0]
         entries = _entry_values(trace, graph, instance)
@@ -844,7 +845,7 @@ def _refuse_unaddressable_exits(region_target: RegionTarget) -> None:
             "address in the dataflow edge family; the coordinated exit "
             "substitution cannot address these crossings",
             code="region_exit_address_underivable",
-            remedy="re-capture with CaptureOptions(intervention_ready=True) so "
+            remedy="re-capture with CaptureOptions(replayable=True) so "
             "argument provenance is recorded, or reshape the region so its "
             "exits are ordinary tensor arguments",
         )
@@ -916,13 +917,11 @@ def _commit_region_occurrence(
         func_call_id=child_op.func_call_id,
         container_path=tuple(child_op.container_path or ()),
         engine="replay",
-        helper=None,
+        edit=None,
         site_label=child_op.layer_label,
         timing="post",
         signal="forward",
-        helper_name=(
-            edit.helper_name if isinstance(edit, Edit) else getattr(edit, "__name__", "region_edit")
-        ),
+        edit_name=edit.name if isinstance(edit, Edit) else getattr(edit, "__name__", "region_edit"),
         replaced=False,
         edge_address=tuple(address),
     )
@@ -1035,7 +1034,7 @@ def apply_region_do(
         ],
         exits=applied,
         instances=per_instance,
-        edit=(edit.helper_name if isinstance(edit, Edit) else getattr(edit, "__name__", "value")),
+        edit=(edit.name if isinstance(edit, Edit) else getattr(edit, "__name__", "value")),
         execution_effect=_REGION_EXECUTION_EFFECT,
         effect_closure=effect_disclosure,
         source="current_transaction",

@@ -25,6 +25,7 @@ from .._capture.projections import (
 )
 from .._capture.stages import InternalCaptureConfig
 from .._capture.stop import StopDirective, stop_directive_for_trace
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureNotActiveError, KeywordConflictError
@@ -34,6 +35,7 @@ from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal
+from ._recorder_streaming import _rank_prefixed_streaming_options
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
@@ -46,43 +48,6 @@ from .options import (
     merge_recording_options,
 )
 from .types import CaptureSpec, Recording, _mark_recording_halted
-
-
-def _rank_prefixed_streaming_options(
-    streaming: StorageOptions | None | MissingType,
-) -> StorageOptions | None | MissingType:
-    """Return streaming options with a rank-local directory prefix.
-
-    Parameters
-    ----------
-    streaming:
-        Caller-supplied streaming options.
-
-    Returns
-    -------
-    StorageOptions | None | MissingType
-        Options with ``path`` rewritten to include ``rank_NN`` when a
-        bundle path is configured.
-    """
-
-    if isinstance(streaming, MissingType) or streaming is None or streaming.path is None:
-        return streaming
-    rank = 0
-    if torch.distributed.is_available() and torch.distributed.is_initialized():
-        rank = torch.distributed.get_rank()
-    bundle_path = Path(streaming.path)
-    # Rewrite ONLY bundle_path: rebuilding from defaults silently dropped the
-    # R62 include_* opt-outs (and now the async-write routing) for rank-split
-    # recordings.
-    return StorageOptions(
-        path=bundle_path.parent / f"rank_{rank:02d}" / bundle_path.name,
-        retain_in_memory=streaming.retain_in_memory,
-        on_save=streaming.on_save,
-        include_custom_attributes=streaming.include_custom_attributes,
-        include_buffer_values=streaming.include_buffer_values,
-        async_writes=streaming.async_writes,
-        max_pending_bytes=streaming.max_pending_bytes,
-    )
 
 
 def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
@@ -197,6 +162,34 @@ def _resolve_train_mode_default(
             code="backward_ready_conflict",
         )
     return value
+
+
+def _settle_recording_outcome(recording: Recording, state: RecordingState) -> None:
+    """Stamp the finalized recording with its capture outcome when none is present."""
+
+    from .._capture.outcome import (
+        CaptureOutcome,
+        CaptureStatus,
+        stamp_recording_outcome,
+    )
+
+    if getattr(recording, "_outcome", None) is not None:
+        return
+    inference_only = bool(
+        state.runtime_trace._options_inference_only
+        if state.runtime_trace is not None and is_live_trace(state.runtime_trace)
+        else False
+    )
+    if recording.is_stopped:
+        stamped = CaptureOutcome(
+            status=CaptureStatus.STOPPED,
+            reason=recording.stop_reason,
+            boundary_label=recording.stop_reason,
+            inference_only=inference_only,
+        )
+    else:
+        stamped = CaptureOutcome(status=CaptureStatus.COMPLETE, inference_only=inference_only)
+    stamp_recording_outcome(recording, stamped)
 
 
 class Recorder:
@@ -421,27 +414,7 @@ class Recorder:
             self._recording = Recording.from_capture_events(session)
             # Settle the finalized product (path 14). A construction failure
             # above propagates productless -- the raise is the signal.
-            from .._capture.outcome import (
-                CaptureOutcome,
-                CaptureStatus,
-                stamp_recording_outcome,
-            )
-
-            if getattr(self._recording, "_outcome", None) is None:
-                recording = self._recording
-                inference_only = bool(getattr(self._state.runtime_trace, "inference_only", False))
-                if recording.is_stopped:
-                    stamped = CaptureOutcome(
-                        status=CaptureStatus.STOPPED,
-                        reason=recording.stop_reason,
-                        boundary_label=recording.stop_reason,
-                        inference_only=inference_only,
-                    )
-                else:
-                    stamped = CaptureOutcome(
-                        status=CaptureStatus.COMPLETE, inference_only=inference_only
-                    )
-                stamp_recording_outcome(recording, stamped)
+            _settle_recording_outcome(self._recording, self._state)
         else:
             self._state.abort_storage(safe_exception_str(exc_value))
         self._entered = False
@@ -523,7 +496,7 @@ class Recorder:
             backward_ready=True,
             inference_only=inference_only,
         )
-        trace.capture_mode = "predicate"
+        trace._options_mode = "predicate"
         trace._fastlog_recording = self._state.recording
         trace._predicate_save_options = self.options
         trace._stop_directive = StopDirective(
@@ -577,7 +550,7 @@ class Recorder:
                 max(self._state.recording.num_ops, self._next_pass_index),
             )
             self._mark_halted_pass(
-                self._next_pass_index, halt_exc, inference_only=trace.inference_only
+                self._next_pass_index, halt_exc, inference_only=trace._options_inference_only
             )
             if self._echo_session is not None:
                 # Halted is not failed: no crash tail, one typed disclosure.

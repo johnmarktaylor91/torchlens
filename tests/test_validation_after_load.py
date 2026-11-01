@@ -57,7 +57,7 @@ def test_loaded_replay_ready_bundle_validates(tmp_path: Path) -> None:
     path = tmp_path / "trace.tlz"
     trace.save(path, level="executable_with_callables")
     loaded = tl.load(path)
-    computational = [op for op in loaded.layer_list if op.func_name not in {"none"}]
+    computational = [op for op in loaded._layer_list if op.func_name not in {"none"}]
     assert computational and all(op.func is None for op in computational)
     assert loaded.validate_forward_pass(reference) is True
     status = loaded.validation_replay_status
@@ -112,7 +112,7 @@ def test_foreign_impure_missing_or_mismatched_keys_never_resolve(
     key: FunctionRegistryKey, func_name: str
 ) -> None:
     layer = _layer(key, func_name)
-    assert resolve_loaded_callables(SimpleNamespace(layer_list=[layer])) == []
+    assert resolve_loaded_callables(SimpleNamespace(_layer_list=[layer])) == []
     assert layer.func is None
 
 
@@ -121,7 +121,7 @@ def test_structural_nodes_never_resolve() -> None:
 
     output = _layer(FunctionRegistryKey("torch", "relu", "function"), "none")
     output.is_output = True
-    assert resolve_loaded_callables(SimpleNamespace(layer_list=[output])) == []
+    assert resolve_loaded_callables(SimpleNamespace(_layer_list=[output])) == []
     assert output.func is None
 
 
@@ -130,7 +130,7 @@ def test_pure_torch_keys_resolve_and_release() -> None:
         _layer(FunctionRegistryKey("torch", "relu", "function"), "relu"),
         _layer(FunctionRegistryKey("torch.Tensor", "__add__", "dunder"), "__add__"),
     ]
-    resolved = resolve_loaded_callables(SimpleNamespace(layer_list=layers))
+    resolved = resolve_loaded_callables(SimpleNamespace(_layer_list=layers))
     assert resolved == layers and all(callable(layer.func) for layer in layers)
     release_loaded_callables(resolved)
     assert all(layer.func is None for layer in layers)
@@ -148,6 +148,6 @@ def test_literal_producer_and_torch_c_builtin_keys_resolve() -> None:
         FunctionRegistryKey("custom", "gelu", "function", import_path="torch._C._nn:os.system"),
         "gelu",
     )
-    resolved = resolve_loaded_callables(SimpleNamespace(layer_list=[ones, gelu, forged]))
+    resolved = resolve_loaded_callables(SimpleNamespace(_layer_list=[ones, gelu, forged]))
     assert resolved == [ones, gelu]
     assert forged.func is None

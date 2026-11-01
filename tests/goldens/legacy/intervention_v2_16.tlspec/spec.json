@@ -72,8 +72,8 @@
   "helpers": [
     {
       "args": [],
-      "batch_independent": true,
-      "compatible_with_append": true,
+      "is_batch_independent": true,
+      "is_compatible_with_append": true,
       "kind": "forward",
       "kwargs": {
         "force_shape_change": false
@@ -104,8 +104,8 @@
         "value": {
           "__helper__": {
             "args": [],
-            "batch_independent": true,
-            "compatible_with_append": true,
+            "is_batch_independent": true,
+            "is_compatible_with_append": true,
             "kind": "forward",
             "kwargs": {
               "force_shape_change": false

@@ -57,7 +57,7 @@ def main() -> None:
     torch.manual_seed(9)
     model = Model().eval()
     x = torch.randn(2, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
     block_sites = log.find_sites(tl.in_module("block"), max_fanout=4)
     target = tl.label(block_sites.where(lambda site: site.func_name == "relu").labels()[0])
@@ -66,8 +66,8 @@ def main() -> None:
     edited.push()
 
     assert any(site.func_name == "relu" for site in block_sites)
-    assert edited.last_run_records()[-1].helper_name == "zero_ablate"
-    assert not torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)
+    assert edited.last_run_records()[-1].edit_name == "zero_ablate"
+    assert not torch.allclose(log.output_ops[-1].out, edited.output_ops[-1].out)
 
 
 if __name__ == "__main__":

@@ -165,7 +165,7 @@ def _op_for_entry(trace: Any, entry: Site, *, sample_name: str | None = None) ->
     ops = [
         op
         for op in _find_act_ops(trace, layer_label)
-        if (getattr(op, "pass_index", 1) or 1) == pass_index
+        if (getattr(op, "pass_number", 1) or 1) == pass_index
     ]
     if not ops:
         where = "this trace" if sample_name is None else sample_name
@@ -982,7 +982,7 @@ def _table_population(
             (
                 candidate
                 for candidate in ops
-                if (getattr(candidate, "pass_index", 1) or 1) == int(label.rsplit(":", 1)[1])
+                if (getattr(candidate, "pass_number", 1) or 1) == int(label.rsplit(":", 1)[1])
             ),
             None,
         )

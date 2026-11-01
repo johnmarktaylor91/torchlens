@@ -43,7 +43,7 @@ def _x() -> Any:
 def _final_payload(trace: Any) -> Any:
     """Return the saved payload of the last captured op."""
 
-    return trace.layer_list[-1].out
+    return trace._layer_list[-1].out
 
 
 def test_jax_nn_relu_captures_faithfully() -> None:
@@ -64,8 +64,8 @@ def test_jax_nn_relu_captures_faithfully() -> None:
     params, x = _params(), _x()
     trace = tl.trace(cast(Any, model), (params, x), backend="jax")
 
-    assert "custom_jvp_call" in trace.jax_inlined_call_primitives
-    assert "max" in {op.func_name for op in trace.layer_list}
+    assert "custom_jvp_call" in trace.provenance.jax_inlined_call_primitives
+    assert "max" in {op.func_name for op in trace._layer_list}
     expected = jax.nn.relu(x @ params["w"])
     assert jnp.array_equal(_final_payload(trace), expected)
 
@@ -81,8 +81,8 @@ def test_jax_nn_softplus_captures_faithfully() -> None:
     params, x = _params(), _x()
     trace = tl.trace(cast(Any, model), (params, x), backend="jax")
 
-    assert "custom_jvp_call" in trace.jax_inlined_call_primitives
-    captured_primitives = {op.func_name for op in trace.layer_list}
+    assert "custom_jvp_call" in trace.provenance.jax_inlined_call_primitives
+    captured_primitives = {op.func_name for op in trace._layer_list}
     assert "log1p" in captured_primitives or "exp" in captured_primitives
     expected = jax.nn.softplus(x @ params["w"])
     assert jnp.array_equal(_final_payload(trace), expected)
@@ -112,7 +112,7 @@ def test_user_custom_jvp_with_pure_primal_captures() -> None:
     params, x = _params(), _x()
     trace = tl.trace(cast(Any, model), (params, x), backend="jax")
 
-    assert "custom_jvp_call" in trace.jax_inlined_call_primitives
+    assert "custom_jvp_call" in trace.provenance.jax_inlined_call_primitives
     hidden = x @ params["w"]
     assert jnp.array_equal(_final_payload(trace), hidden * hidden * hidden)
 

@@ -132,7 +132,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # dedup split to _op_dedup.py (T77) lands on the merged tree alongside
     # the F10 deletions; re-keyed down to the next 50-line step above the
     # merged measurement (4794).
-    "torchlens/_data_classes/op.py": 4800,
+    "torchlens/_data_classes/op.py": 4700,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -224,7 +224,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # measure_host_peak_memory DROP knob and the KEEP backward_peak_memory_reason
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
-    "torchlens/_data_classes/trace.py": 4050,
+    "torchlens/_data_classes/trace.py": 3950,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
@@ -388,7 +388,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # clears the union and stays.
     # 3300 -> 3150: the quantized-module FLOPs estimator split to
     # _quantized_flops.py (3127 measured); the ceiling follows the file down.
-    "torchlens/backends/torch/model_prep.py": 2500,
+    "torchlens/backends/torch/model_prep.py": 2400,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
     # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop

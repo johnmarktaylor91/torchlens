@@ -22,7 +22,7 @@ def _armed_trace():
     torch.manual_seed(0)
     model = ReusedReluNet()
     x = torch.rand(1, 2, 3, 3)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ def test_cone_preflight_discloses_engine_assumptions():
     assert plan["cone_size"] < plan["total_ops"]
     assert plan["live_lane_ops"] == plan["total_ops"]  # live always runs the full forward
     notes = " ".join(plan["notes"])
-    assert "intervention_ready" in notes
+    assert "replayable" in notes
     assert "never numeric change" in notes
 
 

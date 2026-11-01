@@ -519,7 +519,7 @@ def _container_from_registry(op: Op) -> Container | None:
         return None
     if getattr(op, "container_spec", None) is None and not _op_is_final_output(op):
         # A per-op spec is the opt-in metadata (capture_container_structure /
-        # intervention_ready); the FINAL-output snapshot is registered on every
+        # replayable); the FINAL-output snapshot is registered on every
         # capture (W051-HONESTY H2), so final-output ops read the registry even
         # when their own record carries no spec.
         return None
@@ -741,7 +741,7 @@ def _registry_sibling_leaves_from_trace(
 def _op_from_raw_label(trace: Any, raw_label: str) -> Op | None:
     """Return the op whose raw label matches ``raw_label``."""
 
-    for candidate in trace.layer_list:
+    for candidate in trace._layer_list:
         if (
             getattr(candidate, "layer_label_raw", None) == raw_label
             or getattr(candidate, "_layer_label_raw", None) == raw_label
@@ -813,7 +813,7 @@ def _trace_container_capability(trace: Any, role: Role) -> str:
     # backend seam (a torch-era legacy artifact), so it resolves the torch
     # default instead of a hardcoded claim; an unresolvable backend fails
     # CLOSED to "none".
-    backend = getattr(trace, "backend", None) or "torch"
+    backend = trace._provenance_backend or "torch"
     try:
         from ..backends.registry import get_backend_spec
 

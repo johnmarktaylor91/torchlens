@@ -137,7 +137,7 @@ VALIDATION_REASONS: frozenset[str] = frozenset(
 REFUSABLE_CAPABILITY_FLAGS: dict[str, str] = {
     "backward_capture": "backward_capture_unsupported",
     "fastlog": "fastlog_unsupported",
-    "interventions": "interventions_unsupported",
+    "can_intervene": "interventions_unsupported",
     "rng_replay": "rng_replay_unsupported",
     "has_streaming": "streaming_unsupported",
     "structure_only_capture": "structure_only_capture_unsupported",

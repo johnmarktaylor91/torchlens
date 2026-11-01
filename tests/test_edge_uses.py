@@ -64,7 +64,7 @@ def _first_op_by_func_name(trace: Trace, func_name: str) -> Op:
         First matching operation.
     """
 
-    return next(op for op in trace.layer_list if op.func_name == func_name)
+    return next(op for op in trace._layer_list if op.func_name == func_name)
 
 
 def _arg_path_values(edge_uses: tuple[EdgeUseRecord, ...]) -> list[tuple[int, ...]]:
@@ -97,7 +97,7 @@ def test_edge_uses_reports_repeated_and_single_parent_uses() -> None:
     """Repeated same-parent tensor uses remain visible through ``edge_uses``."""
 
     trace = _edge_trace()
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
     add_op = _first_op_by_func_name(trace, "__add__")
     cat_op = _first_op_by_func_name(trace, "cat")
     relu_op = _first_op_by_func_name(trace, "relu")
@@ -121,7 +121,7 @@ def test_edge_uses_is_tuple_and_empty_without_recorded_edges() -> None:
     """The public accessor is immutable and empty for ops with no recorded edges."""
 
     trace = _edge_trace()
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
 
     assert input_op.edge_uses == ()
     assert isinstance(input_op.edge_uses, tuple)
@@ -141,7 +141,7 @@ def test_edge_uses_survives_tlspec_roundtrip(tmp_path: Path) -> None:
 
     add_op = _first_op_by_func_name(loaded, "__add__")
     cat_op = _first_op_by_func_name(loaded, "cat")
-    input_op = next(op for op in loaded.layer_list if op.is_input)
+    input_op = next(op for op in loaded._layer_list if op.is_input)
 
     assert len(add_op.edge_uses) == 2
     assert {edge_use.parent_label for edge_use in add_op.edge_uses} == {input_op.layer_label}

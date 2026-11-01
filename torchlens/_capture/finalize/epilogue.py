@@ -60,7 +60,7 @@ def _render_layer_visualizers(
     output_dir = ensure_trace_visualizer_dir(trace)
     visualizer_dir = output_dir / "visualizers"
     visualizer_dir.mkdir(parents=True, exist_ok=True)
-    max_fanout = max(1, len(trace.layer_list))
+    max_fanout = max(1, len(trace._layer_list))
 
     for selector, visualizer in layer_visualizers.items():
         try:
@@ -163,16 +163,16 @@ def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     if input_transform is not None:
         stamp_user_transform_provenance(trace, input_transform)
     trace.profile_enabled = cast("bool", facts.get("profile_enabled"))
-    trace.save_grads = facts.get("save_grads_policy")
+    trace._options_save_grads = facts.get("save_grads_policy")
     if facts.get("uses_selective_layers_to_save"):
         _restrict_layer_nums_to_saved(trace, bool(getattr(options, "save_args", False)))
 
     # Print final summary.
     _vprint(
         trace,
-        f"Done: {len(trace.layer_logs)} layers, "
-        f"{trace.num_saved_ops} saved, "
-        f"{trace.total_activation_memory}",
+        f"Done: {len(trace._layer_logs)} layers, "
+        f"{trace._num_saved_ops} saved, "
+        f"{trace._cost_total_activation_memory}",
     )
 
     layer_visualizers = getattr(options, "layer_visualizers", None)
@@ -218,7 +218,7 @@ def _check_stop_after_fired(trace: Trace, facts: dict[str, Any]) -> None:
     """
     # brainpipe D-16.
     stop_after_site = facts.get("stop_after_site")
-    if stop_after_site is None or bool(getattr(trace, "halted", False)):
+    if stop_after_site is None or bool(getattr(trace, "is_stopped", False)):
         return
     site_repr = repr(stop_after_site)
     if facts.get("stop_after_selector_shaped") and not facts.get("stop_after_ambient"):
@@ -260,7 +260,7 @@ def _warn_module_filter_zero_saved(trace: Trace, module_filter: Any) -> None:
     if (
         module_filter is not None
         and module_filter_suppressed > 0
-        and int(getattr(trace, "num_saved_ops", 0) or 0) == 0
+        and int(trace._num_saved_ops or 0) == 0
     ):
         from ...errors import TorchLensWarning as _TorchLensWarning
 
@@ -284,8 +284,8 @@ def _restrict_layer_nums_to_saved(trace: Trace, save_args: bool) -> None:
     """Narrow the saved-layer index list to the ops a selective save kept."""
     trace._layer_nums_to_save = [
         op.raw_index
-        for op in trace.layer_list
-        if op.has_saved_activation and op.layer_type not in {"input", "output"}
+        for op in trace._layer_list
+        if op.has_saved_activation and op.type not in {"input", "output"}
     ]
     if not save_args:
         trace._replay_arg_version_data_complete = False
@@ -298,9 +298,9 @@ def _store_capture_cache(trace: Trace, cache: dict[str, Any] | None) -> None:
     cache_path, cache_key, cache_secret = cache.get("path"), cache.get("key"), cache.get("secret")
     if cache_path is None or cache_key is None or cache_secret is None:
         return
-    trace.capture_cache_hit = False
-    trace.capture_cache_key = cache_key
-    trace.capture_cache_path = str(cache_path)
+    trace._provenance_cache_hit = False
+    trace._provenance_cache_key = cache_key
+    trace._provenance_cache_path = str(cache_path)
     cache["store"](trace, cache_path, cache_secret)
 
 

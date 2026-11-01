@@ -164,7 +164,7 @@ assert edge.contribution is graph.nodes["m0"].value
 
 # A circuit runs as one patch_edges call: every edge outside it reads its
 # sender's value on the corrupted input.
-ready = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
+ready = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
 clean = tl.trace(model, ids, capture=ready)
 corrupt = tl.trace(model, torch.randint(0, 32, (1, 5)), capture=ready)
 corrupt_graph = torchlens.mechinterp.component_graph(corrupt)
@@ -202,7 +202,7 @@ recomputed locally (only the norm and projection ops run on the
 substituted input, with no fork). A circuit over all 445 GPT-2 small
 receivers therefore costs 25 replays, 24 graph builds and one fork. No edges returns an unpatched fork; an
 edge passed twice refuses `mi_edge_patch_edge_repeated`. Patching needs a
-trace captured with `intervention_ready=True`.
+trace captured with `replayable=True`.
 
 ## Edge attribution patching and circuit faithfulness
 

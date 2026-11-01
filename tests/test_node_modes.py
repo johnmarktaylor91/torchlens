@@ -75,7 +75,7 @@ def test_profiling_mode_omits_missing_fields(tmp_path: Path) -> None:
 
     model = nn.Linear(4, 4)
     log = tl.trace(model, torch.randn(1, 4))
-    for layer_log in log.layer_logs.values():
+    for layer_log in log._layer_logs.values():
         for layer_pass in layer_log.ops.values():
             layer_pass.func_duration = None
 
@@ -176,7 +176,7 @@ class _RecurrentBlock(nn.Module):
 def _set_op_durations(log: tl.Trace, seconds: float) -> None:
     """Stamp a known func_duration on every op for deterministic rows."""
 
-    for layer_log in log.layer_logs.values():
+    for layer_log in log._layer_logs.values():
         for layer_pass in layer_log.ops.values():
             layer_pass.func_duration = seconds
 
@@ -318,7 +318,7 @@ def test_profiling_multipass_rows_omitted_when_untimed(tmp_path: Path) -> None:
     """No pass timed -> no t= row on multi-pass nodes (matches single-pass)."""
 
     log = tl.trace(_RecurrentBlock(), torch.randn(2, 4))
-    for layer_log in log.layer_logs.values():
+    for layer_log in log._layer_logs.values():
         for layer_pass in layer_log.ops.values():
             layer_pass.func_duration = None
 

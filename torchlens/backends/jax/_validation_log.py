@@ -64,7 +64,7 @@ def _record_jax_constant_leaves(trace: Trace, log: _JaxValidationLog) -> None:
     reasons the constants rule names (item 3).
     """
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if str(getattr(op, "func_name", "")) != "constant":
             continue
         label = str(getattr(op, "label", ""))

@@ -84,7 +84,7 @@ def _record_predicate_module_boundary_outputs(
         if ctx.kind == "op" and ctx.raw_label is not None
     }
     existing = {
-        (record.ctx.raw_label, record.ctx.pass_index)
+        (record.ctx.raw_label, record.ctx.pass_number)
         for record in state.recording.records
         if record.ctx.raw_label is not None
     }
@@ -131,7 +131,7 @@ def _record_predicate_module_boundary_outputs(
         trace._tl_save_selector_fire_count = (
             int(getattr(trace, "_tl_save_selector_fire_count", 0)) + 1
         )
-        key = (boundary_ctx.raw_label, boundary_ctx.pass_index)
+        key = (boundary_ctx.raw_label, boundary_ctx.pass_number)
         if key in existing:
             continue
         existing.add(key)
@@ -193,10 +193,10 @@ def _predicate_module_enter(trace: Trace, state: Any, frame: Any, halt_only: boo
     enter_ctx = _build_record_context(
         kind="module_enter",
         op_log_or_op_data={
-            "label": f"{frame.address}:enter:{frame.pass_index}",
+            "label": f"{frame.address}:enter:{frame.pass_number}",
             "address": frame.address,
             "module_type": frame.module_type,
-            "module_pass_index": frame.pass_index,
+            "module_pass_number": frame.pass_number,
         },
         module_stack=state.module_stack,
         history=tuple(state.history),
@@ -265,10 +265,10 @@ def _predicate_module_exit(
     exit_ctx = _build_record_context(
         kind="module_exit",
         op_log_or_op_data={
-            "label": f"{frame.address}:exit:{frame.pass_index}",
+            "label": f"{frame.address}:exit:{frame.pass_number}",
             "address": frame.address,
             "module_type": frame.module_type,
-            "module_pass_index": frame.pass_index,
+            "module_pass_number": frame.pass_number,
         },
         module_stack=state.module_stack,
         history=tuple(state.history),
@@ -337,7 +337,7 @@ def _predicate_module_forward(
 
     state = get_active_recording_state()
     frame = _mstack.push_frame(trace, state.module_stack, module)
-    bind_invocation(trace, module, frame.address, frame.pass_index, (args, kwargs))
+    bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
     halt_only = _is_halt_only_capture(state.options)
     skipped_spec = _predicate_module_enter(trace, state, frame, halt_only)
     out = None
@@ -355,7 +355,7 @@ def _predicate_module_forward(
         out = _apply_module_boundary_live_hooks(
             out,
             module_address=frame.address,
-            module_call_index=frame.pass_index,
+            module_call_index=frame.pass_number,
             module_type=frame.module_type,
             call_args=args,
             call_kwargs=dict(kwargs),
@@ -365,7 +365,7 @@ def _predicate_module_forward(
             state,
             out,
             module_address=frame.address,
-            module_call_index=frame.pass_index,
+            module_call_index=frame.pass_number,
         )
         return out
     finally:

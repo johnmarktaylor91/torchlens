@@ -392,11 +392,11 @@ def test_field_table_string_keys_follow_their_field(tmp_path: Path) -> None:
         },
     )
     row = {
-        "id": "member:torchlens.trace:Trace.backward_durations",
+        "id": "member:torchlens.trace:Trace.cost.backward_durations",
         "kind": "member",
         "name": "backward_durations",
         "proposed": "backward_times",
-        "path": "Trace.backward_durations",
+        "path": "Trace.cost.backward_durations",
         "module": "torchlens.trace",
         "owner": "torchlens.trace:Trace",
         "field_tables": ["torchlens.constants:TRACE_FIELDS"],

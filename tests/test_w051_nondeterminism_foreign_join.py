@@ -436,7 +436,7 @@ def test_prepool_feed_in_capture_is_not_verified(
 
     x = torch.randn(2, 4)
     model = _FeedIn(lambda: warm_pool.submit(time.time).result()).eval()
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     seam = trace._runnable
     assert seam.rng_monitor_uncertain
     assert "foreign_thread_read_joined:time.time" in seam.rng_monitor_uncertain_detail
@@ -477,9 +477,7 @@ def test_lazy_pool_captures_never_verify_across_repeats() -> None:
     x = torch.randn(2, 4)
     try:
         for index in range(3):
-            seam = tl.trace(
-                model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-            )._runnable
+            seam = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))._runnable
             assert seam.host_rng_unreplayable or seam.rng_monitor_uncertain, index
     finally:
         for pool in pools:
@@ -505,7 +503,7 @@ def test_unjoined_flusher_capture_replays_verified(tmp_path: Path) -> None:
     try:
         x = torch.randn(2, 4)
         trace = tl.trace(
-            _LinearNoBias().eval(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
+            _LinearNoBias().eval(), x, capture=tl.options.CaptureOptions(replayable=True)
         )
         seam = trace._runnable
         assert not seam.host_rng_unreplayable

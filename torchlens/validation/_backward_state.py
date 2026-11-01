@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ..errors import TorchLensWarning
 
 if TYPE_CHECKING:
@@ -205,7 +206,7 @@ def _is_appended_trace(value: Any) -> bool:
         True only for objects carrying the appended Trace state marker.
     """
 
-    return bool(getattr(value, "is_appended", False))
+    return bool(value._provenance_is_appended if is_live_trace(value) else False)
 
 
 def _warn_if_no_module_output_evidence(layer_report: LayerGradReport) -> None:

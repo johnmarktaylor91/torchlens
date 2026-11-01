@@ -21,13 +21,13 @@ import torchlens as tl
 from torchlens.stats._capture_stats import PACKED_SLOTS
 
 _SPINE_FIELDS = (
-    "count_total",
-    "count_finite",
-    "count_zero",
-    "count_negative",
-    "count_nan",
-    "count_posinf",
-    "count_neginf",
+    "numel",
+    "num_finite",
+    "num_zero",
+    "num_negative",
+    "num_nan",
+    "num_posinf",
+    "num_neginf",
     "finite_min",
     "finite_max",
     "finite_absmax",
@@ -84,7 +84,7 @@ def _full_spines(trace: Any) -> dict[str, tl.stats.RunningStatsResult]:
         if isinstance(value, torch.Tensor) and not value.is_complex():
             spine = tl.stats.RunningStats()
             spine.update(value)
-            out[str(op.label)] = spine.result()
+            out[str(op.label)] = spine.compute()
     return out
 
 
@@ -109,7 +109,7 @@ def test_site_spines_equal_full_capture(kind: str) -> None:
         full = tl.trace(model, x)
         reduced = tl.trace(model, x, save="stats")
         expected = _full_spines(full)
-        got = {label: spine.result() for label, spine in tl.stats.site_stats(reduced).items()}
+        got = {label: spine.compute() for label, spine in tl.stats.site_stats(reduced).items()}
         assert set(got) == set(expected)
         assert got, "no sites folded"
         for label, result in expected.items():
@@ -159,7 +159,7 @@ def test_payload_read_refuses_with_working_spelling() -> None:
         _ = trace[label].out
     assert info.value.fields["code"] == "activation_reduced_to_stats"
     assert "tl.stats.site_stats(trace)[label]" in str(info.value)
-    assert tl.stats.site_stats(trace)[label].result().count_total > 0
+    assert tl.stats.site_stats(trace)[label].compute().numel > 0
     assert isinstance(tl.trace(model, x, save="all")[label].out, torch.Tensor)
 
 
@@ -202,7 +202,7 @@ def test_site_spines_keep_folding_across_batches() -> None:
         reference = tl.stats.RunningStats()
         reference.update(op_a.out)
         reference.update(op_b.out)
-        got, want = merged.result(), reference.result()
+        got, want = merged.compute(), reference.compute()
         assert got.counts() == want.counts()
         assert got.finite_min == want.finite_min and got.finite_max == want.finite_max
         assert got.mean == pytest.approx(want.mean, rel=1e-12, abs=1e-15)
@@ -242,7 +242,7 @@ def test_chunked_reducer_tolerance(monkeypatch: pytest.MonkeyPatch) -> None:
     full = _full_spines(tl.trace(model, x))
     reduced = tl.stats.site_stats(tl.trace(model, x, save="stats"))
     for label, want in full.items():
-        got = reduced[label].result()
+        got = reduced[label].compute()
         assert got.counts() == want.counts(), label
         for field in ("finite_min", "finite_max", "finite_absmax", "sum", "mean"):
             assert getattr(got, field) == getattr(want, field), (label, field)
@@ -290,10 +290,10 @@ def test_reducer_working_memory_is_bounded() -> None:
     naive = _largest_new_allocation(lambda v: tl.stats.RunningStats().update(v), out)
     assert lean <= _capture_stats._CHUNK * 8
     assert naive >= out.numel() * 8
-    assert _capture_stats.lean_spine(out).result().counts() == _spine_counts(out)
+    assert _capture_stats.lean_spine(out).compute().counts() == _spine_counts(out)
 
 
 def _spine_counts(value: torch.Tensor) -> dict[str, int]:
     spine = tl.stats.RunningStats()
     spine.update(value)
-    return spine.result().counts()
+    return spine.compute().counts()

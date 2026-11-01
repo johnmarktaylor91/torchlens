@@ -69,7 +69,7 @@ def test_selective_save_without_arg_values_reports_versions_incomplete() -> None
     )
 
     assert not trace._replay_arg_version_data_complete
-    assert all(not op.out_versions_by_child for op in trace.layer_list)
+    assert all(not op.out_versions_by_child for op in trace._layer_list)
     with pytest.raises(ValueError, match="child-version snapshots"):
         trace.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)
 

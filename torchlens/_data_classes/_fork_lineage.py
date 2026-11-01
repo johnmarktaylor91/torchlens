@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ._trace_missing_attrs import is_live_trace
+
 if TYPE_CHECKING:
     from .trace import Trace
 
@@ -32,7 +34,7 @@ def _is_fork_relative(trace: Trace, other: Trace) -> bool:
     for start, target in ((trace, other), (other, trace)):
         current: Any = start
         for _ in range(64):
-            parent_ref = getattr(current, "parent_run", None)
+            parent_ref = current._parent_run if is_live_trace(current) else None
             parent = parent_ref() if callable(parent_ref) else None
             if parent is None:
                 break

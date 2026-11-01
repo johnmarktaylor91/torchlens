@@ -120,13 +120,13 @@ def test_tf_closure_constant_is_a_constant_source_op_with_payload() -> None:
         return tf.matmul(v, weights) + bias
 
     trace = tl.trace(fn, _x(), backend="tf")
-    constants = [op for op in trace.layer_list if op.func_name == "constant"]
+    constants = [op for op in trace._layer_list if op.func_name == "constant"]
     assert len(constants) == 2
     for op in constants:
         assert tuple(op.parents or ()) == ()
         assert op.out is not None
         assert op.children
-    matmul = next(op for op in trace.layer_list if op.func_name == "MatMul")
+    matmul = next(op for op in trace._layer_list if op.func_name == "MatMul")
     assert any(parent in {c.label, c.layer_label} for c in constants for parent in matmul.parents)
     np.testing.assert_array_equal(np.asarray(constants[0].out), np.full((4, 3), 0.5))
     status = _protocol().validate(trace, None)
@@ -141,7 +141,7 @@ def test_tf_scalar_literal_stays_replayable_without_an_op() -> None:
         return v * 2.0 + 1.0
 
     trace = tl.trace(fn, _x(), backend="tf")
-    assert [op.func_name for op in trace.layer_list] == ["input", "Mul", "AddV2"]
+    assert [op.func_name for op in trace._layer_list] == ["input", "Mul", "AddV2"]
     assert _protocol().validate(trace, None).state == "passed"
 
 
@@ -152,7 +152,7 @@ def test_tf_forward_fill_is_a_literal_producer_that_validates() -> None:
         return tf.matmul(tf.transpose(tf.reshape(v, [4, 2])), tf.ones([4, 1]))
 
     trace = tl.trace(fn, _x(), backend="tf")
-    fill = next(op for op in trace.layer_list if op.func_name == "Fill")
+    fill = next(op for op in trace._layer_list if op.func_name == "Fill")
     assert tuple(fill.parents or ()) == ()
     assert fill.out is not None and tuple(np.asarray(fill.out).shape) == (4, 1)
     status = _protocol().validate(trace, None)
@@ -169,7 +169,7 @@ def test_tf_keras_gelu_erfc_is_classified_and_replayed() -> None:
         [keras.Input((4,)), keras.layers.Dense(4), keras.layers.Activation("gelu")]
     )
     trace = tl.trace(model, _x(), backend="tf")
-    assert any(op.func_name == "Erfc" for op in trace.layer_list)
+    assert any(op.func_name == "Erfc" for op in trace._layer_list)
     status = _protocol().validate(trace, None)
     assert status.state != "failed", status.message
     erfc = [r for r in status.decisions if r["func_name"] == "Erfc"]
@@ -186,7 +186,7 @@ def test_tf_tampered_payload_fails_naming_the_op_and_reason() -> None:
         return tf.nn.relu(tf.matmul(v, weights))
 
     trace = tl.trace(fn, _x(), backend="tf")
-    relu = next(op for op in trace.layer_list if op.func_name == "Relu")
+    relu = next(op for op in trace._layer_list if op.func_name == "Relu")
     relu.out = tf.constant(np.asarray(relu.out) + 7.0)
     status = _protocol().validate(trace, None)
     assert isinstance(status, ValidationStatus)

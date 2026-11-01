@@ -95,7 +95,7 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
             remedy="pass tensors produced by already-captured operations in the active trace",
             argument="parent/child",
         )
-    trace.manual_tensor_connections.append((parent_label, child_label))
+    trace._graph_manual_tensor_connections.append((parent_label, child_label))
     _register_live_tensor_connection(trace, parent_label, child_label)
 
 
@@ -134,7 +134,7 @@ def _register_live_tensor_connection(
             child_label,
             parents=(
                 *event.parents,
-                ParentEdge(parent_label_raw=parent_label, arg_position=None, edge_use="output"),
+                ParentEdge(parent_label_raw=parent_label, arg_position=None, _edge_use="output"),
             ),
             parent_arg_positions=parent_arg_positions,
         )
@@ -174,7 +174,7 @@ def _run_model_and_save_specified_outs(
     grad_storage_path: str | Path | None = None,
     retain_grads_in_memory: bool = True,
     out_sink: Callable[[str, torch.Tensor], None] | None = None,
-    intervention_ready: bool = False,
+    replayable: bool = False,
     capture_container_structure: bool = False,
     hooks: Any | None = None,
     intervention_spec: Any | None = None,
@@ -270,7 +270,7 @@ def _run_model_and_save_specified_outs(
             every exit path, so code after the capture continues its own streams. When
             None the seed is drawn from a private entropy-seeded stream, so an outer
             ``torch.manual_seed`` does not make an unseeded capture reproducible. The
-            seed used is recorded on ``trace.random_seed``.
+            seed used is recorded on ``trace.options.seed``.
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
         recurrence_detection: If True (default), run full isomorphic subgraph expansion to
@@ -297,7 +297,7 @@ def _run_model_and_save_specified_outs(
             backward finalization.
         out_sink: Optional callback invoked with ``(label, tensor)`` for each
             saved out.
-        intervention_ready: If True, capture replay-template metadata and mark the
+        replayable: If True, capture replay-template metadata and mark the
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence.
         capture_container_structure: If True, persist input and output container
@@ -423,7 +423,7 @@ def _configure_runtime_context(r: SimpleNamespace) -> None:
     _state.configure_capture_runtime_context(
         hook_plan=r.hook_plan,
         intervention_spec=r.intervention_spec,
-        capture_replay_templates=r.intervention_ready,
+        capture_replay_templates=r.replayable,
         model_object_id=r.model_object_id,
         model_class_qualname=r.model_class_qualname,
         weight_fingerprint=r.weight_fingerprint,
@@ -631,5 +631,5 @@ def run_capture(request: CaptureRequest) -> ForwardResult:
         trace=trace,
         request=request,
         arm=_forward_arm_of(trace),
-        raw_output=getattr(trace, "raw_output", None),
+        raw_output=getattr(trace, "transformed_output", None),
     )

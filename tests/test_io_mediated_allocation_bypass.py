@@ -93,7 +93,7 @@ from torchlens.options import CaptureOptions
 _TENSOR_BASE = getattr(torch._C, "TensorBase", None) or torch._C._TensorBase
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -777,6 +777,8 @@ def test_honest_artifact_round_trip_unaffected(
 
     loaded = tl.load(path)
 
-    assert loaded.num_ops == trace.num_ops
-    assert [str(op.label) for op in loaded.layer_list] == [str(op.label) for op in trace.layer_list]
+    assert loaded._num_ops == trace._num_ops
+    assert [str(op.label) for op in loaded._layer_list] == [
+        str(op.label) for op in trace._layer_list
+    ]
     tl.validation.validate_tlspec(path)

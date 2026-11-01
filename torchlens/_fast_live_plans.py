@@ -182,9 +182,9 @@ def _module_exit_index(trace: Any, module_call: Any, resolved: tuple[Any, ...]) 
     """
 
     contained = (
-        trace.layer_dict_all_keys[label]
+        trace._layer_dict_all_keys[label]
         for label in getattr(module_call, "ops", ())
-        if label in trace.layer_dict_all_keys
+        if label in trace._layer_dict_all_keys
     )
     return max(int(getattr(item, "raw_index", 0) or 0) for item in (*contained, *resolved))
 
@@ -211,9 +211,9 @@ def build_module_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
         if address == "self":
             continue
         resolved = tuple(
-            trace.layer_dict_all_keys[label]
+            trace._layer_dict_all_keys[label]
             for label in module_call.output_ops
-            if label in trace.layer_dict_all_keys
+            if label in trace._layer_dict_all_keys
         )
         if not resolved or not any(
             bool(getattr(item, "has_saved_activation", False)) for item in resolved
@@ -272,14 +272,14 @@ def build_function_plans(
     explicit = getattr(trace, "_predicate_save_options", None) is not None
     target_names = {
         str(op.func_name)
-        for op in trace.layer_list
+        for op in trace._layer_list
         if bool(getattr(op, "has_saved_activation", False))
         and not bool(getattr(op, "is_atomic_module", False))
         and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
         and (explicit or op.label not in module_saved_labels)
     }
     plans: list[_FastOutputPlan] = []
-    ops = [op for op in trace.layer_list if str(getattr(op, "func_name", "")) in target_names]
+    ops = [op for op in trace._layer_list if str(getattr(op, "func_name", "")) in target_names]
     index = 0
     while index < len(ops):
         first = ops[index]
@@ -392,11 +392,11 @@ def _admitted_collection_labels(trace: Any, plans: Sequence[_FastOutputPlan]) ->
         getattr(trace, "output_layers", ())
     )
     supported_labels = {label for plan in plans for label in plan.save_labels} | {
-        op.label for op in trace.layer_list if op.layer_label in boundary_layer_labels
+        op.label for op in trace._layer_list if op.layer_label in boundary_layer_labels
     }
     unsupported_function_labels = tuple(
         op.label
-        for op in trace.layer_list
+        for op in trace._layer_list
         if bool(getattr(op, "has_saved_activation", False))
         and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
         and op.label not in supported_labels
@@ -424,7 +424,7 @@ def _drop_uncollected_payloads(trace: Any, supported_labels: set[str]) -> None:
         model's boundary ops.
     """
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if bool(getattr(op, "has_saved_activation", False)) and op.label not in supported_labels:
             op._internal_set("out", None)
             op._internal_set("transformed_out", None)
@@ -524,7 +524,7 @@ def save_payload_paused(session: Any, op: Any, value: torch.Tensor) -> None:
             (),
             {},
             False,
-            activation_transform=getattr(session.trace, "activation_transform", None),
+            activation_transform=session.trace._options_activation_transform,
         )
     finally:
         session.collection_paused = False

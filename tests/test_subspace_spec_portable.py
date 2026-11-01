@@ -49,7 +49,7 @@ _ROTATION = torch.linalg.qr(
 
 
 def _ready(x: torch.Tensor = _X) -> Any:
-    return tl.trace(_MODEL, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(_MODEL, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _edited(rows: torch.Tensor, edit: Any, **subspace_kwargs: Any) -> Any:
@@ -83,8 +83,8 @@ def test_saved_rotation_reapplies_bit_identically(tmp_path: Path, rank: int, ver
     session = _edited(_ROTATION[:rank], edit)
     loaded = _save_load(session, tmp_path / "rotation.tlspec")
     helper = loaded.hook_specs[0].helper
-    assert helper.helper_name == "subspace_edit" and helper.portability == "builtin"
-    assert helper.args[0].helper_name == verb
+    assert helper.name == "subspace_edit" and helper.portability == "builtin"
+    assert helper.args[0].name == verb
     reapplied = _apply(loaded)
     assert torch.equal(reapplied[_SITE].out, session[_SITE].out)
     assert torch.equal(_out(reapplied), _out(session))
@@ -129,7 +129,7 @@ def test_reloaded_edit_keeps_the_complement_and_the_basis_provenance(tmp_path: P
     delta = (reapplied[_SITE].out - base).detach()
     assert torch.allclose(delta @ complement, torch.zeros_like(delta), atol=1e-12)
     assert not torch.allclose(reapplied[_SITE].out, base * 3.0)
-    fired = [record.helper for record in reapplied[_SITE].interventions]
+    fired = [record.edit for record in reapplied[_SITE].edits]
     assert any(dict(helper.kwargs).get("origin") == _ORIGIN for helper in fired)
 
 

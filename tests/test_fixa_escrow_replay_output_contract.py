@@ -53,7 +53,9 @@ def _require_hf_snapshot(repo_dirname: str) -> None:
 
 
 def _output_nodes(trace) -> list:
-    return [op for op in trace.layer_list if getattr(op, "is_output", False) and op.out is not None]
+    return [
+        op for op in trace._layer_list if getattr(op, "is_output", False) and op.out is not None
+    ]
 
 
 def _parent_slot_out(trace, node) -> torch.Tensor:
@@ -63,7 +65,7 @@ def _parent_slot_out(trace, node) -> torch.Tensor:
     parent_label = node.parents[0]
     same_call = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.layer_label == parent_label and op.func_call_id == node.func_call_id
     ]
     assert len(same_call) == 1, (
@@ -86,7 +88,7 @@ def _assert_boundary_slots_consistent(fork, source) -> None:
 
 
 def _first_module_op(trace, func_names: tuple[str, ...]):
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if (
             op.func_name in func_names
             and op.output_of_modules
@@ -141,9 +143,7 @@ def test_distilgpt2_structured_arms_and_bare_wrapper_positive_control():
     ids = families._token_ids()
 
     def edited_fork(model, args, kwargs):
-        trace = tl.trace(
-            model, args, kwargs, capture=tl.options.CaptureOptions(intervention_ready=True)
-        )
+        trace = tl.trace(model, args, kwargs, capture=tl.options.CaptureOptions(replayable=True))
         target = _first_module_op(trace, ("addmm", "linear", "conv1d"))
         fork = trace.fork()
         _zero_ablate_whole_site(fork, target.label)
@@ -180,7 +180,7 @@ def test_one_component_container_do_lands():
     torch.manual_seed(0)
     model = _OneComponentContainer().eval()
     x = torch.randn(2, 8)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     target = _first_module_op(trace, ("linear",))
     fork = trace.fork()
     _zero_ablate_whole_site(fork, target.label)
@@ -201,9 +201,7 @@ def test_multi_leaf_container_slots_stay_exact():
     from tests.real_model.r0 import families
 
     model, args, kwargs = families.build_structural("container-output")
-    trace = tl.trace(
-        model, args, kwargs, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    trace = tl.trace(model, args, kwargs, capture=tl.options.CaptureOptions(replayable=True))
     target = _first_module_op(trace, ("linear",))
     fork = trace.fork()
     _zero_ablate_whole_site(fork, target.label)
@@ -238,7 +236,7 @@ def test_real_distilgpt2_nested_cache_do_lands():
     model = transformers.AutoModelForCausalLM.from_pretrained("distilgpt2").eval()
     ids = torch.randint(0, 1000, (1, 16), generator=torch.Generator().manual_seed(0))
     trace = tl.trace(
-        model, (), {"input_ids": ids}, capture=tl.options.CaptureOptions(intervention_ready=True)
+        model, (), {"input_ids": ids}, capture=tl.options.CaptureOptions(replayable=True)
     )
     nested = [node for node in _output_nodes(trace) if len(tuple(node.container_path or ())) >= 3]
     assert nested, "real distilgpt2 exposes no nested-cache boundary nodes"
@@ -263,7 +261,7 @@ def test_resnet18_bare_output_negative_control_bit_identical():
 
     model = torchvision.models.resnet18(weights="IMAGENET1K_V1").eval()
     x = torch.randn(4, 3, 224, 224, generator=torch.Generator().manual_seed(1))
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     # grouping rule row 28: each BasicBlock's one ReLU module called twice is one
     # Layer with 2 passes, so layer1.1.conv2 is the 14th Layer, not the 15th.
     target = trace["conv2d_5_14"]

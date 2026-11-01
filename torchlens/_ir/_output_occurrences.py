@@ -40,10 +40,10 @@ def container_path_to_address(path: tuple[Any, ...]) -> str:
     for component in path:
         if hasattr(component, "index"):
             parts.append(str(component.index))
-        elif hasattr(component, "key"):
-            parts.append(str(component.key))
-        elif hasattr(component, "name"):
-            parts.append(str(component.name))
+        elif hasattr(component, "_key"):
+            parts.append(str(component._key))
+        elif hasattr(component, "_name"):
+            parts.append(str(component._name))
         else:
             parts.append(str(component))
     return ".".join(parts)

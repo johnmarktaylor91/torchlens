@@ -213,7 +213,7 @@ def _save_selection(probe: Any, specs: list[_sites.SiteSpec]) -> Any:
     from torchlens import in_module
 
     label_map: dict[str, Any] = {}
-    for op in probe.layer_list:
+    for op in probe._layer_list:
         label_map[str(op.label)] = op
         label_map[str(op.label).rsplit(":", 1)[0]] = op
 

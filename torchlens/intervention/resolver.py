@@ -306,7 +306,7 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
         # A genuine substring pattern keeps its documented fan-out semantics;
         # only the exact bare layer label is the pass-ambiguous address.
         return
-    pass_indices = sorted(int(getattr(site, "pass_index", 1) or 1) for site in matched)
+    pass_indices = sorted(int(getattr(site, "pass_number", 1) or 1) for site in matched)
     raise AmbiguousSiteError(
         multipass_bare_label_message(layer_label, pass_indices),
         code="multipass_bare_label_ambiguous",
@@ -645,7 +645,7 @@ def _guard_episode_step_query(log: Trace, selector: Any) -> None:
             code="episode_step_selector_without_episode",
             remedy="re-capture with episode=, or drop at_step()",
         )
-    if not any(getattr(op, "episode_step", None) is not None for op in log.layer_list):
+    if not any(getattr(op, "episode_step", None) is not None for op in log._layer_list):
         raise SiteResolutionError(
             "at_step(...) needs the per-op episode-step stamps "
             "(Op.episode_step), but no op on this episode product carries "
@@ -677,7 +677,7 @@ def _iter_layer_ops(log: Trace) -> Sequence[Op]:
 
     if not getattr(log, "_tracing_finished", False):
         raise SiteResolutionError("Sites can only be resolved after the forward pass is complete.")
-    return log.layer_list
+    return log._layer_list
 
 
 def _iter_sites(log: Trace, universe: str) -> Sequence[Site]:
@@ -710,9 +710,9 @@ def _iter_sites(log: Trace, universe: str) -> Sequence[Site]:
         return _iter_layer_ops(log)
     if resolved != "node":
         raise SiteResolutionError(f"unknown site universe {universe!r}.")
-    if not getattr(log, "has_backward_pass", False):
+    if not log._autograd_has_backward_pass:
         raise SiteResolutionError("Backward selectors require log_backward() to run first.")
-    return tuple(log.grad_fn_logs.values())
+    return tuple(log._grad_fn_logs.values())
 
 
 def _resolve_unchecked(

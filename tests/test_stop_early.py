@@ -38,7 +38,7 @@ def test_stop_after_wired_on_trace() -> None:
 
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU(), torch.nn.Linear(2, 2))
     log = tl.trace(model, torch.ones(1, 2), capture=CaptureOptions(stop_after="relu"))
-    assert log.halted is True
+    assert log.is_stopped is True
     labels = [op.layer_label for op in log]
     assert any(label.startswith("relu") for label in labels)
     assert not any(label.startswith("linear_2") for label in labels)

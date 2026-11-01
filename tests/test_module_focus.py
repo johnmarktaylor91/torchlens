@@ -40,7 +40,7 @@ def _layer_labels(log: tl.Trace, layer_type: str) -> list[str]:
 
     return [
         layer_log.layer_label
-        for layer_log in log.layer_logs.values()
+        for layer_log in log._layer_logs.values()
         if layer_log.layer_type == layer_type
     ]
 

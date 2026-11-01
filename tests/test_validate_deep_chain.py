@@ -5,7 +5,7 @@ A ``nn.Sequential`` of six or more ``Linear`` + ``ReLU`` pairs failed
 dtype and seed, on the ``equivalence_symmetry`` metadata invariant. Replay and
 perturbation passed; the capture was correct.
 
-The torch capture keys ``Trace.op_equivalence_classes`` by the pre-suffix class
+The torch capture keys ``Trace.graph.op_equivalence_classes`` by the pre-suffix class
 and stamps each op with that class plus its module path joined without a
 separator. The ReLU at module ``"1"`` is stamped ``relu_<hash>_module1`` +
 ``"1"``, which is the registry key of the ReLU at module ``"11"`` (first
@@ -71,8 +71,8 @@ def _relu_at(trace: tl.Trace, module_address: str) -> tl.Op:
 
     return next(
         op
-        for op in trace.layer_list
-        if op.layer_type == "relu" and list(op.modules) == [f"{module_address}:1"]
+        for op in trace._layer_list
+        if op.type == "relu" and list(op.modules) == [f"{module_address}:1"]
     )
 
 
@@ -95,7 +95,7 @@ def test_equivalence_symmetry_resolves_registry_key_without_suffix_collision() -
     try:
         relu_1 = _relu_at(trace, "1")
         relu_11 = _relu_at(trace, "11")
-        foreign_group = trace.op_equivalence_classes.get(relu_1.equivalence_class)
+        foreign_group = trace.graph.op_equivalence_classes.get(relu_1.equivalence_class)
         assert foreign_group is not None and relu_11.label in foreign_group, (
             "precondition: the ReLU at module '1' is stamped with the registry key "
             "of the ReLU at module '11'"
@@ -114,10 +114,12 @@ def test_equivalence_symmetry_still_fires_on_scrubbed_registry_group() -> None:
     try:
         relu_1 = _relu_at(trace, "1")
         own_key = next(
-            key for key, group in trace.op_equivalence_classes.items() if relu_1.label in group
+            key
+            for key, group in trace.graph.op_equivalence_classes.items()
+            if relu_1.label in group
         )
         assert own_key != relu_1.equivalence_class
-        trace.op_equivalence_classes[own_key] = set()
+        trace.graph.op_equivalence_classes[own_key] = set()
         with pytest.raises(MetadataInvariantError, match="equivalence_symmetry"):
             check_metadata_invariants(trace)
     finally:

@@ -67,7 +67,7 @@ class _DoorArgs:
     save_outs_to: str | Path | None | MissingType = MISSING
     keep_outs_in_memory: bool | MissingType = MISSING
     out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING
-    intervention_ready: bool | MissingType = MISSING
+    replayable: bool | MissingType = MISSING
     capture_container_structure: bool | MissingType = MISSING
     hooks: Any | None | MissingType = MISSING
     unwrap_when_done: bool | MissingType = MISSING
@@ -203,7 +203,7 @@ def _run_plan_capture_rows(state: _DoorState) -> dict[str, Any]:
         "grad_storage_path": state.grad_storage_path_value,
         "retain_grads_in_memory": state.retain_grads_in_memory_value,
         "out_sink": streaming_options.on_save,
-        "intervention_ready": opts.intervention_ready,
+        "replayable": opts.replayable,
         "capture_container_structure": opts.capture_container_structure,
         "hooks": opts.hooks,
         "intervention_spec": None,

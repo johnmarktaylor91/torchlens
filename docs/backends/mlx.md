@@ -26,7 +26,7 @@ model = nn.Sequential(nn.Linear(4, 8), nn.GELU(), nn.Linear(8, 2))
 x = mx.array([[0.5, -1.0, 2.0, 0.25], [1.0, 1.0, -1.0, 0.0]])
 
 trace = tl.trace(model, x, backend="mlx")
-print([op.func_name for op in trace.layer_list])  # ['input', 'linear', 'gelu', 'linear']
+print([op.func_name for op in trace])  # ['input', 'linear', 'gelu', 'linear']
 print(trace.output_ops[0].shape)  # (2, 2)
 
 status = tl.backends.spec("mlx").validate_trace(trace)
@@ -65,7 +65,7 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | Forward capture (`tl.trace`) | supported | |
 | Replay validation (`has_validation_replay`; `validate_trace`, status object with per-op reasons) | supported | |
 | Payload materialization (`payload_materialization`; `save` / `load` with array payloads) | supported | |
-| Static-label interventions (`interventions`; `intervene=`, `halt=`) | supported | |
+| Static-label interventions (`can_intervene`; `intervene=`, `halt=`) | supported | |
 | Intermediate derived gradients (`intermediate_derived_grads`; `grad_options=`) | supported | |
 | Backward capture (`backward_capture`; `save_grads`, `backward_ready`) | unsupported | `backward_capture_unsupported` |
 | Fastlog (`fastlog`) | unsupported | `fastlog_unsupported` |

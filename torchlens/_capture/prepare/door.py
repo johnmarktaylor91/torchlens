@@ -436,7 +436,7 @@ def _merge_door_capture_options(args: _DoorArgs) -> CaptureOptions:
         mark_layer_depths=args.mark_layer_depths,
         detach_saved_activations=args.detach_saved_activations,
         recurrence_detection=args.recurrence_detection,
-        intervention_ready=args.intervention_ready,
+        replayable=args.replayable,
         capture_container_structure=args.capture_container_structure,
         capture_output_structure=args.capture_output_structure,
         hooks=args.hooks,
@@ -804,7 +804,7 @@ def _apply_structure_only_entry(state: _DoorState) -> _DoorState:
             lookback_payload_policy=state.args.lookback_payload_policy,
             raise_on_nan_value=capture_options.raise_on_nan,
             track_nonfinite_value=capture_options.track_nonfinite,
-            intervention_ready=capture_options.intervention_ready,
+            replayable=capture_options.replayable,
             should_save_grads=state.should_save_grads,
         ),
     )
@@ -827,11 +827,8 @@ def _resolve_backward_flags(state: _DoorState) -> _DoorState:
         inference_only_conflicts.append("backward_ready")
     if capture_options.is_field_explicit("save_grads") and should_save_grads:
         inference_only_conflicts.append("save_grads")
-    if (
-        capture_options.is_field_explicit("intervention_ready")
-        and capture_options.intervention_ready is True
-    ):
-        inference_only_conflicts.append("intervention_ready")
+    if capture_options.is_field_explicit("replayable") and capture_options.replayable is True:
+        inference_only_conflicts.append("replayable")
     backward_opted_in = (
         capture_options.is_field_explicit("save_grads")
         and should_save_grads
@@ -879,7 +876,7 @@ def _validate_training_and_inference(state: _DoorState) -> _DoorState:
     inference_only_value = effective_inference_only(
         capture_options,
         backward_requested=bool(
-            state.train_mode_value or state.should_save_grads or capture_options.intervention_ready
+            state.train_mode_value or state.should_save_grads or capture_options.replayable
         ),
     )
     return replace(state, inference_only_value=inference_only_value)
@@ -933,9 +930,9 @@ def _lookup_capture_cache(request: CaptureRequest) -> Trace | None:
         os.utime(cache_path, None)
     except OSError:
         pass
-    cached_log.capture_cache_hit = True
-    cached_log.capture_cache_key = cache["key"]
-    cached_log.capture_cache_path = str(cache_path)
+    cached_log._provenance_cache_hit = True
+    cached_log._provenance_cache_key = cache["key"]
+    cached_log._provenance_cache_path = str(cache_path)
     cached_log.batch_render = _door_options(request).batch_render
     return cached_log
 
@@ -1068,13 +1065,13 @@ def _run_chunked_capture(state: _DoorState, request: CaptureRequest) -> Trace:
                 chunk_paths=normalize_chunk_paths(state.chunk_paths_value),
             ),
         )
-    trace.append_history = [initial_record, *trace.append_history]
+    trace._append_history = [initial_record, *trace._append_history]
     return _finish_chunked_trace(state, request, trace)
 
 
 def _finish_chunked_trace(state: _DoorState, request: CaptureRequest, trace: Trace) -> Trace:
     """Stamp the chunked-forward facts and run the shared door epilogue tail."""
-    trace.chunked_forward = True
+    trace._options_chunk_size = True
     trace.last_run = dict(trace.last_run or {})
     trace.last_run["chunk_size"] = state.normalized_chunk_size
     trace.last_run["chunk_paths"] = normalize_chunk_paths(state.chunk_paths_value)

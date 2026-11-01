@@ -42,7 +42,7 @@ def mds_scatter_node_spec(
 
     The returned callback reads ``layer:<layer_label>`` or ``op:<op.label>``
     coordinate tensors from ``trace._annotation_blobs`` and composes a fresh
-    PIL PNG every time a graph is drawn. When ``trace.raw_input`` is a PIL image
+    PIL PNG every time a graph is drawn. When ``trace.input`` is a PIL image
     batch with the same leading count as the coordinates, thumbnails are pasted
     at the normalized MDS positions. Otherwise, the callback renders an explicit
     point-cloud fallback image.
@@ -100,7 +100,7 @@ def mds_scatter_node_spec(
         if key is None or coords is None:
             return None
 
-        images = _matching_pil_image_batch(getattr(trace, "raw_input", None), coords.shape[0])
+        images = _matching_pil_image_batch(getattr(trace, "input", None), coords.shape[0])
         shown_count = min(max_thumbnails, coords.shape[0])
         more_count = max(0, coords.shape[0] - shown_count)
         fallback_reason = (
@@ -225,7 +225,7 @@ def rdm_node_spec(  # noqa: PLR0913 -- draw-time producer: six all-defaulted pre
             shown_matrix = rank_transform_rdm(matrix, output=display)  # type: ignore[arg-type]
         images = None
         if show_axis_thumbnails:
-            images = _matching_pil_image_batch(getattr(trace, "raw_input", None), matrix.shape[0])
+            images = _matching_pil_image_batch(getattr(trace, "input", None), matrix.shape[0])
         labels = None if images is not None else [f"s{index}" for index in range(matrix.shape[0])]
         heatmap = node_plots.heatmap(
             shown_matrix,

@@ -599,7 +599,7 @@ def _normalize_backward_edges(
             for next_id in grad_fn.next_grad_fn_ids:
                 if next_id not in visible_ids:
                     continue
-                head = trace.grad_fn_logs[next_id]
+                head = trace._grad_fn_logs[next_id]
                 tail_name = _backward_dot_node_name(grad_fn)
                 head_name = _backward_dot_node_name(head)
                 edges.append(

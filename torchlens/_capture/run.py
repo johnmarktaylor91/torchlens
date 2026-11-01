@@ -103,7 +103,7 @@ restore bracket (breaking byte-exact RNG neutrality for a seeded host
 process) or, if the draw were bracketed too, made consecutive auto-seeded
 captures reuse one identical seed (silently correlating dropout patterns
 across runs). A private stream preserves both guarantees; the chosen seed is
-always disclosed on ``trace.random_seed``.
+always disclosed on ``trace.options.seed``.
 """
 
 
@@ -169,7 +169,7 @@ def _begin_capture(
         # process) or, if bracketed, made every ``seed=None`` capture reuse
         # the identical seed (correlated dropout across runs).
         seed = _AUTO_SEED_ENTROPY.randint(1, 4294967294)
-    self.random_seed = seed  # type: ignore[assignment]
+    self._options_seed = seed
     # The per-capture code-context cache (and the call-site anchor stored in
     # it) is valid for the stack of ONE capture run: a re-capture on a
     # carried-over Trace state (a live-refresh fork) must never consult a
@@ -181,8 +181,8 @@ def _begin_capture(
         input_args,
         input_kwargs,
     )
-    backend.set_capture_producer_policy(self, self.capture_mode)
-    if getattr(self, "_source_model_ref", None) is None:
+    backend.set_capture_producer_policy(self, self._options_mode)
+    if self._source_model_ref is None:
         # Needed so unlabeled output tensors that are direct registered-buffer
         # reads (``forward`` returning ``self.running_mean`` untouched) can be
         # identified during output extraction. The exhaustive door sets this
@@ -201,7 +201,7 @@ def _resolve_save_selectors(
 ) -> None:
     """Resolve the activation and gradient save selectors to raw op numbers."""
 
-    if self.capture_mode == "predicate":
+    if self._options_mode == "predicate":
         self._layer_nums_to_save = []
         self._grad_op_nums_to_save = []
     else:
@@ -226,9 +226,9 @@ def _resolve_save_selectors(
     if layer_nums_to_save != "all" and self._tracing_finished:
         output_parent_nums = set()
         for output_label in self.output_layers:
-            output_entry = self.layer_dict_all_keys[output_label]
+            output_entry = self._layer_dict_all_keys[output_label]
             for parent_label in output_entry.parents:
-                parent_entry = self.layer_dict_all_keys[parent_label]
+                parent_entry = self._layer_dict_all_keys[parent_label]
                 output_parent_nums.add(parent_entry.raw_index)
         if output_parent_nums:
             combined = set(layer_nums_to_save) | output_parent_nums
@@ -264,7 +264,7 @@ def _claim_slot_and_seed(self: "Trace", run: _RunState, reservation_resume: obje
     The slot is claimed BEFORE any capture-global side effect (label-session
     swap in model prep, compiled-submodule swaps, the recorder's fastlog
     state): a concurrent capture destined for ``ReentrantTraceError`` used to
-    run those mutations first and orphan the admitted winner's session. r8 R54
+    run those mutations first and orphan the admitted winner's session. R54
     moved the claim ahead of the RNG snapshot, reseed and input setup too, so
     a refused loser never reseeds the process-global engines mid-window. A
     same-thread re-entry passes only on the recorder's continuation token
@@ -294,7 +294,7 @@ def _claim_slot_and_seed(self: "Trace", run: _RunState, reservation_resume: obje
             # not leak to the user.
             run.restore_rng()
             raise
-        self.capture_start_time = time.time()
+        self._provenance_start_time = time.time()
         # Settlement state for this pass: the phase marker attributes failures
         # to FORWARD/FINALIZE/POSTPROCESS, and any stale stop-request latch
         # from a prior pass on a carried-over Trace must never classify this one.
@@ -329,7 +329,7 @@ def _fetch_inputs(self: "Trace", run: _RunState) -> None:
     self._output_attribution_input_tensors = run.input_tensors
     # RNG state snapshot for deterministic explicit refreshes and legacy
     # two-pass consistency (#58).
-    if self.capture_mode == "exhaustive":
+    if self._options_mode == "exhaustive":
         self._pre_forward_rng_states = run.backend.snapshot_rng(self)
 
 
@@ -348,16 +348,16 @@ def _attach_sessions(
     if not isinstance(getattr(self, "_stop_directive", None), StopDirective):
         self._stop_directive = StopDirective(
             halt_options=getattr(self, "_predicate_save_options", None),
-            raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
+            raise_on_nan=bool(self._options_on_nonfinite),
             forward_error_mode=getattr(
                 getattr(self, "_predicate_save_options", None),
                 "on_forward_error",
                 "raise",
             ),
-            inference_only=bool(getattr(self, "inference_only", False)),
+            inference_only=bool(self._options_inference_only),
         )
     self._capture_config = InternalCaptureConfig(
-        capture_mode=str(self.capture_mode),
+        capture_mode=str(self._options_mode),
         layers_to_save=layers_to_save,
         grad_layers_to_save=grad_layers_to_save,
         random_seed=run.seed,
@@ -415,9 +415,9 @@ def _instrument_model(self: "Trace", run: _RunState) -> None:
     run.instrumentation = contextlib.ExitStack()
     with _timed_phase(self, "ctx_build:model_prepare"):
         run.compiled_prep = _enter_instrumentation(self, run, run.instrumentation)
-    self.setup_duration = Duration(time.time() - self.capture_start_time)
-    _vprint(self, f"Model prepared ({self.setup_duration:.2f s})")
-    if getattr(self, "verbose", False):
+    self._provenance_setup_duration = Duration(time.time() - self._provenance_start_time)
+    _vprint(self, f"Model prepared ({self._provenance_setup_duration:.2f s})")
+    if self._options_verbose:
         devices = set()
         for t in run.input_tensors or ():
             if hasattr(t, "device"):
@@ -429,7 +429,7 @@ def _instrument_model(self: "Trace", run: _RunState) -> None:
 def _snapshot_runnable_state(self: "Trace", run: _RunState) -> None:
     """Record the bound state a runnable descriptor needs, before the forward."""
 
-    if bool(getattr(self, "intervention_ready", False)):
+    if bool(getattr(self, "is_replayable", False)):
         from .._runnable_state import (
             snapshot_capture_state,
             snapshot_capture_state_signatures,
@@ -475,7 +475,7 @@ def _log_inputs(self: "Trace", run: _RunState) -> None:
     _record_runnable_input_tensor_sites(self, input_args, input_kwargs)
     _record_runnable_input_structure(self, input_args, input_kwargs)
     _record_runnable_module_training_modes(self, run.model)
-    if bool(getattr(self, "intervention_ready", False)):
+    if bool(getattr(self, "is_replayable", False)):
         # r35 decision E: capture the ambient backend execution context the
         # forward is about to run under (defaults, matmul precision,
         # determinism, TF32/cuDNN flags, SDP toggles) so the sparse runnable
@@ -507,7 +507,7 @@ def _run_exhaustive_forward(self: "Trace", run: _RunState) -> Any:
     non-global channels (RNG instances, SystemRandom, os entropy, clocks, the
     default_rng factory); any touch is permanently unreplayable, and monitor
     uncertainty downgrades completeness, never reads as no-consumption. The
-    monitor is armed ONLY for runnable-capable captures (``intervention_ready``
+    monitor is armed ONLY for runnable-capable captures (``replayable``
     is the exact predicate); a disarmed capture stamps ``monitor_uncertain``
     fail-closed. The FAIL-CLOSED verdict is stamped BEFORE the forward: the
     real verdict lands several statements later, so anything raising in
@@ -522,7 +522,7 @@ def _run_exhaustive_forward(self: "Trace", run: _RunState) -> Any:
                 self._runnable.rng_monitor_uncertain = True
                 self._runnable.rng_monitor_uncertain_detail = ("monitor_verdict_not_stamped",)
                 _host_rng_before = snapshot_host_rng()
-                if bool(getattr(self, "intervention_ready", False)):
+                if bool(getattr(self, "is_replayable", False)):
                     from .._utils.rng import host_nondeterminism_monitor
 
                     with host_nondeterminism_monitor(cast(nn.Module, run.model)) as _rng_channels:
@@ -539,11 +539,11 @@ def _run_exhaustive_forward(self: "Trace", run: _RunState) -> Any:
 def _run_forward(self: "Trace", run: _RunState) -> Any:
     """Log the inputs and run the forward pass under ``active_logging``."""
 
-    _vprint(self, f"Running {self.capture_mode} forward pass...")
+    _vprint(self, f"Running {self._options_mode} forward pass...")
     with run.backend.active_logging(self):
         _warn_unlogged_dynamo_region(self, run.compiled_prep)
         _log_inputs(self, run)
-        if self.capture_mode == "predicate":
+        if self._options_mode == "predicate":
             with _structure_only_forward_boundary(self):
                 return _run_predicate_forward_with_root_frame(
                     self,

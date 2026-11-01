@@ -55,7 +55,7 @@ def _validate_graph_structure(trace: Trace) -> None:
     known = _known_relation_targets(ops)
     for op in ops:
         label = str(getattr(op, "label", "<unknown>"))
-        pass_index = getattr(op, "pass_index", None)
+        pass_index = getattr(op, "pass_number", None)
         num_passes = getattr(op, "num_passes", None)
         if not (
             _is_int(pass_index)
@@ -66,7 +66,7 @@ def _validate_graph_structure(trace: Trace) -> None:
             _graph_invalid(
                 f"op {label!r} carries pass_index={pass_index!r} / num_passes={num_passes!r}; "
                 "pass stamps are 1-based ints with 1 <= pass_index <= num_passes",
-                "Op.pass_index",
+                "Op.pass_number",
                 "pass_stamp_range",
             )
         for relation in ("parents", "children"):
@@ -475,8 +475,8 @@ def _validate_executed_flops_records(trace: Trace) -> None:
 
     from ..report._backward_attribution import executed_flops_record_problem
 
-    for record in (getattr(trace, "backward_pass_logs", None) or {}).values():
-        value = getattr(record, "executed_flops_record", None)
+    for record in (trace._backward_pass_logs or {}).values():
+        value = getattr(record, "_executed_flops_record", None)
         if value is None:
             continue
         problem = executed_flops_record_problem(value)
@@ -485,7 +485,7 @@ def _validate_executed_flops_records(trace: Trace) -> None:
             _refuse(
                 f"backward pass {getattr(record, 'pass_index', '?')}: {message}",
                 code="artifact_executed_flops_record_invalid",
-                field="BackwardPass.executed_flops_record",
+                field="BackwardPass._executed_flops_record",
                 reason=reason,
                 remedy=(
                     "re-save the artifact from its source capture; do not hand-edit "

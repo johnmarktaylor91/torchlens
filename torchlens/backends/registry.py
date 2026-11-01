@@ -68,7 +68,7 @@ class BackendCapabilities:
         Whether the backend can perform replay validation.
     fastlog:
         Whether sparse ``tl.record`` capture is supported.
-    interventions:
+    can_intervene:
         Whether live intervention capture is supported.
     rng_replay:
         Whether operation-level RNG replay is supported.
@@ -105,7 +105,7 @@ class BackendCapabilities:
     backward_capture: bool
     has_validation_replay: bool
     fastlog: bool
-    interventions: bool
+    can_intervene: bool
     rng_replay: bool
     payload_materialization: bool
     has_streaming: bool
@@ -147,7 +147,7 @@ class BackendSpec:
     Parameters
     ----------
     name:
-        Backend identifier used by ``backend=`` and ``Trace.backend``.
+        Backend identifier used by ``backend=`` and ``Trace.provenance.backend``.
     can_handle:
         Side-effect-light detector used only for ``backend=None`` or mismatch checks.
     capture_trace:

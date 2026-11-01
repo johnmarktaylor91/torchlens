@@ -44,7 +44,7 @@ def _code(exc: BaseException) -> str:
 
 
 def _kinds(trace: tl.Trace) -> tuple[str, ...]:
-    return tuple(str(op.func_name) for op in trace.layer_list)
+    return tuple(str(op.func_name) for op in trace._layer_list)
 
 
 def _validate(trace: tl.Trace) -> ValidationStatus:
@@ -63,7 +63,7 @@ def test_roster_row_inventory_graph_and_shapes(row) -> None:
     assert _kinds(trace) == row.expected_op_kinds
     assert graph_integrity_problems(trace) == ()
     assert shape_metadata_problems(trace, np.asarray) == ()
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.out is not None:
             assert tuple(op.shape) == np.asarray(op.out).shape, op.label
     assert silent_gap_reason(trace) is None
@@ -83,7 +83,7 @@ def test_roster_row_intermediates_match_numpy(row) -> None:
     expected = row.expected_intermediates()
     for kind, want in expected.items():
         wants = want if isinstance(want, list) else [want]
-        got = [np.asarray(op.out) for op in trace.layer_list if op.func_name == kind]
+        got = [np.asarray(op.out) for op in trace._layer_list if op.func_name == kind]
         assert len(got) == len(wants), f"{kind}: {len(got)} captured, {len(wants)} expected"
         for captured, reference in zip(got, wants, strict=True):
             np.testing.assert_allclose(captured, np.asarray(reference), rtol=1e-5, atol=1e-5)
@@ -220,13 +220,13 @@ def test_closure_constant_is_a_constant_op_with_payload_and_parent_edge() -> Non
 
     weight = mx.array(W44)
     trace = tl.trace(lambda v: mx.matmul(v, weight), mx.array(X24), backend="mlx")
-    constants = [op for op in trace.layer_list if op.func_name == "constant"]
+    constants = [op for op in trace._layer_list if op.func_name == "constant"]
     assert len(constants) == 1
     constant = constants[0]
     np.testing.assert_array_equal(np.asarray(constant.out), W44)
     assert not tuple(constant.parents or ())
     assert constant not in list(trace.input_ops)
-    matmul = next(op for op in trace.layer_list if op.func_name == "matmul")
+    matmul = next(op for op in trace._layer_list if op.func_name == "matmul")
     assert constant.layer_label in set(matmul.parents)
     status = _validate(trace)
     assert status.state == "passed", status.message
@@ -254,7 +254,7 @@ def test_literal_producer_keeps_zero_parents_and_a_payload() -> None:
     """``mx.ones`` inside the forward is an op with no parents and a saved payload."""
 
     trace = tl.trace(lambda v: v @ mx.ones((4, 1)), mx.array(X24), backend="mlx")
-    ones = next(op for op in trace.layer_list if op.func_name == "ones")
+    ones = next(op for op in trace._layer_list if op.func_name == "ones")
     assert not tuple(ones.parents or ())
     np.testing.assert_array_equal(np.asarray(ones.out), np.ones((4, 1), np.float32))
     assert "constant" not in _kinds(trace)
@@ -284,7 +284,7 @@ def test_tampered_constant_payload_fails_and_names_the_consumer() -> None:
 
     weight = mx.array(W44)
     trace = tl.trace(lambda v: mx.matmul(v, weight), mx.array(X24), backend="mlx")
-    constant = next(op for op in trace.layer_list if op.func_name == "constant")
+    constant = next(op for op in trace._layer_list if op.func_name == "constant")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         constant.out = constant.out + 1.0
@@ -301,7 +301,7 @@ def test_constant_without_payload_is_a_failed_check_not_an_exemption() -> None:
 
     weight = mx.array(W44)
     trace = tl.trace(lambda v: mx.matmul(v, weight), mx.array(X24), backend="mlx")
-    constant = next(op for op in trace.layer_list if op.func_name == "constant")
+    constant = next(op for op in trace._layer_list if op.func_name == "constant")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         constant.out = None
@@ -320,8 +320,8 @@ def test_unwrapped_output_flags_with_the_registry_reason() -> None:
 
     with pytest.warns(UserWarning, match="not produced by a wrapped operation"):
         trace = tl.trace(_unwrapped, mx.array(X24), backend="mlx")
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "unwrapped_op_in_capture"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "unwrapped_op_in_capture"
     assert "unwrapped_op_in_capture" in REFUSAL_CODES
     assert silent_gap_reason(trace) == "unwrapped_op_in_capture"
 
@@ -331,8 +331,8 @@ def test_unwrapped_intermediate_flags_instead_of_becoming_a_constant() -> None:
 
     with pytest.warns(UserWarning, match="not produced by a wrapped operation"):
         trace = tl.trace(lambda v: mx.add(mx.linalg.norm(v), 1.0), mx.array(X24), backend="mlx")
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "unwrapped_op_in_capture"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "unwrapped_op_in_capture"
     assert "constant" not in _kinds(trace)
 
 

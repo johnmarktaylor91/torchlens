@@ -81,8 +81,8 @@ class _NumpyBackend:
         """An empty function-root trace shell with a live event journal."""
 
         trace = Trace(model_class_name="FakeFunction")
-        trace.backend = "fake"  # type: ignore[assignment]
-        trace.root_entry_point = "function_call:fake_forward"
+        trace._provenance_backend = "fake"  # type: ignore[assignment]
+        trace._provenance_root_entry_point = "function_call:fake_forward"
         trace.capture_events = CaptureEvents()
         return trace
 
@@ -147,7 +147,7 @@ class _NumpyBackend:
         events = trace.capture_events
         reserved = events.reserve_label(func_name)
         parents = tuple(
-            ParentEdge(parent_label_raw=self.labels[id(arg)], arg_position=index, edge_use="arg")
+            ParentEdge(parent_label_raw=self.labels[id(arg)], arg_position=index, _edge_use="arg")
             for index, arg in enumerate(args)
             if self.is_tensor(arg) and id(arg) in self.labels
         )
@@ -277,7 +277,7 @@ class _NumpyBackend:
                 "kwargs": {},
             },
             _edge_uses=tuple(
-                (edge.parent_label_raw, edge.arg_position, edge.edge_use) for edge in parents
+                (edge.parent_label_raw, edge.arg_position, edge._edge_use) for edge in parents
             ),
             params=(),
             parent_params=(),
@@ -319,14 +319,14 @@ class _NumpyBackend:
             is_scalar_bool=None,
             bool_value=None,
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
             record_context=RecordContext(
                 kind="op",
                 label=reserved.label,
                 raw_label=reserved.label_raw,
-                pass_index=1,
+                pass_number=1,
                 event_index=reserved.raw_index,
                 step_index=None,
                 layer_type=reserved.layer_type,
@@ -335,7 +335,7 @@ class _NumpyBackend:
                 func_name=func_name,
                 address=None,
                 module_type=None,
-                module_pass_index=None,
+                module_pass_number=None,
                 module_stack=(),
                 recent_events=(),
                 recent_ops=(),
@@ -385,7 +385,7 @@ def _capture_planted_forward(*, closure_shape: tuple[int, ...] = (2, 3)) -> tupl
 def _op_by_raw(trace: Trace, label_raw: str) -> Any:
     """The finalized op whose raw label is ``label_raw``."""
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if getattr(op, "_label_raw", None) == label_raw or op.label == label_raw:
             return op
     raise AssertionError(f"no op with raw label {label_raw!r}: {list(trace.layer_labels)}")
@@ -466,7 +466,7 @@ def test_a_lost_parent_edge_is_never_a_constant() -> None:
     # record the miss the way the capture records do.
     backend.emit_op(trace, "add", (stray,), out, unattributed=("arg_0",))
     backend.finish(trace, out)
-    gap = next(op for op in trace.layer_list if op.func_name == "add")
+    gap = next(op for op in trace._layer_list if op.func_name == "add")
     assert tuple(gap.parents) == ()
     assert not is_literal_producer_op(gap)
     assert not is_constant_op(gap)
@@ -490,7 +490,7 @@ def test_rng_producers_are_not_constants(func_name: str) -> None:
     out = x + noise
     backend.emit_op(trace, "add", (x, noise), out)
     backend.finish(trace, out)
-    rng_op = next(op for op in trace.layer_list if op.func_name == func_name)
+    rng_op = next(op for op in trace._layer_list if op.func_name == func_name)
     assert tuple(rng_op.parents) == ()
     assert not is_constant_op(rng_op)
 
@@ -669,16 +669,16 @@ def test_torch_already_satisfies_the_rule_structure() -> None:
     """Torch records closure tensors as source ops and ``torch.ones`` as a literal producer."""
 
     trace = tl.trace(_ClosureModel(), torch.arange(3.0))
-    ones_ops = [op for op in trace.layer_list if op.func_name == "ones"]
-    assert ones_ops, [op.func_name for op in trace.layer_list]
+    ones_ops = [op for op in trace._layer_list if op.func_name == "ones"]
+    assert ones_ops, [op.func_name for op in trace._layer_list]
     for op in ones_ops:
         assert tuple(op.parents) == ()
         assert is_literal_producer_op(op) and is_constant_op(op)
     # Torch records the operator form (``__mul__``) for ``x * scale``.
-    mul_ops = [op for op in trace.layer_list if op.func_name in {"mul", "__mul__"}]
-    assert mul_ops, [op.func_name for op in trace.layer_list]
+    mul_ops = [op for op in trace._layer_list if op.func_name in {"mul", "__mul__"}]
+    assert mul_ops, [op.func_name for op in trace._layer_list]
     mul = mul_ops[0]
-    by_layer_label = {op.layer_label: op for op in trace.layer_list}
+    by_layer_label = {op.layer_label: op for op in trace._layer_list}
     parents = [by_layer_label[label] for label in mul.parents]
     assert len(parents) == 2, mul.parents
     # The closure tensor arrives as a parentless buffer source op (torch's existing

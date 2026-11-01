@@ -580,7 +580,7 @@ def _trace(model: nn.Module) -> tl.Trace:
 def _first_layer(trace: tl.Trace, layer_type: str) -> tl.Layer:
     """Return the first rendered layer of a given type."""
 
-    for layer in trace.layer_logs.values():
+    for layer in trace._layer_logs.values():
         if layer.layer_type == layer_type:
             return layer
     raise AssertionError(f"No layer of type {layer_type!r}.")

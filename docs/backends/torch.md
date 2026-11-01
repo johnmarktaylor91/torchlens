@@ -22,7 +22,7 @@ model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2)).eval()
 x = torch.randn(2, 4)
 
 trace = tl.trace(model, x)
-print([op.func_name for op in trace.layer_list])
+print([op.func_name for op in trace])
 assert tl.validate(model, x, scope="forward")
 
 protocol = get_backend_spec("torch").protocol()
@@ -43,7 +43,7 @@ object, never a bare boolean.
 |---|---|---|
 | `backward_capture` | supported | True backward capture through autograd hooks. |
 | `fastlog` | supported | Sparse recording. |
-| `interventions` | supported | Live `intervene=` and `halt=`. |
+| `can_intervene` | supported | Live `intervene=` and `halt=`. |
 | `rng_replay` | supported | Replay restores the captured RNG state. |
 | `has_streaming` | supported | Streaming save. |
 | `structure_only_capture` | supported | `structure_only=True`. |

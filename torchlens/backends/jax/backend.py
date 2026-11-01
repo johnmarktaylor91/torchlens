@@ -277,14 +277,14 @@ _UNSUPPORTED_CONTAINER_SPEC: Final = object()
 def _stamp_jaxpr_results(trace: Trace, closed_jaxpr: Any, result: Any, static_argnums: Any) -> None:
     """Record the interpreted jaxpr and its captures on the trace."""
 
-    trace.jax_closed_jaxpr = closed_jaxpr
+    trace._provenance_jax_closed_jaxpr = closed_jaxpr
     trace.jax_equation_captures = result.equations
     trace.jax_ordered_captures = result.captures
     trace.jax_region_captures = tuple(
         capture for capture in result.captures if isinstance(capture, JaxRegionCapture)
     )
-    trace.jax_inlined_call_primitives = result.inlined_call_primitives
-    trace.jax_static_argnums = static_argnums
+    trace._provenance_jax_inlined_call_primitives = result.inlined_call_primitives
+    trace._options_jax_static_argnums = static_argnums
 
 
 def _jax_pre_replay_failure_status(
@@ -350,7 +350,7 @@ def _jax_ops_by_label(trace: Trace) -> dict[str, Any]:
     # single-pass parent reference. Index the bare label too (safe: a
     # single-pass op's bare label is unambiguous).
     ops_by_label: dict[str, Any] = {}
-    for op in getattr(trace, "layer_list", []):
+    for op in trace._layer_list:
         labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
         if getattr(op, "num_passes", 1) == 1:
             labels.append(getattr(op, "layer_label", None))
@@ -548,7 +548,7 @@ class JAXBackend:
         grad_options
             Optional JAX derived-gradient configuration. This runs a second
             pure functional ``jax.value_and_grad`` pass and populates
-            ``trace.derived_grads``.
+            ``trace.autograd.derived_grads``.
         capture
             Grouped ``CaptureOptions``. The sole post-sprint spelling for the
             flat capture kwargs above; an explicit field here is merged in
@@ -713,7 +713,7 @@ class JAXBackend:
             save_transformed_output=cast(str | bool, save_raw_output),
         )
         trace.capture_events = CaptureEvents()
-        trace.capture_start_time = time.time()
+        trace._provenance_start_time = time.time()
         if use_pytree_module:
             if module_tree is None:
                 raise AssertionError("pytree_module mode requires JAX module metadata.")
@@ -746,8 +746,8 @@ class JAXBackend:
         )
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
-        trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        trace.raw_output = output_transform(output) if callable(output_transform) else None
+        trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+        trace.transformed_output = output_transform(output) if callable(output_transform) else None
         self._emit_arg_sources(trace, args)
         self._emit_const_sources(trace, closure_consts)
         self._emit_equations(trace, result)
@@ -991,7 +991,7 @@ class JAXBackend:
         # single-pass parent reference. Index the bare label too (safe: a
         # single-pass op's bare label is unambiguous).
         ops_by_label: dict[str, Any] = {}
-        for op in getattr(trace, "layer_list", []):
+        for op in trace._layer_list:
             labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
             if getattr(op, "num_passes", 1) == 1:
                 labels.append(getattr(op, "layer_label", None))
@@ -1204,7 +1204,7 @@ class JAXBackend:
                 )
                 continue
             data_parents = tuple(
-                ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
+                ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
                 for index, value in enumerate(equation.input_values)
                 if (label := label_by_value_id.get(id(value))) is not None
             )
@@ -1212,7 +1212,7 @@ class JAXBackend:
                 ParentEdge(
                     parent_label_raw=label_by_capture_index[control_index],
                     arg_position=f"control:{control_index}",
-                    edge_use="control",
+                    _edge_use="control",
                 )
                 for control_index in equation.control_capture_indices
                 if control_index in label_by_capture_index
@@ -1291,7 +1291,7 @@ class JAXBackend:
         if capture.kind == "region":
             trace.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
             data_parents = tuple(
-                ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
+                ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
                 for index, value in enumerate(capture.input_values)
                 if (label := label_by_value_id.get(id(value))) is not None
             )
@@ -1339,7 +1339,7 @@ class JAXBackend:
                 ParentEdge(
                     parent_label_raw=boundary_label,
                     arg_position=f"region_output:{capture.output_index}",
-                    edge_use="control",
+                    _edge_use="control",
                 ),
             )
             output = capture.output_values[0]
@@ -1506,7 +1506,7 @@ class JAXBackend:
             parents=parents,
             parent_arg_positions=parent_arg_positions,
             _edge_uses=tuple(
-                (edge.parent_label_raw, edge.arg_position, edge.edge_use) for edge in parents
+                (edge.parent_label_raw, edge.arg_position, edge._edge_use) for edge in parents
             ),
             params=(),
             parent_params=(),
@@ -1546,7 +1546,7 @@ class JAXBackend:
             is_scalar_bool=None,
             bool_value=None,
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
             record_context=self._record_context(reserved, output, func_name),
@@ -1609,7 +1609,7 @@ class JAXBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,
@@ -1618,7 +1618,7 @@ class JAXBackend:
             func_name=func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=(),
             recent_events=(),
             recent_ops=(),
@@ -1744,13 +1744,13 @@ class JAXBackend:
             param._param_ref = None
             param.trace = trace
             param_logs[address] = param
-        trace.param_logs = ParamAccessor(param_logs)
-        trace.num_param_tensors = len(param_logs)
+        trace._param_logs = ParamAccessor(param_logs)
+        trace._num_param_tensors = len(param_logs)
         trace.num_params = sum(param.num_params for param in param_logs.values())
         trace.num_params_trainable = trace.num_params
         trace.num_params_frozen = 0
-        trace.num_layers_with_params = 0
-        trace.param_source = "pytree-derived" if param_logs else "none"
+        trace._num_layers_with_params = 0
+        trace._provenance_param_source = "pytree-derived" if param_logs else "none"
 
     def _attach_pytree_params(
         self,
@@ -1776,15 +1776,15 @@ class JAXBackend:
             param_logs = equinox_param_logs(tree, trace)
         else:
             param_logs = nnx_param_logs(tree, trace)
-        trace.param_logs = ParamAccessor(param_logs)
-        trace.num_param_tensors = len(param_logs)
+        trace._param_logs = ParamAccessor(param_logs)
+        trace._num_param_tensors = len(param_logs)
         trace.num_params = sum(param.num_params for param in param_logs.values())
         trace.num_params_trainable = sum(
             param.num_params for param in param_logs.values() if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.num_layers_with_params = 0
-        trace.param_source = "pytree-derived" if param_logs else "none"
+        trace._num_layers_with_params = 0
+        trace._provenance_param_source = "pytree-derived" if param_logs else "none"
 
     def _attach_derived_grads(
         self,
@@ -1825,7 +1825,7 @@ class JAXBackend:
         Returns
         -------
         None
-            ``trace.derived_grads`` and unambiguous param gradient slots are populated.
+            ``trace.autograd.derived_grads`` and unambiguous param gradient slots are populated.
         """
 
         import jax
@@ -1895,7 +1895,7 @@ class JAXBackend:
         if not jax.tree.all(jax.tree.map(_values_close, aux_output, captured_output)):
             raise ValueError(
                 "JAX derived gradient run raw output diverged from captured raw output; "
-                "refusing to expose trace.derived_grads."
+                "refusing to expose trace.autograd.derived_grads."
             )
         final_closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
         reject_undeclared_consts(final_closed_jaxpr)
@@ -1924,7 +1924,7 @@ class JAXBackend:
                     },
                 )
             )
-        trace.derived_grads = DerivedGradAccessor(records)
+        trace._autograd_derived_grads = DerivedGradAccessor(records)
         mirror_param_derived_grads(trace, records)
         if grad_options.intermediate_grads:
             try:
@@ -2159,9 +2159,9 @@ class JAXBackend:
         """
 
         assignments = self._jax_recurrence_assignments(trace)
-        trace.grouping_policy = build_grouping_policy_stamp(
-            ran_recurrence_grouping=bool(trace.recurrence_detection),
-            requested=getattr(trace, "grouping", "structural"),
+        trace._options_grouping_policy = build_grouping_policy_stamp(
+            ran_recurrence_grouping=bool(trace._options_recurrence_detection),
+            requested=trace._options_grouping,
         )
         raw_labels = tuple(trace._raw_graph_ws.raw_layer_labels_list)
         raw_to_final_op_label: dict[str, str] = {}
@@ -2175,13 +2175,13 @@ class JAXBackend:
         # this sibling mapping feeds ``_relabel_jax_graph_edges`` instead.
         raw_to_final_layer_label: dict[str, str] = {}
 
-        trace.layer_list = []
-        trace.layer_dict_main_keys.clear()
-        trace.layer_dict_all_keys.clear()
-        trace.layer_logs.clear()
+        trace._layer_list = []
+        trace._layer_dict_main_keys.clear()
+        trace._layer_dict_all_keys.clear()
+        trace._layer_logs.clear()
         trace.op_labels = []
         trace.layer_labels = []
-        trace.layer_num_calls.clear()
+        trace._layer_num_calls.clear()
         trace._lookup_keys_to_layer_num_dict.clear()
         trace._layer_num_to_lookup_keys_dict.clear()
 
@@ -2202,10 +2202,10 @@ class JAXBackend:
             op_log._label_raw = label
             op_log._layer_label_raw = assignment.layer_label
             op_log.label = pass_label
-            op_log.label_short = pass_label
+            op_log.short_label = pass_label
             op_log.layer_label = layer_label
-            op_log.layer_label_short = layer_label
-            op_log.pass_index = assignment.pass_index
+            op_log.short_layer_label = layer_label
+            op_log.pass_number = assignment.pass_index
             op_log.num_passes = assignment.num_passes
             op_log.equivalence_class = assignment.equivalence_key
             op_log.site_key = assignment.site_key
@@ -2250,28 +2250,28 @@ class JAXBackend:
             # ``Module.layer_labels``, tripping the ``module_attribution``
             # metadata invariant.
             op_log.lookup_keys = [label, op_log.label, op_log.layer_label]
-            trace.layer_list.append(op_log)
-            trace.layer_dict_main_keys[op_log.label] = op_log
+            trace._layer_list.append(op_log)
+            trace._layer_dict_main_keys[op_log.label] = op_log
             for lookup_key in op_log.lookup_keys:
-                if lookup_key not in trace.layer_dict_all_keys:
-                    trace.layer_dict_all_keys[lookup_key] = op_log
+                if lookup_key not in trace._layer_dict_all_keys:
+                    trace._layer_dict_all_keys[lookup_key] = op_log
                     trace._lookup_keys_to_layer_num_dict[lookup_key] = raw_index
                 trace._layer_num_to_lookup_keys_dict[raw_index].append(lookup_key)
             if op_log.num_passes > 1:
                 # Incidental raw-index artifact, not a contract: every pass
                 # overwrites the bare layer label (last wins, torch parity).
-                trace.layer_dict_all_keys[op_log.layer_label] = op_log
+                trace._layer_dict_all_keys[op_log.layer_label] = op_log
                 trace._lookup_keys_to_layer_num_dict[op_log.layer_label] = raw_index
             trace.op_labels.append(op_log.label)
             if op_log.layer_label not in trace.layer_labels:
                 trace.layer_labels.append(op_log.layer_label)
-            trace.layer_num_calls[op_log.layer_label] = op_log.num_passes
-            layer_log = trace.layer_logs.get(op_log.layer_label)
+            trace._layer_num_calls[op_log.layer_label] = op_log.num_passes
+            layer_log = trace._layer_logs.get(op_log.layer_label)
             if layer_log is None:
                 layer_log = Layer(op_log)
-                trace.layer_logs[op_log.layer_label] = layer_log
+                trace._layer_logs[op_log.layer_label] = layer_log
             layer_log.num_passes = op_log.num_passes
-            layer_log.ops[op_log.pass_index] = op_log
+            layer_log.ops[op_log.pass_number] = op_log
             layer_log.call_labels.append(op_log.label)
             layer_log.dtype_ref = op_log.dtype_ref
             layer_log.device_ref = op_log.device_ref
@@ -2281,11 +2281,11 @@ class JAXBackend:
         if module_tree is not None:
             self._attach_pytree_op_params(trace, module_tree, captures)
 
-        trace.op_equivalence_classes.clear()
-        trace.op_equivalence_classes.update(equivalent_labels_by_key)
-        trace.num_ops = sum(
+        trace._graph_op_equivalence_classes.clear()
+        trace._graph_op_equivalence_classes.update(equivalent_labels_by_key)
+        trace._num_ops = sum(
             1
-            for op_log in trace.layer_list
+            for op_log in trace._layer_list
             if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
         )
         if module_tree is None:
@@ -2296,7 +2296,7 @@ class JAXBackend:
             # takes the param as an operand). Matching on it directly (as
             # the old code did) attaches params to the input-echo op
             # instead of the op that genuinely uses them, so
-            # ``has_params``/``used_by_ops``/``num_layers_with_params``
+            # ``has_params``/``used_by_ops``/``_num_layers_with_params``
             # never reflect real param usage. Mirror
             # ``_attach_pytree_op_params`` above (and the equivalent
             # ``torch``/``mlx``/``paddle`` param attribution): resolve each
@@ -2311,22 +2311,22 @@ class JAXBackend:
             # ``_relabel_jax_graph_edges``), and a source op is always
             # single-pass, so both keys point at the one param.
             param_log_by_source_label: dict[str, Param] = {}
-            for op_log in trace.layer_list:
+            for op_log in trace._layer_list:
                 path = getattr(op_log, "annotations", {}).get("jax_container_path")
                 if not isinstance(path, str) or not path.startswith("0."):
                     continue
                 param_address = path.removeprefix("0.")
-                if param_address not in trace.param_logs:
+                if param_address not in trace._param_logs:
                     continue
-                param_log_by_source_label[op_log.label] = trace.param_logs[param_address]
+                param_log_by_source_label[op_log.label] = trace._param_logs[param_address]
                 if op_log.num_passes == 1:
-                    param_log_by_source_label[op_log.layer_label] = trace.param_logs[param_address]
+                    param_log_by_source_label[op_log.layer_label] = trace._param_logs[param_address]
 
             if param_log_by_source_label:
                 from .._finalize import _attach_param_usage
 
                 usage_membership: dict[int, tuple[set[str], set[str], set[str]]] = {}
-                for op_log in trace.layer_list:
+                for op_log in trace._layer_list:
                     seen_barcodes: set[str] = set()
                     consumed_params: list[Param] = []
                     for parent_label in op_log.parents:
@@ -2363,8 +2363,8 @@ class JAXBackend:
             # unused params and fails ``check_metadata_invariants``'
             # ``trace_self_consistency`` check (which independently
             # recomputes the same dedup-by-layer sum from ``layer_list``).
-            trace.num_layers_with_params = len(
-                {op.layer_label for op in trace.layer_list if op.has_params}
+            trace._num_layers_with_params = len(
+                {op.layer_label for op in trace._layer_list if op.has_params}
             )
             # Parameter-identity basis, not a per-layer-label dedup sum: a
             # param reused across more than one op/layer (a tied weight, or a
@@ -2374,10 +2374,10 @@ class JAXBackend:
             # ``trace_self_consistency`` invariant's
             # ``num_param_tensors != len(param_logs)`` check (same fix as
             # ``backends/_finalize.py``'s ``_update_param_totals_from_layers``).
-            trace.num_param_tensors = len(trace.param_logs)
-            trace.num_params = sum(param.num_params for param in trace.param_logs)
+            trace._num_param_tensors = len(trace._param_logs)
+            trace.num_params = sum(param.num_params for param in trace._param_logs)
             trace.num_params_trainable = sum(
-                param.num_params for param in trace.param_logs if param.is_trainable
+                param.num_params for param in trace._param_logs if param.is_trainable
             )
             trace.num_params_frozen = trace.num_params - trace.num_params_trainable
 
@@ -2415,14 +2415,14 @@ class JAXBackend:
         trace.input_layers = [_final_label(label) for label in trace.input_layers]
         trace._layers_logged = True
         trace._layers_saved = True
-        trace.has_backward_pass = False
-        trace.capture_end_time = time.time()
-        trace.backend = cast(BackendName, self.name)
+        trace._autograd_has_backward_pass = False
+        trace._provenance_end_time = time.time()
+        trace._provenance_backend = cast(BackendName, self.name)
         if module_tree is None:
-            trace.module_identity_mode = "function_root"
+            trace._options_module_identity_mode = "function_root"
             attach_function_root_module(trace)
         else:
-            trace.module_identity_mode = "pytree_module"
+            trace._options_module_identity_mode = "pytree_module"
             self._attach_pytree_module_logs(trace, module_tree)
         trace._tracing_finished = True
         compact_op_metadata(trace)
@@ -2432,8 +2432,8 @@ class JAXBackend:
         # Layer objects, not the ops the flood must mutate); running it after
         # the finished flag flips is still required so relabeled child edges
         # are present on the ops the index collects.
-        trace.mark_layer_depths = bool(getattr(trace, "mark_layer_depths", False))
-        if trace.mark_layer_depths:
+        trace._options_mark_layer_depths = bool(trace._options_mark_layer_depths)
+        if trace._options_mark_layer_depths:
             from .._finalize import compute_preview_input_output_distances
 
             compute_preview_input_output_distances(trace)
@@ -2478,7 +2478,7 @@ class JAXBackend:
                     param_addresses.append(address)
             if not param_addresses:
                 continue
-            params = [trace.param_logs[address] for address in param_addresses]
+            params = [trace._param_logs[address] for address in param_addresses]
             op_log._param_barcodes = [param.barcode for param in params]
             op_log._param_logs = params
             op_log.param_shapes = [param.shape for param in params]
@@ -2491,17 +2491,17 @@ class JAXBackend:
             # Set-memoized usage cross-links (the bare list scans were
             # O(m^2) for a param consumed by m ops).
             _attach_param_usage(trace, op_log, usage_membership)
-        trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.has_params}
+        trace._num_layers_with_params = len(
+            {op.layer_label for op in trace._layer_list if op.has_params}
         )
         # Parameter-identity basis (see the identical note in
         # ``_jax_recurrence_assignments``'s sibling counter block above):
         # a per-layer-label dedup sum still double-counts a param shared
         # across more than one layer.
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace._num_param_tensors = len(trace._param_logs)
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
+            param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
 
@@ -2540,7 +2540,7 @@ class JAXBackend:
             if address != "self" and "." not in address:
                 mbd["top_level_modules"].append(address)
 
-        for param in trace.param_logs:
+        for param in trace._param_logs:
             owner = param.module_address
             mbd["module_nparams"][owner] += param.num_params
             if param.is_trainable:
@@ -2573,7 +2573,7 @@ class JAXBackend:
         seen_pass_children: dict[str, set[str]] = defaultdict(set)
         seen_addresses = set(mbd["addresses"])
 
-        for op_log in trace.layer_list:
+        for op_log in trace._layer_list:
             normalized_calls = normalize_op_module_calls(op_log.modules)
             op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
             op_log.module = op_log.modules[-1] if op_log.modules else None
@@ -2649,7 +2649,7 @@ class JAXBackend:
         """
 
         site_keys = self._jax_site_keys(trace)
-        if not trace.recurrence_detection:
+        if not trace._options_recurrence_detection:
             return {
                 label: self._jax_singleton_assignment(label, op_log, site_keys.get(label))
                 for label, op_log in trace._raw_graph_ws.raw_layer_dict.items()
@@ -4005,7 +4005,7 @@ def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:
 
     return tuple(
         op
-        for op in getattr(trace, "layer_list", ())
+        for op in trace._layer_list
         if isinstance(getattr(op, "annotations", None), Mapping)
         and op.annotations.get("jax_capture_kind") in ALL_JAX_EQUATION_KINDS
     )
@@ -4027,7 +4027,7 @@ def _jax_region_ops(trace: Trace) -> tuple[Any, ...]:
 
     return tuple(
         op
-        for op in getattr(trace, "layer_list", ())
+        for op in trace._layer_list
         if isinstance(getattr(op, "annotations", None), Mapping)
         and op.annotations.get("jax_capture_kind") in {"region", "region_output"}
     )

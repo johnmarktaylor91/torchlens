@@ -553,7 +553,7 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "compute_input_output_distances",
         "detach_saved_activations",
         "recurrence_detection",
-        "intervention_ready",
+        "replayable",
         "capture_container_structure",
         "track_device_memory",
         "measure_host_peak_memory",
@@ -667,7 +667,7 @@ def _resolve_cache_key(state: _DoorState) -> _DoorState:
 # * Capability / payload-policy options that change WHAT is captured or
 #   stored in the returned trace. Omitting any of these let a second
 #   trace() with a different capability silently return an earlier cached
-#   trace built with the wrong capability (e.g. asked intervention_ready=True,
+#   trace built with the wrong capability (e.g. asked replayable=True,
 #   got a cached False). Include them so a capability change misses the cache;
 #   callables are repr-keyed (conservative -- a distinct object misses rather
 #   than risking a false hit), matching how output_transform is keyed.
@@ -702,7 +702,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "intervene": _predicate_cache_key(args.intervene),
         "halt": _predicate_cache_key(state.halt),
         "stop_after": _stable_cache_fragment(state.stop_after_site),
-        "intervention_ready": opts.intervention_ready,
+        "replayable": opts.replayable,
         "structure_only": opts.structure_only,
         "track_device_memory": opts.track_device_memory,
         "measure_host_peak_memory": opts.measure_host_peak_memory,

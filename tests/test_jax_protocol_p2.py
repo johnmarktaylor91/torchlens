@@ -112,13 +112,13 @@ def test_jax_closure_constant_is_a_constant_source_op_with_payload() -> None:
         return jnp.matmul(v, weights) + bias
 
     trace = tl.trace(cast(Any, fn), _x(), backend="jax")
-    constants = [op for op in trace.layer_list if op.func_name == "constant"]
+    constants = [op for op in trace._layer_list if op.func_name == "constant"]
     assert len(constants) == 2
     for op in constants:
         assert tuple(op.parents or ()) == ()
         assert op.out is not None
         assert op.children
-    dot = next(op for op in trace.layer_list if op.func_name == "dot_general")
+    dot = next(op for op in trace._layer_list if op.func_name == "dot_general")
     assert any(parent in {c.label, c.layer_label} for c in constants for parent in dot.parents)
     np.testing.assert_array_equal(np.asarray(constants[0].out), np.full((4, 3), 0.5))
     status = _protocol().validate(trace, None)
@@ -137,7 +137,7 @@ def test_jax_norm_softmax_validation_is_a_named_verdict() -> None:
 
     trace = tl.trace(cast(Any, fn), _x(), backend="jax")
     literal = [
-        op for op in trace.layer_list if op.func_name == "convert_element_type" and not op.parents
+        op for op in trace._layer_list if op.func_name == "convert_element_type" and not op.parents
     ]
     assert literal, "literal convert_element_type producers are recorded with zero parents"
     assert all(op.out is not None for op in literal)
@@ -157,7 +157,7 @@ def test_jax_tampered_payload_fails_naming_the_op_and_reason() -> None:
         return jax.nn.relu(v * 2.0)
 
     trace = tl.trace(cast(Any, fn), _x(), backend="jax")
-    mul = next(op for op in trace.layer_list if op.func_name == "mul")
+    mul = next(op for op in trace._layer_list if op.func_name == "mul")
     mul.out = jnp.asarray(np.asarray(mul.out) + 7.0)
     status = _protocol().validate(trace, None)
     assert isinstance(status, ValidationStatus)

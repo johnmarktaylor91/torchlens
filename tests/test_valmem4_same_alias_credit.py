@@ -222,12 +222,12 @@ def test_a_user_trace_still_charges_parameter_copies() -> None:
 
 
 def _corrupt_relu_input(trace: Any) -> None:
-    relu = next(op for op in trace.layer_list if op.func_name == "relu")
+    relu = next(op for op in trace._layer_list if op.func_name == "relu")
     relu.saved_args[0].add_(1.0)
 
 
 def _corrupt_saved_weight(trace: Any) -> None:
-    linear = next(op for op in trace.layer_list if op.func_name == "linear")
+    linear = next(op for op in trace._layer_list if op.func_name == "linear")
     with torch.no_grad():
         linear.saved_args[1].add_(1.0)
 

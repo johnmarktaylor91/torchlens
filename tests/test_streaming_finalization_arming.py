@@ -1,7 +1,7 @@
 """Liveness killers for the streamed-bundle finalization step (executor step 18).
 
 r7 R74 executor-family survivor, found by the family's own first sample
-campaign: forcing ``_should_run_step_18`` to ``False`` (the streamed bundle
+campaign: forcing ``_should_run_finalize_streamed_bundle`` to ``False`` (the streamed bundle
 never finalizes) survived the ENTIRE 472-test arming suite -- no suite file
 captured with ``storage=tl.to_disk(...)`` and then relied on the finalized
 bundle. These plants close that margin: skipping finalization (or the
@@ -39,7 +39,7 @@ def test_streamed_bundle_is_finalized_and_loadable(tmp_path) -> None:
     path, trace = _capture_streamed(tmp_path)
     assert path.exists(), "streamed bundle missing on disk after capture"
     loaded = tl.load(str(path))
-    assert loaded.backend == "torch"
+    assert loaded.provenance.backend == "torch"
     assert set(loaded.layer_labels) == set(trace.layer_labels)
 
 

@@ -42,7 +42,7 @@ def _capture(offset: float = 0.0, seed: int = 7) -> tl.Trace:
     torch.manual_seed(seed)
     model = _Tiny(offset=offset)
     x = torch.randn(2, 3)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _pair() -> tl.Bundle:

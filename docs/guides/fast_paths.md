@@ -190,7 +190,7 @@ Cost and caveats:
 A trace costs about 3.2 ms of host Python per recorded op with default settings, linear in the
 op count with no meaningful fixed cost. The device does not change it: a GPU trace costs the
 same as a CPU trace of the same model. So the levers are fewer ops and less work per op.
-`trace.num_ops` tells you how many ops a forward recorded.
+`len(trace.ops)` tells you how many ops a forward recorded.
 
 ```python
 import torch
@@ -209,7 +209,7 @@ trace = tl.trace(
     capture=CaptureOptions(inference_only=True),
 )
 
-print(trace.num_ops)
+print(len(trace.ops))
 relu = trace.find_sites(tl.func("relu")).first()
 assert relu.out.shape == (2, 8)
 ```
@@ -228,7 +228,7 @@ assert relu.out.shape == (2, 8)
 - **`CaptureOptions(inference_only=True)`** runs the forward under `torch.no_grad()`. It saved
   about 5% per trace in the measurement above. A capture entered inside `torch.no_grad()` or
   `torch.inference_mode()` implies it unless a backward option (`backward_ready`, `save_grads`)
-  asks for one; `trace.inference_only` reports the value in force.
+  asks for one; `trace.options.inference_only` reports the value in force.
 - **`tl.record` skips gradient hooks by default.** It installs them only when
   `backward_ready=True`, `save_grads=` or `default_grad=` is given, so pass one of those before a
   `Recording.backward()`, which refuses otherwise.
@@ -252,7 +252,7 @@ pip install flash-linear-attention
 ```
 
 It provides GPU (Triton) kernels, so it helps on CUDA hosts; CPU-only runs keep the reference
-loops. If a trace of such a model records far more ops than you expect, check `trace.num_ops`
+loops. If a trace of such a model records far more ops than you expect, check `len(trace.ops)`
 and whether the package imports in your environment. With the KV cache on, each decoding step
 processes one token, so the package matters much less for `bind` with `generate()`.
 
@@ -268,7 +268,7 @@ refuse a staged intervention, refuse a change in input, or replay over the captu
 | `trace.run(inputs=x)` | A fresh verified execution of the recorded program | Refuses `run_staged_spec_unapplied` when the trace carries a staged intervention, because it would not apply it |
 | `trace.run(inputs=x, fast=True)` | A guarded static-loop refresh: the model's native forward with targeted hooks | Applies a staged module-selector intervention through the guarded fast engine and admits a growing input while the model's call structure is unchanged; any refusal raises (`PathDivergenceError` for a structural change) instead of falling back. Needs a selective `save=` on the capture (`tl.module(...)` or `tl.func(...)`); a save-everything capture refuses. Unsteered and at a fixed shape: 0.41 s on Qwen3.5-9B against 47 s for a trace |
 | `trace.run(model, x)` on an intervened trace | The guarded fast steered rerun: the native forward with the staged hooks, refreshing the saved sites | About 1.5 to 2x a plain hook per step, exact, and exact on every repeat. When a guard refuses it falls back to recapturing the whole forward with the stored intervention: still exact, at the cost of a trace, with the reason in `last_run["fast_refused"]` |
-| `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Needs a `CaptureOptions(intervention_ready=True)` capture (about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |
+| `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Needs a `CaptureOptions(replayable=True)` capture (about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |
 | `episode=` capture with `intervene=` | Captures a whole steered generation as one product | Exact, but diagnostic-tier cost (tens of steps, not hundreds), and `run()` refuses on the coupled product by design; see [episode capture](../reference/episode_capture.md) |
 
 For steering alone, across many inputs or through generation, [`bind`](#steering-and-patching-over-many-forwards-bind)

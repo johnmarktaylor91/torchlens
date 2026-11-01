@@ -49,7 +49,7 @@ def _select_raw_indexes_by_retention_predicate(
     from ..recording.exceptions import PredicateError
 
     selected_raw_indexes: set[int] = set()
-    for layer_entry in getattr(self, "layer_list", []):
+    for layer_entry in self._layer_list:
         decision = predicate(layer_entry)
         if not isinstance(decision, bool):
             raise PredicateError(
@@ -87,7 +87,7 @@ def _get_op_nums_from_user_labels(
                 for site in self._resolve_sites(
                     which_layers,
                     strict=False,
-                    max_fanout=max(1, len(getattr(self, "layer_list", []))),
+                    max_fanout=max(1, len(self._layer_list)),
                 )
             }
         )
@@ -105,15 +105,15 @@ def _get_op_nums_from_user_labels(
                 for site in self._resolve_sites(
                     layer_key,
                     strict=False,
-                    max_fanout=max(1, len(getattr(self, "layer_list", []))),
+                    max_fanout=max(1, len(self._layer_list)),
                 )
             )
             continue
         if isinstance(layer_key, str) and ":" not in layer_key:
             matching_layer_passes = [
                 layer_entry
-                for layer_entry in getattr(self, "layer_list", [])
-                if layer_key in {layer_entry.layer_label, layer_entry.layer_label_short}
+                for layer_entry in self._layer_list
+                if layer_key in {layer_entry.layer_label, layer_entry.short_layer_label}
             ]
             if matching_layer_passes:
                 raw_layer_nums_to_save.update(
@@ -124,10 +124,10 @@ def _get_op_nums_from_user_labels(
             raw_layer_nums_to_save.add(self._lookup_keys_to_layer_num_dict[layer_key])
             continue
 
-        keys_with_substr = [key for key in self.layer_dict_all_keys if str(layer_key) in str(key)]
+        keys_with_substr = [key for key in self._layer_dict_all_keys if str(layer_key) in str(key)]
         if len(keys_with_substr) > 0:
             for key in keys_with_substr:
-                raw_layer_nums_to_save.add(self.layer_dict_all_keys[key].raw_index)
+                raw_layer_nums_to_save.add(self._layer_dict_all_keys[key].raw_index)
             continue
 
         _give_user_feedback_about_lookup_key(self, layer_key, "query_multiple")
@@ -215,7 +215,7 @@ def _register_model_input_container_snapshots(
             reconstructable=result.reconstructable,
         )
     if first_spec is not None:
-        trace.__dict__["input_structure"] = first_spec
+        trace.__dict__["_provenance_input_structure"] = first_spec
 
 
 _OPAQUE_INPUT_LEAF = object()
@@ -261,7 +261,7 @@ def _record_runnable_input_literal_leaves(
         Normalized keyword model inputs.
     """
 
-    if not bool(getattr(trace, "intervention_ready", False)):
+    if not bool(getattr(trace, "is_replayable", False)):
         return
 
     from torchlens._input_walk import tagged_mapping_key_component, walk_input_boundary
@@ -329,7 +329,7 @@ def _record_runnable_input_structure(
     diverges on any node mismatch. Analysis captures are unaffected.
     """
 
-    if not bool(getattr(trace, "intervention_ready", False)):
+    if not bool(getattr(trace, "is_replayable", False)):
         return
 
     from torchlens._input_walk import snapshot_input_boundary
@@ -375,7 +375,7 @@ def _record_runnable_input_tensor_sites(
         Normalized keyword model inputs.
     """
 
-    if not bool(getattr(trace, "intervention_ready", False)):
+    if not bool(getattr(trace, "is_replayable", False)):
         return
 
     from torchlens._input_walk import raw_mapping_key_component, walk_input_boundary

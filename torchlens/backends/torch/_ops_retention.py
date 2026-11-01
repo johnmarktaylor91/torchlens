@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import time
 import warnings
 from collections import deque
 from collections.abc import Callable
@@ -322,10 +321,10 @@ def _save_predicate_activation_fields(
         spec,
         intent,
         activation_transform=activation_transform,
-        save_raw_activations=getattr(trace, "save_raw_activations", True),
+        save_raw_activations=trace._options_save_raw_activations,
         ctx=ctx,
         kind="activation",
-        detach_saved_activations=bool(getattr(trace, "detach_saved_activations", True)),
+        detach_saved_activations=bool(trace._options_detach_saved_activations),
     )
     metadata_tensor = ram_payload
     if metadata_tensor is None:
@@ -387,7 +386,7 @@ def _module_stack_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[Modul
                 address=str(module_address),
                 module_type="",
                 module_id=0,
-                pass_index=int(module_pass),
+                pass_number=int(module_pass),
             )
         )
     return tuple(frames)
@@ -501,13 +500,13 @@ def _copy_lookback_payload(
     if fields_dict["output_device"] not in [str(raw_out.device), "same"]:
         raw_out = safe_to(raw_out, fields_dict["output_device"])
     transformed_out = None
-    if policy == "transformed" and trace.activation_transform is not None:
+    if policy == "transformed" and trace._options_activation_transform is not None:
         transformed_out = apply_transform(
             label=fields_dict.get("_layer_label_raw"),
             raw_label=fields_dict.get("_label_raw"),
             func_name=fields_dict.get("func_name"),
             tensor=raw_out,
-            transform=trace.activation_transform,
+            transform=trace._options_activation_transform,
             transform_kind="activation",
             streaming_active=False,
         )
@@ -516,14 +515,12 @@ def _copy_lookback_payload(
             transformed_tensor=transformed_out,
             transform_kind="activation",
             tripwire_armed=train_mode_tripwire_armed(
-                backward_ready=fields_dict.get(
-                    "backward_ready", getattr(trace, "backward_ready", False)
-                ),
-                transform=trace.activation_transform,
+                backward_ready=fields_dict.get("backward_ready", trace._options_backward_ready),
+                transform=trace._options_activation_transform,
             ),
             label=fields_dict.get("_layer_label_raw"),
         )
-    store_raw = policy != "transformed" or getattr(trace, "save_raw_activations", True)
+    store_raw = policy != "transformed" or trace._options_save_raw_activations
     raw_shape = tuple(raw_out.shape)
     raw_dtype = raw_out.dtype
     _commit_save_budget(
@@ -672,11 +669,11 @@ def _build_trace_predicate_context(
     history = tuple(getattr(trace, "_predicate_history", ()))
     raw_label = fields_dict["_label_raw"]
     module_address = fields_dict.get("module")
-    module_pass_index = None
+    module_pass_number = None
     if isinstance(module_address, tuple) and len(module_address) == 2:
-        module_address, module_pass_index = module_address
+        module_address, module_pass_number = module_address
     module_address = None if module_address is None else str(module_address)
-    module_pass_index = None if module_pass_index is None else int(module_pass_index)
+    module_pass_number = None if module_pass_number is None else int(module_pass_number)
     return build_op_record_context(
         kind="op",
         label=raw_label,
@@ -696,15 +693,15 @@ def _build_trace_predicate_context(
         module_stack=_module_stack_frames_from_fields(fields_dict),
         history=history,
         op_counts=dict(trace._raw_graph_ws.raw_layer_type_counter),
-        pass_index=int(fields_dict.get("pass_index", 0)),
+        pass_index=int(fields_dict.get("pass_number", 0)),
         event_index=int(fields_dict["raw_index"]),
         step_index=fields_dict.get("step_index"),
-        capture_start_time=float(getattr(trace, "capture_start_time", time.time())),
+        capture_start_time=float(trace._provenance_start_time),
         include_source_events=False,
         sample_id=None,
         address=module_address,
         module_type=None,
-        module_pass_index=module_pass_index,
+        module_pass_number=module_pass_number,
         is_transform=bool(fields_dict.get("is_transform", False)),
         transform_kind=fields_dict.get("transform_kind"),
     )

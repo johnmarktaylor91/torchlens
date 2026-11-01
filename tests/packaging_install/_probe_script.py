@@ -67,7 +67,7 @@ def main() -> None:
     trace = tl.trace(model, torch.randn(2, 4))
     trace.save(spec["save_path"])
     loaded = tl.load(spec["save_path"])
-    result["num_ops"] = [trace.num_ops, loaded.num_ops]
+    result["num_ops"] = [len(trace.ops), len(loaded.ops)]
     missing_error = tl.errors.MissingDependencyError
     result["gates"] = {
         name: _gate_outcome(gate, missing_error) for name, gate in spec["gates"].items()

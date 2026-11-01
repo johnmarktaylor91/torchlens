@@ -1799,7 +1799,7 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
         Log to make pickle-compatible in place.
     """
 
-    for layer in getattr(trace, "layer_list", []):
+    for layer in trace._layer_list:
         for field_name in (
             "out",
             "transformed_out",
@@ -1812,7 +1812,7 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
         layer.grad_fn_handle = None
         layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
         layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.saved_kwargs))
-    for layer_log in getattr(trace, "layer_logs", {}).values():
+    for layer_log in trace._layer_logs.values():
         # ``Layer.transformed_out``/``transformed_grad`` are read-only proxies that read
         # through to the underlying ``Layer.ops[i]`` -- the real tensors live on the Op
         # objects, which expose ``_internal_set`` (the Layer view does not, so a raw

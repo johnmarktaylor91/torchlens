@@ -379,8 +379,11 @@ def check_lockstep(
     """
 
     leaves: dict[str, set[str]] = {}
+    live_owners: dict[str, set[str]] = {}
     for row in head_rows.values():
         leaves.setdefault(row["kind"], set()).add(row["name"])
+        if row["kind"] == "member":
+            live_owners.setdefault(row["name"], set()).update(_owners(row))
     claims = attribution.Claims.from_rows(head_rows.values())
     findings: list[Finding] = []
     for row in surface_diff.new:
@@ -399,10 +402,65 @@ def check_lockstep(
         findings += _missing(corpus, new_row, "renamed")
         old_row = {**new_row, "id": rename.old_id, "name": rename.old_name}
         old_row["path"] = _old_path(new_row, rename.new_name, rename.old_name)
-        findings += _residue(corpus, old_row, rename.new_id, "renamed", leaves, claims)
+        gone = _retired_spelling(old_row, live_owners)
+        if gone is not None:
+            findings += _residue(corpus, gone, rename.new_id, "renamed", leaves, claims)
     for row in surface_diff.removed:
-        findings += _residue(corpus, row, row["id"], "removed", leaves, claims)
+        gone = _retired_spelling(row, live_owners)
+        if gone is not None:
+            findings += _residue(corpus, gone, row["id"], "removed", leaves, claims)
     return sorted(findings, key=dataclasses.astuple)
+
+
+def _owners(row: dict[str, Any]) -> set[str]:
+    """Return the classes a member row is reached through (its owners and its definer).
+
+    Parameters
+    ----------
+    row
+        A member row.
+
+    Returns
+    -------
+    set[str]
+        Class names.
+    """
+
+    return {*row.get("owner_names", ()), str(row["path"]).split(".")[0]}
+
+
+def _retired_spelling(
+    row: dict[str, Any], live_owners: dict[str, set[str]]
+) -> dict[str, Any] | None:
+    """Return a gone member row spelled only through the owners head no longer has.
+
+    A member that moved between classes of one owner (a ``Trace`` mixin method that
+    became a ``Trace`` property on another mixin) leaves ``Trace.leaf`` a current
+    spelling; only ``OldMixin.leaf`` is residue. Rows of other kinds are unchanged.
+
+    Parameters
+    ----------
+    row
+        Base row of a renamed or removed name.
+    live_owners
+        Head member leaf to the classes that still reach it.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        The row restricted to its retired owners, or ``None`` when every owner still
+        reaches the leaf (then no spelling of it is stale).
+    """
+
+    if row["kind"] != "member":
+        return row
+    live = live_owners.get(str(row["name"]), set())
+    retired = sorted(_owners(row) - live)
+    if not retired:
+        return None
+    definer = str(row["path"]).split(".")[0]
+    path = row["path"] if definer in retired else f"{retired[0]}.{row['name']}"
+    return {**row, "owner_names": retired, "path": path}
 
 
 def _old_path(new_row: dict[str, Any], new_name: str, old_name: str) -> str:

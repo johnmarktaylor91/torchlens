@@ -67,7 +67,7 @@ def test_edit_signal_replaces_kind_and_direction() -> None:
         tl.clip_norm(1.0),
         helper_module.swap_with(torch.zeros(2)),
     ):
-        assert neutral.signal is None, neutral.helper_name
+        assert neutral.signal is None, neutral.name
     model = nn.Linear(2, 2)
     donor = tl.trace(model, torch.randn(1, 2))
     for forward_only in (
@@ -76,7 +76,7 @@ def test_edit_signal_replaces_kind_and_direction() -> None:
         tl.patch_from(donor),
         helper_module.swap_with(donor[donor.layer_labels[1]]),
     ):
-        assert forward_only.signal == "forward", forward_only.helper_name
+        assert forward_only.signal == "forward", forward_only.name
 
 
 def test_fire_record_and_audit_payload_carry_signal() -> None:

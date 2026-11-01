@@ -357,7 +357,7 @@ class TorchBackend:
         input_args, input_kwargs, input_copy_gaps = safe_copy_input_tree(
             input_args,
             input_kwargs,
-            require_distinct_tensor_sites=bool(getattr(session, "intervention_ready", False)),
+            require_distinct_tensor_sites=bool(getattr(session, "is_replayable", False)),
         )
         _record_input_semantics_gaps(
             session,
@@ -584,7 +584,7 @@ class TorchBackend:
         del session
         set_rng_from_saved_states(cast(dict[str, Any], rng_state))
 
-    def inference_context(self, session: object) -> AbstractContextManager[None]:
+    def inference_context(self, session: Any) -> AbstractContextManager[None]:
         """Return the torch inference-only context for this session.
 
         Parameters
@@ -598,11 +598,7 @@ class TorchBackend:
             ``torch.no_grad()`` when requested, otherwise a null context.
         """
 
-        return (
-            torch.no_grad()
-            if getattr(session, "inference_only", False)
-            else contextlib.nullcontext()
-        )
+        return torch.no_grad() if session._options_inference_only else contextlib.nullcontext()
 
     def log_source_tensor(
         self,
@@ -686,7 +682,7 @@ class TorchBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,
@@ -695,7 +691,7 @@ class TorchBackend:
             func_name=func_event_input.func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=func_event_input.module_stack,
             recent_events=(),
             recent_ops=(),

@@ -543,12 +543,12 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
     ptrs: Any = None
     if (
         _COW_ENABLED
-        and not getattr(trace, "intervention_ready", False)
-        and not getattr(trace, "backward_ready", False)
-        and getattr(trace, "save_grads", None) in (None, False)
-        and getattr(trace, "activation_transform", None) is None
-        and getattr(trace, "capture_mode", None) != "predicate"
-        and getattr(trace, "save_mode", "copy") == "copy"
+        and not getattr(trace, "is_replayable", False)
+        and not trace._options_backward_ready
+        and trace._options_save_grads in (None, False)
+        and trace._options_activation_transform is None
+        and trace._options_mode != "predicate"
+        and trace._options_save_mode == "copy"
         and getattr(trace, "_out_writer", None) is None
     ):
         model_ref = getattr(trace, "_source_model_ref", None)
@@ -751,9 +751,9 @@ def _propagate_mutation_label_to_storage_aliases(
     # surface) get the mutation edge. Follow-up: teach the runnable reader
     # per-(label, consumer) payload keying, then lift this scope.
     if (
-        getattr(trace, "intervention_ready", False)
-        or getattr(trace, "backward_ready", False)
-        or getattr(trace, "save_grads", None) not in (None, False)
+        getattr(trace, "is_replayable", False)
+        or trace._options_backward_ready
+        or trace._options_save_grads not in (None, False)
     ):
         return
 
@@ -1357,7 +1357,7 @@ def torch_func_decorator(
             return _call_print_func(trace, func, func_name, args, kwargs)
 
         # Snapshot args before the call in case in-place ops mutate them.
-        if trace.save_arg_values:
+        if trace._options_save_args:
             from ._ops_arguments import _copy_saved_call_args
 
             arg_copies, kwarg_copies = _copy_saved_call_args(func_name, args, kwargs)
@@ -1411,8 +1411,7 @@ def torch_func_decorator(
         # matching barcode => this is the bottom-level (leaf) function.
         func_call_barcode = make_random_barcode()
         trace._wrapper_runtime_ws.current_func_barcode = func_call_barcode
-        _save_rng = getattr(trace, "save_rng_states", False)
-        rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
+        rng_states = log_current_rng_states(torch_only=True) if trace._options_save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
         register_call_input_container_snapshots(
@@ -1649,7 +1648,7 @@ def torch_func_decorator(
 
         # Log all output tensors (excluding Parameters, which are source tensors).
         # Fast inline check for the common single-tensor output case.
-        if getattr(trace, "intervention_ready", False):
+        if getattr(trace, "is_replayable", False):
             output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]
         else:
             output_tensors = _collect_output_tensors(out_orig)
@@ -2508,10 +2507,10 @@ def _refuse_unwrap_during_active_capture() -> None:
     if _state._active_trace is None and not _state._logging_enabled:
         return
     trace = _state._active_trace
-    model_label = getattr(trace, "model_label", None) or getattr(trace, "model_class_name", None)
+    model_name = (trace.model_name or trace._source_class_name) if trace is not None else None
     raise CaptureNotActiveError(
         "unwrap_torch() was called while a TorchLens capture is still active"
-        + (f" for model {model_label!r}" if model_label else ""),
+        + (f" for model {model_name!r}" if model_name else ""),
         code="unwrap_during_active_capture",
         remedy=(
             "let the capture finish before removing the wrappers (pass "

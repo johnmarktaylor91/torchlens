@@ -31,7 +31,7 @@ import torchlens.attribution as attribution
 import torchlens.mechinterp
 
 PAIR_CLEAN, PAIR_CORRUPT = torch.tensor([[0], [0]]), torch.tensor([[1], [1]])
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
+_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
 
 
 def _remedy(message: str) -> str:

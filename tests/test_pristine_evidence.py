@@ -80,7 +80,7 @@ def _steered(model: nn.Module) -> tl.Trace:
 
 
 def _ready(model: nn.Module) -> tl.Trace:
-    return tl.trace(model, _x(), capture=CaptureOptions(intervention_ready=True))
+    return tl.trace(model, _x(), capture=CaptureOptions(replayable=True))
 
 
 def _double(out: torch.Tensor) -> torch.Tensor:
@@ -172,7 +172,7 @@ def test_plain_reruns_and_runs_stay_pristine(tmp_path: Path) -> None:
 
 def test_fork_inherits_the_reading_and_never_touches_its_parent() -> None:
     model = _model()
-    plain = tl.trace(model, _x(), capture=CaptureOptions(intervention_ready=True))
+    plain = tl.trace(model, _x(), capture=CaptureOptions(replayable=True))
     fork = plain.fork("f")
     assert fork.is_pristine is True and plain.is_pristine is True
     fork.set(tl.module("block"), _double, confirm_mutation=True)
@@ -241,13 +241,13 @@ def test_saved_artifact_reads_what_it_carries(tmp_path: Path) -> None:
 )
 def test_derivation_rule(backend: str, version: int, history: list[Any], expected: Any) -> None:
     stub = SimpleNamespace(
-        backend=backend,
+        _provenance_backend=backend,
         tlspec_version=version,
         state_history=history,
         intervention_audit=[],
         state=TraceState.RERUN_PROPAGATED,
         _has_direct_writes=False,
-        layer_list=[],
+        _layer_list=[],
     )
     assert derive_pristine(stub) is expected
 
@@ -257,13 +257,13 @@ def test_non_torch_backends_read_not_recorded_never_pristine() -> None:
     assert "torch" in names and len(names) > 1
     for name in sorted(names):
         stub = SimpleNamespace(
-            backend=name,
+            _provenance_backend=name,
             tlspec_version=10,
             state_history=[],
             intervention_audit=[],
             state=TraceState.PRISTINE,
             _has_direct_writes=False,
-            layer_list=[],
+            _layer_list=[],
         )
         expected = True if name == "torch" else None
         assert records_intervention_evidence(name) is (name == "torch")
@@ -278,18 +278,18 @@ def test_non_torch_backends_read_not_recorded_never_pristine() -> None:
         ("state", TraceState.DIRECT_WRITE_DIRTY),
         ("state", TraceState.REPLAY_PROPAGATED),
         ("state", TraceState.LIVE_CAPTURED),
-        ("layer_list", [SimpleNamespace(intervention_replaced=True)]),
+        ("_layer_list", [SimpleNamespace(is_edited=True)]),
     ],
 )
 def test_each_evidence_kind_reads_not_pristine(field: str, value: Any) -> None:
     stub = SimpleNamespace(
-        backend="torch",
+        _provenance_backend="torch",
         tlspec_version=10,
         state_history=[],
         intervention_audit=[],
         state=TraceState.PRISTINE,
         _has_direct_writes=False,
-        layer_list=[],
+        _layer_list=[],
     )
     setattr(stub, field, value)
     assert derive_pristine(stub) is False

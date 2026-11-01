@@ -33,7 +33,7 @@ Allowlist policy (fail-closed):
   that walks attributes off a torchlens module to reach ``os.system`` (real module
   ``posix``) is denied. Crucially, a pickle ``REDUCE`` INVOKES the admitted callable
   with attacker args, so the pre-r21 blanket "any torchlens-owned callable" policy
-  was a load-time RCE: it trusted the PRIVATE ``torchlens._utils._module_is_installed``
+  was a load-time RCE: it trusted the PRIVATE ``torchlens.report._environment._module_is_installed``
   (which ``importlib.import_module``s its argument). The narrowed gate is
   deterministic (public-name + side-effect-name guard, no live-registry lookup) and
   admits our vetted first-party code without admitting that gadget.
@@ -1381,7 +1381,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
                 "with this release and save it again; or load the file with the "
                 "release that wrote it, replace the tensors in trace.annotations with "
                 "plain values (for example tensor.tolist()), set "
-                "trace.save_raw_input = False and trace.save_raw_output = False, and "
+                "trace._options_save_raw_input = False and trace._options_save_transformed_output = False, and "
                 "save: the re-saved file loads here. If no TorchLens release wrote "
                 "this file, it is corrupt."
             )
@@ -1511,7 +1511,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
         # / helper that cannot import/exec/open/spawn): a pickle ``REDUCE`` INVOKES
         # the admitted callable with attacker args, and the pre-r21 blanket
         # ``_is_torchlens_owned`` admission trusted EVERY torchlens-owned callable --
-        # including the private import gadget ``torchlens._utils._module_is_installed``
+        # including the private import gadget ``torchlens.report._environment._module_is_installed``
         # (``importlib.import_module`` of attacker input == confirmed load-time RCE).
         # The gate is DETERMINISTIC (public-name + side-effect-name guard), never
         # keyed off the live facet registry (that ordering-dependent snapshot was a

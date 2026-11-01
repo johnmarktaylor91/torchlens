@@ -24,6 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens.errors import SelectionError
 
 _RELU = "relu_1_2"
@@ -162,7 +163,7 @@ def test_changed_selects_what_the_intervention_moved(model):
     trace = tl.trace(
         model,
         torch.randn(1, 1, 10, 10),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         target = tl.units(_RELU, [(0, 0, 1, 1), (0, 1, 2, 2)])
@@ -365,7 +366,7 @@ def test_structural_site_key_mismatch_refuses():
     subject = tl.trace(_A(), torch.randn(1, 4))
     reference = tl.trace(_C(), torch.randn(1, 4))
     try:
-        assert subject["linear_1_1"].site_key != reference["linear_1_1"].site_key
+        assert layer_site_key(subject["linear_1_1"]) != layer_site_key(reference["linear_1_1"])
         with pytest.raises(SelectionError) as excinfo:
             subject[tl.changed(reference, "linear_1_1")]
         # Since leverage B4 the guarded join is the pairing authority: the
@@ -415,7 +416,7 @@ def test_changed_composes_with_the_algebra(log, log_b):
 def test_repr_stability_pins(log_b):
     """The constructor-shaped disclosures are pinned (readable AST spellings)."""
 
-    label = log_b.trace_label
+    label = log_b.name
     assert repr(tl.changed(log_b)) == (
         f"Selection[ACT](changed(vs={label!r}, above=0.0, below=None, by='abs', "
         "within=saved_sites))"
@@ -609,7 +610,7 @@ def test_do_zero_ablates_top_movers(model):
     trace = tl.trace(
         model,
         torch.randn(1, 1, 10, 10),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     torch.manual_seed(5)
     reference = tl.trace(model, torch.randn(1, 1, 10, 10))
@@ -635,7 +636,7 @@ def test_do_zero_ablates_a_stable_unit_at_every_pass():
     trace = tl.trace(
         _Recurrent(),
         torch.randn(1, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = tl.stable_across_passes(_TANH, atol=1e-9)

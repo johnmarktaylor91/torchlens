@@ -120,13 +120,13 @@ def _validate_chunk_append_candidate(old_trace: Trace, new_trace: Trace) -> None
         Raises when graph metadata is incompatible.
     """
 
-    old_hash = getattr(old_trace, "graph_shape_hash", None)
-    new_hash = getattr(new_trace, "graph_shape_hash", None)
+    old_hash = old_trace._provenance_fingerprint
+    new_hash = new_trace._provenance_fingerprint
     if old_hash != new_hash:
         raise AppendMismatchError("graph shape changed")
 
-    old_labels = tuple(layer._layer_label_raw for layer in old_trace.layer_list)
-    new_labels = tuple(layer._layer_label_raw for layer in new_trace.layer_list)
+    old_labels = tuple(layer._layer_label_raw for layer in old_trace._layer_list)
+    new_labels = tuple(layer._layer_label_raw for layer in new_trace._layer_list)
     if old_labels != new_labels:
         raise AppendMismatchError("topology or site labels changed")
 
@@ -173,8 +173,8 @@ def _append_chunk_trace_state(trace: Trace, new_trace: Trace, chunk: _ChunkAppen
 
     _validate_chunk_append_candidate(trace, new_trace)
     started_at = time.monotonic()
-    old_hash = getattr(trace, "graph_shape_hash", None)
-    new_hash = getattr(new_trace, "graph_shape_hash", None)
+    old_hash = trace._provenance_fingerprint
+    new_hash = new_trace._provenance_fingerprint
     old_predicate_options = getattr(trace, "_predicate_save_options", MISSING)
     new_predicate_options = getattr(new_trace, "_predicate_save_options", MISSING)
     try:
@@ -191,7 +191,7 @@ def _append_chunk_trace_state(trace: Trace, new_trace: Trace, chunk: _ChunkAppen
         else:
             new_trace._predicate_save_options = new_predicate_options
 
-    trace.is_appended = True
+    trace._provenance_is_appended = True
     trace._append_sequence_id = chunk.append_sequence_id
     trace.state = TraceState.APPENDED
     trace._has_direct_writes = False
@@ -213,7 +213,7 @@ def _append_chunk_trace_state(trace: Trace, new_trace: Trace, chunk: _ChunkAppen
         "new_graph_shape_hash": new_hash,
         "chunk_paths": chunk.chunk_paths,
     }
-    trace.append_history.append(dict(trace.last_run))
+    trace._append_history.append(dict(trace.last_run))
     trace._record_operation(
         "append",
         engine="append",
@@ -762,7 +762,7 @@ def _recursive_capture_options(state: _DoorState) -> CaptureOptions:
         compute_input_output_distances=opts.compute_input_output_distances,
         detach_saved_activations=opts.detach_saved_activations,
         recurrence_detection=opts.recurrence_detection,
-        intervention_ready=opts.intervention_ready,
+        replayable=opts.replayable,
         capture_container_structure=opts.capture_container_structure,
         hooks=MISSING,
         unwrap_when_done=False,

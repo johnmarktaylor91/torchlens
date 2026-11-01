@@ -45,7 +45,7 @@ from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -268,7 +268,7 @@ def test_r45_H_mH_producer_keys_are_tensor_property_methods(
 
     The r44 corr1_1 / secF_1 producer defect: ``.H`` fell through to an unresolvable
     ``custom`` ``getset_descriptor.__get__`` key and ``.mH`` failed save with
-    ``unsupported_tensor_constant``. Both now key exactly like ``.T`` / ``.mT``.
+    ``tensor_constant_unsupported``. Both now key exactly like ``.T`` / ``.mT``.
     """
 
     x = torch.arange(6.0).reshape(2, 3)

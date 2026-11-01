@@ -303,20 +303,12 @@ def _build_dot(
     paired_left_ids = {id(left_layer) for left_layer, _right_layer in pairs}
     paired_right_ids = {id(right_layer) for _left_layer, right_layer in pairs}
     left_unmatched = (
-        [
-            layer
-            for layer in getattr(bundle[left_name], "layer_list", [])
-            if id(layer) not in paired_left_ids
-        ]
+        [layer for layer in bundle[left_name]._layer_list if id(layer) not in paired_left_ids]
         if include_unmatched
         else []
     )
     right_unmatched = (
-        [
-            layer
-            for layer in getattr(bundle[right_name], "layer_list", [])
-            if id(layer) not in paired_right_ids
-        ]
+        [layer for layer in bundle[right_name]._layer_list if id(layer) not in paired_right_ids]
         if include_unmatched
         else []
     )

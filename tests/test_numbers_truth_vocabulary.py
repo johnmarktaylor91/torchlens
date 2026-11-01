@@ -71,7 +71,7 @@ def test_summary_rows_never_spell_passes_as_ops(three_pass_log: tl.Trace) -> Non
     for text in (str(three_pass_log.summary()), str(three_pass_log.summary(level="op"))):
         assert "(3 ops)" not in text
     # The op denominator stays the executed-op count (3 passes of one layer).
-    assert three_pass_log.num_ops == 3
+    assert three_pass_log._num_ops == 3
 
 
 def test_op_str_keeps_pass_vocabulary(three_pass_log: tl.Trace) -> None:

@@ -23,19 +23,16 @@ Design rationale:
     just to check the toggle.
 
 Access policy (disputed-r2 b5/R45, exempt-by-declaration):
-    This module is the sanctioned shared toggle substrate. Direct READS of its
-    published globals from other torchlens modules — including the bare
-    ``_state._logging_enabled`` / ``_state._active_trace`` loads on the per-op
-    wrapper hot path — are the documented design, not private-member
-    reach-ins, and are exempt from private-access lint ratchets by this
-    declaration. The exemption is pinned no-growth by
-    ``tests/test_state_access_ratchet.py``: new cross-module access sites may
-    not silently accumulate. NEW code should prefer the atomic
-    ``active_capture()`` snapshot below over paired raw reads. Multi-field
-    session-state TRANSITIONS (enable/disable, session setup/teardown) belong
-    in state-owned functions and context managers here (``active_logging``,
-    ``pause_logging``, ``reset_capture_runtime_context``, ...), not in
-    external assignment clusters.
+    This module is the sanctioned shared toggle substrate. Direct READS of its published globals
+    from other torchlens modules — including the bare ``_state._logging_enabled`` /
+    ``_state._active_trace`` loads on the per-op wrapper hot path — are the documented design, not
+    private-member reach-ins, and are exempt from private-access lint ratchets by this declaration.
+    The exemption is pinned no-growth by ``tests/test_state_access_ratchet.py``: new cross-module
+    access sites may not silently accumulate. NEW code should prefer the atomic ``active_capture()``
+    snapshot below over paired raw reads. Multi-field session-state TRANSITIONS (enable/disable,
+    session setup/teardown) belong in state-owned functions and context managers here
+    (``active_logging``, ``pause_logging``, ``reset_capture_runtime_context``, ...), not in external
+    assignment clusters.
 """
 
 import contextvars
@@ -52,8 +49,6 @@ from typing import TYPE_CHECKING, Any
 # ``errors._base`` imports nothing from torchlens, so this cannot form a cycle.
 from .errors._base import CaptureError
 
-# TYPE_CHECKING is False at runtime, so this import only exists for static
-# analysis / IDE support — it will never trigger the circular-import problem.
 if TYPE_CHECKING:
     from ._data_classes.trace import Trace
     from .intervention.types import InterventionSpec
@@ -301,7 +296,9 @@ def list_logs() -> tuple["Trace", ...]:
     """
 
     snapshot = list(_log_registry)
-    return tuple(log for log in snapshot if log is not None and hasattr(log, "layer_list"))
+    return tuple(
+        log for log in snapshot if log is not None and not log.__dict__.get("_tl_cleaned_up")
+    )
 
 
 def _strip_hf_suffix(class_name: str) -> str:
@@ -535,7 +532,7 @@ _completeness_witness_mode: str = "off"
 """Dispatcher completeness witness mode: ``"off"`` or diagnostic ``"shadow"``.
 
 OFF BY DEFAULT (AUD-HONESTY H4): a plain ``tl.trace()`` never arms the aten-dispatch
-census, so ``Trace.capture_verified`` stays ``None`` (NOT RECORDED -- never a clean
+census, so ``Trace.provenance.verified`` stays ``None`` (NOT RECORDED -- never a clean
 bill) and host escapes only the census can see (``from_numpy``/``as_tensor``/
 ``from_dlpack`` round-trips in a plain forward, in-forward storage writes) leave no
 ceiling. A numpy- or dlpack-backed ``autograd.Function`` forward is the one such
@@ -551,7 +548,7 @@ _runnable_ledger_armed: bool = False
 _aten_recording_armed: bool = False
 """Whether the r35 event-lifecycle ledger requires wrapper ownership tokens.
 
-Armed only around a runnable-eligible (``intervention_ready``) capture forward so
+Armed only around a runnable-eligible (``replayable``) capture forward so
 the dispatch census can attribute raised / host-returning aten events to their
 exact wrapper owner even when both diagnostic shadow modes are off.
 """
@@ -811,9 +808,11 @@ def _reentrant_refusal() -> ReentrantTraceError:
         Refusal naming the active model when one is identifiable.
     """
 
-    active_model = getattr(_active_trace, "model_label", None)
-    if active_model is None:
-        active_model = getattr(_active_trace, "model_class_name", None)
+    active_model = getattr(_active_trace, "model_name", None)
+    # A non-Trace active subject (a Recording, a test sentinel) may carry no instance dict.
+    active_state = getattr(_active_trace, "__dict__", {})
+    if active_model is None and not active_state.get("_tl_cleaned_up"):
+        active_model = active_state.get("_source_class_name")
     active_model_text = f" for active model {active_model!r}" if active_model else ""
     return ReentrantTraceError(
         "torchlens.trace / active_logging is not re-entrant: "

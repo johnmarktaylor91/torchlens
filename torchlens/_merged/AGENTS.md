@@ -17,7 +17,8 @@ Both are top-level lazy names routed here. Contract of record:
   at load rederivation. Audit-first: conflicted memberships never join and never
   become presence gaps.
 - Alignment is seq-DELTA from each rank's first recorded key; absolute bases are
-  never compared. Witness digests only DEMOTE (`_witness_consistency`).
+  never compared. Witness digests only DEMOTE (`witness_consistency` in
+  `_witness.py`, which the engine imports and which never imports the engine).
 - Outputs: `MergeDerivation`, `JoinRecord`, `PerRankRef`.
 - `derive_merge()` is a short orchestrator over named stages, in normative order:
   scope guard, membership authority, lineage audit, group table, channel
@@ -25,8 +26,10 @@ Both are top-level lazy names routed here. Contract of record:
   c10d and absolute-seq cross-checks, presence gap, witness verdict), declared
   ranks, order check, stored verdicts. The join assembly (anything that builds a
   `PerRankRef`/`JoinRecord`) stays here; the evidence-only stages live in
-  `_derive_steps.py`, and the per-kind relation table (`_relation_findings`,
-  `_roles_of`) in `_relation_table.py`, which never imports the engine.
+  `_derive_steps.py`, the per-kind relation table (`_relation_findings`) in
+  `_relation_table.py` and the witness verdict in `_witness.py`; neither imports
+  the engine. The order check is `_order_graph` + `_has_cycle` (union-find join
+  classes, then Kahn) behind the thin `_check_order`.
 - `tests/test_merged_derive_steps.py` pins the whole result (digest) or the exact
   refusal of every stage; a change to findings order, messages or codes fails it.
 
@@ -56,7 +59,26 @@ Both are top-level lazy names routed here. Contract of record:
   rank's boundary + ledger evidence into `RankEvidence`; malformed inputs refuse
   typed via `MergeInputError`.
 - `_validate_boundary` is the ordered list of per-boundary rule groups; the rules
-  themselves live in `_boundary_rules.py` and `_boundary_membership.py`.
+  themselves live in `_boundary_rules.py` and `_boundary_membership.py`. The
+  per-core coherence rules (group-rank presence, the `c10d_group_seq` latch,
+  install-epoch agreement, unique correlation keys) are `_CoreCoherence`; the
+  boundary walk is `_walk_boundaries`, the ledger parse `_parse_ledger`.
+
+## _rules.py (shared identity, boundary and provenance rules)
+- Leaf module, raises nothing, imports only `_enums` and the ledger digest. It is
+  the ONE home of every predicate both the evidence validator (`_evidence`,
+  `_boundary_rules`, `_boundary_membership`) and the merge derivation
+  (`_engine`, `_derive_steps`, `_relation_table`, `_witness`) need: identity
+  (`correlation_key`, `group_uid`, `channel_key`, `membership_digest_bound`,
+  `ranks_outside_membership`, `group_rank_in_range`, `GroupRankPresence`),
+  boundary (role vocabularies and selectors `roles_of` / `role_shapes`,
+  `empty_for_tensor_kind`, `is_digest_sequence`) and provenance (completion,
+  witness-policy, install-epoch and disclosure vocabularies, `GroupSeqLatch`).
+- No duplicated predicate: a rule needed on both sides is added HERE and called
+  from both, never re-spelled in a caller. The validator and the engine differ
+  only where the contract differs (parse requires digest fields to be JSON
+  lists and pins `my_group_rank` to the membership position; the engine belt
+  accepts any digest sequence and checks range).
 
 ## _boundary_rules.py
 - Leaf module: the closed boundary vocabularies (`KNOWN_KINDS`, `P2P_KINDS`, the

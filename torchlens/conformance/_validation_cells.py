@@ -114,14 +114,14 @@ def tamper_target(trace: Any) -> Any | None:
 
     candidates = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if not _is_input(op)
         and getattr(op, "out", None) is not None
         and tuple(getattr(op, "children", None) or ())
     ]
     if candidates:
         return candidates[0]
-    fallback = [op for op in trace.layer_list if getattr(op, "out", None) is not None]
+    fallback = [op for op in trace._layer_list if getattr(op, "out", None) is not None]
     return fallback[0] if fallback else None
 
 
@@ -141,7 +141,8 @@ def _consumer_keys(target: Any, trace: Any | None) -> set[str]:
 
     children = {str(key) for key in (getattr(target, "children", None) or ())}
     keys = set(children)
-    for op in getattr(trace, "layer_list", None) or ():
+    layers = trace._layer_list if trace is not None else None
+    for op in layers or ():
         op_keys = _label_keys(op)
         if op_keys & children:
             keys |= op_keys

@@ -841,7 +841,7 @@ def _capture(model: nn.Module, x: torch.Tensor, *, seed: int) -> tl.Trace:
         model,
         x,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
             seed=seed,

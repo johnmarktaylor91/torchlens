@@ -356,8 +356,8 @@ def test_compiled_region_verdict_names_dynamo_not_an_incidental_symptom(_no_stan
     with pytest.warns(UserWarning, match="torch.compile"):
         trace = tl.trace(_CompiledAttributeModel(), torch.randn(2, 4))
 
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "dynamo_region_not_logged"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "dynamo_region_not_logged"
 
 
 @pytest.mark.heavy
@@ -381,8 +381,8 @@ def test_compiled_region_verdict_survives_a_warm_compile_cache(_no_stance: None)
         warm = tl.trace(model, x)
 
     assert warm._raw_dynamo_region_detected is True
-    assert warm.capture_verified is False
-    assert warm.capture_verification_reason == "dynamo_region_not_logged"
+    assert warm.provenance.verified is False
+    assert warm.provenance.verification_reason == "dynamo_region_not_logged"
 
 
 @pytest.mark.heavy
@@ -403,8 +403,8 @@ def test_compiled_attribute_boundary_does_not_depend_on_is_compiling_timing(
 
     assert trace._raw_dynamo_region_detected is True
     assert trace._raw_transform_escape_detected is True
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "dynamo_region_not_logged"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "dynamo_region_not_logged"
 
 
 @pytest.mark.heavy
@@ -431,7 +431,7 @@ def test_ordinary_capture_verdict_is_unchanged_by_the_dynamo_branch() -> None:
 
     trace = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
     assert trace._raw_dynamo_region_detected is False
-    assert trace.capture_verification_reason != "dynamo_region_not_logged"
+    assert trace.provenance.verification_reason != "dynamo_region_not_logged"
 
 
 @pytest.mark.heavy

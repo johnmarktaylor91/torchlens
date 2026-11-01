@@ -17,7 +17,7 @@ import re
 import warnings
 import weakref
 from collections import OrderedDict, defaultdict
-from collections.abc import Iterable, Iterator, Mapping, MutableMapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -200,13 +200,14 @@ def scrub_for_save(
         so ``False`` drops the whole channel; values are never rewritten.
     backend_name:
         Backend identifier for payload audit records. Defaults to
-        ``trace.backend`` when present.
+        ``trace.provenance.backend`` when present.
     payload_materialization:
         Whether this backend can serialize materialized tensor payloads.
     sparse_runnable:
         Whether to apply the runnable sparse-core payload exclusion policy.
     blob_id_floor:
-        Blob ids start at ``blob_id_floor + 1``; streaming passes its writer's issued count.
+        Ids start at ``blob_id_floor + 1``; a streaming finalize passes the
+        writer's issued count so no scrub id repeats a streamed id.
 
     Returns
     -------
@@ -224,8 +225,8 @@ def scrub_for_save(
         include_custom_attributes=include_custom_attributes,
         include_buffer_values=include_buffer_values,
         sparse_runnable=sparse_runnable,
-        structure_only=bool(getattr(trace, "structure_only", False)),
-        backend_name=str(backend_name or getattr(trace, "backend", "torch")),
+        structure_only=bool(isinstance(trace, Trace) and trace._options_structure_only),
+        backend_name=str(backend_name or trace._provenance_backend),
         payload_materialization=payload_materialization,
     )
     options.payload_codec = get_payload_codec(options.backend_name)
@@ -241,12 +242,11 @@ def scrub_for_save(
     scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
     module_accessor = getattr(trace, "_module_logs", None)
-    if module_accessor is not None:
-        scrubbed_state["_io_module_accessor_state"] = _scrub_value(
-            module_accessor, options, memo, blob_specs, blob_counter
-        )
-    else:
-        scrubbed_state["_io_module_accessor_state"] = None
+    scrubbed_state["_io_module_accessor_state"] = (
+        _scrub_value(module_accessor, options, memo, blob_specs, blob_counter)
+        if module_accessor is not None
+        else None
+    )
     _stamp_replacement_evidence(trace, scrubbed_state)
     # AUD-CODE 3.11g: annotation tensors become plain detached tensors on the
     # scrubbed copy (the live trace keeps its session-time objects).
@@ -285,17 +285,15 @@ def _stamp_replacement_evidence(trace: Trace, state: dict[str, Any]) -> None:
 
     scrubbed_ops = [
         op
-        for op in (state.get("layer_list") or ())
+        for op in (state.get("_layer_list") or ())
         if getattr(op, "func_name", None) == "intervention_replacement"
-        or getattr(op, "intervention_replaced", False)
+        or getattr(op, "is_edited", False)
     ]
     if not scrubbed_ops:
         return
     from ..validation._invariants_backward_flow import op_has_genuine_replacement_evidence
 
-    live_ops_by_label = {
-        getattr(op, "label", None): op for op in (getattr(trace, "layer_list", None) or ())
-    }
+    live_ops_by_label = {getattr(op, "label", None): op for op in (trace._layer_list or ())}
     for scrubbed_op in scrubbed_ops:
         live_op = live_ops_by_label.get(getattr(scrubbed_op, "label", None))
         corroborated = bool(
@@ -325,10 +323,10 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     logical identifiers.
     """
 
-    ops = list(state.get("layer_list") or ())
-    layers = list((state.get("layer_logs") or {}).values())
+    ops = list(state.get("_layer_list") or ())
+    layers = list((state.get("_layer_logs") or {}).values())
     params = sorted(
-        (state.get("param_logs") or {}).values(),
+        (state.get("_param_logs") or {}).values(),
         key=lambda param: (
             str(getattr(param, "address", "")),
             str(getattr(param, "name", "")),
@@ -444,7 +442,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
                 remap_barcode_text(key): value for key, value in parent_param_ops.items()
             }
 
-    equivalence_groups = state.get("op_equivalence_classes")
+    equivalence_groups = state.get("_graph_op_equivalence_classes")
     if isinstance(equivalence_groups, dict):
         rebuilt_groups = {
             equivalence_class_map.get(key) or canonical_equivalence_key(key): value
@@ -465,10 +463,10 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
             remapped_groups.update(rebuilt_groups)
         else:
             remapped_groups = type(equivalence_groups)(rebuilt_groups)
-        state["op_equivalence_classes"] = remapped_groups
+        state["_graph_op_equivalence_classes"] = remapped_groups
 
-    grad_fn_order = list(state.get("grad_fn_order") or ())
-    grad_fn_logs = state.get("grad_fn_logs") or {}
+    grad_fn_order = list(state.get("_autograd_grad_fn_order") or ())
+    grad_fn_logs = state.get("_grad_fn_logs") or {}
     grad_id_map: dict[int, int] = {}
 
     def register_grad_id(value: Any) -> None:
@@ -493,7 +491,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     # reached them, so a raw grad_fn memory address persisted verbatim into
     # ``.tlspec`` (process-dependent artifact bytes + a dangling address in a
     # portable file). Register + remap them through the same trace-local map.
-    backward_pass_logs = state.get("backward_pass_logs")
+    backward_pass_logs = state.get("_backward_pass_logs")
     pass_records = (
         tuple(backward_pass_logs.values()) if isinstance(backward_pass_logs, dict) else ()
     )
@@ -515,11 +513,10 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
                 remap_grad_id(next_id) for next_id in grad_fn.next_grad_fn_ids
             ]
             remapped_logs[remap_grad_id(grad_id)] = grad_fn
-        state["grad_fn_logs"] = remapped_logs
-    state["grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
-    state["backward_root_grad_fn_object_ids"] = [
-        remap_grad_id(grad_id) for grad_id in (state.get("backward_root_grad_fn_object_ids") or ())
-    ]
+        state["_grad_fn_logs"] = remapped_logs
+    state["_autograd_grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
+    roots = state.get("_autograd_backward_root_grad_fn_object_ids") or ()
+    state["_autograd_backward_root_grad_fn_object_ids"] = [remap_grad_id(g) for g in roots]
     for record in (*ops, *layers):
         record.grad_fn_object_id = remap_grad_id(getattr(record, "grad_fn_object_id", None))
     for pass_record in pass_records:
@@ -527,8 +524,8 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         if root_ids:
             pass_record.root_grad_fn_ids = [remap_grad_id(root_id) for root_id in root_ids]
 
-    state["model_object_id"] = 1 if state.get("model_object_id") is not None else None
-    state["input_object_id"] = 1 if state.get("input_object_id") is not None else None
+    for object_id_key in ("_provenance_model_object_id", "_provenance_input_object_id"):
+        state[object_id_key] = 1 if state.get(object_id_key) is not None else None
 
 
 def detach_conditional_trace_backrefs(value: Any) -> None:
@@ -554,7 +551,7 @@ def detach_conditional_trace_backrefs(value: Any) -> None:
 
     if not isinstance(value, MutableMapping):
         return
-    accessor = value.get("conditionals")
+    accessor = value.get("_graph_conditionals")
     if not isinstance(accessor, ConditionalAccessor):
         return
     detached: list[Conditional] = []
@@ -567,7 +564,7 @@ def detach_conditional_trace_backrefs(value: Any) -> None:
         conditional_copy = copy.copy(conditional)
         conditional_copy.arms = detached_arms
         detached.append(conditional_copy)
-    value["conditionals"] = ConditionalAccessor(detached)
+    value["_graph_conditionals"] = ConditionalAccessor(detached)
 
 
 def _mapping_key_payload_reason(key: Any, options: _ScrubOptions) -> str | None:
@@ -631,43 +628,48 @@ _SCRUB_TUPLE = 4
 _SCRUB_SET = 5
 _SCRUB_FROZENSET = 6
 _SCRUB_OBJECT = 7
-# The two mapping kinds sort ABOVE _SCRUB_OBJECT so one ``>=`` test selects "is a
-# mapping" (which shares the key-payload refusal) before splitting on flavour.
 _SCRUB_ORDERED_DICT = 8
 _SCRUB_MAPPING = 9
+# A ``_PORTABLE_STATE_SPEC`` owner that is not one of the containers above; the
+# spec itself is read at scrub time (tests edit spec rows in place).
+_SCRUB_SPEC_OBJECT = 10
 
 _SCRUB_VALUE_KINDS: weakref.WeakKeyDictionary[type, int] = weakref.WeakKeyDictionary()
+
+
+#: Container classification order for :func:`_scrub_value_kind`: exactly the
+#: ``isinstance`` chain it replaces. ``torch.Size`` precedes ``tuple`` (it is a
+#: tuple subclass) and ``OrderedDict``/``defaultdict`` precede plain ``dict`` so
+#: their observable ordering and default-factory behavior survive a round trip.
+_SCRUB_KIND_ORDER: tuple[tuple[type | tuple[type, ...], int], ...] = (
+    (_SIMPLE_KEEP_TYPES, _SCRUB_SIMPLE),
+    (torch.Size, _SCRUB_SIZE),
+    (BlobRef, _SCRUB_BLOBREF),
+    (list, _SCRUB_LIST),
+    (tuple, _SCRUB_TUPLE),
+    (set, _SCRUB_SET),
+    (frozenset, _SCRUB_FROZENSET),
+    (OrderedDict, _SCRUB_ORDERED_DICT),
+    (dict, _SCRUB_MAPPING),
+)
 
 
 def _scrub_value_kind(value_type: type) -> int:
     """Classify one node type for :func:`_scrub_value`, memoized per type.
 
-    The branch order below is exactly the ``isinstance`` chain it replaces:
-    ``torch.Size`` before ``tuple`` (it is a tuple subclass), and
-    ``OrderedDict``/``defaultdict`` before plain ``dict`` so their observable
-    ordering and default-factory behavior survive a round trip.
+    Containers are matched in :data:`_SCRUB_KIND_ORDER`; a spec owner is only
+    recognized after every container kind, as the old chain did, and anything
+    else is a spec-less leaf.
     """
 
-    if issubclass(value_type, _SIMPLE_KEEP_TYPES):
-        kind = _SCRUB_SIMPLE
-    elif issubclass(value_type, torch.Size):
-        kind = _SCRUB_SIZE
-    elif issubclass(value_type, BlobRef):
-        kind = _SCRUB_BLOBREF
-    elif issubclass(value_type, list):
-        kind = _SCRUB_LIST
-    elif issubclass(value_type, tuple):
-        kind = _SCRUB_TUPLE
-    elif issubclass(value_type, set):
-        kind = _SCRUB_SET
-    elif issubclass(value_type, frozenset):
-        kind = _SCRUB_FROZENSET
-    elif issubclass(value_type, OrderedDict):
-        kind = _SCRUB_ORDERED_DICT
-    elif issubclass(value_type, dict):
-        kind = _SCRUB_MAPPING
+    kind = _SCRUB_OBJECT
+    for base, candidate in _SCRUB_KIND_ORDER:
+        if issubclass(value_type, base):
+            kind = candidate
+            break
     else:
-        kind = _SCRUB_OBJECT
+        if getattr(value_type, "_PORTABLE_STATE_SPEC", None) is not None:
+            kind = _SCRUB_SPEC_OBJECT
     _SCRUB_VALUE_KINDS[value_type] = kind
     return kind
 
@@ -842,6 +844,43 @@ def _portable_default_factory(
     return None
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class _ScrubWalk:
+    """Per-pass state shared by every node of one portable scrub walk.
+
+    ``payload_owner`` is ``None`` on the METADATA walk (:func:`_scrub_value`)
+    and the ``(owner, field_name)`` pair of a ``BLOB_RECURSIVE`` field on the
+    PAYLOAD walk (:func:`_blobify_recursive_value`). Both walks share every
+    container rule in :data:`_SCRUB_NODE_HANDLERS` and differ only at the
+    leaves (:func:`_scrub_object_node`) and in their cycle/depth wording.
+    """
+
+    options: _ScrubOptions
+    memo: dict[int, Any]
+    blob_specs: list[BlobSpec]
+    blob_counter: list[int]
+    stringify_unknown: bool = False
+    payload_owner: tuple[Any, str] | None = None
+
+    @property
+    def noun(self) -> str:
+        """Return the wording of this walk's depth and cycle refusals."""
+
+        return "metadata" if self.payload_owner is None else "payload"
+
+    def for_fields(self) -> _ScrubWalk:
+        """Return the metadata walk that scrubs a spec object's fields.
+
+        Neither ``stringify_unknown`` nor a payload owner crosses into a
+        ``_PORTABLE_STATE_SPEC`` object: its fields follow their declared
+        policies on a plain metadata walk sharing this walk's memo and blobs.
+        """
+
+        if self.payload_owner is None and not self.stringify_unknown:
+            return self
+        return _ScrubWalk(self.options, self.memo, self.blob_specs, self.blob_counter)
+
+
 def _scrub_value(
     value: Any,
     options: _ScrubOptions,
@@ -867,381 +906,473 @@ def _scrub_value(
         the rest of the ``Trace`` object graph.
     """
 
-    if _depth > _PORTABLE_WALK_MAX_DEPTH:
-        raise ArtifactError(
-            f"Portable metadata exceeds the maximum depth of {_PORTABLE_WALK_MAX_DEPTH}."
-        )
+    walk = _ScrubWalk(options, memo, blob_specs, blob_counter, stringify_unknown=stringify_unknown)
+    return _scrub_node(value, walk, _depth)
 
-    # One cached type lookup replaces the up-to-ten ``isinstance`` chain this
-    # branch table used to re-run for every one of the ~225k nodes a ResNet scrub
-    # visits. :func:`_scrub_value_kind` resolves the branches in the identical
-    # order, so the selected branch is unchanged.
+
+def _scrub_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
+    """Scrub one node by dispatching on its memoized value kind.
+
+    One cached type lookup replaces the up-to-ten ``isinstance`` chain the
+    old branch table re-ran for every one of the quarter-million nodes a ResNet scrub
+    visits; :func:`_scrub_value_kind` resolves the kinds in the identical
+    order, so the selected rule is unchanged.
+    """
+
+    if depth > _PORTABLE_WALK_MAX_DEPTH:
+        raise ArtifactError(
+            f"Portable {walk.noun} exceeds the maximum depth of {_PORTABLE_WALK_MAX_DEPTH}."
+        )
     kind = _SCRUB_VALUE_KINDS.get(type(value))
     if kind is None:
         kind = _scrub_value_kind(type(value))
-    if kind == _SCRUB_SIMPLE:
-        return value
-    if kind == _SCRUB_SIZE:
-        return torch.Size(value)
-    if kind == _SCRUB_BLOBREF:
-        return value
-    if kind == _SCRUB_LIST:
-        obj_id = id(value)
-        if obj_id in memo:
-            return memo[obj_id]
-        if type(value) is not list:
-            # Symmetry with the tuple-subclass downgrade disclosure (R10-9): a
-            # list/set/frozenset subclass rebuilds as a plain builtin, silently
-            # losing its type; disclose it once per type like tuples do.
-            _disclose_container_downgrade(
-                options,
-                value,
-                "Dropping non-portable list subclass {name} in portable metadata; "
-                "it rebuilds as a plain list.",
-            )
-        rebuilt_list: list[Any] = []
-        _pin_in_memo(memo, value)
-        memo[obj_id] = rebuilt_list
-        rebuilt_list.extend(
-            _scrub_value(
-                item,
-                options,
-                memo,
-                blob_specs,
-                blob_counter,
-                stringify_unknown,
-                _depth + 1,
-            )
-            for item in value
-        )
-        return rebuilt_list
-    if kind == _SCRUB_TUPLE:
-        obj_id = id(value)
-        cached = memo.get(obj_id)
-        if cached is _SCRUB_IN_PROGRESS:
-            raise ArtifactError("Portable metadata contains a cycle through a tuple.")
-        if cached is not None:
-            return cached
-        _pin_in_memo(memo, value)
-        memo[obj_id] = _SCRUB_IN_PROGRESS
-        try:
-            rebuilt_tuple = _rebuild_tuple_value(
-                value,
-                (
-                    _scrub_value(
-                        item,
-                        options,
-                        memo,
-                        blob_specs,
-                        blob_counter,
-                        stringify_unknown,
-                        _depth + 1,
-                    )
-                    for item in value
-                ),
-                options,
-            )
-        except BaseException:
-            memo.pop(obj_id, None)
-            raise
-        memo[obj_id] = rebuilt_tuple
-        return rebuilt_tuple
-    if kind == _SCRUB_SET:
-        obj_id = id(value)
-        if obj_id in memo:
-            return memo[obj_id]
-        if type(value) is not set:
-            _disclose_container_downgrade(
-                options,
-                value,
-                "Dropping non-portable set subclass {name} in portable metadata; "
-                "it rebuilds as a plain set.",
-            )
-        rebuilt_set: set[Any] = set()
-        _pin_in_memo(memo, value)
-        memo[obj_id] = rebuilt_set
-        rebuilt_set.update(
-            _scrub_value(
-                item,
-                options,
-                memo,
-                blob_specs,
-                blob_counter,
-                stringify_unknown,
-                _depth + 1,
-            )
-            for item in value
-        )
-        return rebuilt_set
-    if kind == _SCRUB_FROZENSET:
-        obj_id = id(value)
-        cached = memo.get(obj_id)
-        if cached is _SCRUB_IN_PROGRESS:
-            raise ArtifactError("Portable metadata contains a cycle through a frozenset.")
-        if cached is not None:
-            return cached
-        if type(value) is not frozenset:
-            _disclose_container_downgrade(
-                options,
-                value,
-                "Dropping non-portable frozenset subclass {name} in portable "
-                "metadata; it rebuilds as a plain frozenset.",
-            )
-        _pin_in_memo(memo, value)
-        memo[obj_id] = _SCRUB_IN_PROGRESS
-        try:
-            rebuilt_frozenset = frozenset(
-                _scrub_value(
-                    item,
-                    options,
-                    memo,
-                    blob_specs,
-                    blob_counter,
-                    stringify_unknown,
-                    _depth + 1,
-                )
-                for item in value
-            )
-        except BaseException:
-            memo.pop(obj_id, None)
-            raise
-        memo[obj_id] = rebuilt_frozenset
-        return rebuilt_frozenset
-    if kind >= _SCRUB_ORDERED_DICT:
-        # Every mapping kind: refuse tensor-payload keys before the type-specific
-        # branches rebuild the mapping so a payload cannot slip into
-        # ``metadata.pkl`` unscrubbed and un-inventoried.
-        _reject_payload_mapping_keys(value, options)
-        obj_id = id(value)
-        if obj_id in memo:
-            return memo[obj_id]
-        _pin_in_memo(memo, value)
-        if isinstance(value, defaultdict):
-            rebuilt: defaultdict[Any, Any] = defaultdict(_portable_default_factory(value, options))
-            memo[obj_id] = rebuilt
-            for key, item in value.items():
-                rebuilt[key] = _scrub_value(
-                    item,
-                    options,
-                    memo,
-                    blob_specs,
-                    blob_counter,
-                    stringify_unknown,
-                    _depth + 1,
-                )
-            return rebuilt
-        if kind == _SCRUB_ORDERED_DICT:
-            rebuilt_ordered: OrderedDict[Any, Any] = OrderedDict()
-            memo[obj_id] = rebuilt_ordered
-            for key, item in value.items():
-                rebuilt_ordered[key] = _scrub_value(
-                    item,
-                    options,
-                    memo,
-                    blob_specs,
-                    blob_counter,
-                    stringify_unknown,
-                    _depth + 1,
-                )
-            return rebuilt_ordered
-        rebuilt_mapping: dict[Any, Any] = {}
-        memo[obj_id] = rebuilt_mapping
-        for key, item in value.items():
-            rebuilt_mapping[key] = _scrub_value(
-                item,
-                options,
-                memo,
-                blob_specs,
-                blob_counter,
-                stringify_unknown,
-                _depth + 1,
-            )
-        return rebuilt_mapping
+    return _SCRUB_NODE_HANDLERS[kind](value, walk, depth)
 
-    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
-    if spec is None:
-        if stringify_unknown and not _is_safely_picklable(value):
-            return _stringify_value(value)
-        return value
+
+def _keep_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
+    """Keep a replay-safe literal or an already-blobified ``BlobRef`` as is."""
+
+    return value
+
+
+def _scrub_size_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
+    """Rebuild a ``torch.Size`` (an int tuple, never memoized or walked)."""
+
+    return torch.Size(value)
+
+
+def _scrub_mutable_collection(
+    value: Any, walk: _ScrubWalk, depth: int, builtin: type[list[Any]] | type[set[Any]]
+) -> Any:
+    """Rebuild a list or set under the shared memo so shared identity survives.
+
+    The empty rebuilt container is memoized BEFORE its items are scrubbed, so
+    a self-referencing list/set rebuilds as a self-referencing copy instead
+    of recursing until the depth cap. Only the metadata walk discloses a
+    flattened subclass (R10-9 symmetry with tuples); the payload walk never
+    did, and this keeps its warning surface unchanged.
+
+    Items are appended in a plain loop rather than through a generator: a
+    generator is one more Python frame per nesting level, and the depth cap
+    must fire as a typed ``ArtifactError`` before the interpreter's recursion
+    limit does.
+    """
+
+    memo = walk.memo
     obj_id = id(value)
     if obj_id in memo:
         return memo[obj_id]
+    if type(value) is not builtin and walk.payload_owner is None:
+        name = builtin.__name__
+        _disclose_container_downgrade(
+            walk.options,
+            value,
+            f"Dropping non-portable {name} subclass {{name}} in portable metadata; "
+            f"it rebuilds as a plain {name}.",
+        )
+    rebuilt = builtin()
+    _pin_in_memo(memo, value)
+    memo[obj_id] = rebuilt
+    add = rebuilt.append if isinstance(rebuilt, list) else rebuilt.add
+    for item in value:
+        add(_scrub_node(item, walk, depth + 1))
+    return rebuilt
 
+
+def _rebuild_frozenset_value(
+    value: Any, items: Iterable[Any], options: _ScrubOptions | None
+) -> frozenset[Any]:
+    """Rebuild a frozenset from its scrubbed items (subclass type not kept)."""
+
+    return frozenset(items)
+
+
+@dataclass(frozen=True, slots=True)
+class _ImmutableRule:
+    """How :func:`_scrub_immutable_collection` rebuilds one container kind."""
+
+    rebuild: Callable[[Any, Iterable[Any], _ScrubOptions | None], Any]
+    noun: str
+    disclose_subclass: bool
+
+
+def _scrub_immutable_collection(
+    value: Any, walk: _ScrubWalk, depth: int, rule: _ImmutableRule
+) -> Any:
+    """Rebuild an immutable container whose identity exists only once built.
+
+    A tuple or frozenset cannot be memoized before its items are scrubbed
+    (there is no empty instance to fill in), so a re-entry while it is in
+    progress is a true cycle and is refused rather than looped on. A
+    frozenset subclass flattens to a plain frozenset, disclosed once on the
+    metadata walk (``disclose_subclass``); tuple subclasses are disclosed by
+    :func:`_rebuild_tuple_value` itself, which preserves the loadable ones.
+    """
+
+    memo = walk.memo
+    obj_id = id(value)
+    cached = memo.get(obj_id)
+    if cached is _SCRUB_IN_PROGRESS:
+        raise ArtifactError(f"Portable {walk.noun} contains a cycle through a {rule.noun}.")
+    if cached is not None:
+        return cached
+    if rule.disclose_subclass and type(value) is not frozenset and walk.payload_owner is None:
+        _disclose_container_downgrade(
+            walk.options,
+            value,
+            "Dropping non-portable frozenset subclass {name} in portable "
+            "metadata; it rebuilds as a plain frozenset.",
+        )
+    _pin_in_memo(memo, value)
+    memo[obj_id] = _SCRUB_IN_PROGRESS
+    try:
+        items: list[Any] = []
+        for item in value:
+            items.append(_scrub_node(item, walk, depth + 1))
+        rebuilt = rule.rebuild(value, items, walk.options)
+    except BaseException:
+        memo.pop(obj_id, None)
+        raise
+    memo[obj_id] = rebuilt
+    return rebuilt
+
+
+def _empty_mapping_like(
+    value: Mapping[Any, Any], options: _ScrubOptions
+) -> MutableMapping[Any, Any]:
+    """Return the empty portable mapping a scrubbed ``value`` rebuilds into.
+
+    ``defaultdict`` keeps a load-reconstructible factory
+    (:func:`_portable_default_factory`), ``OrderedDict`` keeps its ordering
+    type, and every other mapping (plain ``dict`` and its subclasses)
+    rebuilds as a plain ``dict``.
+    """
+
+    if isinstance(value, defaultdict):
+        return defaultdict(_portable_default_factory(value, options))
+    if isinstance(value, OrderedDict):
+        return OrderedDict()
+    return {}
+
+
+def _scrub_mapping_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
+    """Rebuild any mapping kind after refusing tensor-payload keys.
+
+    The key refusal runs for EVERY mapping flavour before the rebuild so a
+    payload cannot slip into ``metadata.pkl`` unscrubbed and un-inventoried
+    (see :func:`_mapping_key_payload_reason`). Values are scrubbed; keys are
+    copied verbatim.
+    """
+
+    _reject_payload_mapping_keys(value, walk.options)
+    memo = walk.memo
+    obj_id = id(value)
+    if obj_id in memo:
+        return memo[obj_id]
+    _pin_in_memo(memo, value)
+    rebuilt = _empty_mapping_like(value, walk.options)
+    memo[obj_id] = rebuilt
+    for key, item in value.items():
+        rebuilt[key] = _scrub_node(item, walk, depth + 1)
+    return rebuilt
+
+
+def _scrub_object_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
+    """Scrub a spec-less non-container node: tensor payload or opaque leaf.
+
+    The payload walk blobifies anything its codec recognizes and stringifies
+    every other spec-less object (the ``saved_args``/``custom_attributes``
+    contract). The metadata walk keeps a spec-less object unless
+    ``stringify_unknown`` is set AND it cannot be pickled, in which case it
+    becomes a bounded ``<scrubbed:TypeName>`` placeholder.
+    """
+
+    owner = walk.payload_owner
+    if owner is not None and walk.options.payload_codec.can_encode(value):
+        return _blobify_tensor_field(
+            owner[0], owner[1], value, walk.blob_specs, walk.blob_counter, walk.options
+        )
+    if owner is not None:
+        return _stringify_value(value)
+    if walk.stringify_unknown and not _is_safely_picklable(value):
+        return _stringify_value(value)
+    return value
+
+
+def _scrub_spec_object(value: Any, walk: _ScrubWalk, depth: int) -> Any:
+    """Scrub an object that declares a ``_PORTABLE_STATE_SPEC``, field by field.
+
+    On the payload walk an encodable spec object is blobbed whole; otherwise
+    its fields follow their declared policies on a plain metadata walk
+    (:meth:`_ScrubWalk.for_fields`). The object is memoized before its fields
+    are scrubbed so self-references resolve to the scrubbed copy.
+    """
+
+    owner = walk.payload_owner
+    if owner is not None:
+        if walk.options.payload_codec.can_encode(value):
+            return _blobify_tensor_field(
+                owner[0], owner[1], value, walk.blob_specs, walk.blob_counter, walk.options
+            )
+        walk = walk.for_fields()
+    elif walk.stringify_unknown:
+        walk = walk.for_fields()
+    memo = walk.memo
+    obj_id = id(value)
+    if obj_id in memo:
+        return memo[obj_id]
     scrubbed_obj = state_new(type(value))
     _pin_in_memo(memo, value)
     memo[obj_id] = scrubbed_obj
-    scrubbed_state: dict[str, Any] = {}
     owner_is_trace = isinstance(value, Trace)
+    scrubbed_state = _scrub_spec_fields(value, walk, depth, owner_is_trace=owner_is_trace)
+    if owner_is_trace:
+        _stamp_trace_portable_rows(value, scrubbed_state, walk.options)
+    else:
+        _apply_owner_source_policies(value, scrubbed_state, walk.options)
+    return state_restore(scrubbed_obj, scrubbed_state)
+
+
+def _scrub_spec_fields(
+    value: Any, walk: _ScrubWalk, depth: int, *, owner_is_trace: bool
+) -> dict[str, Any]:
+    """Return the scrubbed state of a ``_PORTABLE_STATE_SPEC`` owner.
+
+    An undeclared live field is refused (:func:`_undeclared_field_error`)
+    unless it is a ``functools.cached_property`` cell (derived state, skipped).
+    DROP/WEAKREF_STRIP and plain KEEP are resolved inline, in ``_scrub_field``'s
+    own branch order, because this loop scrubs hundreds of thousands of fields
+    per ResNet save and one Python call per field was measurable.
+    """
+
+    spec: Mapping[str, FieldPolicy] = type(value)._PORTABLE_STATE_SPEC
+    raw_fields = _TRACE_RAW_FIELDS if owner_is_trace else frozenset[str]()
+    scrubbed_state: dict[str, Any] = {}
     for field_name, field_value in _state_items_for_scrub(value, spec):
         if owner_is_trace and _is_runtime_only_trace_field(field_name):
             continue
-        if field_name not in spec:
-            # A ``functools.cached_property`` read caches its value in the
-            # instance ``__dict__`` under the property's own name (e.g. the
-            # public ``Trace.recipe`` accessor). Those cells are
-            # DERIVED state that rebuilds on access, never portable fields,
-            # and they appear only after a read -- refusing them here made a
-            # read-only public property poison every later ``Trace.save``
-            # (B3R4-R10-1). Skip the whole class structurally; the check runs
-            # only on the refusal path, so the hot field loop pays nothing.
-            if isinstance(
-                inspect.getattr_static(type(value), field_name, None),
-                functools.cached_property,
-            ):
-                continue
-            # Teach at the point of failure: an undeclared ``_<name>_cache``
-            # cell is almost always DERIVED state poked into ``__dict__`` by a
-            # lazily-caching public accessor read (the ModuleCall/Module
-            # ``.facets`` incident) -- name that accessor when it exists so the
-            # message points at the read that poisoned the save, not just an
-            # internal field the user never heard of.
-            accessor_hint = ""
-            if field_name.startswith("_") and field_name.endswith("_cache"):
-                accessor_name = field_name[1 : -len("_cache")]
-                if isinstance(
-                    inspect.getattr_static(type(value), accessor_name, None),
-                    property,
-                ):
-                    accessor_hint = (
-                        f" This cell was populated by reading the public "
-                        f"`.{accessor_name}` accessor; a lazy derived cache "
-                        f"must be declared FieldPolicy.DROP in "
-                        f"{type(value).__name__}._PORTABLE_STATE_SPEC so a "
-                        f"read-only access cannot poison a later save."
-                    )
-            # Same lesson for LEDGERED-but-undeclared Trace transients (the
-            # draw() `_last_encoding_state` incident: ledgered as
-            # "scrub-declared runtime-only" while no declaration existed) --
-            # quote the ledger row so the message names the writer.
-            if owner_is_trace and not accessor_hint:
-                from .._data_classes._trace_components import (
-                    TRACE_EXTERNAL_WRITE_EXEMPTIONS,
-                )
-
-                ledger_reason = TRACE_EXTERNAL_WRITE_EXEMPTIONS.get(field_name)
-                if ledger_reason is not None:
-                    accessor_hint = (
-                        f" This field is ledgered in "
-                        f"TRACE_EXTERNAL_WRITE_EXEMPTIONS as: {ledger_reason!r}."
-                        f" The ledger documents the write; it is not a scrub "
-                        f"policy. Enroll the runtime-only transient in the "
-                        f"scrub's runtime-only set (or give it a "
-                        f"FieldPolicy.DROP row) so populating it cannot "
-                        f"poison a later save."
-                    )
-            raise ArtifactError(
-                f"{type(value).__name__}.{field_name} is missing from "
-                f"_PORTABLE_STATE_SPEC. Every live state field needs an "
-                f"explicit portability policy before it can be saved."
-                f"{accessor_hint}"
-            )
-        if field_name == "_is_in_conditional_body" and field_value is None:
-            field_value = False
-        if field_name == "_capture_outcome" and field_value is not None:
-            # The settled capture outcome persists as its STRING-ONLY payload
-            # (tlspec v7): the safe-unpickle allowlist never needs the record
-            # class, and loads parse the payload against closed vocabularies.
-            field_value = field_value.to_payload() if hasattr(field_value, "to_payload") else None
-        policy = _effective_policy(value, field_name, spec[field_name], options)
-        # The two overwhelmingly common policies are resolved here instead of
-        # through :func:`_scrub_field`, which is one Python call per field on a walk
-        # that scrubs ~160k fields per ResNet save. Both shortcuts reproduce
-        # ``_scrub_field``'s own branch order exactly: its DROP/WEAKREF_STRIP test
-        # runs first, and KEEP falls through every field-specific serializer to the
-        # generic ``_scrub_value`` -- except for a Trace raw input/output field,
-        # which keeps routing through the full function.
-        if policy is FieldPolicy.DROP or policy is FieldPolicy.WEAKREF_STRIP:
+        declared = spec.get(field_name)
+        if declared is None:
+            _refuse_undeclared_field(value, field_name, owner_is_trace)
+            continue
+        if field_name in _NORMALIZED_FIELD_NAMES:
+            field_value = _normalize_field_value(field_name, field_value)
+        policy = _effective_policy(value, field_name, declared, walk.options)
+        if policy in _NULLED_POLICIES:
             scrubbed_state[field_name] = None
-            continue
-        if policy is FieldPolicy.KEEP and not (
-            owner_is_trace and (field_name == "raw_input" or field_name == "raw_output")
-        ):
-            scrubbed_state[field_name] = _scrub_value(
-                field_value,
-                options,
-                memo,
-                blob_specs,
-                blob_counter,
-                _depth=_depth + 1,
-            )
-            continue
-        scrubbed_state[field_name] = _scrub_field(
-            owner=value,
-            field_name=field_name,
-            field_value=field_value,
-            policy=policy,
-            options=options,
-            memo=memo,
-            blob_specs=blob_specs,
-            blob_counter=blob_counter,
-            depth=_depth + 1,
-        )
-
-    if isinstance(value, Trace):
-        # B8-20: a functools.partial repr embeds its bound argument VALUES, so the
-        # scrubbed persistence repr redacts them.
-        scrubbed_state["_activation_transform_repr"] = _scrubbed_transform_repr(
-            value.activation_transform
-        )
-        # P7/R10: a capture TorchLens itself refused to bless must not round-trip
-        # into "no claim". The NEGATIVE disclosure persists as a string-only row
-        # (mirroring _capture_outcome's treatment); True/None stay session-time,
-        # so a loaded artifact can never CLAIM verification -- the row can only
-        # ever worsen a verdict, preserving the monotonicity the runnable side
-        # enforces structurally. rescue_rerun stays session-time as documented.
-        if getattr(value, "capture_verified", None) is False:
-            reason = getattr(value, "capture_verification_reason", None)
-            scrubbed_state["_capture_verification"] = {
-                "verified": False,
-                "reason": str(reason) if reason is not None else None,
-            }
-        scrubbed_state["tlspec_version"] = TLSPEC_VERSION
-        if _prerelease._ACTIVE:
-            # EVERY switch-on write is marked, whether or not a gated field
-            # actually persisted in this state -- no per-field accounting can
-            # omit the marker, so switched and real-version artifacts are
-            # never indistinguishable (loads refuse the marker typed unless
-            # the switch is active; see torchlens._io.prerelease).
-            scrubbed_state[_prerelease.PRERELEASE_STATE_KEY] = (
-                _prerelease.prerelease_marker_payload()
-            )
+        elif policy is FieldPolicy.KEEP and field_name not in raw_fields:
+            scrubbed_state[field_name] = _scrub_node(field_value, walk, depth + 1)
         else:
-            # Registered pre-release ANNOTATIONS sub-keys are new persistence
-            # write paths inside the already-persisting annotations mapping
-            # (e.g. the episode ledger): they never ride a real artifact of
-            # the frozen tlspec version. The pop acts on the scrubbed copy
-            # only -- the live trace keeps its session-time annotations.
-            gated_annotation_keys = _prerelease.gated_annotations_keys()
-            if gated_annotation_keys:
-                annotations_state = scrubbed_state.get("annotations")
-                if isinstance(annotations_state, dict):
-                    for gated_key in gated_annotation_keys:
-                        annotations_state.pop(gated_key, None)
-        _apply_advisory_source_policy(scrubbed_state, options)
-        _apply_source_metadata_policy(scrubbed_state, options)
-        _apply_trace_blob_policy(scrubbed_state, options)
-    # ``FuncCallLocation`` is matched by name rather than ``isinstance`` to avoid
-    # an import cycle between ``_io`` and ``data_classes``; it is a unique
-    # internal class with no subclasses.
-    elif type(value).__name__ == "FuncCallLocation":
+            scrubbed_state[field_name] = _scrub_field(
+                owner=value,
+                field_name=field_name,
+                field_value=field_value,
+                policy=policy,
+                walk=walk,
+                depth=depth + 1,
+            )
+    return scrubbed_state
+
+
+#: Per-kind scrub rules, indexed by the :func:`_scrub_value_kind` constants.
+#: Container rules are bound with ``functools.partial`` (a C-level call, no
+#: extra Python frame) so every nesting level costs the same two frames the
+#: old branch chain did; see :func:`_scrub_mutable_collection`.
+_SCRUB_NODE_HANDLERS: tuple[Callable[[Any, _ScrubWalk, int], Any], ...] = (
+    _keep_node,  # _SCRUB_SIMPLE
+    _scrub_size_node,  # _SCRUB_SIZE
+    _keep_node,  # _SCRUB_BLOBREF
+    functools.partial(_scrub_mutable_collection, builtin=list),  # _SCRUB_LIST
+    functools.partial(  # _SCRUB_TUPLE
+        _scrub_immutable_collection,
+        rule=_ImmutableRule(_rebuild_tuple_value, "tuple", disclose_subclass=False),
+    ),
+    functools.partial(_scrub_mutable_collection, builtin=set),  # _SCRUB_SET
+    functools.partial(  # _SCRUB_FROZENSET
+        _scrub_immutable_collection,
+        rule=_ImmutableRule(_rebuild_frozenset_value, "frozenset", disclose_subclass=True),
+    ),
+    _scrub_object_node,  # _SCRUB_OBJECT
+    _scrub_mapping_node,  # _SCRUB_ORDERED_DICT
+    _scrub_mapping_node,  # _SCRUB_MAPPING
+    _scrub_spec_object,  # _SCRUB_SPEC_OBJECT
+)
+
+#: Trace fields whose KEEP policy still routes through the raw-value save policy.
+_TRACE_RAW_FIELDS = frozenset({"input", "transformed_output"})
+#: Policies whose field is written back as ``None`` without a walk.
+_NULLED_POLICIES = frozenset({FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP})
+
+#: Fields whose live value is normalized before its policy applies.
+_NORMALIZED_FIELD_NAMES = frozenset({"_is_in_conditional_body", "_capture_outcome"})
+
+
+def _normalize_field_value(field_name: str, field_value: Any) -> Any:
+    """Normalize the two fields whose live value is not their portable value."""
+
+    if field_name == "_is_in_conditional_body" and field_value is None:
+        return False
+    if field_name == "_capture_outcome" and field_value is not None:
+        # The settled capture outcome persists as its STRING-ONLY payload
+        # (tlspec v7): the safe-unpickle allowlist never needs the record
+        # class, and loads parse the payload against closed vocabularies.
+        return field_value.to_payload() if hasattr(field_value, "to_payload") else None
+    return field_value
+
+
+def _refuse_undeclared_field(owner: Any, field_name: str, owner_is_trace: bool) -> None:
+    """Refuse a live field missing from the spec unless it is a cached_property cell."""
+
+    if not _is_cached_property_cell(type(owner), field_name):
+        raise _undeclared_field_error(owner, field_name, owner_is_trace)
+
+
+def _is_cached_property_cell(owner_type: type, field_name: str) -> bool:
+    """Return whether an undeclared field is a ``functools.cached_property`` cell.
+
+    A ``cached_property`` read caches its value in the instance ``__dict__``
+    under the property's own name (e.g. the public ``Trace.recipe`` accessor).
+    Those cells are DERIVED state that rebuilds on access, never portable
+    fields, and they appear only after a read -- refusing them made a
+    read-only public property poison every later ``Trace.save`` (B3R4-R10-1).
+    The check runs only on the refusal path, so the hot field loop pays nothing.
+    """
+
+    return isinstance(
+        inspect.getattr_static(owner_type, field_name, None), functools.cached_property
+    )
+
+
+def _undeclared_field_hint(value: Any, field_name: str, owner_is_trace: bool) -> str:
+    """Name the writer that populated an undeclared field, when one is known.
+
+    An undeclared ``_<name>_cache`` cell is almost always DERIVED state poked
+    into ``__dict__`` by a lazily-caching public accessor read (the
+    ModuleCall/Module ``.facets`` incident): name that accessor when it
+    exists. A LEDGERED-but-undeclared Trace transient (the draw()
+    ``_last_encoding_state`` incident) quotes its ledger row so the message
+    names the writer. Either way the message points at the read that
+    poisoned the save, not just an internal field the user never heard of.
+    """
+
+    if field_name.startswith("_") and field_name.endswith("_cache"):
+        accessor_name = field_name[1 : -len("_cache")]
+        if isinstance(inspect.getattr_static(type(value), accessor_name, None), property):
+            return (
+                f" This cell was populated by reading the public "
+                f"`.{accessor_name}` accessor; a lazy derived cache "
+                f"must be declared FieldPolicy.DROP in "
+                f"{type(value).__name__}._PORTABLE_STATE_SPEC so a "
+                f"read-only access cannot poison a later save."
+            )
+    if owner_is_trace:
+        from .._data_classes._trace_components import TRACE_EXTERNAL_WRITE_EXEMPTIONS
+
+        ledger_reason = TRACE_EXTERNAL_WRITE_EXEMPTIONS.get(field_name)
+        if ledger_reason is not None:
+            return (
+                f" This field is ledgered in "
+                f"TRACE_EXTERNAL_WRITE_EXEMPTIONS as: {ledger_reason!r}."
+                f" The ledger documents the write; it is not a scrub "
+                f"policy. Enroll the runtime-only transient in the "
+                f"scrub's runtime-only set (or give it a "
+                f"FieldPolicy.DROP row) so populating it cannot "
+                f"poison a later save."
+            )
+    return ""
+
+
+def _undeclared_field_error(value: Any, field_name: str, owner_is_trace: bool) -> ArtifactError:
+    """Build the refusal for a live state field with no portability policy."""
+
+    return ArtifactError(
+        f"{type(value).__name__}.{field_name} is missing from "
+        f"_PORTABLE_STATE_SPEC. Every live state field needs an "
+        f"explicit portability policy before it can be saved."
+        f"{_undeclared_field_hint(value, field_name, owner_is_trace)}"
+    )
+
+
+def _stamp_trace_portable_rows(
+    trace: Trace, scrubbed_state: dict[str, Any], options: _ScrubOptions
+) -> None:
+    """Add the Trace-only portable rows and apply the Trace source policies."""
+
+    # B8-20: a functools.partial repr embeds its bound argument VALUES, so the
+    # scrubbed persistence repr redacts them.
+    scrubbed_state["_activation_transform_repr"] = _scrubbed_transform_repr(
+        trace._options_activation_transform
+    )
+    # P7/R10: a capture TorchLens itself refused to bless must not round-trip
+    # into "no claim". The NEGATIVE disclosure persists as a string-only row
+    # (mirroring _capture_outcome's treatment); True/None stay session-time,
+    # so a loaded artifact can never CLAIM verification -- the row can only
+    # ever worsen a verdict, preserving the monotonicity the runnable side
+    # enforces structurally. rescue_rerun stays session-time as documented.
+    if trace._provenance_verified is False:
+        reason = trace._provenance_verification_reason
+        scrubbed_state["_capture_verification"] = {
+            "verified": False,
+            "reason": str(reason) if reason is not None else None,
+        }
+    scrubbed_state["tlspec_version"] = TLSPEC_VERSION
+    _apply_prerelease_rows(scrubbed_state)
+    _apply_advisory_source_policy(scrubbed_state, options)
+    _apply_source_metadata_policy(scrubbed_state, options)
+    _apply_trace_blob_policy(scrubbed_state, options)
+
+
+def _apply_prerelease_rows(scrubbed_state: dict[str, Any]) -> None:
+    """Mark a switch-on write, or strip gated annotation keys from a real one."""
+
+    if _prerelease._ACTIVE:
+        # EVERY switch-on write is marked, whether or not a gated field
+        # actually persisted in this state -- no per-field accounting can
+        # omit the marker, so switched and real-version artifacts are
+        # never indistinguishable (loads refuse the marker typed unless
+        # the switch is active; see torchlens._io.prerelease).
+        scrubbed_state[_prerelease.PRERELEASE_STATE_KEY] = _prerelease.prerelease_marker_payload()
+        return
+    # Registered pre-release ANNOTATIONS sub-keys are new persistence
+    # write paths inside the already-persisting annotations mapping
+    # (e.g. the episode ledger): they never ride a real artifact of
+    # the frozen tlspec version. The pop acts on the scrubbed copy
+    # only -- the live trace keeps its session-time annotations.
+    gated_annotation_keys = _prerelease.gated_annotations_keys()
+    if not gated_annotation_keys:
+        return
+    annotations_state = scrubbed_state.get("annotations")
+    if isinstance(annotations_state, dict):
+        for gated_key in gated_annotation_keys:
+            annotations_state.pop(gated_key, None)
+
+
+def _apply_owner_source_policies(
+    value: Any, scrubbed_state: dict[str, Any], options: _ScrubOptions
+) -> None:
+    """Apply the source-privacy policy of a non-Trace spec object, by shape.
+
+    Owners are matched by name or field signature rather than ``isinstance``
+    to avoid an import cycle between ``_io`` and ``data_classes``.
+    """
+
+    # ``FuncCallLocation`` is a unique internal class with no subclasses.
+    if type(value).__name__ == "FuncCallLocation":
         _apply_frame_source_policy(scrubbed_state, options)
     # ``Module`` logs carry the same per-module class/init/forward source
-    # metadata (docstrings + absolute source files) as the Trace. Dispatch on the
-    # field signature rather than the class so any source-metadata owner is
-    # covered without an ``_io`` -> ``data_classes`` import cycle.
-    elif "class_docstring" in scrubbed_state:
+    # metadata (docstrings + absolute source files) as the Trace; any
+    # source-metadata owner is covered by its field signature.
+    elif "_source_class_docstring" in scrubbed_state:
         _apply_source_metadata_policy(scrubbed_state, options)
     # ``ConditionalEvent`` records (in ``conditional_records``) carry the absolute
-    # path of the user's forward-defining module in ``source_file``. Dispatch on the
-    # field signature so only the persisted, spec-bearing record is relativized/dropped.
+    # path of the user's forward-defining module in ``source_file``; only the
+    # persisted, spec-bearing record is relativized/dropped.
     elif "source_file" in scrubbed_state and "branch_ranges" in scrubbed_state:
         _apply_conditional_source_policy(scrubbed_state, options, drop_value="")
     # ``Conditional`` records (in the public ``conditionals`` accessor) carry the
     # same absolute path in an OPTIONAL ``source_file``; dropped to ``None``.
     elif "source_file" in scrubbed_state and "arms" in scrubbed_state:
         _apply_conditional_source_policy(scrubbed_state, options, drop_value=None)
-
-    return state_restore(scrubbed_obj, scrubbed_state)
 
 
 def _state_items_for_scrub(
@@ -1357,15 +1488,12 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         # into declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is
         # consulted BEFORE the spec, so an entry here makes the declared policy
         # dead code.
-        "jax_closed_jaxpr",
         "jax_equation_captures",
         "jax_ordered_captures",
         "jax_region_captures",
         "_jax_capture_index_to_raw_op_label",
         "jax_capture_index_to_final_op_label",
-        "jax_inlined_call_primitives",
         "jax_outvar_key_to_capture_index",
-        "jax_static_argnums",
         "_selective_save_hidden_payloads",
         # B1-02: the four semantic-output scratch names moved OUT of this
         # allowance and into `Trace._PORTABLE_STATE_SPEC` as declared
@@ -1418,13 +1546,13 @@ def _effective_policy(
         "grad_inputs",
         "grad_outputs",
         "input_activations",
-        "orphan_records",
+        "_orphan_records",
         "out",
         "out_versions_by_child",
         "parent_params",
         "payload",
-        "raw_input",
-        "raw_output",
+        "input",
+        "transformed_output",
         "saved_args",
         "saved_kwargs",
         "transformed_grad",
@@ -1482,10 +1610,7 @@ def _scrub_field(
     field_name: str,
     field_value: Any,
     policy: FieldPolicy,
-    options: _ScrubOptions,
-    memo: dict[int, Any],
-    blob_specs: list[BlobSpec],
-    blob_counter: list[int],
+    walk: _ScrubWalk,
     depth: int,
 ) -> Any:
     """Scrub one object field according to its effective field policy.
@@ -1503,51 +1628,39 @@ def _scrub_field(
 
     if policy in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}:
         return None
-    if isinstance(owner, Trace) and field_name in {"raw_input", "raw_output"}:
-        return _scrub_raw_value_for_save(
-            owner,
-            field_name,
-            field_value,
-            options,
-            memo,
-            blob_specs,
-            blob_counter,
-        )
+    if isinstance(owner, Trace) and field_name in {"input", "transformed_output"}:
+        return _scrub_raw_value_for_save(owner, field_name, field_value, walk)
     if policy == FieldPolicy.STRINGIFY:
         return _stringify_value(field_value)
     if policy == FieldPolicy.BLOB:
         return _blobify_tensor_field(
-            owner, field_name, field_value, blob_specs, blob_counter, options
+            owner, field_name, field_value, walk.blob_specs, walk.blob_counter, walk.options
         )
     if policy == FieldPolicy.BLOB_RECURSIVE:
         return _blobify_recursive_value(
             owner=owner,
             field_name=field_name,
             value=field_value,
-            options=options,
-            memo=memo,
-            blob_specs=blob_specs,
-            blob_counter=blob_counter,
+            options=walk.options,
+            memo=walk.memo,
+            blob_specs=walk.blob_specs,
+            blob_counter=walk.blob_counter,
             depth=depth,
         )
-    return _scrub_value(
-        field_value,
-        options,
-        memo,
-        blob_specs,
-        blob_counter,
-        _depth=depth,
-    )
+    return _scrub_node(field_value, walk, depth)
+
+
+_RAW_SAVE_POLICY_ATTR = {
+    "input": "_options_save_raw_input",
+    "transformed_output": "_options_save_transformed_output",
+}
 
 
 def _scrub_raw_value_for_save(
     owner: Trace,
     field_name: str,
     value: Any,
-    options: _ScrubOptions,
-    memo: dict[int, Any],
-    blob_specs: list[BlobSpec],
-    blob_counter: list[int],
+    walk: _ScrubWalk,
 ) -> Any:
     """Apply a raw-value save policy before portable metadata serialization.
 
@@ -1559,14 +1672,8 @@ def _scrub_raw_value_for_save(
         Raw-value field being serialized.
     value:
         Raw user input or output metadata to serialize.
-    options:
-        Active scrub options.
-    memo:
-        Object-identity memo for recursive scrubbing.
-    blob_specs:
-        Accumulated tensor blob specs.
-    blob_counter:
-        Mutable blob id counter.
+    walk:
+        Active scrub walk (options, identity memo, blob specs and counter).
 
     Returns
     -------
@@ -1575,7 +1682,7 @@ def _scrub_raw_value_for_save(
     """
 
     policy_name = f"save_{field_name}"
-    policy = getattr(owner, policy_name, "small")
+    policy = getattr(owner, _RAW_SAVE_POLICY_ATTR.get(field_name, policy_name), "small")
     if policy is False:
         return None
     if policy is True:
@@ -1587,7 +1694,14 @@ def _scrub_raw_value_for_save(
         # ``saved_args``/``forward_args``/``custom_attributes`` policy,
         # which already uses a stringify fallback (via
         # ``_blobify_recursive_value``) for exactly this class of object.
-        return _scrub_value(value, options, memo, blob_specs, blob_counter, stringify_unknown=True)
+        return _scrub_value(
+            value,
+            walk.options,
+            walk.memo,
+            walk.blob_specs,
+            walk.blob_counter,
+            stringify_unknown=True,
+        )
     if policy != "small":
         raise ArtifactError(f"{policy_name} must be 'small', True, or False.")
     return _small_raw_value(value, field_name=field_name)
@@ -1685,132 +1799,17 @@ def _blobify_recursive_value(
     blob_counter: list[int],
     depth: int = 0,
 ) -> Any:
-    """Blobify tensors recursively inside nested containers."""
+    """Blobify tensors recursively inside nested containers.
 
-    if depth > _PORTABLE_WALK_MAX_DEPTH:
-        raise ArtifactError(
-            f"Portable payload exceeds the maximum depth of {_PORTABLE_WALK_MAX_DEPTH}."
-        )
+    This is the PAYLOAD walk: the same per-kind container rules as
+    :func:`_scrub_value` (one memo, one cycle discipline, one tensor-key
+    refusal), with leaves that blobify every value the payload codec
+    recognizes and stringify every other spec-less object
+    (:func:`_scrub_object_node`).
+    """
 
-    def recurse(item: Any) -> Any:
-        """Blobify one child at the next portable-walk depth."""
-
-        return _blobify_recursive_value(
-            owner=owner,
-            field_name=field_name,
-            value=item,
-            options=options,
-            memo=memo,
-            blob_specs=blob_specs,
-            blob_counter=blob_counter,
-            depth=depth + 1,
-        )
-
-    if isinstance(value, _SIMPLE_KEEP_TYPES):
-        return value
-    if isinstance(value, torch.Size):
-        return torch.Size(value)
-    if isinstance(value, BlobRef):
-        return value
-    if options.payload_codec.can_encode(value):
-        return _blobify_tensor_field(owner, field_name, value, blob_specs, blob_counter, options)
-    if isinstance(value, list):
-        obj_id = id(value)
-        if obj_id in memo:
-            return memo[obj_id]
-        rebuilt_list: list[Any] = []
-        _pin_in_memo(memo, value)
-        memo[obj_id] = rebuilt_list
-        rebuilt_list.extend(recurse(item) for item in value)
-        return rebuilt_list
-    if isinstance(value, tuple):
-        obj_id = id(value)
-        cached = memo.get(obj_id)
-        if cached is _SCRUB_IN_PROGRESS:
-            raise ArtifactError("Portable payload contains a cycle through a tuple.")
-        if cached is not None:
-            return cached
-        _pin_in_memo(memo, value)
-        memo[obj_id] = _SCRUB_IN_PROGRESS
-        try:
-            rebuilt_tuple = _rebuild_tuple_value(value, (recurse(item) for item in value), options)
-        except BaseException:
-            memo.pop(obj_id, None)
-            raise
-        memo[obj_id] = rebuilt_tuple
-        return rebuilt_tuple
-    if isinstance(value, dict):
-        # ``dict`` covers ``OrderedDict`` / ``defaultdict``; refuse tensor-payload
-        # keys here (the value path below blobifies tensor VALUES, so a tensor KEY
-        # would otherwise bypass the blob manifest and body index entirely).
-        _reject_payload_mapping_keys(value, options)
-    if isinstance(value, OrderedDict):
-        obj_id = id(value)
-        if obj_id in memo:
-            return memo[obj_id]
-        rebuilt_ordered: OrderedDict[Any, Any] = OrderedDict()
-        _pin_in_memo(memo, value)
-        memo[obj_id] = rebuilt_ordered
-        for key, item in value.items():
-            rebuilt_ordered[key] = recurse(item)
-        return rebuilt_ordered
-    if isinstance(value, defaultdict):
-        obj_id = id(value)
-        if obj_id in memo:
-            return memo[obj_id]
-        rebuilt: defaultdict[Any, Any] = defaultdict(_portable_default_factory(value, options))
-        _pin_in_memo(memo, value)
-        memo[obj_id] = rebuilt
-        for key, item in value.items():
-            rebuilt[key] = recurse(item)
-        return rebuilt
-    if isinstance(value, dict):
-        obj_id = id(value)
-        if obj_id in memo:
-            return memo[obj_id]
-        rebuilt_mapping: dict[Any, Any] = {}
-        _pin_in_memo(memo, value)
-        memo[obj_id] = rebuilt_mapping
-        for key, item in value.items():
-            rebuilt_mapping[key] = recurse(item)
-        return rebuilt_mapping
-    if isinstance(value, set):
-        obj_id = id(value)
-        if obj_id in memo:
-            return memo[obj_id]
-        rebuilt_set: set[Any] = set()
-        _pin_in_memo(memo, value)
-        memo[obj_id] = rebuilt_set
-        rebuilt_set.update(recurse(item) for item in value)
-        return rebuilt_set
-    if isinstance(value, frozenset):
-        obj_id = id(value)
-        cached = memo.get(obj_id)
-        if cached is _SCRUB_IN_PROGRESS:
-            raise ArtifactError("Portable payload contains a cycle through a frozenset.")
-        if cached is not None:
-            return cached
-        _pin_in_memo(memo, value)
-        memo[obj_id] = _SCRUB_IN_PROGRESS
-        try:
-            rebuilt_frozenset = frozenset(recurse(item) for item in value)
-        except BaseException:
-            memo.pop(obj_id, None)
-            raise
-        memo[obj_id] = rebuilt_frozenset
-        return rebuilt_frozenset
-
-    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
-    if spec is not None:
-        return _scrub_value(
-            value,
-            options,
-            memo,
-            blob_specs,
-            blob_counter,
-            _depth=depth,
-        )
-    return _stringify_value(value)
+    walk = _ScrubWalk(options, memo, blob_specs, blob_counter, payload_owner=(owner, field_name))
+    return _scrub_node(value, walk, depth)
 
 
 def _stringify_value(value: Any) -> str:
@@ -1925,7 +1924,7 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "buffer_initial_value"
     if field_name == "_annotation_blobs":
         return "annotation_blob"
-    if field_name == "orphan_records":
+    if field_name == "_orphan_records":
         return "orphan_payload"
     if field_name == "edge_substitutions":
         # L6 stage 3: tier-(ii) occurrence-granular substituted-value payloads

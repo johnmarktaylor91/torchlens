@@ -277,13 +277,11 @@ def _emit_exhaustive_operation_events(
         fire_results = _pop_tensor_live_fire_results(out_tensor)
         if fire_results:
             fields_dict_onetensor["fire_results"] = fire_results
-            fields_dict_onetensor["interventions"] = [
+            fields_dict_onetensor["edits"] = [
                 result.fire_record for result in fire_results if result.fire_record is not None
             ]
-            fields_dict_onetensor["intervention_replaced"] = any(
-                result.replaced for result in fire_results
-            )
-        if getattr(self, "intervention_ready", False):
+            fields_dict_onetensor["is_edited"] = any(result.replaced for result in fire_results)
+        if getattr(self, "is_replayable", False):
             fields_dict_onetensor["_edge_uses"] = _build_edge_use_records(
                 self,
                 fields_dict_onetensor["parent_arg_positions"],
@@ -307,7 +305,7 @@ def _emit_exhaustive_operation_events(
                 fields_dict=fields_dict_onetensor,
                 t_args=arg_copies,
                 t_kwargs=kwarg_copies,
-                activation_transform=self.activation_transform,
+                activation_transform=self._options_activation_transform,
                 event_module_stack=event_module_stack,
                 call_ref_box=call_ref_box,
             ),

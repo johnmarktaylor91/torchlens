@@ -13,10 +13,25 @@ into ``_evidence``; that module re-exports them.
 from __future__ import annotations
 
 import re
-from typing import Any, TypeGuard
+from typing import Any
 
 from ._enums import REDUCE_OP_KINDS, TENSORLESS_KINDS, MergedErrorCode
 from ._errors import MergeInputError
+from ._rules import (
+    COMPLETION_BINDINGS,
+    CORRELATION_FIELDS,
+    DISCLOSURE_TOKENS,
+    INFLIGHT_READ_TOKEN,
+    INSTALL_EPOCHS,
+    NOT_PRESENT_REASONS,
+    SEQ_READ_FAILED_TOKEN,
+    WITNESS_DIGEST_FIELDS,
+    WITNESS_POLICIES,
+    destination_unobserved,
+    empty_for_tensor_kind,
+    expected_not_present_reason,
+    is_strict_int,
+)
 
 # Shared rule parameters, documented once: ``entry`` is one boundary journal
 # entry (a mapping), ``kind`` its validated kind, ``where`` the diagnostic
@@ -69,14 +84,13 @@ KNOWN_KINDS = frozenset(
 P2P_KINDS = frozenset({"send", "recv"})
 """Point-to-point kinds: out of C1 scope (pipeline pairing is rung C3)."""
 
-_COMPLETION_BINDINGS = frozenset({"issue_sync", "unobserved"})
-_WITNESS_POLICIES = frozenset({"none", "digest"})
-_INSTALL_EPOCHS = frozenset({"armed_before_any_group", "seeded"})
-_ROLE_NAMES = frozenset({"contribution", "destination", "contribution_destination"})
-_NOT_PRESENT_REASONS = frozenset({"async_completion_unobserved"})
-"""Closed vocabulary for ``witness.not_present_reason`` (null is the other value)."""
-_DISCLOSURE_TOKENS = frozenset({"read_of_inflight_destination", "c10d_group_seq_read_failed"})
-"""Closed vocabulary of boundary disclosure tokens the recorder can emit."""
+# The provenance vocabularies are defined once in ``_rules``; these are the
+# reader-side names ``_evidence`` re-exports for the writer-lockstep tests.
+_COMPLETION_BINDINGS = COMPLETION_BINDINGS
+_WITNESS_POLICIES = WITNESS_POLICIES
+_INSTALL_EPOCHS = INSTALL_EPOCHS
+_NOT_PRESENT_REASONS = NOT_PRESENT_REASONS
+_DISCLOSURE_TOKENS = DISCLOSURE_TOKENS
 _VALUE_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 """Byte-exact witness digests are SHA-256 hex, same shape as membership digests."""
 
@@ -104,12 +118,6 @@ def _refuse(
         ),
         **payload,
     )
-
-
-def _is_strict_int(value: Any) -> TypeGuard[int]:
-    """Return whether ``value`` is an ``int`` that is not a ``bool``."""
-
-    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def check_boundary_identity(entry: dict[str, Any], where: str, source: str) -> Any:
@@ -150,20 +158,15 @@ def check_correlation_key(entry: dict[str, Any], where: str, source: str) -> dic
     """
 
     correlation = entry.get("correlation")
-    if not isinstance(correlation, dict) or set(correlation) != {
-        "membership_digest",
-        "lifetime_ordinal",
-        "channel",
-        "seq",
-    }:
+    if not isinstance(correlation, dict) or set(correlation) != CORRELATION_FIELDS:
         raise _refuse(f"{where} has a malformed correlation key", source=source)
     if not isinstance(correlation["membership_digest"], str):
         raise _refuse(f"{where} membership_digest is not a string", source=source)
     if not isinstance(correlation["channel"], str):
         raise _refuse(f"{where} correlation channel is not a string", source=source)
-    if not _is_strict_int(correlation["lifetime_ordinal"]) or correlation["lifetime_ordinal"] < 0:
+    if not is_strict_int(correlation["lifetime_ordinal"]) or correlation["lifetime_ordinal"] < 0:
         raise _refuse(f"{where} lifetime_ordinal is not a non-negative integer", source=source)
-    if not _is_strict_int(correlation["seq"]) or correlation["seq"] < 0:
+    if not is_strict_int(correlation["seq"]) or correlation["seq"] < 0:
         raise _refuse(f"{where} seq is not a non-negative integer", source=source)
     return correlation
 
@@ -202,7 +205,7 @@ def check_scalar_records(entry: dict[str, Any], kind: Any, where: str, source: s
     if "c10d_group_seq" not in entry:
         raise _refuse(f"{where} lacks its c10d_group_seq record", source=source)
     c10d_group_seq = entry.get("c10d_group_seq")
-    if c10d_group_seq is not None and not _is_strict_int(c10d_group_seq):
+    if c10d_group_seq is not None and not is_strict_int(c10d_group_seq):
         raise _refuse(f"{where} c10d_group_seq is not an integer or null", source=source)
     return c10d_group_seq
 
@@ -229,7 +232,7 @@ def check_completion_events(entry: dict[str, Any], where: str, source: str) -> A
     async_op = events.get("async_op")
     if not isinstance(async_op, bool):
         raise _refuse(f"{where} events async_op is not a boolean", source=source)
-    if async_op != (completion_binding == "unobserved"):
+    if async_op != destination_unobserved(completion_binding):
         raise _refuse(
             f"{where} events record is incoherent: async_op={async_op} with "
             f"completion_binding={completion_binding!r} (an unobserved completion "
@@ -278,8 +281,8 @@ def check_disclosures(
             "the closed vocabulary",
             source=source,
         )
-    inflight_read = "read_of_inflight_destination" in disclosures
-    if (completion_binding == "unobserved") != inflight_read:
+    inflight_read = INFLIGHT_READ_TOKEN in disclosures
+    if destination_unobserved(completion_binding) != inflight_read:
         raise _refuse(
             f"{where} disclosure record is incoherent: completion_binding "
             f"{completion_binding!r} with read_of_inflight_destination "
@@ -288,7 +291,7 @@ def check_disclosures(
             "and no observed completion does)",
             source=source,
         )
-    if "c10d_group_seq_read_failed" in disclosures and group_seq is not None:
+    if SEQ_READ_FAILED_TOKEN in disclosures and group_seq is not None:
         raise _refuse(
             f"{where} discloses a failed c10d_group_seq read yet carries a c10d_group_seq value",
             source=source,
@@ -364,11 +367,7 @@ def check_witness_policy(
             "the closed vocabulary",
             source=source,
         )
-    expected_reason = (
-        "async_completion_unobserved"
-        if policy_resolved == "digest" and completion_binding == "unobserved"
-        else None
-    )
+    expected_reason = expected_not_present_reason(policy_resolved, completion_binding)
     if not_present_reason != expected_reason:
         raise _refuse(
             f"{where} witness not_present_reason {not_present_reason!r} is "
@@ -415,7 +414,7 @@ def check_witness_digests(
         checked before destination digests.
     """
 
-    for digest_field in ("contribution_digests", "destination_digests"):
+    for digest_field in WITNESS_DIGEST_FIELDS:
         digests = witness.get(digest_field)
         if digests is None:
             continue
@@ -455,7 +454,7 @@ def _check_digest_provenance(
             "digests, so these are forged, not evidence",
             source=source,
         )
-    if digest_field == "destination_digests" and completion_binding == "unobserved":
+    if digest_field == "destination_digests" and destination_unobserved(completion_binding):
         raise _refuse(
             f"{where} witness carries destination_digests under an "
             "unobserved completion; the destination bytes were never "
@@ -484,7 +483,9 @@ def _check_digest_list(digest_field: str, digests: Any, kind: Any, where: str, s
         that is not a lowercase hex digest.
     """
 
-    if not isinstance(digests, list) or (not digests and kind not in TENSORLESS_KINDS):
+    # Parse requires the JSON shape (a list); the derivation's belt accepts any
+    # digest sequence from internal constructors (``_rules.is_digest_sequence``).
+    if not isinstance(digests, list) or empty_for_tensor_kind(kind, digests):
         raise _refuse(
             f"{where} witness {digest_field} is not null or a non-empty list",
             source=source,

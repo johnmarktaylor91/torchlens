@@ -19,6 +19,7 @@ from torch import nn
 import torchlens as tl
 from tests import example_models
 from torchlens._errors import CaptureGapWarning
+from torchlens._record_type import record_type
 from torchlens.backends.torch._function_boundary import (
     FOREIGN_FUNCTION_FUNC_NAME,
     FOREIGN_FUNCTION_TRANSFORM_KIND,
@@ -115,7 +116,7 @@ class _PlainNumpyRoundTripModel(nn.Module):
 def _boundary_ops(trace: tl.Trace) -> list:
     """Return the ``autogradfunction`` ops of a trace."""
 
-    return [op for op in trace.layer_list if op.func_name == FOREIGN_FUNCTION_FUNC_NAME]
+    return [op for op in trace._layer_list if op.func_name == FOREIGN_FUNCTION_FUNC_NAME]
 
 
 def _assert_one_boundary(trace: tl.Trace, function: type[torch.autograd.Function]) -> None:
@@ -131,10 +132,10 @@ def _assert_one_boundary(trace: tl.Trace, function: type[torch.autograd.Function
     assert is_foreign_function_recorder(op.func)
     # The interior (detach, the host re-entry constructor) is not in the graph.
     interior_types = {"detach", "fromnumpy", "fromdlpack", "contiguous", "zeroslike"}
-    assert not any(op.layer_type in interior_types for op in trace.layer_list)
+    assert not any(op.type in interior_types for op in trace._layer_list)
     # Parents are the Function's tensor inputs; the child is the consumer of its output.
-    assert [trace[label].layer_type for label in op.parents] == ["linear"]
-    assert [trace[label].layer_type for label in op.children] == ["relu"]
+    assert [record_type(trace[label]) for label in op.parents] == ["linear"]
+    assert [record_type(trace[label]) for label in op.children] == ["relu"]
 
 
 def _assert_validates_clean(model: nn.Module, x: torch.Tensor) -> None:
@@ -184,13 +185,13 @@ def test_foreign_function_owns_its_interior_dispatches() -> None:
     with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
         trace = tl.trace(model, torch.randn(3, 4))
 
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
     assert trace.completeness_diagnostics == []
-    owners = {entry["owner_wrapper"] for entry in trace.completeness_decompositions}
+    owners = {entry["owner_wrapper"] for entry in trace.health.completeness_decompositions}
     assert FOREIGN_FUNCTION_WRAPPER_NAME in owners
     boundary_rows = [
         entry
-        for entry in trace.completeness_decompositions
+        for entry in trace.health.completeness_decompositions
         if entry["owner_wrapper"] == FOREIGN_FUNCTION_WRAPPER_NAME
     ]
     assert len(boundary_rows) == 1
@@ -198,7 +199,7 @@ def test_foreign_function_owns_its_interior_dispatches() -> None:
     assert boundary_rows[0]["capture_accounted"] is True
     # The interior detach was re-owned: no owner row of its own survives.
     assert not any(
-        entry["owner_func_name"] == "detach" for entry in trace.completeness_decompositions
+        entry["owner_func_name"] == "detach" for entry in trace.health.completeness_decompositions
     )
 
 
@@ -208,7 +209,7 @@ def test_boundary_selector_and_row_are_wired() -> None:
     model = _ForeignFunctionModel(_NumpyDoubleFunction)
     with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
         trace = tl.trace(model, torch.randn(2, 4), save=tl.func_transform("autograd.Function"))
-    saved = [op for op in trace.layer_list if op.has_saved_activation]
+    saved = [op for op in trace._layer_list if op.has_saved_activation]
     assert [op.func_name for op in saved] == [FOREIGN_FUNCTION_FUNC_NAME]
     rows = [
         row
@@ -227,9 +228,9 @@ def test_ordinary_custom_function_is_captured_as_before() -> None:
         warnings.simplefilter("error", TorchLensWarning)
         trace = tl.trace(model, x)
     assert _boundary_ops(trace) == []
-    types = [op.layer_type for op in trace.layer_list]
+    types = [op.type for op in trace._layer_list]
     assert "mul" in types
-    assert not any(op.is_transform for op in trace.layer_list)
+    assert not any(op.is_transform for op in trace._layer_list)
     _assert_validates_clean(model, x)
 
 
@@ -250,11 +251,11 @@ def test_plain_numpy_round_trip_is_not_collapsed() -> None:
         warnings.simplefilter("error", TorchLensWarning)
         trace = tl.trace(model, x)
     assert _boundary_ops(trace) == []
-    from_numpy_ops = [op for op in trace.layer_list if op.layer_type == "fromnumpy"]
+    from_numpy_ops = [op for op in trace._layer_list if op.type == "fromnumpy"]
     assert len(from_numpy_ops) == 1
     assert list(from_numpy_ops[0].parents) == []
     assert not trace.output_ops[0].input_ancestors
-    assert any(op.layer_type == "detach" for op in trace.layer_list)
+    assert any(op.type == "detach" for op in trace._layer_list)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         base_verdict = validate_forward_pass(model, [x], input_kwargs={})

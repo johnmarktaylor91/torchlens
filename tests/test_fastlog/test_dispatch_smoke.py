@@ -62,8 +62,8 @@ def _run_dispatcher_smoke(
     """Run a minimal predicate pass through existing dispatchers."""
 
     trace = Trace("TinyMlp")
-    trace.capture_mode = "predicate"
-    trace.capture_start_time = time.time()
+    trace._options_mode = "predicate"
+    trace._provenance_start_time = time.time()
     state = RecordingState(options=options, recording=_empty_recording(options.history_size))
     _ensure_model_prepared(model)
     _prepare_model_session(trace, model)

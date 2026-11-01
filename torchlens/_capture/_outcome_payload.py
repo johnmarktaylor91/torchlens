@@ -331,11 +331,11 @@ def derive_outcome_from_structural_state(state: Mapping[str, Any]) -> CaptureOut
     """
 
     finished = bool(state.get("_tracing_finished"))
-    halted = bool(state.get("halted"))
+    halted = bool(state.get("is_stopped"))
     inference_only = bool(state.get("inference_only"))
     if halted and finished:
-        reason = state.get("halt_reason")
-        frontier = state.get("halt_frontier")
+        reason = state.get("stop_reason")
+        frontier = state.get("_graph_stop_frontier")
         return CaptureOutcome(
             status=CaptureStatus.STOPPED,
             reason=reason if isinstance(reason, str) else None,
@@ -387,7 +387,7 @@ def resolve_loaded_outcome(state: Mapping[str, Any]) -> CaptureOutcome:
             stacklevel=3,
         )
         return _unknown_attestation_outcome(f"attestation_parse_failed: {exc}")
-    halted = bool(state.get("halted"))
+    halted = bool(state.get("is_stopped"))
     finished = bool(state.get("_tracing_finished"))
     # b8-sol: the refusal names the rule that ACTUALLY failed. An internally
     # contradictory record (cross-field layer) used to be blamed on the

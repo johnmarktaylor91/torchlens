@@ -152,7 +152,7 @@ def test_huggingface_batch_encoding_like_input_logs() -> None:
     batch = _BatchEncodingLike({"input_ids": torch.randn(2, 4)})
 
     log = tl.trace(model, [batch], capture=CaptureOptions(layers_to_save="all"))
-    assert len(log.layer_logs) > 0
+    assert len(log._layer_logs) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +196,7 @@ def test_dataclass_output_does_not_crash() -> None:
 
     log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="none"))
     # At minimum the Linear projection should be logged.
-    layer_types = [ll.layer_type for ll in log.layer_logs.values()]
+    layer_types = [ll.layer_type for ll in log._layer_logs.values()]
     assert any("linear" in t.lower() or "addmm" in t.lower() for t in layer_types), (
         f"Expected a linear/addmm op in the log; got: {layer_types}"
     )
@@ -212,4 +212,4 @@ def test_standard_model_still_logs_cleanly() -> None:
     model = _Tiny()
     x = torch.randn(2, 4)
     log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all"))
-    assert len(log.layer_logs) > 0
+    assert len(log._layer_logs) > 0

@@ -129,13 +129,13 @@ def finalize_completed(result: ForwardResult) -> Any:
     # an implied inference_only holds only if the forward discarded its graph.
     cleared = cleared_inference_only_directive(trace._stop_directive, outputs)
     if cleared is not None:  # before settlement stamps the flag on the outcome
-        trace.inference_only, trace._stop_directive = False, cleared
+        trace._options_inference_only, trace._stop_directive = False, cleared
     set_capture_phase(trace, CapturePhase.FINALIZE)
     _fence_device_work(trace)
     backend.finalize_forward_session(trace, trace._raw_graph_ws)
 
     output_transform = trace._output_transform
-    trace.raw_output = output_transform(outputs) if output_transform is not None else None
+    trace.transformed_output = output_transform(outputs) if output_transform is not None else None
     from ..._autoroute._builtin_output import decode_outputs_for_trace
 
     decode_outputs_for_trace(trace, outputs)
@@ -144,10 +144,12 @@ def finalize_completed(result: ForwardResult) -> Any:
     # reach here (halt, failure, interrupt) -- see B1-02.
     _drop_semantic_output_transients(trace)
 
-    trace.forward_duration = Duration(time.time() - trace.capture_start_time - trace.setup_duration)
+    trace._cost_forward_duration = Duration(
+        time.time() - trace._provenance_start_time - trace._provenance_setup_duration
+    )
     _vprint(
         trace,
-        f"Forward pass complete ({trace.forward_duration:.2f s}, "
+        f"Forward pass complete ({trace._cost_forward_duration:.2f s}, "
         f"{len(trace.capture_events.op_events)} raw operations)",
     )
     if not _postprocess_requested(result):
@@ -178,7 +180,7 @@ def _complete_recorder_path(result: ForwardResult) -> Any:
     trace._fastlog_captured_run_core = capture_session.seal()
     trace.__dict__.pop("_output_attribution_input_tensors", None)
     backend.cleanup_model_session(trace, _model_session_args(result))
-    trace.capture_end_time = time.time()
+    trace._provenance_end_time = time.time()
     trace.__dict__.pop("_capture_producer_policy", None)
     settle_completed(trace, capture_session)
     return outputs

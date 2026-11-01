@@ -129,7 +129,7 @@ def group_rows_by_source_line(
     op_rows:
         Op-level rows, index-aligned with ``ops``.
     ops:
-        The trace's op records (``trace.layer_list``).
+        The trace's op records (``trace._layer_list``).
     row_evidence:
         Per-row FLOPs evidence labels, index-aligned with ``op_rows``.
     weakest_evidence:

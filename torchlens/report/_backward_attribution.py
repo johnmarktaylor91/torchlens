@@ -27,7 +27,7 @@ checkpoints, or a trace with no checkpoint evidence) the recompute share is
 ``None`` (unknown), never a guess.
 
 The attribution of a pass is written onto the pass as a small closed record
-(``BackwardPass.executed_flops_record``) so a saved and loaded trace reads
+(``BackwardPass._executed_flops_record``) so a saved and loaded trace reads
 the counted answer; the per-call census itself is session-time.
 """
 
@@ -225,7 +225,7 @@ class _OwnedElsewhere:
 def _has_op_in_pass(trace: Any, object_id: int, pass_index: int) -> bool:
     """Whether ``trace`` recorded this node with a forward op and a call in ``pass_index``."""
 
-    grad_fn = (getattr(trace, "grad_fn_logs", {}) or {}).get(object_id)
+    grad_fn = (trace._grad_fn_logs or {}).get(object_id)
     if grad_fn is None or not getattr(grad_fn, "has_op", False):
         return False
     calls = getattr(grad_fn, "calls", None) or {}
@@ -347,8 +347,8 @@ def attribute_census(
         The pass's recorded ``DispatchedOp`` calls, in run order.
     """
 
-    pass_index = int(backward_pass.pass_index)
-    grad_fn_logs = getattr(trace, "grad_fn_logs", {}) or {}
+    pass_index = int(backward_pass.pass_number)
+    grad_fn_logs = trace._grad_fn_logs or {}
     builds_graph = _pass_builds_graph(backward_pass)
     checkpoint = _checkpoint_evidence(trace)
     rows: dict[tuple[int, int], _RowAccumulator] = {}
@@ -562,7 +562,7 @@ def _record_coherence_problem(record: Mapping[str, Any]) -> tuple[str, str] | No
 
 
 def executed_flops_record_problem(record: Any) -> tuple[str, str] | None:
-    """Why a persisted ``executed_flops_record`` is malformed, or ``None`` when sound.
+    """Why a persisted ``_executed_flops_record`` is malformed, or ``None`` when sound.
 
     Returns ``(message, reason)``: the closed key set, ints and short strings
     only, and rows plus unattributed equal to a known executed count.

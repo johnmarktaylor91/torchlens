@@ -128,7 +128,7 @@ def resolve_loaded_callables(trace: Any) -> list[Any]:
     from ..intervention.resolver import resolve_function_registry_key
 
     resolved: list[Any] = []
-    for layer in getattr(trace, "layer_list", ()) or ():
+    for layer in trace._layer_list or ():
         key = _resolution_candidate(layer)
         if key is None:
             continue

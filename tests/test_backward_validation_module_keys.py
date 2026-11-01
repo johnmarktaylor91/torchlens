@@ -56,7 +56,7 @@ class _SharedActivation(nn.Module):
 def test_shared_module_canonical_address_is_its_first_registration() -> None:
     torch.manual_seed(0)
     trace = tl.trace(_SharedActivation(), torch.randn(2, 3))
-    calls = {call.call_label for call in trace.module_calls}
+    calls = {call.label for call in trace.module_calls}
     assert {"act:1", "act:2"} <= calls
     assert not {call for call in calls if call.startswith(("a.act", "b.act"))}
 

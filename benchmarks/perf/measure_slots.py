@@ -42,7 +42,7 @@ class Measurement:
     model:
         Stable model name.
     n_ops:
-        Number of traced operation records in ``trace.layer_list``.
+        Number of traced operation records in ``trace._layer_list``.
     total_bytes:
         Retained bytes for the full TorchLens trace object.
     bytes_per_op:
@@ -338,7 +338,7 @@ def _measure_case(case: ModelCase, tl_module: Any) -> Measurement:
             trace = tl_module.trace(model, example_input)
         gc.collect()
         total_bytes, _ = _trace_total_bytes(trace)
-        n_ops = len(trace.layer_list)
+        n_ops = len(trace._layer_list)
         return Measurement(
             model=case.name,
             n_ops=n_ops,

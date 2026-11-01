@@ -33,9 +33,7 @@ def _pair() -> tl.Bundle:
     x = torch.randn(2, 3)
 
     def _capture() -> tl.Trace:
-        return tl.trace(
-            _Tiny(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
-        ).fork()
+        return tl.trace(_Tiny(), x, capture=tl.options.CaptureOptions(replayable=True)).fork()
 
     return tl.Bundle({"a": _capture(), "b": _capture()}, baseline="a")
 

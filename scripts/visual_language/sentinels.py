@@ -50,7 +50,7 @@ class Sentinel:
 
 
 _GRAD = {"save_grads": "all"}
-_EDIT = {"intervention_ready": True, "save_args": True}
+_EDIT = {"replayable": True, "save_args": True}
 
 SENTINELS: tuple[Sentinel, ...] = (
     Sentinel(

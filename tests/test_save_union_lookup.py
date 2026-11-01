@@ -146,7 +146,7 @@ def _decisions(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[Any, ...]
             (
                 ctx.kind,
                 ctx.raw_label,
-                ctx.pass_index,
+                ctx.pass_number,
                 tuple(ctx.output_of_module_calls),
                 getattr(spec, "save_out", None),
                 getattr(spec, "save_metadata", None),
@@ -211,7 +211,7 @@ def _recording_fingerprint(recording: Any) -> tuple[Any, ...]:
         (
             record.ctx.kind,
             record.ctx.raw_label,
-            record.ctx.pass_index,
+            record.ctx.pass_number,
             record.ctx.address,
             tuple(record.ctx.output_of_module_calls),
             record.spec.save_out,
@@ -238,9 +238,9 @@ def _trace_fingerprint(trace: Any) -> tuple[Any, ...]:
             tuple(op.children),
             _payload_bytes(op.out) if op.has_saved_activation else None,
         )
-        for op in trace.layer_list
+        for op in trace._layer_list
     ]
-    return rows, trace.num_saved_module_calls
+    return rows, len(trace.saved_module_calls)
 
 
 def _record_both_ways(
@@ -381,8 +381,9 @@ def test_twenty_four_site_union_walks_once_per_capture(monkeypatch: pytest.Monke
 
     with _walker_forced(monkeypatch), _call_counts(monkeypatch) as walker_counts:
         tl.record(model, x, save=UNIONS["twenty_four"]())
-    # The walker evaluates every union member for every non-matching event.
-    assert walker_counts["_evaluate_subject"] > _DEPTH * len(decisions) // 2, walker_counts
+    # The walker evaluates the union once per non-matching event; its members
+    # run inside the compiled plan, so the count scales with events, not depth.
+    assert walker_counts["_evaluate_subject"] > len(decisions) // 2, walker_counts
 
 
 def test_mixed_union_counts_equal_the_walker(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -419,7 +420,7 @@ def test_pass_qualified_address_saves_only_that_call(monkeypatch: pytest.MonkeyP
         assert "shared:2" in record_calls
         assert "shared:1" not in record_calls
         assert len(recording.records) == 1
-        saved = [op for op in trace.layer_list if op.has_saved_activation]
+        saved = [op for op in trace._layer_list if op.has_saved_activation]
         saved_calls = {call for op in saved for call in (op.output_of_module_calls or ())}
         assert "shared:2" in saved_calls
         assert "shared:1" not in saved_calls

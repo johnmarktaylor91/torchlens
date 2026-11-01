@@ -58,7 +58,7 @@ def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
     # Grad info
     fields_dict["grad"] = None
     fields_dict["transformed_grad"] = None
-    fields_dict["save_grads"] = getattr(self, "save_grads", None) not in (None, False)
+    fields_dict["save_grads"] = self._options_save_grads not in (None, False)
     fields_dict["has_grad"] = False
     fields_dict["grad_shape"] = None
     fields_dict["transformed_grad_shape"] = None
@@ -128,12 +128,12 @@ def _build_shared_fields_dict(
 
     # General info
     fields_dict["type"] = layer_type
-    fields_dict["detach_saved_activations"] = self.detach_saved_activations
-    fields_dict["output_device"] = self.output_device
+    fields_dict["detach_saved_activations"] = self._options_detach_saved_activations
+    fields_dict["output_device"] = self._options_output_device
     fields_dict["_construction_done"] = False
-    fields_dict["interventions"] = []
+    fields_dict["edits"] = []
     should_capture_template = bool(
-        getattr(self, "intervention_ready", False) or getattr(self, "save_arg_templates", False)
+        getattr(self, "is_replayable", False) or self._options_save_arg_templates
     )
     if should_capture_template:
         captured_template = _build_args_template(func, args, kwargs, self, func_name=func_name)
@@ -147,7 +147,7 @@ def _build_shared_fields_dict(
         # identity lets replay validation resolve the callable on a loaded
         # bundle (``validation/_loaded_callables.py``), which carries no callables.
         fields_dict["func_id"] = (
-            _function_registry_key(func, func_name) if self.save_arg_values else None
+            _function_registry_key(func, func_name) if self._options_save_args else None
         )
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
@@ -167,7 +167,7 @@ def _build_shared_fields_dict(
     call_site_out: list[Any] = []
     fields_dict["code_context"] = _get_code_context(
         self.num_context_lines,
-        source_loading_enabled=self.save_code_context,
+        source_loading_enabled=self._options_save_source_context,
         disable_col_offset=False,
         context_cache=code_context_cache,
         call_site_out=call_site_out,
@@ -350,7 +350,7 @@ def _get_parent_output_version_snapshot(
     # Cheap gate first: without save_arg_values this function always returns
     # None, so the per-parent contract scan below was pure waste on the
     # default capture path.
-    if not self.save_arg_values:
+    if not self._options_save_args:
         return None
     contract_positions = tuple(mutated_input_positions) + tuple(aliased_output_inputs)
     should_snapshot_by_contract = parent_label_has_alias_contract(

@@ -298,7 +298,7 @@ class _FastSparseSession:
         # iteration returned iteration-1 payloads on a verified trace.
         self.saved_labels = frozenset(
             key
-            for key, entry in source.layer_dict_all_keys.items()
+            for key, entry in source._layer_dict_all_keys.items()
             if bool(getattr(entry, "has_saved_activation", False))
         )
         aliases: dict[str, list[str]] = {}
@@ -549,14 +549,14 @@ class _FastSparseSession:
                     affected_op_labels=call.op_labels,
                 )
             if op_label in self.saved_labels:
-                op = self.target.layer_dict_all_keys.get(op_label)
+                op = self.target._layer_dict_all_keys.get(op_label)
                 if op is not None:
                     op.save_activation(
                         value,
                         (),
                         {},
                         False,
-                        activation_transform=getattr(self.target, "activation_transform", None),
+                        activation_transform=self.target._options_activation_transform,
                     )
         if call.control_obligations:
             return _call_witness_checks(self.descriptor, call, slot_values)
@@ -587,10 +587,10 @@ class _FastSparseSession:
             slot_values[slot.slot_id] = value
             op = next(
                 (
-                    self.target.layer_dict_all_keys.get(label)
+                    self.target._layer_dict_all_keys.get(label)
                     for label in self.target.output_layers
-                    if self.target.layer_dict_all_keys.get(label) is not None
-                    and getattr(self.target.layer_dict_all_keys[label], "container_path", ())
+                    if self.target._layer_dict_all_keys.get(label) is not None
+                    and getattr(self.target._layer_dict_all_keys[label], "container_path", ())
                     == (slot.output_path or ())
                 ),
                 None,
@@ -612,10 +612,10 @@ class _FastSparseSession:
             values.append((slot.output_path or (), value))
         spec = next(
             (
-                getattr(self.target.layer_dict_all_keys[label], "container_spec", None)
+                getattr(self.target._layer_dict_all_keys[label], "container_spec", None)
                 for label in self.target.output_layers
                 if isinstance(
-                    getattr(self.target.layer_dict_all_keys[label], "container_spec", None),
+                    getattr(self.target._layer_dict_all_keys[label], "container_spec", None),
                     ContainerSpec,
                 )
             ),
@@ -973,7 +973,7 @@ class _FastLiveSession:
                 )
                 return
             if label in plan.save_labels:
-                save_payload_paused(self, self.trace.layer_dict_all_keys[label], value)
+                save_payload_paused(self, self.trace._layer_dict_all_keys[label], value)
 
     def capture_module(self, address: str, output: Any) -> None:
         """Collect and guard one atomic-module forward-hook event."""
@@ -1278,7 +1278,7 @@ class _FastLiveSession:
         readiness = ReadinessReport(
             status=ReadinessStatus.READY,
             provider=RunProvider.LIVE,
-            backend=str(getattr(self.trace, "backend", "torch")),
+            backend=str(self.trace._provenance_backend),
             capability="guarded_static_native_forward",
             resolver_records=(),
             state_sources_available=(StateSource.LIVE_MODEL_STATE,),
@@ -1390,7 +1390,7 @@ class _FastLiveSession:
         """
 
         captured_paths = [
-            tuple(getattr(self.trace.layer_dict_all_keys[label], "container_path", None) or ())
+            tuple(getattr(self.trace._layer_dict_all_keys[label], "container_path", None) or ())
             for label in output_labels
         ]
         values, reason = _pair_output_leaves(output, captured_paths, len(output_labels))
@@ -1463,7 +1463,7 @@ class _FastLiveSession:
         output_labels = tuple(getattr(self.trace, "output_layers", ()))
         output_values = self._match_native_output_leaves(output, output_labels)
         for label, value in zip(output_labels, output_values, strict=True):
-            op = self.trace.layer_dict_all_keys[label]
+            op = self.trace._layer_dict_all_keys[label]
             expected_shape = tuple(op.shape) if op.shape is not None else None
             expected_dtype = str(op.dtype) if op.dtype is not None else None
             if not isinstance(value, torch.Tensor):
@@ -1502,8 +1502,8 @@ class _FastLiveSession:
         # Same rule as capture (_capture/trace.py): the transformed raw output
         # is stored when an output transform exists; the save scope is
         # otherwise untouched, so a sparse save stays sparse on a rerun.
-        output_transform = self.output_transform
-        self.trace.raw_output = output_transform(output) if output_transform is not None else None
+        transform = self.output_transform
+        self.trace.transformed_output = transform(output) if transform is not None else None
 
 
 def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:
@@ -1601,7 +1601,7 @@ def try_guarded_fast_rerun(
         Transformed forward input.
     output_transform:
         The resolved rerun output transform, applied to the native output for
-        ``trace.raw_output`` exactly as the capture engine does.
+        ``trace.transformed_output`` exactly as the capture engine does.
 
     Returns
     -------

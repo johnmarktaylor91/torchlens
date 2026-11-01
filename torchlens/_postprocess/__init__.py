@@ -16,9 +16,10 @@ stable contract steps 0-20, split into thematic submodules:
   finalize any streamed bundle, optionally evict in-memory outs, and release
   live parameter references.
 
-Step order is load-bearing: ``_executor.STEP_REGISTRY`` lists the steps in the
-order they run, and a reorder is verified by the byte-identity oracles. Warnings
-and first-exception order are pinned by that order.
+Step order is load-bearing: ``_pipeline.PIPELINE`` lists the named steps in the
+order they run (tuple position is the order; no step carries a rank), and a
+reorder is verified by the byte-identity oracles. Warnings and first-exception
+order are pinned by that order.
 
 Out-of-model, disclosed: deferred gradient streaming re-runs step-18/19-equivalent
 code after backward, outside the pipeline.
@@ -38,8 +39,9 @@ from .._utils.hashing import (
 )
 from ..backends.torch._ops_capture_records import _compact_ancestor_sets
 from . import ast_branches
-from ._executor import StepContext, run_pipeline
+from ._executor import StepContext
 from ._materialize import materialize_from_events
+from ._pipeline import run_pipeline
 from ._primitive_profile import _finalize_forward_primitive_profile
 from .finalization import (
     _set_tracing_finished,
@@ -237,10 +239,10 @@ def _postprocess_body(
         f"Postprocessing {len(self._raw_graph_ws.raw_layer_labels_list):,} layers "
         f"({len(self.buffer_layers):,} buffers)...",
     )
-    _post_t0 = time.time() if getattr(self, "verbose", False) else 0
+    _post_t0 = time.time() if self._options_verbose else 0
 
-    # Steps 1-20 run through the executor (_executor.py): each step body
-    # resolves its callable through this module's namespace at call time.
+    # The named steps run through _pipeline.run_pipeline over PIPELINE: each
+    # step body resolves its callable through its home module at call time.
     run_pipeline(
         StepContext(
             trace=self,

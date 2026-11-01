@@ -108,7 +108,7 @@ def test_sparse_core_backstop_inspects_mixed_dict_and_slot_fields(
 
     with pytest.raises(SparseCorePayloadError, match=expected_field) as caught:
         assert_sparse_core_has_no_tensor_payload(_MixedState(slot_value, dict_value))
-    assert caught.value.fields["code"] == "sparse_core_tensor_payload"
+    assert caught.value.fields["code"] == "sparse_core_payload_invalid"
     # The typed tripwire stays catchable as AssertionError for historical callers.
     assert isinstance(caught.value, AssertionError)
 

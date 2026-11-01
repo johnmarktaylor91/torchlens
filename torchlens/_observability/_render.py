@@ -439,7 +439,7 @@ def _nonfinite_count(spine: RunningStatsResult | None) -> int:
 
     if spine is None:
         return 0
-    return int(spine.count_nan + spine.count_posinf + spine.count_neginf)
+    return int(spine.num_nan + spine.num_posinf + spine.num_neginf)
 
 
 def _draw_step_marks(

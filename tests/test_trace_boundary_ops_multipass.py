@@ -96,7 +96,7 @@ def test_input_ops_lists_each_pass_as_an_op_in_argument_order() -> None:
     ops = list(trace.input_ops)
     assert len(ops) == 2 == len(trace.input_ops)
     assert all(isinstance(op, Op) for op in ops)
-    assert [op.pass_index for op in ops] == [1, 2]
+    assert [op.pass_number for op in ops] == [1, 2]
     assert torch.equal(ops[0].out, a)
     assert torch.equal(ops[1].out, b)
     assert trace.input_ops.keys() == [op.label for op in ops]
@@ -142,7 +142,7 @@ def test_boundary_label_ops_expands_an_under_listed_layer() -> None:
     trace, (a, b) = _loop_trace()
 
     ops = boundary_label_ops(["input_1"], trace.__getitem__)
-    assert [op.pass_index for op in ops] == [1, 2]
+    assert [op.pass_number for op in ops] == [1, 2]
     assert torch.equal(ops[0].out, a) and torch.equal(ops[1].out, b)
 
 

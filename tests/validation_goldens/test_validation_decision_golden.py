@@ -337,7 +337,7 @@ def _first_op_with_func(trace: Any, func_name: str) -> Any:
         Matching operation.
     """
 
-    return next(layer for layer in trace.layer_list if layer.func_name == func_name)
+    return next(layer for layer in trace._layer_list if layer.func_name == func_name)
 
 
 def _wrong_add(input_tensor: torch.Tensor, *_args: Any, **_kwargs: Any) -> torch.Tensor:
@@ -489,7 +489,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     x_intervention = torch.randn(2, 3)
     clean = tl.trace(intervention, x_intervention, capture=full_capture)
     edited = clean.fork("zero_relu")
-    relu_pass = next(layer for layer in edited.layer_list if layer.func_name == "relu")
+    relu_pass = next(layer for layer in edited._layer_list if layer.func_name == "relu")
     edited.set(tl.func("relu"), torch.zeros_like(relu_pass.out), confirm_mutation=True)
     edited.run(intervention, x_intervention)
 

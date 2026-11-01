@@ -101,10 +101,10 @@ def _fired_site(label: str, *edits: Any) -> SimpleNamespace:
     """Return a stand-in site whose fire records name ``edits``."""
 
     records = [
-        FireRecord(target_label=label, helper=edit, timestamp=float(index))
+        FireRecord(target_label=label, edit=edit, timestamp=float(index))
         for index, edit in enumerate(edits)
     ]
-    return SimpleNamespace(label=label, layer_label=label, interventions=records)
+    return SimpleNamespace(label=label, layer_label=label, edits=records)
 
 
 def test_header_edit_line_forms() -> None:
@@ -377,7 +377,7 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
     try:
-        linear = next(layer for layer in trace.layer_logs.values() if layer.layer_type == "linear")
+        linear = next(layer for layer in trace._layer_logs.values() if layer.layer_type == "linear")
         assert linear.num_passes == 2
         second = trace[f"{linear.layer_label}:2"]
         trace.attach_hooks(
@@ -413,11 +413,11 @@ def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
     trace = tl.trace(
         _SharedLinearTwice(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         fork = trace.fork("edited")
-        layers = {layer.layer_type: layer.layer_label for layer in fork.layer_logs.values()}
+        layers = {layer.layer_type: layer.layer_label for layer in fork._layer_logs.values()}
         linear, relu = layers["linear"], layers["relu"]
         fork.do(tl.label(f"{linear}:2"), tl.zero_ablate())
         dot = fork.draw(

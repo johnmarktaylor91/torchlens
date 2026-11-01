@@ -50,7 +50,7 @@ def test_head_ablation_flagship_on_pretrained_gpt2(r1_loader, tmp_path: Path) ->
         metric="logit[' Paris'] at the last position",
     )
     try:
-        baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+        baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
         candidates = head_ablation_candidates(baseline, _MODULE, heads=n_heads)
         bundle = sweep_sites(
             baseline,

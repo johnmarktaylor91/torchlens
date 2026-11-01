@@ -454,7 +454,7 @@ def _op_facts(op: Any) -> tuple[Any, ...]:
         str(op.dtype),
         tuple(op.parents),
         tuple(op.children),
-        op.pass_index,
+        op.pass_number,
     )
 
 

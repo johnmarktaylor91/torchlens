@@ -262,14 +262,14 @@ def _construct_trace(r: SimpleNamespace) -> Trace:
         distributed_witness=r.distributed_witness,
         save_budget=r.save_budget,
         input_transform=r.transform,
-        raw_input=r.raw_input,
+        input=r.raw_input,
         save_raw_input=r.save_raw_input,
         batch_render=r.batch_render,
         output_transform=r.output_transform,
         save_transformed_output=r.save_transformed_output,
         layer_visualizers=r.layer_visualizers,
         save_visualizations=r.save_visualizations,
-        facet_registry_snapshot=facets_mod.snapshot(r.recipes),
+        facet_functions=facets_mod.snapshot(r.recipes),
     )
 
 
@@ -300,14 +300,14 @@ def _stamp_save_request(trace: Trace, r: SimpleNamespace) -> None:
     trace._semantic_output_metadata = semantic_output_cache_key(model)
     if r.intervention_spec is not None:
         trace._intervention_spec = r.intervention_spec
-    trace.trace_label = r.name
-    trace.code_context = _get_code_context(
+    trace.name = r.name
+    trace._source_frames = _get_code_context(
         r.num_context_lines,
         source_loading_enabled=r.save_source_context,
     )
     forward_code = getattr(model.forward, "__code__", None)
-    trace.forward_source_line = getattr(forward_code, "co_firstlineno", None)
-    trace.intervention_ready = r.intervention_ready
+    trace._source_forward_line = getattr(forward_code, "co_firstlineno", None)
+    trace.is_replayable = r.replayable
     trace._capture_container_structure = r.capture_container_structure
     if r.hook_plan:
         trace.state = TraceState.LIVE_CAPTURED
@@ -317,16 +317,16 @@ def _stamp_identity_and_sinks(trace: Trace, r: SimpleNamespace) -> None:
     """Stamp the root identity facts, sinks, honesty flags and the stop directive."""
 
     model = r.model
-    trace.model_object_id = r.model_object_id
-    trace.model_class_qualname = r.model_class_qualname
-    trace.param_hash_quick = r.weight_fingerprint
-    trace.param_hash_full = r.weight_fingerprint
+    trace._provenance_model_object_id = r.model_object_id
+    trace._source_class_qualname = r.model_class_qualname
+    trace._provenance_param_hash_quick = r.weight_fingerprint
+    trace._provenance_param_hash_full = r.weight_fingerprint
     # C07X (iv)/D10: unconditional write; F41's fail-closed gate reads it.
     # module_call for plain module roots, bound_method for the F41
     # TL-authored wrapper root (derived beside the identity fields above).
-    trace.root_entry_point = r.root_entry_point
-    trace.input_object_id = r.input_object_id
-    trace.input_signature_hash = r.input_signature_hash
+    trace._provenance_root_entry_point = r.root_entry_point
+    trace._provenance_input_object_id = r.input_object_id
+    trace._provenance_input_signature_hash = r.input_signature_hash
     trace._source_code_blob = capture_model_source_code(model)
     trace._source_model_ref = make_weak_model_ref(model)
     trace._out_sink = r.out_sink
@@ -334,7 +334,7 @@ def _stamp_identity_and_sinks(trace: Trace, r: SimpleNamespace) -> None:
     trace._grad_stream_retain_in_memory = r.retain_grads_in_memory
     trace._defer_streaming_bundle_finalization = r.grad_storage_path is not None
     trace._wrapper_runtime_ws.in_exhaustive_pass = True
-    trace.raise_on_nan = r.raise_on_nan
+    trace._options_on_nonfinite = r.raise_on_nan
     trace.track_nonfinite = r.track_nonfinite
     trace.track_device_memory = r.track_device_memory
     trace.measure_host_peak_memory = r.measure_host_peak_memory
@@ -344,7 +344,7 @@ def _stamp_identity_and_sinks(trace: Trace, r: SimpleNamespace) -> None:
     # ratification the settlement-side stamp moves to the
     # _capture/outcome.py witness machinery in the S2 author's PR; this
     # entry write stays as the declared-mode source of truth.
-    trace.structure_only = r.structure_only
+    trace._options_structure_only = r.structure_only
     trace._stop_directive = StopDirective(
         halt_options=getattr(trace, "_predicate_save_options", None),
         raise_on_nan=r.raise_on_nan,

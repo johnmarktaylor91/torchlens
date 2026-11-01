@@ -45,7 +45,7 @@ def _is_relu(ctx) -> bool:
 def test_selector_save_keeps_one_record_per_pass() -> None:
     recording = _record_passes(tl.func("relu"))
 
-    assert [record.ctx.pass_index for record in recording.records] == [1, 2, 3]
+    assert [record.ctx.pass_number for record in recording.records] == [1, 2, 3]
     assert recording.n_records == 3
     assert recording.by_pass == {1: [0], 2: [1], 3: [2]}
 
@@ -56,7 +56,7 @@ def test_selector_save_matches_plain_callable_record_for_record() -> None:
 
     assert len(by_selector.records) == len(by_callable.records) == 3
     for left, right in zip(by_selector.records, by_callable.records, strict=True):
-        assert left.ctx.pass_index == right.ctx.pass_index
+        assert left.ctx.pass_number == right.ctx.pass_number
         assert left.ctx.label == right.ctx.label
         assert torch.equal(left.ram_payload, right.ram_payload)
     assert by_selector.by_pass == by_callable.by_pass
@@ -70,5 +70,5 @@ def test_selector_save_disk_bundle_loads_one_record_per_pass(tmp_path: Path) -> 
     )
     loaded = load(bundle)
 
-    assert [record.ctx.pass_index for record in loaded.records] == [1, 2, 3]
-    assert [record.ctx.pass_index for record in recording.records] == [1, 2, 3]
+    assert [record.ctx.pass_number for record in loaded.records] == [1, 2, 3]
+    assert [record.ctx.pass_number for record in recording.records] == [1, 2, 3]

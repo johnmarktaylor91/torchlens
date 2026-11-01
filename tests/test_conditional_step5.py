@@ -184,8 +184,8 @@ def _get_only_event(trace: Trace) -> ConditionalEvent:
         The only materialized conditional event.
     """
 
-    assert len(trace.conditional_records) == 1
-    return trace.conditional_records[0]
+    assert len(trace.graph.conditional_records) == 1
+    return trace.graph.conditional_records[0]
 
 
 def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
@@ -202,7 +202,7 @@ def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
         Terminal scalar bool layers in execution order.
     """
 
-    return [layer for layer in trace.layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
+    return [layer for layer in trace._layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
 
 
 def _find_single_layer(trace: Trace, func_name: str) -> Op:
@@ -221,7 +221,7 @@ def _find_single_layer(trace: Trace, func_name: str) -> Op:
         Matching layer.
     """
 
-    matching_layers = [layer for layer in trace.layer_list if layer.func_name == func_name]
+    matching_layers = [layer for layer in trace._layer_list if layer.func_name == func_name]
     assert len(matching_layers) == 1, (
         f"Expected one {func_name!r} layer, found {len(matching_layers)}"
     )
@@ -239,19 +239,28 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
 
     expected_then_edges = [
         (parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
+        for (
+            conditional_id,
+            branch_kind,
+        ), edge_list in trace.graph.conditional_arm_entry_edges.items()
         if branch_kind == "then"
         for parent_label, child_label in edge_list
     ]
     expected_elif_edges = [
         (conditional_id, int(branch_kind.split("_")[1]), parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
+        for (
+            conditional_id,
+            branch_kind,
+        ), edge_list in trace.graph.conditional_arm_entry_edges.items()
         if branch_kind.startswith("elif_")
         for parent_label, child_label in edge_list
     ]
     expected_else_edges = [
         (conditional_id, parent_label, child_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items()
+        for (
+            conditional_id,
+            branch_kind,
+        ), edge_list in trace.graph.conditional_arm_entry_edges.items()
         if branch_kind == "else"
         for parent_label, child_label in edge_list
     ]
@@ -262,10 +271,10 @@ def _assert_derived_views_consistent(trace: Trace) -> None:
     assert isinstance(expected_elif_edges, list)
     assert isinstance(expected_else_edges, list)
 
-    for call_indexs in trace.conditional_edge_call_indices.values():
+    for call_indexs in trace.graph.conditional_edge_call_indices.values():
         assert call_indexs == sorted(call_indexs)
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         expected_then_children = sorted(
             set(
                 chain.from_iterable(
@@ -338,8 +347,8 @@ def _assert_evaluation_entry_edges_are_upstream(trace: Trace) -> None:
         Trace whose public conditional records should be checked.
     """
 
-    assert len(trace.conditionals) > 0
-    for conditional in trace.conditionals:
+    assert len(trace.graph.conditionals) > 0
+    for conditional in trace.graph.conditionals:
         for arm in conditional.arms:
             if arm.kind == "else":
                 assert arm.evaluation_entry_edge is None
@@ -383,10 +392,10 @@ def test_simple_if_else_model_step5_pipeline() -> None:
     assert negative_bool[0].is_terminal_conditional_bool is True
     assert negative_bool[0].terminal_conditional_id == 0
 
-    assert positive_log.conditional_branch_edges
-    assert negative_log.conditional_branch_edges
-    assert (0, "then") in positive_log.conditional_arm_entry_edges
-    assert (0, "else") in negative_log.conditional_arm_entry_edges
+    assert positive_log.graph.conditional_branch_edges
+    assert negative_log.graph.conditional_branch_edges
+    assert (0, "then") in positive_log.graph.conditional_arm_entry_edges
+    assert (0, "else") in negative_log.graph.conditional_arm_entry_edges
 
     relu_layer = _find_single_layer(positive_log, "relu")
     sigmoid_layer = _find_single_layer(negative_log, "sigmoid")
@@ -394,10 +403,12 @@ def test_simple_if_else_model_step5_pipeline() -> None:
     assert sigmoid_layer.conditional_branch_stack == ((0, "else"),)
 
     assert all(
-        call_indexs == [1] for call_indexs in positive_log.conditional_edge_call_indices.values()
+        call_indexs == [1]
+        for call_indexs in positive_log.graph.conditional_edge_call_indices.values()
     )
     assert all(
-        call_indexs == [1] for call_indexs in negative_log.conditional_edge_call_indices.values()
+        call_indexs == [1]
+        for call_indexs in negative_log.graph.conditional_edge_call_indices.values()
     )
     _assert_derived_views_consistent(positive_log)
     _assert_derived_views_consistent(negative_log)
@@ -409,8 +420,8 @@ def test_returned_predicate_remains_a_conditional_consumer() -> None:
     trace = _log_model(ReturnedPredicateIfElseModel(), torch.ones(2, 2))
     predicate = next(op for op in trace.ops if op.func_name == "__gt__")
 
-    assert len(trace.conditionals) == 1
-    assert trace.conditional_branch_edges
+    assert len(trace.graph.conditionals) == 1
+    assert trace.graph.conditional_branch_edges
     assert predicate.is_terminal_bool is True
     assert predicate.is_terminal_conditional_bool is True
     assert predicate.label in trace.internally_terminated_bool_ops
@@ -458,9 +469,9 @@ def test_elif_ladder_model_step5_pipeline() -> None:
 
         assert event.kind == "if_chain"
         assert set(event.branch_ranges) == {"then", "elif_1", "elif_2", "else"}
-        assert (0, branch_kind) in trace.conditional_arm_entry_edges
+        assert (0, branch_kind) in trace.graph.conditional_arm_entry_edges
         assert all(
-            call_indexs == [1] for call_indexs in trace.conditional_edge_call_indices.values()
+            call_indexs == [1] for call_indexs in trace.graph.conditional_edge_call_indices.values()
         )
 
         target_layer = _find_single_layer(trace, func_name)
@@ -482,9 +493,9 @@ def test_assert_not_branch_model_step5_pipeline() -> None:
     assert bool_layers[0].conditional_context_kind == "assert"
     assert bool_layers[0].is_terminal_conditional_bool is False
     assert bool_layers[0].terminal_conditional_id is None
-    assert trace.conditional_records == []
-    assert trace.conditional_arm_entry_edges == {}
-    assert trace.conditional_branch_edges == []
+    assert trace.graph.conditional_records == []
+    assert trace.graph.conditional_arm_entry_edges == {}
+    assert trace.graph.conditional_branch_edges == []
 
     _assert_derived_views_consistent(trace)
 
@@ -507,7 +518,7 @@ def test_save_code_context_false_still_attributes_branches() -> None:
     assert bool_layers[0].conditional_context_kind == "if_test"
     assert bool_layers[0].is_terminal_conditional_bool is True
     assert bool_layers[0].terminal_conditional_id == 0
-    assert (0, "then") in trace.conditional_arm_entry_edges
+    assert (0, "then") in trace.graph.conditional_arm_entry_edges
     assert relu_layer.conditional_branch_stack == ((0, "then"),)
 
     _assert_derived_views_consistent(trace)
@@ -566,7 +577,9 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
         # Precondition: the step-5 conditional-parent role lives on the node
         # about to be merged away.
         assert removed.conditional_entry_children
-        assert any(parent == removed._label_raw for parent, _ in trace.conditional_branch_edges)
+        assert any(
+            parent == removed._label_raw for parent, _ in trace.graph.conditional_branch_edges
+        )
         merged["survivor"] = survivor._label_raw
         merged["bool_child"] = removed.conditional_entry_children[0]
         deferred: dict = {}
@@ -580,15 +593,15 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
     assert merged, "the merge wrapper never ran"
     buffer_branch_edges = [
         (parent, child)
-        for parent, child in traced.conditional_branch_edges
+        for parent, child in traced.graph.conditional_branch_edges
         if parent.startswith("buffer")
     ]
     assert buffer_branch_edges, (
         "the surviving buffer lost its step-5 conditional branch edge: "
-        f"{traced.conditional_branch_edges}"
+        f"{traced.graph.conditional_branch_edges}"
     )
     surviving_buffer_labels = {
-        op.layer_label for op in traced.layer_list if getattr(op, "is_buffer", False)
+        op.layer_label for op in traced._layer_list if getattr(op, "is_buffer", False)
     }
     for parent, _child in buffer_branch_edges:
         assert parent in surviving_buffer_labels

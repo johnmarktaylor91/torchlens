@@ -35,7 +35,7 @@ def _capture(model: nn.Module, x: Any) -> Any:
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(intervention_ready=True, cache=False),
+        capture=CaptureOptions(replayable=True, cache=False),
     )
 
 

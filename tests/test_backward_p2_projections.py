@@ -67,11 +67,11 @@ def test_backward_passes_and_grad_fn_calls_are_event_projections() -> None:
 
     trace = _captured_two_pass_trace()
     try:
-        assert trace.num_backward_passes == 2
+        assert len(trace.autograd.backward_passes) == 2
         backward_passes = trace.autograd.backward_passes
-        assert [backward_pass.pass_index for backward_pass in backward_passes] == [1, 2]
+        assert [backward_pass.pass_number for backward_pass in backward_passes] == [1, 2]
         assert backward_passes[0] is backward_passes.for_pass(1)
-        assert trace.autograd.last_backward_pass.pass_index == 2
+        assert trace.autograd.last_backward_pass.pass_number == 2
         assert backward_passes.for_pass(2).trigger == "backward"
 
         reused_grad_fn = next(
@@ -79,8 +79,8 @@ def test_backward_passes_and_grad_fn_calls_are_event_projections() -> None:
         )
         assert [call.ordinal for call in reused_grad_fn.calls.values()] == [1, 2]
         assert [call.backward_pass_index for call in reused_grad_fn.calls.values()] == [1, 2]
-        assert reused_grad_fn.calls[0].call_label == f"{reused_grad_fn.label}:1"
-        assert reused_grad_fn.calls.for_pass(2).call_label == f"{reused_grad_fn.label}:2"
+        assert reused_grad_fn.calls[0].label == f"{reused_grad_fn.label}:1"
+        assert reused_grad_fn.calls.for_pass(2).label == f"{reused_grad_fn.label}:2"
         assert trace.autograd.grad_fn_calls[f"{reused_grad_fn.label}:2"].backward_pass_index == 2
     finally:
         trace.cleanup()
@@ -260,7 +260,7 @@ def test_higher_order_induction_stress_reaches_expected_depth() -> None:
         assert set(range(1, num_grad_passes + 2)).issubset(resolved_orders)
         assert max(resolved_orders) == num_grad_passes + 1
         assert all(
-            grad_fn.order == trace.grad_fn_logs[grad_fn.creator_object_id].order + 1
+            grad_fn.order == trace._grad_fn_logs[grad_fn.creator_object_id].order + 1
             for grad_fn in trace.autograd.grad_fns
             if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )
@@ -289,7 +289,7 @@ def test_higher_order_mixed_order_pass_records_reused_and_created_nodes() -> Non
 
         label_to_order = {grad_fn.label: grad_fn.order for grad_fn in trace.autograd.grad_fns}
         second_pass_orders = {
-            label_to_order[call.label]
+            label_to_order[call.grad_fn_label]
             for call in trace.autograd.backward_passes.for_pass(2).grad_fn_calls
         }
         assert {1, 2}.issubset(second_pass_orders)
@@ -410,7 +410,7 @@ def test_forward_op_on_a_first_order_gradient_keeps_creator_orders_consistent() 
         assert creations
         assert {grad_fn.order for grad_fn in creations} == {3}
         assert all(
-            grad_fn.order == trace.grad_fn_logs[grad_fn.creator_object_id].order + 1
+            grad_fn.order == trace._grad_fn_logs[grad_fn.creator_object_id].order + 1
             for grad_fn in trace.autograd.grad_fns
             if grad_fn.creator_object_id is not None and grad_fn.order is not None
         )

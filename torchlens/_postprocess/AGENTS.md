@@ -15,7 +15,8 @@ eviction plus parameter-reference release. Step order is load-bearing.
 |------|-------|---------|
 | `__init__.py` | orchestrator | `postprocess()` prologue/epilogue and the transient-state drop |
 | `_call_site_contract.py` | 7 support | Call-site grouping side table (call-site class per raw label, never persisted) and the grouping contract checked at step 7 and by validation |
-| `_executor.py` | executor | StepSpec registry (steps 1-20 in run order), `run_pipeline` |
+| `_pipeline.py` | pipeline | `PIPELINE`: the named step records in run order (name, home module, trace fields read and written, gate, postcondition) and `run_pipeline` |
+| `_executor.py` | executor | `StepContext` and the per-step adapters (`_run_<name>`), gates (`_should_run_<name>`) and postconditions (`_<name>_violation`) the pipeline points at |
 | `_materialize.py` | 0 | Project capture events into raw `Op` state |
 | `_buffer_addresses.py` | 0 support | Resolve each buffer op's registered buffer address and the initial buffer snapshots |
 | `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances |
@@ -30,12 +31,18 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_lazy_param_geometry.py` | 15 support | Finalize deferred geometry for lazy-at-prep params (R43 split from `finalization.py`) |
 | `saved_summary.py` | 11 support | Saved-output summary refresh helpers (`_refresh_fast_saved_summary`) |
 | `source_provenance.py` | 11, 11.5 | Provenance disclosure warning (`_warn_unattributed_tensor_args`) and source variable names (`_populate_var_names`) |
-| `incremental.py` | fastlog enrichment | Adds module paths to sparse recordings; `add_param_addresses` is DEAD on current builds (ActivationRecord carries no `parent_param_addresses` field, so it always raises `RecordingConfigError`) |
+| `incremental.py` | fastlog enrichment | Adds module path strings to sparse recordings (`Recording.enrich`) |
 
 ## Step Order
 
-Step order is load-bearing and is the order of `STEP_REGISTRY` in `_executor.py`.
-After each step runs, `run_pipeline` checks that step's postcondition (`STEP_POSTCONDITIONS`: steps 1, 8, 11, 15.5, 16, 16.5, 17) on every capture, with no env gate, and raises `MetadataInvariantError` (`postprocess_step_postcondition`) on a violation; step 1's is one output layer per attributable output, so all-unattributable outputs leave none.
+Step order is load-bearing and is the tuple order of `PIPELINE` in `_pipeline.py`; steps are
+named, never numbered (the "Step N" numerals below and in the `_phase_timings` bucket keys are
+the historical labels, kept because the bucket text is persisted). After each step runs,
+`run_pipeline` checks the step's `postcondition` when it declares one (add_output_layers,
+map_final_labels, build_lookup_keys, build_layer_logs, build_module_logs, hash_graph_shape,
+mark_tracing_finished) on every capture, with no env gate, and raises `MetadataInvariantError`
+(`postprocess_step_postcondition`) on a violation; add_output_layers' is one output layer per
+attributable output, so all-unattributable outputs leave none.
 Reordering steps requires the byte-identity oracles and a warnings/exception-order
 review (those are pinned only by the existing order). Transient
 build scratch lives in three named per-phase workspaces (`ir/workspaces.py`),
@@ -47,44 +54,44 @@ step 17.5 (the contracted container-adoption + workspace-drop seam).
 
 ## The Ordered Steps
 
-| Step | Function | What |
-|------|----------|------|
-| pre-0 | `_resolve_output_parent_labels` | Pair each output tensor with its graph parent; late-log returned-but-never-traced buffers as source events |
-| 0 | `materialize_from_events` | Rebuild raw `Op` state from sealed capture events |
-| 1 | `_add_output_layers` | Create dedicated output nodes (skips unattributable outputs) |
-| 2 | `_find_output_ancestors` | Mark nodes connected to model output |
-| 3 | `_remove_orphan_nodes` | Drop unconnected raw nodes |
-| 4 | `_mark_layer_depths` | Optional input/output distance metadata |
-| 5 | `_mark_conditional_branches` | AST/bool/event/edge conditional attribution |
-| 6 | `_fix_buffer_layers` | Reconnect buffers; merge only re-logged reads of one recorded buffer version |
-| 7 | `_detect_and_label_loops` or `_group_by_shared_params` | Recurrent grouping |
-| 8 | `_map_raw_labels_to_final_labels` | Build raw-to-final label map |
-| 9 | `_log_final_info_for_layers` | Write final layer/module fields |
-| 10 | `_rename_model_history_layer_names` | Rename global refs (field reorder removed — scrub order is now deterministic) |
-| 11 | `_build_lookup_keys_and_finalize_retained_layers` | Build lookup keys and finalize retained layer lists |
-| 11.5 | `_populate_var_names` | Resolve source assignment names through `ast_branches.py` |
-| 11.75 | executor `_run_step_11_75` | Resolve deferred retention decisions through the attached `CaptureSession` (saves selected payloads; runs only when a capture session is attached) |
-| 12 | `_undecorate_all_saved_tensors` | Strip TorchLens attrs from saved tensors |
-| 13 | `torch.cuda.empty_cache` | Optional CUDA cache clear |
-| 14 | `_log_time_elapsed` | Capture timing |
-| 15 | `_finalize_param_logs` | Build and complete ParamLogs |
-| 15.5 | `_build_layer_logs` | Build aggregate LayerLogs |
-| 16 | `_build_module_logs` | Build ModuleLogs |
-| 16.5 | `compute_graph_shape_hash` | Hash graph shape before pass-finished behavior changes |
-| 17 | `_set_tracing_finished` | Switch Trace to user-facing behavior |
-| 17.5 | executor `_run_step_17_5` | Adopt container records; drop the three per-phase workspaces |
-| 18 | `_finalize_streamed_bundle` | Finalize streamed out bundle |
-| 19 | `_evict_streamed_outs` | Optional in-memory out eviction |
-| 20 | `_release_param_refs` | Drop live parameter references after finalization |
+| Label | Pipeline name | Function | What |
+|------|------|----------|------|
+| pre-0 | (prologue) | `_resolve_output_parent_labels` | Pair each output tensor with its graph parent; late-log returned-but-never-traced buffers as source events |
+| 0 | (prologue) | `materialize_from_events` | Rebuild raw `Op` state from sealed capture events |
+| 1 | `add_output_layers` | `_add_output_layers` | Create dedicated output nodes (skips unattributable outputs) |
+| 2 | `find_output_ancestors` | `_find_output_ancestors` | Mark nodes connected to model output |
+| 3 | `remove_orphan_nodes` | `_remove_orphan_nodes` | Drop unconnected raw nodes |
+| 4 | `mark_layer_depths` | `_mark_layer_depths` | Optional input/output distance metadata |
+| 5 | `mark_conditional_branches` | `_mark_conditional_branches` | AST/bool/event/edge conditional attribution |
+| 6 | `fix_buffer_layers` | `_fix_buffer_layers` | Reconnect buffers; merge only re-logged reads of one recorded buffer version |
+| 7 | `group_recurrent_layers` | `_detect_and_label_loops` or `_group_by_shared_params` | Recurrent grouping |
+| 8 | `map_final_labels` | `_map_raw_labels_to_final_labels` | Build raw-to-final label map |
+| 9 | `log_final_layer_info` | `_log_final_info_for_layers` | Write final layer/module fields |
+| 10 | `rename_layer_references` | `_rename_model_history_layer_names` | Rename global refs (field reorder removed — scrub order is now deterministic) |
+| 11 | `build_lookup_keys` | `_build_lookup_keys_and_finalize_retained_layers` | Build lookup keys and finalize retained layer lists |
+| 11.5 | `populate_source_var_names` | `_populate_var_names` | Resolve source assignment names through `ast_branches.py` |
+| 11.75 | `resolve_deferred_retention` | executor `_run_resolve_deferred_retention` | Resolve deferred retention decisions through the attached `CaptureSession` (saves selected payloads; runs only when a capture session is attached) |
+| 12 | `undecorate_saved_tensors` | `_undecorate_all_saved_tensors` | Strip TorchLens attrs from saved tensors |
+| 13 | `clear_cuda_cache` | `torch.cuda.empty_cache` | Optional CUDA cache clear |
+| 14 | `log_time_elapsed` | `_log_time_elapsed` | Capture timing |
+| 15 | `finalize_param_logs` | `_finalize_param_logs` | Build and complete ParamLogs |
+| 15.5 | `build_layer_logs` | `_build_layer_logs` | Build aggregate LayerLogs |
+| 16 | `build_module_logs` | `_build_module_logs` | Build ModuleLogs |
+| 16.5 | `hash_graph_shape` | `compute_graph_shape_hash` | Hash graph shape before pass-finished behavior changes |
+| 17 | `mark_tracing_finished` | `_set_tracing_finished` | Switch Trace to user-facing behavior |
+| 17.5 | `adopt_containers_and_drop_workspaces` | executor `_run_adopt_containers_and_drop_workspaces` | Adopt container records; drop the three per-phase workspaces |
+| 18 | `finalize_streamed_bundle` | `_finalize_streamed_bundle` | Finalize streamed out bundle |
+| 19 | `evict_streamed_outs` | `_evict_streamed_outs` | Optional in-memory out eviction |
+| 20 | `release_param_refs` | `_release_param_refs` | Drop live parameter references after finalization |
 
 ## Step 5: Conditional Attribution
 
 Step 5 builds AST indexes, classifies terminal scalar bools, materializes dense
 `conditional_records`, runs a backward flood from branch bools, attributes forward arm edges,
 then derives legacy THEN/ELIF/ELSE views. Canonical structures are:
-- `Trace.conditional_records`
-- `Trace.conditional_arm_entry_edges`
-- `Trace.conditional_edge_call_indices`
+- `Trace.graph.conditional_records`
+- `Trace.graph.conditional_arm_entry_edges`
+- `Trace.graph.conditional_edge_call_indices`
 - `conditional_arm_children` on `Op` and `Layer`
 
 ## equivalence_class module suffix
@@ -128,13 +135,13 @@ retained op list.
 ## Executor
 
 `postprocess()` keeps the prologue (pre-0 + step-0 materialize block), the
-no-layers early exit, and the freeze epilogue; steps 1-20 run through
-`_executor.run_pipeline` over `STEP_REGISTRY`. Every step body calls its
+no-layers early exit, and the freeze epilogue; the named steps run through
+`_pipeline.run_pipeline` over `PIPELINE`, each through its `_executor` adapter. Every adapter calls its
 function through the function's home module (`graph_traversal`, `labeling`,
 `finalization`, ...), so a test that replaces a step replaces it on that home
-module, never on the package (`tests/test_postprocess_executor.py` proves it). Step 18's `should_run` IS the
-streaming snapshot point (context-writing, never trace-writing); step 19
-gates on the snapshot; `should_run` evaluates exactly once per step.
+module, never on the package (`tests/test_postprocess_executor.py` proves it). The
+`finalize_streamed_bundle` gate IS the streaming snapshot point (context-writing, never
+trace-writing); `evict_streamed_outs` gates on the snapshot; `should_run` evaluates exactly once per step.
 
 ## Step 5 Conditional Branch Detection
 

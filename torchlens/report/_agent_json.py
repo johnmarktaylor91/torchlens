@@ -24,6 +24,7 @@ from .._capture_honesty import (
     poison_facts,
     refuse_presenter_subject,
 )
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ._explain import _safe_len
 
 #: Schema identifier for the agent trace dump.
@@ -108,7 +109,7 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
         "nonfinite_evidence": "trace.first_nonfinite()",
         "nonfinite_coverage": "trace.nonfinite_coverage",
     }
-    if int(getattr(log, "num_saved_ops", 0) or 0) > 0:
+    if len(getattr(log, "saved_ops", ())) > 0:
         steps["one_activation"] = "trace[<layer_label>].out"
     steps["receptive_field"] = "trace[<layer_label>].receptive_field"
     steps["draw_graph"] = "trace.draw()"
@@ -116,7 +117,7 @@ def _guide_next_steps(log: Any) -> dict[str, str]:
         steps["op_table"] = "trace.to_pandas()"
         if _first_op_site_key(log) is not None:
             steps["sites_table"] = "trace.sites()"
-        if getattr(log, "decoded_output", None) is not None:
+        if is_live_trace(log) and log._decoded_output is not None:
             steps["output_table"] = "trace.output_table(k=5)"
     logged = (getattr(log, "annotations", {}) or {}).get("logged_values")
     if isinstance(logged, dict) and logged:
@@ -139,7 +140,7 @@ def _pandas_available() -> bool:
 def _first_op_site_key(log: Any) -> str | None:
     """Return the first op's site key, or ``None`` on keyless artifacts."""
 
-    for op in getattr(log, "layer_list", []) or []:
+    for op in (log._layer_list if is_live_trace(log) else None) or []:
         return getattr(op, "site_key", None)
     return None
 
@@ -251,9 +252,9 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
     except Exception:  # noqa: BLE001 -- foreign/partial logs keep the raw fallback
         return {
             "layers": _safe_len(getattr(log, "layer_labels", None)),
-            "operations": int(getattr(log, "num_ops", 0) or 0),
+            "operations": int((log._num_ops if is_live_trace(log) else 0) or 0),
             "tensors_total": len(log) if hasattr(log, "__len__") else 0,
-            "tensors_saved": int(getattr(log, "num_saved_ops", 0) or 0),
+            "tensors_saved": len(getattr(log, "saved_ops", ())),
             "parameters": int(getattr(log, "num_params", 0) or 0),
             "modules": module_row_count,
         }
@@ -352,7 +353,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
     Parameters
     ----------
     op:
-        Operation record from ``trace.layer_list``.
+        Operation record from ``trace._layer_list``.
 
     Returns
     -------
@@ -373,7 +374,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
         "payload_state": _payload_state(op),
         "label": str(getattr(op, "label", getattr(op, "layer_label", "unknown"))),
         "layer_label": str(getattr(op, "layer_label", "unknown")),
-        "pass_index": int(getattr(op, "pass_index", 1) or 1),
+        "pass_index": int(getattr(op, "pass_number", 1) or 1),
         "num_passes": int(getattr(op, "num_passes", 1) or 1),
         "func_name": str(getattr(op, "func_name", "unknown")),
         "shape": _json_shape(getattr(op, "shape", None)),
@@ -472,7 +473,7 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
             "omit it to dump every op."
         )
 
-    ops = list(getattr(log, "layer_list", []) or [])
+    ops = list((log._layer_list if is_live_trace(log) else None) or [])
     truncation: dict[str, Any] | None = None
     if max_ops is not None and len(ops) > max_ops:
         truncation = {
@@ -489,11 +490,11 @@ def build_agent_json(log: Any, *, max_ops: int | None = None) -> dict[str, Any]:
 
     capture = {
         **capture_verification(log),
-        "backend": str(getattr(log, "backend", "unknown")),
-        "model_class": str(getattr(log, "model_class_name", type(log).__name__)),
-        "structure_only": bool(getattr(log, "structure_only", False)),
-        "grouping": str(getattr(log, "grouping", "unknown")),
-        "has_backward_pass": bool(getattr(log, "has_backward_pass", False)),
+        "backend": str(log._provenance_backend if is_live_trace(log) else "unknown"),
+        "model_class": str(log._source_class_name if is_live_trace(log) else type(log).__name__),
+        "structure_only": bool(log._options_structure_only if is_live_trace(log) else False),
+        "grouping": str(log._options_grouping if is_live_trace(log) else "unknown"),
+        "has_backward_pass": bool(log._autograd_has_backward_pass if is_live_trace(log) else False),
         "device_summary": getattr(log, "backend_runtime_device_summary", None),
         # Poison, episode, and advisory facts are honesty disclosures: a
         # diverged sparse run or a forced-tokens episode must never dump as an

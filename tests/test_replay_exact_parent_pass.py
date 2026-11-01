@@ -57,15 +57,15 @@ def _capture() -> tl.Trace:
     return tl.trace(
         _FusedThenAdd(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
 def _colliding_label(trace: tl.Trace) -> str:
     """Return a final layer label that is also another op's public raw label."""
 
-    final = {str(op.layer_label): str(op.label) for op in trace.layer_list}
-    for op in trace.layer_list:
+    final = {str(op.layer_label): str(op.label) for op in trace._layer_list}
+    for op in trace._layer_list:
         other = final.get(str(op.raw_label))
         if other is not None and other != str(op.label):
             return str(op.raw_label)
@@ -73,7 +73,7 @@ def _colliding_label(trace: tl.Trace) -> str:
 
 
 def _hold_rsqrt(trace: tl.Trace) -> tl.Trace:
-    held = [str(op.label) for op in trace.layer_list if op.func_name == "rsqrt"]
+    held = [str(op.label) for op in trace._layer_list if op.func_name == "rsqrt"]
     fork = trace.fork()
     fork.do(
         {label: tl.patch_from(trace) for label in held},
@@ -84,7 +84,7 @@ def _hold_rsqrt(trace: tl.Trace) -> tl.Trace:
 
 def test_replay_names_the_recorded_parent_when_labels_collide() -> None:
     trace = _capture()
-    assert any(int(op.num_passes) > 1 for op in trace.layer_list)
+    assert any(int(op.num_passes) > 1 for op in trace._layer_list)
     _colliding_label(trace)
     out = str(trace.output_layers[0])
     fork = _hold_rsqrt(trace)
@@ -124,7 +124,7 @@ class TestTinyGemma2:
             trace = tl.trace(
                 model,
                 torch.tensor([fx.TOKENS]),
-                capture=tl.options.CaptureOptions(intervention_ready=True),
+                capture=tl.options.CaptureOptions(replayable=True),
             )
         try:
             yield fx, model, trace

@@ -22,6 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._postprocess._site_join import join_site_profiles, site_profile
 
 
@@ -50,10 +51,8 @@ def _capture_pair() -> tuple[tl.Trace, tl.Trace]:
     inserted_model.load_state_dict(base_model.state_dict())
     torch.manual_seed(0)
     x = torch.randn(2, 4)
-    base = tl.trace(base_model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    inserted = tl.trace(
-        inserted_model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    base = tl.trace(base_model, x, capture=tl.options.CaptureOptions(replayable=True))
+    inserted = tl.trace(inserted_model, x, capture=tl.options.CaptureOptions(replayable=True))
     return base, inserted
 
 
@@ -66,7 +65,7 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
     base, inserted = _capture_pair()
     rows = join_site_profiles(site_profile(base), site_profile(inserted))
 
-    relu_key = base["relu_1_2"].site_key
+    relu_key = layer_site_key(base["relu_1_2"])
     assert relu_key is not None
 
     # POSITIVE CONTROL that must FAIL to detect: naive key-set membership
@@ -86,7 +85,7 @@ def test_guarded_join_refuses_the_inserted_cohort() -> None:
     assert row.verdict.value == "refused_cardinality"
 
     # Unaffected structural positions stay joined.
-    fc1_key = base["linear_1_1"].site_key
+    fc1_key = layer_site_key(base["linear_1_1"])
     assert rows[fc1_key].joined
 
 
@@ -121,10 +120,8 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     inserted_model.load_state_dict(base_model.state_dict())
     torch.manual_seed(0)
     x = torch.randn(2, 4)
-    base = tl.trace(base_model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    inserted = tl.trace(
-        inserted_model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    base = tl.trace(base_model, x, capture=tl.options.CaptureOptions(replayable=True))
+    inserted = tl.trace(inserted_model, x, capture=tl.options.CaptureOptions(replayable=True))
 
     base.attach_hooks(tl.func("relu"), tl.scale(0.5), confirm_mutation=True)
     spec_path = os.path.join(tmp_path, "spec.tlspec")
@@ -134,7 +131,7 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     manifest = spec.metadata["target_manifest"]
     assert manifest, "manifest missing"
     assert all("resolved_site_keys" in entry for entry in manifest)
-    assert manifest[0]["resolved_site_keys"] == [base["relu_1_2"].site_key]
+    assert manifest[0]["resolved_site_keys"] == [layer_site_key(base["relu_1_2"])]
 
     # Same trace: EXACT, empty drift.
     same = check_spec_compat(spec, base)
@@ -169,9 +166,7 @@ def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
     derived = load_intervention_spec(derived_path)
     assert derived.metadata["spec_derived"] is True
 
-    ready = tl.trace(
-        model, torch.randn(2, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    ready = tl.trace(model, torch.randn(2, 4), capture=tl.options.CaptureOptions(replayable=True))
     fork = ready.fork()
     fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)), confirm_mutation=True)
     authored_path = os.path.join(tmp_path, "authored.tlspec")

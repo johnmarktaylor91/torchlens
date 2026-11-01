@@ -83,7 +83,7 @@ def _pinned_box_case(
     truth = _gradient_truth(model, x, out_unit)
 
     trace = _armed_trace(model, x)
-    op = next(o for o in trace.layer_list if "conv" in o.label)
+    op = next(o for o in trace._layer_list if "conv" in o.label)
     rf = op.receptive_field
     box = rf.at(unit)
     assert box.exact is True
@@ -159,7 +159,7 @@ def test_widened_full_axis_exact_claim_fails_check(monkeypatch) -> None:
     model = _GetitemConv(lambda x: x[0, :, 3:, :].unsqueeze(0)).eval()
     x = torch.randn(2, 1, 8, 8)
     trace = _armed_trace(model, x)
-    op = next(o for o in trace.layer_list if "conv" in o.label)
+    op = next(o for o in trace._layer_list if "conv" in o.label)
 
     from torchlens.receptive_field import _validation as validation_module
 
@@ -208,6 +208,6 @@ def test_honest_full_axis_claims_still_pass_check() -> None:
     model = _GetitemConv(lambda x: x[0, :, 3:, :].unsqueeze(0)).eval()
     x = torch.randn(2, 1, 8, 8)
     trace = _armed_trace(model, x)
-    op = next(o for o in trace.layer_list if "conv" in o.label)
+    op = next(o for o in trace._layer_list if "conv" in o.label)
     result = op.receptive_field.check((0, 0, 1, 2))
     assert result.status.name == "PASS", result.message

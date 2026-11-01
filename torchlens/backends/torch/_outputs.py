@@ -100,7 +100,7 @@ def _output_parent_storage_intent(
         in_ram=streaming is None or streaming.path is None or streaming.retain_in_memory,
         on_disk=streaming is not None and streaming.path is not None,
     )
-    output_device = getattr(trace, "output_device", None)
+    output_device: str | None = trace._options_output_device
     if output_device == "same":
         output_device = None
     spec = CaptureSpec(
@@ -108,7 +108,7 @@ def _output_parent_storage_intent(
         save_metadata=True,
         save_grad=False,
         device=output_device,
-        save_mode=cast(Any, getattr(trace, "save_mode", "copy")),
+        save_mode=cast(Any, trace._options_save_mode),
     )
     return intent, output_device, spec
 
@@ -150,11 +150,11 @@ def _retain_output_parent_payloads(
         tensor,
         spec,
         intent,
-        activation_transform=getattr(trace, "activation_transform", None),
-        save_raw_activations=getattr(trace, "save_raw_activations", True),
+        activation_transform=trace._options_activation_transform,
+        save_raw_activations=trace._options_save_raw_activations,
         ctx=ctx,
         kind="activation",
-        detach_saved_activations=bool(getattr(trace, "detach_saved_activations", True)),
+        detach_saved_activations=bool(trace._options_detach_saved_activations),
     )
     if budget is not None and reservation is not None:
         budget.commit(reservation, (ram_payload, transformed_ram_payload))
@@ -565,7 +565,7 @@ def _collect_output_addresses(
 
     # The per-op container_spec is only user-facing metadata when explicitly
     # opted into via capture_container_structure (or implied by
-    # intervention_ready); with the default OFF it must stay None on output
+    # replayable); with the default OFF it must stay None on output
     # layers. The container *path*, however, is always preserved so
     # forward-replay validation can slice multi-output containers back to the
     # right leaf, and the FINAL-output ContainerSpec is always registered as
@@ -573,7 +573,7 @@ def _collect_output_addresses(
     # the exact tuple/dict/ModelOutput the model returned from that one
     # snapshot, so a default capture settles VERIFIED instead of the
     # remedy-only ``container_contract_unrecorded`` (W051-HONESTY H2).
-    persist_container_spec = getattr(self_trace, "intervention_ready", False) or getattr(
+    persist_container_spec = getattr(self_trace, "is_replayable", False) or getattr(
         self_trace, "_capture_container_structure", False
     )
     if output_entries:
@@ -738,7 +738,7 @@ def extract_and_mark_outputs(
             _raise_output_attribution_error(self_trace, t, output_address)
         attributable_output_tensors.append(t)
         attributable_output_tensor_addresses.append(output_address)
-        if self_trace.capture_mode in {"exhaustive", "predicate"}:
+        if self_trace._options_mode in {"exhaustive", "predicate"}:
             amendment = _output_parent_promotion_amendment(self_trace, _label_raw, t)
             if amendment is not None:
                 self_trace.capture_events.append_amendment(amendment)
