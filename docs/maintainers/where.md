@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-77 packages, 1177 modules, 603844 lines, 0 modules without a docstring.
+77 packages, 1177 modules, 603850 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 89 | 56176 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 89 | 56172 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -34,7 +34,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2940 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2113 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
-| `torchlens._utils` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. | 32 | 22311 |
+| `torchlens._utils` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. | 32 | 22321 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 64 | 42241 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 749 |
@@ -93,7 +93,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (89 modules, 56176 lines)
+TorchLens - extract outs and metadata from PyTorch models. (89 modules, 56172 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -121,7 +121,7 @@ TorchLens - extract outs and metadata from PyTorch models. (89 modules, 56176 li
 | `_fast_live_plans` | Collection plans and direct-call routes for the guarded fast live run. | 664 |
 | `_fast_live_steer` | Steered, shape-varying support for the guarded fast live engine. | 645 |
 | `_fast_live_until` | Early stop (''until='') for the guarded fast live run. | 208 |
-| `_fast_run` | Explicit guarded fast paths for repeated static-model execution. | 1718 |
+| `_fast_run` | Explicit guarded fast paths for repeated static-model execution. | 1649 |
 | `_fast_sparse_state` | Cached-state safety analysis for the guarded fast sparse engine. | 297 |
 | `_input_coerce` | Duck-typed ergonomic input coercion for TorchLens entry points. | 402 |
 | `_input_walk` | Single-sourced model-input boundary traversal ( Cluster Y, the normative dispatch). | 1633 |
@@ -141,7 +141,7 @@ TorchLens - extract outs and metadata from PyTorch models. (89 modules, 56176 li
 | `_runnable_call_outputs` | Sparse-call output binding and mutation checks. | 613 |
 | `_runnable_execution` | Transactional execution providers for the unified :meth:'Trace.run' surface. | 381 |
 | `_runnable_input_aliases` | Input alias topology and non-tensor tree contracts. | 508 |
-| `_runnable_input_metadata` | Input structure, literal, and metadata witness helpers. | 612 |
+| `_runnable_input_metadata` | Input structure, literal, and metadata witness helpers. | 677 |
 | `_runnable_input_sites` | Live input sites and metadata contract checks. | 628 |
 | `_runnable_output_contracts` | Output reconstruction and post-execution contracts. | 754 |
 | `_runnable_path_faithfulness` | Path-faithfulness and state comparison helpers. | 572 |
@@ -669,7 +669,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 
 
 ### `torchlens._utils`
 
-Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. (32 modules, 22311 lines)
+Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. (32 modules, 22321 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -685,7 +685,7 @@ Focused utility modules: RNG, tensor ops, argument handling, introspection, coll
 | `_rng_channels` | Thread routing, owner-join settlement, and global-engine state rows for the monitor. | 845 |
 | `_script_call_slot` | Probe for the TorchScript call boundary: can ''ScriptFunction.__call__'' be replaced. | 35 |
 | `_subprocess` | The ONE bounded-subprocess spawn discipline for every TorchLens child. | 205 |
-| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4676 |
+| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4686 |
 | `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 246 |
 | `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 117 |
 | `_type_new_slot` | CPython ''tp_new'' patching for torch's immutable legacy tensor-constructor types. | 465 |

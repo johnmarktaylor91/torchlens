@@ -70,7 +70,6 @@ from ._runnable import (
     RunResult,
     SparseRunDescriptor,
     StateSource,
-    TensorSlotDescriptor,
     TensorSlotRole,
     mark_trace_path_status,
 )
@@ -97,7 +96,7 @@ from ._runnable_input_aliases import (
     _split_mixed_inputs,
 )
 from ._runnable_input_metadata import (
-    _input_layout_ok,
+    _fast_input_check,
     _input_literal_contract_checks,
     _runtime_mirror_clone,
     _top_level_input_site_contract_checks,
@@ -110,10 +109,7 @@ from ._runnable_input_sites import (
     _model_input_arity_positions,
     _require_loaded_sparse_provider,
 )
-from ._runnable_output_contracts import (
-    _call_witness_checks,
-    _post_execution_contract_checks,
-)
+from ._runnable_output_contracts import _call_witness_checks, _post_execution_contract_checks
 from ._runnable_path_faithfulness import _path_faithfulness
 from ._runnable_providers import (
     _finalize_provider_run,
@@ -260,71 +256,6 @@ def direct_forward_routes_installed(
                 module.__dict__.pop("forward", None)
             else:
                 module.__dict__["forward"] = prior
-
-
-def _fast_input_check(
-    slot: TensorSlotDescriptor,
-    value: Any,
-) -> tuple[ContractCheck, ...]:
-    """Build cheap shape/dtype/device/layout checks for one runtime input leaf.
-
-    Parameters
-    ----------
-    slot:
-        Persisted input slot contract.
-    value:
-        Runtime value resolved at that slot's path.
-
-    Returns
-    -------
-    tuple[ContractCheck, ...]
-        Ordered fast static-guard checks.
-    """
-
-    is_tensor = isinstance(value, torch.Tensor)
-    shape = tuple(value.shape) if is_tensor else None
-    dtype = str(value.dtype) if is_tensor else None
-    device_ok = bool(
-        is_tensor
-        and value.device.type == slot.device_type
-        and (
-            slot.device_index is None
-            or value.device.index is None
-            or value.device.index == slot.device_index
-        )
-    )
-    return (
-        _contract_check(
-            f"fast_input_type:{slot.slot_id}",
-            is_tensor,
-            RunnableErrorCode.INPUT_TREE_MISMATCH,
-            f"Runtime input at {slot.slot_id!r} is not a tensor.",
-        ),
-        _contract_check(
-            f"fast_input_shape:{slot.slot_id}",
-            shape == slot.shape,
-            RunnableErrorCode.INPUT_SHAPE_MISMATCH,
-            f"Runtime input shape {shape} does not match {slot.shape}.",
-        ),
-        _contract_check(
-            f"fast_input_dtype:{slot.slot_id}",
-            dtype == slot.dtype,
-            RunnableErrorCode.INPUT_DTYPE_MISMATCH,
-            f"Runtime input dtype {dtype} does not match {slot.dtype}.",
-        ),
-        _contract_check(
-            f"fast_input_device:{slot.slot_id}",
-            device_ok,
-            RunnableErrorCode.INPUT_TREE_MISMATCH,
-            f"Runtime input device does not match {slot.device_type}:{slot.device_index}.",
-        ),
-        _contract_check(
-            f"fast_input_layout:{slot.slot_id}",
-            bool(is_tensor and _input_layout_ok(value)),
-            RunnableErrorCode.INPUT_TREE_MISMATCH,
-            "Fast sparse execution accepts only plain dense strided tensor inputs.",
-        ),
-    )
 
 
 class _FastSparseSession:
