@@ -339,9 +339,8 @@ def test_unwrapped_intermediate_flags_instead_of_becoming_a_constant() -> None:
 def test_unwrapped_policy_refuse_raises_typed_and_restores_state() -> None:
     """Under ``unwrapped_policy("refuse")`` the gap is a typed refusal; wrappers unwind."""
 
-    with unwrapped_policy("refuse"):
-        with pytest.raises(BackendUnsupportedError) as info:
-            tl.trace(_unwrapped, mx.array(X24), backend="mlx")
+    with unwrapped_policy("refuse"), pytest.raises(BackendUnsupportedError) as info:
+        tl.trace(_unwrapped, mx.array(X24), backend="mlx")
     assert _code(info.value) == "unwrapped_op_in_capture"
     assert not is_mlx_wrapped()
     assert get_unwrapped_policy() == "flag"
@@ -350,9 +349,8 @@ def test_unwrapped_policy_refuse_raises_typed_and_restores_state() -> None:
 def test_unwrapped_policy_rejects_unknown_values() -> None:
     """Only ``flag`` and ``refuse`` are policies."""
 
-    with pytest.raises(ValueError, match="flag"):
-        with unwrapped_policy("ignore"):
-            pass
+    with pytest.raises(ValueError, match="flag"), unwrapped_policy("ignore"):
+        pass
 
 
 # ------------------------------------------------------------- typed refusals
