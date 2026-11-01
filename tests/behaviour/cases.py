@@ -287,7 +287,10 @@ TOY_CASES: tuple[Case, ...] = (
 )
 
 # wave-3 fills
+from tests.behaviour import _fill_intervention as _fill_intervention  # noqa: E402
 from tests.behaviour._fill_capture import TOY_CASES  # noqa: E402, F811 (adds toy rows)
+
+TOY_CASES = _fill_intervention.extend_toys(TOY_CASES)
 
 
 @cache
