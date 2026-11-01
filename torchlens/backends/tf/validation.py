@@ -284,11 +284,7 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
         op_label = str(getattr(op, "label", label))
         if op_class == "source":
             if op_type == "constant":
-                # Constants rule item 3: a closure constant is a leaf whose
-                # saved payload is the record; nothing upstream to perturb.
-                decisions_list.extend(_constant_leaf_decisions(op_label))
-                exempted_reasons[_REASON_CONSTANT_LEAF] += 1
-                exempted_reasons[_REASON_CONSTANT_PERTURB] += 1
+                _record_constant_leaf(op_label, decisions_list, exempted_reasons)
             continue
         if op_class != "value":
             if op_class in {"pure-resource-read", "effect-denied", "control-region"}:
@@ -332,6 +328,18 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
         unverified_reasons=unverified_reasons,
         exempted_reasons=exempted_reasons,
     )
+
+
+def _record_constant_leaf(
+    op_label: str, decisions_list: list[Mapping[str, Any]], exempted_reasons: Counter[str]
+) -> None:
+    """Record a closure constant as an exempted leaf (constants rule item 3)."""
+
+    # Constants rule item 3: a closure constant is a leaf whose
+    # saved payload is the record; nothing upstream to perturb.
+    decisions_list.extend(_constant_leaf_decisions(op_label))
+    exempted_reasons[_REASON_CONSTANT_LEAF] += 1
+    exempted_reasons[_REASON_CONSTANT_PERTURB] += 1
 
 
 def _detailed_result(
