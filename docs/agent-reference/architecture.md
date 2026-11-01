@@ -304,6 +304,11 @@ Key entry points:
   eager TF preview (static-label, two-level writable layer, fail-closed site reachability;
   see invariant 15). `trace(halt=...)` runs on torch and Paddle; the remaining previews
   refuse typed.
+  Spec persistence is one path: `intervention/save.py` owns the `.tlspec` directory,
+  tensors and manifest; `intervention/_spec_codec.py` holds the one spec-document
+  encoder and decoder with the `format_version` table (`SPEC_FORMAT_VERSIONS`);
+  `intervention/_spec_values.py` holds the value wrapper grammar and the import-ref
+  trust gate. `_io/injection_codec.py` is the separate bundle-row envelope.
 - Visualization encoding channel (UNSTABLE naming, keyword-only): `Trace.draw(color_by=...)`
   fills op nodes from a sequential ramp (field name / scalar builtin / callable), dot-layout-only
   (AUTO forces dot; explicit rank refuses `encoding_requires_dot_layout`), legend-disclosed via
