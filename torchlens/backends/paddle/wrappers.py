@@ -369,7 +369,7 @@ class _PaddleWrapperRegistry:
             if original is None or (layer_cls, "forward") in self._originals:
                 continue
             self._originals[(layer_cls, "forward")] = original
-            setattr(layer_cls, "forward", _conv_layer_wrapper(original, op_name, backend))
+            layer_cls.forward = _conv_layer_wrapper(original, op_name, backend)
             names.add(f"nn.{class_name}.forward")
         return names
 
@@ -436,7 +436,7 @@ class _PaddleWrapperRegistry:
 
             observer = _ACTIVE_TAP_OBSERVER
             if observer is not None:
-                observe_call = getattr(observer, "call")
+                observe_call = observer.call
                 return observe_call(original, op_name, args, kwargs)
             if not _state._logging_enabled:
                 return original(*args, **kwargs)
@@ -456,7 +456,7 @@ class _PaddleWrapperRegistry:
             finally:
                 trace._paddle_capture_depth = depth
             module_stack = tuple(getattr(trace, "_paddle_module_stack", ()))
-            emit = getattr(backend, "emit_paddle_operation")
+            emit = backend.emit_paddle_operation
             return emit(trace, op_name, original, args, kwargs, output, module_stack=module_stack)
 
         setattr(owner, name, wrapper)
@@ -500,7 +500,7 @@ def _conv_layer_wrapper(original: Any, op_name: str, backend: object) -> Any:
             trace._paddle_capture_depth = depth
         call_args, call_kwargs = conv_layer_call(layer, op_name, x)
         module_stack = tuple(getattr(trace, "_paddle_module_stack", ()))
-        emit = getattr(backend, "emit_paddle_operation")
+        emit = backend.emit_paddle_operation
         return emit(
             trace,
             op_name,

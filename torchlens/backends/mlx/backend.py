@@ -737,7 +737,7 @@ class MLXBackend:
                 continue
             self.tensor_store.set_label(output, reserved.label_raw)
             if policy.save_payload:
-                getattr(session, "_mlx_saved_payloads").append(output)
+                session._mlx_saved_payloads.append(output)
             parents, parent_arg_positions, edge_uses = self._parent_edges(
                 func_event_input.args,
                 dict(func_event_input.kwargs),
@@ -951,11 +951,7 @@ class MLXBackend:
         trace._mlx_external_arrays = external_array_ids(model, self.is_tensor)
         trace._mlx_unwrapped_intermediates = 0
         trace._pre_forward_rng_states = None
-        setattr(
-            trace,
-            "random_seed",
-            cast(int, seed) if seed is not None else random.randint(1, 4294967294),
-        )
+        trace.random_seed = cast(int, seed) if seed is not None else random.randint(1, 4294967294)
         self.tensor_store.clear()
         # R07: the try owns the wrap call itself -- a raise anywhere between
         # wrapper install and the forward (session prep, input normalization,
@@ -1409,7 +1405,7 @@ class MLXBackend:
                 backend=self.name,
                 payload_load_status=getattr(trace, "payload_load_status", None),
             )
-            setattr(trace, "_validation_replay_status", status_result)
+            trace._validation_replay_status = status_result
             return status_result
         replayed_count = 0
         failed_count = 0
@@ -1494,7 +1490,7 @@ class MLXBackend:
                 decisions=decisions,
             )
         status_result = _name_first_failure(status_result)
-        setattr(trace, "_validation_replay_status", status_result)
+        trace._validation_replay_status = status_result
         return status_result
 
     def emit_mlx_operation(
@@ -1894,7 +1890,7 @@ class MLXBackend:
             reserved = events.reserve_label_block("constant", 1)[0]
             self.tensor_store.set_label(leaf, reserved.label_raw)
             if policy.save_payload:
-                getattr(trace, "_mlx_saved_payloads").append(leaf)
+                trace._mlx_saved_payloads.append(leaf)
             events.append(self._build_source_event(trace, leaf, reserved, func_name="constant"))
             self._inventory_constant(trace, reserved.label_raw)
 

@@ -672,7 +672,7 @@ class JAXBackend:
 
         status = trace.validation_replay_status
         if not status.is_available:
-            setattr(trace, "_validation_replay_status", status)
+            trace._validation_replay_status = status
             return status
         status_result = self.validation_status(
             trace, validate_metadata=bool(kwargs.get("validate_metadata", True))
@@ -701,7 +701,7 @@ class JAXBackend:
 
         status = trace.validation_replay_status
         if not status.is_available:
-            setattr(trace, "_validation_replay_status", status)
+            trace._validation_replay_status = status
             return status
         log = _JaxValidationLog()
         try:
@@ -740,7 +740,7 @@ class JAXBackend:
                 status_result,
                 message=f"Replay validation failed before replay: {type(exc).__name__}: {exc}",
             )
-        setattr(trace, "_validation_replay_status", status_result)
+        trace._validation_replay_status = status_result
         return status_result
 
     def _validation_status_from_counts(

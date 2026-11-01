@@ -241,8 +241,8 @@ def validate_tf_trace(trace: Any, *, validate_metadata: bool = True) -> Validati
                 f"{result.counts.replayed_node_count} replayed."
             ),
         )
-    setattr(trace, "_tf_validation_result", result)
-    setattr(trace, "_validation_replay_status", status)
+    trace._tf_validation_result = result
+    trace._validation_replay_status = status
     return status
 
 
@@ -464,7 +464,7 @@ def validate_tf_trace_status(trace: Any, *, validate_metadata: bool = True) -> V
 
     status = trace.validation_replay_status
     if not status.is_available:
-        setattr(trace, "_validation_replay_status", status)
+        trace._validation_replay_status = status
         return status
     if getattr(trace, "_loaded_from_bundle", False) and not getattr(trace, "_tf_op_captures", ()):
         # Portable save strips the runtime callback captures; a loaded trace
@@ -472,7 +472,7 @@ def validate_tf_trace_status(trace: Any, *, validate_metadata: bool = True) -> V
         stripped = ValidationStatus.unavailable_loaded_runtime_stripped(
             backend="tf", payload_load_status=getattr(trace, "payload_load_status", None)
         )
-        setattr(trace, "_validation_replay_status", stripped)
+        trace._validation_replay_status = stripped
         return stripped
     source: ValidationReplaySource = (
         "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
@@ -498,7 +498,7 @@ def validate_tf_trace_status(trace: Any, *, validate_metadata: bool = True) -> V
             failed,
             message=f"Replay validation failed before replay: {type(exc).__name__}: {exc}",
         )
-        setattr(trace, "_validation_replay_status", failed)
+        trace._validation_replay_status = failed
         return failed
 
 
@@ -1423,7 +1423,7 @@ def _saved_payload(op: Any) -> Any:
 
     if not bool(getattr(op, "has_saved_activation", False)):
         raise ValueError(f"op has no saved activation: {getattr(op, 'label', op)!r}")
-    return getattr(op, "out")
+    return op.out
 
 
 def _captures_by_label(trace: Any) -> dict[str, TFOpCapture]:

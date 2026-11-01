@@ -232,7 +232,10 @@ def _parity_holds(trace: Any, reference: Any, adapter: Any) -> bool:
     if isinstance(reference, (tuple, list)):
         if len(outputs) != len(reference):
             return False
-        return all(_output_arm_equal(op.out, arm, adapter) for op, arm in zip(outputs, reference))
+        return all(
+            _output_arm_equal(op.out, arm, adapter)
+            for op, arm in zip(outputs, reference, strict=True)
+        )
     return _output_arm_equal(outputs[0].out, reference, adapter)
 
 
