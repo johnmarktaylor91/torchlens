@@ -507,7 +507,7 @@ def test_the_fast_path_unpickler_retains_nothing_after_load() -> None:
         if unpickler.load_path != "c":
             del loaded, unpickler
             continue
-        assert len(unpickler.memo) == 0, f"{label}: the fast path kept its memo after load()"
+        assert not unpickler.memo.copy(), f"{label}: the fast path kept its memo after load()"
         unpickler_ref = weakref.ref(unpickler)
         del unpickler
         assert unpickler_ref() is None, f"{label}: a dry-run cycle kept the unpickler alive"
