@@ -54,7 +54,7 @@ def main() -> None:
     sizes = bundle.map(lambda member: len(member.layer_list))
     comparison = bundle.at(tl.func("relu")).compare()
 
-    assert node.traces == {"clean", "zero"}
+    assert node.names == {"clean", "zero"}
     assert sizes["clean"] == sizes["zero"]
     assert comparison.shape == (2, 2)
 

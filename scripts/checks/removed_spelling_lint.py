@@ -119,6 +119,21 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
         r"\bprofiler\.execution_trace\b|\bexecution_trace\s*\("
         r"|\bexplain\s*\([^)\n]*\bformat\s*="
     ),
+    # Round-1 rename removals the examples/notebooks audit found still taught
+    # (remove-and-rename, no shim): the quantity classes left the root for
+    # ``torchlens.types``; ``Trace.grad_fns`` is ``trace.autograd.grad_fns``
+    # (``Bundle.grad_fns`` is live, so only receivers named like a trace or
+    # log match); ``AttributionError`` is exported from ``tl.errors`` only
+    # (``attr`` is the audit notebooks' alias for ``tl.attribution``); and
+    # ``ReadTable.for_target`` is ``ReadTable.target``.
+    "r1_renames": re.compile(
+        r"(?<![\w.])(?:tl|torchlens)\.(?:Bytes|Duration|Flops|Macs|Quantity)\b"
+        r"|\bfrom\s+torchlens\s+import\s+(?:\([^)]*?|[^\n]*?)"
+        r"\b(?:Bytes|Duration|Flops|Macs|Quantity)\b"
+        r"|\b\w*(?:trace|log)\w*\.grad_fns\b"
+        r"|(?<![\w.])(?:(?:tl|torchlens)\.)?(?:attribution|attr)\.AttributionError\b"
+        r"|\bfor_target\b"
+    ),
 }
 
 #: Lines spelling a grouped-option bundle are exempt from ``trace_flat``.
@@ -205,6 +220,16 @@ _NEEDLES: dict[str, tuple[str, ...]] = {
         "VisualizationOptions",
     ),
     "batch2_report": ("execution_trace", "explain"),
+    "r1_renames": (
+        "Bytes",
+        "Duration",
+        "Flops",
+        "Macs",
+        "Quantity",
+        "grad_fns",
+        "AttributionError",
+        "for_target",
+    ),
 }
 
 #: The audited-legitimate ledger: path -> (groups | {"ALL"}, reason).
@@ -447,6 +472,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         "node_style_domain": "log.draw(node_style='vision')\n",
         "inert_opts": "opts = SaveOptions(output_dir='out')\n",
         "batch2_report": 'payload = trace.explain(format="json")\n',
+        "r1_renames": "from torchlens import Bytes, Duration, Flops, Macs, Quantity\n",
     }
     assert set(planted) == set(_FORBIDDEN)
     assert set(_NEEDLES) == set(_FORBIDDEN), "every group needs a needle row"
@@ -461,6 +487,26 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
     resurrected = "nodes = tl.bridge.profiler.execution_trace(trace, path)\n"
     hits = _scan_file(tmp_path / "planted_execution_trace.py", resurrected)
     assert any(group == "batch2_report" for group, _, _ in hits)
+
+    for resurrected in (
+        "size = tl.Bytes(2048)\n",
+        "from torchlens import (\n    Quantity,\n)\n",
+        "print(trace_bwd.grad_fns)\n",
+        "except attr.AttributionError as exc:\n",
+        "except tl.attribution.AttributionError as exc:\n",
+        "sub = table.for_target(target_id)\n",
+    ):
+        hits = _scan_file(tmp_path / "planted_r1_renames.py", resurrected)
+        assert any(group == "r1_renames" for group, _, _ in hits), resurrected
+    for canonical in (
+        "from torchlens.types import Bytes, Duration, Flops, Macs, Quantity\n",
+        "size = torchlens.types.Bytes(2048)\n",
+        "print(trace_bwd.autograd.grad_fns)\n",
+        "aligned = bundle.grad_fns\n",
+        "except tl.errors.AttributionError as exc:\n",
+        "sub = table.target(target_id)\n",
+    ):
+        assert not _scan_file(tmp_path / "canonical_r1_renames.py", canonical), canonical
 
     clean = 'log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))\n'
     assert not _scan_file(tmp_path / "clean.py", clean), (
