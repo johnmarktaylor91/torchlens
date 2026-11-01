@@ -55,7 +55,7 @@ trace.draw(show_containers="nodes")
 
 For mid-graph containers, TorchLens does not route tensor dataflow through the container node. The key label stays on the real producer-to-consumer edge, and a light dashed arrowless member-of tie associates producer ops with the collapsed container node. Single-owner module clusters and large homogeneous-container collapse still apply as visual enhancers.
 
-A container that is the model's input or output is drawn as that boundary container even when a submodule built it: its node carries the model-input or model-output role and its leaves connect only through the keyed source or sink edges, never through member-of ties.
+A container that is the model's input or output is drawn as that boundary container even when a submodule built it: its node carries the model-input or model-output role and its leaves connect only through the keyed source or sink edges, never through member-of ties. When the homogeneous-container collapse already summarizes every leaf of a container, the summary node is the container node: it carries the role (for example `tuple x16 (model output)`) and no second node is drawn.
 
 Existing modes are unchanged: `False`, `"labels"`, `"cluster"`, `"collapsed"`, and `"auto"` keep their prior rendering behavior.
 

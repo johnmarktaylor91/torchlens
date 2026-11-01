@@ -773,8 +773,13 @@ def _collapsed_container_leaf_nodes(
     show_containers: ShowContainersLiteral,
     container_max_inline: int,
     pending_nodes: list[dict[str, Any]],
+    summary_label_lines: dict[str, list[str]] | None = None,
 ) -> dict[str, str]:
-    """Return leaf-to-summary node names hidden by homogeneous collapse."""
+    """Return leaf-to-summary node names hidden by homogeneous collapse.
+
+    ``summary_label_lines``, when given, receives each summary node's label
+    lines by node name, so nodes mode can add the container role to them.
+    """
 
     if show_containers not in {"collapsed", "auto", "nodes"} or vis_mode != "unrolled":
         return {}
@@ -786,7 +791,12 @@ def _collapsed_container_leaf_nodes(
         summary_node = _collapsed_container_node_name(group_id)
         for leaf in leaves:
             hidden[_render_node_name(leaf, vis_mode)] = summary_node
-        _add_collapsed_container_node(pending_nodes, leaves, vis_mode=vis_mode)
+        _add_collapsed_container_node(
+            pending_nodes,
+            leaves,
+            vis_mode=vis_mode,
+            label_lines_sink=summary_label_lines,
+        )
     return hidden
 
 
@@ -803,12 +813,15 @@ def _container_nodes_and_overlay_edges(
     *,
     vis_call_depth: int,
     collapse_fn: CollapseFn | None,
-) -> tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge]]:
+    summary_nodes: frozenset[str] = frozenset(),
+) -> tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge], dict[str, str]]:
     """Return render-only container nodes and non-dataflow overlay edges.
 
     A record that is a model input or model output is drawn as that boundary
     container (role label and keyed source or sink edges) even when a
     submodule also returned it, so it never gets mid-graph member-of ties.
+    A record whose every leaf is already hidden in one homogeneous-collapse
+    summary node is drawn by that summary alone: no second node, no edges.
 
     Parameters
     ----------
@@ -820,17 +833,21 @@ def _container_nodes_and_overlay_edges(
         Maximum module nesting levels to show before collapsed-module summaries.
     collapse_fn:
         Optional custom module-collapse predicate.
+    summary_nodes:
+        Names of the homogeneous-collapse summary nodes being drawn.
 
     Returns
     -------
-    tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge]]
-        Node argument dictionaries and overlay edge specs. The edge specs are
-        intentionally separate from real dataflow edge queues.
+    tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge], dict[str, str]]
+        Node argument dictionaries, overlay edge specs (kept separate from
+        real dataflow edge queues), and the role text of each summary node
+        that stands for a whole record.
     """
 
     nodes_by_name: dict[str, ContainerOverlayNode] = {}
     edges: list[ContainerOverlayEdge] = []
     edge_keys: set[tuple[str, str, str, str]] = set()
+    summary_roles: dict[str, str] = {}
     records = getattr(trace, "_containers", {})
     for record in records.values():
         if not isinstance(record, ContainerRecord):
@@ -844,6 +861,10 @@ def _container_nodes_and_overlay_edges(
             snapshot for snapshot in record.snapshots if snapshot.role == Role.CALL_OUTPUT
         ]
         if not drawn:
+            continue
+        summary = _record_summary_node(trace, drawn[0], collapsed_container_nodes, summary_nodes)
+        if summary is not None:
+            summary_roles.setdefault(summary, drawn[0].role.value.replace("_", " "))
             continue
         node_name = _container_record_node_name(record)
         nodes_by_name.setdefault(
@@ -863,7 +884,51 @@ def _container_nodes_and_overlay_edges(
         )
         for snapshot in drawn:
             append_edges(trace, snapshot, node_name, collapsed_container_nodes, edge_keys, edges)
-    return list(nodes_by_name.values()), edges
+    return list(nodes_by_name.values()), edges, summary_roles
+
+
+def _record_summary_node(
+    trace: "Trace",
+    snapshot: ContainerSnapshot,
+    collapsed_container_nodes: Mapping[str, str],
+    summary_nodes: frozenset[str],
+) -> str | None:
+    """Return the one collapse summary node holding every leaf of ``snapshot``, else ``None``.
+
+    Parameters
+    ----------
+    trace:
+        Trace used for resolving occurrence labels.
+    snapshot:
+        Snapshot whose leaves are checked.
+    collapsed_container_nodes:
+        Mapping from rendered leaf node names to collapsed summary node names.
+    summary_nodes:
+        Names of the homogeneous-collapse summary nodes being drawn.
+
+    Returns
+    -------
+    str | None
+        The shared summary node name, or ``None`` when any leaf is drawn on
+        its own or the leaves span several summaries.
+    """
+
+    if not summary_nodes or not snapshot.leaf_occurrences:
+        return None
+    found: set[str] = set()
+    for occurrence in snapshot.leaf_occurrences:
+        candidates = [_render_node_name_for_occurrence(trace, occurrence.producer_op_label)]
+        if snapshot.role == Role.MODEL_OUTPUT:
+            candidates.append(_render_output_node_name_for_path(trace, occurrence.path))
+        hidden_in = {
+            collapsed_container_nodes[name]
+            for name in candidates
+            if name is not None and collapsed_container_nodes.get(name) in summary_nodes
+        }
+        if len(hidden_in) != 1:
+            return None
+        found |= hidden_in
+    return next(iter(found)) if len(found) == 1 else None
 
 
 def _container_record_owner_key(

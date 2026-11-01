@@ -611,6 +611,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
     emitted_segment_nodes: set[str] = set()
     captured_forward_edges: list[CapturedForwardEdge] = []
     pending_container_collapse_nodes: list[dict[str, Any]] = []
+    container_summary_lines: dict[str, list[str]] = {}
     container_clusters: list[ContainerClusterSpec] = []
     collapsed_container_nodes = _collapsed_container_leaf_nodes(
         trace,
@@ -619,6 +620,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
         show_containers=request.show_containers,
         container_max_inline=request.container_max_inline,
         pending_nodes=pending_container_collapse_nodes,
+        summary_label_lines=container_summary_lines,
     )
     collapsed_container_nodes.update(
         bundle_member_nodes(
@@ -693,6 +695,25 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
                 suppressed_args=suppressed_args,
                 show_saved_for_backward=request.show_saved_for_backward,
             )
+    container_overlay_nodes: list[ContainerOverlayNode] = []
+    container_overlay_edges: list[ContainerOverlayEdge] = []
+    draw_container_nodes = request.show_containers == "nodes" and request.vis_mode == "unrolled"
+    if draw_container_nodes:
+        # Before the summaries are emitted: a summary standing for a whole
+        # container record carries that record's role instead of a twin node.
+        container_overlay_nodes, container_overlay_edges, summary_roles = (
+            _container_nodes_and_overlay_edges(
+                trace,
+                collapsed_container_nodes,
+                vis_call_depth=request.vis_call_depth,
+                collapse_fn=request.collapse_fn,
+                summary_nodes=frozenset(container_summary_lines),
+            )
+        )
+        pending_container_collapse_nodes = [
+            _summary_args_with_role(args, container_summary_lines, summary_roles)
+            for args in pending_container_collapse_nodes
+        ]
     for node_args in pending_container_collapse_nodes:
         forward_ir_builder.node(**node_args)
     from ._mutated_params import add_mutated_parameter_nodes
@@ -701,15 +722,8 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
         trace, context, forward_ir_builder, module_cluster_dict
     )
 
-    container_overlay_edges: list[ContainerOverlayEdge] = []
-    if request.show_containers == "nodes" and request.vis_mode == "unrolled":
+    if draw_container_nodes:
         context.dot.graph_attr.update({"pad": "0.20"})
-        container_overlay_nodes, container_overlay_edges = _container_nodes_and_overlay_edges(
-            trace,
-            collapsed_container_nodes,
-            vis_call_depth=request.vis_call_depth,
-            collapse_fn=request.collapse_fn,
-        )
         for overlay_node in container_overlay_nodes:
             if overlay_node.owner_key is None:
                 forward_ir_builder.node(**overlay_node.args)
@@ -1902,6 +1916,35 @@ def _run_fold_for_graph_node_name(
         if representative_name == graph_node_name:
             return fold
     return None
+
+
+def _summary_args_with_role(
+    args: dict[str, Any],
+    label_lines: Mapping[str, list[str]],
+    roles: Mapping[str, str],
+) -> dict[str, Any]:
+    """Return collapse-summary node args, with the container role added when it has one.
+
+    Parameters
+    ----------
+    args:
+        Pending Graphviz node args of one homogeneous-collapse summary.
+    label_lines:
+        Each summary's label lines by node name.
+    roles:
+        Role text of each summary that stands for a whole container record.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``args`` unchanged, or a copy whose first label line ends with the role.
+    """
+
+    role = roles.get(args["name"])
+    lines = label_lines.get(args["name"])
+    if role is None or not lines:
+        return args
+    return {**args, "label": render_lines_to_html([f"{lines[0]} ({role})", *lines[1:]])}
 
 
 __all__ = [

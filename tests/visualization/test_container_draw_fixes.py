@@ -176,6 +176,30 @@ def _keys_kept_in_svg(source: str, svg: str) -> tuple[list[str], list[str]]:
     return [key for _, _, key in wanted], kept
 
 
+def test_nodes_mode_draws_a_collapsed_wide_tuple_once(tmp_path: Path) -> None:
+    """The 16-leaf model output is one summary node carrying the model-output role."""
+
+    trace = tl.trace(WideTuple(), torch.randn(1, 4), capture=STRUCTURE)
+    source = _draw(trace, tmp_path, "wide", "nodes")
+
+    assert "container_node_" not in source
+    assert source.count("tuple x16") == 1
+    assert "tuple x16 (model output)" in source
+    into_summary = _edges_into(source, "container_final_output_0_tuple")
+    assert len(into_summary) == 16
+    assert not any("dashed" in attrs for attrs in into_summary)
+
+
+def test_collapsed_mode_summary_keeps_its_plain_label(tmp_path: Path) -> None:
+    """The role is added in nodes mode only; collapsed mode keeps its picture."""
+
+    trace = tl.trace(WideTuple(), torch.randn(1, 4), capture=STRUCTURE)
+    source = _draw(trace, tmp_path, "wide_collapsed", "collapsed")
+
+    assert "tuple x16" in source
+    assert "(model output)" not in source
+
+
 def test_nodes_mode_names_a_submodule_dict_returned_as_model_output(tmp_path: Path) -> None:
     """A dict a submodule returns as the model output is drawn as the model-output sink."""
 

@@ -839,18 +839,26 @@ def _add_collapsed_container_node(
     leaves: Sequence[GraphNode],
     *,
     vis_mode: str,
+    label_lines_sink: dict[str, list[str]] | None = None,
 ) -> None:
-    """Record a collapsed container summary node for later emission."""
+    """Record a collapsed container summary node for later emission.
+
+    ``label_lines_sink``, when given, receives the summary's label lines by
+    node name (nodes mode adds the container role to them).
+    """
 
     first = leaves[0]
     group_id = cast(str, _container_group_id(cast(BaseGraphNode, first)))
     kind = _container_kind(cast(BaseGraphNode, first)) or "container"
     shape = "x".join(str(dim) for dim in (getattr(first, "shape", ()) or ())) or "scalar"
     node_name = _collapsed_container_node_name(group_id)
+    label_lines = [f"{kind} x{len(leaves)}", shape]
+    if label_lines_sink is not None:
+        label_lines_sink[node_name] = label_lines
     pending_nodes.append(
         {
             "name": node_name,
-            "label": render_lines_to_html([f"{kind} x{len(leaves)}", shape]),
+            "label": render_lines_to_html(label_lines),
             "shape": "box",
             "style": "filled,dashed",
             "fillcolor": "white",
