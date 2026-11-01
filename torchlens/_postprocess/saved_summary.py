@@ -130,3 +130,34 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
         for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None))
     ]
     trace.pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))
+
+
+def _has_retained_gradient_payloads(self: "Trace") -> bool:
+    """Return whether any completed backward pass retained gradient payloads.
+
+    Parameters
+    ----------
+    self:
+        Trace whose projected operation and parameter gradients should be
+        inspected.
+
+    Returns
+    -------
+    bool
+        Whether portable scrubbing must include gradient payloads.
+
+    Notes
+    -----
+    The projection is the authority here, rather than ``Trace.save_grads``:
+    ``log_backward(save_grads=...)`` may override that capture-time default on
+    each pass.
+    """
+
+    for op in getattr(self, "layer_list", ()):
+        for record in getattr(op, "grads", ()):
+            if record.grad is not None or record.transformed_grad is not None:
+                return True
+    for param in getattr(self, "param_logs", {}).values():
+        if any(record.grad is not None for record in getattr(param, "grads", ())):
+            return True
+    return False

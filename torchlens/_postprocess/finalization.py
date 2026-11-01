@@ -50,6 +50,7 @@ from .._utils._torch_symbols import torch_attr
 from ..backends.torch._tl import clear_meta
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
+from .saved_summary import _has_retained_gradient_payloads
 
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
@@ -1671,7 +1672,6 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
         return
 
     from .._capture.outcome import outcome_for
-    from .._io.scrub import scrub_for_save
     from ..intervention.injection import refuse_injection_logged_stream_finalize
 
     # F44: the streamed writer stages its own bundle and never passes the
@@ -1679,20 +1679,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     # keeps a streamed artifact from silently dropping recorded computation.
     refuse_injection_logged_stream_finalize(self)
     try:
-        scrubbed_state, blob_specs, unsupported_tensor_records = scrub_for_save(
-            self,
-            include_outs=True,
-            include_grads=_has_retained_gradient_payloads(self),
-            include_saved_args=self.save_arg_values,
-            include_rng_states=self.save_rng_states,
-            include_custom_attributes=getattr(writer, "include_custom_attributes", True),
-            include_buffer_values=getattr(writer, "include_buffer_values", True),
-            # Scrub ids start past every id the capture streamed: a tensor field with
-            # no streamed blob (a synthetic output row, an orphan payload) otherwise
-            # takes an id the stream already wrote once an op streamed during capture
-            # was pruned, and its ref silently resolves to that op's payload.
-            blob_id_floor=writer.issued_blob_count(),
-        )
+        scrubbed_state, blob_specs, unsupported_tensor_records = _scrub_streamed_trace(self, writer)
         scrubbed_state, blob_specs = _reuse_streamed_blob_ids(
             self,
             scrubbed_state=scrubbed_state,
@@ -1728,35 +1715,40 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     self._defer_streaming_bundle_finalization = False
 
 
-def _has_retained_gradient_payloads(self: "Trace") -> bool:
-    """Return whether any completed backward pass retained gradient payloads.
+def _scrub_streamed_trace(
+    self: "Trace", writer: BundleStreamWriter
+) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
+    """Scrub a streamed trace for staging, numbering its blobs past the stream's ids.
 
     Parameters
     ----------
     self:
-        Trace whose projected operation and parameter gradients should be
-        inspected.
+        Model log whose streamed bundle is being finalized.
+    writer:
+        The capture's streaming bundle writer.
 
     Returns
     -------
-    bool
-        Whether portable scrubbing must include gradient payloads.
-
-    Notes
-    -----
-    The projection is the authority here, rather than ``Trace.save_grads``:
-    ``log_backward(save_grads=...)`` may override that capture-time default on
-    each pass.
+    tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]
+        Scrubbed state, blob specs and unsupported tensor audit records.
     """
 
-    for op in getattr(self, "layer_list", ()):
-        for record in getattr(op, "grads", ()):
-            if record.grad is not None or record.transformed_grad is not None:
-                return True
-    for param in getattr(self, "param_logs", {}).values():
-        if any(record.grad is not None for record in getattr(param, "grads", ())):
-            return True
-    return False
+    from .._io.scrub import scrub_for_save
+
+    return scrub_for_save(
+        self,
+        include_outs=True,
+        include_grads=_has_retained_gradient_payloads(self),
+        include_saved_args=self.save_arg_values,
+        include_rng_states=self.save_rng_states,
+        include_custom_attributes=getattr(writer, "include_custom_attributes", True),
+        include_buffer_values=getattr(writer, "include_buffer_values", True),
+        # Scrub ids start past every id the capture streamed: a tensor field with
+        # no streamed blob (a synthetic output row, an orphan payload) otherwise
+        # takes an id the stream already wrote once an op streamed during capture
+        # was pruned, and its ref silently resolves to that op's payload.
+        blob_id_floor=writer.issued_blob_count(),
+    )
 
 
 def _evict_streamed_outs(self: "Trace") -> None:
