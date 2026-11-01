@@ -133,18 +133,31 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
     # consistency check at the bottom of this module already uses) makes the
     # invariant actually run for suffixed classes; the key lookup stays first
     # so a label scrubbed OUT of its group still resolves the group and fails.
+    #
+    # The stamped class is NOT a key in the registry's namespace, though: the
+    # module path is joined without a separator, so it can spell an UNRELATED
+    # registry key (in a ``Sequential`` the ReLU at module "1" is stamped
+    # ``relu_<hash>_module1`` + "1", the key of the ReLU at module "11"), and
+    # the key lookup then compared an honest op against a foreign group. An
+    # op's own registry key always PREFIXES its stamped class (torch appends
+    # the module path to it; other backends stamp the key itself), so the
+    # group that holds the op under such a key is its own and is taken first.
     group_by_member: dict[str, set] = {}
-    for group in ml.op_equivalence_classes.values():
+    key_by_member: dict[str, object] = {}
+    for group_key, group in ml.op_equivalence_classes.items():
         if isinstance(group, set):
             for member_label in group:
                 group_by_member[member_label] = group
+                key_by_member[member_label] = group_key
     for op in ml.layer_list:
         equivalence_class = getattr(op, "equivalence_class", None)
-        expected_group = (
-            ml.op_equivalence_classes.get(equivalence_class)
-            if isinstance(equivalence_class, str)
-            else None
-        )
+        expected_group = None
+        if isinstance(equivalence_class, str):
+            member_key = key_by_member.get(op.label)
+            if isinstance(member_key, str) and equivalence_class.startswith(member_key):
+                expected_group = group_by_member[op.label]
+            else:
+                expected_group = ml.op_equivalence_classes.get(equivalence_class)
         if expected_group is None:
             expected_group = group_by_member.get(op.label)
         canonical = _canonical_equivalent_ops(op)
