@@ -325,32 +325,16 @@ class TraceInterventionMixin(_TraceMixinBase):
                 argument="direction",
             )
         if direction in {"backward", "both"}:
-
-            def _backward_set_hook(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-                """Return a static or callable gradient replacement."""
-
-                del ctx
-                if callable(value):
-                    return cast(torch.Tensor, value(grad))
-                return cast(torch.Tensor, value)
-
-            self.attach_hooks(
-                site,
-                _backward_set_hook,
-                direction="backward",
-                strict=strict,
-                confirm_mutation=True,
+            # Gradients are addressed as sites now; ``set`` (removed by wave D)
+            # keeps only its activation path rather than a second gradient door.
+            raise InvalidArgumentError(
+                f"set(..., direction={direction!r}) no longer edits gradients: a gradient "
+                "is addressed as a site, tl.grad(site)",
+                code="intervention_direction_invalid",
+                remedy="trace.do(tl.grad(site), edit, model=model, x=x, loss=fn), or "
+                "trace.attach_hooks(tl.grad(site), edit) then trace.backward(loss)",
+                argument="direction",
             )
-            if direction == "backward":
-                self._record_operation(
-                    "set",
-                    site=self._history_site_payload(site),
-                    value_kind=type(value).__name__,
-                    strict=strict,
-                    callable=callable(value),
-                    direction=direction,
-                )
-                return self
         from ..intervention.hooks import is_facet_target
 
         if is_facet_target(site):
@@ -379,7 +363,6 @@ class TraceInterventionMixin(_TraceMixinBase):
             self.attach_hooks(
                 site,
                 _facet_replacement_hook,
-                direction="forward",
                 strict=strict,
                 confirm_mutation=True,
             )
@@ -1244,7 +1227,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         ``clear_edits(...)`` or their handle's ``remove()``.
         """
 
-        from .._ir.selector_eval import selector_from_spec
+        from .._ir.selector_eval import normalize_selector_like
         from ..intervention.spec import Rule
 
         spec = self._intervention_spec
@@ -1255,7 +1238,8 @@ class TraceInterventionMixin(_TraceMixinBase):
             if _ARMING_GROUP_KEY not in hook_spec.metadata:
                 continue
             edit = hook_spec.helper if hook_spec.helper is not None else hook_spec.hook
-            rules.append(Rule(selector_from_spec(hook_spec.site_target), edit))
+            target = normalize_selector_like(hook_spec.site_target, lifecycle="site")
+            rules.append(Rule(target, edit))
         return tuple(rules)
 
     def _armed_summary_line(self: "Trace") -> str | None:
