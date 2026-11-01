@@ -151,6 +151,24 @@ class ConstantRecord:
     arg_position: Any = None
 
 
+def _closure_record(
+    label_raw: str,
+    payload: Any,
+    consumer_label_raw: str | None,
+    arg_position: Any,
+) -> ConstantRecord:
+    """Build the record for one realized closure constant."""
+
+    return ConstantRecord(
+        label_raw=label_raw,
+        kind="closure",
+        shape=_shape_of(payload),
+        dtype=_dtype_name(payload),
+        consumer_label_raw=consumer_label_raw,
+        arg_position=arg_position,
+    )
+
+
 class ConstantLedger:
     """Per-capture record of the constants a backend saw, keyed by raw label.
 
@@ -251,14 +269,7 @@ class ConstantLedger:
             op_label=label_raw,
             consumer_label=consumer_label_raw,
         )
-        record = ConstantRecord(
-            label_raw=label_raw,
-            kind="closure",
-            shape=_shape_of(payload),
-            dtype=_dtype_name(payload),
-            consumer_label_raw=consumer_label_raw,
-            arg_position=arg_position,
-        )
+        record = _closure_record(label_raw, payload, consumer_label_raw, arg_position)
         self._closure_count += 1
         self._records[label_raw] = record
         return record, payload
