@@ -512,10 +512,25 @@ def test_opcode_ceiling_fires_in_the_prescan() -> None:
     counted = SafeBundleUnpickler(io.BytesIO(data), max_opcodes=10_000)
     assert counted.load() == [0] * 1000
     assert counted.prescan_opcodes == sum(1 for _ in pickletools.genops(data))
-    # below the byte threshold the ceiling is unreachable and the count is skipped
+    # below the byte threshold the ceiling is unreachable and is not applied
     skipped = SafeBundleUnpickler(io.BytesIO(data), max_opcodes=100, count_opcodes_above=len(data))
     assert skipped.load() == [0] * 1000
-    assert skipped.prescan_opcodes == 0
+
+
+def test_absurd_memo_index_is_refused_before_either_machine_runs() -> None:
+    """A memo PUT index above the opcode count is refused (the C memo-table amplifier)."""
+
+    huge = (
+        pickle.PROTO + b"\x02" + pickle.EMPTY_LIST + pickle.LONG_BINPUT + struct.pack("<I", 2**30)
+    )
+    with pytest.raises(pickle.UnpicklingError, match="memo PUT index"):
+        _new_path(huge + pickle.STOP)
+    # the flipped-SETITEM shape the generated variants produce
+    flipped = pickle.PROTO + b"\x02" + pickle.EMPTY_DICT + b"r" + b"\xff\xff\xff\x7f" + pickle.STOP
+    with pytest.raises(pickle.UnpicklingError, match="memo PUT index"):
+        _new_path(flipped)
+    sane = pickle.PROTO + b"\x02" + pickle.EMPTY_LIST + pickle.BINPUT + b"\x01" + pickle.STOP
+    assert _new_path(sane) == []
 
 
 def test_application_failures_keep_their_identity() -> None:

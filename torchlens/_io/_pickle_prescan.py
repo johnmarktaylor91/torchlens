@@ -28,8 +28,10 @@ the stream through the pure-Python machine, which enforces the same checks per o
 No TorchLens writer produces such a stream, so the fast path is the normal path and the
 interpreter is the exact fallback, never a weaker one.
 
-The opcode-count ceiling is a separate pass (:func:`count_opcodes`, a tight byte reader),
-run only on streams large enough for the ceiling to be reachable.
+A tight byte reader (:func:`scan_opcodes`) walks the opcodes once before either machine
+runs: it refuses a memo PUT index above the opcode count (the C machine's memo table is
+sized from that index, so an absurd one is an allocation amplifier the pure-Python dict
+memo never had) and counts opcodes against the ceiling on streams large enough to reach it.
 """
 
 from __future__ import annotations
@@ -48,7 +50,7 @@ __all__ = [
     "PrescanPlan",
     "ReduceSite",
     "StreamNeedsInterpreter",
-    "count_opcodes",
+    "scan_opcodes",
     "prescan_stream",
 ]
 
@@ -529,18 +531,31 @@ def _next_opcode(ops: Any) -> tuple[Any, Any, int]:
         raise _corrupt(f"{type(exc).__name__}: {exc}") from exc
 
 
-def count_opcodes(data: bytes, max_opcodes: int) -> int:
-    """Return the opcode count of ``data``, refusing past ``max_opcodes``."""
+def scan_opcodes(data: bytes, max_opcodes: int | None) -> int:
+    """Walk the opcodes once: refuse an absurd memo index and enforce the opcode ceiling.
+
+    The C machine sizes its memo table from the largest PUT index the stream names (a
+    five-byte ``LONG_BINPUT`` can demand a table of billions of slots, which it fills
+    before any check can run); the dict-backed pure-Python machine never did. A pickler
+    assigns memo indices sequentially, so an index above the running opcode count is
+    never honest and is refused here, before the dry run or the real run touch the
+    stream. The same pass counts opcodes against ``max_opcodes`` when one is given.
+    """
 
     count = 0
     ops = _iter_opcodes(data)
     while True:
-        name, _arg, _pos = _next_opcode(ops)
+        name, arg, _pos = _next_opcode(ops)
         count += 1
-        if count > max_opcodes:
+        if max_opcodes is not None and count > max_opcodes:
             raise OpcodeCeilingExceeded(_CORRUPT + "opcode count exceeds the allocation ceiling")
+        if name in _PUT_OPCODES and (arg < 0 or arg > count):
+            raise _corrupt("memo PUT index above the opcode count")
         if name == "STOP":
             return count
+
+
+_PUT_OPCODES = frozenset({"PUT", "BINPUT", "LONG_BINPUT"})
 
 
 def prescan_stream(

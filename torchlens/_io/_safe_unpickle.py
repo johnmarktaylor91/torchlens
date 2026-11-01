@@ -128,8 +128,8 @@ from ._pickle_prescan import (
     GuardedCallable,
     PrescanPlan,
     StreamNeedsInterpreter,
-    count_opcodes,
     prescan_stream,
+    scan_opcodes,
 )
 from ._pre3_module_paths import refuse_pre_3_module_path
 from .format_errors import ArtifactTooOldError
@@ -1921,8 +1921,8 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
     through :class:`_PurePythonBundleUnpickler` instead, which enforces the same checks
     per opcode; no TorchLens writer produces such a stream. After ``load()``,
     ``load_path`` is ``"c"`` or ``"pure_python"``, ``prescan_opcodes`` the opcode count
-    when the ceiling pass ran (else ``0``), ``global_lookups`` the C phase's
-    ``find_class`` calls and ``guarded_calls`` the REDUCEs the guards ran.
+    of the reader pass, ``global_lookups`` the C phase's ``find_class`` calls and
+    ``guarded_calls`` the REDUCEs the guards ran.
     """
 
     def __init__(
@@ -1954,8 +1954,8 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
             :class:`~torchlens._io._pickle_prescan.OpcodeCeilingExceeded` before any
             object is built.
         count_opcodes_above:
-            Only streams longer than this many bytes are counted against the ceiling
-            (below it the ceiling is unreachable, so the count would tax every load).
+            Only streams longer than this many bytes are held to the ceiling (below it
+            the ceiling is unreachable); the memo-index check runs on every stream.
         """
 
         data = file.read()
@@ -2004,8 +2004,8 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
     def _prescan(self) -> PrescanPlan | None:
         """Return the pre-scan plan, or ``None`` when the interpreter must run instead."""
 
-        if self._max_opcodes is not None and len(self._data) > self._count_opcodes_above:
-            self.prescan_opcodes = count_opcodes(self._data, self._max_opcodes)
+        ceiling = self._max_opcodes if len(self._data) > self._count_opcodes_above else None
+        self.prescan_opcodes = scan_opcodes(self._data, ceiling)
         try:
             plan = prescan_stream(
                 self._data,
