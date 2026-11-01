@@ -47,6 +47,8 @@ EXPECTED_COMPAT_ROW_KEYS = {
     "torch_capabilities",
     "torch_compile",
     "vmap_functorch",
+    # One shipped-scorecard row per registered backend (backends/_scorecard_rows.py).
+    *(f"backend_scorecard:{name}" for name in ("torch", "tf", "jax", "mlx", "paddle", "tinygrad")),
 }
 
 
