@@ -210,7 +210,7 @@ class TapObserver:
         if grad_value is None:
             grad_value, grad_kind = _first_tensor_grad(grad_input, "grad_input")
         if grad_value is None:
-            return
+            return None
         with _state.pause_logging():
             value = grad_value.detach().clone()
         span_names = _active_span_names("backward")
@@ -226,6 +226,7 @@ class TapObserver:
                 _trace_ref=_active_trace_ref(),
             )
         )
+        return None
 
     def values(self, masked: bool = False) -> list[torch.Tensor]:
         """Return observed out values.
