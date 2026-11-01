@@ -137,9 +137,11 @@ def test_normal_output_records_one_output_op_per_parameter() -> None:
     """Capture keeps ``loc`` and ``scale`` as two output ops at attribute paths."""
 
     model = NormalHead().eval()
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", UserWarning)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         trace = _trace(model)
+    # The attribute-search fallback (and its advisory) is no longer taken.
+    assert not [w for w in caught if "output traversal does not support" in str(w.message)]
     paths = [tuple(op.container_path) for op in trace.output_ops]
     assert paths == [(NamedField("loc"),), (NamedField("scale"),)]
     live = model(_x())
