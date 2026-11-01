@@ -675,15 +675,18 @@ def test_torch_already_satisfies_the_rule_structure() -> None:
     for op in ones_ops:
         assert tuple(op.parents) == ()
         assert is_literal_producer_op(op) and is_constant_op(op)
-    mul_ops = [op for op in trace.layer_list if op.func_name == "mul"]
-    assert mul_ops
+    # Torch records the operator form (``__mul__``) for ``x * scale``.
+    mul_ops = [op for op in trace.layer_list if op.func_name in {"mul", "__mul__"}]
+    assert mul_ops, [op.func_name for op in trace.layer_list]
     mul = mul_ops[0]
     by_layer_label = {op.layer_label: op for op in trace.layer_list}
     parents = [by_layer_label[label] for label in mul.parents]
     assert len(parents) == 2, mul.parents
-    # The closure tensor arrives as a parentless source op (input-like or buffer-like):
-    # nothing upstream of it, a payload-bearing leaf, never a lost edge.
+    # The closure tensor arrives as a parentless buffer source op (torch's existing
+    # buffer and parameter source logging): a payload-bearing leaf, never a lost edge.
     sources = [p for p in parents if not p.is_input]
     assert len(sources) == 1, [(p.label, p.is_input, p.is_buffer) for p in parents]
+    assert sources[0].is_buffer is True
     assert tuple(sources[0].parents) == ()
+    assert sources[0].out is not None
     assert tuple(getattr(mul, "unattributed_tensor_args", ()) or ()) == ()
