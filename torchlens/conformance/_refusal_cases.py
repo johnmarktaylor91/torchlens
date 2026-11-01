@@ -72,7 +72,7 @@ def _storage_probe() -> Any:
 
     from ..options import StorageOptions
 
-    return StorageOptions(bundle_path=Path(tempfile.mkdtemp(prefix="tl_conf_stream_")))
+    return StorageOptions(path=Path(tempfile.mkdtemp(prefix="tl_conf_stream_")))
 
 
 def _intervene_probe() -> Any:
