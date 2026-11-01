@@ -35,7 +35,6 @@ _ir.selector_eval	11
 _postprocess._materialize	1
 _postprocess._selective_save	1
 _postprocess.labeling	1
-_runnable	1
 _runnable.execution	2
 _runnable.transaction	2
 _trace_selector_helpers	5

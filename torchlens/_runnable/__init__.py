@@ -12,9 +12,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
-from typing import Any, Final, Literal, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, TypeAlias
 
-from ..intervention.types import FunctionRegistryKey
+if TYPE_CHECKING:
+    from ..intervention.types import FunctionRegistryKey
 
 RUNNABLE_TLSPEC_SCHEMA_VERSION: Final = "sparse_recorded_taken_path_v2"
 """Frozen sparse runnable descriptor capability/version string.
