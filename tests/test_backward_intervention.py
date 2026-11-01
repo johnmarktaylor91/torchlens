@@ -950,13 +950,13 @@ def _run_identity_relu_intervention(selector: Any, helper: Any) -> tuple[torch.T
 def test_gradient_action_family_changes_only_gradient_path(selector: Any) -> None:
     """Neutral edits change the gradient through the gradient and node universes."""
 
-    zero_grad, zero_records = _run_identity_relu_intervention(selector, tl.zero_ablate())
+    zeroed, zero_records = _run_identity_relu_intervention(selector, tl.zero_ablate())
     scaled_grad, scaled_records = _run_identity_relu_intervention(selector, tl.scale(2.0))
     clamped_grad, clamped_records = _run_identity_relu_intervention(selector, tl.clamp(0, 0))
     clipped_grad, clipped_records = _run_identity_relu_intervention(selector, tl.clip_norm(0.1))
     noisy_grad, noisy_records = _run_identity_relu_intervention(selector, tl.add_noise(0.5, seed=7))
 
-    assert torch.equal(zero_grad, torch.zeros_like(zero_grad))
+    assert torch.equal(zeroed, torch.zeros_like(zeroed))
     assert torch.equal(scaled_grad, torch.full_like(scaled_grad, 2.0))
     assert torch.equal(clamped_grad, torch.zeros_like(clamped_grad))
     assert (
