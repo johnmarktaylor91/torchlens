@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from typing import Any, Final, cast
+from typing import Any, Final, NamedTuple, cast
 
 from ..._data_classes._compaction import compact_op_metadata
 from ..._data_classes.derived_grad import (
@@ -701,15 +701,16 @@ class JAXBackend:
                     log,
                     "<trace>",
                     "",
-                    "metadata",
-                    "failed",
-                    "capture_inconsistent",
+                    _JaxVerdict("metadata", "failed", "capture_inconsistent"),
                     "importer-owned region boundary or seam check failed",
                 )
             status_result = self._validation_status_from_counts(trace, passed=passed, log=log)
         except Exception as exc:  # noqa: BLE001 - the tripwire reports, never raises
             _record_jax_decision(
-                log, "<trace>", "", "metadata", "failed", "metadata_invariant_exception"
+                log,
+                "<trace>",
+                "",
+                _JaxVerdict("metadata", "failed", "metadata_invariant_exception"),
             )
             status_result = ValidationStatus.result(
                 passed=False,
@@ -807,9 +808,7 @@ class JAXBackend:
                 log,
                 "<trace>",
                 "",
-                "metadata",
-                "failed",
-                "capture_inconsistent",
+                _JaxVerdict("metadata", "failed", "capture_inconsistent"),
                 f"{len(captures)} equation captures for {len(equation_ops)} equation ops",
             )
             return False
@@ -820,9 +819,7 @@ class JAXBackend:
                 log,
                 "<trace>",
                 "",
-                "metadata",
-                "failed",
-                "capture_inconsistent",
+                _JaxVerdict("metadata", "failed", "capture_inconsistent"),
                 "equation capture kinds differ from op capture kinds",
             )
             return False
@@ -851,7 +848,10 @@ class JAXBackend:
             func_name = str(getattr(op, "func_name", capture.primitive))
             if capture.kind != _jax_op_capture_kind(op):
                 _record_jax_decision(
-                    log, op_label, func_name, "metadata", "failed", "capture_inconsistent"
+                    log,
+                    op_label,
+                    func_name,
+                    _JaxVerdict("metadata", "failed", "capture_inconsistent"),
                 )
                 return False
             try:
@@ -869,15 +869,13 @@ class JAXBackend:
                     log,
                     op_label,
                     func_name,
-                    "replay",
-                    "failed",
-                    "replay_mismatch",
+                    _JaxVerdict("replay", "failed", "replay_mismatch"),
                     f"{type(exc).__name__}: {exc}",
                 )
                 return False
             if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
                 _record_jax_decision(
-                    log, op_label, func_name, "replay", "failed", "replay_mismatch"
+                    log, op_label, func_name, _JaxVerdict("replay", "failed", "replay_mismatch")
                 )
                 return False
             if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
@@ -885,12 +883,12 @@ class JAXBackend:
                     log,
                     op_label,
                     func_name,
-                    "perturbation",
-                    "failed",
-                    "perturbation_insensitive",
+                    _JaxVerdict("perturbation", "failed", "perturbation_insensitive"),
                 )
                 return False
-            _record_jax_decision(log, op_label, func_name, "replay", "validated", "replay_match")
+            _record_jax_decision(
+                log, op_label, func_name, _JaxVerdict("replay", "validated", "replay_match")
+            )
         return True
 
     def _validate_jax_regions(self, trace: Trace) -> bool:
@@ -955,13 +953,11 @@ class JAXBackend:
             )
             if any(op is None for op in projection_ops):
                 return False
+            seam = _RegionSeam(
+                boundary, boundary_op, projections, cast(tuple[Any, ...], projection_ops)
+            )
             if not _validate_region_boundary(
-                boundary=boundary,
-                boundary_op=boundary_op,
-                projections=projections,
-                projection_ops=cast(tuple[Any, ...], projection_ops),
-                ops_by_label=ops_by_label,
-                hidden_outputs_by_label=hidden_outputs_by_label,
+                seam, ops_by_label=ops_by_label, hidden_outputs_by_label=hidden_outputs_by_label
             ):
                 return False
         return True
@@ -3900,13 +3896,19 @@ class _JaxValidationLog:
     exempted_reason_counts: dict[str, int] = field(default_factory=dict)
 
 
+class _JaxVerdict(NamedTuple):
+    """The phase, decision and reason of one per-op validation decision."""
+
+    phase: str
+    decision: str
+    reason: str
+
+
 def _record_jax_decision(
     log: _JaxValidationLog,
     op_label: str,
     func_name: str,
-    phase: str,
-    decision: str,
-    reason: str,
+    verdict: _JaxVerdict,
     justification: str | None = None,
 ) -> None:
     """Append one per-op validation decision (torch record shape) to the log.
@@ -3918,15 +3920,15 @@ def _record_jax_decision(
     record: dict[str, Any] = {
         "op_label": op_label,
         "func_name": func_name,
-        "phase": phase,
-        "decision": decision,
-        "reason": reason,
+        "phase": verdict.phase,
+        "decision": verdict.decision,
+        "reason": verdict.reason,
     }
     if justification is not None:
         record["justification"] = justification
     log.decisions.append(record)
-    if decision == "failed" and log.first_failure is None:
-        log.first_failure = (op_label, func_name, reason)
+    if verdict.decision == "failed" and log.first_failure is None:
+        log.first_failure = (op_label, func_name, verdict.reason)
 
 
 def _record_jax_constant_leaves(trace: Trace, log: _JaxValidationLog) -> None:
@@ -3945,18 +3947,14 @@ def _record_jax_constant_leaves(trace: Trace, log: _JaxValidationLog) -> None:
             log,
             label,
             "constant",
-            "replay",
-            "exempted",
-            CONSTANT_PRODUCER_LEAF_REASON,
+            _JaxVerdict("replay", "exempted", CONSTANT_PRODUCER_LEAF_REASON),
             "closure constant: its saved payload is the record",
         )
         _record_jax_decision(
             log,
             label,
             "constant",
-            "perturbation",
-            "exempted",
-            CONSTANT_PARENT_PAYLOAD_REASON,
+            _JaxVerdict("perturbation", "exempted", CONSTANT_PARENT_PAYLOAD_REASON),
             "closure constant: no upstream op to perturb",
         )
         for reason in (CONSTANT_PRODUCER_LEAF_REASON, CONSTANT_PARENT_PAYLOAD_REASON):
@@ -4067,16 +4065,8 @@ def _jax_op_capture_kind(op: Any) -> str:
     return kind
 
 
-def _validate_region_boundary(
-    *,
-    boundary: JaxRegionCapture,
-    boundary_op: Any,
-    projections: tuple[JaxRegionCapture, ...],
-    projection_ops: tuple[Any, ...],
-    ops_by_label: Mapping[str, Any],
-    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
-) -> bool:
-    """Validate one JAX region boundary and its projection seams.
+class _RegionSeam(NamedTuple):
+    """One JAX region boundary with its projections, runtime and materialized.
 
     Parameters
     ----------
@@ -4088,6 +4078,26 @@ def _validate_region_boundary(
         Runtime projection captures for the boundary outputs.
     projection_ops
         Materialized projection ops aligned with ``projections``.
+    """
+
+    boundary: JaxRegionCapture
+    boundary_op: Any
+    projections: tuple[JaxRegionCapture, ...]
+    projection_ops: tuple[Any, ...]
+
+
+def _validate_region_boundary(
+    seam: _RegionSeam,
+    *,
+    ops_by_label: Mapping[str, Any],
+    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
+) -> bool:
+    """Validate one JAX region boundary and its projection seams.
+
+    Parameters
+    ----------
+    seam
+        The boundary, its op and the aligned projections.
     ops_by_label
         Materialized operations keyed by raw and final labels.
     hidden_outputs_by_label
@@ -4101,6 +4111,7 @@ def _validate_region_boundary(
 
     import jax
 
+    boundary, boundary_op, projections, projection_ops = seam
     if boundary.kind != "region":
         return False
     if _jax_region_capture_kind(boundary_op) != "region":
