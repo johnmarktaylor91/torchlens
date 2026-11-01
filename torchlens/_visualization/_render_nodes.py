@@ -1840,7 +1840,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     """
     from torchlens._data_classes.layer import Layer
     from torchlens._data_classes.op import Op
-    from torchlens.visualization._render_common import BoundaryNode
+    from torchlens._visualization._render_common import BoundaryNode
 
     if node.is_input:
         bg_color = INPUT_COLOR

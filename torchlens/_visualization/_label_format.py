@@ -403,7 +403,7 @@ def _param_items(params: Any) -> list[Any]:
 
     from torchlens._data_classes.layer import Layer
     from torchlens._data_classes.op import Op
-    from torchlens.visualization._render_common import BoundaryNode
+    from torchlens._visualization._render_common import BoundaryNode
 
     barcodes = getattr(params, "_param_barcodes", None)
     if barcodes is not None and len(barcodes) == 0:

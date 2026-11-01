@@ -94,9 +94,9 @@ def mean_ablate(
     source:
         What is averaged. ``None`` averages the site's own value at hook
         fire time (a value that couples every batch row, so the spec derives
-        ``batch_independent=False`` and the append gate refuses). A tensor or
+        ``is_batch_independent=False`` and the append gate refuses). A tensor or
         an Op-like object exposing ``out`` is averaged instead of the site,
-        and never reads the traced batch (``batch_independent=True``). A
+        and never reads the traced batch (``is_batch_independent=True``). A
         :class:`~torchlens.intervention.Population` averages its members
         elementwise first (a reduction, never a draw: no seed, prepared at
         construction), and ``dim`` then names the further site axes.
@@ -107,7 +107,7 @@ def mean_ablate(
         elementwise across-member mean and axes reduce that mean further. A
         semantic axis name refuses ``axis_semantics_unknown`` until axis-role
         evidence exists; any other spelling refuses ``intervention_over_invalid``
-        at construction (a typo can never flip ``batch_independent`` open).
+        at construction (a typo can never flip ``is_batch_independent`` open).
     allow_shape_change:
         Stored escape-hatch metadata for execution.
 
@@ -179,7 +179,7 @@ def _source_mean_spec(
         factory=factory,
         signal="forward",
         is_batch_independent=is_batch_independent,
-        compatible_with_append=not allow_shape_change,
+        is_compatible_with_append=not allow_shape_change,
         metadata={
             "stochastic": False,
             **({} if is_batch_independent else {"batch_coherent": True}),
@@ -247,8 +247,8 @@ def _population_mean_spec(
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
         metadata={"stochastic": False},
     )
 
@@ -912,8 +912,8 @@ def clip_norm(max_norm: float, norm_type: float = 2.0) -> Edit:
         args=(max_norm,),
         kwargs={"norm_type": norm_type},
         factory=factory,
-        batch_independent=False,
-        compatible_with_append=True,
+        is_batch_independent=False,
+        is_compatible_with_append=True,
     )
 
 
@@ -1455,5 +1455,5 @@ def patch_from(
         factory=factory,
         portability="opaque_audit",
         signal="forward",
-        batch_independent=True,
+        is_batch_independent=True,
     )

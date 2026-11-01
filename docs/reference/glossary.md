@@ -1183,9 +1183,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : The one mean door. `dim` is required: `None` averages every axis of the source to one
   scalar; an int or tuple of ints averages those axes (`keepdim`, broadcast back to the site).
   `source` is what is averaged: the site's own value (the default; it reads the whole batch, so
-  the spec derives `batch_independent=False`, the append gate refuses and a chunked capture
+  the spec derives `is_batch_independent=False`, the append gate refuses and a chunked capture
   refuses `chunked_replay_batch_coupling`), a tensor or Op-like object (averaged instead of the
-  site; `batch_independent=True`), or a `tl.intervention.Population` (its members are averaged
+  site; `is_batch_independent=True`), or a `tl.intervention.Population` (its members are averaged
   elementwise first; `dim=None` fills with that member-shaped mean, axes reduce it further; the
   spec is `opaque_audit` and the fire record says `stochastic=False`). A mean is a reduction,
   never a draw: no seed. A semantic axis name (`"batch"`, `"position"`, `"feature"`) refuses

@@ -741,3 +741,67 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
 recorded: 2026-10-31T20:54:57.159877+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (default_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:30.601813+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (selective_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:30.720865+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (backward_ready_trace_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:30.861185+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_roundtrip_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:31.420831+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:31.450551+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:33.056147+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (public_accessors_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:33.319543+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (tlspec_manifest_projection)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:33.616616+00:00
