@@ -1,6 +1,6 @@
 """Hook axis: capture-time TorchLens hooks as options rows, torch's own hooks as model rows.
 
-A TorchLens hook is ``fn(out, *, hook)`` (``hook`` is the per-firing context)
+A TorchLens hook is ``fn(out, *, ctx)`` (``ctx`` is the per-firing context)
 and runs at capture through ``tl.trace(..., intervene=tl.when(site, fn))``.
 The options rows aim at ``tl.func("linear")``, the op almost every model row
 carries, so each hook behaviour is crossed with every architecture; a model
@@ -37,20 +37,20 @@ HOOK_SITE = "linear"
 BUFFER_SITE = "buffer_1:1"
 
 
-def hook_reads(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def hook_reads(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Read the output and return it unchanged."""
 
     float(out.detach().float().abs().sum())
     return out
 
 
-def hook_scales(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def hook_scales(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Return a new, scaled output."""
 
     return out * 0.5
 
 
-def hook_scales_in_place(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def hook_scales_in_place(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Scale the output in place and return the same tensor."""
 
     with torch.no_grad():
@@ -58,7 +58,7 @@ def hook_scales_in_place(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
     return out
 
 
-def hook_raises_typed(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def hook_raises_typed(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Refuse with a typed TorchLens error carrying a stable code."""
 
     raise InvalidArgumentError(
@@ -69,13 +69,13 @@ def hook_raises_typed(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
     )
 
 
-def hook_raises_plain(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def hook_raises_plain(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Raise a plain user exception."""
 
     raise StressUserError("stress hook raises a plain exception on purpose")
 
 
-def hook_nested_capture(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def hook_nested_capture(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     """Start a second capture from inside a capture-time hook."""
 
     side_capture(torch.zeros(1, WIDTH))
