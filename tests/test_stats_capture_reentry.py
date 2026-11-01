@@ -89,7 +89,7 @@ results = {
     "ops": len(trace.ops),
     "layers": len(trace.layers),
     "stats": {
-        label: [_num(s.mean), _num(s.std), _num(s.num_zero), _num(s.numel)]
+        label: [_num(s.mean), _num(s.sum_squares), _num(s.num_zero), _num(s.numel)]
         for label, s in ((label, site[label].compute()) for label in sorted(site))
     },
 }
