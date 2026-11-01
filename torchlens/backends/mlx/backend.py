@@ -381,6 +381,127 @@ def _mlx_validation_source(trace: Trace) -> ValidationReplaySource:
     return "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
 
 
+def _mlx_trace_decision(phase: str, reason: str, detail: str) -> dict[str, Any]:
+    """One failed trace-level validation decision row."""
+
+    return {
+        "op_label": "<trace>",
+        "func_name": None,
+        "phase": phase,
+        "decision": "failed",
+        "reason": reason,
+        "detail": detail,
+    }
+
+
+def _mlx_metadata_failed_decision(reasons: Mapping[str, str]) -> dict[str, Any]:
+    """The trace-level row recorded when backend-neutral metadata invariants fail."""
+
+    return _mlx_trace_decision(
+        "metadata", reasons["metadata_invariant"], "backend-neutral metadata invariants failed"
+    )
+
+
+def _mlx_nothing_replayed_decision(reasons: Mapping[str, str]) -> dict[str, Any]:
+    """The trace-level row recorded when no op was replay-validated."""
+
+    return _mlx_trace_decision(
+        "coverage", reasons["nothing_replayed"], "no op was replay-validated"
+    )
+
+
+def _mlx_unverified_count(
+    trace: Trace,
+    failed_count: int,
+    unverified_reasons: dict[str, int],
+    count_region_annotations: Callable[[Trace], int],
+) -> int:
+    """Unverified-op count for a passing replay; zero once anything failed."""
+
+    if failed_count != 0:
+        return 0
+    # Perturbation gaps stay UNVERIFIED evidence, never a silent
+    # pass; only the named constant leaves are exempted.
+    return count_region_annotations(trace) + sum(unverified_reasons.values())
+
+
+def _mlx_detailed_counts(
+    trace: Trace, validate_detailed: Callable[[Trace], Any]
+) -> tuple[int, int, tuple[dict[str, Any], ...], dict[str, int], dict[str, int]]:
+    """Run the detailed per-op oracle and unpack its counts, stamping perturbation gaps."""
+
+    outcome = validate_detailed(trace)
+    trace._mlx_perturbation_gaps = outcome.perturbation_gaps
+    return (
+        outcome.replayed_count,
+        outcome.failed_count,
+        outcome.decisions,
+        dict(outcome.exempted_reason_counts),
+        dict(outcome.unverified_reason_counts),
+    )
+
+
+def _append_replay_inventory(
+    trace: Trace,
+    op_name: str,
+    labels_raw: Any,
+    arg_leaf_labels: Any,
+    kwarg_leaf_labels: Mapping[str, Any],
+    intervention_slots: Any,
+) -> None:
+    """Append one op's emit-time fingerprint to the trace's replay inventory."""
+
+    inventory = getattr(trace, "_mlx_replay_inventory", None)
+    if inventory is None:
+        inventory = []
+        trace._mlx_replay_inventory = inventory
+    # The 5th element pins emit-time intervention declarations, so a
+    # post-hoc claim that a value was (or was not) intervened mismatches
+    # the immutable fingerprint instead of steering hook re-application.
+    inventory.append(
+        (
+            op_name,
+            labels_raw,
+            arg_leaf_labels,
+            tuple(sorted((key, labels) for key, labels in kwarg_leaf_labels.items())),
+            intervention_slots,
+        )
+    )
+
+
+def _drop_forward_only_state(trace: Trace) -> None:
+    """Delete the emit-path state the forward read; it must not outlive the model call."""
+
+    # Forward-time-only state: the emit path reads these during the
+    # model call; leaving them on the trace breaks the portable-state
+    # scrub (they are not in _PORTABLE_STATE_SPEC by design).
+    del trace._mlx_intervention_plan
+    del trace._mlx_halt_selector
+    del trace._mlx_param_ids
+    del trace._mlx_external_arrays
+
+
+def _stamp_param_logs(trace: Trace, module_tree: MLXModuleTree | None) -> None:
+    """Record the parameter accessor and counts; empty when no object module was traced."""
+
+    if module_tree is not None:
+        trace.param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
+        trace.num_param_tensors = len(trace.param_logs)
+        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace.num_params_trainable = sum(
+            param.num_params for param in trace.param_logs if param.is_trainable
+        )
+        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+        trace.param_source = "native-module"
+    else:
+        trace.param_logs = ParamAccessor({})
+        trace.num_param_tensors = 0
+        trace.num_params = 0
+        trace.num_params_trainable = 0
+        trace.num_params_frozen = 0
+        trace.param_source = "none"
+
+
 class MLXBackend:
     """MLX adapter for the backend-neutral capture Protocol."""
 
@@ -980,13 +1101,7 @@ class MLXBackend:
                 trace.halted = True
                 trace.halt_reason = signal.reason
                 trace.halt_frontier = signal.reason
-            # Forward-time-only state: the emit path reads these during the
-            # model call; leaving them on the trace breaks the portable-state
-            # scrub (they are not in _PORTABLE_STATE_SPEC by design).
-            del trace._mlx_intervention_plan
-            del trace._mlx_halt_selector
-            del trace._mlx_param_ids
-            del trace._mlx_external_arrays
+            _drop_forward_only_state(trace)
             # Zero-match disclosure (preview half of the torch-side fix): a
             # selector matching nothing produced a trace byte-identical to
             # plain capture with no warning and no counter anywhere.
@@ -1020,22 +1135,7 @@ class MLXBackend:
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
-            if use_object_module and module_tree is not None:
-                trace.param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
-                trace.num_param_tensors = len(trace.param_logs)
-                trace.num_params = sum(param.num_params for param in trace.param_logs)
-                trace.num_params_trainable = sum(
-                    param.num_params for param in trace.param_logs if param.is_trainable
-                )
-                trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-                trace.param_source = "native-module"
-            else:
-                trace.param_logs = ParamAccessor({})
-                trace.num_param_tensors = 0
-                trace.num_params = 0
-                trace.num_params_trainable = 0
-                trace.num_params_frozen = 0
-                trace.param_source = "none"
+            _stamp_param_logs(trace, module_tree if use_object_module else None)
             self._finish_trace(trace, module_tree if use_object_module else None)
             if halt_signal is not None:
                 self._restrict_halted_param_logs(trace)
@@ -1404,12 +1504,7 @@ class MLXBackend:
 
         status = trace.validation_replay_status
         if not status.is_available or _mlx_loaded_replay_unavailable(trace):
-            status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
-                backend=self.name,
-                payload_load_status=getattr(trace, "payload_load_status", None),
-            )
-            trace._validation_replay_status = status_result
-            return status_result
+            return self._stamp_unavailable_status(trace)
         replayed_count = 0
         failed_count = 0
         decisions: tuple[dict[str, Any], ...] = ()
@@ -1422,79 +1517,92 @@ class MLXBackend:
             unverified_reasons: dict[str, int] = {}
             if kwargs.get("validate_metadata", True) and not check_metadata_invariants(trace):
                 failed_count = 1
-                decisions = (
-                    {
-                        "op_label": "<trace>",
-                        "func_name": None,
-                        "phase": "metadata",
-                        "decision": "failed",
-                        "reason": MLX_VALIDATION_REASONS["metadata_invariant"],
-                        "detail": "backend-neutral metadata invariants failed",
-                    },
-                )
+                decisions = (_mlx_metadata_failed_decision(MLX_VALIDATION_REASONS),)
             else:
-                outcome = validate_mlx_captures_detailed(trace)
-                trace._mlx_perturbation_gaps = outcome.perturbation_gaps
-                replayed_count = outcome.replayed_count
-                failed_count = outcome.failed_count
-                decisions = outcome.decisions
-                exempted = dict(outcome.exempted_reason_counts)
-                unverified_reasons = dict(outcome.unverified_reason_counts)
+                replayed_count, failed_count, decisions, exempted, unverified_reasons = (
+                    _mlx_detailed_counts(trace, validate_mlx_captures_detailed)
+                )
             if failed_count == 0 and replayed_count < 1:
                 failed_count = 1
-                decisions = (
-                    *decisions,
-                    {
-                        "op_label": "<trace>",
-                        "func_name": None,
-                        "phase": "coverage",
-                        "decision": "failed",
-                        "reason": MLX_VALIDATION_REASONS["nothing_replayed"],
-                        "detail": "no op was replay-validated",
-                    },
-                )
-            unverified_count = 0
-            if failed_count == 0:
-                # Perturbation gaps stay UNVERIFIED evidence, never a silent
-                # pass; only the named constant leaves are exempted.
-                unverified_count = count_importer_region_annotations(trace) + sum(
-                    unverified_reasons.values()
-                )
-            status_result = ValidationStatus.from_replay_counts(
-                backend=self.name,
-                source=_mlx_validation_source(trace),
-                num_replayed_ops=replayed_count,
-                num_unverified_ops=unverified_count,
-                num_failed_ops=failed_count,
-                payload_load_status=getattr(trace, "payload_load_status", None),
-                unverified_reason_counts=unverified_reasons or None,
-                exempted_reason_counts=exempted or None,
-                decisions=decisions,
+                decisions = (*decisions, _mlx_nothing_replayed_decision(MLX_VALIDATION_REASONS))
+            unverified_count = _mlx_unverified_count(
+                trace, failed_count, unverified_reasons, count_importer_region_annotations
+            )
+            status_result = self._counts_status(
+                trace,
+                replayed_count,
+                unverified_count,
+                failed_count,
+                decisions,
+                unverified_reasons=unverified_reasons,
+                exempted=exempted,
             )
         except Exception as exc:  # noqa: BLE001 - a raising oracle is a failed verdict
-            decisions = (
-                *decisions,
-                {
-                    "op_label": "<trace>",
-                    "func_name": None,
-                    "phase": "replay",
-                    "decision": "failed",
-                    "reason": "no_replayable_function",
-                    "detail": f"{type(exc).__name__}: {exc}",
-                },
-            )
-            status_result = ValidationStatus.result(
-                passed=False,
-                backend=self.name,
-                source=_mlx_validation_source(trace),
-                payload_load_status=getattr(trace, "payload_load_status", None),
-                num_replayed_ops=replayed_count,
-                num_failed_ops=max(1, failed_count),
-                decisions=decisions,
+            status_result = self._oracle_raised_status(
+                trace, exc, replayed_count, failed_count, decisions
             )
         status_result = _name_first_failure(status_result)
         trace._validation_replay_status = status_result
         return status_result
+
+    def _stamp_unavailable_status(self, trace: Trace) -> ValidationStatus:
+        """Record and return the unavailable status for a payload-stripped loaded trace."""
+
+        status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
+            backend=self.name,
+            payload_load_status=getattr(trace, "payload_load_status", None),
+        )
+        trace._validation_replay_status = status_result
+        return status_result
+
+    def _counts_status(
+        self,
+        trace: Trace,
+        replayed_count: int,
+        unverified_count: int,
+        failed_count: int,
+        decisions: tuple[dict[str, Any], ...],
+        *,
+        unverified_reasons: dict[str, int],
+        exempted: dict[str, int],
+    ) -> ValidationStatus:
+        """The status derived from the replay, unverified and failed op counts."""
+
+        return ValidationStatus.from_replay_counts(
+            backend=self.name,
+            source=_mlx_validation_source(trace),
+            num_replayed_ops=replayed_count,
+            num_unverified_ops=unverified_count,
+            num_failed_ops=failed_count,
+            payload_load_status=getattr(trace, "payload_load_status", None),
+            unverified_reason_counts=unverified_reasons or None,
+            exempted_reason_counts=exempted or None,
+            decisions=decisions,
+        )
+
+    def _oracle_raised_status(
+        self,
+        trace: Trace,
+        exc: BaseException,
+        replayed_count: int,
+        failed_count: int,
+        decisions: tuple[dict[str, Any], ...],
+    ) -> ValidationStatus:
+        """The failed status when the replay oracle itself raised."""
+
+        decisions = (
+            *decisions,
+            _mlx_trace_decision("replay", "no_replayable_function", f"{type(exc).__name__}: {exc}"),
+        )
+        return ValidationStatus.result(
+            passed=False,
+            backend=self.name,
+            source=_mlx_validation_source(trace),
+            payload_load_status=getattr(trace, "payload_load_status", None),
+            num_replayed_ops=replayed_count,
+            num_failed_ops=max(1, failed_count),
+            decisions=decisions,
+        )
 
     def emit_mlx_operation(
         self,
@@ -1647,21 +1755,8 @@ class MLXBackend:
         # Appended to a list — O(1) per op on the capture hot path; wholesale
         # attribute replacement is coherent reauthoring, outside the threat
         # model, so a tuple rebuild bought no protection.
-        inventory = getattr(trace, "_mlx_replay_inventory", None)
-        if inventory is None:
-            inventory = []
-            trace._mlx_replay_inventory = inventory
-        # The 5th element pins emit-time intervention declarations, so a
-        # post-hoc claim that a value was (or was not) intervened mismatches
-        # the immutable fingerprint instead of steering hook re-application.
-        inventory.append(
-            (
-                op_name,
-                labels_raw,
-                arg_leaf_labels,
-                tuple(sorted((key, labels) for key, labels in kwarg_leaf_labels.items())),
-                intervention_slots,
-            )
+        _append_replay_inventory(
+            trace, op_name, labels_raw, arg_leaf_labels, kwarg_leaf_labels, intervention_slots
         )
         emitted = self.emit_function_outputs(
             trace,
