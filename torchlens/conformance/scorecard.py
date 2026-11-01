@@ -24,8 +24,8 @@ from typing import TYPE_CHECKING
 from ._graduation import _graduation_report
 from ._scorecard import (
     _preview_scorecard,
+    scorecard_from_json,
     scorecards_differ,
-    shipped_scorecard,
     shipped_scorecard_path,
 )
 
@@ -77,7 +77,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = _parser().parse_args(argv)
     if args.graduation:
-        if shipped_scorecard(args.backend) is None:
+        if _shipped_record(args.backend) is None:
             print(
                 f"no shipped scorecard for {args.backend}: {shipped_scorecard_path(args.backend)}"
             )
@@ -97,10 +97,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
+def _shipped_record(backend: str) -> PreviewScorecard | None:
+    """The shipped record, resolved through this module's ``shipped_scorecard_path``."""
+
+    path = shipped_scorecard_path(backend)
+    if not path.is_file():
+        return None
+    return scorecard_from_json(path.read_text(encoding="utf-8"))
+
+
 def _check_shipped(backend: str, card: PreviewScorecard) -> int:
     """Compare the shipped record with ``card``: ``0`` equal, ``1`` differs, ``2`` none ships."""
 
-    shipped = shipped_scorecard(backend)
+    shipped = _shipped_record(backend)
     if shipped is None:
         print(f"no shipped scorecard for {backend}: {shipped_scorecard_path(backend)}")
         return 2
