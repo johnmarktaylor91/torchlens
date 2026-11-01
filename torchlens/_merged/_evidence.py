@@ -387,6 +387,13 @@ def _parse_ledger(record: dict[str, Any], install_epoch: Any, source: str) -> Gr
     return ledger
 
 
+def _shard_local_scope(trace: Any) -> bool:
+    """Return whether a live trace declares the rank-local shard distributed scope."""
+
+    scope = trace._provenance_distributed_scope if is_live_trace(trace) else None
+    return bool(scope == "rank_local_shard")
+
+
 def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
     """Extract and validate one rank core's merge evidence.
 
@@ -445,10 +452,7 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
         # anything other than the exact marker string reads False -- absence
         # of the marker never blocks, presence of ANY other value never
         # blocks; only the one documented value engages the scope guard.
-        shard_local=(
-            (trace._provenance_distributed_scope if is_live_trace(trace) else None)
-            == "rank_local_shard"
-        ),
+        shard_local=_shard_local_scope(trace),
     )
 
 

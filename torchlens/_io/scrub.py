@@ -242,12 +242,11 @@ def scrub_for_save(
     scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
     module_accessor = getattr(trace, "_module_logs", None)
-    if module_accessor is not None:
-        scrubbed_state["_io_module_accessor_state"] = _scrub_value(
-            module_accessor, options, memo, blob_specs, blob_counter
-        )
-    else:
-        scrubbed_state["_io_module_accessor_state"] = None
+    scrubbed_state["_io_module_accessor_state"] = (
+        _scrub_value(module_accessor, options, memo, blob_specs, blob_counter)
+        if module_accessor is not None
+        else None
+    )
     _stamp_replacement_evidence(trace, scrubbed_state)
     # AUD-CODE 3.11g: annotation tensors become plain detached tensors on the
     # scrubbed copy (the live trace keeps its session-time objects).
@@ -516,10 +515,8 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
             remapped_logs[remap_grad_id(grad_id)] = grad_fn
         state["_grad_fn_logs"] = remapped_logs
     state["_autograd_grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
-    state["_autograd_backward_root_grad_fn_object_ids"] = [
-        remap_grad_id(grad_id)
-        for grad_id in (state.get("_autograd_backward_root_grad_fn_object_ids") or ())
-    ]
+    roots = state.get("_autograd_backward_root_grad_fn_object_ids") or ()
+    state["_autograd_backward_root_grad_fn_object_ids"] = [remap_grad_id(g) for g in roots]
     for record in (*ops, *layers):
         record.grad_fn_object_id = remap_grad_id(getattr(record, "grad_fn_object_id", None))
     for pass_record in pass_records:
