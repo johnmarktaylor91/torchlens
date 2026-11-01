@@ -17,7 +17,6 @@ import enum
 import importlib
 import io
 import pickle
-import pickletools
 from pathlib import Path
 from typing import Any
 
@@ -46,29 +45,43 @@ def _reduce_by_name(self: enum.Enum, proto: int) -> tuple[Any, tuple[Any, ...]]:
 
 
 def _force_by_name(monkeypatch: pytest.MonkeyPatch, *classes: type[enum.Enum]) -> None:
+    """Give each class the by-name reduction for the duration of the test."""
+
     for cls in classes:
         monkeypatch.setattr(cls, "__reduce_ex__", _reduce_by_name)
 
 
 def _canonical_bytes(value: Any) -> bytes:
+    """``value`` as the canonical metadata pickler writes it."""
+
     buffer = io.BytesIO()
     dump_canonical_metadata(value, buffer)
     return buffer.getvalue()
 
 
-def _global_pairs(payload: bytes) -> set[tuple[str, str]]:
-    """Every ``(module, name)`` a GLOBAL / STACK_GLOBAL opcode in ``payload`` names."""
+class _RecordingUnpickler(pickle.Unpickler):
+    """Stdlib unpickler that records every global the stream names.
 
-    pairs: set[tuple[str, str]] = set()
-    strings: list[str] = []
-    for op, arg, _pos in pickletools.genops(payload):
-        if op.name in {"SHORT_BINUNICODE", "BINUNICODE", "BINUNICODE8", "UNICODE"}:
-            strings = [*strings, arg][-2:]
-        elif op.name == "GLOBAL":
-            pairs.add(tuple(arg.split(" ", 1)))  # type: ignore[arg-type]
-        elif op.name == "STACK_GLOBAL" and len(strings) == 2:
-            pairs.add((strings[0], strings[1]))
-    return pairs
+    Used on bytes this test suite wrote itself, so the stdlib loader is safe here;
+    the restricted loader is exercised separately. Recording ``find_class`` sees
+    every GLOBAL / STACK_GLOBAL, including ones whose strings come from the memo,
+    which an opcode scan would miss.
+    """
+
+    def __init__(self, payload: bytes) -> None:
+        super().__init__(io.BytesIO(payload))
+        self.globals: set[tuple[str, str]] = set()
+
+    def find_class(self, module: str, name: str) -> Any:
+        self.globals.add((module, name))
+        return super().find_class(module, name)
+
+
+def _load_recording(payload: bytes) -> tuple[Any, set[tuple[str, str]]]:
+    """Load ``payload`` with the stdlib unpickler; return the value and the globals named."""
+
+    unpickler = _RecordingUnpickler(payload)
+    return unpickler.load(), unpickler.globals
 
 
 # --------------------------------------------------------------------------- #
@@ -129,8 +142,8 @@ def test_every_enum_kind_pickles_by_value_regardless_of_interpreter(
     forced = _canonical_bytes(member)
 
     assert forced == expected
-    assert ("builtins", "getattr") not in _global_pairs(forced)
-    loaded = pickle.loads(forced)
+    loaded, named = _load_recording(forced)
+    assert ("builtins", "getattr") not in named
     assert loaded is cls(member.value) and loaded == member
 
 
@@ -150,6 +163,8 @@ _EXPECTED_ADMITTED_ENUMS = frozenset(
 
 
 def _admitted_enum_classes() -> dict[tuple[str, str], type[enum.Enum]]:
+    """Resolve every Enum class on the loader's first-party type allowlist."""
+
     found: dict[tuple[str, str], type[enum.Enum]] = {}
     for module, qualname in _SAFE_TORCHLENS_TYPES:
         obj: Any = importlib.import_module(module)
@@ -176,7 +191,7 @@ def test_every_admitted_enum_member_round_trips_through_the_restricted_loader(
     for cls in classes.values():
         for member in cls.__members__.values():
             payload = _canonical_bytes(member)
-            assert ("builtins", "getattr") not in _global_pairs(payload)
+            assert ("builtins", "getattr") not in _load_recording(payload)[1]
             assert SafeBundleUnpickler(io.BytesIO(payload)).load() is member
 
 
@@ -186,6 +201,8 @@ def test_every_admitted_enum_member_round_trips_through_the_restricted_loader(
 
 
 def _tiny_trace() -> Any:
+    """A seeded three-op MLP trace whose metadata carries TraceState and Relationship."""
+
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
     return tl.trace(model, torch.randn(2, 4))
@@ -204,8 +221,9 @@ def test_trace_saved_under_by_name_enum_reduce_round_trips(
     forced = tmp_path / "forced.tlspec"
     trace.save(forced)
 
-    assert (forced / "metadata.pkl").read_bytes() == (plain / "metadata.pkl").read_bytes()
-    assert ("builtins", "getattr") not in _global_pairs((forced / "metadata.pkl").read_bytes())
+    forced_bytes = (forced / "metadata.pkl").read_bytes()
+    assert forced_bytes == (plain / "metadata.pkl").read_bytes()
+    assert ("builtins", "getattr") not in _load_recording(forced_bytes)[1]
     loaded = tl.load(forced)
     assert isinstance(loaded, tl.Trace)
 
@@ -244,6 +262,8 @@ def test_getattr_reduce_stays_refused(module: str, name: str, attr: str) -> None
 
 
 def test_safe_getattr_refuses_enum_classes_directly() -> None:
+    """The wrapper itself, not only the stream path, refuses an Enum class target."""
+
     with pytest.raises(pickle.UnpicklingError, match="Blocked getattr"):
         _safe_getattr(TraceState, "PRISTINE")
     with pytest.raises(pickle.UnpicklingError, match="Blocked getattr"):

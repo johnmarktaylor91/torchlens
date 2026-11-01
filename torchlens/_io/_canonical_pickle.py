@@ -69,7 +69,8 @@ class _CanonicalMetadataPickler(pickle._Pickler):
             # reaches ``builtins.getattr`` in the restricted loader, which admits the
             # Enum CLASS as a global but never ``getattr`` on it, so a save on those
             # interpreters failed its own dry-run reload. Same shape as
-            # ``Enum.__reduce_ex__`` elsewhere, so the bytes match the 3.10 goldens;
+            # ``Enum.__reduce_ex__`` on 3.10 and 3.11.4+, so the bytes match the
+            # pinned goldens;
             # ``cls(value)`` also resolves aliases and combined ``Flag`` values.
             return (cls, (obj._value_,))
         if cls is frozenset or cls is set:
