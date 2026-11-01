@@ -74,6 +74,13 @@ def _not_applicable(reason: str) -> Any:
     raise NotApplicable(reason)
 
 
+def _error_code(exc: BaseException) -> str:
+    """Return the contract code of a TorchLens error the way the harness reads it."""
+
+    fields = getattr(exc, "fields", None) or {}
+    return str(fields.get("code", "") or getattr(exc, "code", ""))
+
+
 def _is_float(dtype: Any) -> bool:
     text = str(dtype)
     return "float" in text or "bfloat" in text
@@ -107,8 +114,18 @@ def _ops_with_out(trace: Any) -> dict[str, torch.Tensor]:
     }
 
 
+def _no_pass(label: str) -> str:
+    """Return the layer label of ``label`` (``conv_1_1:1`` reads ``conv_1_1``)."""
+
+    head, sep, tail = label.rpartition(":")
+    return head if sep and tail.isdigit() else label
+
+
 def _descendants(trace: Any, label: str) -> set[str]:
-    """Return the labels downstream of ``label`` (its cone), ``label`` excluded."""
+    """Return the layer labels downstream of ``label`` (its cone), ``label`` excluded.
+
+    Relations are spelled in no-pass layer labels, so the cone is too.
+    """
 
     seen: set[str] = set()
     frontier = [label]
@@ -116,6 +133,7 @@ def _descendants(trace: Any, label: str) -> set[str]:
         current = frontier.pop()
         for child in trace[current].children or ():
             child_label = child if isinstance(child, str) else getattr(child, "label", str(child))
+            child_label = _no_pass(child_label)
             if child_label not in seen:
                 seen.add(child_label)
                 frontier.append(child_label)
@@ -195,7 +213,7 @@ def _expect_cone_only(cell: Cell, base: Any, edited: Any, label: str, what: str)
     cone = _descendants(base, label)
     before, after = _ops_with_out(base), _ops_with_out(edited)
     for name, value in before.items():
-        if name == label or name in cone or name not in after:
+        if name == label or _no_pass(name) in cone or name not in after:
             continue
         cell.expect(
             _same(value, after[name]), f"{what}: {name} outside the cone of {label} changed"
@@ -306,7 +324,7 @@ def _expect_loaded_replay(cell: Cell, loaded: Any, before: list[Any]) -> None:
     try:
         loaded.run(cell.model, cell.fresh_inputs())
     except TorchLensError as exc:
-        if getattr(exc, "code", "") != "run_intervention_spec_not_persisted":
+        if _error_code(exc) != "run_intervention_spec_not_persisted":
             raise
         cell.expect(
             not rules,
@@ -368,19 +386,21 @@ def _after_bundle(cell: Cell) -> None:
     fork = trace.fork()
     fork.do(tl.label(label), tl.zero_ablate())
     pair = tl.Bundle({"base": trace, "edited": fork}, baseline="base")
-    rows = dict(pair.compare("base", "edited", metric="relative_l2"))
-    cell.expect(label in rows, f"compare rows lack the edited site {label}: {sorted(rows)[:8]}")
+    compared = pair.compare("base", "edited", metric="relative_l2")
+    rows = {_no_pass(name): value for name, value in compared}
+    site = _no_pass(label)
+    cell.expect(site in rows, f"compare rows lack the edited site {site}: {sorted(rows)[:8]}")
     cell.expect(
-        abs(rows[label] - 1.0) < 1e-5,
-        f"zero ablation at {label} reads relative distance {rows[label]!r}, wanted 1.0",
+        abs(rows[site] - 1.0) < 1e-5,
+        f"zero ablation at {site} reads relative distance {rows[site]!r}, wanted 1.0",
     )
     cone = _descendants(trace, label)
-    outside = {name: value for name, value in rows.items() if name != label and name not in cone}
+    outside = {name: value for name, value in rows.items() if name != site and name not in cone}
     moved = sorted(name for name, value in outside.items() if value != 0)
-    cell.expect(not moved, f"sites outside the cone of {label} differ: {moved[:8]}")
+    cell.expect(not moved, f"sites outside the cone of {site} differ: {moved[:8]}")
     cell.expect(
-        all(rows[label] >= value for value in outside.values()),
-        f"{label} is not ranked first among the sites outside its cone",
+        all(rows[site] >= value for value in outside.values()),
+        f"{site} is not ranked first among the sites outside its cone",
     )
 
 
