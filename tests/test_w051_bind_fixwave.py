@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._capture.run_entry as capture_run_entry
+import torchlens._capture._run_setup as capture_run_setup
 from torchlens.intervention.errors import BindingPreflightError
 from torchlens.intervention.injection import attest_injected_ops, injected_ops
 
@@ -577,13 +577,13 @@ def test_module_boundary_rule_id_from_stamped_plan_entry(monkeypatch) -> None:
             for entry in entries
         ]
 
-    monkeypatch.setattr(capture_run_entry, "normalize_hook_plan", stamped)
+    monkeypatch.setattr(capture_run_setup, "normalize_hook_plan", stamped)
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
     records = injected_ops(logged)
     assert records
     assert {record.provenance.spec_rule_id for record in records} == {spec.rules[0].rule_id}
     # and the door resets: a later plain capture's records never inherit the stamp
-    monkeypatch.setattr(capture_run_entry, "normalize_hook_plan", real)
+    monkeypatch.setattr(capture_run_setup, "normalize_hook_plan", real)
     plain = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
     relu_rule = tl.when(tl.func("relu"), _sae_like).rules[0].rule_id
     assert {record.provenance.spec_rule_id for record in injected_ops(plain)} == {relu_rule}

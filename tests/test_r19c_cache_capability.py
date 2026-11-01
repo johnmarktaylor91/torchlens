@@ -206,7 +206,7 @@ def test_pre_forward_failure_resets_capture_runtime_context(monkeypatch):
     stale until the next trace() happened to reset at its start.
     """
     from torchlens import _state
-    from torchlens._capture import run_entry as uf
+    from torchlens._capture import _run_setup as uf
 
     real_trace_cls = uf.Trace
 
