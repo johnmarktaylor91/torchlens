@@ -53,7 +53,7 @@ from .._io import (
 from .._io.state_keys import refuse_callable_shadowing_state_keys
 from .._ir.refs import DtypeRef
 from .._quantities import Bytes, Duration, Flops, Macs
-from .._selection.selection import _selection_from_layer, _SelectionOperand
+from .._selection.selection import _SelectionOperand
 from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPLE_VIEW_FIELDS
 from . import _doors
@@ -1028,6 +1028,7 @@ class Layer(_SelectionOperand):
 
     def __selection__(self) -> object:
         """Lift this layer's whole output as an ACT selection term (ALL passes)."""
+        from .._selection.selection import _selection_from_layer
 
         return _selection_from_layer(self)
 

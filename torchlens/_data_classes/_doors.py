@@ -31,7 +31,7 @@ def _package_of(module: ModuleType) -> ModuleType:
 def report() -> ModuleType:
     """Door to ``torchlens.report`` (facts, summary and narrate destinations)."""
 
-    from ..report import _narrate, _trace_facts, _trace_summary  # noqa: F401
+    from ..report import _agent_json, _narrate, _trace_facts, _trace_summary  # noqa: F401
 
     return _package_of(_trace_summary)
 

@@ -39,7 +39,8 @@ from contextlib import contextmanager
 from functools import cache
 from typing import Any
 
-from . import TLSPEC_VERSION, UnknownPersistedFieldError
+from .format_contract import TLSPEC_VERSION
+from .format_errors import UnknownPersistedFieldError
 
 #: Cap on unknown names spelled out in one refusal/inventory row (the full
 #: count always reports; a hostile million-key state must not build a

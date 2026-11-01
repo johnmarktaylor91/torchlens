@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._errors import ArgumentTypeError
-from .._io import ArtifactError, JaxPayloadLoadHint, PayloadLoadHints, _json, materialize_nested
+from .._io import ArtifactError, JaxPayloadLoadHint, PayloadLoadHints, _json
 from .._io.bundle import cleanup_tmp, load as _load
+from .._io.rehydrate import materialize_nested
 from .._io.sidecar import (
     AnalysisOnlySidecar,
     SidecarFamily,

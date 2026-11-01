@@ -117,7 +117,9 @@ class TraceStatsMixin(_TraceMixinBase):
         artifacts, which never re-measure.
         """
 
-        return _doors.report()._trace_facts.cost_forward_peak_memory_pair(self)
+        from .._capture.peak_memory import read_peak_pair
+
+        return read_peak_pair(self)
 
     @property
     def _layers_recurrent(self: "Trace") -> "LayerAccessor":

@@ -313,7 +313,9 @@ class TraceVisualizationMixin(_TraceMixinBase):
             This log, allowing chained calls before ``draw``.
         """
 
-        return _doors.visualization()._trace_draw.add_node_overlay(self, scores=scores, name=name)
+        self._node_overlay_scores = dict(scores)
+        self._node_overlay_name = name
+        return self
 
     def animate_ops(self: "Trace", site: Any) -> str:
         """Return a minimal HTML animation for repeated ops at ``site``.

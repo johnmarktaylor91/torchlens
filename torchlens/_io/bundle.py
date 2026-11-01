@@ -1554,7 +1554,7 @@ def _load_trace_payload(
     except ArtifactError:
         raise
     except OpcodeCeilingExceeded:
-        raise _opcode_ceiling_error(metadata_path, code=_OPCODE_CEILING_CODE) from None
+        raise _opcode_ceiling_error(metadata_path, code="metadata_object_count_exceeded") from None
     except (pickle.UnpicklingError, EOFError) as exc:
         hint = ""
         if python_major_mismatch:
