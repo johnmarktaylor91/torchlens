@@ -630,7 +630,7 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
     ]
     dropped_args = [
         getattr(layer, "layer_label", "<unknown>")
-        for layer in getattr(self, "_layer_list", [])
+        for layer in self._layer_list
         if getattr(layer, "func", None) is not None
         and bool(getattr(layer, "has_saved_args", False))
         and getattr(layer, "saved_args", None) is None

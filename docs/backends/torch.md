@@ -43,7 +43,7 @@ object, never a bare boolean.
 |---|---|---|
 | `backward_capture` | supported | True backward capture through autograd hooks. |
 | `fastlog` | supported | Sparse recording. |
-| `interventions` | supported | Live `intervene=` and `halt=`. |
+| `can_intervene` | supported | Live `intervene=` and `halt=`. |
 | `rng_replay` | supported | Replay restores the captured RNG state. |
 | `has_streaming` | supported | Streaming save. |
 | `structure_only_capture` | supported | `structure_only=True`. |

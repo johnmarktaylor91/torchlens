@@ -167,7 +167,7 @@ def test_torch_protocol_reference_output_runs_pristine() -> None:
     x = torch.ones(1, 2)
     candidate = get_backend_spec("torch").protocol()
     trace = candidate.capture(model, x, None)
-    assert trace.backend == "torch"
+    assert trace.provenance.backend == "torch"
     reference = candidate.reference_output(model, x, None)
     torch.testing.assert_close(reference, model(x))
 

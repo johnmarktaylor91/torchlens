@@ -131,8 +131,8 @@ def _payload_shape(payload: Any, host_copy: Any) -> tuple[int, ...] | None:
 def silent_gap_reason(trace: Any) -> str | None:
     """The recorded verification ceiling when the capture flagged itself, else ``None``."""
 
-    if getattr(trace, "_provenance_verified", None) is False:
-        return str(getattr(trace, "_provenance_verification_reason", None) or "unrecorded reason")
+    if trace._provenance_verified is False:
+        return str(trace._provenance_verification_reason or "unrecorded reason")
     return None
 
 
