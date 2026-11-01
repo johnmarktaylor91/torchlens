@@ -9,6 +9,7 @@ import torchlens
 
 TARGET_ALL = [
     "trace",
+    "draw",
     "release_model",
     "clear_cache",
     "export",

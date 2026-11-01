@@ -41,8 +41,8 @@ def test_root_budget_is_frozen() -> None:
     """The root-name list is a FROZEN BUDGET (memo s5 namespace rule)."""
 
     rows = surface_rows()
-    assert len(rows) == 111, (
-        f"root surface budget moved: {len(rows)} names (frozen budget 111: "
+    assert len(rows) == 112, (
+        f"root surface budget moved: {len(rows)} names (frozen budget 112: "
         "143 at the C01 freeze, -1 private `_trace` alias retired, +6 by "
         "the A10 facade -- summary/load_extraction into __all__ plus the four "
         "pre-existing lazy namespaces bridge/callbacks/neuro/notebook -- "
@@ -73,7 +73,9 @@ def test_root_budget_is_frozen() -> None:
         "(folded into tl.neuro) left the root; with every area lane merged and "
         "the table regenerated, the root held 114 rows; round 2 then moved "
         "the captured_run, user_funcs and visualization namespaces to private packages "
-        "(-3), so the root holds 111 rows. "
+        "(-3), so the root held 111 rows -- and +1 by lane H.16 (c): "
+        "tl.quickstart.render -> tl.draw, a decided root name in __all__, "
+        "so the root holds 112 rows. "
         "Root growth is a deliberate act: regenerate the table, justify the "
         "new name's layer, and update this pin in the same change."
     )

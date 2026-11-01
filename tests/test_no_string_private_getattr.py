@@ -248,7 +248,9 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # _render_nodes.py sites.
     # 23 -> 22 (2026-08-14 fix-wave reconcile, fix/vizr2 2d1371ac): one
     # reach-in discharged with the imagepath-out-of-saved-DOT rework.
-    "_visualization": 22,
+    # 22 -> 20 (2026-11-01 C2 integration, lane wip/mp-r2-draw-2 c5c1d322d): two
+    # reach-ins discharged with the Trace.draw/Drawing rework.
+    "_visualization": 20,
     # 2 -> 1 (2026-08-14 fixwave-2 reconcile): one reach-in discharged upstream.
     "viz": 1,
 }
