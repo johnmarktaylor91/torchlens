@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-77 packages, 1172 modules, 604900 lines, 0 modules without a docstring.
+77 packages, 1172 modules, 604927 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 89 | 56507 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 89 | 56532 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -34,7 +34,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2940 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2113 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
-| `torchlens._utils` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. | 31 | 22093 |
+| `torchlens._utils` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. | 31 | 22094 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 64 | 42241 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 749 |
@@ -53,7 +53,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 9 | 5104 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 10 | 8024 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 3 | 3429 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 84 | 51060 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 84 | 51061 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8008 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 17 | 7731 |
@@ -93,7 +93,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (89 modules, 56507 lines)
+TorchLens - extract outs and metadata from PyTorch models. (89 modules, 56532 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -183,7 +183,7 @@ TorchLens - extract outs and metadata from PyTorch models. (89 modules, 56507 li
 | `features` | The ONE named, recorded feature-matrix shaping operation (tvscope B7/). | 303 |
 | `fingerprint` | Provisional public structural-hash helpers. | 306 |
 | `inventory` | Site inventory: the audience's "what can I extract?" answer (tvscope B6). | 449 |
-| `observers` | User observer helpers for taps, scalar logs, and record spans. | 505 |
+| `observers` | User observer helpers for taps, scalar logs, and record spans. | 530 |
 | `options` | Grouped option dataclasses for public TorchLens APIs. | 1902 |
 | `types` | Public TorchLens type aliases and rarely used data classes. | 162 |
 
@@ -668,7 +668,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 
 
 ### `torchlens._utils`
 
-Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. (31 modules, 22093 lines)
+Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. (31 modules, 22094 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -684,7 +684,7 @@ Focused utility modules: RNG, tensor ops, argument handling, introspection, coll
 | `_rng_channels` | Thread routing, owner-join settlement, and global-engine state rows for the monitor. | 845 |
 | `_script_call_slot` | Probe for the TorchScript call boundary: can ''ScriptFunction.__call__'' be replaced. | 35 |
 | `_subprocess` | The ONE bounded-subprocess spawn discipline for every TorchLens child. | 205 |
-| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4676 |
+| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4677 |
 | `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 246 |
 | `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 94 |
 | `_type_new_slot` | CPython ''tp_new'' patching for torch's immutable legacy tensor-constructor types. | 465 |
@@ -1030,7 +1030,7 @@ tinygrad backend preview. (3 modules, 3429 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (84 modules, 51060 lines)
+Torch backend implementation package for TorchLens capture. (84 modules, 51061 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1090,7 +1090,7 @@ Torch backend implementation package for TorchLens capture. (84 modules, 51060 l
 | `_script_boundary` | TorchScript call boundary: a ''torch.jit.ScriptFunction'' called from an eager forward. | 255 |
 | `_session_forwards` | Session-scoped ''forward'' wrappers for non-root submodules. | 279 |
 | `_storage_overlap` | Storage-overlap geometry for mutation-label propagation (pure, no capture state). | 157 |
-| `_tl` | TorchLens private metadata namespace helpers. | 1789 |
+| `_tl` | TorchLens private metadata namespace helpers. | 1790 |
 | `_tl_collective` | Unwrap a functional-collective async tensor for TorchLens tensor metadata. | 39 |
 | `_torch_ops_calls` | Record direct ''torch.ops.*'' calls made by user code as ordinary logged ops. | 445 |
 | `_weightsfree_ctx` | The capture-owned factory-device slot (-CTX, weightsfree ). | 78 |
