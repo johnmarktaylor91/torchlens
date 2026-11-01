@@ -259,3 +259,15 @@ def test_capture_time_gradient_edit_arms_then_fires_on_backward() -> None:
     _backward(trace)
     assert torch.equal(trace[lin].grad, torch.zeros(4, 4))
     assert len(_backward_records(trace)) == 1
+
+
+def test_gradient_edit_fires_at_a_site_save_grads_does_not_select() -> None:
+    model, x = _double()
+    base = tl.trace(model, x, capture=_CAPTURE)
+    mul, lin = _label(base, "mul"), _label(base, "linear")
+    selective = tl.options.CaptureOptions(backward_ready=True, save_grads=[lin])
+    trace = tl.trace(model, x, capture=selective, intervene=tl.when(tl.grad(mul), tl.scale(0)))
+    _backward(trace)
+    # The edit fired at mul (not selected for saving), so lin's saved gradient is zero.
+    assert torch.equal(trace[lin].grad, torch.zeros(4, 4))
+    assert len(_backward_records(trace)) == 1
