@@ -171,7 +171,7 @@ def _fork_rng_devices() -> list[int]:
     pre-fix gate ``utils/rng.py`` documents.
     """
 
-    from .._utils.tensor_utils import _is_cuda_initialized
+    from .._utils._cuda_probe import _is_cuda_initialized
 
     if _is_cuda_initialized() and torch.cuda.is_available():
         return list(range(torch.cuda.device_count()))

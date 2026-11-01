@@ -21,7 +21,9 @@ LAYER_LABELS = ["conv2d_1_5", "relu_3_7", "batch_norm_2_9", "input_1", "output_1
 RAW_LABELS = ["relu_1_2_raw", "input_1_1_raw", "conv2d_4_11_raw"]
 
 
-@pytest.mark.parametrize(("op_label", "layer_label"), list(zip(OP_LABELS, LAYER_LABELS)))
+@pytest.mark.parametrize(
+    ("op_label", "layer_label"), list(zip(OP_LABELS, LAYER_LABELS, strict=True))
+)
 def test_split_pass_separates_the_layer_label_and_the_pass_number(
     op_label: str, layer_label: str
 ) -> None:
@@ -89,7 +91,7 @@ def test_final_labels_are_not_raw(label: object) -> None:
 
 @pytest.mark.smoke
 def test_smoke_pass_qualified_vocabulary_round_trips() -> None:
-    for op_label, layer_label in zip(OP_LABELS, LAYER_LABELS):
+    for op_label, layer_label in zip(OP_LABELS, LAYER_LABELS, strict=True):
         assert _labels.is_pass_qualified(op_label), op_label
         assert not _labels.is_pass_qualified(layer_label), layer_label
         base, pass_number = _labels.split_pass(op_label)

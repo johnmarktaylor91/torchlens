@@ -430,8 +430,8 @@ def test_rng_snapshot_uses_all_cuda_devices(monkeypatch: pytest.MonkeyPatch) -> 
     calls: list[str] = []
     fake_states = [torch.tensor([1], dtype=torch.uint8), torch.tensor([2], dtype=torch.uint8)]
 
-    monkeypatch.setattr("torchlens._utils.tensor_utils._cuda_available", True)
-    monkeypatch.setattr("torchlens._utils.rng._is_cuda_available", lambda: True)
+    monkeypatch.setattr("torchlens._utils._cuda_probe._cuda_available", True)
+    monkeypatch.setattr("torchlens._utils.rng.streams._is_cuda_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "is_initialized", lambda: True)
     monkeypatch.setattr(torch.cuda, "get_rng_state_all", lambda: fake_states)
 

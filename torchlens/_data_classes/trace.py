@@ -3718,14 +3718,13 @@ class Trace(
             have already been validated against this log.
         """
 
-        new_by_raw = {layer._layer_label_raw: layer for layer in trace._layer_list}
         old_by_label = {
             key: layer
             for layer in self._layer_list
             for key in (layer._layer_label_raw, layer.layer_label)
         }
-        for layer in self._layer_list:
-            new_layer = new_by_raw[layer._layer_label_raw]
+        # By position, not raw label: a reused module repeats its raw label across passes.
+        for layer, new_layer in zip(self._layer_list, trace._layer_list, strict=True):
             if not (
                 getattr(layer, "is_buffer", False)
                 or self._is_append_buffer_side_effect_layer(layer, old_by_label)

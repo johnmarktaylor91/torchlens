@@ -214,9 +214,7 @@ jobs:
         if: matrix.scope == 'smoke'
         env:
           # One torch thread per xdist worker: intra-op threads on top of
-          # four workers oversubscribe the runner and inflate the duration
-          # tripwire's measurements (lane L15). The tripwire aggregates
-          # across workers, so it stays armed under -n.
+          # four workers oversubscribe the runner.
           OMP_NUM_THREADS: "1"
         run: |
           pytest tests/ -m smoke -n 4 --tb=short -q \
@@ -628,10 +626,8 @@ jobs:
           uv pip check
 
       - name: Run the smoke tier under coverage with a floor
-        # No deselects: the duration-budget machinery itself skips recording
-        # under coverage instrumentation (tests/conftest.py, r7 R41/R72 --
-        # the old single --deselect here named a test that had been RENAMED,
-        # so it silently excluded nothing while claiming the carve-out).
+        # No deselects: duration budgets are a repository check over
+        # tests/tiers/durations.csv, so coverage tracing cannot trip them.
         # pytest-cov combines the xdist workers' data before the floors run.
         env:
           OMP_NUM_THREADS: "1"

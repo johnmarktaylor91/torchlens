@@ -88,17 +88,20 @@ def test_nightly_coverage_job_exists_and_instruments_the_smoke_tier() -> None:
         "the nightly coverage job no longer instruments torchlens under branch "
         "coverage — the floor would be measuring nothing"
     )
-    # The instrumented leg must not deselect budget tests by name: the
-    # carve-out lives in the budget machinery itself (a renamed test id once
-    # turned the deselect into a silent no-op while claiming the exemption).
+    # The instrumented leg must not deselect budget tests by name: duration
+    # budgets are a repository check over tests/tiers/durations.csv, and a
+    # coverage-instrumented measurement is judged at the slowdown factor (a
+    # renamed test id once turned a deselect into a silent no-op while
+    # claiming the exemption).
     assert "--deselect" not in command, (
-        "the coverage job deselects tests by name again — the instrumentation "
-        "carve-out belongs in tests/conftest.py (cov_source check), where a "
+        "the coverage job deselects tests by name again — instrumented runs are "
+        "allowed for in scripts/tier_durations.py (MAX_SLOWDOWN_FACTOR), where a "
         "rename cannot silently void it"
     )
-    conftest_text = (_PROJECT_ROOT / "tests" / "conftest.py").read_text(encoding="utf-8")
-    assert 'getattr(item.config.option, "cov_source", None)' in conftest_text, (
-        "tests/conftest.py lost the instrumented-session budget carve-out that "
+    from scripts.tier_durations import MAX_SLOWDOWN_FACTOR, budget_factor
+
+    assert budget_factor({"instrumented": True, "workers": 1}) == MAX_SLOWDOWN_FACTOR, (
+        "scripts/tier_durations.py lost the instrumented-measurement allowance that "
         "replaced the coverage job's brittle --deselect"
     )
 

@@ -16,12 +16,12 @@ import textwrap
 
 import pytest
 import torch
+from support.sampling import sampling_draws
 from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import population, sample_from
-from torchlens.intervention.stochastic import sampling_records
 
 
 class _TwoBlock(nn.Module):
@@ -69,7 +69,7 @@ def test_address_identity_ignores_object_identity() -> None:
     fork_a.do(tl.label("relu_1_2"), tl.patch_from(plan_a))
     fork_b = subject.fork()
     fork_b.do(tl.label("relu_1_2"), tl.patch_from(plan_b))
-    assert sampling_records(fork_a)[-1]["donor_ids"] == sampling_records(fork_b)[-1]["donor_ids"]
+    assert sampling_draws(fork_a)[-1].draw_indices == sampling_draws(fork_b)[-1].draw_indices
 
 
 @pytest.mark.smoke
@@ -115,7 +115,7 @@ _TWO_PROCESS_SCRIPT = textwrap.dedent(
     from torch import nn
     import torchlens as tl
     from torchlens.intervention import population, sample_from
-    from torchlens.intervention.stochastic import sampling_records
+    from support.sampling import sampling_draws
 
     class TwoBlock(nn.Module):
         def __init__(self):
@@ -139,9 +139,9 @@ _TWO_PROCESS_SCRIPT = textwrap.dedent(
         plan = sample_from(ref, seed=3)
         fork = subject.fork()
         fork.do(tl.label("relu_1_2"), tl.patch_from(plan))
-        record = sampling_records(fork)[-1]
+        record = sampling_draws(fork)[-1]
         print(ref.digest_kind, ref.identity, plan.donor_group_id,
-              record["derived_seed"], record["donor_ids"])
+              record.derived_seed, record.draw_indices)
     """
 )
 
@@ -153,7 +153,9 @@ def test_two_process_golden_reproduces_every_draw() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(tl.__file__)))
     outputs = []
     for hash_seed in ("1", "2"):
-        env = dict(os.environ, PYTHONHASHSEED=hash_seed, PYTHONPATH=root)
+        # The child imports tests/support, so the tests directory joins the path.
+        search_path = os.pathsep.join((root, os.path.join(root, "tests")))
+        env = dict(os.environ, PYTHONHASHSEED=hash_seed, PYTHONPATH=search_path)
         completed = subprocess.run(
             [sys.executable, "-c", _TWO_PROCESS_SCRIPT],
             capture_output=True,

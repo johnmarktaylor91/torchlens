@@ -147,7 +147,7 @@ capture entry is `_trace_torch_model` in `user_funcs.py`, one function of about 
 lines outside the backend package; `torch_func_decorator` and its nested `wrapped_func` in
 `backends/torch/wrappers.py` are about 900 and 760 lines; the forward runner
 `run_and_log_inputs_through_model` in `_capture/trace.py` about 860. `validation/core.py` is
-5,200 lines and `_utils/rng.py` 5,080. Changes to capture semantics usually touch three of
+5,200 lines and the host-nondeterminism monitor `_utils/rng/monitor.py` about 1,600. Changes to capture semantics usually touch three of
 these at once.
 
 **Five record shapes for one op.** An executed call is represented as `ir.events.OpEvent`
@@ -174,6 +174,8 @@ the generated index gives each one's first docstring line.
 - A module's one-line purpose and size: [where.md](where.md).
 - Step order and contracts in postprocess: `torchlens/_postprocess/_contracts.py`.
 - The invariants a change must keep: `docs/agent-reference/critical-invariants.md`.
-- The saved-file contract: `torchlens/schemas/writer_contract_v10.json` and
+- The saved-file contract: `torchlens/schemas/writer_contract_v11.json` and
   `docs/reference/runnable_tlspec_contract.md`.
+- Every persisted key of the saved format, with its type, save level, policy and public
+  accessor: [persisted_fields.md](persisted_fields.md) (generated).
 - The public surface, name by name: `docs/reference/glossary.md`.

@@ -25,8 +25,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._utils import _rng_channels
-from torchlens._utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
+from torchlens._utils.rng import (
+    HOST_NONDETERMINISM_REGISTRY,
+    engine_state,
+    host_nondeterminism_monitor,
+)
 
 
 class _LinearNoBias(nn.Module):
@@ -203,7 +206,7 @@ def test_get_draw_set_capture_requires_the_capture_seed(
 def test_registry_carries_global_engine_state_rows() -> None:
     rows = [row for row in HOST_NONDETERMINISM_REGISTRY if row.family == "rng_global_state"]
     targets = {row.target for row in rows}
-    assert targets == {channel for _m, _n, channel in _rng_channels.GLOBAL_ENGINE_STATE_ROWS}
+    assert targets == {channel for _m, _n, channel in engine_state.GLOBAL_ENGINE_STATE_ROWS}
     assert all(row.classification == "replayable_read" for row in rows)
     strategies = {(row.target, row.strategy) for row in rows}
     assert ("random.getstate", "c_call_identity") in strategies

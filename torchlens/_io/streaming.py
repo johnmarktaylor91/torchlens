@@ -24,7 +24,7 @@ from safetensors.torch import save_file
 from .. import __version__ as TORCHLENS_VERSION
 from .._state import pause_logging
 from .._utils.hashing import sha256_file
-from . import TLSPEC_VERSION, ArtifactError
+from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import _restrict_mode, fsync_dir, fsync_tree
 from .manifest import Manifest, TensorEntry, _runtime_python_version
@@ -114,7 +114,7 @@ class BundleStreamWriter:
         self.final_path = Path(path)
         reject_symlink_path(self.final_path, context="save target")
         if self.final_path.exists():
-            raise ArtifactError(f"Bundle path already exists: {self.final_path}")
+            refuse_bundle_exists(self.final_path)
 
         self.tmp_path = _make_tmp_bundle_path(self.final_path)
         self.blobs_path = self.tmp_path / "blobs"
@@ -599,7 +599,7 @@ class BundleStreamWriter:
         if self.final_path.exists():
             reason = f"Bundle path already exists: {self.final_path}"
             self.abort(reason)
-            raise ArtifactError(reason)
+            refuse_bundle_exists(self.final_path)
         try:
             self.tmp_path.rename(self.final_path)
         except OSError as exc:

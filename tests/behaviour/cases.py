@@ -288,6 +288,7 @@ TOY_CASES: tuple[Case, ...] = (
 
 # wave-3 fills
 from tests.behaviour._fill_capture import TOY_CASES  # noqa: E402, F811 (adds toy rows)
+from tests.behaviour._fill_io import TOY_CASES  # noqa: E402, F811 (adds io toy rows)
 
 
 @cache

@@ -24,6 +24,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
+from .._errors import InvalidArgumentError
 from ..errors import CaptureError
 from ._outcome_payload import (
     _OUTCOME_PAYLOAD_KEYS,  # noqa: F401 -- test-visible re-export
@@ -716,3 +717,35 @@ __all__ = [
     "stamp_cooked",
     "stamp_forked",
 ]
+
+
+def refuse_streamed_trace_run(trace: Any) -> None:
+    """Refuse ``run()`` on a trace captured with ``storage=tl.to_disk(...)``.
+
+    Every run provider re-captures the payloads into RAM while the streamed
+    bundle on disk keeps the first capture, so the trace and its bundle would
+    silently disagree (behaviour-net IO-8). Re-streaming a rerun into the
+    bundle is not built; until it is, a streamed trace does not run. A trace
+    loaded from a bundle is not streamed (its payloads are the bundle's) and
+    keeps its loaded providers.
+    """
+
+    state = trace.__dict__
+    if state.get("_loaded_from_bundle"):
+        return
+    bundle_path = state.get("_source_bundle_path")
+    if bundle_path is None and state.get("_out_writer") is None:
+        return
+    where = f" at {bundle_path}" if bundle_path is not None else ""
+    raise InvalidArgumentError(
+        "this trace was captured with storage=tl.to_disk(...), so its payloads live in the "
+        f"bundle{where}; run() re-captures every payload into RAM while that bundle keeps the "
+        "first capture, so a streamed trace does not run",
+        code="trace_option_unsupported",
+        remedy=(
+            "capture again with storage=tl.to_disk(...) to a new path, or capture without "
+            "to_disk, and run that trace"
+        ),
+        argument="storage",
+        bundle_path=None if bundle_path is None else str(bundle_path),
+    )
