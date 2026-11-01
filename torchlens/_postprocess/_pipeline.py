@@ -86,6 +86,7 @@ PIPELINE: tuple[PipelineStep, ...] = (
             "save_rng_states",
         ),
         writes=(
+            "_op_accessor_cache",
             "_raw_graph_ws",
             "_trace_core",
             "layer_list",
@@ -143,6 +144,7 @@ PIPELINE: tuple[PipelineStep, ...] = (
             "op_equivalence_classes",
             "orphan_records",
             "output_layers",
+            "state_history",
         ),
     ),
     PipelineStep(
@@ -359,6 +361,7 @@ PIPELINE: tuple[PipelineStep, ...] = (
             "_lookup_keys_to_layer_num_dict",
             "_module_boundary_adoptions",
             "_module_boundary_outside_sources",
+            "_module_call_accessor",
             "_orphan_unattributed_tensor_args",
             "_plain_direct_escape_gaps",
             "_plain_scalar_escape_labels",
@@ -490,8 +493,10 @@ PIPELINE: tuple[PipelineStep, ...] = (
         ),
         writes=(
             "_buffer_accessor",
+            "_module_call_accessor",
             "_module_capture_ws",
             "_module_logs",
+            "_op_accessor_cache",
             "_param_logs_by_module",
             "_trace_core",
             "_uncalled_module_addresses",
