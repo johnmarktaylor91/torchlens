@@ -36,7 +36,7 @@ from functools import cache
 from importlib import import_module
 from typing import Any
 
-from . import FieldPolicy
+from ._field_policy import FieldPolicy
 
 
 class FieldTier(str, Enum):

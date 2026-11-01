@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Literal, TypeAlias, cast
 
 from .._errors import _actionable_message, _ActionableErrorMixin
-from .._io import FieldPolicy
+from .._io._field_policy import FieldPolicy
 from ..errors._base import TorchLensError
 
 # Canonical ``defaultdict`` factory callables restorable on load WITHOUT importing

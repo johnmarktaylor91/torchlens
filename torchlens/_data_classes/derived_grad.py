@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
-from .._io import FieldPolicy
+from .._io._field_policy import FieldPolicy
 from .._ir.refs import DtypeRef
 from ._accessor_base import Accessor
 
