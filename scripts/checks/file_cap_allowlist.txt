@@ -355,12 +355,8 @@ torchlens/_merged/_artifact.py::_cached_join_refs	90
 torchlens/_merged/_artifact.py::_check_degraded_cache_coherence	140
 torchlens/_merged/_artifact.py::load_merged	297
 torchlens/_merged/_artifact.py::save_merged	206
-torchlens/_merged/_engine.py::_check_order	63
-torchlens/_merged/_engine.py::_witness_consistency	104
 torchlens/_merged/_engine.py::derive_merge	76
-torchlens/_merged/_evidence.py::extract_rank_evidence	204
 torchlens/_merged/_presenter.py	896
-torchlens/_merged/_relation_table.py::_relation_findings	133
 torchlens/_notebook/_grid.py::array_grid_html	97
 torchlens/_notebook/_truncation.py::infer_balanced_truncation	97
 torchlens/_observability/_artifact.py::HistoryWriter._columns_for	65
