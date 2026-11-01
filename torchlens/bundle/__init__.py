@@ -695,7 +695,12 @@ class Bundle:
         return _bundle_upstream(self, name)
 
     def downstream(self, name: str | Trace) -> tuple[str, ...]:
-        """Return the members that transitively came after ``name``, nearest first."""
+        """Return the members that transitively came after ``name`` (what it fed), nearest first.
+
+        Walks the same ordering relation kinds as :meth:`upstream` (``fed_by``,
+        ``selected_by``, ``successor_of``, ``forked_from``, ``escalates``) from
+        the earlier member to the later ones; the inverse of :meth:`upstream`.
+        """
 
         return _bundle_downstream(self, name)
 
