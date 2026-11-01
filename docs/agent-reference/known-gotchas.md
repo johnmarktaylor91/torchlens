@@ -235,7 +235,7 @@
   way (`ModuleMeta.direct_forward_called` on the live module, kept across captures; the call is
   told apart by its caller frame through `_utils/_module_call_dispatch.py`, gated by
   `HAS_MODULE_CALL_DISPATCH_FRAME`), and the fast run
-  routes exactly those through a per-run instance `forward` (`_fast_live_plans.py`), restored by
+  routes exactly those through a per-run instance `forward` (`_fast_run.py`), restored by
   identity after each run; every other module stays on hooks. A direct call no capture
   marked (no capture of the model made one, or the flag is False) is still refused as
   `run_capability_unavailable` at stage `fast_live_module_hook_unobserved`.

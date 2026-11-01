@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 import weakref
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, nullcontext
-from dataclasses import dataclass
 from typing import Any, cast
 
 import torch
@@ -16,22 +16,26 @@ from torch import nn
 from torchlens._runnable import ContractCheck, ReadinessReport
 
 from . import _state
-from ._call_fingerprint import fingerprinting, install_module_token_hooks
+from ._call_fingerprint import (
+    fingerprinting,
+    install_module_token_hooks,
+    module_fingerprint_address,
+)
 from ._data_classes._trace_accessors import boundary_label_rows
 from ._fast_live_plans import (
+    DirectForwardRoute,
     _admitted_collection_labels,
+    _direct_call,
     _drop_uncollected_payloads,
     _FastOutputPlan,
-    _is_opaque_output_root,
     _live_modules_by_address,
     _module_call_budget,
     _output_tensor_leaves,
     _pair_output_leaves,
-    build_direct_forward_routes,
+    _remove_fast_live_hooks,
     build_function_plans,
     build_module_plans,
     collected_function_output,
-    direct_forward_routes_installed,
     install_collection_hooks,
     repeats_last_function_output,
     require_distinct_plan_modules,
@@ -54,14 +58,13 @@ from ._fast_live_until import (
     resolve_fast_until,
     truncate_after,
 )
-from ._fast_sparse_state import _state_mutating_call_ids
+from ._fast_sparse_state import _compile_sparse_call, _CompiledSparseCall, _state_mutating_call_ids
 from ._ir.container import ContainerSpec, rebuild_container_from_spec
 from ._runnable import (
     DivergencePolicy,
     NumericAttestationStatus,
     PathFaithfulness,
     ReadinessStatus,
-    RunnableCallDescriptor,
     RunnableErrorCode,
     RunProvider,
     RunResult,
@@ -75,13 +78,11 @@ from ._runnable_execution import (
     _HOST_RNG_SOURCE_KIND,
     _INPUT_CHECK_UNAVAILABLE,
     _ambient_execution_context_restored,
-    _call_execution_context_entered,
     _call_witness_checks,
     _container_spec_reconstruction_lossy,
     _contract_check,
     _control_witness_source_slot_ids,
     _declared_nondeterministic_sources,
-    _decode_literal,
     _descriptor_has_seeded_rng,
     _finalize_provider_run,
     _first_failed_live_input_check,
@@ -116,138 +117,132 @@ from ._runnable_execution import (
     _unbound_state_escape_stale,
     _uninit_taint_reaches,
     _value_at_path,
-    _write_argument,
     run_loaded_sparse_trace,
 )
 from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
+from ._utils._module_call_dispatch import forward_entered_through_module_call
 from ._utils._torch_compat import tensor_has_named_dims
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
+from .backends.torch._ops_container_base import _try_build_container_spec
+from .backends.torch._session_forwards import _NO_INSTANCE_FORWARD, _SessionForward
+from .backends.torch._tl import get_module_meta
 from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError
 
 
-@dataclass(frozen=True, slots=True)
-class _CompiledSparseCall:
-    """One sparse call with decoded literals and pre-indexed tensor bindings."""
+def _is_opaque_output_root(output: Any) -> bool:
+    """Return whether a model output is a container capture walks only by attribute search."""
 
-    descriptor: RunnableCallDescriptor
-    func: Callable[..., Any]
-    base_args: tuple[Any, ...]
-    base_kwargs: Mapping[str, Any]
-    top_level_tensor_args: tuple[tuple[str, int | str, str], ...]
-    nested_tensor_args: tuple[tuple[tuple[str | int, ...], str], ...]
-    requires_context: bool
-
-    def execute(self, slot_values: Mapping[str, torch.Tensor]) -> Any:
-        """Bind current tensor slots and invoke the resolved callable.
-
-        Parameters
-        ----------
-        slot_values:
-            Runtime tensor slot store.
-
-        Returns
-        -------
-        Any
-            Raw callable output.
-        """
-
-        args = list(self.base_args)
-        kwargs = dict(self.base_kwargs)
-        for root, key, slot_id in self.top_level_tensor_args:
-            try:
-                value = slot_values[slot_id]
-            except KeyError as exc:
-                raise RuntimeSignatureDriftError(
-                    f"Fast sparse call {self.descriptor.call_id!r} references unavailable "
-                    f"slot {slot_id!r}.",
-                    code=RunnableErrorCode.MISSING_TENSOR_SLOT.value,
-                    call_id=self.descriptor.call_id,
-                    slot_id=slot_id,
-                ) from exc
-            if root == "args":
-                args[cast(int, key)] = value
-            else:
-                kwargs[cast(str, key)] = value
-        for path, slot_id in self.nested_tensor_args:
-            try:
-                value = slot_values[slot_id]
-            except KeyError as exc:
-                raise RuntimeSignatureDriftError(
-                    f"Fast sparse call {self.descriptor.call_id!r} references unavailable "
-                    f"slot {slot_id!r}.",
-                    code=RunnableErrorCode.MISSING_TENSOR_SLOT.value,
-                    call_id=self.descriptor.call_id,
-                    slot_id=slot_id,
-                ) from exc
-            _write_argument(args, kwargs, path, value)
-        try:
-            if not self.requires_context:
-                return self.func(*args, **kwargs)
-            with _call_execution_context_entered(self.descriptor.execution_context):
-                return self.func(*args, **kwargs)
-        except RunCapabilityUnavailableError:
-            raise
-        except Exception as exc:
-            raise RuntimeSignatureDriftError(
-                f"Resolved callable rejected compiled fast recipe for "
-                f"{self.descriptor.call_id!r}: {exc}",
-                code=RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value,
-                call_id=self.descriptor.call_id,
-                affected_op_labels=self.descriptor.op_labels,
-            ) from exc
+    return (
+        output is not None
+        and not isinstance(output, torch.Tensor)
+        and _try_build_container_spec(output) is None
+    )
 
 
-def _compile_sparse_call(
-    call: RunnableCallDescriptor,
-    func: Callable[..., Any],
-    *,
-    ambient_grad_enabled: bool,
-    ambient_inference_mode: bool,
-) -> _CompiledSparseCall:
-    """Compile a sparse call's invariant literal tree and tensor assignments.
+def _was_called_directly(module: nn.Module) -> bool:
+    """Return whether a capture marked ``module`` as entered by a direct call."""
+
+    meta = get_module_meta(module)
+    return meta is not None and meta.direct_forward_called
+
+
+def build_direct_forward_routes(
+    model: nn.Module,
+    modules: Mapping[str, nn.Module],
+    plan_addresses: tuple[str, ...],
+    steer_modules: Mapping[str, nn.Module],
+) -> tuple[DirectForwardRoute, ...]:
+    """Build one route per live module a capture entered by a direct ``forward()`` call.
 
     Parameters
     ----------
-    call:
-        Frozen call recipe.
-    func:
-        Resolved callable.
-    ambient_grad_enabled:
-        Grad mode already restored around the compiled loop.
-    ambient_inference_mode:
-        Inference mode already restored around the compiled loop.
-
-    Returns
-    -------
-    _CompiledSparseCall
-        Reusable per-call binder.
+    model:
+        Live root model (never routed: capture leaves the root undecorated).
+    modules:
+        Every live address, alias spellings included.
+    plan_addresses:
+        Addresses the session collects through a forward hook.
+    steer_modules:
+        Steered address to live module, as the steer plan resolved them.
     """
 
-    args: list[Any] = [None] * call.num_positional_args
-    kwargs: dict[str, Any] = {}
-    for literal in call.literal_arguments:
-        _write_argument(args, kwargs, literal.argument_path, _decode_literal(literal.value))
-    top_level: list[tuple[str, int | str, str]] = []
-    nested: list[tuple[tuple[str | int, ...], str]] = []
-    for argument in call.tensor_arguments:
-        path = tuple(argument.argument_path)
-        if len(path) == 2 and path[0] in {"args", "kwargs"}:
-            top_level.append((cast(str, path[0]), path[1], argument.slot_id))
-        else:
-            nested.append((path, argument.slot_id))
-    return _CompiledSparseCall(
-        descriptor=call,
-        func=func,
-        base_args=tuple(args),
-        base_kwargs=kwargs,
-        top_level_tensor_args=tuple(top_level),
-        nested_tensor_args=tuple(nested),
-        requires_context=(
-            call.execution_context.grad_enabled != ambient_grad_enabled
-            or call.execution_context.inference_mode != ambient_inference_mode
-            or any(entry.enabled for entry in call.execution_context.autocast)
-        ),
-    )
+    routes: list[DirectForwardRoute] = []
+    for name, module in model.named_modules():
+        if module is model or not _was_called_directly(module):
+            continue
+        collect = [
+            planned
+            for planned in plan_addresses
+            if modules.get("" if planned == "self" else planned) is module
+        ]
+        routes.append(
+            DirectForwardRoute(
+                module_ref=weakref.ref(module),
+                token=_state.module_token(module_fingerprint_address(module, name)),
+                steer_addresses=tuple(
+                    steered for steered, target in steer_modules.items() if target is module
+                ),
+                collect_address=collect[0] if collect else None,
+            )
+        )
+    return tuple(routes)
+
+
+class _RoutedForward(_SessionForward):
+    """A per-run ``forward`` that runs the session hook work on a direct call only."""
+
+    def __init__(
+        self,
+        direct: Callable[..., Any],
+        module: nn.Module,
+        original: Callable[..., Any],
+        prior: Any,
+    ) -> None:
+        """Hold the direct-call delegate and the module's own ``forward``."""
+
+        super().__init__(direct, module, original, prior)
+        self._original = original
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Pass a ``Module.__call__`` call through; route a direct call."""
+
+        if forward_entered_through_module_call(sys._getframe(1)):
+            return self._original(*args, **kwargs)
+        return self._delegate(*args, **kwargs)
+
+
+@contextmanager
+def direct_forward_routes_installed(
+    routes: tuple[DirectForwardRoute, ...], session_ref: weakref.ReferenceType[Any]
+) -> Iterator[None]:
+    """Install the routes for one native forward, then restore every ``forward``.
+
+    A module whose ``forward`` no longer holds the route at exit (the model
+    reassigned it mid-forward) keeps the newer value, as session cleanup does.
+    """
+
+    installed: list[tuple[nn.Module, Any, _RoutedForward]] = []
+    try:
+        for route in routes:
+            module = route.module_ref()
+            if module is None:
+                continue
+            prior = module.__dict__.get("forward", _NO_INSTANCE_FORWARD)
+            original = module.forward
+            wrapper = _RoutedForward(
+                _direct_call(route, module, original, session_ref), module, original, prior
+            )
+            module.__dict__["forward"] = wrapper
+            installed.append((module, prior, wrapper))
+        yield
+    finally:
+        for module, prior, wrapper in reversed(installed):
+            if module.__dict__.get("forward") is not wrapper:
+                continue
+            if prior is _NO_INSTANCE_FORWARD:
+                module.__dict__.pop("forward", None)
+            else:
+                module.__dict__["forward"] = prior
 
 
 def _input_layout_ok(value: torch.Tensor) -> bool:
@@ -326,28 +321,6 @@ def _fast_input_check(
             "Fast sparse execution accepts only plain dense strided tensor inputs.",
         ),
     )
-
-
-def _remove_fast_live_hooks(handles: list[Any]) -> None:
-    """Remove and discard module-hook handles without retaining their session.
-
-    Every handle gets its own removal attempt: ``weakref.finalize`` pops its
-    registry entry BEFORE invoking the callback, so this is the one chance to
-    remove these hooks -- a single raising ``remove()`` must never strand the
-    remaining handles on the user's modules forever. The first failure
-    re-raises only after every handle was attempted and the list cleared.
-    """
-
-    first_error: BaseException | None = None
-    for handle in handles:
-        try:
-            handle.remove()
-        except BaseException as exc:
-            if first_error is None:
-                first_error = exc
-    handles.clear()
-    if first_error is not None:
-        raise first_error
 
 
 class _FastSparseSession:

@@ -218,7 +218,7 @@ class ModuleMeta(TorchLensMeta):
     module_type: str | None = None
     # Set (and kept) once a capture enters the module by a direct
     # ``module.forward(x)`` call, which no torch hook observes; the fast live
-    # run routes exactly these modules around its hooks (``_fast_live_plans``).
+    # run routes exactly these modules around its hooks (``_fast_run``).
     direct_forward_called: bool = False
 
 
