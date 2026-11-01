@@ -3043,3 +3043,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 56d29dabd53faef092e32a4e3074c0c2c201fd1f (dirty)
 recorded: 2026-10-31T20:54:20.236442+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: v11 triage lane 2: the live door site, module frame and facet home pass reads moved from pass_index to pass_number
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 75daa99d16c960c32b37a7197d971f30018e917e (dirty)
+recorded: 2026-11-01T00:15:49.319825+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: v11 triage lane 2: the live door site, module frame and facet home pass reads moved from pass_index to pass_number
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 75daa99d16c960c32b37a7197d971f30018e917e (dirty)
+recorded: 2026-11-01T00:15:59.919785+00:00

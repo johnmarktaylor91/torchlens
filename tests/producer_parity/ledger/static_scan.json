@@ -4176,14 +4176,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "pass_index",
-  "file": "torchlens/backends/torch/_aten_capture.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
   "ambiguous": true,
   "field": "label_raw",
   "file": "torchlens/backends/torch/_completeness_cross_thread.py",
@@ -6969,14 +6961,6 @@
  },
  {
   "ambiguous": false,
-  "field": "pass_index",
-  "file": "torchlens/intervention/runtime.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
   "field": "raw_index",
   "file": "torchlens/intervention/runtime.py",
   "has_default": true,
@@ -7054,14 +7038,6 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "pass_index",
-  "file": "torchlens/mechinterp/_aliases.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": true,
@@ -7974,14 +7950,6 @@
   "has_default": false,
   "sites": 11,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "pass_index",
-  "file": "torchlens/semantic/facets.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
