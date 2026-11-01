@@ -1036,7 +1036,7 @@ class TraceInterventionMixin(_TraceMixinBase):
 
             quarantine_episode_after_perturbed_replay(result)
         if loss is not None:
-            result._run_do_loss(loss, attached=tuple(attached), txn=txn)
+            result._run_do_loss(loss, attached=tuple(attached), txn=txn, source=self)
         return result
 
     def _select_signal_plan_engine(
@@ -1191,25 +1191,29 @@ class TraceInterventionMixin(_TraceMixinBase):
         *,
         attached: tuple[str, ...],
         txn: _DoTransaction,
+        source: "Trace",
     ) -> None:
         """Run ``self.backward(loss(self))`` for ``do(..., loss=)``.
 
         A loss callable that raises (or a backward that refuses its value,
         such as a non-scalar or detached tensor) writes an ``error`` envelope,
         removes the hooks this ``do`` attached, and re-raises the original
-        exception, the same cleanup a failed rerun gets.
+        exception, the same cleanup a failed rerun gets. After a rerun the
+        caller never receives the result, so the error row is also written on
+        the ``source`` trace the caller holds.
         """
 
         try:
             self.backward(loss(self))
         except BaseException as exc:
             self._detach_handles(attached)
-            self._record_do_intervention_event(
-                txn._replace(audit_rows_before=len(self.intervention_audit)),
-                status="error",
-                error=repr(exc),
-                event_row=True,
-            )
+            for trace in (self,) if source is self else (self, source):
+                trace._record_do_intervention_event(
+                    txn._replace(audit_rows_before=len(trace.intervention_audit)),
+                    status="error",
+                    error=repr(exc),
+                    event_row=True,
+                )
             raise
 
     def _live_backward_graph_available(self: "Trace") -> bool:
