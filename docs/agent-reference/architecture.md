@@ -9,6 +9,15 @@ Key entry points:
   `draw_backward()`, `validate_forward_pass()`
 - Backend registry: `torchlens/backends/registry.py` - `BackendSpec`, `BackendName`,
   backend resolution, validation dispatch, and canonical backend errors.
+- Backend protocol: `torchlens/backends/_backend_protocol.py` - `BackendProtocol`, the one
+  contract all six backends fill (`BackendSpec.protocol()`; objects in
+  `torchlens/backends/_protocols/<name>.py`), `FrameworkRequirement`, `REFUSAL_CODES`,
+  `VALIDATION_REASONS` and the `maturity` labels. Shared rules: constants
+  (`backends/_constants.py`, called from `backends/_finalize.py`) and realize-once for lazy
+  frameworks. The conformance suite (`torchlens/conformance/`) scores every backend with the
+  same case ids; the record ships as `torchlens/backends/<name>/scorecard.json` and surfaces as
+  `tl.compat.report()` rows built by `backends/_scorecard_rows.py`. `CaptureBackend`
+  (`backends/_protocol.py`) stays torch's internal orchestration adapter.
 - Site keys + grouping surface (L1 wave 0, DOCUMENTED-UNSTABLE): every
   retained op carries the portable structural-position key `op.site_key`
   (`site_key_v1`, minted at grouping time on every backend,

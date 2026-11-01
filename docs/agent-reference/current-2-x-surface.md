@@ -380,6 +380,29 @@
   errors. Public backend-neutral metadata lives on `Trace.backend`, `Trace.module_identity_mode`,
   `Trace.param_source`, and record fields such as `dtype_ref`, `device_ref`,
   `backend_address`, and `resolver_status`.
+- BACKEND PROTOCOL: every backend, torch included, fills `tl.backends.BackendProtocol`
+  (`BackendSpec.protocol()` returns it; `torchlens/backends/_protocols/<name>.py`). Members:
+  `name`, `maturity` (`"stable"` for torch, `"preview"` for tf, jax, mlx, paddle, tinygrad;
+  `BackendSpec.maturity` is the single source), `framework` (`tl.backends.FrameworkRequirement`:
+  distributions, `[minimum, below)`, `tested_through`, CI `pinned`, install `extra`),
+  `materialization` (`"eager"` or `"lazy"`; lazy backends realize once), `capabilities()`,
+  `runtime_available()`, `can_handle`, `capture`, `reference_output` (no TorchLens wrapper
+  installed), `validate` (a `ValidationStatus` whose decisions use `tl.backends.VALIDATION_REASONS`),
+  `is_tensor`, `host_copy`, `realize_once`, `trace_options()`, `refusal_codes()` (a subset of
+  `tl.backends.REFUSAL_CODES`). Refusals are `BackendUnsupportedError` with `exc.code` from that
+  registry, raised before any framework side effect. Closure constants are parentless `constant`
+  ops with saved payloads. `CaptureBackend` (`backends/_protocol.py`) is torch's internal
+  orchestration seam, not the contract.
+
+  Example: `protocol = tl.backends.spec("torch").protocol()`, then
+  `status = protocol.validate(protocol.capture(model, x, None), protocol.reference_output(model, x, None))`
+  reads `status.state == "passed"` on a plain torch module.
+
+  Each backend ships a measured scorecard (`torchlens/backends/<name>/scorecard.json`, checked by
+  `python -m torchlens.conformance.scorecard --backend <name> --check` in its CI leg);
+  `tl.compat.report()` shows it as the `backend_scorecard:<name>` row and
+  `CompatReport.backend_scorecards`; `torchlens.conformance.graduation_report(name)` returns the
+  advisory six-item `GraduationReport`. Per-backend pages: `docs/backends/<name>.md`.
 - TensorFlow is available as `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16
   preview when `keras.backend.backend() == "tensorflow"`. The shipped path is eager live capture
   with `op_callbacks` as the primary mechanism: real values, real taken-branch control flow,
@@ -1255,9 +1278,13 @@
   v2.33.0-cannot-load-v2.34.1 class), `migrate` (tl.migrate v1), and `plugins` (entry-point discovery
   that NEVER executes third-party code at discovery; kill switch).
   `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
-  scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`,
-  `ScorecardCell`, `PREVIEW_BACKENDS`, and `RosterModel.expected_op_kinds`
-  (the op-inventory check that fails when a backend silently drops an op).
+  scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`
+  (v2: `maturity`, `framework_requirement`, `capabilities`, `roster_groups`,
+  `graduation`), `ScorecardCell`, `PREVIEW_BACKENDS`, `graduation_report`
+  (`GraduationReport`, `GraduationItem`), `RosterModel.expected_op_kinds`
+  (the op-inventory check that fails when a backend silently drops an op) and the
+  protocol roster fields `RosterModel.expected_intermediates`,
+  `RosterModel.has_constants`, `RosterModel.random_init` and `RosterModel.group`.
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
