@@ -1603,21 +1603,22 @@ def _gradient_target_matches(trace: Any, target: Any, op: Any, pass_index: int |
         Whether the target matches.
     """
 
-    from .hooks import gradient_inner
-    from .selectors import BackwardPassSelector, CompositeSelector, NotSelector
+    from .hooks import _target_operands, gradient_inner
 
     inner = gradient_inner(target)
     if inner is not None:
         return _inner_selector_matches_op(inner, op)
-    if isinstance(target, BackwardPassSelector):
-        return pass_index == target.pass_index
-    if isinstance(target, CompositeSelector):
-        results = (
-            _gradient_target_matches(trace, child, op, pass_index) for child in target.selectors
-        )
-        return all(results) if target.operator == "and" else any(results)
-    if isinstance(target, NotSelector):
-        return not _gradient_target_matches(trace, target.selector, op, pass_index)
+    # Live selectors and the stored TargetSpec a sticky rule is re-normalised
+    # from read the same way (a recipe stores ``tl.in_backward_pass(2)`` as
+    # kind ``"backward_pass"`` with the pass index as its value).
+    if getattr(target, "selector_kind", None) == "backward_pass":
+        return pass_index == getattr(target, "pass_index", target.selector_value)
+    operator, operands = _target_operands(target)
+    if operator == "not":
+        return not _gradient_target_matches(trace, operands[0], op, pass_index)
+    if operator is not None:
+        results = (_gradient_target_matches(trace, child, op, pass_index) for child in operands)
+        return all(results) if operator == "and" else any(results)
     return False
 
 

@@ -395,11 +395,43 @@ def gradient_inners(site_target: Any) -> tuple[Any, ...]:
     inner = gradient_inner(site_target)
     if inner is not None:
         return (inner,)
+    _operator, children = _target_operands(site_target)
+    return tuple(found for child in children for found in gradient_inners(child))
+
+
+def _target_operands(site_target: Any) -> tuple[str | None, tuple[Any, ...]]:
+    """Return the connective and operands of a live or stored composite target.
+
+    A live ``CompositeSelector`` / ``NotSelector`` and the ``TargetSpec`` /
+    ``FrozenTargetSpec`` a recipe stores for it (kind ``"and"``, ``"or"`` or
+    ``"not"``, operands in ``selector_value``) read the same way, so a sticky
+    rule re-normalised from its stored spec keeps the branch it was attached
+    in.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like target.
+
+    Returns
+    -------
+    tuple[str | None, tuple[Any, ...]]
+        ``("and" | "or" | "not", operands)``, or ``(None, ())`` for a leaf.
+    """
+
     if isinstance(site_target, CompositeSelector):
-        return tuple(found for child in site_target.selectors for found in gradient_inners(child))
+        return site_target.operator, tuple(site_target.selectors)
     if isinstance(site_target, NotSelector):
-        return gradient_inners(site_target.selector)
-    return ()
+        return "not", (site_target.selector,)
+    if not isinstance(site_target, (TargetSpec, FrozenTargetSpec)):
+        return None, ()
+    kind = site_target.selector_kind
+    value = site_target.selector_value
+    if kind in ("and", "or") and isinstance(value, (tuple, list)):
+        return kind, tuple(value)
+    if kind == "not" and value is not None:
+        return "not", (value,)
+    return None, ()
 
 
 def site_universe(site_target: Any) -> SiteUniverse:
@@ -422,21 +454,16 @@ def site_universe(site_target: Any) -> SiteUniverse:
 
     if gradient_inner(site_target) is not None:
         return "gradient"
-    if isinstance(site_target, (str, TargetSpec, FrozenTargetSpec)) and not isinstance(
-        site_target, BaseSelector
-    ):
-        kind = getattr(site_target, "selector_kind", None)
-        return "node" if kind in _NODE_SELECTOR_KINDS else "activation"
-    if not isinstance(site_target, BaseSelector):
-        return "activation"
-    if isinstance(site_target, CompositeSelector):
-        universes = {site_universe(child) for child in site_target.selectors}
+    operator, children = _target_operands(site_target)
+    if operator is not None:
+        universes = {site_universe(child) for child in children}
         if "gradient" in universes:
             return "gradient"
         return "node" if "node" in universes else "activation"
-    if isinstance(site_target, NotSelector):
-        return site_universe(site_target.selector)
-    return "node" if site_target.selector_kind in _NODE_SELECTOR_KINDS else "activation"
+    if not isinstance(site_target, (str, TargetSpec, FrozenTargetSpec, BaseSelector)):
+        return "activation"
+    kind = getattr(site_target, "selector_kind", None)
+    return "node" if kind in _NODE_SELECTOR_KINDS else "activation"
 
 
 def split_site_branches(site_target: Any) -> tuple[tuple[SiteUniverse, Any], ...]:
@@ -457,17 +484,26 @@ def split_site_branches(site_target: Any) -> tuple[tuple[SiteUniverse, Any], ...
         ``(universe, target)`` per branch.
     """
 
-    if not (isinstance(site_target, CompositeSelector) and site_target.operator == "or"):
+    operator, operands = _target_operands(site_target)
+    if operator != "or":
         return ((site_universe(site_target), site_target),)
     groups: dict[SiteUniverse, list[Any]] = {}
-    for child in site_target.selectors:
+    for child in operands:
         groups.setdefault(site_universe(child), []).append(child)
     if len(groups) == 1:
         return ((next(iter(groups)), site_target),)
-    return tuple(
-        (universe, children[0] if len(children) == 1 else CompositeSelector("or", tuple(children)))
-        for universe, children in groups.items()
-    )
+    stored = not isinstance(site_target, CompositeSelector)
+
+    def _rejoin(children: list[Any]) -> Any:
+        """Rejoin one universe's operands in the input's own form."""
+
+        if len(children) == 1:
+            return children[0]
+        if stored:
+            return type(site_target)(selector_kind="or", selector_value=tuple(children))
+        return CompositeSelector("or", tuple(children))
+
+    return tuple((universe, _rejoin(children)) for universe, children in groups.items())
 
 
 def lower_record_site_target(site_target: Any) -> Any:
