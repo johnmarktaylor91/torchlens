@@ -297,9 +297,9 @@ Key entry points:
 - Lazy decoration: `torchlens/backends/torch/model_prep.py:_ensure_model_prepared()` calls
   `wrap_torch()` and the belt/rescue stale-reference machinery
 - Forward-pass orchestration: `torchlens/_capture/trace.py`
-- Postprocess: `torchlens/_postprocess/__init__.py` current 26-step pipeline (steps `0`..`20`
-  plus fractional inserts `11.5`/`11.75`/`15.5`/`16.5`/`17.5`; steps 1-20 run in order from
-  `_postprocess/_executor.py::STEP_REGISTRY`)
+- Postprocess: `torchlens/_postprocess/__init__.py` runs the materialize prologue, then the
+  25 named steps of `_postprocess/_pipeline.py::PIPELINE` in tuple order (each record names
+  the step, its home module and the trace fields it reads and writes; there are no ranks)
 - Portable I/O: `torchlens/_io/bundle.py`, `torchlens/_io/tlspec.py`, `torchlens/io/__init__.py`
 - Intervention: `torchlens/intervention/` plus top-level selector/helper aliases. Live
   `trace(intervene=...)` runs on torch, on the eager Paddle preview

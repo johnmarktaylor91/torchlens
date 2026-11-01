@@ -377,7 +377,7 @@ transient fields live in three named per-phase workspaces
 the transient-cleanup seam, with the backend `finalize_forward_session`
 protocol taking the raw-graph workspace as its ownership token; the three
 dead fields (`grad_fn_strong_refs`, `output_container_specs*`) were deleted
-with the dissolution. Postprocess steps 1-20 run in order from `_postprocess/_executor.py::STEP_REGISTRY`; the
+with the dissolution. The postprocess steps run in the order of `_postprocess/_pipeline.py::PIPELINE` (named records, no ranks); the
 declared-contract derivation and the env-gated column audit that once accompanied it were
 removed (2026-10-31).
 The Trace PHYSICAL component decomposition (components as storage owners
