@@ -417,6 +417,14 @@ def validate_tf_trace_status(trace: Any, *, validate_metadata: bool = True) -> V
     if not status.is_available:
         setattr(trace, "_validation_replay_status", status)
         return status
+    if getattr(trace, "_loaded_from_bundle", False) and not getattr(trace, "_tf_op_captures", ()):
+        # Portable save strips the runtime callback captures; a loaded trace
+        # has nothing to replay, which is "unavailable", never "failed".
+        stripped = ValidationStatus.unavailable_loaded_runtime_stripped(
+            backend="tf", payload_load_status=getattr(trace, "payload_load_status", None)
+        )
+        setattr(trace, "_validation_replay_status", stripped)
+        return stripped
     source: ValidationReplaySource = (
         "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
     )

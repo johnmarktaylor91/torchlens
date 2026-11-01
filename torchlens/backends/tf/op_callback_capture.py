@@ -839,7 +839,13 @@ class TFEagerCaptureSession:
             params=(),
             parent_params=(),
             module_stack=tuple(self.module_stack),
-            modules=(),
+            # A constant read inside a module call is attributed to that call,
+            # like the ops around it; model inputs keep no attribution.
+            modules=(
+                tuple((frame.address, frame.call_index) for frame in self.module_stack)
+                if kind == "constant"
+                else ()
+            ),
             backend_semantics=BackendSemantics(
                 backend_grad_handle=None,
                 grad_fn_class_name=None,
@@ -1224,12 +1230,19 @@ def _is_closure_constant(tensor: Any) -> bool:
     The shared constants rule (SPEC section 2, rule 1) records every tensor
     the forward used that is neither an input, a parameter nor a captured
     output as a source op with a saved payload. TensorFlow converts Python
-    scalars to tensors before the callback sees them, so the rule is applied
-    to array-valued constants (rank one and above: closure weights and
-    ``tf.constant([...])`` literals); rank-zero scalars stay replayable
-    ``constant/factory`` values recorded on the consuming op's capture.
+    scalars, axes, permutations and shapes to tensors before the callback
+    sees them, so the rule is applied to floating or complex array-valued
+    constants (rank one and above: closure weights and ``tf.constant([...])``
+    literals). Rank-zero scalars and integer or boolean vectors (reduction
+    axes, ``perm``, ``dims``, paddings) stay replayable ``constant/factory``
+    values recorded on the consuming op's capture record.
     """
 
+    dtype = getattr(tensor, "dtype", None)
+    if dtype is None or not (
+        bool(getattr(dtype, "is_floating", False)) or bool(getattr(dtype, "is_complex", False))
+    ):
+        return False
     shape = getattr(tensor, "shape", None)
     rank = getattr(shape, "rank", None)
     if rank is None:
