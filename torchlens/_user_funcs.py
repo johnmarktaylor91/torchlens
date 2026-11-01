@@ -23,68 +23,23 @@ from typing import Any, cast
 import torch
 from torch import nn
 
-from torchlens._capture.finalize.epilogue import (
-    _render_layer_visualizers as _render_layer_visualizers,
-    _render_one_layer_visualizer as _render_one_layer_visualizer,
-    _safe_visualizer_filename as _safe_visualizer_filename,
-)
 from torchlens._capture.prepare.cache import (
-    _CAPTURE_CACHE_HEADER_BYTES as _CAPTURE_CACHE_HEADER_BYTES,
-    _CAPTURE_CACHE_MAGIC as _CAPTURE_CACHE_MAGIC,
-    _CAPTURE_CACHE_MAX_BYTES as _CAPTURE_CACHE_MAX_BYTES,
-    _CAPTURE_CACHE_MAX_ENTRIES as _CAPTURE_CACHE_MAX_ENTRIES,
-    _CAPTURE_CACHE_SECRET_BYTES as _CAPTURE_CACHE_SECRET_BYTES,
-    _CAPTURE_CACHE_SECRET_FILE as _CAPTURE_CACHE_SECRET_FILE,
-    _CAPTURE_CACHE_TAG_HEX_CHARS as _CAPTURE_CACHE_TAG_HEX_CHARS,
-    _CAPTURE_CACHE_TAG_SUFFIX as _CAPTURE_CACHE_TAG_SUFFIX,
-    _CAPTURE_CACHE_TEMP_DEBRIS_AGE_SECONDS as _CAPTURE_CACHE_TEMP_DEBRIS_AGE_SECONDS,
-    CAPTURE_CACHE_KEY_CURATED as CAPTURE_CACHE_KEY_CURATED,
-    CAPTURE_CACHE_KEY_NEUTRAL as CAPTURE_CACHE_KEY_NEUTRAL,
-    _capture_cache_io_error as _capture_cache_io_error,
-    _capture_cache_secret as _capture_cache_secret,
-    _CaptureCacheEntryOverCeilingError as _CaptureCacheEntryOverCeilingError,
-    _evict_capture_cache as _evict_capture_cache,
-    _harden_capture_cache_dir as _harden_capture_cache_dir,
-    _load_authenticated_capture_cache as _load_authenticated_capture_cache,
-    _prepare_capture_cache_dir as _prepare_capture_cache_dir,
-    _store_authenticated_capture_cache as _store_authenticated_capture_cache,
-    _sweep_option_fields_into_cache_config as _sweep_option_fields_into_cache_config,
-    _sweep_stale_capture_cache_temp_files as _sweep_stale_capture_cache_temp_files,
-    _TaggingWriter as _TaggingWriter,
+    _CAPTURE_CACHE_TAG_SUFFIX,
+    _capture_cache_io_error,
+    _sweep_stale_capture_cache_temp_files,
 )
 from torchlens._capture.prepare.dispatch import (
-    _MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS as _MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS,
-    _capability_option_requested as _capability_option_requested,
-    _enforce_capability_option_gates as _enforce_capability_option_gates,
-    _filter_trace_kwargs_for_backend as _filter_trace_kwargs_for_backend,
-    _reject_unsupported_torch_trace_option_values as _reject_unsupported_torch_trace_option_values,
-    _trace_mlx_model as _trace_mlx_model,
-    _trace_mlx_model_from_public_kwargs as _trace_mlx_model_from_public_kwargs,
-    _trace_option_explicit as _trace_option_explicit,
-    _unsupported_trace_option_message as _unsupported_trace_option_message,
-)
-from torchlens._capture.prepare.door import (
-    _BATCHNORM_TRAIN_STATS_WARNED as _BATCHNORM_TRAIN_STATS_WARNED,
-    _model_type_remedy as _model_type_remedy,
-    _release_preparation_after_failed_capture as _release_preparation_after_failed_capture,
-    _trace_torch_model as _trace_torch_model,
-    _warn_failed_capture_release_incomplete as _warn_failed_capture_release_incomplete,
-    _warn_once_train_mode_running_stats as _warn_once_train_mode_running_stats,
-)
-from torchlens._capture.prepare.resolve import (
-    _warn_zero_match_capture_selectors as _warn_zero_match_capture_selectors,
+    _dispatch_trace,
+    _refuse_compiled_callable_root,
+    _refuse_trace_entry_shapes,
 )
 from torchlens._capture.run_entry import (
-    _register_live_tensor_connection as _register_live_tensor_connection,
     _run_model_and_save_specified_outs as _run_model_and_save_specified_outs,
-    register_tensor_connection as register_tensor_connection,
 )
 
 from . import _state
-from ._autoroute._builtin_output import semantic_output_cache_key as semantic_output_cache_key
 from ._capture_state_helpers import (
     _capture_cache_dir,
-    _clone_state_dict_with_metadata as _clone_state_dict_with_metadata,
     _reject_opaque_wrappers as _reject_opaque_wrappers,
     _unwrap_data_parallel as _unwrap_data_parallel,
 )
@@ -101,26 +56,15 @@ from ._input_coerce import (
     _reject_non_mapping_input_kwargs,
     _reject_unrouted_forward_kwargs,
 )
-from ._robustness import check_model_and_input_variants as check_model_and_input_variants
-from ._user_funcs_guards import (
-    _refuse_non_torch_episode,
-    _reject_auto_environment,
-    _reject_compiled_plain_callable,
-    _reject_unrouted_jax_options,
-)
 from ._utils.tensor_utils import SaveMode
 from .backends.registry import (
     BackendName,
-    get_backend_spec,
-    resolve_backend_spec,
 )
 from .backends.torch.bound_root import (
     _reject_non_module_ladder_root,
 )
-from .bridge import transformers as _hf_bridge
 from .intervention import model_door as _model_door
 from .intervention._zero_fire import zero_fire_policy_scope
-from .intervention.errors import ChunkedForwardConfigError
 from .intervention.predicates import InterventionPredicate
 from .intervention.selectors import BaseSelector
 from .options import (
@@ -131,13 +75,6 @@ from .options import (
 )
 from .recording.options import HaltPredicateFn, PredicateFn
 from .types import _GradientPostfunc
-
-_can_resolve_hf_processor = _hf_bridge._can_resolve_hf_processor
-_can_resolve_hf_tokenizer = _hf_bridge._can_resolve_hf_tokenizer
-_has_attached_image_processor = _hf_bridge._has_attached_image_processor
-_is_hf_image_input = _hf_bridge._is_hf_image_input
-_is_hf_multimodal_input = _hf_bridge._is_hf_multimodal_input
-_is_hf_text_input = _hf_bridge._is_hf_text_input
 
 
 def clear_cache(cache_dir: str | Path | None = None) -> int:
@@ -442,82 +379,26 @@ def trace(
             from ._quickstart._ladder import _trace_via_ladder
 
             return _trace_via_ladder(model, input_args, input_kwargs, input_shape, ladder_kwargs)
-        _reject_compiled_plain_callable(model)
+        _refuse_compiled_callable_root(model)
         _reject_extra_positional_input(grad_transform)
         public_trace_kwargs = locals().copy()
-        public_trace_kwargs.pop("backend")
-        public_trace_kwargs.pop("input_shape")  # ladder-consumed; always None here
-        # Settled by the zero_fire_policy_scope above, never a backend option.
-        public_trace_kwargs.pop("on_zero_fire")
-        # grouping= (UNSTABLE, keyword-only; L1 wave 0): closed-vocabulary knob.
-        # Only "structural" (today's grouping, the default) is entry-legal;
-        # "strict_shapes" waits on its own reviewed design and "fold_sites" on
-        # an affirmative D1 ruling (the flip PR) / the episode capture kind.
-        public_trace_kwargs.pop("grouping")
-        if grouping is not MISSING:
-            from ._postprocess._grouping_stamp import validate_grouping_knob
-
-            validate_grouping_knob(grouping)
-        if narrate is not None and narrate is not False:
-            # Entry-time echo refusals (bad spellings, finalized-label selectors)
-            # fire BEFORE any capture work on every backend path.
-            from ._snoop import normalize_echo
-
-            normalize_echo(narrate)
-        if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
-            raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
-        _reject_unrouted_jax_options(backend, jax_static_argnums, grad_options)
-        explicit_backend_spec = None
-        if backend is not None:
-            explicit_backend_spec = get_backend_spec(str(backend))
-            _filter_trace_kwargs_for_backend(public_trace_kwargs, explicit_backend_spec)
-            explicit_backend_spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
-        if (
-            backend is None
-            and chunk_size in (MISSING, None)
-            and (capture is None or not capture.is_field_explicit("input_transform"))
-        ):
-            from . import _autoroute as autoroute
-
-            # Only the surviving public kwargs are forwarded: capture knobs travel
-            # inside the grouped ``capture=`` object, so re-entrant trace() calls
-            # inside detectors receive exactly what the user could have passed.
-            autoroute_kwargs = {
-                "input_kwargs": input_kwargs,
-                "grad_transform": grad_transform,
-                "save_mode": save_mode,
-                "reconstruction_ready": reconstruction_ready,
-                "capture": capture,
-                "save": save,
-                "intervene": intervene,
-                "halt": halt,
-                "lookback": lookback,
-                "lookback_payload_policy": lookback_payload_policy,
-                "storage": storage,
-                "streaming": streaming,
-                "profile": profile,
-                "facets": facets,
-                "episode": episode,
-                "grouping": grouping,
-                "narrate": narrate,
-                "on_zero_fire": on_zero_fire,
-            }
-            for detector in autoroute.input.iter_by_priority():
-                result = detector(model, input_args, **autoroute_kwargs)
-                if result is not None:
-                    return cast("Trace", result)
-        _reject_auto_environment()
-        resolved_spec = explicit_backend_spec or resolve_backend_spec(
-            backend, model, input_args, input_kwargs
+        # backend= routes below; input_shape= is ladder-consumed (always None
+        # here); on_zero_fire= was settled by the zero_fire_policy_scope above,
+        # never a backend option; grouping= is validated as an entry knob.
+        for consumed in ("backend", "input_shape", "on_zero_fire", "grouping"):
+            public_trace_kwargs.pop(consumed)
+        _refuse_trace_entry_shapes(
+            grouping=grouping,
+            narrate=narrate,
+            chunk_size=chunk_size,
+            chunk_paths=chunk_paths,
+            backend=backend,
+            jax_static_argnums=jax_static_argnums,
+            grad_options=grad_options,
         )
-        from ._snoop._entry import refuse_echo_non_torch
-
-        # Never a silent no-op: narrate= is torch-only in wave 1 (typed refusal).
-        refuse_echo_non_torch(narrate, resolved_spec)
-        _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
-        _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
-        _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
-        return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
+        return _dispatch_trace(
+            public_trace_kwargs, backend=backend, grouping=grouping, on_zero_fire=on_zero_fire
+        )
 
 
 def log_model_metadata(

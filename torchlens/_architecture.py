@@ -230,7 +230,6 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "_runnable_witness_contracts",
         "_training_validation",
         "_fast_run",
-        "_user_funcs",
         # integ-F relocation: the trace-entry refusal guards moved out of
         # _user_funcs (file cap) keep their one is_dynamo_compiled_callable()
         # read at the ONE sanctioned probe chokepoint (_utils/_torch_compat);

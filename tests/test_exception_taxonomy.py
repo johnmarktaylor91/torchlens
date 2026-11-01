@@ -13,7 +13,8 @@ from typing import Any
 import pytest
 from _source_corpus import package_ast, package_files
 
-from torchlens import _user_funcs as user_funcs, errors
+from torchlens import errors
+from torchlens._capture import run_entry
 from torchlens._io.tlspec import coerce_tlspec_save_level
 from torchlens.errors import (
     AmbiguousBackendError,
@@ -864,7 +865,7 @@ def test_top_refusal_messages_name_a_remedy(
     (
         (
             "register_tensor_connection",
-            lambda: user_funcs.register_tensor_connection(object(), object()),  # type: ignore[arg-type]
+            lambda: run_entry.register_tensor_connection(object(), object()),  # type: ignore[arg-type]
         ),
     ),
 )

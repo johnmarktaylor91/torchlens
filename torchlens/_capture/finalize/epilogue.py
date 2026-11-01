@@ -2,11 +2,13 @@
 
 The bodies moved verbatim from the torch door (``torchlens._user_funcs``, then
 ``torchlens._capture.prepare.door``); the door calls ``finish_trace`` once.
-``CaptureRequest.plan`` keys ``finish_trace`` reads: ``stop_after_site``,
-``stop_after_selector_shaped``, ``stop_after_ambient``, ``module_filter``,
-``input_transform``, ``profile_enabled``, ``save_grads_policy``,
-``uses_selective_layers_to_save``, ``save_args``, ``layer_visualizers``,
-``unwrap_when_done``, ``episode_resolved``.
+``finish_trace`` reads the door facts from ``CaptureRequest.admission``
+(``stop_after_site``, ``stop_after_selector_shaped``, ``stop_after_ambient``,
+``profile_enabled``, ``save_grads_policy``, ``uses_selective_layers_to_save``,
+``episode_resolved``, ``meta_admission``), the user's knobs from
+``CaptureRequest.options`` (``module_filter``, ``input_transform``,
+``save_args``, ``layer_visualizers``, ``unwrap_when_done``) and the cache
+``key``, ``path``, ``secret`` and ``store`` callable from ``CaptureRequest.cache``.
 """
 
 from __future__ import annotations
@@ -136,10 +138,9 @@ def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     Order (pinned): stop_after never fired; module_filter zero fire;
     input_transform provenance; selective save; summary print; layer
     visualizers; ``unwrap_when_done``; cache store; episode ledger;
-    weightsfree settlement. ``request.plan`` carries the inputs by today's
-    local names (module docstring); ``cache`` carries ``key``, ``path``,
-    ``secret`` and the ``store`` callable; ``admission`` carries
-    ``meta_admission``.
+    weightsfree settlement. ``request.admission`` carries the door facts,
+    ``request.options`` the user's knobs (module docstring); ``cache``
+    carries ``key``, ``path``, ``secret`` and the ``store`` callable.
 
     Parameters
     ----------
@@ -154,16 +155,17 @@ def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
         The finished trace.
     """
     trace = result.trace
-    plan = request.plan or {}
-    _check_stop_after_fired(trace, plan)
-    _warn_module_filter_zero_saved(trace, plan.get("module_filter"))
-    input_transform = plan.get("input_transform")
+    facts = request.admission or {}
+    options = request.options
+    _check_stop_after_fired(trace, facts)
+    _warn_module_filter_zero_saved(trace, getattr(options, "module_filter", None))
+    input_transform = getattr(options, "input_transform", None)
     if input_transform is not None:
         stamp_user_transform_provenance(trace, input_transform)
-    trace.profile_enabled = cast("bool", plan.get("profile_enabled"))
-    trace.save_grads = plan.get("save_grads_policy")
-    if plan.get("uses_selective_layers_to_save"):
-        _restrict_layer_nums_to_saved(trace, bool(plan.get("save_args")))
+    trace.profile_enabled = cast("bool", facts.get("profile_enabled"))
+    trace.save_grads = facts.get("save_grads_policy")
+    if facts.get("uses_selective_layers_to_save"):
+        _restrict_layer_nums_to_saved(trace, bool(getattr(options, "save_args", False)))
 
     # Print final summary.
     _vprint(
@@ -173,7 +175,7 @@ def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
         f"{trace.total_activation_memory}",
     )
 
-    layer_visualizers = plan.get("layer_visualizers")
+    layer_visualizers = getattr(options, "layer_visualizers", None)
     if layer_visualizers:
         _render_layer_visualizers(trace, layer_visualizers)
 
@@ -183,15 +185,15 @@ def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
 
 def _settle_epilogue_tail(trace: Trace, request: CaptureRequest) -> None:
     """Unwrap when asked, store the cache, write the episode ledger, settle weightsfree."""
-    plan = request.plan or {}
-    if plan.get("unwrap_when_done"):
+    facts = request.admission or {}
+    if getattr(request.options, "unwrap_when_done", False):
         from ...backends.torch.wrappers import unwrap_torch
 
         unwrap_torch()
 
     _store_capture_cache(trace, request.cache)
 
-    episode_resolved = plan.get("episode_resolved")
+    episode_resolved = facts.get("episode_resolved")
     if episode_resolved is not None:
         # Settlement-time episode ledger (S7): written ONCE, after postprocess
         # and outcome settlement, from the settled record + module-call truth.
@@ -202,10 +204,10 @@ def _settle_epilogue_tail(trace: Trace, request: CaptureRequest) -> None:
     # envelope on structure-only captures.
     from .._structure_evidence import settle_weightsfree_capture
 
-    settle_weightsfree_capture(trace, (request.admission or {}).get("meta_admission"))
+    settle_weightsfree_capture(trace, facts.get("meta_admission"))
 
 
-def _check_stop_after_fired(trace: Trace, plan: dict[str, Any]) -> None:
+def _check_stop_after_fired(trace: Trace, facts: dict[str, Any]) -> None:
     """Refuse or warn when ``stop_after`` never fired, by the site's provenance.
 
     Never-fired policy split by provenance: a selector-shaped site that never
@@ -215,11 +217,11 @@ def _check_stop_after_fired(trace: Trace, plan: dict[str, Any]) -> None:
     ledger entry.
     """
     # brainpipe D-16.
-    stop_after_site = plan.get("stop_after_site")
+    stop_after_site = facts.get("stop_after_site")
     if stop_after_site is None or bool(getattr(trace, "halted", False)):
         return
     site_repr = repr(stop_after_site)
-    if plan.get("stop_after_selector_shaped") and not plan.get("stop_after_ambient"):
+    if facts.get("stop_after_selector_shaped") and not facts.get("stop_after_ambient"):
         raise InvalidArgumentError(
             f"stop_after={site_repr} never fired: the capture ran the full "
             "forward and completed without halting, so the result is not the "

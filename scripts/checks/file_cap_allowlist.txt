@@ -39,8 +39,7 @@ torchlens/_capture/prepare/chunked.py::_append_chunk_trace_state	73
 torchlens/_capture/prepare/chunked.py::plan_chunks	76
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	180
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	126
-torchlens/_capture/prepare/door.py	1621
-torchlens/_capture/prepare/door.py::_trace_torch_model	1308
+torchlens/_capture/prepare/door.py	1584
 torchlens/_capture/prepare/resolve.py::_record_capture_intervention_event	72
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	135
 torchlens/_capture/projections.py	1600
@@ -548,7 +547,7 @@ torchlens/_trace_core/relation_views.py::freeze_trace_relation_views	79
 torchlens/_trace_selector_helpers.py	835
 torchlens/_trace_selector_helpers.py::_make_layers_to_save_predicate	76
 torchlens/_training_validation.py::validate_training_compatibility	69
-torchlens/_user_funcs.py::trace	301
+torchlens/_user_funcs.py::trace	245
 torchlens/_user_public_impls.py	1985
 torchlens/_user_public_impls.py::_validate_forward_pass_torch	526
 torchlens/_user_public_impls.py::_warn_if_validation_trace_not_reproducible	138
@@ -1243,9 +1242,9 @@ torchlens/intervention/replay.py::_run_differentiable_replay	62
 torchlens/intervention/replay.py::_run_replay	202
 torchlens/intervention/replay.py::_threaded_buffer_value	97
 torchlens/intervention/replay.py::cone_of_effect	65
-torchlens/intervention/rerun.py	1695
+torchlens/intervention/rerun.py	1693
 torchlens/intervention/rerun.py::_append_rerun	104
-torchlens/intervention/rerun.py::_capture_with_active_spec	92
+torchlens/intervention/rerun.py::_capture_with_active_spec	90
 torchlens/intervention/rerun.py::_chunked_rerun	78
 torchlens/intervention/rerun.py::_reconcile_rerun_hook_fires	99
 torchlens/intervention/rerun.py::_refuse_source_matched_zero_fire	72

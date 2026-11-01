@@ -17,6 +17,7 @@ from _source_corpus import package_ast, package_files, package_source
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.prepare.dispatch import _dispatch_trace
 from torchlens._capture.trace import _capture_backend_from_registry
 from torchlens.backends import (
     BackendCapabilities,
@@ -969,9 +970,11 @@ def test_dead_correctness_protocol_methods_are_not_required() -> None:
 def test_public_trace_dispatches_through_backend_spec() -> None:
     """Public ``trace`` dispatch stays owned by the backend spec."""
 
-    source = inspect.getsource(tl.trace)
-    assert "capture_trace(**public_trace_kwargs)" in source
-    assert "resolved_spec.name" not in source
+    facade_source = inspect.getsource(tl.trace)
+    dispatch_source = inspect.getsource(_dispatch_trace)
+    assert "_dispatch_trace(" in facade_source
+    assert "capture_trace(**public_trace_kwargs)" in dispatch_source
+    assert "resolved_spec.name" not in facade_source + dispatch_source
 
 
 def test_public_backend_literal_branches_stay_in_registry_or_backends() -> None:

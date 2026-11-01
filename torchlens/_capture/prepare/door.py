@@ -1,15 +1,18 @@
-"""Torch door body for the PREPARE stage: admission, refusals and request resolution.
+"""Torch door for the PREPARE stage: admission, refusals and request resolution.
 
-Moved verbatim from ``torchlens._user_funcs`` by the capture seam.
+The door body moved here verbatim from ``torchlens._user_funcs`` by the capture
+seam; the PREPARE lane split it into stage functions over a frozen ``_DoorState``
+that end in ``prepare_capture`` (one ``CaptureRequest``), the cache lookup, the
+chunk fan-out, the run bracket and the door epilogue.
 """
 
 import collections.abc
-import functools
 import os
 import warnings
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import torch
 from torch import nn
@@ -20,7 +23,6 @@ from ..._autoroute._builtin_output import semantic_output_cache_key
 from ..._capture_state_helpers import (
     _capture_cache_key,
     _facet_recipe_cache_key,
-    _prepare_log_for_capture_cache,
     _reject_opaque_wrappers,
     _unwrap_data_parallel,
     unwrap_compiled_model,
@@ -35,15 +37,16 @@ from ..._errors import (
     CaptureNotActiveError,
     InvalidArgumentError,
     KeywordConflictError,
+    TorchLensWarning,
 )
 from ..._input_coerce import (
     _coerce_input_args,
     _reject_non_mapping_input_kwargs,
 )
-from ..._literals import (
-    OutputDeviceLiteral,
-)
+from ..._ir.selector_eval import looks_like_finalized_label
+from ..._options_validation import _validate_output_device
 from ..._robustness import check_model_and_input_variants
+from ..._runnable_state_live import capture_observer_bracket
 from ..._trace_selector_helpers import (
     _combine_save_predicates,
     _is_selective_label_save,
@@ -65,26 +68,27 @@ from ..._training_validation import (
 )
 from ..._utils.display import warn_parallel
 from ..._utils.tensor_utils import SaveMode
+from ...backends.torch import rescue as _rescue
 from ...backends.torch._op_markers import refuse_unavailable_nvtx
 from ...backends.torch.bound_root import (
     TLBoundMethodRoot,
     is_bound_method_of_module,
 )
+from ...errors.episode import EpisodeDeclarationError
 from ...intervention.errors import ChunkedForwardConfigError
-from ...intervention.predicates import InterventionPredicate
-from ...intervention.selectors import BaseSelector
+from ...intervention.selectors import BaseSelector, FuncSelector, ModuleSelector
 from ...options import (
     CaptureOptions,
-    EpisodeOptions,
     ReplayOptions,
     SaveOptions,
-    StorageOptions,
     merge_capture_options,
     merge_save_options,
     merge_streaming_options,
 )
-from ...recording.options import HaltPredicateFn, PredicateFn
+from ...recording.options import PredicateFn
 from ...types import _ActivationPostfunc, _GradientPostfunc
+from .._episode_coupling import CouplingSession, rule_identity_of
+from .._episode_join import armed_capture
 from .._episode_ledger import (
     resolve_episode_declaration,
 )
@@ -92,20 +96,22 @@ from .._structure_only_entry import (
     _enforce_structure_only_entry_contract,
     _StructureOnlyEntryFacts,
 )
+from .._weightsfree_admission import pending_admission
 from ..finalize.epilogue import (
     _render_layer_visualizers,
+    _restrict_layer_nums_to_saved,
+    _store_capture_cache,
     attach_failed_episode_ledger,
     finish_trace,
 )
-from ..run_entry import _run_model_and_save_specified_outs
+from ..run_entry import run_capture
 from ..stages import CaptureRequest, ForwardResult
+from ..structure_only import STRUCTURE_ONLY_EPISODE_UNSUPPORTED
 from .cache import (
     CAPTURE_CACHE_KEY_CURATED,
     CAPTURE_CACHE_KEY_NEUTRAL,
-    _evict_capture_cache,
     _load_authenticated_capture_cache,
     _prepare_capture_cache_dir,
-    _store_authenticated_capture_cache,
     _sweep_option_fields_into_cache_config,
 )
 from .chunked import (
@@ -119,6 +125,7 @@ from .chunked import (
     plan_chunks,
 )
 from .dispatch import _reject_unsupported_torch_trace_option_values
+from .request import _build_request, _DoorArgs, _DoorState
 
 # list-A row 30 latch: once-per-process disclosure that train-mode tracing
 # advances norm running statistics. Process-global by design ("warn once");
@@ -158,10 +165,8 @@ def _warn_once_train_mode_running_stats(model: nn.Module) -> None:
     if not mutating:
         return
     _BATCHNORM_TRAIN_STATS_WARNED = True
-    from ...errors import TorchLensWarning as _TorchLensWarning
-
     warnings.warn(
-        _TorchLensWarning(
+        TorchLensWarning(
             "tracing runs the model's REAL forward with CaptureOptions(carry_state=True) "
             f"(forward-equivalent state): {len(mutating)} norm layer(s) in train mode with track_running_stats=True updated "
             "their running statistics in place during this capture "
@@ -238,10 +243,8 @@ def _warn_failed_capture_release_incomplete(release_exc: BaseException) -> None:
         Warns coded; never raises (the capture exception must propagate).
     """
 
-    from ...errors import TorchLensWarning as _TorchLensWarning
-
     warnings.warn(
-        _TorchLensWarning(
+        TorchLensWarning(
             "TorchLens could not fully release its preparation of "
             f"the model after the failed capture "
             f"({type(release_exc).__name__}: {release_exc}); its module "
@@ -277,83 +280,7 @@ def _trace_torch_model(
     model: nn.Module | Callable[..., Any],
     input_args: str | torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    layers_to_save: str | list[Any] | None | MissingType = MISSING,
-    transform: Callable[[Any], Any] | None | MissingType = MISSING,
-    save_raw_input: str | bool | MissingType = MISSING,
-    batch_render: str | MissingType = MISSING,
-    output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
-    save_transformed_output: str | bool | MissingType = MISSING,
-    keep_orphans: bool | MissingType = MISSING,
-    output_device: OutputDeviceLiteral | MissingType = MISSING,
-    activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
-    grad_transform: _GradientPostfunc | None | MissingType = MISSING,
-    save_raw_activations: bool | MissingType = MISSING,
-    save_raw_grads: bool | MissingType = MISSING,
-    save_mode: SaveMode | MissingType = MISSING,
-    capture_tensor_grad_hooks: bool | MissingType = MISSING,
-    mark_layer_depths: bool | MissingType = MISSING,
-    detach_saved_activations: bool | MissingType = MISSING,
-    save_args: bool | MissingType = MISSING,
-    save_grads: bool | str | list[Any] | PredicateFn | BaseSelector | None | MissingType = MISSING,
-    save_source_context: bool | MissingType = MISSING,
-    save_rng: bool | MissingType = MISSING,
-    reconstruction_ready: bool | MissingType = MISSING,
-    seed: int | None | MissingType = MISSING,
-    num_context_lines: int | MissingType = MISSING,
-    optimizer: Any | MissingType = MISSING,
-    save_outs_to: str | Path | None | MissingType = MISSING,
-    keep_outs_in_memory: bool | MissingType = MISSING,
-    out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
-    intervention_ready: bool | MissingType = MISSING,
-    capture_container_structure: bool | MissingType = MISSING,
-    hooks: Any | None | MissingType = MISSING,
-    unwrap_when_done: bool | MissingType = MISSING,
-    verbose: bool | MissingType = MISSING,
-    source_context_lines: int | MissingType = MISSING,
-    compute_input_output_distances: bool | MissingType = MISSING,
-    recurrence_detection: bool | MissingType = MISSING,
-    capture: CaptureOptions | None = None,
-    save: SaveOptions
-    | PredicateFn
-    | BaseSelector
-    | str
-    | list[Any]
-    | tuple[Any, ...]
-    | None = None,
-    intervene: InterventionPredicate | None = None,
-    halt: HaltPredicateFn | None = None,
-    lookback: int = 0,
-    lookback_payload_policy: str = "metadata_only",
-    storage: StorageOptions | None = None,
-    streaming: StorageOptions | None = None,
-    backward_ready: bool | MissingType = MISSING,
-    inference_only: bool | MissingType = MISSING,
-    name: str | None | MissingType = MISSING,
-    cache: bool | MissingType = MISSING,
-    cache_dir: str | Path | None | MissingType = MISSING,
-    module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
-    stop_after: Any | None | MissingType = MISSING,
-    raise_on_nan: bool | MissingType = MISSING,
-    structure_only: bool | MissingType = MISSING,
-    profile: bool | MissingType = MISSING,
-    jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
-    jax_max_control_flow_unroll: int | MissingType = MISSING,
-    module_identity_mode: str | None | MissingType = MISSING,
-    payload_policy: str | None | MissingType = MISSING,
-    save_preview: bool | MissingType = MISSING,
-    facets: (
-        list[Callable[[Any], dict[str, Any]]]
-        | tuple[Callable[[Any], dict[str, Any]], ...]
-        | None
-        | MissingType
-    ) = MISSING,
-    episode: EpisodeOptions | None = None,
-    capture_output_structure: bool | MissingType = MISSING,
-    chunk_size: int | None | MissingType = MISSING,
-    chunk_paths: Iterable[Any] | None | MissingType = MISSING,
-    narrate: Any | None = None,
-    retain_output_parents_for_layers_to_save: bool = False,
-    _selective_layers_to_save_request: object | None = None,
+    **options: Any,
 ) -> Trace:
     """Run the registry-owned torch trace implementation.
 
@@ -365,14 +292,93 @@ def _trace_torch_model(
         Positional args for ``model.forward()``.
     input_kwargs:
         Keyword args for ``model.forward()``.
-    **capture_options:
-        The remaining parameters match ``trace`` exactly, excluding ``backend``.
+    **options:
+        The remaining parameters match ``trace`` exactly, excluding ``backend``;
+        see ``_DoorArgs`` for the accepted names and defaults.
 
     Returns
     -------
     Trace
         Captured torch trace.
     """
+    state = _resolve_door(model, input_args, input_kwargs, _DoorArgs(**options))
+    request = _build_request(state)
+    cached = _lookup_capture_cache(request)
+    if cached is not None:
+        return cached
+    _disclose_running_stats_mutation(request)
+    if _chunk_fanout_needed(state):
+        return _run_chunked_capture(state, request)
+    return finish_trace(_run_request(request), request)
+
+
+def prepare_capture(
+    model: nn.Module | Callable[..., Any],
+    input_args: Any,
+    input_kwargs: dict[Any, Any] | None = None,
+    **options: Any,
+) -> CaptureRequest:
+    """Resolve one torch door call into the request the RUN stage consumes.
+
+    Every refusal, warning and resolution that happens before the forward pass
+    runs here, in today's order; no torch state is touched, no wrapper installed
+    and no ``Trace`` built. The capture-cache directory is prepared here (as
+    today); the lookup itself is ``_lookup_capture_cache(request)``.
+
+    Parameters
+    ----------
+    model:
+        The user's model (an ``nn.Module`` or a bound method of one).
+    input_args:
+        Positional forward inputs.
+    input_kwargs:
+        Keyword forward inputs.
+    **options:
+        The door keywords (``_DoorArgs``).
+
+    Returns
+    -------
+    CaptureRequest
+        ``plan`` holds the run keywords; ``cache`` the ``key``, ``path`` and
+        ``secret`` (None when not caching); ``admission`` the door facts the run
+        bracket and epilogue read: ``meta_admission``, ``rescue_eligible``,
+        ``episode_resolved``, ``stop_after_site``, ``stop_after_selector_shaped``,
+        ``stop_after_ambient``, ``profile_enabled``, ``save_grads_policy`` and
+        ``uses_selective_layers_to_save``.
+    """
+    return _build_request(_resolve_door(model, input_args, input_kwargs, _DoorArgs(**options)))
+
+
+def _resolve_door(
+    model: nn.Module | Callable[..., Any],
+    input_args: Any,
+    input_kwargs: dict[Any, Any] | None,
+    args: _DoorArgs,
+) -> _DoorState:
+    """Run the PREPARE stages in today's order and return the resolved door state."""
+    admitted = _admit_model(model, input_kwargs)
+    capture_options = _merge_door_capture_options(args)
+    _refuse_option_shapes(capture_options)
+    state = _open_door_state(args, admitted, input_args, input_kwargs, capture_options)
+    state = _admit_and_route_save(state)
+    _refuse_predicate_shapes(args)
+    state = _resolve_episode(state)
+    state = _resolve_save_and_storage(state)
+    state = _unpack_save_policies(state)
+    state = _resolve_stop_after(state)
+    state = _resolve_gradient_policy(state)
+    _refuse_output_routing(state)
+    state = _apply_structure_only_entry(state)
+    state = _resolve_backward_flags(state)
+    state = _validate_training_and_inference(state)
+    state = _resolve_chunk_plan(state)
+    state = _resolve_selectors(state)
+    _validate_predicate_capabilities(state)
+    return _resolve_cache_key(state)
+
+
+def _admit_model(model: nn.Module | Callable[..., Any], input_kwargs: Any) -> nn.Module:
+    """Admit the root: an ``nn.Module`` or a bound method of one, unwrapped for capture."""
     # DataParallel is not supported - unwrap and warn if present.
     warn_parallel()
     # Reject non-Module input first: `_reject_opaque_wrappers` calls
@@ -402,57 +408,66 @@ def _trace_torch_model(
     # and direct callers of this torch path get the same check.
     _reject_non_mapping_input_kwargs(input_kwargs)
     model = unwrap_compiled_model(model)
-    model = _unwrap_data_parallel(model)
-    if reconstruction_ready is not MISSING and reconstruction_ready:
+    return _unwrap_data_parallel(model)
+
+
+def _merge_door_capture_options(args: _DoorArgs) -> CaptureOptions:
+    """Merge the grouped ``capture=`` object with the flat door keywords."""
+    save_args = args.save_args
+    save_rng = args.save_rng
+    if args.reconstruction_ready is not MISSING and args.reconstruction_ready:
         save_args = True
         save_rng = True
-
-    capture_options = merge_capture_options(
-        capture=capture,
-        layers_to_save=layers_to_save,
-        input_transform=transform,
-        save_raw_input=save_raw_input,
-        batch_render=batch_render,
-        output_transform=output_transform,
-        save_transformed_output=save_transformed_output,
+    return merge_capture_options(
+        capture=args.capture,
+        layers_to_save=args.layers_to_save,
+        input_transform=args.transform,
+        save_raw_input=args.save_raw_input,
+        batch_render=args.batch_render,
+        output_transform=args.output_transform,
+        save_transformed_output=args.save_transformed_output,
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
-        keep_orphans=keep_orphans,
-        output_device=output_device,
+        keep_orphans=args.keep_orphans,
+        output_device=args.output_device,
         save_args=save_args,
-        save_grads=save_grads,
-        capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-        save_source_context=save_source_context,
+        save_grads=args.save_grads,
+        capture_tensor_grad_hooks=args.capture_tensor_grad_hooks,
+        save_source_context=args.save_source_context,
         save_rng=save_rng,
-        seed=seed,
-        source_context_lines=source_context_lines,
-        num_context_lines=num_context_lines,
-        optimizer=optimizer,
-        compute_input_output_distances=compute_input_output_distances,
-        mark_layer_depths=mark_layer_depths,
-        detach_saved_activations=detach_saved_activations,
-        recurrence_detection=recurrence_detection,
-        intervention_ready=intervention_ready,
-        capture_container_structure=capture_container_structure,
-        capture_output_structure=capture_output_structure,
-        hooks=hooks,
-        unwrap_when_done=unwrap_when_done,
-        verbose=verbose,
-        backward_ready=backward_ready,
-        inference_only=inference_only,
-        name=name,
-        cache=cache,
-        cache_dir=cache_dir,
-        module_filter=module_filter,
-        stop_after=stop_after,
-        jax_control_flow=jax_control_flow,
-        jax_max_control_flow_unroll=jax_max_control_flow_unroll,
-        module_identity_mode=module_identity_mode,
-        payload_policy=payload_policy,
-        save_preview=save_preview,
-        raise_on_nan=raise_on_nan,
-        structure_only=structure_only,
+        seed=args.seed,
+        source_context_lines=args.source_context_lines,
+        num_context_lines=args.num_context_lines,
+        optimizer=args.optimizer,
+        compute_input_output_distances=args.compute_input_output_distances,
+        mark_layer_depths=args.mark_layer_depths,
+        detach_saved_activations=args.detach_saved_activations,
+        recurrence_detection=args.recurrence_detection,
+        intervention_ready=args.intervention_ready,
+        capture_container_structure=args.capture_container_structure,
+        capture_output_structure=args.capture_output_structure,
+        hooks=args.hooks,
+        unwrap_when_done=args.unwrap_when_done,
+        verbose=args.verbose,
+        backward_ready=args.backward_ready,
+        inference_only=args.inference_only,
+        name=args.name,
+        cache=args.cache,
+        cache_dir=args.cache_dir,
+        module_filter=args.module_filter,
+        stop_after=args.stop_after,
+        jax_control_flow=args.jax_control_flow,
+        jax_max_control_flow_unroll=args.jax_max_control_flow_unroll,
+        module_identity_mode=args.module_identity_mode,
+        payload_policy=args.payload_policy,
+        save_preview=args.save_preview,
+        raise_on_nan=args.raise_on_nan,
+        structure_only=args.structure_only,
     )
+
+
+def _refuse_option_shapes(capture_options: CaptureOptions) -> None:
+    """Refuse option values the torch door cannot honor."""
     if isinstance(capture_options.layers_to_save, torch.Tensor):
         raise ArgumentTypeError(
             "capture.layers_to_save received a torch.Tensor -- this is almost "
@@ -463,18 +478,28 @@ def _trace_torch_model(
             remedy="bundle positional inputs into one tuple; use save= for selection",
         )
     _reject_unsupported_torch_trace_option_values(capture_options)
+
+
+def _open_door_state(
+    args: _DoorArgs,
+    model: nn.Module,
+    input_args: Any,
+    input_kwargs: dict[Any, Any] | None,
+    capture_options: CaptureOptions,
+) -> _DoorState:
+    """Resolve echo options and the forward inputs (transform or coercion) into a state."""
     # Echo teaching refusals fire whether or not narrate= is armed: NarrationOptions
     # routed into save=/hooks= refuses with the measured receipts, and
     # echo x cache/chunked/structure_only composition refuses typed (snoop D1).
     from ..._snoop._entry import resolve_echo_capture_options
 
     echo_options = resolve_echo_capture_options(
-        narrate,
-        save=save,
+        args.narrate,
+        save=args.save,
         capture_options=capture_options,
-        chunked=chunk_size is not MISSING and chunk_size is not None,
+        chunked=args.chunk_size is not MISSING and args.chunk_size is not None,
     )
-    profile_enabled = False if isinstance(profile, MissingType) else bool(profile)
+    profile_enabled = False if isinstance(args.profile, MissingType) else bool(args.profile)
     raw_input = None
     input_transform = capture_options.input_transform
     if input_transform is not None:
@@ -491,45 +516,69 @@ def _trace_torch_model(
         input_args = _coerce_input_args(model, input_args)
         if _should_store_auto_coerced_raw_input(original_input_args, input_args):
             raw_input = original_input_args
+    return _DoorState(
+        args=args,
+        model=model,
+        input_args=input_args,
+        input_kwargs=input_kwargs,
+        capture_options=capture_options,
+        raw_input=raw_input,
+        echo_options=echo_options,
+        profile_enabled=profile_enabled,
+    )
 
+
+def _admit_and_route_save(state: _DoorState) -> _DoorState:
+    """Derive the meta admission once and route ``save=`` into options and predicate."""
     # W2 (weightsfree memo D2): admit_meta derives ONCE from the resolved
     # structure-only option state at this CAPTURE entry; the returned
     # admission record (None on ordinary/real captures) is armed around the
     # capture driver below and consumed by the forward scope + settlement.
     meta_admission = check_model_and_input_variants(
-        model,
-        input_args,
-        input_kwargs,
-        admit_meta=bool(capture_options.structure_only),
+        state.model,
+        state.input_args,
+        state.input_kwargs,
+        admit_meta=bool(state.capture_options.structure_only),
     )
     routed_save, capture_options = _route_save_label_selection(
-        save, capture, capture_options, model
+        state.args.save, state.args.capture, state.capture_options, state.model
     )
     grouped_save_options, save_predicate = _split_save_options_and_predicate(routed_save)
-    if intervene is not None and not callable(intervene):
+    return replace(
+        state,
+        meta_admission=meta_admission,
+        capture_options=capture_options,
+        grouped_save_options=grouped_save_options,
+        save_predicate=save_predicate,
+    )
+
+
+def _refuse_predicate_shapes(args: _DoorArgs) -> None:
+    """Refuse non-callable predicates and out-of-range lookback settings."""
+    if args.intervene is not None and not callable(args.intervene):
         raise ArgumentTypeError(
-            f"intervene received non-callable type {type(intervene).__name__}",
+            f"intervene received non-callable type {type(args.intervene).__name__}",
             code="intervention_predicate_type_invalid",
             remedy="pass a predicate callable such as tl.when(...) or None",
             argument="intervene",
-            received_type=type(intervene).__name__,
+            received_type=type(args.intervene).__name__,
         )
-    if halt is not None and not callable(halt):
+    if args.halt is not None and not callable(args.halt):
         raise ArgumentTypeError(
-            f"halt received non-callable type {type(halt).__name__}",
+            f"halt received non-callable type {type(args.halt).__name__}",
             code="halt_predicate_type_invalid",
             remedy="pass a predicate callable or None",
             argument="halt",
-            received_type=type(halt).__name__,
+            received_type=type(args.halt).__name__,
         )
-    if not isinstance(lookback, int) or not 0 <= lookback <= 1024:
+    if not isinstance(args.lookback, int) or not 0 <= args.lookback <= 1024:
         raise InvalidArgumentError(
-            f"lookback={lookback!r} is not an integer in the supported range [0, 1024]",
+            f"lookback={args.lookback!r} is not an integer in the supported range [0, 1024]",
             code="lookback_invalid",
             remedy="set lookback to an integer from 0 through 1024 inclusive",
             argument="lookback",
         )
-    if lookback_payload_policy not in {
+    if args.lookback_payload_policy not in {
         "metadata_only",
         "detached_raw",
         "transformed",
@@ -537,7 +586,7 @@ def _trace_torch_model(
         "disk_spilled",
     }:
         raise InvalidArgumentError(
-            f"lookback_payload_policy={lookback_payload_policy!r} is not supported",
+            f"lookback_payload_policy={args.lookback_payload_policy!r} is not supported",
             code="lookback_payload_policy_invalid",
             remedy=(
                 "set lookback_payload_policy to 'metadata_only', 'detached_raw', "
@@ -545,79 +594,84 @@ def _trace_torch_model(
             ),
             argument="lookback_payload_policy",
         )
-    episode_resolved = None
-    if episode is not None:
-        from ...errors.episode import EpisodeDeclarationError
 
-        if chunk_size not in (MISSING, None) or chunk_paths not in (MISSING, None):
-            raise EpisodeDeclarationError(
-                "episode= cannot combine with chunked forwards (chunk_size/"
-                "chunk_paths): an episode is ONE wrapped session capture, and "
-                "the chunk fan-out produces several.",
-                code="episode_declaration_invalid",
-            )
-        if cache is not MISSING and cache:
-            raise EpisodeDeclarationError(
-                "episode= cannot combine with cache=True in this release: the "
-                "capture cache replays a stored product, and episode ledgers "
-                "are settled per capture.",
-                code="episode_declaration_invalid",
-            )
-        if getattr(capture_options, "structure_only", False):
-            # S2 marker-combination table: episode x structure_only is TYPED
-            # REFUSE this sprint (no value semantics to fold). The refusal
-            # code is L7a's capability-table constant — ONE vocabulary for
-            # the combination across the entry check and the post-capture
-            # capability gate (_capture/structure_only.py owns the row).
-            from ..structure_only import STRUCTURE_ONLY_EPISODE_UNSUPPORTED
 
-            raise EpisodeDeclarationError(
-                "structure-only episodes are out of scope this sprint: "
-                "capture_kind=episode with the structure-only marker refuses "
-                "typed per the ratified marker-combination table.",
-                code=STRUCTURE_ONLY_EPISODE_UNSUPPORTED,
-            )
-        if getattr(episode, "step_output_kind", "tokens") != "none" and (
-            capture_options.layers_to_save in (None, "none", "None", "NONE")
-            or (
-                isinstance(capture_options.layers_to_save, list)
-                and not capture_options.layers_to_save
-            )
-        ):
-            # Kind-conditional save rule (foldA D8, lane F40b): tokens/digest
-            # evidence derives from the retained root output, so a value-free
-            # save policy refuses; a declared status-only episode
-            # (step_output_kind='none') derives no evidence and is admitted.
-            raise EpisodeDeclarationError(
-                "episode= with step_output_kind='tokens'/'digest' derives its "
-                "per-step evidence column from the retained root output; "
-                "save='none' retains no output payload. Remedy: keep the "
-                "default save policy, include the output in the save= "
-                "selection, or declare step_output_kind='none' for a "
-                "status-only ledger.",
-                code="episode_declaration_invalid",
-            )
-        episode_resolved = resolve_episode_declaration(episode, model)
-        if intervene is not None:
-            # ATTESTED COUPLING (lane F42, the foldA D5 flip): the session
-            # armed here feeds the settlement writers (fire counts,
-            # intervention digest, perturbed fidelity) -- the D5 evidence bar.
-            from dataclasses import replace as _dataclass_replace
+def _refuse_episode_combinations(args: _DoorArgs, capture_options: CaptureOptions) -> None:
+    """Refuse the episode declarations the marker-combination table rules out."""
+    if args.chunk_size not in (MISSING, None) or args.chunk_paths not in (MISSING, None):
+        raise EpisodeDeclarationError(
+            "episode= cannot combine with chunked forwards (chunk_size/"
+            "chunk_paths): an episode is ONE wrapped session capture, and "
+            "the chunk fan-out produces several.",
+            code="episode_declaration_invalid",
+        )
+    if args.cache is not MISSING and args.cache:
+        raise EpisodeDeclarationError(
+            "episode= cannot combine with cache=True in this release: the "
+            "capture cache replays a stored product, and episode ledgers "
+            "are settled per capture.",
+            code="episode_declaration_invalid",
+        )
+    if getattr(capture_options, "structure_only", False):
+        # S2 marker-combination table: episode x structure_only is TYPED
+        # REFUSE this sprint (no value semantics to fold). The refusal
+        # code is L7a's capability-table constant — ONE vocabulary for
+        # the combination across the entry check and the post-capture
+        # capability gate (_capture/structure_only.py owns the row).
+        raise EpisodeDeclarationError(
+            "structure-only episodes are out of scope this sprint: "
+            "capture_kind=episode with the structure-only marker refuses "
+            "typed per the ratified marker-combination table.",
+            code=STRUCTURE_ONLY_EPISODE_UNSUPPORTED,
+        )
+    if getattr(args.episode, "step_output_kind", "tokens") != "none" and (
+        capture_options.layers_to_save in (None, "none", "None", "NONE")
+        or (isinstance(capture_options.layers_to_save, list) and not capture_options.layers_to_save)
+    ):
+        # Kind-conditional save rule (foldA D8, lane F40b): tokens/digest
+        # evidence derives from the retained root output, so a value-free
+        # save policy refuses; a declared status-only episode
+        # (step_output_kind='none') derives no evidence and is admitted.
+        raise EpisodeDeclarationError(
+            "episode= with step_output_kind='tokens'/'digest' derives its "
+            "per-step evidence column from the retained root output; "
+            "save='none' retains no output payload. Remedy: keep the "
+            "default save policy, include the output in the save= "
+            "selection, or declare step_output_kind='none' for a "
+            "status-only ledger.",
+            code="episode_declaration_invalid",
+        )
 
-            from .._episode_coupling import CouplingSession, rule_identity_of
 
-            episode_resolved = _dataclass_replace(
-                episode_resolved,
-                coupling_session=CouplingSession(rule_identity=rule_identity_of(intervene)),
-            )
+def _resolve_episode(state: _DoorState) -> _DoorState:
+    """Resolve the ``episode=`` declaration, with its coupling session when intervening."""
+    episode = state.args.episode
+    if episode is None:
+        return state
+    _refuse_episode_combinations(state.args, state.capture_options)
+    episode_resolved = resolve_episode_declaration(episode, state.model)
+    if state.args.intervene is not None:
+        # ATTESTED COUPLING (lane F42, the foldA D5 flip): the session
+        # armed here feeds the settlement writers (fire counts,
+        # intervention digest, perturbed fidelity) -- the D5 evidence bar.
+        episode_resolved = replace(
+            episode_resolved,
+            coupling_session=CouplingSession(rule_identity=rule_identity_of(state.args.intervene)),
+        )
+    return replace(state, episode_resolved=episode_resolved)
+
+
+def _resolve_save_and_storage(state: _DoorState) -> _DoorState:
+    """Merge the save options, resolve storage routing and the chunk request."""
+    args = state.args
     save_options = merge_save_options(
-        save=grouped_save_options,
-        activation_transform=activation_transform,
-        grad_transform=grad_transform,
-        save_raw_activations=save_raw_activations,
-        save_raw_grads=save_raw_grads,
+        save=state.grouped_save_options,
+        activation_transform=args.activation_transform,
+        grad_transform=args.grad_transform,
+        save_raw_activations=args.save_raw_activations,
+        save_raw_grads=args.save_raw_grads,
     )
-    if storage is not None and streaming is not None:
+    if args.storage is not None and args.streaming is not None:
         raise KeywordConflictError(
             "Both storage and streaming options were supplied",
             code="storage_argument_conflict",
@@ -625,29 +679,27 @@ def _trace_torch_model(
             arguments=("storage", "streaming"),
         )
     streaming_options = merge_streaming_options(
-        streaming=storage if storage is not None else streaming,
+        streaming=args.storage if args.storage is not None else args.streaming,
     )
-    chunk_size_value = None if isinstance(chunk_size, MissingType) else chunk_size
-    chunk_paths_value = None if isinstance(chunk_paths, MissingType) else chunk_paths
+    chunk_size_value = None if isinstance(args.chunk_size, MissingType) else args.chunk_size
+    chunk_paths_value = None if isinstance(args.chunk_paths, MissingType) else args.chunk_paths
     normalized_chunk_size = normalize_chunk_size(chunk_size_value)
     if chunk_paths_value is not None and normalized_chunk_size is None:
         raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
-    layers_to_save = capture_options.layers_to_save
-    save_raw_input_policy = capture_options.save_raw_input
-    batch_render_policy = capture_options.batch_render
-    output_transform_value = capture_options.output_transform
-    save_raw_output_policy = capture_options.save_transformed_output
-    layer_visualizers_value = cast(
-        "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
+    return replace(
+        state,
+        save_options=save_options,
+        streaming_options=streaming_options,
+        chunk_size_value=chunk_size_value,
+        chunk_paths_value=chunk_paths_value,
+        normalized_chunk_size=normalized_chunk_size,
     )
-    save_visualizations_value = capture_options.save_visualizations
-    keep_orphans = capture_options.keep_orphans
-    output_device = capture_options.output_device
-    activation_transform = save_options.activation_transform
-    grad_transform = save_options.grad_transform
-    save_raw_activations = save_options.save_raw_activations
-    save_raw_grads = save_options.save_raw_gradients
-    save_mode_value = "copy" if save_mode is MISSING else save_mode
+
+
+def _unpack_save_policies(state: _DoorState) -> _DoorState:
+    """Take the save policies the door rewrites later and refuse a bad ``save_mode``."""
+    capture_options = state.capture_options
+    save_mode_value = "copy" if state.args.save_mode is MISSING else state.args.save_mode
     if save_mode_value not in {"copy", "reference", "view", "cpu_async"}:
         raise InvalidArgumentError(
             f"save_mode={save_mode_value!r} is not supported",
@@ -656,24 +708,22 @@ def _trace_torch_model(
             argument="save_mode",
         )
     refuse_unavailable_nvtx(capture_options.emit_nvtx)
-    save_args = capture_options.save_args
-    capture_tensor_grad_hooks = capture_options.capture_tensor_grad_hooks
-    save_source_context = capture_options.save_source_context
-    save_rng = capture_options.save_rng
-    seed = capture_options.seed
-    source_context_lines = capture_options.source_context_lines
-    optimizer = capture_options.optimizer
-    compute_input_output_distances = capture_options.compute_input_output_distances
-    detach_saved_activations = capture_options.detach_saved_activations
-    recurrence_detection = capture_options.recurrence_detection
-    intervention_ready = capture_options.intervention_ready
-    capture_container_structure = capture_options.capture_container_structure
-    hooks = capture_options.hooks
-    unwrap_when_done = capture_options.unwrap_when_done
-    verbose = capture_options.verbose
-    name = capture_options.name
-    cache_enabled = capture_options.cache
-    facet_recipes = None if isinstance(facets, MissingType) else facets
+    facet_recipes = None if isinstance(state.args.facets, MissingType) else state.args.facets
+    return replace(
+        state,
+        layers_to_save=capture_options.layers_to_save,
+        save_raw_input_policy=capture_options.save_raw_input,
+        save_raw_output_policy=capture_options.save_transformed_output,
+        save_mode_value=save_mode_value,
+        facet_recipes=facet_recipes,
+        halt=state.args.halt,
+    )
+
+
+def _resolve_stop_after(state: _DoorState) -> _DoorState:
+    """Refuse a stop_after/halt conflict, then compile stop_after into the halt slot."""
+    capture_options = state.capture_options
+    halt = state.halt
     if capture_options.stop_after is not None and halt is not None:
         raise ArgumentConflictError(
             "Both stop_after= and halt= were configured; they compile into the same "
@@ -694,51 +744,60 @@ def _trace_torch_model(
         stop_after_ambient = stop_after_site is not None
     stop_after_selector_shaped = False
     if stop_after_site is not None:
-        if normalized_chunk_size is not None:
+        if state.normalized_chunk_size is not None:
             raise ChunkedForwardConfigError(
                 "chunk_size cannot be combined with stop_after: the chunk fan-out runs "
                 "several captures and a single stop frontier is ambiguous across them. "
                 "Remedy: drop chunk_size or drop stop_after.",
                 code="stop_after_chunked_conflict",
             )
-        if isinstance(stop_after_site, BaseSelector):
-            halt = stop_after_site
-            stop_after_selector_shaped = True
-        elif isinstance(stop_after_site, str):
-            from ..._ir.selector_eval import looks_like_finalized_label
+        halt, stop_after_selector_shaped = _compile_stop_after_site(stop_after_site)
+    return replace(
+        state,
+        halt=halt,
+        stop_after_site=stop_after_site,
+        stop_after_ambient=stop_after_ambient,
+        stop_after_selector_shaped=stop_after_selector_shaped,
+    )
 
-            if looks_like_finalized_label(stop_after_site):
-                raise InvalidArgumentError(
-                    f"stop_after={stop_after_site!r} looks like a finalized postprocess "
-                    "label, but stop_after runs live during capture, before finalized "
-                    "labels exist",
-                    code="stop_after_site_not_live",
-                    remedy=(
-                        "pass a module address string (e.g. 'encoder.layer.4'), a live "
-                        "selector such as tl.func('relu') or tl.module('encoder.layer.4'), "
-                        "or a callable predicate"
-                    ),
-                    argument="stop_after",
-                )
-            from ...intervention.selectors import FuncSelector, ModuleSelector
 
-            # A bare string is the pluck-vocabulary spelling: halt at the first
-            # emission whose module address OR function name matches, whichever
-            # fires first ("encoder.layer.4" never names a func; "relu" never
-            # names a module address in practice, so collisions are benign).
-            halt = ModuleSelector(stop_after_site) | FuncSelector(stop_after_site)
-            stop_after_selector_shaped = True
-        elif callable(stop_after_site):
-            halt = stop_after_site
-        else:
-            raise ArgumentTypeError(
-                f"stop_after received unsupported type {type(stop_after_site).__name__}",
-                code="stop_after_type_invalid",
-                remedy=("pass a module address string, a tl.* selector, or a callable predicate"),
+def _compile_stop_after_site(stop_after_site: Any) -> tuple[Any, bool]:
+    """Compile one stop_after site into the halt slot; the flag is True when selector-shaped."""
+    if isinstance(stop_after_site, BaseSelector):
+        return stop_after_site, True
+    if isinstance(stop_after_site, str):
+        if looks_like_finalized_label(stop_after_site):
+            raise InvalidArgumentError(
+                f"stop_after={stop_after_site!r} looks like a finalized postprocess "
+                "label, but stop_after runs live during capture, before finalized "
+                "labels exist",
+                code="stop_after_site_not_live",
+                remedy=(
+                    "pass a module address string (e.g. 'encoder.layer.4'), a live "
+                    "selector such as tl.func('relu') or tl.module('encoder.layer.4'), "
+                    "or a callable predicate"
+                ),
                 argument="stop_after",
-                received_type=type(stop_after_site).__name__,
             )
-    save_grads_policy = capture_options.save_grads
+        # A bare string is the pluck-vocabulary spelling: halt at the first
+        # emission whose module address OR function name matches, whichever
+        # fires first ("encoder.layer.4" never names a func; "relu" never
+        # names a module address in practice, so collisions are benign).
+        return ModuleSelector(stop_after_site) | FuncSelector(stop_after_site), True
+    if callable(stop_after_site):
+        return stop_after_site, False
+    raise ArgumentTypeError(
+        f"stop_after received unsupported type {type(stop_after_site).__name__}",
+        code="stop_after_type_invalid",
+        remedy=("pass a module address string, a tl.* selector, or a callable predicate"),
+        argument="stop_after",
+        received_type=type(stop_after_site).__name__,
+    )
+
+
+def _resolve_gradient_policy(state: _DoorState) -> _DoorState:
+    """Resolve the save_grads policy into the retention selector and gradient storage."""
+    save_grads_policy = state.capture_options.save_grads
     should_save_grads = save_grads_policy not in (None, False)
     if save_grads_policy is True:
         grads_to_save_resolved: Any = "all"
@@ -753,12 +812,21 @@ def _trace_torch_model(
         grads_to_save_resolved = save_grads_policy
     else:
         grads_to_save_resolved = cast("str | list[Any] | None", save_grads_policy)
-    grad_storage_path_value = streaming_options.path if should_save_grads else None
-    retain_grads_in_memory_value = streaming_options.retain_in_memory
+    streaming_options = state.streaming_options
+    return replace(
+        state,
+        save_grads_policy=save_grads_policy,
+        should_save_grads=should_save_grads,
+        grads_to_save_resolved=grads_to_save_resolved,
+        grad_storage_path_value=streaming_options.path if should_save_grads else None,
+        retain_grads_in_memory_value=streaming_options.retain_in_memory,
+    )
 
-    from ..._options_validation import _validate_output_device
 
-    _validate_output_device(output_device)
+def _refuse_output_routing(state: _DoorState) -> None:
+    """Refuse an invalid output device and a disk-plus-callback output sink."""
+    _validate_output_device(state.capture_options.output_device)
+    streaming_options = state.streaming_options
     if streaming_options.path is not None and streaming_options.on_save is not None:
         raise ArgumentConflictError(
             "Both disk-backed output storage and an output callback were configured",
@@ -769,23 +837,39 @@ def _trace_torch_model(
             ),
             arguments=("path", "on_save"),
         )
-    if capture_options.structure_only:
-        layers_to_save = _enforce_structure_only_entry_contract(
-            capture_options,
-            _StructureOnlyEntryFacts(
-                layers_to_save=layers_to_save,
-                save_predicate=save_predicate,
-                halt=halt,
-                streaming_options=streaming_options,
-                lookback_payload_policy=lookback_payload_policy,
-                raise_on_nan_value=capture_options.raise_on_nan,
-                track_nonfinite_value=capture_options.track_nonfinite,
-                intervention_ready=intervention_ready,
-                should_save_grads=should_save_grads,
-            ),
-        )
-        save_raw_input_policy = False
-        save_raw_output_policy = False
+
+
+def _apply_structure_only_entry(state: _DoorState) -> _DoorState:
+    """Apply the structure-only entry contract: no values retained, raw policies off."""
+    capture_options = state.capture_options
+    if not capture_options.structure_only:
+        return state
+    layers_to_save = _enforce_structure_only_entry_contract(
+        capture_options,
+        _StructureOnlyEntryFacts(
+            layers_to_save=state.layers_to_save,
+            save_predicate=state.save_predicate,
+            halt=state.halt,
+            streaming_options=state.streaming_options,
+            lookback_payload_policy=state.args.lookback_payload_policy,
+            raise_on_nan_value=capture_options.raise_on_nan,
+            track_nonfinite_value=capture_options.track_nonfinite,
+            intervention_ready=capture_options.intervention_ready,
+            should_save_grads=state.should_save_grads,
+        ),
+    )
+    return replace(
+        state,
+        layers_to_save=layers_to_save,
+        save_raw_input_policy=False,
+        save_raw_output_policy=False,
+    )
+
+
+def _resolve_backward_flags(state: _DoorState) -> _DoorState:
+    """Resolve backward_ready from the explicit flag, save_grads and gradient streaming."""
+    capture_options = state.capture_options
+    should_save_grads = state.should_save_grads
     train_mode_explicit = capture_options.is_field_explicit("backward_ready")
     train_mode_value = capture_options.backward_ready
     inference_only_conflicts: list[str] = []
@@ -793,14 +877,17 @@ def _trace_torch_model(
         inference_only_conflicts.append("backward_ready")
     if capture_options.is_field_explicit("save_grads") and should_save_grads:
         inference_only_conflicts.append("save_grads")
-    if capture_options.is_field_explicit("intervention_ready") and intervention_ready is True:
+    if (
+        capture_options.is_field_explicit("intervention_ready")
+        and capture_options.intervention_ready is True
+    ):
         inference_only_conflicts.append("intervention_ready")
     backward_opted_in = (
         capture_options.is_field_explicit("save_grads")
         and should_save_grads
-        and save_grads_policy is not True
+        and state.save_grads_policy is not True
     )
-    grad_streaming_requested = grad_storage_path_value is not None
+    grad_streaming_requested = state.grad_storage_path_value is not None
     if grad_streaming_requested:
         should_save_grads = True
     if backward_opted_in:
@@ -814,42 +901,66 @@ def _trace_torch_model(
             )
         train_mode_value = True
         should_save_grads = True
-    if train_mode_value and grad_storage_path_value is not None:
+    if train_mode_value and state.grad_storage_path_value is not None:
         raise TrainingModeConfigError(
             "backward_ready=True is not compatible with disk-backed gradient storage. "
             "Remedy: drop the gradient storage path or drop backward_ready=True.",
             code="backward_ready_conflict",
         )
+    return replace(
+        state,
+        train_mode_value=train_mode_value,
+        should_save_grads=should_save_grads,
+        inference_only_conflicts=tuple(inference_only_conflicts),
+    )
 
+
+def _validate_training_and_inference(state: _DoorState) -> _DoorState:
+    """Validate the training-mode combination and settle the effective inference_only."""
+    capture_options = state.capture_options
     validate_training_compatibility(
-        backward_ready=train_mode_value,
-        streaming=streaming_options,
-        detach_saved_activations=detach_saved_activations,
+        backward_ready=state.train_mode_value,
+        streaming=state.streaming_options,
+        detach_saved_activations=capture_options.detach_saved_activations,
         inference_mode_active=torch.is_inference_mode_enabled(),
         inference_only=capture_options.inference_only,
-        inference_only_conflicts=tuple(inference_only_conflicts),
+        inference_only_conflicts=state.inference_only_conflicts,
     )
     inference_only_value = effective_inference_only(
         capture_options,
-        backward_requested=bool(train_mode_value or should_save_grads or intervention_ready),
+        backward_requested=bool(
+            state.train_mode_value or state.should_save_grads or capture_options.intervention_ready
+        ),
     )
-    chunk_plan = None
-    if normalized_chunk_size is not None:
-        _validate_chunked_forward_capture(
-            input_kwargs=input_kwargs,
-            backward_ready=train_mode_value,
-            save_grads=should_save_grads,
-            hooks=hooks,
-            intervene=intervene,
-            halt=halt,
-            streaming=streaming_options,
-        )
-        chunk_plan = plan_chunks(
-            input_args,
-            chunk_size=normalized_chunk_size,
-            chunk_paths=chunk_paths_value,
-        )
+    return replace(state, inference_only_value=inference_only_value)
 
+
+def _resolve_chunk_plan(state: _DoorState) -> _DoorState:
+    """Validate the chunked-forward request and plan the chunks."""
+    if state.normalized_chunk_size is None:
+        return state
+    _validate_chunked_forward_capture(
+        input_kwargs=state.input_kwargs,
+        backward_ready=state.train_mode_value,
+        save_grads=state.should_save_grads,
+        hooks=state.capture_options.hooks,
+        intervene=state.args.intervene,
+        halt=state.halt,
+        streaming=state.streaming_options,
+    )
+    chunk_plan = plan_chunks(
+        state.input_args,
+        chunk_size=state.normalized_chunk_size,
+        chunk_paths=state.chunk_paths_value,
+    )
+    return replace(state, chunk_plan=chunk_plan)
+
+
+def _resolve_selectors(state: _DoorState) -> _DoorState:
+    """Resolve the save and gradient selectors into live predicates and deferred requests."""
+    layers_to_save = state.layers_to_save
+    grads_to_save_resolved = state.grads_to_save_resolved
+    save_predicate = state.save_predicate
     if type(layers_to_save) is str:
         layers_to_save = layers_to_save.lower()
     if type(grads_to_save_resolved) is str:
@@ -870,7 +981,7 @@ def _trace_torch_model(
     )
     needs_live_output_projection = (
         _is_selective_label_save(layers_to_save)
-        and should_save_grads
+        and state.should_save_grads
         and not uses_deferred_activation
     )
     uses_selective_layers_to_save = _is_selective_label_save(layers_to_save)
@@ -881,6 +992,24 @@ def _trace_torch_model(
     elif uses_deferred_activation and live_layers_to_save is not None:
         layers_predicate = _make_layers_to_save_predicate(live_layers_to_save)
         save_predicate = _combine_save_predicates(save_predicate, layers_predicate)
+    return replace(
+        state,
+        layers_to_save=layers_to_save,
+        requested_layers_to_save=requested_layers_to_save,
+        save_predicate=save_predicate,
+        grads_to_save_resolved=grads_to_save_resolved,
+        uses_deferred_gradients=uses_deferred_gradients,
+        uses_deferred_activation=uses_deferred_activation,
+        needs_live_output_projection=needs_live_output_projection,
+        uses_selective_layers_to_save=uses_selective_layers_to_save,
+    )
+
+
+def _validate_predicate_capabilities(state: _DoorState) -> None:
+    """Refuse followed_by predicates in slots whose capability cannot honor them."""
+    save_predicate = state.save_predicate
+    intervene = state.args.intervene
+    halt = state.halt
     if save_predicate is not None or intervene is not None or halt is not None:
         from ..predicates import validate_followed_by_capability
 
@@ -902,543 +1031,378 @@ def _trace_torch_model(
             api_name="trace(halt=...)",
             supports_retroactive=False,
         )
-    log_name = name if name is not None else _state._auto_name(model)
-    cache_path: Path | None = None
-    cache_key: str | None = None
-    cache_secret: bytes | None = None
-    if cache_enabled:
-        cache_config = {
-            "layers_to_save": requested_layers_to_save,
-            "keep_orphans": keep_orphans,
-            "output_device": output_device,
-            "save_args": save_args,
-            "capture_tensor_grad_hooks": capture_tensor_grad_hooks,
-            "save_grads": repr(save_grads_policy),
-            "save_source_context": save_source_context,
-            "save_rng": save_rng,
-            "source_context_lines": source_context_lines,
-            "compute_input_output_distances": compute_input_output_distances,
-            "detach_saved_activations": detach_saved_activations,
-            "save_mode": save_mode_value,
-            "recurrence_detection": recurrence_detection,
-            "backward_ready": train_mode_value,
-            "inference_only": inference_only_value,
-            "chunk_size": normalized_chunk_size,
-            "chunk_paths": normalize_chunk_paths(chunk_paths_value),
-            "capture_container_structure": capture_container_structure,
-            "output_transform": _stable_cache_fragment(output_transform_value),
-            "semantic_output_cache_key": semantic_output_cache_key(model),
-            "facets": _facet_recipe_cache_key(facet_recipes),
-            "save_predicate": _predicate_cache_key(save_predicate),
-            "intervene": _predicate_cache_key(intervene),
-            "halt": _predicate_cache_key(halt),
-            # stop_after compiles INTO the halt slot, but its never-fired policy
-            # differs by provenance, so the two spellings must not share a key:
-            # a completed halt= capture could otherwise satisfy a stop_after=
-            # request whose cold run would have refused stop_after_never_fired.
-            "stop_after": _stable_cache_fragment(stop_after_site),
-            # Capability / payload-policy options that change WHAT is captured or
-            # stored in the returned trace. Omitting any of these let a second
-            # trace() with a different capability silently return an earlier cached
-            # trace built with the wrong capability (e.g. asked intervention_ready=True,
-            # got a cached False). Include them so a capability change misses the cache;
-            # callables are repr-keyed (conservative -- a distinct object misses rather
-            # than risking a false hit), matching how output_transform is keyed above.
-            "intervention_ready": intervention_ready,
-            "structure_only": capture_options.structure_only,
-            "track_device_memory": capture_options.track_device_memory,
-            # A cached capture without the opt-in holds no CPU peak.
-            "measure_host_peak_memory": capture_options.measure_host_peak_memory,
-            "log_injections": capture_options.log_injections,
-            "save_raw_input": repr(save_raw_input_policy),
-            "save_transformed_output": repr(save_raw_output_policy),
-            "save_raw_activations": save_raw_activations,
-            "save_raw_gradients": save_raw_grads,
-            "activation_transform": _stable_cache_fragment(activation_transform),
-            "grad_transform": _stable_cache_fragment(grad_transform),
-            "seed": seed,
-            "module_filter": _stable_cache_fragment(capture_options.module_filter),
-            "layer_visualizers": _stable_cache_fragment(layer_visualizers_value),
-            "save_visualizations": _stable_cache_fragment(save_visualizations_value),
-            "optimizer": repr(optimizer),
-            "hooks": _stable_cache_fragment(hooks),
-            "lookback": lookback,
-            "lookback_payload_policy": lookback_payload_policy,
-            "jax_control_flow": capture_options.jax_control_flow,
-            "jax_max_control_flow_unroll": capture_options.jax_max_control_flow_unroll,
-            "module_identity_mode": capture_options.module_identity_mode,
-            "payload_policy": capture_options.payload_policy,
-            "save_preview": capture_options.save_preview,
-            "profile": profile_enabled,
-        }
-        # The inversion sweep: every CaptureOptions field not hand-curated
-        # above and not declared session-neutral enters the key here --
-        # raise_on_nan, track_nonfinite, save_budget, distributed_witness,
-        # measure_python_peak_memory, emit_nvtx, transform, name, and any
-        # future field. Streaming options change what the returned trace
-        # retains (and where), so they sweep in full as well.
-        _sweep_option_fields_into_cache_config(
-            cache_config,
-            capture_options,
-            prefix="capture_option",
-            curated=CAPTURE_CACHE_KEY_CURATED,
-            neutral=CAPTURE_CACHE_KEY_NEUTRAL,
-        )
-        _sweep_option_fields_into_cache_config(
-            cache_config,
-            streaming_options,
-            prefix="streaming_option",
-        )
-        cache_key = _capture_cache_key(model, input_args, input_kwargs, cache_config)
-        cache_root, cache_secret = _prepare_capture_cache_dir(capture_options.cache_dir)
-        cache_path = cache_root / f"{cache_key}.pkl"
-        if cache_path.exists():
-            cached_log = cast(
-                "Trace | None", _load_authenticated_capture_cache(cache_path, cache_secret)
-            )
-            if cached_log is not None:
-                try:
-                    os.utime(cache_path, None)
-                except OSError:
-                    pass
-                cached_log.capture_cache_hit = True
-                cached_log.capture_cache_key = cache_key
-                cached_log.capture_cache_path = str(cache_path)
-                cached_log.batch_render = batch_render_policy
-                return cached_log
+
+
+def _resolve_cache_key(state: _DoorState) -> _DoorState:
+    """Name the trace and, when caching, derive the cache key, path and secret."""
+    capture_options = state.capture_options
+    name = capture_options.name
+    log_name = name if name is not None else _state._auto_name(state.model)
+    state = replace(state, log_name=log_name)
+    if not capture_options.cache:
+        return state
+    config = _curated_cache_config(state)
+    # The inversion sweep: every CaptureOptions field not hand-curated
+    # above and not declared session-neutral enters the key here --
+    # raise_on_nan, track_nonfinite, save_budget, distributed_witness,
+    # measure_python_peak_memory, emit_nvtx, transform, name, and any
+    # future field. Streaming options change what the returned trace
+    # retains (and where), so they sweep in full as well.
+    _sweep_option_fields_into_cache_config(
+        config,
+        capture_options,
+        prefix="capture_option",
+        curated=CAPTURE_CACHE_KEY_CURATED,
+        neutral=CAPTURE_CACHE_KEY_NEUTRAL,
+    )
+    _sweep_option_fields_into_cache_config(
+        config,
+        state.streaming_options,
+        prefix="streaming_option",
+    )
+    cache_key = _capture_cache_key(state.model, state.input_args, state.input_kwargs, config)
+    cache_root, cache_secret = _prepare_capture_cache_dir(capture_options.cache_dir)
+    return replace(
+        state,
+        cache_key=cache_key,
+        cache_path=cache_root / f"{cache_key}.pkl",
+        cache_secret=cache_secret,
+    )
+
+
+# Cache-key curation notes (the rows below, in order):
+# * stop_after compiles INTO the halt slot, but its never-fired policy
+#   differs by provenance, so the two spellings must not share a key:
+#   a completed halt= capture could otherwise satisfy a stop_after=
+#   request whose cold run would have refused stop_after_never_fired.
+# * Capability / payload-policy options that change WHAT is captured or
+#   stored in the returned trace. Omitting any of these let a second
+#   trace() with a different capability silently return an earlier cached
+#   trace built with the wrong capability (e.g. asked intervention_ready=True,
+#   got a cached False). Include them so a capability change misses the cache;
+#   callables are repr-keyed (conservative -- a distinct object misses rather
+#   than risking a false hit), matching how output_transform is keyed.
+# * A cached capture without the measure_host_peak_memory opt-in holds no CPU peak.
+def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
+    """Hand-curated cache-key rows; ``_resolve_cache_key`` sweeps the remaining fields in."""
+    opts = state.capture_options
+    args = state.args
+    cache_config = {
+        "layers_to_save": state.requested_layers_to_save,
+        "keep_orphans": opts.keep_orphans,
+        "output_device": opts.output_device,
+        "save_args": opts.save_args,
+        "capture_tensor_grad_hooks": opts.capture_tensor_grad_hooks,
+        "save_grads": repr(state.save_grads_policy),
+        "save_source_context": opts.save_source_context,
+        "save_rng": opts.save_rng,
+        "source_context_lines": opts.source_context_lines,
+        "compute_input_output_distances": opts.compute_input_output_distances,
+        "detach_saved_activations": opts.detach_saved_activations,
+        "save_mode": state.save_mode_value,
+        "recurrence_detection": opts.recurrence_detection,
+        "backward_ready": state.train_mode_value,
+        "inference_only": state.inference_only_value,
+        "chunk_size": state.normalized_chunk_size,
+        "chunk_paths": normalize_chunk_paths(state.chunk_paths_value),
+        "capture_container_structure": opts.capture_container_structure,
+        "output_transform": _stable_cache_fragment(opts.output_transform),
+        "semantic_output_cache_key": semantic_output_cache_key(state.model),
+        "facets": _facet_recipe_cache_key(state.facet_recipes),
+        "save_predicate": _predicate_cache_key(state.save_predicate),
+        "intervene": _predicate_cache_key(args.intervene),
+        "halt": _predicate_cache_key(state.halt),
+        "stop_after": _stable_cache_fragment(state.stop_after_site),
+        "intervention_ready": opts.intervention_ready,
+        "structure_only": opts.structure_only,
+        "track_device_memory": opts.track_device_memory,
+        "measure_host_peak_memory": opts.measure_host_peak_memory,
+        "log_injections": opts.log_injections,
+        "save_raw_input": repr(state.save_raw_input_policy),
+        "save_transformed_output": repr(state.save_raw_output_policy),
+        "save_raw_activations": state.save_options.save_raw_activations,
+        "save_raw_gradients": state.save_options.save_raw_gradients,
+        "activation_transform": _stable_cache_fragment(state.save_options.activation_transform),
+        "grad_transform": _stable_cache_fragment(state.save_options.grad_transform),
+        "seed": opts.seed,
+        "module_filter": _stable_cache_fragment(opts.module_filter),
+        "layer_visualizers": _stable_cache_fragment(opts.layer_visualizers),
+        "save_visualizations": _stable_cache_fragment(opts.save_visualizations),
+        "optimizer": repr(opts.optimizer),
+        "hooks": _stable_cache_fragment(opts.hooks),
+        "lookback": args.lookback,
+        "lookback_payload_policy": args.lookback_payload_policy,
+        "jax_control_flow": opts.jax_control_flow,
+        "jax_max_control_flow_unroll": opts.jax_max_control_flow_unroll,
+        "module_identity_mode": opts.module_identity_mode,
+        "payload_policy": opts.payload_policy,
+        "save_preview": opts.save_preview,
+        "profile": state.profile_enabled,
+    }
+    return cache_config
+
+
+def _door_options(request: CaptureRequest) -> CaptureOptions:
+    """The resolved ``CaptureOptions`` of a torch door request."""
+    return cast(CaptureOptions, request.options)
+
+
+def _door_facts(request: CaptureRequest) -> dict[str, Any]:
+    """The door's admission and epilogue facts (``CaptureRequest.admission``)."""
+    return request.admission or {}
+
+
+def _lookup_capture_cache(request: CaptureRequest) -> Trace | None:
+    """Return the authenticated cached trace for this request, or None on a miss."""
+    cache = request.cache
+    if cache is None:
+        return None
+    cache_path = cast(Path, cache["path"])
+    if not cache_path.exists():
+        return None
+    cached_log = cast(
+        "Trace | None", _load_authenticated_capture_cache(cache_path, cache["secret"])
+    )
+    if cached_log is None:
+        return None
+    try:
+        os.utime(cache_path, None)
+    except OSError:
+        pass
+    cached_log.capture_cache_hit = True
+    cached_log.capture_cache_key = cache["key"]
+    cached_log.capture_cache_path = str(cache_path)
+    cached_log.batch_render = _door_options(request).batch_render
+    return cached_log
+
+
+def _disclose_running_stats_mutation(request: CaptureRequest) -> None:
+    """Warn once per process that this capture advances train-mode running statistics."""
     # list-A row 30: tracing runs the model's REAL forward, so train-mode norm
     # layers with running statistics advance them in place (momentum applies
     # even inside torch.no_grad / inference_only). Disclose once per process at
     # the point the mutation is about to happen. Cache hits return above (no
     # forward, no mutation) and structure-only captures retain no values, so
     # neither path reaches this warn. The chunked fan-out recurses back into
-    # this function, but the outer call warns first and latches the flag.
+    # the door, but the outer call warns first and latches the flag.
+    capture_options = _door_options(request)
     if (
         not _BATCHNORM_TRAIN_STATS_WARNED
         and not capture_options.structure_only
         and capture_options.carry_state
     ):
-        _warn_once_train_mode_running_stats(model)
-    if (
-        chunk_plan is not None
-        and normalized_chunk_size is not None
-        and normalized_chunk_size < chunk_plan.total_size
-    ):
-        chunks = iter_chunked_inputs(input_args, chunk_plan)
-        recursive_jax_control_flow = (
-            capture_options.jax_control_flow
-            if capture_options.is_field_explicit("jax_control_flow")
-            else MISSING
-        )
-        recursive_jax_max_control_flow_unroll = (
-            capture_options.jax_max_control_flow_unroll
-            if capture_options.is_field_explicit("jax_max_control_flow_unroll")
-            else MISSING
-        )
-        recursive_capture_options = CaptureOptions(
-            layers_to_save=layers_to_save,
-            input_transform=None,
-            save_raw_input=save_raw_input_policy,
-            batch_render=batch_render_policy,
-            output_transform=output_transform_value,
-            save_transformed_output=save_raw_output_policy,
-            layer_visualizers=layer_visualizers_value,
-            save_visualizations=save_visualizations_value,
-            keep_orphans=keep_orphans,
-            output_device=output_device,
-            save_args=save_args,
-            save_grads=save_grads_policy,
-            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-            save_source_context=save_source_context,
-            save_rng=save_rng,
-            seed=seed,
-            source_context_lines=source_context_lines,
-            optimizer=optimizer,
-            compute_input_output_distances=compute_input_output_distances,
-            detach_saved_activations=detach_saved_activations,
-            recurrence_detection=recurrence_detection,
-            intervention_ready=intervention_ready,
-            capture_container_structure=capture_container_structure,
-            hooks=MISSING,
-            unwrap_when_done=False,
-            verbose=verbose,
-            backward_ready=train_mode_value,
-            inference_only=inference_only_value,
-            name=log_name,
-            cache=False,
-            cache_dir=capture_options.cache_dir,
-            module_filter=capture_options.module_filter,
-            stop_after=MISSING,
-            jax_control_flow=recursive_jax_control_flow,
-            jax_max_control_flow_unroll=recursive_jax_max_control_flow_unroll,
-            module_identity_mode=capture_options.module_identity_mode,
-            payload_policy=capture_options.payload_policy,
-            save_preview=capture_options.save_preview,
-            # Session knobs the chunk path historically DROPPED (list-A row 26,
-            # second clause): the recursive options object was rebuilt from a
-            # hand-enumerated field list, so a chunked capture silently reset
-            # save_budget (and the other session-time knobs) to defaults. The
-            # recursive constructor must cover EVERY CaptureOptions field;
-            # tests/test_capopts_truth_cache_key.py pins the full-coverage
-            # set difference so a future field cannot silently drop here.
-            emit_nvtx=capture_options.emit_nvtx,
-            measure_python_peak_memory=capture_options.measure_python_peak_memory,
-            distributed_witness=capture_options.distributed_witness,
-            save_budget=capture_options.save_budget,
-            raise_on_nan=capture_options.raise_on_nan,
-            track_nonfinite=capture_options.track_nonfinite,
-            track_device_memory=capture_options.track_device_memory,
-            structure_only=capture_options.structure_only,
-            log_injections=capture_options.log_injections,
-            carry_state=capture_options.carry_state,
-            measure_host_peak_memory=capture_options.measure_host_peak_memory,
-        )
-        recursive_save_options = SaveOptions(
-            activation_transform=activation_transform,
-            grad_transform=grad_transform,
-            save_raw_activations=save_raw_activations,
-            save_raw_grads=save_raw_grads,
-        )
-        recursive_save_value: SaveOptions | PredicateFn | BaseSelector | None = (
-            save_predicate if save_predicate is not None else recursive_save_options
-        )
-        recursive_activation_transform: _ActivationPostfunc | None | MissingType = (
-            activation_transform
-            if save_predicate is not None and activation_transform is not None
-            else MISSING
-        )
-        recursive_grad_transform: _GradientPostfunc | None | MissingType = (
-            grad_transform if save_predicate is not None and grad_transform is not None else MISSING
-        )
-        recursive_save_raw_activations: bool | MissingType = (
-            save_raw_activations
-            if save_predicate is not None and save_raw_activations is not True
-            else MISSING
-        )
-        recursive_save_raw_gradients: bool | MissingType = (
-            save_raw_grads if save_predicate is not None and save_raw_grads is not True else MISSING
-        )
-        trace = _trace_torch_model(
-            model=model,
-            input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
-            input_kwargs=None,
-            layers_to_save=MISSING,
-            transform=MISSING,
-            save_raw_input=MISSING,
-            batch_render=MISSING,
-            output_transform=MISSING,
-            save_transformed_output=MISSING,
-            keep_orphans=MISSING,
-            output_device=MISSING,
-            activation_transform=recursive_activation_transform,
-            grad_transform=recursive_grad_transform,
-            save_raw_activations=recursive_save_raw_activations,
-            save_raw_grads=recursive_save_raw_gradients,
-            save_mode=cast(SaveMode, save_mode_value),
-            capture_tensor_grad_hooks=MISSING,
-            mark_layer_depths=MISSING,
-            detach_saved_activations=MISSING,
-            save_args=MISSING,
-            save_grads=MISSING,
-            save_source_context=MISSING,
-            save_rng=MISSING,
-            reconstruction_ready=MISSING,
-            seed=MISSING,
-            num_context_lines=MISSING,
-            optimizer=MISSING,
-            save_outs_to=MISSING,
-            keep_outs_in_memory=MISSING,
-            out_sink=MISSING,
-            intervention_ready=MISSING,
-            capture_container_structure=MISSING,
-            hooks=MISSING,
-            unwrap_when_done=MISSING,
-            verbose=MISSING,
-            source_context_lines=MISSING,
-            compute_input_output_distances=MISSING,
-            recurrence_detection=MISSING,
-            capture=recursive_capture_options,
-            save=recursive_save_value,
-            intervene=None,
-            halt=halt,
-            lookback=lookback,
-            lookback_payload_policy=lookback_payload_policy,
-            storage=None,
-            streaming=None,
-            backward_ready=MISSING,
-            inference_only=MISSING,
-            name=MISSING,
-            cache=MISSING,
-            cache_dir=MISSING,
-            module_filter=MISSING,
-            stop_after=MISSING,
-            raise_on_nan=MISSING,
-            profile=profile_enabled,
-            jax_control_flow=MISSING,
-            jax_max_control_flow_unroll=MISSING,
-            module_identity_mode=MISSING,
-            payload_policy=MISSING,
-            save_preview=MISSING,
-            facets=facet_recipes,
-            capture_output_structure=MISSING,
-            chunk_size=None,
-            chunk_paths=None,
-            retain_output_parents_for_layers_to_save=uses_selective_layers_to_save,
-            _selective_layers_to_save_request=(
-                requested_layers_to_save if uses_selective_layers_to_save else None
-            ),
-        )
-        initial_chunk_size = min(normalized_chunk_size, chunk_plan.total_size)
-        initial_record = {
-            "engine": "trace",
-            "append": False,
-            "chunk_size": initial_chunk_size,
-            "total_batch_size": chunk_plan.total_size,
-            "append_sequence_id": 0,
-            "chunk_paths": normalize_chunk_paths(chunk_paths_value),
-        }
-        for chunk_index, chunk in enumerate(chunks[1:], start=1):
-            if save_predicate is None:
-                trace.run(model, chunk, replay=ReplayOptions(append=True), input_transform=False)
-                continue
-            new_trace = _trace_torch_model(
-                model=model,
-                input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunk),
-                input_kwargs=None,
-                layers_to_save=MISSING,
-                transform=MISSING,
-                save_raw_input=MISSING,
-                batch_render=MISSING,
-                output_transform=MISSING,
-                save_transformed_output=MISSING,
-                keep_orphans=MISSING,
-                output_device=MISSING,
-                activation_transform=recursive_activation_transform,
-                grad_transform=recursive_grad_transform,
-                save_raw_activations=recursive_save_raw_activations,
-                save_raw_grads=recursive_save_raw_gradients,
-                save_mode=cast(SaveMode, save_mode_value),
-                capture_tensor_grad_hooks=MISSING,
-                mark_layer_depths=MISSING,
-                detach_saved_activations=MISSING,
-                save_args=MISSING,
-                save_grads=MISSING,
-                save_source_context=MISSING,
-                save_rng=MISSING,
-                reconstruction_ready=MISSING,
-                seed=MISSING,
-                num_context_lines=MISSING,
-                optimizer=MISSING,
-                save_outs_to=MISSING,
-                keep_outs_in_memory=MISSING,
-                out_sink=MISSING,
-                intervention_ready=MISSING,
-                capture_container_structure=MISSING,
-                hooks=MISSING,
-                unwrap_when_done=MISSING,
-                verbose=MISSING,
-                source_context_lines=MISSING,
-                compute_input_output_distances=MISSING,
-                recurrence_detection=MISSING,
-                capture=recursive_capture_options,
-                save=recursive_save_value,
-                intervene=None,
-                halt=halt,
-                lookback=lookback,
-                lookback_payload_policy=lookback_payload_policy,
-                storage=None,
-                streaming=None,
-                backward_ready=MISSING,
-                inference_only=MISSING,
-                name=MISSING,
-                cache=MISSING,
-                cache_dir=MISSING,
-                module_filter=MISSING,
-                stop_after=MISSING,
-                raise_on_nan=MISSING,
-                profile=profile_enabled,
-                jax_control_flow=MISSING,
-                jax_max_control_flow_unroll=MISSING,
-                module_identity_mode=MISSING,
-                payload_policy=MISSING,
-                save_preview=MISSING,
-                facets=facet_recipes,
-                capture_output_structure=MISSING,
-                chunk_size=None,
-                chunk_paths=None,
-                retain_output_parents_for_layers_to_save=uses_selective_layers_to_save,
-                _selective_layers_to_save_request=(
-                    requested_layers_to_save if uses_selective_layers_to_save else None
-                ),
-            )
-            appended_chunk_size = min(
-                normalized_chunk_size,
-                chunk_plan.total_size - (chunk_index * normalized_chunk_size),
-            )
-            _append_chunk_trace_state(
-                trace,
-                new_trace,
-                _ChunkAppend(
-                    chunk_size=appended_chunk_size,
-                    total_batch_size=chunk_plan.total_size,
-                    append_sequence_id=chunk_index,
-                    chunk_paths=normalize_chunk_paths(chunk_paths_value),
-                ),
-            )
-        trace.append_history = [initial_record, *trace.append_history]
-        trace.chunked_forward = True
-        trace.last_run = dict(trace.last_run or {})
-        trace.last_run["chunk_size"] = normalized_chunk_size
-        trace.last_run["chunk_paths"] = normalize_chunk_paths(chunk_paths_value)
-        trace.profile_enabled = profile_enabled
-        if uses_selective_layers_to_save:
-            trace._layer_nums_to_save = [
-                op.raw_index
-                for op in trace.layer_list
-                if op.has_saved_activation and op.layer_type not in {"input", "output"}
-            ]
-            if not save_args:
-                trace._replay_arg_version_data_complete = False
-        if layer_visualizers_value:
-            _render_layer_visualizers(trace, layer_visualizers_value)
-        if unwrap_when_done:
-            from ...backends.torch.wrappers import unwrap_torch
+        _warn_once_train_mode_running_stats(request.model)
 
-            unwrap_torch()
-        if cache_path is not None and cache_key is not None and cache_secret is not None:
-            trace.capture_cache_hit = False
-            trace.capture_cache_key = cache_key
-            trace.capture_cache_path = str(cache_path)
-            _prepare_log_for_capture_cache(trace)
-            if _store_authenticated_capture_cache(trace, cache_path, cache_secret):
-                _evict_capture_cache(cache_path.parent, keep=cache_path)
-        return trace
 
-    run_capture = functools.partial(
-        _run_model_and_save_specified_outs,
-        model=model,
-        input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], input_args),
-        input_kwargs=input_kwargs,
-        layers_to_save=layers_to_save,
-        keep_orphans=keep_orphans,
-        output_device=output_device,
+def _chunk_fanout_needed(state: _DoorState) -> bool:
+    """Whether the request fans out into several per-chunk captures."""
+    chunk_plan = state.chunk_plan
+    chunk_size = state.normalized_chunk_size
+    return chunk_plan is not None and chunk_size is not None and chunk_size < chunk_plan.total_size
+
+
+def _explicit_or_missing(capture_options: CaptureOptions, field_name: str) -> Any:
+    """The field's value when the user set it explicitly, else ``MISSING``."""
+    if capture_options.is_field_explicit(field_name):
+        return getattr(capture_options, field_name)
+    return MISSING
+
+
+# Session knobs the chunk path historically DROPPED (list-A row 26,
+# second clause): the recursive options object was rebuilt from a
+# hand-enumerated field list, so a chunked capture silently reset
+# save_budget (and the other session-time knobs) to defaults. The
+# recursive constructor must cover EVERY CaptureOptions field;
+# tests/test_capopts_truth_chunk_options.py pins the full-coverage
+# set difference so a future field cannot silently drop here.
+def _recursive_capture_options(state: _DoorState) -> CaptureOptions:
+    """The grouped options each per-chunk recursive capture receives."""
+    opts = state.capture_options
+    recursive_capture_options = CaptureOptions(
+        layers_to_save=state.layers_to_save,
+        input_transform=None,
+        save_raw_input=state.save_raw_input_policy,
+        batch_render=opts.batch_render,
+        output_transform=opts.output_transform,
+        save_transformed_output=state.save_raw_output_policy,
+        layer_visualizers=opts.layer_visualizers,
+        save_visualizations=opts.save_visualizations,
+        keep_orphans=opts.keep_orphans,
+        output_device=opts.output_device,
+        save_args=opts.save_args,
+        save_grads=state.save_grads_policy,
+        capture_tensor_grad_hooks=opts.capture_tensor_grad_hooks,
+        save_source_context=opts.save_source_context,
+        save_rng=opts.save_rng,
+        seed=opts.seed,
+        source_context_lines=opts.source_context_lines,
+        optimizer=opts.optimizer,
+        compute_input_output_distances=opts.compute_input_output_distances,
+        detach_saved_activations=opts.detach_saved_activations,
+        recurrence_detection=opts.recurrence_detection,
+        intervention_ready=opts.intervention_ready,
+        capture_container_structure=opts.capture_container_structure,
+        hooks=MISSING,
+        unwrap_when_done=False,
+        verbose=opts.verbose,
+        backward_ready=state.train_mode_value,
+        inference_only=state.inference_only_value,
+        name=state.log_name,
+        cache=False,
+        cache_dir=opts.cache_dir,
+        module_filter=opts.module_filter,
+        stop_after=MISSING,
+        jax_control_flow=_explicit_or_missing(opts, "jax_control_flow"),
+        jax_max_control_flow_unroll=_explicit_or_missing(opts, "jax_max_control_flow_unroll"),
+        module_identity_mode=opts.module_identity_mode,
+        payload_policy=opts.payload_policy,
+        save_preview=opts.save_preview,
+        emit_nvtx=opts.emit_nvtx,
+        measure_python_peak_memory=opts.measure_python_peak_memory,
+        distributed_witness=opts.distributed_witness,
+        save_budget=opts.save_budget,
+        raise_on_nan=opts.raise_on_nan,
+        track_nonfinite=opts.track_nonfinite,
+        track_device_memory=opts.track_device_memory,
+        structure_only=opts.structure_only,
+        log_injections=opts.log_injections,
+        carry_state=opts.carry_state,
+        measure_host_peak_memory=opts.measure_host_peak_memory,
+    )
+    return recursive_capture_options
+
+
+def _recursive_door_kwargs(state: _DoorState) -> dict[str, Any]:
+    """Door keywords for each per-chunk recursive capture of the chunk fan-out."""
+    save_options = state.save_options
+    save_predicate = state.save_predicate
+    activation_transform = save_options.activation_transform
+    grad_transform = save_options.grad_transform
+    save_raw_activations = save_options.save_raw_activations
+    save_raw_grads = save_options.save_raw_gradients
+    recursive_save_options = SaveOptions(
         activation_transform=activation_transform,
         grad_transform=grad_transform,
         save_raw_activations=save_raw_activations,
         save_raw_grads=save_raw_grads,
-        save_mode=cast(SaveMode, save_mode_value),
-        capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-        mark_layer_depths=compute_input_output_distances,
-        detach_saved_activations=detach_saved_activations,
-        save_args=save_args,
-        save_grads=should_save_grads,
-        grads_to_save=grads_to_save_resolved,
-        seed=seed,
-        num_context_lines=source_context_lines,
-        optimizer=optimizer,
-        echo_options=echo_options,
-        save_source_context=save_source_context,
-        save_rng=save_rng,
-        recurrence_detection=recurrence_detection,
-        save_outs_to=streaming_options.path,
-        keep_outs_in_memory=streaming_options.retain_in_memory,
-        stream_custom_attributes=streaming_options.include_custom_attributes,
-        stream_buffer_values=streaming_options.include_buffer_values,
-        stream_async_writes=streaming_options.async_writes,
-        stream_max_pending_bytes=streaming_options.max_pending_bytes,
-        grad_storage_path=grad_storage_path_value,
-        retain_grads_in_memory=retain_grads_in_memory_value,
-        out_sink=streaming_options.on_save,
-        intervention_ready=intervention_ready,
-        capture_container_structure=capture_container_structure,
-        hooks=hooks,
-        intervention_spec=None,
-        normalized_hook_plan=None,
-        verbose=verbose,
-        backward_ready=train_mode_value,
-        inference_only=inference_only_value,
-        inference_only_implied=(
-            inference_only_value and not capture_options.is_field_explicit("inference_only")
-        ),
-        name=log_name,
-        module_filter=capture_options.module_filter,
-        emit_nvtx=capture_options.emit_nvtx,
-        measure_python_peak_memory=capture_options.measure_python_peak_memory,
-        distributed_witness=capture_options.distributed_witness,
-        save_budget=capture_options.save_budget,
-        raise_on_nan=capture_options.raise_on_nan,
-        track_nonfinite=capture_options.track_nonfinite,
-        track_device_memory=capture_options.track_device_memory,
-        structure_only=capture_options.structure_only,
-        log_injections=capture_options.log_injections,
-        measure_host_peak_memory=capture_options.measure_host_peak_memory,
-        transform=input_transform,
-        raw_input=raw_input,
-        save_raw_input=save_raw_input_policy,
-        batch_render=batch_render_policy,
-        output_transform=output_transform_value,
-        save_transformed_output=save_raw_output_policy,
-        layer_visualizers=layer_visualizers_value,
-        save_visualizations=save_visualizations_value,
-        recipes=facet_recipes,
-        save_predicate=save_predicate,
-        intervene_predicate=intervene,
-        halt_predicate=halt,
-        _halt_from_stop_after=stop_after_site is not None,
-        lookback=lookback,
-        lookback_payload_policy=lookback_payload_policy,
-        retain_output_parents_for_layers_to_save=(
-            retain_output_parents_for_layers_to_save
-            or uses_selective_layers_to_save
-            or episode_resolved is not None
-        ),
-        episode_resolved=episode_resolved,
-        _selective_layers_to_save_request=(
-            _selective_layers_to_save_request
-            if _selective_layers_to_save_request is not None
-            else (requested_layers_to_save if uses_selective_layers_to_save else None)
-        ),
-        _deferred_retention_selector=(
-            requested_layers_to_save
-            if uses_deferred_activation
-            else (["output"] if needs_live_output_projection else None)
-        ),
-        _deferred_gradient_selector=(
-            grads_to_save_resolved
-            if uses_deferred_gradients
-            else ("all" if uses_deferred_activation and train_mode_value else None)
-        ),
     )
-    from ...backends.torch.rescue import capture_with_rescue
+    recursive_save_value: SaveOptions | PredicateFn | BaseSelector | None = (
+        save_predicate if save_predicate is not None else recursive_save_options
+    )
+    recursive_activation_transform: _ActivationPostfunc | None | MissingType = (
+        activation_transform
+        if save_predicate is not None and activation_transform is not None
+        else MISSING
+    )
+    recursive_grad_transform: _GradientPostfunc | None | MissingType = (
+        grad_transform if save_predicate is not None and grad_transform is not None else MISSING
+    )
+    recursive_save_raw_activations: bool | MissingType = (
+        save_raw_activations
+        if save_predicate is not None and save_raw_activations is not True
+        else MISSING
+    )
+    recursive_save_raw_gradients: bool | MissingType = (
+        save_raw_grads if save_predicate is not None and save_raw_grads is not True else MISSING
+    )
+    uses_selective = state.uses_selective_layers_to_save
+    return {
+        "activation_transform": recursive_activation_transform,
+        "grad_transform": recursive_grad_transform,
+        "save_raw_activations": recursive_save_raw_activations,
+        "save_raw_grads": recursive_save_raw_gradients,
+        "save_mode": cast(SaveMode, state.save_mode_value),
+        "capture": _recursive_capture_options(state),
+        "save": recursive_save_value,
+        "intervene": None,
+        "halt": state.halt,
+        "lookback": state.args.lookback,
+        "lookback_payload_policy": state.args.lookback_payload_policy,
+        "storage": None,
+        "streaming": None,
+        "profile": state.profile_enabled,
+        "facets": state.facet_recipes,
+        "chunk_size": None,
+        "chunk_paths": None,
+        "retain_output_parents_for_layers_to_save": uses_selective,
+        "_selective_layers_to_save_request": (
+            state.requested_layers_to_save if uses_selective else None
+        ),
+    }
 
-    # Streaming saves, sinks, and halt-predicate partials are not re-runnable;
-    # they report an escape as before instead of attempting a rescue re-run.
-    # EVERY user-callable channel the re-run would invoke a SECOND time is
-    # refused (fail closed): side effects (counters, file writes,
-    # externally-held state) would double-apply with only a session-time
-    # disclosure. That covers intervention transforms, pre-attached hooks,
-    # AND the in-capture transform callables -- ``activation_transform``,
-    # ``grad_transform``, and ``output_transform`` run inside ``run_capture``
-    # and measurably fired twice on a recovered rescue (b6-opus-R16-1 reopen).
-    # Channels applied OUTSIDE the rescue boundary stay eligible: ``save=``
-    # selector predicates (pure by contract), the input ``transform=``
-    # (applied before the re-run boundary; fires once), and
-    # ``layer_visualizers`` (rendered once on the returned trace, after the
-    # driver).
-    rescue_eligible = (
-        streaming_options.path is None
-        and streaming_options.on_save is None
-        and grad_storage_path_value is None
-        and halt is None
-        and intervene is None
-        and not hooks
-        and activation_transform is None
-        and grad_transform is None
-        and output_transform_value is None
+
+def _run_chunked_capture(state: _DoorState, request: CaptureRequest) -> Trace:
+    """Run the chunk fan-out: one recursive capture per chunk, appended into one trace."""
+    chunk_plan = state.chunk_plan
+    normalized_chunk_size = cast(int, state.normalized_chunk_size)
+    chunks = iter_chunked_inputs(state.input_args, chunk_plan)
+    recursive_kwargs = _recursive_door_kwargs(state)
+    trace = _trace_torch_model(
+        state.model,
+        cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
+        None,
+        **recursive_kwargs,
     )
-    from ..._runnable_state_live import capture_observer_bracket
-    from .._episode_join import armed_capture
-    from .._weightsfree_admission import pending_admission
+    initial_record = {
+        "engine": "trace",
+        "append": False,
+        "chunk_size": min(normalized_chunk_size, chunk_plan.total_size),
+        "total_batch_size": chunk_plan.total_size,
+        "append_sequence_id": 0,
+        "chunk_paths": normalize_chunk_paths(state.chunk_paths_value),
+    }
+    for chunk_index, chunk in enumerate(chunks[1:], start=1):
+        if state.save_predicate is None:
+            trace.run(state.model, chunk, replay=ReplayOptions(append=True), input_transform=False)
+            continue
+        new_trace = _trace_torch_model(
+            state.model,
+            cast(torch.Tensor | list[Any] | tuple[Any, ...], chunk),
+            None,
+            **recursive_kwargs,
+        )
+        appended_chunk_size = min(
+            normalized_chunk_size,
+            chunk_plan.total_size - (chunk_index * normalized_chunk_size),
+        )
+        _append_chunk_trace_state(
+            trace,
+            new_trace,
+            _ChunkAppend(
+                chunk_size=appended_chunk_size,
+                total_batch_size=chunk_plan.total_size,
+                append_sequence_id=chunk_index,
+                chunk_paths=normalize_chunk_paths(state.chunk_paths_value),
+            ),
+        )
+    trace.append_history = [initial_record, *trace.append_history]
+    return _finish_chunked_trace(state, request, trace)
+
+
+def _finish_chunked_trace(state: _DoorState, request: CaptureRequest, trace: Trace) -> Trace:
+    """Stamp the chunked-forward facts and run the shared door epilogue tail."""
+    trace.chunked_forward = True
+    trace.last_run = dict(trace.last_run or {})
+    trace.last_run["chunk_size"] = state.normalized_chunk_size
+    trace.last_run["chunk_paths"] = normalize_chunk_paths(state.chunk_paths_value)
+    trace.profile_enabled = state.profile_enabled
+    if state.uses_selective_layers_to_save:
+        _restrict_layer_nums_to_saved(trace, bool(_door_options(request).save_args))
+    _render_and_unwrap(request, trace)
+    _store_capture_cache(trace, request.cache)
+    return trace
+
+
+def _run_request(request: CaptureRequest) -> ForwardResult:
+    """Run the forward pass for a prepared request inside the observer bracket."""
+
+    model = request.model
+    facts = _door_facts(request)
+    episode_resolved = facts["episode_resolved"]
+
+    def run_prepared() -> Trace:
+        """Run the RUN stage for this request and return its trace."""
+        return run_capture(request).trace
 
     # a default capture is a pure observer. Buffers, random
     # state, training modes and plain attributes are restored on every path,
@@ -1454,15 +1418,17 @@ def _trace_torch_model(
     # already-materialized records and stays recoverable after the release.
     with capture_observer_bracket(
         model,
-        carry_state=capture_options.carry_state,
+        carry_state=_door_options(request).carry_state,
         on_failure=lambda: _release_preparation_after_failed_capture(model),
     ) as observer:
         try:
             with (
-                armed_capture(episode_resolved, run_capture) as capture_callable,
-                pending_admission(meta_admission),
+                armed_capture(episode_resolved, run_prepared) as capture_callable,
+                pending_admission(facts["meta_admission"]),
             ):
-                trace = capture_with_rescue(capture_callable, eligible=rescue_eligible, model=model)
+                trace = _rescue.capture_with_rescue(
+                    capture_callable, eligible=facts["rescue_eligible"], model=model
+                )
                 observer.trace = trace
         except BaseException as capture_exc:
             if episode_resolved is not None:
@@ -1471,80 +1437,18 @@ def _trace_torch_model(
                 # masking the user's exception.
                 attach_failed_episode_ledger(capture_exc, episode_resolved)
             raise
+    return ForwardResult(trace=trace, request=request)
 
-    def _store_capture_cache(cache_trace: Trace, path: Path, secret: Any) -> None:
-        """Write the authenticated capture-cache entry and evict stale siblings."""
-        _prepare_log_for_capture_cache(cache_trace)
-        if _store_authenticated_capture_cache(cache_trace, path, secret):
-            _evict_capture_cache(path.parent, keep=path)
 
-    # The door epilogue is the FINALIZE stage's ``finish_trace``; the request
-    # carries its inputs by today's local names.
-    return finish_trace(
-        ForwardResult(trace=trace),
-        CaptureRequest(
-            model=cast(nn.Module, model),
-            input_args=input_args,
-            input_kwargs=input_kwargs,
-            options=capture_options,
-            plan={
-                "stop_after_site": stop_after_site,
-                "stop_after_selector_shaped": stop_after_selector_shaped,
-                "stop_after_ambient": stop_after_ambient,
-                "module_filter": capture_options.module_filter,
-                "input_transform": input_transform,
-                "profile_enabled": profile_enabled,
-                "save_grads_policy": save_grads_policy,
-                "uses_selective_layers_to_save": uses_selective_layers_to_save,
-                "save_args": save_args,
-                "layer_visualizers": layer_visualizers_value,
-                "unwrap_when_done": unwrap_when_done,
-                "episode_resolved": episode_resolved,
-            },
-            cache={
-                "key": cache_key,
-                "path": cache_path,
-                "secret": cache_secret,
-                "store": _store_capture_cache,
-            },
-            admission={"meta_admission": meta_admission},
-        ),
+def _render_and_unwrap(request: CaptureRequest, trace: Trace) -> None:
+    """Render the layer visualizers, then unwrap torch when the user asked for it."""
+    capture_options = _door_options(request)
+    layer_visualizers_value = cast(
+        "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
     )
+    if layer_visualizers_value:
+        _render_layer_visualizers(trace, layer_visualizers_value)
+    if capture_options.unwrap_when_done:
+        from ...backends.torch.wrappers import unwrap_torch
 
-
-def prepare_capture(
-    model: nn.Module,
-    input_args: Any,
-    input_kwargs: dict[Any, Any] | None = None,
-    **flat: Any,
-) -> CaptureRequest:
-    """Pack one torch capture call into the request the RUN stage consumes.
-
-    Seam entry: ``flat`` holds the keyword arguments of
-    ``_run_model_and_save_specified_outs`` unchanged, so
-    ``run_capture(prepare_capture(model, args, kwargs, **flat))`` runs exactly
-    ``_run_model_and_save_specified_outs(model, args, kwargs, **flat)``. The
-    PREPARE lane moves request resolution behind this name.
-
-    Parameters
-    ----------
-    model:
-        The user's model.
-    input_args:
-        Positional forward inputs.
-    input_kwargs:
-        Keyword forward inputs.
-    **flat:
-        Remaining run keyword arguments, carried in ``CaptureRequest.plan``.
-
-    Returns
-    -------
-    CaptureRequest
-        The packed request.
-    """
-    return CaptureRequest(
-        model=model,
-        input_args=input_args,
-        input_kwargs=input_kwargs,
-        plan=dict(flat),
-    )
+        unwrap_torch()
