@@ -3380,7 +3380,6 @@ describe each surface in depth.
 
 | Spelling | Meaning |
 | --- | --- |
-| `Recording.activation_transform_repr` | Canonical repr of the activation transform callable captured at recording time, if any |
 | `Recording.add_grad_record` | Append one retained gradient record and update the gradient indexes |
 | `Recording.by_address` | Map from module address to indexes of its retained records |
 | `Recording.by_label` | Map from layer label to `(pass, record)` index pairs of its retained records |
@@ -3394,7 +3393,6 @@ describe each surface in depth.
 | `Recording.grad_by_pass` | Map from pass index to indexes into `grad_records` |
 | `Recording.grad_records` | Retained gradient records, in capture order |
 | `Recording.history_size` | Number of earlier events kept for predicate history at recording time |
-| `Recording.keep_op_repr` | Repr of the keep-op predicate used at recording time, or `None` |
 | `Recording.last_event_func` | Function name of the last captured event on a failed recording, best effort |
 | `Recording.last_event_input_meta` | Input metadata of the last captured event on a failed recording, best effort |
 | `Recording.last_event_label` | Label of the last captured event on a failed recording, best effort |
@@ -3403,7 +3401,6 @@ describe each surface in depth.
 | `Recording.raw_metadata` | Return payload-free raw metadata rows for every captured event, retained or not |
 | `Recording.records` | Retained activation records, in capture order |
 | `Recording.recovery_warnings` | Warnings collected while recovering this recording from disk |
-| `Recording.save_grads_repr` | Repr of the gradient-saving selector used at recording time, or `None` |
 | `Recording.start_times` | Per-pass start timestamps of the recording |
 
 #### `tl.options.RecordingOptions`
