@@ -818,6 +818,7 @@ _build_module_context_fields = _rebind_function(
 _build_shared_fields_dict = _rebind_function(
     _ops_shared_fields._build_shared_fields_dict, globals()
 )
+_set_grad_info_fields = _rebind_function(_ops_shared_fields._set_grad_info_fields, globals())
 _classify_new_tensor_in_trace = _rebind_function(
     _ops_shared_fields._classify_new_tensor_in_trace, globals()
 )
