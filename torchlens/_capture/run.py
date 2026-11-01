@@ -332,6 +332,33 @@ def run_and_log_inputs_through_model(
         _restore_user_global_rng()
         raise
 
+    # Every arm after the forward is one FINALIZE entry; the record it
+    # reads is built here so RUN holds the forward state and FINALIZE the
+    # arm order (``finalize_completed`` raises the swallowed-stop error
+    # into the failed arm, exactly as the inline check did).
+    def _forward_result(
+        arm: ForwardArm, *, raw_output: Any = None, exc: BaseException | None = None
+    ) -> ForwardResult:
+        return ForwardResult(
+            trace=self,
+            request=CaptureRequest(
+                model=cast(nn.Module, model),
+                input_args=input_args,
+                input_kwargs=input_kwargs,
+                postprocess=postprocess,
+                reservation_resume=reservation_resume,
+            ),
+            arm=arm,
+            raw_output=raw_output,
+            session=capture_session,
+            exc=exc,
+            backend=backend,
+            model=model,
+            input_tensors=tuple(input_tensors),
+            input_args=input_args,
+            input_kwargs=input_kwargs,
+        )
+
     try:
         # B8-25b: everything after ``__enter__`` runs INSIDE the try whose
         # ``finally`` exits the context -- a KeyboardInterrupt between enter
@@ -609,34 +636,6 @@ def run_and_log_inputs_through_model(
                                 self._runnable.host_rng_consumed = _global_advanced
                                 self._runnable.rng_monitor_uncertain = True
                                 self._runnable.rng_monitor_uncertain_detail = ("monitor_not_armed",)
-
-        # Every arm after the forward is one FINALIZE entry; the record it
-        # reads is built here so RUN holds the forward state and FINALIZE the
-        # arm order (``finalize_completed`` raises the swallowed-stop error
-        # into the failed arm, exactly as the inline check did).
-        def _forward_result(
-            arm: ForwardArm, *, raw_output: Any = None, exc: BaseException | None = None
-        ) -> ForwardResult:
-            return ForwardResult(
-                trace=self,
-                request=CaptureRequest(
-                    model=cast(nn.Module, model),
-                    input_args=input_args,
-                    input_kwargs=input_kwargs,
-                    postprocess=postprocess,
-                    reservation_resume=reservation_resume,
-                ),
-                arm=arm,
-                raw_output=raw_output,
-                session=capture_session,
-                exc=exc,
-                raw_graph_ws=self.__dict__.get("_raw_graph_ws"),
-                backend=backend,
-                model=model,
-                input_tensors=tuple(input_tensors),
-                input_args=input_args,
-                input_kwargs=input_kwargs,
-            )
 
         return finalize_completed(_forward_result("completed", raw_output=outputs))
 

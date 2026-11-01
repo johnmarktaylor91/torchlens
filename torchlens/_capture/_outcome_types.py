@@ -7,8 +7,8 @@ per-outcome capability table with its refusal hints, and the two hostile-
 import-graph leaf (it imports only the error hierarchy) so the loaded-payload
 codec can live in its own sibling module without joining the package's import
 cycle. The public home of every name is :mod:`torchlens._capture.outcome`,
-which re-exports them; the classes pin ``__module__`` there so pickles and
-reprs keep naming the authority module.
+which re-exports them; existing by-reference pickles that name the authority
+module keep resolving through those re-exports.
 """
 
 from __future__ import annotations
@@ -194,19 +194,6 @@ class StopRequest:
     boundary_kind: str | None = None
     boundary_label: str | None = None
     error_ref: weakref.ref[BaseException] | None = None
-
-
-# The classes were defined in ``torchlens._capture.outcome`` before this leaf
-# split; pin that public home so by-reference pickles (exceptions, enums,
-# records) and ``repr`` output keep resolving through the authority module.
-_PUBLIC_MODULE = "torchlens._capture.outcome"
-CaptureStatus.__module__ = _PUBLIC_MODULE
-CapturePhase.__module__ = _PUBLIC_MODULE
-FailureOrigin.__module__ = _PUBLIC_MODULE
-CaptureOutcome.__module__ = _PUBLIC_MODULE
-CaptureOutcomeError.__module__ = _PUBLIC_MODULE
-StopSignalSwallowedError.__module__ = _PUBLIC_MODULE
-StopRequest.__module__ = _PUBLIC_MODULE
 
 
 # ---------------------------------------------------------------------------

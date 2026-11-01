@@ -144,7 +144,7 @@ def finalize_completed(result: ForwardResult) -> Any:
     _fence_device_work(trace)
     backend.finalize_forward_session(trace, trace._raw_graph_ws)
 
-    output_transform = getattr(trace, "_output_transform", None)
+    output_transform = trace._output_transform
     trace.raw_output = output_transform(outputs) if output_transform is not None else None
     from ..._autoroute._builtin_output import decode_outputs_for_trace
 
@@ -214,11 +214,11 @@ def _complete_trace_path(result: ForwardResult) -> Any:
 
 def _halt_returns_partial_trace(trace: Trace) -> bool:
     """Return whether the halt frontier hands back a partial trace instead of raising."""
-    options = getattr(trace, "_predicate_save_options", None)
+    options = trace.__dict__.get("_predicate_save_options")
     return (
         options is not None
         and getattr(options, "halt", None) is not None
-        and bool(getattr(trace, "_halt_returns_partial_trace", False))
+        and bool(trace._halt_returns_partial_trace)
     )
 
 
