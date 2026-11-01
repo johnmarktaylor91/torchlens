@@ -3516,8 +3516,9 @@ error-strings	torchlens/_io/runnable_load.py	64
 error-strings	torchlens/_ir/summary_role.py	64
 error-strings	torchlens/_merged/_artifact.py	10
 error-strings	torchlens/_merged/_artifact.py	256
+error-strings	torchlens/_merged/_boundary_rules.py	10
+error-strings	torchlens/_merged/_boundary_rules.py	256
 error-strings	torchlens/_merged/_evidence.py	10
-error-strings	torchlens/_merged/_evidence.py	256
 error-strings	torchlens/_observability/_artifact.py	20
 error-strings	torchlens/_observability/_artifact.py	256
 error-strings	torchlens/_observability/_chassis.py	4.2
@@ -4243,6 +4244,9 @@ package-docstrings	torchlens/_merged/_artifact.py	600
 package-docstrings	torchlens/_merged/_artifact.py	65
 package-docstrings	torchlens/_merged/_artifact.py	700
 package-docstrings	torchlens/_merged/_artifact.py	73
+package-docstrings	torchlens/_merged/_boundary_rules.py	12
+package-docstrings	torchlens/_merged/_boundary_rules.py	17
+package-docstrings	torchlens/_merged/_boundary_rules.py	65
 package-docstrings	torchlens/_merged/_engine.py	1.3
 package-docstrings	torchlens/_merged/_engine.py	1.5
 package-docstrings	torchlens/_merged/_engine.py	2.2
@@ -4252,11 +4256,8 @@ package-docstrings	torchlens/_merged/_enums.py	3.1
 package-docstrings	torchlens/_merged/_enums.py	3.3
 package-docstrings	torchlens/_merged/_enums.py	3.4
 package-docstrings	torchlens/_merged/_enums.py	3.5
-package-docstrings	torchlens/_merged/_evidence.py	12
-package-docstrings	torchlens/_merged/_evidence.py	17
 package-docstrings	torchlens/_merged/_evidence.py	3.2
 package-docstrings	torchlens/_merged/_evidence.py	4.3
-package-docstrings	torchlens/_merged/_evidence.py	65
 package-docstrings	torchlens/_merged/_presenter.py	10
 package-docstrings	torchlens/_merged/_presenter.py	18
 package-docstrings	torchlens/_merged/_presenter.py	19

@@ -54,6 +54,19 @@ Both are top-level lazy names routed here. Contract of record:
 - `extract_rank_evidence(trace, source)` / `resolve_rank_inputs(inputs)` pull each
   rank's boundary + ledger evidence into `RankEvidence`; malformed inputs refuse
   typed via `MergeInputError`.
+- `_validate_boundary` is the ordered list of per-boundary rule groups; the rules
+  themselves live in `_boundary_rules.py`.
+
+## _boundary_rules.py
+- Leaf module: the closed boundary vocabularies (`KNOWN_KINDS`, `P2P_KINDS`, the
+  reader vocabularies `_evidence` re-exports), the shared `_refuse` constructor,
+  and one `check_*` function per rule group (identity, correlation key, group
+  membership and coherence, roles, scalar records, completion events,
+  disclosures, kind-class records, witness policy and digests, op-label
+  back-references, lifetime evidence).
+- Call order is contract: with several defects the earliest group's refusal
+  wins. `tests/test_merged_boundary_rules.py` pins every refusal's class, code
+  and message; a new rule appends a row there.
 
 ## _artifact.py
 - `save_merged(merged, path)` writes the merged-directory artifact: canonical-JSON
