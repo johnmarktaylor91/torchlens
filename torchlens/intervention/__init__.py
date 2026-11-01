@@ -17,6 +17,12 @@ public surface, ``__all__``, and static types unchanged.
 
 from typing import Any
 
+from .._selection.selectors import (
+    label_contains,
+    label_matches,
+    model_input,
+    model_output,
+)
 from ._affine_source import set_affine_coordinates
 from ._directions import Direction, fit_direction
 from ._gradient_contract import keep_grad
@@ -59,17 +65,6 @@ from .hooks import (
 )
 from .population import Population, population
 from .regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget
-from .save import (
-    SpecCompat,
-    TargetManifestDiff,
-    check_spec_compat,
-)
-from .selectors import (
-    label_contains,
-    label_matches,
-    model_input,
-    model_output,
-)
 from .sites import SiteSpec as SiteSpec
 
 # The PUBLIC immutable multi-clause spec (C03 substrate; surgery memo 3.1)
@@ -78,6 +73,11 @@ from .sites import SiteSpec as SiteSpec
 # internal code and persisted pickles are untouched.
 from .spec import (
     Rule,
+)
+from .spec_compat import (
+    SpecCompat,
+    TargetManifestDiff,
+    check_spec_compat,
 )
 from .stochastic import (
     SamplingPlan,

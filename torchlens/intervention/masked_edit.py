@@ -4,8 +4,8 @@ The scatter contract lives here: a whole-site mask returns the edit's
 behavior unchanged (recipe disclosure stamped); element masks wrap the hook
 factory with the EDIT-THEN-SCATTER step on a fresh tensor (stored capture
 truth is never written through). Consumers: the ACT selection do-plan
-(``torchlens._selection.build_selection_do_plan``) and the edge/param
-substitution doors. Moved out of ``torchlens/_selection.py`` under the R43
+(``torchlens._selection.do_plan.build_selection_do_plan``) and the edge/param
+substitution doors. Moved out of ``torchlens/_selection/selection.py`` under the R43
 file-size ratchet; semantics unchanged.
 """
 
@@ -18,7 +18,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from .._selection import Site, _apply_invalid, _Mask
+from .._selection.selection import Site, _apply_invalid, _Mask
 from .types import Edit
 
 __all__ = ["_derive_masked_edit", "_masked_factory", "_validate_edited"]

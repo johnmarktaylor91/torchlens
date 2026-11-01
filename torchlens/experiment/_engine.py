@@ -130,8 +130,8 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
     never as one.
     """
 
-    from .._selection import Selection, Selector
-    from ..intervention.selectors import FacetSelector
+    from .._selection.selection import Selection, Selector
+    from .._selection.selectors import FacetSelector
 
     if isinstance(where, FacetSelector):
         # Checked BEFORE the Selection lift: facet selectors resolve through
@@ -175,7 +175,7 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
             unit_digest=str(getattr(resolved, "resolve_digest", "")),
         )
     if isinstance(where, str):
-        from ..intervention.resolver import _resolve_sites
+        from .._selection.resolver import _resolve_sites
 
         table = _resolve_sites(baseline, where, max_fanout=100_000)
         labels = tuple(str(getattr(site, "label", site)) for site in table)
@@ -186,7 +186,7 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
             resolved_site_count=len(labels),
             resolution_digest=_digest(("sites",) + tuple(sorted(labels))),
         )
-    from ..intervention.resolver import _resolve_sites
+    from .._selection.resolver import _resolve_sites
 
     table = _resolve_sites(baseline, where, max_fanout=100_000)
     labels = tuple(str(getattr(site, "label", site)) for site in table)
@@ -251,7 +251,7 @@ def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) 
     executes identically on live_hook and replay.
     """
 
-    from ..intervention.selectors import site as site_selector
+    from .._selection.selectors import site as site_selector
 
     keys: list[str] = []
     for label in labels:

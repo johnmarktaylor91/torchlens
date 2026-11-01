@@ -41,8 +41,8 @@ import torchlens.intervention._resolver_registry as _resolver
 from torchlens._io import ArtifactError, _safe_unpickle
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._utils._callable_safety import is_pure_forward_callable
+from torchlens.intervention._resolver_registry import resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_import_ref
 
 # The exec/spawn/install stdlib refs the audit proved resolvable under trust.
 _EXEC_SPAWN_INSTALL_REFS = [

@@ -1,7 +1,7 @@
 """Comparative selection producers: differential and cross-pass (L6 producer wave).
 
 Selects by HOW VALUES DIFFER, across runs or across passes. Two producer
-families, both returning :class:`~torchlens._selection.Selection` queries that
+families, both returning :class:`~torchlens._selection.selection.Selection` queries that
 compose with the full ``| & - ~`` algebra and resolve explicitly against one
 trace:
 
@@ -63,7 +63,8 @@ from typing import Any
 
 import torch
 
-from ._selection import (
+from ..errors._base import TorchLensError, TorchLensWarning
+from .selection import (
     Selection,
     SelectionProvenance,
     Selector,
@@ -73,7 +74,7 @@ from ._selection import (
     _unresolvable,
     register_term_resolver,
 )
-from ._selection_values import (
+from .values import (
     _entry_with_mask,
     _lift_within,
     _op_for_entry,
@@ -81,7 +82,6 @@ from ._selection_values import (
     _resolve_population,
     _validate_real_number,
 )
-from .errors._base import TorchLensError, TorchLensWarning
 
 __all__ = [
     "changed",
@@ -106,7 +106,7 @@ def _reference_display(reference: Any) -> str:
 def _validate_reference(reference: Any, producer: str) -> Any:
     """Validate the reference operand: exactly ONE Trace, refused with teaching."""
 
-    from ._data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
     if isinstance(reference, Trace):
         return reference
@@ -185,7 +185,7 @@ class _JoinGuard:
     def build(cls, subject: Any, reference: Any) -> _JoinGuard | None:
         """Build the guard, or ``None`` when either side is keyless."""
 
-        from ._postprocess._site_join import (
+        from .._postprocess._site_join import (
             join_site_profiles,
             occurrence_coordinates,
             site_profile,
@@ -754,7 +754,7 @@ def _disclose_episode_pass_axis(trace: Any, producer: str, layer_labels: list[st
         return
     # Downward (L4 -> L2) import, deferred to keep this module's import-time
     # footprint free of the capture package (the file-local Trace precedent).
-    from ._capture._episode_ledger import EPISODE_ANNOTATIONS_KEY
+    from .._capture._episode_ledger import EPISODE_ANNOTATIONS_KEY
 
     payload = annotations.get(EPISODE_ANNOTATIONS_KEY)
     if not isinstance(payload, Mapping):

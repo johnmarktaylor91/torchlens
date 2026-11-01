@@ -3259,3 +3259,35 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 669800d5f09b4ef5a2a6b6489bd2779c770a2d23 (dirty)
 recorded: 2026-11-01T12:02:26.001613+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: interv-select: selection package move
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 07bd3654ee257522641bc2e0c62b88d99dfbc370 (dirty)
+recorded: 2026-11-01T14:15:37.290093+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: interv-select: selection package move
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 07bd3654ee257522641bc2e0c62b88d99dfbc370 (dirty)
+recorded: 2026-11-01T14:15:42.743346+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: interv-select-2: selection package, one spec path, train merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a514a7862c6a1c2cf94fafc33cecbf0164b2c52a (dirty)
+recorded: 2026-11-01T14:44:33.775614+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: interv-select-2: selection package, one spec path, train merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a514a7862c6a1c2cf94fafc33cecbf0164b2c52a (dirty)
+recorded: 2026-11-01T14:44:36.928186+00:00

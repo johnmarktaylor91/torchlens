@@ -1,6 +1,6 @@
 """The selector base class, its composites and the address-universe classification.
 
-Split from :mod:`torchlens.intervention.selectors`, which re-exports every name here that callers
+Split from :mod:`torchlens._selection.selectors`, which re-exports every name here that callers
 import from it.
 """
 
@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 from .._errors import ArgumentTypeError
 from . import selectors as _selectors
 from .errors import SelectorCompositionError, UnclassifiedSelectorError
-from .types import FrozenTargetSpec, TargetSpec
+from .target import FrozenTargetSpec, TargetSpec
 
 if TYPE_CHECKING:
     from .selectors import SelectorKind, SelectorLike
@@ -197,7 +197,7 @@ class BaseSelector:
         BEFORE lifting (``~lift(s) != lift(~s)``, pinned non-law).
         """
 
-        from .._selection import _selection_from_selector
+        from .selection import _selection_from_selector
 
         return _selection_from_selector(self)
 

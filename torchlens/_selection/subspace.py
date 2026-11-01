@@ -3,7 +3,7 @@
 Selects the elements a DIRECTION (or small subspace) in activation space
 lives on — the spelling for probe directions, steering vectors, PCA
 components, and SAE feature directions. One producer,
-:func:`subspace`, returning a :class:`~torchlens._selection.Selection` query
+:func:`subspace`, returning a :class:`~torchlens._selection.selection.Selection` query
 that composes with the full ``| & - ~`` algebra and resolves explicitly
 against one trace.
 
@@ -61,14 +61,14 @@ from typing import Any
 
 import torch
 
-from ._selection import (
+from .selection import (
     Selection,
     Selector,
     Site,
     _unresolvable,
     register_term_resolver,
 )
-from ._selection_values import (
+from .values import (
     _entry_with_mask,
     _lift_within,
     _resolve_population,

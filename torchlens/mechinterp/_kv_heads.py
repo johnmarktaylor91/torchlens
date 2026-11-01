@@ -29,6 +29,11 @@ from typing import Any
 
 import torch
 
+from .._selection.selectors import (
+    func as func_selector,
+    in_module as in_module_selector,
+    where as where_selector,
+)
 from .._semantic.patching import (
     _baseline_traces,
     _CounterfactualStateGuard,
@@ -37,11 +42,6 @@ from .._semantic.patching import (
     _run_patch,
     _teardown,
     _warn_if_campaign_all_identical,
-)
-from ..intervention.selectors import (
-    func as func_selector,
-    in_module as in_module_selector,
-    where as where_selector,
 )
 from ._errors import refuse
 from ._grids import PatchGrid, _baseline_metrics, _disclose_cost_and_enforce_budget

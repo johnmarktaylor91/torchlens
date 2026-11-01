@@ -20,14 +20,14 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._ir.selector_eval import ensure_supported, selector_from_spec
-from torchlens.intervention.errors import (
-    SelectorCapabilityError,
-    SiteResolutionError,
-)
-from torchlens.intervention.selectors import (
+from torchlens._selection.selectors import (
     BaseSelector,
     CompositeSelector,
     SelectorKind,
+)
+from torchlens.intervention.errors import (
+    SelectorCapabilityError,
+    SiteResolutionError,
 )
 from torchlens.intervention.types import TargetSpec
 
@@ -605,11 +605,8 @@ def test_followed_by_target_spec_serializes_structurally() -> None:
 
     import json
 
-    from torchlens.intervention.save import (
-        SaveLevel,
-        _target_spec_from_json,
-        _target_spec_to_json,
-    )
+    from torchlens.intervention._spec_codec import _target_spec_from_json, _target_spec_to_json
+    from torchlens.intervention.save import SaveLevel
 
     for selector in (
         tl.followed_by(tl.func("relu")),
@@ -632,12 +629,9 @@ def test_followed_by_opaque_inner_refuses_typed_never_mangles() -> None:
     """FIX: an opaque-callable temporal inner must refuse typed, never rebuild
     as a ``contains`` selector over its repr string."""
 
+    from torchlens.intervention._spec_codec import _target_spec_from_json, _target_spec_to_json
     from torchlens.intervention.errors import OpaqueCallableError
-    from torchlens.intervention.save import (
-        SaveLevel,
-        _target_spec_from_json,
-        _target_spec_to_json,
-    )
+    from torchlens.intervention.save import SaveLevel
 
     spec = tl.followed_by(lambda ctx: True).to_target_spec()
     with pytest.raises(OpaqueCallableError):

@@ -87,7 +87,7 @@ def _classify(component: Any) -> tuple[str, str]:
     if isinstance(component, int):
         return "live", "negative ordinals resolve through a bounded rolling window"
     from .._ir.selector_eval import module_exit_bound_addresses, selector_contains_kind
-    from ..intervention.selectors import BaseSelector
+    from .._selection.selectors import BaseSelector
 
     if isinstance(component, BaseSelector) and selector_contains_kind(component, "module"):
         # Any selector naming a module resolves post hoc; one whose matches all

@@ -1,6 +1,6 @@
 """Function registry keys and their trust-gated resolution at the execution boundary.
 
-Split from :mod:`torchlens.intervention.resolver`, which re-exports every name here that callers
+Split from :mod:`torchlens._selection.resolver`, which re-exports every name here that callers
 import from it.
 """
 

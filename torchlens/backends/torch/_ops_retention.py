@@ -25,13 +25,13 @@ from ..._data_classes.op import (
 from ..._ir.op_record import amend_lookback_retention
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._ir.refs import TensorRef
+from ..._selection.selectors import (
+    BaseSelector,
+)
 from ..._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     safe_copy,
     safe_to,
-)
-from ...intervention.selectors import (
-    BaseSelector,
 )
 from ...recording._storage_resolver import _resolve_storage
 from ...recording.exceptions import PredicateError

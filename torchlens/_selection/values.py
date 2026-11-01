@@ -1,7 +1,7 @@
 """Value-based and statistical selection producers (L6 producer wave).
 
 Selects by WHAT VALUES ARE, not just where. Two producer families, both
-returning :class:`~torchlens._selection.Selection` queries that compose with
+returning :class:`~torchlens._selection.selection.Selection` queries that compose with
 the full ``| & - ~`` algebra and resolve explicitly against one trace:
 
 - VALUE producers read the resolution trace's OWN retained activations:
@@ -47,9 +47,9 @@ from typing import Any
 
 import torch
 
-from torchlens._selection import SelectionError
-
-from ._selection import (
+from ..errors._base import TorchLensError
+from .errors import SelectionError
+from .selection import (
     Selection,
     SelectionProvenance,
     Selector,
@@ -65,7 +65,6 @@ from ._selection import (
     _WholeSiteTerm,
     register_term_resolver,
 )
-from .errors._base import TorchLensError
 
 __all__ = [
     "dead",
@@ -648,7 +647,7 @@ def _resolve_stat_term(node: _StatTerm, trace: Any) -> Selection:
 def _validate_samples(samples: Any, producer: str, single_trace_hint: str) -> tuple[Any, ...]:
     """Validate the evidence set: an iterable of >= 2 Traces (Bundle iterates)."""
 
-    from ._data_classes.trace import Trace
+    from .._data_classes.trace import Trace
 
     if isinstance(samples, (str, bytes, torch.Tensor, Trace)):
         raise ValueError(
@@ -825,7 +824,7 @@ class _TableScoreTerm:
 def _is_read_table(candidate: Any) -> bool:
     """Return whether a ``by=`` operand is a one-backward ReadTable."""
 
-    from .attribution.onebackward._table import ReadTable
+    from ..attribution.onebackward._table import ReadTable
 
     return isinstance(candidate, ReadTable)
 
@@ -849,7 +848,7 @@ def _table_rows_by_label(node: _TableScoreTerm, trace: Any) -> tuple[dict[str, A
             "read against this trace.",
             code="by_score_invalid",
         )
-    from .attribution.onebackward._accessor import _validity_token
+    from ..attribution.onebackward._accessor import _validity_token
 
     if table.trace_token is not None and table.trace_token != _validity_token(trace):
         raise _unresolvable(

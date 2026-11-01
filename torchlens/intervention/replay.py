@@ -22,6 +22,7 @@ from .._ir.container import (
     TupleIndex,
 )
 from .._quantities import Bytes
+from .._selection.resolver import _label_index_scope
 from .._trace_state import TraceState
 from .._utils.display import progress_bar
 from .._utils.rng import execute_with_restored_rng_autocast
@@ -63,7 +64,6 @@ from .hooks import (
     normalize_hook_plan,
     normalize_hooks_from_spec,
 )
-from .resolver import _label_index_scope
 from .runtime import _execute_hook
 from .spec import is_gradient_site
 from .types import (
@@ -78,7 +78,7 @@ from .types import (
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from .selectors import SelectorLike
+    from .._selection.selectors import SelectorLike
 
 
 class _CallConeNode(Protocol):

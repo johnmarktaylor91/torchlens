@@ -25,14 +25,14 @@ from ..._ir.events import (
     ModuleFrame,
 )
 from ..._ir.predicate import RetroactiveCaptureDecision
+from ..._selection.selectors import (
+    BaseSelector,
+)
 from ..._state import pause_logging
 from ..._utils.display import _timed_phase
 from ..._utils.tensor_utils import (
     fp8_widen_for_numeric_ops,
     safe_copy,
-)
-from ...intervention.selectors import (
-    BaseSelector,
 )
 from ...recording.types import (
     CaptureSpec,

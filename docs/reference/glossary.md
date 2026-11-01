@@ -1101,7 +1101,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **tl.grad(site)** *(spelling documented-unstable)*
 : Builds a `GradSelector` (frozen, hashable, selector kind `"grad"`; also
-  `torchlens.intervention.selectors.grad`) that names the gradient of the loss with respect to the
+  `torchlens._selection.selectors.grad`) that names the gradient of the loss with respect to the
   site's OUTPUT, observed at the TorchLens boundary before it enters the op's backward function:
   the same tensor `trace[site].grad` stores. It is an address and never calls autograd.
   `repr(tl.grad("relu_3"))` is `tl.grad('relu_3')`. It accepts a label (pass-qualified
@@ -2209,7 +2209,7 @@ no deprecation shim owed*
   `selection_kind_incompatible`; unknown sites refuse `site_not_in_trace`;
   member sites with no output index space refuse `non_tensor_site` /
   `no_index_space`. Both producers are pure functions over the ONE
-  executed-DAG graph substrate (`torchlens._selection_graph._TraceGraph`,
+  executed-DAG graph substrate (`torchlens._selection.graph._TraceGraph`,
   shared with the influence-geometry path machinery), the seam a future
   graph-MOTIF producer plugs into.
 

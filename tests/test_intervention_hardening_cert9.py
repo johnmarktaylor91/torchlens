@@ -23,8 +23,8 @@ import inspect
 
 import pytest
 
+from torchlens.intervention._spec_values import _resolve_import_ref
 from torchlens.intervention.helpers import helper_from_serialized
-from torchlens.intervention.save import _resolve_import_ref
 
 
 def test_value_decoder_has_no_default() -> None:

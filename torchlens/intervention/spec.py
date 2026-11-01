@@ -38,6 +38,7 @@ from typing import Any, Literal
 import torch
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
+from .._selection.selectors import BaseSelector, CompositeSelector
 from ._content_identity import (
     collect_tensors,
     render_helper,
@@ -51,7 +52,6 @@ from ._site_signal import (
     site_signal,
 )
 from .predicates import as_intervention_decision
-from .selectors import BaseSelector, CompositeSelector
 from .types import Edit, HelperDirection, InterventionDecision
 
 AddressClass = Literal["structural", "recorded", "value_dependent"]

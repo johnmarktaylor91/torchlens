@@ -63,7 +63,7 @@ from _oracle_env import (  # noqa: E402 - tests/ is on sys.path under pytest
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.selectors import (
+from torchlens._selection.selectors import (
     BaseSelector,
     CompositeSelector,
     grad_fn_label,
@@ -380,7 +380,7 @@ def _probe_spec(
     """
 
     from torchlens._ir.selector_eval import selector_from_spec
-    from torchlens.intervention.selectors import classify_selector_universe
+    from torchlens._selection.selectors import classify_selector_universe
 
     try:
         selector = make_selector()

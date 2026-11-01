@@ -19,8 +19,8 @@ from .._ir.selector_eval import (
     selector_contains_kind,
     split_followed_by_conjunction,
 )
+from .._selection.selectors import BaseSelector
 from ..intervention.predicates import as_intervention_decision
-from ..intervention.selectors import BaseSelector
 from ..intervention.types import InterventionDecision
 from ..recording.exceptions import PredicateError
 from ..recording.types import CaptureSpec, ModuleStackFrame, RecordContext

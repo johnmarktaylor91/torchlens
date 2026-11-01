@@ -613,7 +613,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         pending naming-session ratification.
         """
 
-        from .._selection import _trace_edge_records
+        from .._selection.selection import _trace_edge_records
 
         return _trace_edge_records(self)
 
@@ -1070,7 +1070,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             attached (for the caller's failure cleanup).
         """
 
-        from .._selection import Selection, Selector
+        from .._selection.selection import Selection, Selector
         from ..intervention.spec import Recipe as PublicInterventionSpec
 
         if isinstance(hooks_or_site, PublicInterventionSpec):
@@ -1165,7 +1165,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             return False
         if not all(isinstance(item, (list, tuple)) and len(item) == 2 for item in value):
             return False
-        from .._selection import Selection, Selector
+        from .._selection.selection import Selection, Selector
 
         slice_module = sys.modules.get("torchlens._trace_slice")
         slice_type = slice_module.TraceSlice if slice_module is not None else ()
@@ -1175,7 +1175,7 @@ class TraceInterventionMixin(_TraceMixinBase):
     def _selection_batch_kind(selection: Any) -> str:
         """The selection kind (``ACT``/``PARAM``/``EDGE``) of one batch pair's target."""
 
-        from .._selection import Selection, Selector, _lift
+        from .._selection.selection import Selection, Selector, _lift
 
         slice_module = sys.modules.get("torchlens._trace_slice")
         if slice_module is not None and isinstance(selection, slice_module.TraceSlice):
@@ -1220,7 +1220,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             batch, which has already propagated.
         """
 
-        from .._selection import Selection, Selector, _lift
+        from .._selection.selection import Selection, Selector, _lift
 
         slice_module = sys.modules.get("torchlens._trace_slice")
         slice_type = slice_module.TraceSlice if slice_module is not None else ()
@@ -1265,7 +1265,7 @@ class TraceInterventionMixin(_TraceMixinBase):
     ) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
         """Resolve one ACT batch pair to its hook plan, refusing leaf sites typed."""
 
-        from .._selection import build_selection_do_plan
+        from .._selection.do_plan import build_selection_do_plan
 
         resolved, plan, audit = build_selection_do_plan(self, selection, edit)
         leaf_sites = [item["op"].label for item in plan if item["is_leaf"]]
@@ -1379,8 +1379,8 @@ class TraceInterventionMixin(_TraceMixinBase):
             committed without propagation) -- plus the sticky-hook handle
             ids attached for the hook kind (empty otherwise).
         """
-
-        from .._selection import _lift, build_selection_do_plan
+        from .._selection.do_plan import build_selection_do_plan
+        from .._selection.selection import _lift
         from ..intervention.errors import EngineDispatchError
 
         lifted = _lift(selection)
@@ -1451,7 +1451,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         exception propagates. Returns the attached handle ids.
         """
 
-        from ..intervention.selectors import label as label_selector
+        from .._selection.selectors import label as label_selector
 
         attached: list[str] = []
         try:
@@ -1491,9 +1491,9 @@ class TraceInterventionMixin(_TraceMixinBase):
     ) -> str:
         """Apply one EDGE-kind selection edit through the edge-substitution path."""
 
-        from torchlens._selection import SelectionError
+        from torchlens._selection.errors import SelectionError
 
-        from .._selection import Selection
+        from .._selection.selection import Selection
 
         if edit is None:
             raise ValueError(
@@ -1543,9 +1543,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         default on the replay path; rerun/set_only keep refusing typed).
         """
 
-        from torchlens._selection import SelectionError
+        from torchlens._selection.errors import SelectionError
 
-        from .._selection import Selection
+        from .._selection.selection import Selection
 
         if edit is None:
             raise ValueError(
@@ -1587,7 +1587,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         disclosure matches the hook path.
         """
 
-        from .._selection import _apply_invalid
+        from .._selection.selection import _apply_invalid
         from ..intervention.audit import build_fire_record
         from ..intervention.hooks import make_hook_context
         from ..intervention.replay import _commit_replay_updates, _replay_site_key

@@ -39,13 +39,13 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, NoReturn
 
 from .._errors import InvalidArgumentError, TorchLensWarning
-from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
-from ._helper_fingerprint import helper_versions
-from ._module_alias_guard import (
+from .._selection.module_alias_guard import (
     bare_module_address,
     model_module_aliases,
     refuse_module_alias_spellings,
 )
+from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
+from ._helper_fingerprint import helper_versions
 from ._zero_fire import (
     DEFAULT_ZERO_FIRE_POLICY,
     check_zero_fire_policy,
@@ -163,7 +163,7 @@ def _selector_terms(selector: Any, *, negated: bool = False) -> list[tuple[str, 
         resolve).
     """
 
-    from .selectors import BaseSelector, CompositeSelector, NotSelector
+    from .._selection.selectors import BaseSelector, CompositeSelector, NotSelector
 
     if isinstance(selector, NotSelector):
         return _selector_terms(selector.selector, negated=not negated)
@@ -206,7 +206,7 @@ def _boundary_parts(rule: Any) -> tuple[Any, tuple[Any, ...]] | None:
         ``(module_selector, step_selectors)``, or ``None`` for any other shape.
     """
 
-    from .selectors import CompositeSelector
+    from .._selection.selectors import CompositeSelector
 
     where = rule.target
     if getattr(where, "selector_kind", None) == "module":

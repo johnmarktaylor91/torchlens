@@ -113,6 +113,9 @@ from ._postprocess._selective_save import (
 )
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetExceededError, SaveBudgetOption
+from ._selection.module_alias_guard import refuse_model_alias_spellings
+from ._selection.resolver import _resolve_sites
+from ._selection.selectors import BaseSelector
 from ._trace_selector_helpers import (
     _TRACE_OPTION_FILTERED_NAMES,
     _combine_save_predicates,
@@ -168,7 +171,6 @@ from .backends.torch.bound_root import (
 )
 from .bridge import transformers as _hf_bridge
 from .intervention import injection as _injection, model_door as _model_door
-from .intervention._module_alias_guard import refuse_model_alias_spellings
 from .intervention._zero_fire import settle_capture_zero_fire, zero_fire_policy_scope
 from .intervention.audit import rule_signal as _rule_signal
 from .intervention.errors import ChunkedForwardConfigError
@@ -178,8 +180,6 @@ from .intervention.hooks import (
     split_site_branches as _split_site_branches,
 )
 from .intervention.predicates import InterventionPredicate
-from .intervention.resolver import _resolve_sites
-from .intervention.selectors import BaseSelector
 from .intervention.types import InterventionDecision
 from .options import (
     CaptureOptions,
@@ -3268,7 +3268,7 @@ def _trace_torch_model(
                     ),
                     argument="stop_after",
                 )
-            from .intervention.selectors import FuncSelector, ModuleSelector
+            from ._selection.selectors import FuncSelector, ModuleSelector
 
             # A bare string is the pluck-vocabulary spelling: halt at the first
             # emission whose module address OR function name matches, whichever

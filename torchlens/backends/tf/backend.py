@@ -21,9 +21,9 @@ from ..._postprocess._selective_save import (
     warn_zero_match_save_predicate,
 )
 from ..._quantities import Duration
+from ..._selection.selectors import BaseSelector
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends import BackendName
-from ...intervention.selectors import BaseSelector
 from ...options import CaptureOptions, merge_capture_options
 from .._finalize import (
     attach_function_root_module,

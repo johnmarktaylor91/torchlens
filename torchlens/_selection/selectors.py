@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from typing import Any, Literal, TypeAlias, cast
 
 from .._errors import ArgumentTypeError
-from ._selector_base import (
+from .errors import SelectorCompositionError
+from .selector_base import (
     _NODE_KINDS,
     _QUALIFIER_KINDS,
     BaseSelector,
@@ -18,8 +19,7 @@ from ._selector_base import (
     SelectorUniverse,
     classify_selector_universe as classify_selector_universe,
 )
-from .errors import SelectorCompositionError
-from .types import FrozenTargetSpec, TargetSpec
+from .target import FrozenTargetSpec, TargetSpec
 
 #: A latent facet name, ``"<sae name>[k]"`` or ``"<sae name>[j,k]"`` (see
 #: ``FacetSelector.latent``); matched for display only, never for resolution.
@@ -1506,7 +1506,7 @@ def _normalize_grad_inner(site: Any) -> str | BaseSelector:
         from .._ir.selector_eval import normalize_selector_like
 
         return normalize_selector_like(site, lifecycle="site")
-    from .hooks import lower_record_site_target
+    from ..intervention.hooks import lower_record_site_target
 
     lowered = lower_record_site_target(site)
     if isinstance(lowered, BaseSelector):

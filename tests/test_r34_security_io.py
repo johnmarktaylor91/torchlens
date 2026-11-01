@@ -61,8 +61,8 @@ from torchlens._io.rehydrate import _rehydrate_small_raw_images
 from torchlens._io.runnable_load import _parse_literal
 from torchlens._runnable import LiteralAtom, LiteralAtomKind
 from torchlens._utils._callable_safety import is_pure_forward_callable
+from torchlens.intervention._resolver_registry import resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_import_ref
 from torchlens.recording.storage_disk import _dtype_from_name
 
 # --------------------------------------------------------------------------- #

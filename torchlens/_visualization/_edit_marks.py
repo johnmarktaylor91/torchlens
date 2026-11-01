@@ -331,7 +331,7 @@ def _staged_marks(trace: Trace) -> dict[str, list[EditMark]]:
     spec = trace._intervention_spec
     if spec is None:
         return {}
-    from ..intervention.resolver import _resolve_sites
+    from .._selection.resolver import _resolve_sites
     from .node_spec import _forward_site
 
     marks: dict[str, list[EditMark]] = {}

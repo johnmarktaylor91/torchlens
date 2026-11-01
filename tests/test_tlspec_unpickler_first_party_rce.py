@@ -38,8 +38,8 @@ import torchlens._utils as tlutils
 from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._utils._callable_safety import is_inert_first_party_callable
+from torchlens.intervention._spec_values import _resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.save import _resolve_import_ref
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
@@ -373,7 +373,7 @@ def test_vetted_inert_helper_set_admitted() -> None:
 def test_untrusted_callable_refusals_carry_code_and_subject() -> None:
     """R65: every trust-gate refusal names its code and the denied import."""
 
-    from torchlens.intervention.resolver import resolve_import_ref
+    from torchlens.intervention._resolver_registry import resolve_import_ref
 
     with pytest.raises(UntrustedCallableError) as untrusted:
         resolve_import_ref("somemod:some_fn")

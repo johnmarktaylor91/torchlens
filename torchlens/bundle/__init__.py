@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 import torch
 
+from .._selection.resolver import _resolve_sites
 from ..errors.episode import BundleRelationError
 from ..intervention._metrics import is_scalar_like, relative_l1, resolve_metric
 from ..intervention._super.super_logs import (
@@ -31,7 +32,6 @@ from ..intervention.errors import (
     BaselineUndeterminedError,
     BundleMemberError,
 )
-from ..intervention.resolver import _resolve_sites
 from ..intervention.types import Relationship
 from ._aligned_sites import aligned_site_labels, resolve_aligned_site
 from ._alternatives import (

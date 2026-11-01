@@ -252,7 +252,7 @@ class injection_recorder:
             ]
         else:
             outputs = []
-        from .resolver import function_registry_key_from_callable
+        from ._resolver_registry import function_registry_key_from_callable
 
         try:
             callable_ref = function_registry_key_from_callable(func)
@@ -785,8 +785,8 @@ def _resolve_record_callable(
 ) -> tuple[Any, str | None]:
     """Resolve one record's callable through the trust gate, or classify."""
 
+    from ._resolver_registry import resolve_function_registry_key
     from .errors import ReplayPreconditionError, UntrustedCallableError
-    from .resolver import resolve_function_registry_key
 
     try:
         func = resolve_function_registry_key(

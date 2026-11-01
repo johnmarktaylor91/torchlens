@@ -20,6 +20,15 @@ from .._ir.selector_eval import (
     looks_like_finalized_label,
     normalize_selector_like,
 )
+from .._selection.selectors import (
+    BackwardPassSelector,
+    BaseSelector,
+    CompositeSelector,
+    FacetSelector,
+    GradKindSelector,
+    NotSelector,
+    label,
+)
 from ..errors import TorchLensWarning
 from ._hooks_support import (
     _display_label,
@@ -39,15 +48,6 @@ from .errors import (
     LiveModeLabelError,
     ReplayPreconditionError,
     SiteResolutionError,
-)
-from .selectors import (
-    BackwardPassSelector,
-    BaseSelector,
-    CompositeSelector,
-    FacetSelector,
-    GradKindSelector,
-    NotSelector,
-    label,
 )
 from .types import (
     Edit,
@@ -1247,7 +1247,7 @@ def live_backward_selector_matches(
         Whether the selector matches this backward site.
     """
 
-    from .resolver import _resolve_unchecked
+    from .._selection.resolver import _resolve_unchecked
 
     expected_call_index = _selector_call_index(selector_like)
     if expected_call_index is not None and expected_call_index != call_index:
