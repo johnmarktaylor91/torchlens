@@ -528,8 +528,8 @@ def test_scorecard_command_writes_checks_and_grades(tmp_path: Path, monkeypatch:
         )
     )
     target = tmp_path / "stub" / "scorecard.json"
-    monkeypatch.setattr(_scorecard, "_preview_scorecard", lambda backend, **kw: card)
-    monkeypatch.setattr(_scorecard, "shipped_scorecard_path", lambda backend: target)
+    monkeypatch.setattr(scorecard, "_preview_scorecard", lambda backend, **kw: card)
+    monkeypatch.setattr(scorecard, "shipped_scorecard_path", lambda backend: target)
     assert scorecard.main(["--backend", "stub", "--graduation"]) == 2
     assert scorecard.main(["--backend", "stub", "--check"]) == 2
     assert scorecard.main(["--backend", "stub", "--write"]) == 0
@@ -548,5 +548,5 @@ def test_scorecard_command_writes_checks_and_grades(tmp_path: Path, monkeypatch:
             "",
         )
     )
-    monkeypatch.setattr(_scorecard, "_preview_scorecard", lambda backend, **kw: changed)
+    monkeypatch.setattr(scorecard, "_preview_scorecard", lambda backend, **kw: changed)
     assert scorecard.main(["--backend", "stub", "--check"]) == 1
