@@ -1,9 +1,11 @@
 """Post-hoc narration mixin for ``Trace`` (lane F28, snoop memo D5).
 
 Lives beside the other Trace mixins; unlike them it is a LEAF (module-level
-imports are typing-only, the renderer import is lazy inside the method --
-``data_classes`` is L1 and must not eagerly import the L5 snoop package), so
-``trace.py`` imports it unconditionally with no typing stand-in.
+imports are typing-only, the ``report._narrate`` import is lazy inside the
+method -- ``data_classes`` is L1 and must not eagerly import the L7 report
+package), so ``trace.py`` imports it unconditionally with no typing stand-in.
+The shell reaches its destination directly rather than through ``_doors`` so
+that it stays outside the record import cycle.
 """
 
 from __future__ import annotations
@@ -36,6 +38,6 @@ class TraceNarrateMixin:
             Rendered narration block (no trailing newline).
         """
 
-        from torchlens._snoop._narrate import narrate_trace
+        from ..report._narrate import narrate as _narrate
 
-        return narrate_trace(self, last=last, select=select)
+        return _narrate(self, last=last, select=select)
