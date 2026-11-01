@@ -19,18 +19,13 @@ import time as _time_module
 import uuid as _uuid_module
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from types import (
-    CodeType,
-    FrameType,
-)
+from types import CodeType, FrameType
 from typing import Any, cast
 
 import numpy as np
 import torch
 
-from .._torch_compat import (
-    warm_lazy_torch_imports,
-)
+from .._torch_compat import warm_lazy_torch_imports
 from . import (
     channels,
     deep_inventory,
@@ -164,9 +159,11 @@ class host_nondeterminism_monitor:
     _numpy_frame_candidate_children = staticmethod(numpy_frames._numpy_frame_candidate_children)
 
     def _deep_inventory_frame_reachable(self, *args: Any, **kwargs: Any) -> Any:
+        """Delegate the frame-reachable inventory walk to :mod:`deep_inventory`."""
         return deep_inventory._deep_inventory_frame_reachable(self, *args, **kwargs)
 
     def _sweep_model_generators(self, *args: Any, **kwargs: Any) -> Any:
+        """Delegate the model-attribute generator sweep to :mod:`generator_sweep`."""
         return generator_sweep._sweep_model_generators(self, *args, **kwargs)
 
     def __init__(self, model: Any = None) -> None:

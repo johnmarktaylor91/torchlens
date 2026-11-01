@@ -66,6 +66,7 @@ def restores_rng_streams(func: Callable[_P, _R]) -> Callable[_P, _R]:
 
     @_functools_module.wraps(func)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        """Call ``func`` inside the restore bracket."""
         with RngStreamsRestore():
             return func(*args, **kwargs)
 

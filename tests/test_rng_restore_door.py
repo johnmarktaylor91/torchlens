@@ -46,7 +46,6 @@ def test_door_restores_every_stream_at_context_exit() -> None:
     assert _draw() == expected
 
 
-@pytest.mark.smoke
 def test_door_restores_on_error() -> None:
     _seed_all(7)
     expected = _draw()
@@ -58,7 +57,6 @@ def test_door_restores_on_error() -> None:
     assert _draw() == expected
 
 
-@pytest.mark.smoke
 def test_door_restores_exactly_once() -> None:
     """A second ``restore`` is a no-op: it never rewinds draws made after the first."""
     _seed_all(7)
