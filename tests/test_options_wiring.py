@@ -93,7 +93,7 @@ def test_visualization_canonical_kwargs_route_without_deprecation() -> None:
     options = VisualizationOptions(rolled=True, depth=2, layout="dot", node_style="profiling")
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        assert options.view == "rolled"
+        assert options.rolled is True
         assert options.depth == 2
         assert options.layout == "dot"
         assert options.node_style == "profiling"

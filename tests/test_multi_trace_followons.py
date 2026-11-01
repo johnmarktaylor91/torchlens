@@ -223,7 +223,7 @@ def test_show_bundle_graph_rolled_and_backward_modes(tmp_path: Path) -> None:
     rolled_source = _visualization.show_bundle_graph(
         bundle,
         path=str(tmp_path / "rolled_bundle"),
-        rolled=True,
+        vis_mode="rolled",
         file_format="svg",
     )
     backward_source = _visualization.show_bundle_graph(
@@ -283,7 +283,7 @@ def test_bundle_graph_style_primitives_and_chrome_trace_diff(tmp_path: Path) -> 
         bundle,
         path=str(tmp_path / "styled_bundle"),
         vis_node_overrides={first_node: {"fillcolor": "#DDEAF7"}},
-        edge_overrides={first_edge: {"color": "#0072B2"}},
+        vis_edge_overrides={first_edge: {"color": "#0072B2"}},
         file_format="svg",
     )
 
