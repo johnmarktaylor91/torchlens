@@ -2346,7 +2346,11 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def grads(self) -> GradientRecordAccessor:
-        """Per-pass gradient records saved for this Op."""
+        """Per-pass gradient records saved for this Op.
+
+        One record per backward pass that reached this op's output, each the
+        gradient after this trace's ``tl.grad(site)`` edit chain.
+        """
 
         trace = self.source_trace
         raise_if_no_backward_capture(trace, plural_subject="op.grads or saved_grad_ops")
@@ -3901,7 +3905,10 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     ) -> None:
         """Save the grad tensor for this layer's output.
 
-        Called by the backward hook registered during the forward pass.
+        Called by the backward hook registered during the forward pass. The
+        saved value is the gradient of this op's output after TorchLens's edit
+        chain at this site (``tl.grad(site)`` edits run first), so ``.grad``
+        and an edit agree.
         The grad is ``detach().clone()``'d - a bare copy, not deep-copied -
         so it's independent of the autograd graph but cheap to store.
 
