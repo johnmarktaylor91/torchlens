@@ -2,8 +2,7 @@
 
 from typing import Any, Literal, cast
 
-from .._errors import KeywordConflictError, _actionable_message
-from .._selection import SelectionError
+from .._errors import KeywordConflictError, SelectionError, _actionable_message
 from ..errors._base import (
     CaptureError,
     CompatibilityError,

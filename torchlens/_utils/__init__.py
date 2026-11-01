@@ -360,7 +360,7 @@ def _probe_fingerprint() -> _EnvironmentCheck:
     """
 
     try:
-        from torchlens._user_funcs import _fingerprint_model_weights
+        from torchlens._capture_state_helpers import _fingerprint_model_weights
 
         model = nn.Linear(2, 1)
         fingerprint = _fingerprint_model_weights(model)

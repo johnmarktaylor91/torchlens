@@ -168,6 +168,17 @@ def derive_episode_status(
     members = [pair for index, pair in enumerate(member_outcomes) if index not in excluded]
     episode_tier = _fold_effective_tier(member_tiers, excluded)
 
+    return _fold_member_arms(members, n_declared, ledger, episode_tier)
+
+
+def _fold_member_arms(
+    members: Sequence[tuple[str, str | None]],
+    n_declared: int | None,
+    ledger: EpisodeLedger | None,
+    episode_tier: ProvenanceTier,
+) -> EpisodeFoldResult:
+    """Evaluate the ordered fold arms over the surviving members."""
+
     # Arm 1: any member UNATTESTED or UNKNOWN, or the ledger violates the law.
     if ledger is not None:
         from ._episode_ledger import _check_monotone_prefix_law

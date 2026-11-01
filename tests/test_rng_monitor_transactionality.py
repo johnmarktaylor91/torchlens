@@ -31,6 +31,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+import torchlens._capture.run as capture_run
 from torchlens._utils import rng as rng_module
 from torchlens._utils._torch_compat import autocast_is_enabled
 from torchlens._utils.rng import AutocastRestore, host_nondeterminism_monitor
@@ -360,12 +361,10 @@ def test_autocast_restore_exits_outer_contexts_when_inner_raises():
 def test_rng_monitor_verdict_is_prestamped_fail_closed(monkeypatch):
     """An unreached verdict stamp must read as UNCERTAIN, never as a clean window."""
 
-    import torchlens._capture.trace as capture_trace
-
     def _raise(*args, **kwargs):
         raise RuntimeError("injected after the monitor window")
 
-    monkeypatch.setattr(capture_trace, "host_rng_advanced", _raise, raising=False)
+    monkeypatch.setattr(capture_run, "host_rng_advanced", _raise, raising=False)
     with pytest.raises(Exception) as excinfo:
         tl.trace(
             _tiny_model(),

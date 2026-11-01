@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
-from .._chunking import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
+from .._capture.prepare.chunked import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
 from .._data_classes._trace_accessors import boundary_label_rows
 from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
@@ -942,7 +942,7 @@ def _preflight(log: Trace, model: nn.Module, x: Any) -> None:
             remedy="pass the forward input explicitly as log.run(model, x)",
             argument="inputs",
         )
-    from .._user_funcs import _reject_opaque_wrappers
+    from .._capture_state_helpers import _reject_opaque_wrappers
 
     _reject_opaque_wrappers(model)
 
@@ -1004,11 +1004,9 @@ def _capture_with_active_spec(
         Fresh log built off to the side.
     """
 
-    from .._user_funcs import (
-        _run_model_and_save_specified_outs,
-        _unwrap_data_parallel,
-        check_model_and_input_variants,
-    )
+    from .._capture.run_entry import _run_model_and_save_specified_outs
+    from .._capture_state_helpers import _unwrap_data_parallel
+    from .._robustness import check_model_and_input_variants
 
     model = _unwrap_data_parallel(model)
     x = _coerce_input_args(model, x)

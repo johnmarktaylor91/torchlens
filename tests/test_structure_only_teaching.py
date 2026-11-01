@@ -294,10 +294,10 @@ def _neutralize_layer1(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _neutralize_layer2(monkeypatch: pytest.MonkeyPatch) -> None:
     from torchlens import _capture as capture_pkg  # noqa: F401
-    from torchlens._capture import trace as capture_trace_module
+    from torchlens._capture import run as capture_run_module
 
     monkeypatch.setattr(
-        capture_trace_module,
+        capture_run_module,
         "_structure_only_forward_boundary",
         lambda trace: nullcontext(),
     )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -12,6 +13,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _user_funcs as user_funcs, _visualization
+from torchlens._capture import run_entry
+from torchlens._capture.prepare import door
 from torchlens.options import CaptureOptions, SaveOptions, StorageOptions, VisualizationOptions
 
 _VISUALIZATION_CASES = [
@@ -153,6 +156,22 @@ def stubbed_runner(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], _Du
         "_run_model_and_save_specified_outs",
         fake_run_model_and_save_specified_outs,
     )
+    monkeypatch.setattr(
+        run_entry,
+        "_run_model_and_save_specified_outs",
+        fake_run_model_and_save_specified_outs,
+    )
+
+    def fake_run_capture(request: Any) -> Any:
+        """Stand in for the RUN stage: record the request's run keywords."""
+
+        plan = run_entry._with_plan_defaults(request).plan
+        trace = fake_run_model_and_save_specified_outs(
+            request.model, request.input_args, request.input_kwargs, **plan
+        )
+        return SimpleNamespace(trace=trace)
+
+    monkeypatch.setattr(door, "run_capture", fake_run_capture)
     return captured, dummy_log
 
 

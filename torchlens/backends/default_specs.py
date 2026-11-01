@@ -527,7 +527,7 @@ def _torch_capture_trace(*args: Any, **kwargs: Any) -> Any:
         Captured trace.
     """
 
-    from .._user_funcs import _trace_torch_model
+    from .._capture.prepare.door import _trace_torch_model
 
     return _trace_torch_model(*args, **kwargs)
 
@@ -661,7 +661,7 @@ def _mlx_capture_trace(*args: Any, **kwargs: Any) -> Any:
         Captured trace.
     """
 
-    from .._user_funcs import _trace_mlx_model_from_public_kwargs
+    from .._capture.prepare.dispatch import _trace_mlx_model_from_public_kwargs
 
     return _trace_mlx_model_from_public_kwargs(*args, **kwargs)
 
