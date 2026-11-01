@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import struct
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
@@ -26,23 +26,6 @@ from ._utils.alias_footprint import touched_bytes_relation
 from .errors import (
     PathDivergenceError,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _VIEW_OP_QUALNAMES,
-        _contract_check,
-        _fact_path_tuple_or_none,
-        _input_alias_topology_checks,
-        _input_error,
-        _input_metadata_contract_checks,
-        _input_nontensor_tree_contract_checks,
-        _input_site_value,
-        _input_tree_contract_checks,
-        _model_input_arity_positions,
-        _model_input_literal_facts,
-        _runtime_top_level_positions,
-        _value_at_path,
-    )
 
 __all__ = (
     "_top_level_input_site_contract_checks",
@@ -602,3 +585,93 @@ def _input_layout_ok(value: torch.Tensor) -> bool:
         and not bool(getattr(value, "is_quantized", False))
         and not tensor_has_named_dims(value)
     )
+
+
+def _fast_input_check(
+    slot: TensorSlotDescriptor,
+    value: Any,
+) -> tuple[ContractCheck, ...]:
+    """Build cheap shape/dtype/device/layout checks for one runtime input leaf.
+
+    Parameters
+    ----------
+    slot:
+        Persisted input slot contract.
+    value:
+        Runtime value resolved at that slot's path.
+
+    Returns
+    -------
+    tuple[ContractCheck, ...]
+        Ordered fast static-guard checks.
+    """
+
+    is_tensor = isinstance(value, torch.Tensor)
+    shape = tuple(value.shape) if is_tensor else None
+    dtype = str(value.dtype) if is_tensor else None
+    device_ok = bool(
+        is_tensor
+        and value.device.type == slot.device_type
+        and (
+            slot.device_index is None
+            or value.device.index is None
+            or value.device.index == slot.device_index
+        )
+    )
+    return (
+        _contract_check(
+            f"fast_input_type:{slot.slot_id}",
+            is_tensor,
+            RunnableErrorCode.INPUT_TREE_MISMATCH,
+            f"Runtime input at {slot.slot_id!r} is not a tensor.",
+        ),
+        _contract_check(
+            f"fast_input_shape:{slot.slot_id}",
+            shape == slot.shape,
+            RunnableErrorCode.INPUT_SHAPE_MISMATCH,
+            f"Runtime input shape {shape} does not match {slot.shape}.",
+        ),
+        _contract_check(
+            f"fast_input_dtype:{slot.slot_id}",
+            dtype == slot.dtype,
+            RunnableErrorCode.INPUT_DTYPE_MISMATCH,
+            f"Runtime input dtype {dtype} does not match {slot.dtype}.",
+        ),
+        _contract_check(
+            f"fast_input_device:{slot.slot_id}",
+            device_ok,
+            RunnableErrorCode.INPUT_TREE_MISMATCH,
+            f"Runtime input device does not match {slot.device_type}:{slot.device_index}.",
+        ),
+        _contract_check(
+            f"fast_input_layout:{slot.slot_id}",
+            bool(is_tensor and _input_layout_ok(value)),
+            RunnableErrorCode.INPUT_TREE_MISMATCH,
+            "Fast sparse execution accepts only plain dense strided tensor inputs.",
+        ),
+    )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_execution import (  # noqa: E402
+    _VIEW_OP_QUALNAMES,
+)
+from ._runnable_input_aliases import (  # noqa: E402
+    _input_alias_topology_checks,
+    _input_nontensor_tree_contract_checks,
+    _input_site_value,
+    _input_tree_contract_checks,
+)
+from ._runnable_input_sites import (  # noqa: E402
+    _fact_path_tuple_or_none,
+    _input_metadata_contract_checks,
+    _model_input_arity_positions,
+    _model_input_literal_facts,
+    _runtime_top_level_positions,
+)
+from ._runnable_verification import (  # noqa: E402
+    _contract_check,
+    _input_error,
+    _value_at_path,
+)

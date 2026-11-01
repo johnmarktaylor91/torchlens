@@ -710,14 +710,14 @@ def test_r67_consumer_source_scan() -> None:
 
     import inspect
 
-    from torchlens import _runnable_execution
+    import torchlens._runnable_output_contracts
     from torchlens._capture import trace as capture_trace
 
     assert "snapshot_input_boundary" in inspect.getsource(
         capture_trace._record_runnable_input_structure
     )
     assert "snapshot_input_boundary" in inspect.getsource(
-        _runnable_execution._input_structure_witness_check
+        torchlens._runnable_output_contracts._input_structure_witness_check
     )
 
 

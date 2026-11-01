@@ -51,9 +51,9 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
         _peek_tensor_live_fire_results,
     )
     from ...recording.types import CaptureSpec
+    from ._ops_containers import _walk_output_tensors_with_paths
     from ._ops_predicates import _record_predicate_output
     from .model_prep import _live_intervention_machinery_armed, _note_replacement_event
-    from .ops import _walk_output_tensors_with_paths
 
     layer_type = "interventionreplacement"
     # Like the exhaustive replacement op, the edited value belongs to the scope

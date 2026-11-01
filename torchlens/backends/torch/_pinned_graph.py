@@ -23,7 +23,8 @@ from ..._state import pause_logging
 
 # Through the ops facade, not the _ops_* split modules: those import back into
 # ops.py, so importing one first is a cycle (see PENDING_IMPORT_CYCLES).
-from .ops import _add_autograd_saved_tensor, _iter_autograd_saved_candidates
+from ._ops_autograd import _add_autograd_saved_tensor
+from ._ops_exhaustive import _iter_autograd_saved_candidates
 
 __all__ = ["pinned_autograd_bytes"]
 

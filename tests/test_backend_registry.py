@@ -1126,7 +1126,7 @@ def test_backend_identity_invariant_rejects_non_string_backend(bad_backend: Any)
     Pin the arm itself so a silent disarm (``if False:``) cannot survive.
     """
 
-    from torchlens.validation.invariants import _check_backend_identity_invariants
+    from torchlens.validation._invariants_entry import _check_backend_identity_invariants
 
     class _BadBackendStub:
         backend = bad_backend

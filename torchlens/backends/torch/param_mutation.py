@@ -20,7 +20,8 @@ import torch
 from ... import _state
 from ..._capture.projections import active_recording_state_or_none
 from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
-from ..._utils.tensor_utils import iter_tensors, safe_copy
+from ..._utils.tensor_leaves import iter_tensors
+from ..._utils.tensor_utils import safe_copy
 from ._tl import get_param_meta
 
 
@@ -104,7 +105,7 @@ def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
         Control for the wrapped call.
     """
 
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with _state.pause_logging(), internal_scalar_read():
         receiver.requires_grad_(False)
@@ -160,7 +161,7 @@ def frozen_parameter_receiver_context(
     receiver = args[0]
     if not isinstance(receiver, torch.nn.Parameter):
         return nullcontext()
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         is_forced_leaf = receiver.requires_grad and receiver.is_leaf

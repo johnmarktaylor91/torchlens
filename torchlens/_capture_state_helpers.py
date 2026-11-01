@@ -37,6 +37,7 @@ from ._utils._torch_compat import (
     get_fsdp_wrapper_type,
     is_dynamo_compiled_callable,
 )
+from ._utils.tensor_leaves import iter_tensors
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 
 # Content-fingerprint / attribute-fragment family: split to _capture_fingerprint.py
@@ -1455,8 +1456,6 @@ def _input_id_for_relationship_evidence(input_args: Any) -> int:
         the input container.
     """
 
-    from ._utils.tensor_utils import iter_tensors
-
     tensors = list(iter_tensors(input_args, sort_keys=True))
     if len(tensors) == 1:
         return id(tensors[0])
@@ -1487,8 +1486,6 @@ def _hash_input_signatures(input_args: Any, input_kwargs: Any) -> str:
     :func:`_hash_input_tensor_value` evidence instead (A-GATE, foldB D6
     path 2: a shape/dtype/device hash is value-blind).
     """
-
-    from ._utils.tensor_utils import iter_tensors
 
     tensors = list(iter_tensors((input_args, input_kwargs), sort_keys=True))
     entries = [(tuple(tensor.shape), str(tensor.dtype), str(tensor.device)) for tensor in tensors]

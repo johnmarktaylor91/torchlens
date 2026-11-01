@@ -287,7 +287,7 @@ def save_intervention(
             save_level=save_level.value,
         )
         _write_text_file(tmp_path / _README_FILE, _readme_text(spec_json, tensor_entries))
-        # Blob file data is fsynced at write time (_fsync_file), but directory
+        # Blob file data is fsynced at write time (fsync_file), but directory
         # ENTRIES must be flushed bottom-up: without fsyncing tensors/ first, a
         # power crash just after publish can leave a durable spec.json whose
         # tensors/*.safetensors entries were lost (R59; siblings use fsync_tree).
@@ -1930,7 +1930,7 @@ def _write_tlspec_tensor_blob(
     relative_path = Path(_TENSOR_DIR) / f"{blob_id}.safetensors"
     blob_path = tmp_path / relative_path
     save_file({_BLOB_TENSOR_KEY: contiguous}, str(blob_path))
-    _fsync_file(blob_path)
+    fsync_file(blob_path)
     return TensorEntry(
         blob_id=blob_id,
         kind=kind,
@@ -2226,18 +2226,6 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ReplayPreconditionError(f"{path} must contain a JSON object")
     return data
-
-
-def _fsync_file(path: Path) -> None:
-    """Fsync an existing file (write-capable handle on Windows; see ``_durability``).
-
-    Parameters
-    ----------
-    path:
-        File path.
-    """
-
-    fsync_file(path)
 
 
 def _fsync_directory(path: Path) -> None:

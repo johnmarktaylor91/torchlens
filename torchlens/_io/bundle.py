@@ -67,6 +67,7 @@ from ._save_gates import (
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
+    _make_tmp_bundle_path,
     reject_symlink_path as _reject_symlink_path,
     resolve_bundle_blob_path,
     resolve_bundle_blobs_dir,
@@ -1044,7 +1045,7 @@ def _capture_activation_blob_specs(
     """
 
     from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
-    from .._runnable_execution import build_input_attestation_fingerprint
+    from .._runnable_input_aliases import build_input_attestation_fingerprint
     from .._runnable_state import runnable_tensor_byte_digest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
@@ -4139,23 +4140,6 @@ def _load_safetensors_file(
         ) from exc
     except (OSError, SafetensorError, ValueError) as exc:
         raise ArtifactError(f"Failed to read safetensors blob at {blob_path}.") from exc
-
-
-def _make_tmp_bundle_path(bundle_path: Path) -> Path:
-    """Create the deterministic sibling temp path for one bundle target.
-
-    Parameters
-    ----------
-    bundle_path:
-        Final bundle directory path.
-
-    Returns
-    -------
-    Path
-        Temporary working directory path.
-    """
-
-    return bundle_path.parent / f"{bundle_path.name}.tmp.{uuid.uuid4().hex}"
 
 
 def _make_backup_path(bundle_path: Path) -> Path:

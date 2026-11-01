@@ -120,7 +120,6 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_fast_run": "L3",
     "_runnable": "L3",
     "_transport": "L3",
-    "_split_rebind": "L3",
     "_selection_align": "L4",
     "_source_links": "L3",
     "_training_validation": "L3",

@@ -38,7 +38,7 @@ from .._data_substrate import (
 )
 from .._errors import InvalidArgumentError, _actionable_message, _ActionableErrorMixin
 from .._io import _json
-from .._utils.tensor_utils import tensor_payload_bytes
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ..errors._base import ConfigurationError
 from ..transforms._pipeline import OpaqueStep
 from .callable_identity import classify_callable

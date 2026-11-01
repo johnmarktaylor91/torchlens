@@ -2171,7 +2171,7 @@ def _paddle_intervention_corroborated(trace: Trace, capture: Any, op: Any) -> bo
         True when every evidence leg is present and consistent.
     """
 
-    from ...validation.invariants import _intervention_spec_is_armed
+    from ...validation._invariants_backward_flow import _intervention_spec_is_armed
 
     if not _intervention_spec_is_armed(getattr(trace, "_intervention_spec", None)):
         return False

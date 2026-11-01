@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from typing import TypeAlias
 
@@ -144,3 +145,20 @@ def resolve_bundle_blob_path(
             f"Bundle rejected path traversal outside blobs/: {relative_path!r}."
         ) from exc
     return candidate
+
+
+def _make_tmp_bundle_path(bundle_path: Path) -> Path:
+    """Create the deterministic sibling temp path for one bundle target.
+
+    Parameters
+    ----------
+    bundle_path:
+        Final bundle directory path.
+
+    Returns
+    -------
+    Path
+        Temporary working directory path.
+    """
+
+    return bundle_path.parent / f"{bundle_path.name}.tmp.{uuid.uuid4().hex}"

@@ -70,18 +70,9 @@ PENDING_IMPORT_CYCLES = {
         "cycle through torchlens._ir.__init__ -> selector_eval -> ir.* back-edge; "
         "torchlens/_ir/ is outside the artifact-boundary lane's territory"
     ),
-    "torchlens.backends.torch._ops_autograd": (
-        "the four _ops_* split modules import back into their sibling ops.py facade; "
-        "backends/torch/ops.py is owned by the r3 ops-split lane"
-    ),
-    "torchlens.backends.torch._ops_capture_records": (
-        "same _ops_* split-module back-edge as _ops_autograd"
-    ),
-    "torchlens.backends.torch._ops_emission": (
-        "same _ops_* split-module back-edge as _ops_autograd"
-    ),
     "torchlens.backends.torch._ops_retention": (
-        "same _ops_* split-module back-edge as _ops_autograd"
+        "_ops_retention still imports back into its sibling ops.py facade "
+        "(the other _ops_* splits import standalone since the rebind removal)"
     ),
 }
 
