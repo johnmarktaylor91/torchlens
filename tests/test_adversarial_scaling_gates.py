@@ -4,9 +4,10 @@ Each gate runs a REAL capture at a size where a complexity regression is
 catastrophic but current behavior is comfortable (sizes calibrated 2026-08-19,
 torch 2.13, the benchmark host: wide-equivalence 300 ~0.9s, 300-pass recurrence ~1.9s,
 1400-op diameter ~3.9s, fan-out 300 ~1.0s). The wall-clock bar is the tier
-duration tripwire itself (smoke <5s / heavy <20s, load-scaled, min(wall, cpu)):
-a regression from linear to quadratic work blows the budget and fails the
-session, while the assertions below pin CORRECTNESS at scale — exact layer
+duration budget (smoke <5s / heavy <20s per test in ``tests/tiers/durations.csv``,
+checked by ``scripts/tier_durations.py check``): a regression from linear to
+quadratic work blows the budget in the next measurement, while the assertions
+below pin CORRECTNESS at scale — exact layer
 counts, exact relation tuples, O(1) identity-shared group views, and silent
 (disclosure-free) grouping below the real ceilings. No ceiling constant is
 monkeypatched here; the tiny-ceiling behavior gates live in

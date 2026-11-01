@@ -21,7 +21,7 @@ Roles
 - ``suite``: names a dedicated gate family selected as a unit.
 - ``tier_selector``: names WHICH items of a function, class or module get a
   tier. ``smoke_cells("test_x[a]", ...)`` applies ``smoke`` to exactly the
-  named items at collection (``tests/conftest.py::pytest_itemcollected``), so
+  named items at collection (``tests/_tiers_plugin.py::pytest_itemcollected``), so
   a parametrized family keeps one or two representative smoke cells. The
   applied ``smoke`` is an ordinary tier mark: every tier rule applies to it.
 - ``selection``: ORTHOGONAL selectors, never cost tiers (compo memo,

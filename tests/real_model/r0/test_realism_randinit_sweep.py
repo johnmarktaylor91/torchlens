@@ -8,8 +8,8 @@ independent same-process oracles, the absence-claim adjudicator against the
 enumerated known-false manifest, and the flagship logit_lens failure pinned
 enumerated-red. The single highest value-to-cost item in the memo (A4).
 
-One explicit test function per model family: the smoke duration tripwire
-budgets aggregate cost per test-function family, and each family's
+One explicit test function per model family: the smoke duration budget
+(``scripts/tier_durations.py``) bounds the slowest test per file, and each family's
 build+trace cost must land in its own budget, not the first test's.
 """
 
