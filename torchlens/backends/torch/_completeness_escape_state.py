@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import types
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
@@ -15,36 +15,6 @@ from .escape_detection import (
     expected_original_call,
     mark_expected_original_accounted,
 )
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _ALIAS_MUTATION_CANDIDATE_LABELS,
-        _AUTHORIZED_INTERNAL_CALLER_CODE,
-        _AUTHORIZED_INTERNAL_CALLER_CODE_IDS,
-        _DATA_ALIAS_MUTATION_TRACES,
-        _HOST_ESCAPE_BOOL_CONSUMER_LOCATIONS,
-        _HOST_ESCAPE_BOOL_SOURCE_LABELS,
-        _HOST_ESCAPE_CROSS_THREAD_CAPTURED,
-        _HOST_ESCAPE_LABEL_LEAF_ORIGINS,
-        _HOST_ESCAPE_MUTABLE_WRITEBACK,
-        _HOST_ESCAPE_RAW_POINTER,
-        _HOST_ESCAPE_SOURCE_LABELS,
-        _HOST_ESCAPE_STATE_SOURCE_LABELS,
-        _HOST_ESCAPE_STATE_SOURCE_NAMES,
-        _HOST_ESCAPE_UNATTRIBUTABLE_BOOL,
-        _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE,
-        _INPUT_METADATA_VIEW_READ,
-        _ORIG_TENSORBASE_UNTYPED_STORAGE,
-        _ORIG_UNTYPED_STORAGE_DATA_PTR,
-        _ORIGIN_LABEL_PREFIX,
-        _ORIGIN_RNG,
-        _ORIGIN_STATE_PREFIX,
-        _ORIGIN_UNKNOWN,
-        _PRUNED_ALIAS_MUTATION_LABELS,
-        _PRUNED_RNG_CONTROL_LABELS,
-        _operand_leaf_origins,
-        internal_scalar_read,
-    )
 
 __all__ = (
     "input_metadata_view_read",
@@ -288,6 +258,14 @@ def _register_authorized_caller_namespace(namespace: Mapping[str, Any], module_f
     caller still authenticates.
     """
 
+    # Imported here, not from this module's bottom block: this runs during the
+    # completeness_witness module's import (its roster collection), which can happen
+    # while this module is still executing its bottom imports.
+    from .completeness_witness import (
+        _AUTHORIZED_INTERNAL_CALLER_CODE,
+        _AUTHORIZED_INTERNAL_CALLER_CODE_IDS,
+    )
+
     def _collect(code: types.CodeType) -> None:
         """Register one module-local code object and its nested code constants."""
 
@@ -403,3 +381,36 @@ def _raw_storage_ptr_no_observe(tensor: Any) -> int | None:
     except (RuntimeError, TypeError, NotImplementedError, AttributeError):
         return None
     return int(ptr) if ptr else None
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._completeness_origins import (  # noqa: E402
+    _operand_leaf_origins,
+    internal_scalar_read,
+)
+from .completeness_witness import (  # noqa: E402
+    _ALIAS_MUTATION_CANDIDATE_LABELS,
+    _AUTHORIZED_INTERNAL_CALLER_CODE_IDS,
+    _DATA_ALIAS_MUTATION_TRACES,
+    _HOST_ESCAPE_BOOL_CONSUMER_LOCATIONS,
+    _HOST_ESCAPE_BOOL_SOURCE_LABELS,
+    _HOST_ESCAPE_CROSS_THREAD_CAPTURED,
+    _HOST_ESCAPE_LABEL_LEAF_ORIGINS,
+    _HOST_ESCAPE_MUTABLE_WRITEBACK,
+    _HOST_ESCAPE_RAW_POINTER,
+    _HOST_ESCAPE_SOURCE_LABELS,
+    _HOST_ESCAPE_STATE_SOURCE_LABELS,
+    _HOST_ESCAPE_STATE_SOURCE_NAMES,
+    _HOST_ESCAPE_UNATTRIBUTABLE_BOOL,
+    _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE,
+    _INPUT_METADATA_VIEW_READ,
+    _ORIG_TENSORBASE_UNTYPED_STORAGE,
+    _ORIG_UNTYPED_STORAGE_DATA_PTR,
+    _ORIGIN_LABEL_PREFIX,
+    _ORIGIN_RNG,
+    _ORIGIN_STATE_PREFIX,
+    _ORIGIN_UNKNOWN,
+    _PRUNED_ALIAS_MUTATION_LABELS,
+    _PRUNED_RNG_CONTROL_LABELS,
+)

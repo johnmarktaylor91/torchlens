@@ -148,9 +148,9 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 
 | Old name | New name | Status |
 | --- | --- | --- |
-| `Trace.conditional_then_entry_edges` | `Trace.conditional_arm_entry_edges` | removed |
-| `Trace.conditional_elif_entry_edges` | `Trace.conditional_arm_entry_edges` | removed |
-| `Trace.conditional_else_entry_edges` | `Trace.conditional_arm_entry_edges` | removed |
+| `Trace.conditional_then_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
+| `Trace.conditional_elif_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
+| `Trace.conditional_else_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
 | `Trace.validate_saved_outs()` | `Trace.validate_forward_pass()` | removed |
 | `Trace.replay()` | `Trace.push()` | removed |
 | `Trace.replay_from()` | `Trace.push_from()` | removed |
@@ -169,3 +169,24 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `sweep(param=...)` | `sweep(at=...)` | removed |
 | `record_span()` | `span()` | removed |
 | `get_model_metadata()` | `log_model_metadata()` | removed |
+
+## Gradient Edits (gradient sites)
+
+The site, not a keyword or a gradient-only helper, says which tensor an edit applies to:
+`tl.grad(site)` addresses the gradient of the site's output. Removed with no alias:
+
+| Old name | New name | Status |
+| --- | --- | --- |
+| `tl.zero_grad()` | `tl.zero_ablate()` on `tl.grad(site)` | removed |
+| `tl.scale_grad(f)` | `tl.scale(f)` on `tl.grad(site)` | removed |
+| `tl.clamp_grad(lo, hi)` | `tl.clamp(low=lo, high=hi)` on `tl.grad(site)` | removed |
+| `tl.add_grad_noise(std, seed=)` | `tl.add_noise(std, seed=)` on `tl.grad(site)` | removed |
+| `tl.clip_grad(max_norm)` | `tl.clip_norm(max_norm)` on `tl.grad(site)` | removed |
+| `tl.hook_grad(fn)` | `fn` on `tl.grad(site)` | removed |
+| `direction=` on `Trace.do`, `Trace.attach_hooks`, `tl.when`, `tl.observers.tap`, `tl.stats.narrate`, `tl.sweep` | the site: `tl.grad(site)`, or `tl.grad(site) \| site` for both | removed |
+| `tl.stats.aggregate(target=)` | metric keys are sites (`tl.grad(site)` for a gradient) | removed |
+| `tl.observers.span(direction=)` | `span(signal=)` | removed |
+| `show_bundle_graph(direction=)` | `show_bundle_graph(signal=)` | removed |
+| `FireRecord.direction`, `TapRecord.direction`, `HookContext.direction` | `.signal` | removed |
+| `Edit.kind`, `Edit.direction` | `Edit.signal`; `Rule.signal` (derived) | removed |
+| `HookContext.ctx`, `HookContext.run_ctx` | `HookContext.state`, `HookContext.run_state` | removed |

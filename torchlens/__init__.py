@@ -21,7 +21,7 @@ if _TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
-__version__ = "2.36.2"
+__version__ = "2.36.3"
 
 if _TYPE_CHECKING:
     from ._data_classes.trace import Trace
@@ -54,7 +54,6 @@ _LAZY_ATTRS = {
     "bridge": ("torchlens.bridge", None),
     "callbacks": ("torchlens.callbacks", None),
     "neuro": ("torchlens.neuro", None),
-    "hook_grad": ("torchlens.intervention.helpers", "hook_grad"),
     "clamp": ("torchlens.intervention.helpers", "clamp"),
     "compat": ("torchlens.compat", None),
     "label_contains": ("torchlens.intervention.selectors", "label_contains"),
@@ -72,14 +71,11 @@ _LAZY_ATTRS = {
     "followed_by": ("torchlens.intervention.selectors", "followed_by"),
     "func": ("torchlens.intervention.selectors", "func"),
     "func_transform": ("torchlens.intervention.selectors", "func_transform"),
-    "clamp_grad": ("torchlens.intervention.helpers", "clamp_grad"),
-    "clip_grad": ("torchlens.intervention.helpers", "clip_grad"),
+    "grad": ("torchlens.intervention.selectors", "grad"),
+    "clip_norm": ("torchlens.intervention.helpers", "clip_norm"),
     "grad_fn": ("torchlens.intervention.selectors", "grad_fn"),
     "grad_input": ("torchlens.intervention.selectors", "grad_input"),
-    "add_grad_noise": ("torchlens.intervention.helpers", "add_grad_noise"),
     "grad_output": ("torchlens.intervention.selectors", "grad_output"),
-    "scale_grad": ("torchlens.intervention.helpers", "scale_grad"),
-    "zero_grad": ("torchlens.intervention.helpers", "zero_grad"),
     "fingerprint": ("torchlens.fingerprint", None),
     "head": ("torchlens.intervention.selectors", "head"),
     "in_backward_pass": ("torchlens.intervention.selectors", "in_backward_pass"),
@@ -452,9 +448,9 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     from ._errors import AmbiguousOpLookupError
     from ._trace_selector_helpers import canonical_module_site_key
 
-    if pattern in trace.layer_dict_all_keys:
+    if pattern in trace._layer_dict_all_keys:
         return [pattern]
-    if pattern in trace.layer_logs:
+    if pattern in trace._layer_logs:
         return [pattern]
     if canonical_module_site_key(trace, pattern) is not None:
         # A wrapper-relative or dot-flattened module name keys by the caller's spelling.
@@ -709,6 +705,7 @@ __all__ = [
     "func",
     "func_transform",
     "followed_by",
+    "grad",
     "grad_fn",
     "grad_input",
     "grad_output",
@@ -725,6 +722,7 @@ __all__ = [
     "in_module",
     "head",
     "clamp",
+    "clip_norm",
     "mean_ablate",
     "merge_ranks",
     "merge_report",
@@ -740,12 +738,6 @@ __all__ = [
     "site",
     "at_step",
     "when",
-    "hook_grad",
-    "clip_grad",
-    "add_grad_noise",
-    "clamp_grad",
-    "scale_grad",
-    "zero_grad",
     "Selector",
     "Selection",
     "units",

@@ -85,6 +85,10 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_io._load_validators": "L3",
     # -- L2 ENGINE ----------------------------------------------------------
     "_capture": "L2",
+    # The PREPARE stage resolves intervention, autoroute and selective-save
+    # requests, so it sits at their tier inside the L2 engine package.
+    "_capture.prepare": "L4",
+    "_capture.run_entry": "L4",
     "backends": "L2",
     "_ir": "L2",
     "recording": "L2",
@@ -103,8 +107,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_robustness": "L2",
     "_input_coerce": "L2",
     "_input_walk": "L2",
-    "_chunking": "L2",
-    "_chunked_capture_helpers": "L2",
+    "_chunking": "L4",
+    "_chunked_capture_helpers": "L4",
     "_capture_state_helpers": "L2",
     "_capture_fingerprint": "L2",
     "_utils": "L1",
@@ -120,7 +124,6 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_fast_run": "L3",
     "_runnable": "L3",
     "_transport": "L3",
-    "_split_rebind": "L3",
     "_selection_align": "L4",
     "_source_links": "L3",
     "_training_validation": "L3",
@@ -226,7 +229,11 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "_runnable_witness_contracts",
         "_training_validation",
         "_fast_run",
-        "_user_funcs",
+        # integ-F relocation: the trace-entry refusal guards moved out of
+        # _user_funcs (file cap) keep their one is_dynamo_compiled_callable()
+        # read at the ONE sanctioned probe chokepoint (_utils/_torch_compat);
+        # the module holds no direct torch._ touches of its own.
+        "_user_funcs_guards",
         # floor2 fix (2026-10-01): the runnable-save CPU float8 path
         # consumes get_cpu_float8_deterministic_fill_support() at the ONE
         # sanctioned probe chokepoint (_utils/_torch_compat); the module

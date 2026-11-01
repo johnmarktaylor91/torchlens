@@ -208,7 +208,7 @@ def grade_save_load(task_dir: Path) -> list[Check]:
     if artifact.exists():
         try:
             loaded = tl.load(str(artifact))
-            _check(checks, "artifact reloads", loaded.num_ops == n_ops, loaded.num_ops)
+            _check(checks, "artifact reloads", len(loaded.ops) == n_ops, len(loaded.ops))
         except Exception as exc:  # noqa: BLE001 - the grader reports any load failure as a check
             _check(checks, "artifact reloads", False, f"{type(exc).__name__}: {exc}")
     return checks

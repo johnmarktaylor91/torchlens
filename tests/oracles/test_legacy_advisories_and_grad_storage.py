@@ -1,4 +1,4 @@
-"""Hand-counted oracles for ``CaptureFacts.advisories`` and ``Trace.total_backward_memory``.
+"""Hand-counted oracles for ``CaptureFacts.advisories`` and ``Trace.cost.total_backward_memory``.
 
 ``advisories`` is the number of capture-advisory records on the trace, one per
 advisory kind the capture raised (``Trace.annotations["capture_advisories"]``,
@@ -29,8 +29,10 @@ from tests.oracles.test_legacy_graph_counts import Grad
 from torchlens.errors import ScalarEscapeWarning
 from torchlens.options import CaptureOptions, SaveOptions
 
-G = torch.randn(4)  # a forward-global tensor a module consumes directly
-H = torch.randn(4)  # a forward-global tensor only a scalar read consumes
+#: A C function no wrapper patches (stand-in for a pybind extension call): its
+#: output carries no provenance. (A closure or forward-global tensor is a recorded
+#: ``constant`` source, so it plants no advisory.)
+_opaque_tanh = torch._C._VariableFunctions.tanh
 
 
 class Advise(nn.Module):
@@ -44,13 +46,19 @@ class Advise(nn.Module):
         h = self.fc(x)
         a = h.sum().item()  # scalar escape 1
         b = float(h.mean())  # scalar escape 2
-        y = self.fc(G)  # module entry adopts a forward-global tensor: 1 adoption
-        g = H.sum().item()  # scalar escape 3; H.sum() is a source-less orphan: 1
+        y = self.fc(_opaque_tanh(x))  # module entry adopts an untagged tensor: 1 adoption
+        g = _opaque_tanh(x).sum().item()  # scalar escape 3; the sum is a source-less orphan: 1
         return h * (a + b + g) + y
 
 
-def test_capture_advisories_match_the_planted_kinds_and_counts() -> None:
+def test_capture_advisories_match_the_planted_kinds_and_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from torchlens.backends.torch import rescue
+
     torch.manual_seed(0)
+    # Keep the primary capture: the rescue re-run's aten recording recovers the stand-in.
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         trace = tl.trace(Advise().eval(), torch.randn(2, 4))
@@ -120,6 +128,6 @@ def test_total_backward_memory_counts_unique_storage_bytes(
 ) -> None:
     trace = _two_pass_trace(transform)
     try:
-        assert int(trace.total_backward_memory) == expected
+        assert int(trace.cost.total_backward_memory) == expected
     finally:
         trace.cleanup()

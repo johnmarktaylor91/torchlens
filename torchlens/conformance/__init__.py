@@ -35,22 +35,27 @@ from pathlib import Path
 from ..errors import ConfigurationError
 from ._adapters import RosterModel, default_roster, resolve_adapter
 from ._cases import CaseResult, run_c0_cases, run_c1_cases, run_c2_cases
+from ._graduation import GraduationItem, GraduationReport, graduation_report
 from ._preview_adapters import PREVIEW_BACKENDS
+from ._protocol_cases import run_c0_protocol_cases
 from ._scorecard import PreviewScorecard, ScorecardCell, preview_scorecard
 
 __tl_layer__ = "L9"
 
 __all__ = [
-    "PREVIEW_BACKENDS",
     "CaseResult",
+    "claim_string",
     "ConformanceReport",
+    "default_roster",
+    "GraduationItem",
+    "GraduationReport",
+    "graduation_report",
+    "PREVIEW_BACKENDS",
+    "preview_scorecard",
     "PreviewScorecard",
     "RosterModel",
-    "ScorecardCell",
-    "claim_string",
-    "default_roster",
-    "preview_scorecard",
     "run_conformance",
+    "ScorecardCell",
 ]
 
 SUITE_VERSION = "torchlens.conformance.v1"
@@ -192,6 +197,18 @@ def _roster_for(adapter: object, roster: tuple[RosterModel, ...] | None) -> tupl
     return default_roster()
 
 
+def _realism_by_family(results: list[CaseResult]) -> dict[str, list[str]]:
+    """Map each realism class to the ordered, de-duplicated families that reported it."""
+
+    realism: dict[str, list[str]] = {}
+    for row in results:
+        if row.realism:
+            realism.setdefault(row.realism, [])
+            if row.family not in realism[row.realism]:
+                realism[row.realism].append(row.family)
+    return realism
+
+
 def run_conformance(
     backend: str,
     *,
@@ -250,6 +267,7 @@ def run_conformance(
     model_rows = _roster_for(adapter, roster)
     results: list[CaseResult] = []
     results.extend(run_c0_cases(adapter))
+    results.extend(run_c0_protocol_cases(str(getattr(adapter, "name", ""))))
     if "C1" in tiers:
         results.extend(run_c1_cases(adapter, model_rows))
     if "C2" in tiers:
@@ -259,12 +277,7 @@ def run_conformance(
         else:
             results.extend(run_c2_cases(adapter, model_rows, workdir=Path(workdir)))
     earned, funnel = _adjudicate(results, tiers, executed_floor)
-    realism: dict[str, list[str]] = {}
-    for row in results:
-        if row.realism:
-            realism.setdefault(row.realism, [])
-            if row.family not in realism[row.realism]:
-                realism[row.realism].append(row.family)
+    realism = _realism_by_family(results)
     pretrained_families = len(realism.get("pretrained", []))
     claim_eligible = (
         earned != ""

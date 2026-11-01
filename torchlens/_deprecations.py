@@ -5,7 +5,7 @@ Historical note: this module also carried the additive-deprecation helpers
 The 2026-08-19 shim-removal lane deleted every deprecation shim outright per
 the interim-phase ruling, so only the load-bearing sentinel machinery remains.
 Interim-phase policy is remove-and-rename, not shim: do not add new
-deprecation routes here (``tests/test_deprecation_inventory.py`` pins the
+deprecation routes here (``scripts/checks/deprecation_inventory.py`` pins the
 package deprecation-free).
 """
 

@@ -355,7 +355,7 @@ def test_standard_model_still_logs_cleanly() -> None:
     model = _Tiny()
     x = torch.randn(2, 4)
     log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all"))
-    assert len(log.layer_logs) > 0
+    assert len(log._layer_logs) > 0
 
 
 def test_check_model_and_input_variants_clean_model_is_noop() -> None:
@@ -490,6 +490,7 @@ def test_bounded_scan_within_limits_is_silent_and_complete() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_cuda_channels_last_safe_copy() -> None:
     """channels_last preservation also works on CUDA tensors."""
@@ -499,13 +500,14 @@ def test_cuda_channels_last_safe_copy() -> None:
     assert copied.device.type == "cuda"
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_cuda_forward_pass_still_logs() -> None:
     """Regression: standard CUDA model logging is unaffected."""
     model = _Tiny().cuda()
     x = torch.randn(2, 4, device="cuda")
     log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all"))
-    assert len(log.layer_logs) > 0
+    assert len(log._layer_logs) > 0
 
 
 def test_offense_path_names_the_input_tree_location() -> None:

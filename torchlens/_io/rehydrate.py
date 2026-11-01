@@ -26,19 +26,26 @@ from torchlens.backends.registry import BackendRuntimeCompatibilityError
 from .._data_classes._state_adapter import state_items
 from .._data_classes.trace import Trace
 from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
+from .._utils._torch_symbols import torch_dtype_named
+from .._utils.hashing import sha256_file
 from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
-from ._torch_symbols import torch_attr
-from .accessor_rebuild import rebuild_trace_accessors
-from .lazy import LazyActivationRef, _file_identity
-from .manifest import Manifest, TensorEntry, sha256_of_file
-from .paths import resolve_bundle_blob_path, resolve_bundle_blobs_dir
-from .payload_codec import materialize_transport_tensor
-from .scrub import (
+from ._rehydrate_lazy_names import _lazy_ref_field_name, _lazy_ref_kind, _normalize_map_location
+from ._small_raw import (
     _RAW_IMAGE_SENTINEL,
     _RAW_INPUT_IMAGE_BYTES_LIMIT,
     _RAW_INPUT_IMAGE_MAX_EDGE,
-    _pin_in_memo,
 )
+from .accessor_rebuild import rebuild_trace_accessors
+from .lazy import LazyActivationRef, _file_identity
+from .manifest import (
+    _TORCH_BACKEND_NAME,
+    Manifest,
+    TensorEntry,
+    _manifest_uses_audit_only_payloads,
+)
+from .paths import resolve_bundle_blob_path, resolve_bundle_blobs_dir
+from .payload_codec import materialize_transport_tensor
+from .scrub import _pin_in_memo
 from .state_contract import governed_artifact_load
 from .state_keys import invalidate_static_class_attr_cache, static_class_attr
 
@@ -50,7 +57,6 @@ _LEGACY_CAPTURE_TRACE_KEYS = {
     "_wrapper_runtime_ws",
     "_pending_live_fire_records",
 }
-_TORCH_BACKEND_NAME = "torch"
 _PORTABLE_WALK_MAX_DEPTH = 200
 _REHYDRATE_IN_PROGRESS = object()
 
@@ -108,8 +114,10 @@ def rehydrate_trace(
     # like the metadata unpickler arms it for nested records.
     with governed_artifact_load():
         trace.__setstate__(state_for_load)
-    trace.raw_input = _rehydrate_small_raw_images(getattr(trace, "raw_input", None))
-    trace.raw_output = _rehydrate_small_raw_images(getattr(trace, "raw_output", None))
+    trace.input = _rehydrate_small_raw_images(getattr(trace, "input", None))
+    trace.transformed_output = _rehydrate_small_raw_images(
+        getattr(trace, "transformed_output", None)
+    )
     _apply_manifest_backend(trace, manifest)
     _drop_capture_only_trace_fields(trace)
 
@@ -183,7 +191,7 @@ def rehydrate_trace(
     # flow). Building accessors first captured the still-unresolved BlobRef
     # permanently, so `Buffer.initial_value` returned a raw BlobRef forever
     # after a plain `tl.load()` instead of a torch.Tensor. Nothing
-    # rebuild_trace_accessors() reads (trace.layer_list, module_accessor_state)
+    # rebuild_trace_accessors() reads (trace._layer_list, module_accessor_state)
     # depends on _rehydrate_object() having run first, so this reorder is safe.
     if module_accessor_state is not None:
         rebuild_trace_accessors(
@@ -199,6 +207,17 @@ def rehydrate_trace(
 
         refresh_saved_module_call_count(trace)
 
+    _stamp_serialized_tlspec_version(trace, manifest)
+
+    _bind_conditional_arms(trace)
+    _set_payload_load_status(trace, manifest_index, payload_statuses)
+    _restore_trace_state_order(trace, portable_key_order)
+    return trace
+
+
+def _stamp_serialized_tlspec_version(trace: Trace, manifest: Manifest | dict[str, Any]) -> None:
+    """Record the manifest's integer ``tlspec_version`` on the rehydrated trace."""
+
     serialized_tlspec_version = (
         manifest.tlspec_version
         if isinstance(manifest, Manifest)
@@ -208,11 +227,6 @@ def rehydrate_trace(
         serialized_tlspec_version, bool
     ):
         trace.tlspec_version = serialized_tlspec_version
-
-    _bind_conditional_arms(trace)
-    _set_payload_load_status(trace, manifest_index, payload_statuses)
-    _restore_trace_state_order(trace, portable_key_order)
-    return trace
 
 
 def _bind_conditional_arms(trace: Trace) -> None:
@@ -226,7 +240,7 @@ def _bind_conditional_arms(trace: Trace) -> None:
 
     from .._data_classes.trace import ConditionalAccessor
 
-    accessor = getattr(trace, "conditionals", None)
+    accessor = trace._graph_conditionals
     if not isinstance(accessor, ConditionalAccessor):
         return
     for conditional in accessor.values():
@@ -347,7 +361,7 @@ def _apply_manifest_backend(trace: Trace, manifest: Manifest | dict[str, Any]) -
     else:
         backend_name = manifest.get("backend")
     if isinstance(backend_name, str) and backend_name:
-        setattr(trace, "backend", backend_name)
+        trace._provenance_backend = backend_name
 
 
 def _build_manifest_index(
@@ -881,7 +895,7 @@ def _materialize_blob_ref(
         pre_hash_identity = _file_identity(blob_path.stat())
     except OSError as exc:
         raise ArtifactError(f"Failed to access blob at {blob_path}.") from exc
-    observed_sha256 = sha256_of_file(blob_path)
+    observed_sha256 = sha256_file(blob_path)
     expected_sha256 = entry.sha256 if isinstance(entry, TensorEntry) else entry.get("sha256")
     if expected_sha256 is not None and observed_sha256 != expected_sha256:
         raise ArtifactError(
@@ -955,46 +969,6 @@ def _build_lazy_tensor_ref(
     )
 
 
-def _lazy_ref_field_name(field_name: str) -> str | None:
-    """Return the corresponding lazy-ref field for a direct blob field.
-
-    Parameters
-    ----------
-    field_name:
-        Direct blob field name on the owning data class.
-
-    Returns
-    -------
-    str | None
-        Matching lazy-ref field name, or ``None`` when not applicable.
-    """
-
-    if field_name == "out":
-        return "out_ref"
-    if field_name == "grad":
-        return "grad_ref"
-    return None
-
-
-def _lazy_ref_kind(blob_kind: str) -> Literal["out", "grad"]:
-    """Normalize a blob kind into a lazy direct-tensor kind.
-
-    Parameters
-    ----------
-    blob_kind:
-        Blob kind stored in the portable manifest.
-
-    Returns
-    -------
-    str
-        Direct tensor kind expected by ``LazyActivationRef``.
-    """
-
-    if blob_kind == "grad":
-        return "grad"
-    return "out"
-
-
 def _manifest_entry_for_blob_ref(
     blob_ref: BlobRef,
     manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
@@ -1063,16 +1037,10 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
     # deprecated ``has_cuda``) fires NO lazy submodule import, NO deprecated ``replacement()``,
     # and leaks NO raw ``ImportError`` before the ``isinstance`` value gate below. Every real
     # dtype is a ``torch.__dict__`` entry and still resolves.
-    dtype_obj = torch_attr(dtype_name)
-    if not isinstance(dtype_obj, torch.dtype):
+    dtype_obj = torch_dtype_named(dtype_name)
+    if dtype_obj is None:
         raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj
-
-
-def _normalize_map_location(map_location: str | torch.device) -> str:
-    """Normalize ``map_location`` to the string form expected by safetensors."""
-
-    return str(map_location)
 
 
 def _load_safetensors_tensor(
@@ -1175,7 +1143,7 @@ def _has_pending_lazy_payload(trace: Trace) -> bool:
         Whether an out/grad lazy ref exists whose payload slot is empty.
     """
 
-    for op in getattr(trace, "layer_list", []) or []:
+    for op in trace._layer_list or []:
         slot = getattr(op, "_slot", None)
         if not callable(slot):
             continue
@@ -1207,21 +1175,6 @@ def _payload_hints_are_explicit(
     sharding = getattr(jax_hint, "sharding", None)
     reconstruct = bool(getattr(jax_hint, "reconstruct_sharding", False))
     return sharding is not None or reconstruct
-
-
-def _manifest_uses_audit_only_payloads(manifest: Manifest | dict[str, Any]) -> bool:
-    """Return whether the manifest declares metadata-only payload loading."""
-
-    if isinstance(manifest, Manifest):
-        backend_name = getattr(manifest, "_tl_logical_backend", "torch")
-        materializes = getattr(manifest, "_tl_payload_materialization_supported", True)
-        return backend_name != _TORCH_BACKEND_NAME and not bool(materializes)
-    if manifest.get("backend", _TORCH_BACKEND_NAME) == _TORCH_BACKEND_NAME:
-        return False
-    payload_policy = manifest.get("payload_policy", {})
-    if not isinstance(payload_policy, dict):
-        return False
-    return not bool(payload_policy.get("materialization_supported", False))
 
 
 def _entry_logical_backend(entry: dict[str, Any] | TensorEntry) -> str:
@@ -1272,7 +1225,7 @@ def rehydrate_nested(
 
     expected_manifest_sha256 = getattr(trace, "_source_bundle_manifest_sha256", None)
     if expected_manifest_sha256 is not None:
-        observed_manifest_sha256 = sha256_of_file(manifest_path)
+        observed_manifest_sha256 = sha256_file(manifest_path)
         if observed_manifest_sha256 != expected_manifest_sha256:
             raise ArtifactError(
                 "source bundle manifest has changed since load; materialize refs and retry"
@@ -1546,7 +1499,7 @@ def _source_bundle_path_for_trace(trace: Trace) -> Path:
     if isinstance(bundle_path, Path):
         return bundle_path
 
-    for layer in getattr(trace, "layer_list", []):
+    for layer in trace._layer_list:
         out_ref = getattr(layer, "out_ref", None)
         if isinstance(out_ref, LazyActivationRef):
             return out_ref.source_bundle_path

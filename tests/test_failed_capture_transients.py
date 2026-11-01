@@ -70,7 +70,7 @@ def _failed_partial() -> tl.types.PartialTrace:
 
 
 def _undeclared(trace: Trace) -> list[str]:
-    return sorted(set(vars(trace)) - set(type(trace).FIELD_POLICY) - _FACADE_PLUMBING_ATTRS)
+    return sorted(set(vars(trace)) - set(type(trace)._FIELD_POLICY) - _FACADE_PLUMBING_ATTRS)
 
 
 def test_failed_capture_trace_carries_no_undeclared_attributes() -> None:
@@ -140,12 +140,12 @@ def test_partial_diagnostics_survive_the_scrub() -> None:
 
 
 def test_partial_trace_declares_a_field_policy() -> None:
-    """R11: ``PartialTrace`` has a FIELD_POLICY so the lockstep gate can see it."""
+    """R11: ``PartialTrace`` has a _FIELD_POLICY so the lockstep gate can see it."""
 
     from torchlens.types import PartialTrace
 
-    policy = getattr(PartialTrace, "FIELD_POLICY", None)
-    assert policy is not None, "PartialTrace must declare FIELD_POLICY"
+    policy = getattr(PartialTrace, "_FIELD_POLICY", None)
+    assert policy is not None, "PartialTrace must declare _FIELD_POLICY"
     partial = _failed_partial()
     undeclared = set(vars(partial)) - set(policy) - _FACADE_PLUMBING_ATTRS
     assert not undeclared, f"PartialTrace carries undeclared attributes: {sorted(undeclared)}"

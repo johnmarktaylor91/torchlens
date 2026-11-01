@@ -36,6 +36,7 @@ from ._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
 from ._utils._torch_symbols import torch_attr
 from ._utils.lazy_state import raise_if_pending_state_slots
 from .errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
+from .errors._base import TorchLensWarning
 
 _INPUT_STRUCTURE_SITE_PREFIX = "input_structure:"
 """Canonical site-label prefix for persisted input-boundary structure facts."""
@@ -170,7 +171,7 @@ def snapshot_persistent_buffer_universe(model: object) -> dict[str, dict[str, An
     with it: a dead-model save whose r75 fallback silently returned dropped
     never-forward-used persistent buffers (BatchNorm's ``num_batches_tracked``) from
     the declared universe, so an honest tensor-only ``load_state_dict`` refused with
-    ``state_unexpected_key`` while the live lane bound fine. This record derives the
+    ``state_key_unknown`` while the live lane bound fine. This record derives the
     SAME name set the live save computes -- ``state_dict()`` names that are buffers
     (present in ``named_buffers``, absent from ``named_parameters``) with tensor
     values -- plus the per-slot geometry the value-free slot drafts need, so the dead
@@ -1081,7 +1082,7 @@ def recorded_state_metadata_facts(descriptor: SparseRunDescriptor) -> dict[str, 
     nothing (fail closed into "no fact", which stages the detached default).
     """
 
-    from ._runnable_execution import _decode_literal
+    from ._runnable_verification import _decode_literal
 
     facts: dict[str, dict[str, bool]] = {}
     for witness in descriptor.control_witnesses:
@@ -1346,7 +1347,6 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
         # 'verified' (faithfulness against THIS random state, oracle 1). The
         # warning makes the substitution impossible to miss at the one moment
         # it matters; settlement semantics are unchanged.
-        from .errors._base import TorchLensWarning
 
         seed_note = " (seed=None: ambient RNG)" if seed is None else f" (seed={seed})"
         warnings.warn(
@@ -2289,8 +2289,6 @@ def _preflight_run_allocation(
     of the slots admitted that way, for the retention floor and the per-call projection.
     """
 
-    from .errors import RunCapabilityUnavailableError
-
     required: dict[str, int] = defaultdict(int)
     slot_ids_by_device: dict[str, list[str]] = defaultdict(list)
     devices: dict[str, torch.device] = {}
@@ -2493,7 +2491,6 @@ def _initialize_slot_neutral(
         # before this point; a RESIDUAL allocator failure (budget shifted under
         # us, fragmentation) still surfaces as the SAME typed diagnostic, never
         # a raw allocator traceback.
-        from .errors import RunCapabilityUnavailableError
 
         raise RunCapabilityUnavailableError(
             f"Random state initialization could not allocate slot {slot.slot_id!r} "
@@ -2615,8 +2612,6 @@ def stage_state_to_slot_devices(
     a device this runtime cannot allocate raises the typed
     ``run_capability_unavailable`` refusal before any callable resolves an input.
     """
-
-    from .errors import RunCapabilityUnavailableError
 
     slots_by_id = {slot.slot_id: slot for slot in descriptor.tensor_slots}
     staged: dict[str, torch.Tensor] = {}
@@ -2806,8 +2801,6 @@ def runnable_tensor_byte_digest(value: torch.Tensor) -> str:
         or bool(getattr(value, "is_quantized", False))
         or tensor_has_named_dims(value)
     ):
-        from .errors import RunPreconditionError
-
         raise RunPreconditionError(
             "Byte digesting requires a plain strided dense tensor; got layout "
             f"{value.layout} (meta={bool(getattr(value, 'is_meta', False))}, "

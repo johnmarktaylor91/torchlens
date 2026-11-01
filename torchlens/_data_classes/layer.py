@@ -57,6 +57,7 @@ from .._selection import _SelectionOperand
 # LayerAccessor is re-exported (not used here) so every historical
 # ``from .layer import ...`` site and pickle qualname keeps resolving.
 from ._layer_accessors import LayerAccessor, OpAccessor  # noqa: F401
+from ._layer_mirror import _layer_mirror_read, _layer_rep_op
 from ._repr import format_config_items, format_shape_list
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
@@ -233,37 +234,6 @@ def _layer_normalize_relation_write(layer: "Layer", name: str, value: Any) -> An
     return view_type(value)
 
 
-def _layer_rep_op(layer: "Layer") -> "Op | None":
-    """Return the representative (first-pass) op backing one Layer's mirrors.
-
-    Reads raw ``__dict__`` storage so descriptor bodies never re-enter the
-    attribute protocol. ``OpAccessor._list`` is pass-index sorted, so index 0
-    is the first pass — the op the former ``__init__`` copied from.
-    """
-
-    ops = layer.__dict__.get("ops")
-    if ops is None:
-        return None
-    item_list = ops.__dict__.get("_list")
-    return item_list[0] if item_list else None
-
-
-def _layer_mirror_read(layer: "Layer", name: str) -> Any:
-    """Return the mirror value for ``name`` (no shadow consulted).
-
-    Raises ``AttributeError`` when the layer has no representative op yet or
-    the op's source cell is unset — the caller (descriptor or state
-    enumeration) translates that into the historical missing-field behavior.
-    """
-
-    rep = _layer_rep_op(layer)
-    if rep is None:
-        raise AttributeError(name)
-    source, normalize = _LAYER_MIRROR_SPEC[name]
-    value = getattr(rep, source)
-    return normalize(value) if normalize is not None else value
-
-
 class _LayerMirrorField:
     """Data descriptor for one Layer field mirrored from the first-pass op."""
 
@@ -391,7 +361,7 @@ class Layer(_SelectionOperand):
         # (``_install_layer_mirror_descriptors``); declared here so static
         # analysis sees the public surface.
         layer_label: Any
-        layer_label_short: Any
+        short_layer_label: Any
         layer_type: Any
         type_index: Any
         step_index: Any
@@ -430,7 +400,7 @@ class Layer(_SelectionOperand):
         output_device: Any
         visualizer_path: Any
         activation_transform: Any
-        intervention_replaced: Any
+        is_edited: Any
         detach_saved_activations: Any
         save_grads: Any
         transformed_grad_shape: Any
@@ -479,7 +449,7 @@ class Layer(_SelectionOperand):
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_is_in_conditional_body": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
-        "layer_label_short": FieldPolicy.KEEP,
+        "short_layer_label": FieldPolicy.KEEP,
         "layer_type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
         "step_index": FieldPolicy.KEEP,
@@ -522,7 +492,7 @@ class Layer(_SelectionOperand):
         "visualizer_path": FieldPolicy.KEEP,
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
-        "intervention_replaced": FieldPolicy.KEEP,
+        "is_edited": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "save_grads": FieldPolicy.KEEP,
         "transformed_grad": FieldPolicy.DROP,
@@ -578,10 +548,10 @@ class Layer(_SelectionOperand):
         "ops": FieldPolicy.KEEP,
         "call_labels": FieldPolicy.KEEP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         LAYER_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="layer"
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     #: Aggregate-facade mirror contract (state-contract service): a pickled
     #: Layer's state carries the Op-shaped mirror fields the facade reads
@@ -1021,7 +991,7 @@ class Layer(_SelectionOperand):
         state = dict(state_items(self))
         state["_source_trace_ref"] = None
         # `grad_fn_handle` holds the live torch autograd `Node` (e.g.
-        # `AddmmBackward0`), which is not picklable. `Layer.FIELD_POLICY`
+        # `AddmmBackward0`), which is not picklable. `Layer._FIELD_POLICY`
         # declares it `FieldPolicy.DROP` for exactly this reason; enforce that
         # here (mirroring `Op.__getstate__`) so plain `pickle.dumps(trace)` of
         # any model with trainable params does not crash. `grad_fn` (a picklable
@@ -1154,19 +1124,6 @@ class Layer(_SelectionOperand):
         return self.ops[0].projective_field
 
     @property
-    def site_key(self) -> str:
-        """Single structural site key, or a typed refusal on spanning/legacy.
-
-        Site-uniformity and pass-uniformity are DIFFERENT axes: a multi-pass
-        reused-module layer has ONE key; a within-call recurrence group
-        spans several (read those via ``.ops[k].site_key``).
-        """
-
-        from ._layer_sites import layer_site_key
-
-        return layer_site_key(self)
-
-    @property
     def site_peers(self) -> tuple["Layer", ...]:
         """Layers sharing any of this layer's site keys (live index)."""
 
@@ -1199,7 +1156,7 @@ class Layer(_SelectionOperand):
             trace = ops[0].trace
         except Exception:  # noqa: BLE001 - detached/cleaned records have no trace
             return
-        record = getattr(trace, "input_preprocessor", None)
+        record = trace._provenance_input_preprocessor
         if (
             record is None
             or getattr(record, "verified", True)
@@ -1265,6 +1222,11 @@ class Layer(_SelectionOperand):
     def grad(self) -> Any:
         """Return the saved grad for a single-pass layer.
 
+        The gradient of the layer's output for the latest backward pass, as
+        it leaves this trace's edit chain: a ``tl.grad(site)`` edit that fired
+        is what this read shows. A site the backward never reached has no
+        grad (``has_grad`` is ``False``); TorchLens never fills in zeros.
+
         Returns
         -------
         Any
@@ -1281,6 +1243,8 @@ class Layer(_SelectionOperand):
     @property
     def has_grad(self) -> bool:
         """Return whether the single pass has a saved grad.
+
+        ``False`` when no backward pass reached the layer's output.
 
         Returns
         -------
@@ -1337,7 +1301,7 @@ class Layer(_SelectionOperand):
         int
             Pass number from the only pass.
         """
-        return cast(int, self._single_pass_or_error("pass_index"))
+        return cast(int, self._single_pass_or_error("pass_number"))
 
     @property
     def lookup_keys(self) -> list[str]:
@@ -1555,9 +1519,9 @@ class Layer(_SelectionOperand):
         return cast(str, self._single_pass_or_error("label"))
 
     @property
-    def label_short(self) -> str:
+    def short_label(self) -> str:
         """For single-pass layers, return the short pass-qualified label."""
-        return cast(str, self._single_pass_or_error("label_short"))
+        return cast(str, self._single_pass_or_error("short_label"))
 
     @property
     def params(self) -> Any:

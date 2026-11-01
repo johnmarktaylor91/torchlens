@@ -23,7 +23,7 @@ from torchlens.backends.torch.backward import (
 from torchlens.intervention.errors import HelperMountError, HookValueError, SelectorCompositionError
 from torchlens.intervention.helpers import _helper_spec
 from torchlens.intervention.hooks import normalize_hook_plan
-from torchlens.intervention.resolver import _selector_resolution_direction
+from torchlens.intervention.selectors import classify_selector_universe
 from torchlens.intervention.types import FireRecord, InterventionSpec, TargetSpec
 
 
@@ -75,9 +75,10 @@ class _IdentityReluModel(nn.Module):
 class _TraceStub:
     """Weakref-able trace stub for direct hook-factory tests."""
 
-    grad_fn_logs: dict[int, GradFn]
+    _grad_fn_logs: dict[int, GradFn]
     _grad_op_nums_to_save: str = "all"
     last_run: dict[str, Any] | None = None
+    _num_backward_passes: int = 0
     # A live trace always owns its capture event stream; hooks refuse typed
     # when it is absent, so the stub must model ownership explicitly.
     _capture_events: CaptureEvents = field(default_factory=CaptureEvents)
@@ -164,7 +165,7 @@ def test_accumulategrad_post_hook_logs_grad_fn_call() -> None:
 
     trace = _logged_backward_trace()
     accumulate_logs = [
-        gfl for gfl in trace.grad_fn_logs.values() if gfl.class_name == "AccumulateGrad"
+        gfl for gfl in trace._grad_fn_logs.values() if gfl.class_name == "AccumulateGrad"
     ]
     assert accumulate_logs
     assert all(gfl.num_calls >= 1 for gfl in accumulate_logs)
@@ -197,7 +198,7 @@ def test_accumulategrad_post_hook_skips_helper_dispatch() -> None:
 
     helper_spec = _helper_spec(
         "count_grad",
-        kind="backward",
+        signal="backward",
         factory=factory,
         metadata={"mount_shape": "tuple"},
     )
@@ -223,7 +224,9 @@ def test_grad_fn_hook_returns_none_when_no_match() -> None:
     """Grad_fn hook returns None when active hooks do not match."""
 
     trace_stub, _grad_fn_log = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="missing"), tl.clamp_grad(0, 1))
+    _state._active_hook_plan = normalize_hook_plan(
+        tl.grad_fn(name="missing"), tl.clamp(low=0, high=1)
+    )
     hook = _make_grad_fn_hook(trace_stub, 1)
     assert hook((torch.ones(1),), (torch.ones(1),)) is None
 
@@ -232,7 +235,7 @@ def test_grad_fn_hook_returns_tuple_when_mutating() -> None:
     """Grad_fn hook returns a tuple when a matching helper mutates gradients."""
 
     trace_stub, _grad_fn_log = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp_grad(0, 0))
+    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     hook = _make_grad_fn_hook(trace_stub, 1)
     result = hook((torch.ones(1),), (torch.ones(1),))
     assert isinstance(result, tuple)
@@ -243,15 +246,15 @@ def test_grad_fn_hook_records_backward_fire() -> None:
     """A matching grad_fn hook attaches a backward fire record to its call."""
 
     trace_stub, grad_fn_handle = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp_grad(0, 0))
+    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     hook = _make_grad_fn_hook(trace_stub, 1)
 
     result = hook((torch.ones(1),), (torch.ones(1),))
 
     assert isinstance(result, tuple)
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
-    assert record.direction == "backward"
+    assert record.signal == "backward"
     assert record.call_index == 1
     assert record.grad_kind == "grad_input"
     assert record.tuple_index == 0
@@ -288,7 +291,7 @@ def test_grad_fn_hook_inplace_mutation_records_replaced() -> None:
 
     hook((torch.ones(1),), (torch.ones(1),))
 
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.replaced is True
 
@@ -324,7 +327,7 @@ def test_grad_fn_hook_data_alias_mutation_records_replaced() -> None:
 
     hook((torch.ones(1),), (torch.ones(1),))
 
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.replaced is True
 
@@ -341,14 +344,14 @@ def test_composite_backward_target_specs_match_live_hooks() -> None:
         trace_stub, grad_fn_handle = _hook_trace()
         trace_stub._active_backward_pass_index = 1  # type: ignore[attr-defined]
         grad_fn_handle.trace = trace_stub  # type: ignore[attr-defined]
-        _state._active_hook_plan = normalize_hook_plan(selector, tl.clamp_grad(0, 0))
+        _state._active_hook_plan = normalize_hook_plan(selector, tl.clamp(low=0, high=0))
         hook = _make_grad_fn_hook(trace_stub, 1)
 
         result = hook((torch.ones(1),), (torch.ones(1),))
 
         assert isinstance(result, tuple), repr(selector)
         assert torch.equal(result[0], torch.zeros(1))
-        assert isinstance(grad_fn_handle.calls[0].intervention_fire_ref, FireRecord)
+        assert isinstance(grad_fn_handle.calls[0].fire_record, FireRecord)
 
 
 def test_composite_grad_output_selector_matches_real_live_backward_hook() -> None:
@@ -385,7 +388,7 @@ def test_composite_grad_output_selector_matches_real_live_backward_hook() -> Non
         tl.grad_output() & tl.grad_fn(name="relu"),
         _helper_spec(
             "count_grad_output",
-            kind="backward",
+            signal="backward",
             factory=factory,
             metadata={"mount_shape": "tuple"},
         ),
@@ -431,7 +434,7 @@ def test_live_backward_pass_selector_targets_second_retain_graph_pass() -> None:
         tl.grad_fn(name="relu") & tl.in_backward_pass(2),
         _helper_spec(
             "count_second_pass",
-            kind="backward",
+            signal="backward",
             factory=factory,
             metadata={"mount_shape": "tuple"},
         ),
@@ -484,7 +487,7 @@ def test_backward_none_return_helper_records_non_replacing_fire() -> None:
     _state._active_hook_plan = normalize_hook_plan(
         tl.grad_fn(name="relu"),
         _helper_spec(
-            "count_none", kind="backward", factory=factory, metadata={"mount_shape": "tuple"}
+            "count_none", signal="backward", factory=factory, metadata={"mount_shape": "tuple"}
         ),
     )
     hook = _make_grad_fn_hook(trace_stub, 1)
@@ -493,7 +496,7 @@ def test_backward_none_return_helper_records_non_replacing_fire() -> None:
 
     assert result is None
     assert counter["fires"] == 1
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.replaced is False
     assert spec.records == [record]
@@ -527,7 +530,7 @@ def test_backward_invalid_replacement_tuple_raises_before_recording_success() ->
     _state._active_hook_plan = normalize_hook_plan(
         tl.grad_fn(name="relu"),
         _helper_spec(
-            "bad_shape", kind="backward", factory=factory, metadata={"mount_shape": "tuple"}
+            "bad_shape", signal="backward", factory=factory, metadata={"mount_shape": "tuple"}
         ),
     )
     hook = _make_grad_fn_hook(trace_stub, 1)
@@ -535,7 +538,7 @@ def test_backward_invalid_replacement_tuple_raises_before_recording_success() ->
     with pytest.raises(HookValueError, match="shape"):
         hook((torch.ones(1),), (torch.ones(1),))
 
-    assert grad_fn_handle.calls[0].intervention_fire_ref is None
+    assert grad_fn_handle.calls[0].fire_record is None
     assert spec.records == []
 
 
@@ -571,10 +574,10 @@ def test_backward_in_place_none_return_helper_records_gradient_effect() -> None:
     assert x.grad is not None
     assert torch.equal(x.grad, torch.zeros_like(x.grad))
     records = [
-        call.intervention_fire_ref
-        for grad_fn in trace.grad_fn_logs.values()
+        call.fire_record
+        for grad_fn in trace._grad_fn_logs.values()
         for call in grad_fn.calls._list
-        if call.intervention_fire_ref is not None
+        if call.fire_record is not None
     ]
     assert records
     assert isinstance(records[0], FireRecord)
@@ -594,7 +597,7 @@ def test_grad_fn_hook_call_index_targeting() -> None:
         {"type": "relu"},
         metadata={"call_index": 2},
     )
-    _state._active_hook_plan = normalize_hook_plan(target, tl.clamp_grad(0, 0))
+    _state._active_hook_plan = normalize_hook_plan(target, tl.clamp(low=0, high=0))
     hook = _make_grad_fn_hook(trace_stub, 1)
 
     first = hook((torch.ones(1),), (torch.ones(1),))
@@ -602,8 +605,8 @@ def test_grad_fn_hook_call_index_targeting() -> None:
 
     assert first is None
     assert isinstance(second, tuple)
-    assert grad_fn_handle.calls[0].intervention_fire_ref is None
-    assert isinstance(grad_fn_handle.calls[1].intervention_fire_ref, FireRecord)
+    assert grad_fn_handle.calls[0].fire_record is None
+    assert isinstance(grad_fn_handle.calls[1].fire_record, FireRecord)
 
 
 def test_helper_requires_grad_output_at_accumulategrad_raises_helpermounterror() -> None:
@@ -611,7 +614,7 @@ def test_helper_requires_grad_output_at_accumulategrad_raises_helpermounterror()
 
     helper = _helper_spec(
         "needs_output",
-        kind="backward",
+        signal="backward",
         factory=lambda: lambda grad_input, **kwargs: grad_input,
         metadata={"mount_shape": "tuple", "requires_grad_output": True},
     )
@@ -647,7 +650,7 @@ def test_grad_fn_prehook_posthook_call_index_alignment() -> None:
     _state._active_hook_plan = normalize_hook_plan(
         tl.grad_fn(name="relu"),
         _helper_spec(
-            "record_index", kind="backward", factory=factory, metadata={"mount_shape": "tuple"}
+            "record_index", signal="backward", factory=factory, metadata={"mount_shape": "tuple"}
         ),
     )
     pre_hook = _make_grad_fn_prehook(trace_stub, 1)
@@ -680,7 +683,7 @@ def test_grad_fn_prehook_posthook_call_index_alignment_multi_fire() -> None:
     _state._active_hook_plan = normalize_hook_plan(
         tl.grad_fn(name="relu"),
         _helper_spec(
-            "record_index", kind="backward", factory=factory, metadata={"mount_shape": "tuple"}
+            "record_index", signal="backward", factory=factory, metadata={"mount_shape": "tuple"}
         ),
     )
     pre_hook = _make_grad_fn_prehook(trace_stub, 1)
@@ -696,7 +699,7 @@ def test_accumulategrad_prehook_records_backward_fire() -> None:
     """AccumulateGrad prehook records are attached to the paired post-hook call."""
 
     trace_stub, grad_fn_handle = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp_grad(0, 0))
+    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     pre_hook = _make_grad_fn_prehook(trace_stub, 1)
     post_hook = _make_grad_fn_hook(trace_stub, 1, is_accumulate_grad=True)
 
@@ -704,10 +707,10 @@ def test_accumulategrad_prehook_records_backward_fire() -> None:
     post_hook((), (torch.ones(1),))
 
     assert isinstance(result, tuple)
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.timing == "pre"
-    assert record.direction == "backward"
+    assert record.signal == "backward"
     assert record.call_index == 1
 
 
@@ -730,7 +733,7 @@ def test_accumulategrad_none_return_prehook_records_backward_fire() -> None:
     _state._active_hook_plan = normalize_hook_plan(
         tl.grad_fn(name="relu"),
         _helper_spec(
-            "none_prehook", kind="backward", factory=factory, metadata={"mount_shape": "tuple"}
+            "none_prehook", signal="backward", factory=factory, metadata={"mount_shape": "tuple"}
         ),
     )
     pre_hook = _make_grad_fn_prehook(trace_stub, 1)
@@ -739,7 +742,7 @@ def test_accumulategrad_none_return_prehook_records_backward_fire() -> None:
     assert pre_hook((torch.ones(1),)) is None
     post_hook((), (torch.ones(1),))
 
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.timing == "pre"
     assert record.replaced is False
@@ -749,7 +752,7 @@ def test_accumulategrad_pending_records_clear_between_passes() -> None:
     """Unpaired AccumulateGrad prehook records are cleared at pass teardown."""
 
     trace_stub, grad_fn_handle = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp_grad(0, 0))
+    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     pre_hook = _make_grad_fn_prehook(trace_stub, 1)
     post_hook = _make_grad_fn_hook(trace_stub, 1, is_accumulate_grad=True)
 
@@ -759,7 +762,7 @@ def test_accumulategrad_pending_records_clear_between_passes() -> None:
     post_hook((), (torch.ones(1),))
 
     assert not hasattr(trace_stub, "_tl_pending_accumulate_grad_fire_records")
-    assert grad_fn_handle.calls[0].intervention_fire_ref is None
+    assert grad_fn_handle.calls[0].fire_record is None
 
 
 def test_accumulategrad_post_hook_crashes_on_non_none_return() -> None:
@@ -773,53 +776,68 @@ def test_accumulategrad_post_hook_crashes_on_non_none_return() -> None:
         loss.backward()
 
 
-def test_grad_clip_on_forward_selector_routes_to_backward_signal() -> None:
-    """Tuple-shaped grad_fn helpers can route through a paired forward selector."""
+def test_site_decides_the_signal_of_a_neutral_edit() -> None:
+    """A neutral edit mounts backward on tl.grad(site) and forward on the bare site."""
 
-    entries = normalize_hook_plan(tl.func("relu"), tl.clip_grad(0.5))
+    backward = normalize_hook_plan(tl.grad(tl.func("relu")), tl.clip_norm(0.5))
+    forward = normalize_hook_plan(tl.func("relu"), tl.clip_norm(0.5))
 
-    assert len(entries) == 1
-    assert entries[0].metadata["direction"] == "backward"
-
-
-def test_selector_compose_grad_fn_and_in_module_legal_at_construction() -> None:
-    """Backward selectors compose with direction-agnostic module filters."""
-
-    selector = tl.grad_fn(name="relu") & tl.in_module("encoder")
-    assert selector.selector_kind == "and"
+    assert len(backward) == 1 and len(forward) == 1
+    assert backward[0].metadata["signal"] == "backward"
+    assert forward[0].metadata["signal"] == "forward"
 
 
-def test_selector_compose_func_and_grad_fn_rejected_at_construction() -> None:
-    """Forward-only and backward-only selectors cannot compose."""
-
-    with pytest.raises(SelectorCompositionError, match="forward"):
-        tl.func("relu") & tl.grad_fn(name="relu")
+def _composition_code(excinfo: pytest.ExceptionInfo[SelectorCompositionError]) -> str | None:
+    fields = getattr(excinfo.value, "fields", None) or {}
+    return fields.get("code", getattr(excinfo.value, "code", None))
 
 
-def test_selector_compose_grad_fn_and_label_legal_at_construction() -> None:
-    """Backward selectors compose with direction-agnostic labels."""
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: tl.grad_fn(name="relu") & tl.in_module("encoder"),
+        lambda: tl.func("relu") & tl.grad_fn(name="relu"),
+        lambda: tl.grad_fn(name="relu") & tl.label("relu_1"),
+        lambda: tl.without_op() & tl.in_module("encoder"),
+        lambda: tl.grad(tl.func("relu")) & tl.grad_fn(name="relu"),
+        lambda: tl.grad(tl.func("relu")) & tl.func("relu"),
+    ],
+    ids=[
+        "node_and_module",
+        "activation_and_node",
+        "node_and_label",
+        "without_op_and_module",
+        "gradient_and_node",
+        "gradient_and_activation",
+    ],
+)
+def test_cross_universe_and_refuses_at_construction(build: Any) -> None:
+    """A bare selector never bridges into the node universe; & across universes refuses."""
 
-    selector = tl.grad_fn(name="relu") & tl.label("relu_1")
-    assert selector.selector_kind == "and"
+    with pytest.raises(SelectorCompositionError) as excinfo:
+        build()
+    assert _composition_code(excinfo) == "selector_cross_universe_and"
 
 
-def test_selector_resolve_intervening_grad_fn_filtered_with_in_module() -> None:
-    """Intervening grad_fns are filtered by module predicates."""
+def test_pass_qualifier_on_an_activation_selector_refuses() -> None:
+    """A pass qualifier needs a gradient or node address."""
 
-    trace = _logged_backward_trace()
-    sites = trace.find_sites(tl.without_op() & tl.in_module("encoder"), max_fanout=100)
-    assert len(sites) == 0
+    with pytest.raises(SelectorCompositionError) as excinfo:
+        tl.func("relu") & tl.in_backward_pass(2)
+    assert _composition_code(excinfo) == "selector_signal_mismatch"
+    qualified = tl.grad(tl.func("relu")) & tl.in_backward_pass(2)
+    assert classify_selector_universe(qualified) == "gradient"
 
 
-def test_find_sites_grad_fn_and_label_returns_grad_fn_sites() -> None:
-    """Grad_fn plus label resolves over GradFn sites."""
+def test_find_sites_gradient_address_returns_forward_sites() -> None:
+    """tl.grad(label) resolves to the forward op whose output gradient it names."""
 
     trace = _logged_backward_trace()
     relu_op = trace.find_sites(tl.func("relu")).first()
-    sites = trace.find_sites(tl.grad_fn(name="relu") & tl.label(relu_op.layer_label))
+    sites = trace.find_sites(tl.grad(tl.label(relu_op.layer_label)))
     assert sites
-    assert all(isinstance(site, GradFn) for site in sites)
-    assert all(site.op is not None and site.op.layer_label == relu_op.layer_label for site in sites)
+    assert all(not isinstance(site, GradFn) for site in sites)
+    assert {site.layer_label for site in sites} == {relu_op.layer_label}
 
 
 def test_find_sites_label_alone_returns_op_sites() -> None:
@@ -832,14 +850,14 @@ def test_find_sites_label_alone_returns_op_sites() -> None:
     assert all(not isinstance(site, GradFn) for site in sites)
 
 
-def test_find_sites_grad_fn_and_in_module_filters_intervening() -> None:
-    """Grad_fn plus module filter returns paired grad_fns only."""
+def test_find_sites_gradient_address_filters_by_module() -> None:
+    """Module filters apply inside tl.grad, in the forward universe."""
 
     trace = _logged_backward_trace()
-    sites = trace.find_sites(tl.grad_fn(name="addmm") & tl.in_module("encoder"))
+    sites = trace.find_sites(tl.grad(tl.func("linear") & tl.in_module("encoder")))
     assert sites
-    assert all(isinstance(site, GradFn) for site in sites)
-    assert all(site.op is not None for site in sites)
+    assert all(not isinstance(site, GradFn) for site in sites)
+    assert len(sites) == len(trace.find_sites(tl.func("linear") & tl.in_module("encoder")))
 
 
 def test_backward_grad_kind_and_pass_selectors_resolve_real_sites() -> None:
@@ -862,7 +880,7 @@ def test_backward_grad_kind_and_pass_selectors_resolve_real_sites() -> None:
 def test_backward_intervention_replacement_registers_higher_order_terminal() -> None:
     """Double-backward terminal discovery scans post-intervention gradients."""
 
-    def scale_grad(
+    def double_grad_input(
         grad_input: tuple[torch.Tensor | None, ...],
         *,
         grad_output: tuple[torch.Tensor | None, ...] | None,
@@ -875,31 +893,32 @@ def test_backward_intervention_replacement_registers_higher_order_terminal() -> 
         del grad_output, grad_fn_handle, call_index, run_ctx
         return tuple(None if grad is None else grad * 2 for grad in grad_input)
 
-    scale_grad.signal = "backward"  # type: ignore[attr-defined]
+    double_grad_input.signal = "backward"  # type: ignore[attr-defined]
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(
         _PowModel(),
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace.attach_hooks(tl.grad_fn(name="pow"), scale_grad, confirm_mutation=True)
+    trace.attach_hooks(tl.grad_fn(name="pow"), double_grad_input, confirm_mutation=True)
     trace.log_backward(trace[trace.output_layers[0]].out, retain_graph=True, create_graph=True)
-    pow_sites = [site for site in trace.grad_fn_logs.values() if site.type == "pow"]
+    pow_sites = [site for site in trace._grad_fn_logs.values() if site.type == "pow"]
 
     assert pow_sites
     assert any(
         site.creator_object_id == pow_sites[0].grad_fn_object_id
-        for site in trace.grad_fn_logs.values()
+        for site in trace._grad_fn_logs.values()
         if site is not pow_sites[0]
     )
 
 
-def test_selector_resolution_direction_grad_fn_and_label() -> None:
-    """Composite traversal uses selectors and returns backward direction."""
+def test_selector_universe_classification() -> None:
+    """Bare selectors are activations, tl.grad is a gradient, grad_fn selectors are nodes."""
 
-    assert (
-        _selector_resolution_direction(tl.grad_fn(name="relu") & tl.label("relu_1")) == "backward"
-    )
+    assert classify_selector_universe(tl.func("relu")) == "activation"
+    assert classify_selector_universe(tl.grad(tl.label("relu_1"))) == "gradient"
+    assert classify_selector_universe(tl.grad_fn(name="relu")) == "node"
+    assert classify_selector_universe(tl.grad_fn(name="relu") & tl.in_backward_pass(1)) == "node"
 
 
 def _run_identity_relu_intervention(selector: Any, helper: Any) -> tuple[torch.Tensor, list[Any]]:
@@ -908,7 +927,7 @@ def _run_identity_relu_intervention(selector: Any, helper: Any) -> tuple[torch.T
     Parameters
     ----------
     selector:
-        Forward or backward selector used in ``tl.when``.
+        Gradient (``tl.grad``) or node selector used in ``tl.when``.
     helper:
         Intervention helper to apply.
 
@@ -926,25 +945,23 @@ def _run_identity_relu_intervention(selector: Any, helper: Any) -> tuple[torch.T
         intervene=tl.when(selector, helper),
     )
     trace.backward(trace[trace.output_layers[0]].out, retain_graph=True)
-    records = [
-        record for record in trace._intervention_spec.records if record.direction == "backward"
-    ]
+    records = [record for record in trace._intervention_spec.records if record.signal == "backward"]
     return trace[trace.input_layers[0]].grad, records
 
 
-@pytest.mark.parametrize("selector", [tl.func("relu"), tl.grad_fn(name="relu")])
+@pytest.mark.parametrize("selector", [tl.grad(tl.func("relu")), tl.grad_fn(name="relu")])
 def test_gradient_action_family_changes_only_gradient_path(selector: Any) -> None:
-    """Legacy grad helpers have observable effects through both selector universes."""
+    """Neutral edits change the gradient through the gradient and node universes."""
 
-    zero_grad, zero_records = _run_identity_relu_intervention(selector, tl.zero_grad())
-    scaled_grad, scaled_records = _run_identity_relu_intervention(selector, tl.scale_grad(2.0))
-    clamped_grad, clamped_records = _run_identity_relu_intervention(selector, tl.clamp_grad(0, 0))
-    clipped_grad, clipped_records = _run_identity_relu_intervention(selector, tl.clip_grad(0.1))
-    noisy_grad, noisy_records = _run_identity_relu_intervention(
-        selector, tl.add_grad_noise(0.5, seed=7)
+    zeroed, zero_records = _run_identity_relu_intervention(selector, tl.zero_ablate())
+    scaled_grad, scaled_records = _run_identity_relu_intervention(selector, tl.scale(2.0))
+    clamped_grad, clamped_records = _run_identity_relu_intervention(
+        selector, tl.clamp(low=0, high=0)
     )
+    clipped_grad, clipped_records = _run_identity_relu_intervention(selector, tl.clip_norm(0.1))
+    noisy_grad, noisy_records = _run_identity_relu_intervention(selector, tl.add_noise(0.5, seed=7))
 
-    assert torch.equal(zero_grad, torch.zeros_like(zero_grad))
+    assert torch.equal(zeroed, torch.zeros_like(zeroed))
     assert torch.equal(scaled_grad, torch.full_like(scaled_grad, 2.0))
     assert torch.equal(clamped_grad, torch.zeros_like(clamped_grad))
     assert (
@@ -965,31 +982,32 @@ def test_gradient_action_family_changes_only_gradient_path(selector: Any) -> Non
     )
 
 
-def test_forward_helper_on_backward_selector_warns() -> None:
-    """Forward-only helpers attached to backward-only selectors emit a warning."""
+def test_activation_only_edit_on_gradient_site_refuses_at_capture() -> None:
+    """An edit that reads recorded activations refuses typed on tl.grad(...), never warns."""
 
-    with pytest.warns(UserWarning, match="Forward intervention helper"):
-        tl.trace(
-            _IdentityReluModel(),
-            torch.ones(1, 3, requires_grad=True),
-            capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
-            intervene=tl.when(tl.grad_fn(name="relu"), tl.zero_ablate()),
-        )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        with pytest.raises(Exception) as excinfo:
+            tl.trace(
+                _IdentityReluModel(),
+                torch.ones(1, 3, requires_grad=True),
+                capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
+                intervene=tl.when(
+                    tl.grad(tl.func("relu")), tl.mean_ablate(torch.ones(3), dim=None)
+                ),
+            )
+    fields = getattr(excinfo.value, "fields", None) or {}
+    assert fields.get("code", getattr(excinfo.value, "code", None)) == "edit_signal_mismatch"
 
 
-@pytest.mark.parametrize("direction", ["backward", "both"])
-def test_backward_zero_match_selector_warns_after_backward(direction: str) -> None:
+def test_backward_zero_match_selector_warns_after_backward() -> None:
     """Unmatched backward selectors report instead of silently no-oping."""
     x = torch.ones(1, 3, requires_grad=True)
     trace = tl.trace(
         _IdentityReluModel(),
         x,
         capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
-        intervene=tl.when(
-            tl.grad_fn(name="NoSuchGradFnClassZZZ"),
-            tl.zero_grad(),
-            direction=direction,
-        ),
+        intervene=tl.when(tl.grad_fn(name="NoSuchGradFnClassZZZ"), tl.zero_ablate()),
     )
 
     with pytest.warns(UserWarning, match="matched zero sites; no intervention fired"):
@@ -1003,7 +1021,7 @@ def test_matching_backward_selector_does_not_warn_zero_match() -> None:
         _IdentityReluModel(),
         x,
         capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
-        intervene=tl.when(tl.grad_fn(name="relu"), tl.zero_grad()),
+        intervene=tl.when(tl.grad_fn(name="relu"), tl.zero_ablate()),
     )
 
     with warnings.catch_warnings(record=True) as caught:
@@ -1013,9 +1031,9 @@ def test_matching_backward_selector_does_not_warn_zero_match() -> None:
     assert not any("matched zero sites" in str(item.message) for item in caught)
 
 
-@pytest.mark.parametrize("selector", [tl.func("relu"), tl.grad_fn(name="relu")])
-def test_bwd_hook_fires_and_can_replace_gradient(selector: Any) -> None:
-    """bwd_hook calls user code and mutates the gradient through both selectors."""
+@pytest.mark.parametrize("selector", [tl.grad(tl.func("relu")), tl.grad_fn(name="relu")])
+def test_callable_fires_and_can_replace_gradient(selector: Any) -> None:
+    """A plain callable on a gradient or node site replaces the gradient."""
 
     calls: list[torch.Tensor] = []
 
@@ -1026,7 +1044,7 @@ def test_bwd_hook_fires_and_can_replace_gradient(selector: Any) -> None:
         calls.append(grad.detach().clone())
         return torch.zeros_like(grad)
 
-    grad, records = _run_identity_relu_intervention(selector, tl.hook_grad(_zero_hook))
+    grad, records = _run_identity_relu_intervention(selector, _zero_hook)
 
     assert calls
     assert torch.equal(grad, torch.zeros_like(grad))
@@ -1035,7 +1053,13 @@ def test_bwd_hook_fires_and_can_replace_gradient(selector: Any) -> None:
 
 @pytest.mark.parametrize(
     "selector",
-    [tl.grad_fn(name="ReluBackward0"), tl.without_op(), tl.label("relu_back_1_1")],
+    [
+        tl.grad_fn(name="ReluBackward0"),
+        tl.without_op(),
+        tl.label("relu_back_1_1"),
+        tl.grad(tl.func("relu")),
+        tl.grad(tl.label("relu_1_2")) & tl.in_backward_pass(2),
+    ],
 )
 def test_backward_selector_target_spec_round_trip(selector: Any) -> None:
     """Backward selectors round-trip through resolver and hook target specs."""
@@ -1060,40 +1084,30 @@ def test_backward_selector_target_spec_round_trip(selector: Any) -> None:
     assert rebuilt_hook.selector_value == selector.selector_value
 
 
-def test_grad_clip_helper_norm_per_node() -> None:
-    """grad_clip clips per tensor in the grad_input tuple."""
+def test_clip_norm_on_gradient_site_clips_the_output_gradient() -> None:
+    """clip_norm rescales the site's output gradient (norm sqrt(3)) down to max_norm."""
 
-    helper = tl.clip_grad(0.5)()
-    result = helper(
-        (torch.ones(4),), grad_output=None, grad_fn_handle=None, call_index=1, run_ctx={}
+    grad, records = _run_identity_relu_intervention(tl.grad(tl.func("relu")), tl.clip_norm(0.5))
+    assert records
+    torch.testing.assert_close(torch.linalg.vector_norm(grad), torch.tensor(0.5))
+
+
+def test_add_noise_on_gradient_site_is_seeded_reproducible() -> None:
+    """Seeded add_noise on a gradient site gives the same gradient twice."""
+
+    first, _ = _run_identity_relu_intervention(tl.grad(tl.func("relu")), tl.add_noise(0.1, seed=7))
+    second, _ = _run_identity_relu_intervention(tl.grad(tl.func("relu")), tl.add_noise(0.1, seed=7))
+    assert torch.equal(first, second)
+    assert not torch.equal(first, torch.ones_like(first))
+
+
+def test_clamp_on_gradient_site_clamps_elementwise() -> None:
+    """clamp on tl.grad(relu) clamps each element of the unit output gradient."""
+
+    grad, _records = _run_identity_relu_intervention(
+        tl.grad(tl.func("relu")), tl.clamp(low=-0.5, high=0.5)
     )
-    assert result is not None
-    assert torch.linalg.vector_norm(result[0]) <= 0.5001
-
-
-def test_grad_noise_helper_seeded_reproducible() -> None:
-    """Seeded grad_noise helpers are reproducible."""
-
-    helper_a = tl.add_grad_noise(0.1, seed=7)()
-    helper_b = tl.add_grad_noise(0.1, seed=7)()
-    kwargs = {"grad_output": None, "grad_fn_handle": None, "call_index": 1, "run_ctx": {}}
-    result_a = helper_a((torch.zeros(3),), **kwargs)
-    result_b = helper_b((torch.zeros(3),), **kwargs)
-    assert torch.equal(result_a[0], result_b[0])
-
-
-def test_grad_clamp_helper_elementwise() -> None:
-    """grad_clamp clamps each tensor element."""
-
-    helper = tl.clamp_grad(-0.5, 0.5)()
-    result = helper(
-        (torch.tensor([-2.0, 0.0, 2.0]),),
-        grad_output=None,
-        grad_fn_handle=None,
-        call_index=1,
-        run_ctx={},
-    )
-    assert torch.equal(result[0], torch.tensor([-0.5, 0.0, 0.5]))
+    assert torch.equal(grad, torch.full_like(grad, 0.5))
 
 
 class _GuidedCNN(nn.Module):
@@ -1127,7 +1141,9 @@ class _GuidedCNN(nn.Module):
 def _guided_backprop_via_torchlens(model: nn.Module, x: torch.Tensor, target: int) -> torch.Tensor:
     """Return the guided-backprop input gradient using the one-off recipe."""
 
-    guided = tl.when(tl.func("relu"), tl.hook_grad(lambda g, *, ctx: g.clamp(min=0)))
+    # Clamping the ReLU's output gradient then masking equals masking then clamping (the
+    # classic grad_input recipe), because the mask is 0 or 1.
+    guided = tl.when(tl.grad(tl.func("relu")), lambda g, *, ctx: g.clamp(min=0))
     trace = tl.trace(
         model,
         x.clone().requires_grad_(True),

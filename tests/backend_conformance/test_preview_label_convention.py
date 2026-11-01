@@ -23,7 +23,7 @@ pytestmark = pytest.mark.backend_parity
 def _assert_conditional_label(trace, label: str, *, context: str) -> None:
     """A label is bare iff its own layer is single-pass; checked for lineage."""
 
-    layer_num_calls = trace.layer_num_calls
+    layer_num_calls = trace._layer_num_calls
     if ":" in label:
         layer_label, _, pass_suffix = label.rpartition(":")
         assert pass_suffix.isdigit(), f"{label!r} ({context}) has a non-numeric suffix after ':'"
@@ -44,7 +44,7 @@ def _assert_conditional_label(trace, label: str, *, context: str) -> None:
 def _assert_torch_label_convention(trace) -> None:
     """Every parent/child/input/output reference follows the conditional rule."""
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         for neighbor_label in (*op.parents, *op.children):
             _assert_conditional_label(
                 trace, neighbor_label, context=f"referenced from {op.label!r}"
@@ -69,7 +69,7 @@ def test_tinygrad_label_convention_matches_torch() -> None:
 
     w = Tensor.arange(16, dtype="float").reshape(4, 4) / 20.0
     trace = tl.trace(model, (Tensor.ones(2, 4), w), backend="tinygrad")
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     _assert_torch_label_convention(trace)
 
 
@@ -85,7 +85,7 @@ def test_jax_label_convention_matches_torch() -> None:
         return x
 
     trace = tl.trace(model, jnp.ones((1, 4)), backend="jax")
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     _assert_torch_label_convention(trace)
 
 
@@ -106,7 +106,7 @@ def test_mlx_label_convention_matches_torch() -> None:
             return x
 
     trace = tl.trace(M(), mx.ones((1, 4)), backend="mlx")
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     _assert_torch_label_convention(trace)
 
 
@@ -126,7 +126,7 @@ def test_paddle_label_convention_matches_torch() -> None:
             return x
 
     trace = tl.trace(M(), paddle.ones([1, 4]), backend="paddle")
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     _assert_torch_label_convention(trace)
 
 
@@ -150,5 +150,5 @@ def test_tf_label_convention_matches_torch() -> None:
     inputs = tf.ones((1, 4))
     model(inputs)
     trace = tl.trace(model, inputs, backend="tf")
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     _assert_torch_label_convention(trace)

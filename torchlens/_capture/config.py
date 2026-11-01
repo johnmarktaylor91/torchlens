@@ -1,36 +1,9 @@
-"""Internal grouped capture configuration for spine orchestration."""
+"""Internal grouped capture configuration for spine orchestration.
+
+``InternalCaptureConfig`` lives in ``torchlens._capture.stages``; this module keeps
+the old import path (and the pickled module path of older traces) resolvable.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
-
-from .stop import StopDirective
-
-
-@dataclass(frozen=True, slots=True)
-class InternalCaptureConfig:
-    """Grouped internal capture configuration for one forward run.
-
-    Parameters
-    ----------
-    capture_mode
-        Active producer mode: exhaustive, fast, or predicate.
-    layers_to_save
-        Public layer-save selector after entry-boundary normalization.
-    grad_layers_to_save
-        Gradient layer selector after entry-boundary normalization.
-    random_seed
-        Forward RNG seed.
-    postprocess
-        Whether the run should materialize the final ``Trace`` immediately.
-    stop
-        Compiled stop directive for halt/non-finite/forward-error behavior.
-    """
-
-    capture_mode: str
-    layers_to_save: Any
-    grad_layers_to_save: Any
-    random_seed: int | None
-    postprocess: bool
-    stop: StopDirective
+from .stages import InternalCaptureConfig as InternalCaptureConfig

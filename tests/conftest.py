@@ -16,6 +16,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import _xdist_groups
 import numpy as np
 import pytest
 import torch
@@ -71,7 +72,7 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     # capture in the package, and reset per test here so a test that trips it
     # via a direct log_current_rng_states() call cannot degrade later tests.
     ("torchlens._utils.rng", "_cuda_rng_unusable", False),
-    ("torchlens._user_funcs", "_BATCHNORM_TRAIN_STATS_WARNED", False),
+    ("torchlens._capture.prepare.door", "_BATCHNORM_TRAIN_STATS_WARNED", False),
     ("torchlens._utils.introspection", "_col_offset_cache_warned", False),
     ("torchlens.validation._stock_layer_grads", "_PASS_INDEX_PARSE_WARNED", False),
     ("torchlens._visualization._render_common", "_SIBLING_ORDER_WARNING_EMITTED", False),
@@ -136,6 +137,9 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ.setdefault("TORCHLENS_COLLAPSE_STRICT", "1")
     config._tl_warn_once_sentinel_specs = _WARN_ONCE_SENTINELS
     _pin_test_threads(config)
+    # pytest 9.2 + xdist 3.8 drop ``xdist_group`` under ``--dist loadgroup``
+    # (tests/_xdist_groups.py); restamp the group on the id pytest reads.
+    _xdist_groups.register(config)
     # Pay PyTorch's one-time RNG and deterministic-mode initialization during
     # session setup, not against whichever smoke test happens to run first.
     torch.random.get_rng_state()
@@ -1016,13 +1020,13 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
     apply_xfail_marks(items)
 
-    if not __debug__:
-        skip_no_assertions = pytest.mark.skip(
-            reason="requires assertions; the postprocess audit cannot run under python -O"
-        )
+    # ``cuda`` capability marker: the GPU leg selects these with ``-m cuda``;
+    # without a device they skip here even if a site forgot its own skipif.
+    if not torch.cuda.is_available():
+        skip_no_cuda = pytest.mark.skip(reason="needs a CUDA device (cuda marker)")
         for item in items:
-            if item.get_closest_marker("requires_assertions") is not None:
-                item.add_marker(skip_no_assertions)
+            if item.get_closest_marker("cuda") is not None:
+                item.add_marker(skip_no_cuda)
 
     collect_usage_stats = _is_full_usage_stats_run(config)
     _state._collect_usage_stats = collect_usage_stats

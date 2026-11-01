@@ -17,6 +17,7 @@ from .._capture_honesty import (
     poison_facts,
     refuse_presenter_subject,
 )
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 Audience = Literal["researcher", "practitioner", "auto"]
@@ -132,7 +133,6 @@ def _estimate_tokens(text: str) -> int:
     int
         Conservative whole-token estimate (always at least 1).
     """
-
     return max(1, (len(text) + 3) // 4)
 
 
@@ -468,7 +468,7 @@ def _capture_status_lines(log: Any) -> list[str]:
     facts = _capture_verification(log)
     lines = [f"- Capture outcome: {facts['capture_status']}."]
     # L7a G3 render honesty (memo sec 3.4).
-    if bool(getattr(log, "structure_only", False)):
+    if bool(log._options_structure_only if is_live_trace(log) else False):
         lines.append(
             "- Structure-only capture: shapes/dtypes are HYPOTHESES, not "
             "measurements; discharge against a real capture to corroborate."
@@ -576,7 +576,7 @@ def _model_summary_lines(log: Any) -> list[str]:
 
     from ._factcore import factcore
 
-    model_class_name = getattr(log, "model_class_name", type(log).__name__)
+    model_class_name = log._source_class_name if is_live_trace(log) else type(log).__name__
     # Single-source law (sumfam D1/item 11): headline facts come from
     # FactCore, never raw trace attributes. A husked/foreign log that cannot
     # serve the substrate degrades to the legacy zero-shape (explain is the
@@ -642,12 +642,12 @@ def _capture_summary_lines(log: Any) -> list[str]:
         core = factcore(log)
     except Exception:  # noqa: BLE001 -- cleaned/foreign logs keep the degraded report
         return [
-            f"- Layers logged: {_safe_len(getattr(log, 'layer_list', None))}.",
-            f"- Operations logged: {int(getattr(log, 'num_ops', 0) or 0)}.",
+            f"- Layers logged: {_safe_len(log._layer_list if is_live_trace(log) else None)}.",
+            f"- Operations logged: {int((log._num_ops if is_live_trace(log) else 0) or 0)}.",
         ]
     pass_counts = [
         int(value)
-        for value in (getattr(log, "layer_num_calls", {}) or {}).values()
+        for value in ((log._layer_num_calls if is_live_trace(log) else None) or {}).values()
         if isinstance(value, int)
     ]
     max_ops = max(pass_counts, default=1)
@@ -680,13 +680,13 @@ def _backward_summary_lines(log: Any) -> list[str]:
         Bullet lines for the backward section.
     """
 
-    if not bool(getattr(log, "has_backward_pass", False)):
+    if not bool(log._autograd_has_backward_pass if is_live_trace(log) else False):
         return ["- No backward passes are recorded on this log."]
-    pass_count = int(getattr(log, "num_backward_passes", 0) or 0)
+    pass_count = int((log._num_backward_passes if is_live_trace(log) else 0) or 0)
     grad_fn_count = len(getattr(getattr(log, "autograd", None), "grad_fns", None) or ())
     grad_fn_call_count = len(getattr(getattr(log, "autograd", None), "grad_fn_calls", None) or ())
     saved_grad_count = _safe_len(getattr(log, "saved_grad_ops", None))
-    total_backward_memory = getattr(log, "total_backward_memory", None)
+    total_backward_memory = log._cost_total_backward_memory if is_live_trace(log) else None
     memory_line = (
         f"- Unique backward payload memory: {total_backward_memory}."
         if total_backward_memory is not None
@@ -905,7 +905,7 @@ def _shared_parameter_line(log: Any) -> str:
     """
 
     shared = 0
-    for param_log in getattr(log, "param_logs", []) or []:
+    for param_log in (log._param_logs if is_live_trace(log) else None) or []:
         used_by_ops = set(getattr(param_log, "used_by_ops", ()) or ())
         try:
             num_calls = int(getattr(param_log, "num_calls", 0) or 0)
@@ -955,7 +955,7 @@ def _dynamic_control_flow_line(log: Any) -> str:
         Dynamic-control-flow summary.
     """
 
-    event_count = _safe_len(getattr(log, "conditional_records", None))
+    event_count = _safe_len(log._graph_conditional_records if is_live_trace(log) else None)
     has_branching = bool(getattr(getattr(log, "graph", None), "has_conditional_branching", False))
     if event_count or has_branching:
         return (
@@ -980,7 +980,7 @@ def _operation_mix_line(log: Any) -> str:
 
     names = [
         str(getattr(layer, "func_name", "unknown"))
-        for layer in getattr(log, "layer_list", []) or []
+        for layer in (log._layer_list if is_live_trace(log) else None) or []
         if str(getattr(layer, "func_name", "none")) != "none"
     ]
     if not names:
@@ -1003,10 +1003,10 @@ def _operational_status_line(log: Any) -> str:
         Operational status summary.
     """
 
-    cache_hit = bool(getattr(log, "capture_cache_hit", False))
+    cache_hit = bool(log._provenance_cache_hit if is_live_trace(log) else False)
     streamed = sum(
         1
-        for layer in getattr(log, "layer_list", []) or []
+        for layer in (log._layer_list if is_live_trace(log) else None) or []
         if getattr(layer, "out_ref", None) is not None
         or getattr(layer, "grad_ref", None) is not None
     )

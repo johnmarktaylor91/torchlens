@@ -11,7 +11,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 from ._capture.arg_positions import _normalize_func_name
-from ._errors import ArgumentTypeError
+from ._errors import AmbiguousOpLookupError, ArgumentConflictError, ArgumentTypeError
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 from .intervention.selectors import BaseSelector
 from .options import SaveOptions
@@ -133,7 +133,6 @@ def _route_save_label_selection(
         return stats_save_options(), _flatten_stage_names_in_options(capture_options, model)
     if not _is_save_label_selection(save_value):
         return save_value, _flatten_stage_names_in_options(capture_options, model)
-    from ._errors import ArgumentConflictError
     from ._option_receipt import _field_is_explicit
     from .options import merge_capture_options
 
@@ -349,19 +348,19 @@ def _label_save_candidates(ctx: RecordContext) -> set[str]:
             # through the deferred post-postprocess resolution instead, so
             # no raw-index "prediction" of final ordinals happens here.
             candidates.add(f"{ctx.layer_type}_{ctx.type_index}")
-            indexed_candidate = f"{ctx.layer_type}_{ctx.type_index}_{ctx.pass_index}"
+            indexed_candidate = f"{ctx.layer_type}_{ctx.type_index}_{ctx.pass_number}"
             candidates.add(indexed_candidate)
-            candidates.add(f"{indexed_candidate}:{ctx.pass_index}")
+            candidates.add(f"{indexed_candidate}:{ctx.pass_number}")
     if ctx.func_name is not None:
         candidates.add(ctx.func_name)
         candidates.add(_normalize_func_name(ctx.func_name))
     if ctx.address:
         candidates.add(ctx.address)
-        if ctx.module_pass_index is not None:
-            candidates.add(f"{ctx.address}:{ctx.module_pass_index}")
+        if ctx.module_pass_number is not None:
+            candidates.add(f"{ctx.address}:{ctx.module_pass_number}")
         candidates.add(ctx.address.rsplit(".", 1)[-1])
-        if ctx.module_pass_index is not None:
-            candidates.add(f"{ctx.address.rsplit('.', 1)[-1]}:{ctx.module_pass_index}")
+        if ctx.module_pass_number is not None:
+            candidates.add(f"{ctx.address.rsplit('.', 1)[-1]}:{ctx.module_pass_number}")
     return candidates
 
 
@@ -421,7 +420,7 @@ def _make_layers_to_save_predicate(layers_to_save: object) -> PredicateFn:
             except ValueError:
                 requested_base = requested_string
             else:
-                if ctx.pass_index != requested_pass_index:
+                if ctx.pass_number != requested_pass_index:
                     return False
 
         if requested_base == "":
@@ -787,7 +786,7 @@ def canonical_module_site_key(trace: Any, name: object) -> str | None:
     if not isinstance(name, str) or not name or name.startswith("."):
         return None
     try:
-        keys = trace.layer_dict_all_keys or {}
+        keys = trace._layer_dict_all_keys or {}
         ambiguous = trace._ambiguous_lookup_keys or {}
     except AttributeError:
         return None
@@ -821,8 +820,6 @@ def _unique_module_for_name(name: str, base: str, addresses: list[str]) -> str |
     AmbiguousOpLookupError
         When ``base`` ends more than one module address.
     """
-
-    from ._errors import AmbiguousOpLookupError
 
     candidates = [address for address in addresses if address.endswith(f".{base}")]
     flattened = base.replace(".", "_")

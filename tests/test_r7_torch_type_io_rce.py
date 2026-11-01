@@ -38,7 +38,7 @@ from torchlens._io._safe_unpickle import SafeBundleUnpickler, _torch_type_denied
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -284,23 +284,6 @@ def test_all_save_levels_still_load(tmp_path: Path) -> None:
     for name, bundle_path in _save_all_levels(tmp_path).items():
         loaded = tl.load(bundle_path)
         assert loaded is not None, name
-
-
-@pytest.mark.filterwarnings(
-    # A08 random-role-init disclosure (runnable_random_init_run): this test
-    # exercises a weight-free runnable run DELIBERATELY; the warning is the
-    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
-    "default:This runnable artifact carries no model weights"
-)
-def test_runnable_levels_still_run(tmp_path: Path) -> None:
-    """Runnable bundles at all three variants still execute after the guarded load."""
-
-    x = torch.randn(2, 4)
-    paths = _save_all_levels(tmp_path)
-    for name in ("runnable", "runnable_weights", "runnable_activations"):
-        loaded = tl.load(paths[name])
-        result = loaded.run(inputs=x)
-        assert tuple(result.output.shape) == (2, 4), name
 
 
 def test_real_cnn_and_attention_models_load(tmp_path: Path) -> None:

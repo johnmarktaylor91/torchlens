@@ -32,9 +32,7 @@ def _save(model: nn.Module, args: object, path: Path) -> Path:
     trace = tl.trace(
         model,
         args,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(path, level="runnable", include_activations=True)
     return path
@@ -201,7 +199,7 @@ def test_r35_unprovable_topology_is_unverifiable_never_attested(tmp_path: Path) 
 def test_r35_zero_length_views_are_trivially_disjoint(tmp_path: Path) -> None:
     """An empty view shares no bytes with anything -> engine proves disjoint."""
 
-    from torchlens._runnable_execution import _touched_bytes_relation
+    from torchlens._runnable_input_metadata import _touched_bytes_relation
 
     base = torch.randn(6)
     assert _touched_bytes_relation(base[0:0], base[:4]) == "disjoint"
@@ -211,7 +209,7 @@ def test_r35_zero_length_views_are_trivially_disjoint(tmp_path: Path) -> None:
 def test_r35_engine_unit_matrix() -> None:
     """Unit rows for the three-valued engine (proof, not assumption)."""
 
-    from torchlens._runnable_execution import _touched_bytes_relation
+    from torchlens._runnable_input_metadata import _touched_bytes_relation
 
     base = torch.randn(16)
     # Identity geometry.

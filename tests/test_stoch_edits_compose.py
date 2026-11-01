@@ -30,9 +30,7 @@ class _Toy(nn.Module):
 
 def _toy_trace() -> tl.Trace:
     torch.manual_seed(0)
-    return tl.trace(
-        _Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    return tl.trace(_Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(replayable=True))
 
 
 def test_left_to_right_order_and_noncommutativity() -> None:
@@ -55,12 +53,12 @@ def test_flattening_is_syntactic_and_audit_visible() -> None:
     nested = compose(tl.scale(2.0), compose(tl.clamp(high=0.5), tl.scale(0.5)))
     flat = compose(tl.scale(2.0), tl.clamp(high=0.5), tl.scale(0.5))
     assert nested == flat
-    assert [leaf.helper_name for leaf in nested.args] == ["scale", "clamp", "scale"]
+    assert [leaf.name for leaf in nested.args] == ["scale", "clamp", "scale"]
     assert dict(nested.metadata)["compose_leaves"] == "scale|clamp|scale"
 
 
 def test_construction_refusals() -> None:
-    """D20/D21: empty, non-helper, unseeded-stochastic, shape-change, backward."""
+    """D20/D21: empty, non-helper, unseeded-stochastic, shape-change."""
 
     with pytest.raises(Exception) as excinfo:
         compose()
@@ -74,9 +72,6 @@ def test_construction_refusals() -> None:
     with pytest.raises(Exception) as excinfo:
         compose(tl.scale(2.0, allow_shape_change=True))
     assert excinfo.value.fields["code"] == "compose_shape_change_unsupported"
-    with pytest.raises(Exception) as excinfo:
-        compose(tl.scale(2.0), tl.zero_grad())
-    assert excinfo.value.fields["code"] == "compose_kind_mismatch"
 
 
 def test_one_fire_one_record_with_ordered_leaves() -> None:
@@ -85,21 +80,21 @@ def test_one_fire_one_record_with_ordered_leaves() -> None:
     log = _toy_trace()
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), compose(tl.scale(3.0), tl.clamp(high=1.0)))
-    fires = list(fork.ops["relu_1_2"].interventions or ())
+    fires = list(fork.ops["relu_1_2"].edits or ())
     assert len(fires) == 1, "one composed fire, never one record per leaf"
-    assert fires[0].helper is not None
-    assert fires[0].helper.helper_name == "compose"
-    assert dict(fires[0].helper.metadata)["compose_leaves"] == "scale|clamp"
+    assert fires[0].edit is not None
+    assert fires[0].edit.name == "compose"
+    assert dict(fires[0].edit.metadata)["compose_leaves"] == "scale|clamp"
 
 
 def test_flags_and_combine_and_seeded_stochastic_leaf_allowed() -> None:
     """Flags AND-combine; a SEEDED stochastic leaf composes (granularity mixing legal)."""
 
     seeded = compose(tl.scale(2.0), tl.add_noise(0.1, seed=7))
-    assert [leaf.helper_name for leaf in seeded.args] == ["scale", "add_noise"]
-    assert seeded.batch_independent is True
+    assert [leaf.name for leaf in seeded.args] == ["scale", "add_noise"]
+    assert seeded.is_batch_independent is True
     baseline_flags = compose(tl.scale(2.0), tl.mean_ablate(dim=None))
-    assert baseline_flags.batch_independent is False, "mean_ablate self-mean couples the batch"
+    assert baseline_flags.is_batch_independent is False, "mean_ablate self-mean couples the batch"
 
 
 def test_matches_explicit_sequential_hooks_bytewise() -> None:
@@ -120,7 +115,7 @@ def test_pickle_round_trip_preserves_leaf_order() -> None:
     spec = compose(tl.scale(2.0), tl.clamp(high=0.5), tl.scale(0.25))
     restored = pickle.loads(pickle.dumps(spec))
     assert restored == spec
-    assert [leaf.helper_name for leaf in restored.args] == ["scale", "clamp", "scale"]
+    assert [leaf.name for leaf in restored.args] == ["scale", "clamp", "scale"]
     assert restored.factory is not None, "the registry re-derives the runtime factory"
 
 

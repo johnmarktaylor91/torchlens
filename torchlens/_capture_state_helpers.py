@@ -25,24 +25,27 @@ from torch import nn
 from . import _state
 from ._data_classes.trace import Trace
 from ._plain_attr_fidelity import (
+    _PLAIN_ATTR_IGNORED_NAMES,
+    _module_plain_attr_names,
     assert_copy_kept_instance_attrs,
     is_registered_tensor_alias,
     restore_simple_plain_attrs_on_copy,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
+from ._utils._package_frames import is_torchlens_code
 from ._utils._torch_compat import (
     force_eager_stance_scope,
     get_dynamo_optimized_module_type,
     get_fsdp_wrapper_type,
     is_dynamo_compiled_callable,
 )
+from ._utils.tensor_leaves import iter_tensors
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 
 # Content-fingerprint / attribute-fragment family: split to _capture_fingerprint.py
 # under the R43 file-size ratchet. Re-exported here because the historical import
 # surface for the capture-cache key helpers is torchlens._capture_state_helpers.
 from ._capture_fingerprint import (  # noqa: F401  isort: skip
-    _iter_tensor_inputs,
     _ATTRIBUTE_FRAGMENT_DEPTH_CEILING,
     _ATTRIBUTE_FRAGMENT_ITEM_CEILING,
     _attribute_state_fragment,
@@ -89,7 +92,6 @@ unchanged while a class is alive; a class that has been collected can no longer
 be the subject of a duplicate warning, since any later model is by definition a
 different type.
 """
-_PLAIN_ATTR_IGNORED_NAMES = frozenset({"_parameters", "_buffers", "_modules"})
 _PLAIN_ATTR_MAX_CONTAINER_ITEMS = 128
 _PLAIN_ATTR_MAX_TENSOR_NUMEL = 4096
 _PLAIN_ATTR_MAX_DEPTH = 64
@@ -1122,24 +1124,6 @@ def _plain_attr_restore_value(snapshot: Any) -> Any:
     return _snapshot_plain_attr_value(snapshot, "<snapshot>")
 
 
-def _module_plain_attr_names(module: nn.Module) -> set[str]:
-    """Return plain attribute names to snapshot for a module.
-
-    Parameters
-    ----------
-    module:
-        Module whose non-registered attributes should be inspected.
-
-    Returns
-    -------
-    set[str]
-        Attribute names excluding registered parameter, buffer, and child
-        module storage.
-    """
-
-    return set(module.__dict__) - _PLAIN_ATTR_IGNORED_NAMES
-
-
 class _ModuleTreePlainAttrSnapshot:
     """Snapshot of small value-comparable plain attributes in a module tree."""
 
@@ -1455,7 +1439,7 @@ def _input_id_for_relationship_evidence(input_args: Any) -> int:
         the input container.
     """
 
-    tensors = _iter_tensor_inputs(input_args)
+    tensors = list(iter_tensors(input_args, sort_keys=True))
     if len(tensors) == 1:
         return id(tensors[0])
     return id(input_args)
@@ -1486,7 +1470,7 @@ def _hash_input_signatures(input_args: Any, input_kwargs: Any) -> str:
     path 2: a shape/dtype/device hash is value-blind).
     """
 
-    tensors = _iter_tensor_inputs((input_args, input_kwargs))
+    tensors = list(iter_tensors((input_args, input_kwargs), sort_keys=True))
     entries = [(tuple(tensor.shape), str(tensor.dtype), str(tensor.device)) for tensor in tensors]
     return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
 
@@ -1653,9 +1637,6 @@ def _fingerprint_model_implementation(model: nn.Module) -> str:
     return hasher.hexdigest()
 
 
-_TORCHLENS_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
 def _is_torchlens_instrumentation(func: Any) -> bool:
     """Return whether an instance ``forward`` is TorchLens' own prepared wrapper.
 
@@ -1671,11 +1652,13 @@ def _is_torchlens_instrumentation(func: Any) -> bool:
     code = getattr(target, "__code__", None)
     if not isinstance(code, types.CodeType):
         return False
-    # The separator matters: a bare prefix match also claimed sibling installs
-    # such as ``site-packages/torchlens_contrib/model.py``, silently EXCLUDING
-    # a user-owned forward override from the implementation signature (edits
-    # then hit the stale cache).
-    return code.co_filename.startswith(_TORCHLENS_PACKAGE_DIR + os.sep)
+    # Spelling-independent, separator-checked (``_package_frames``): a bare
+    # prefix match once claimed sibling installs such as
+    # ``site-packages/torchlens_contrib/model.py``, silently EXCLUDING a
+    # user-owned forward override from the implementation signature (edits then
+    # hit the stale cache), and a raw-filename match missed the wrapper itself
+    # when the package was imported through a ``sys.path`` entry of ``"."``.
+    return is_torchlens_code(code)
 
 
 def _capture_cache_dir(cache_dir: str | Path | None) -> Path:
@@ -1816,7 +1799,7 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
         Log to make pickle-compatible in place.
     """
 
-    for layer in getattr(trace, "layer_list", []):
+    for layer in trace._layer_list:
         for field_name in (
             "out",
             "transformed_out",
@@ -1829,7 +1812,7 @@ def _prepare_log_for_capture_cache(trace: Trace) -> None:
         layer.grad_fn_handle = None
         layer._internal_set("saved_args", _detach_nested_for_cache(layer.saved_args))
         layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.saved_kwargs))
-    for layer_log in getattr(trace, "layer_logs", {}).values():
+    for layer_log in trace._layer_logs.values():
         # ``Layer.transformed_out``/``transformed_grad`` are read-only proxies that read
         # through to the underlying ``Layer.ops[i]`` -- the real tensors live on the Op
         # objects, which expose ``_internal_set`` (the Layer view does not, so a raw

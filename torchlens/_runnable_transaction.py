@@ -5,13 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import torch
 
 from torchlens._runnable import ContractCheck, ReadinessReport
 
 from . import _state
+from ._errors import InvalidArgumentError
 from ._runnable import (
     ActivationPayloadLayerDescriptor,
     DivergencePolicy,
@@ -33,6 +34,11 @@ from ._runnable_state import (
     RunResourceCeiling,
     runnable_tensor_byte_digest,
 )
+from ._runnable_until import (
+    _until_dependency_closure,
+    _until_execution_partition,
+    _until_stop_raw_index,
+)
 from ._utils.rng import (
     restore_host_rng,
     snapshot_host_rng,
@@ -43,48 +49,6 @@ from .errors import (
     RuntimeSignatureDriftError,
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _HOST_RNG_SOURCE_KIND,
-        _INPUT_CHECK_UNAVAILABLE,
-        _ambient_execution_context_restored,
-        _bind_call_outputs,
-        _call_execution_context_entered,
-        _call_witness_checks,
-        _container_spec_reconstruction_lossy,
-        _contract_check,
-        _control_witness_source_slot_ids,
-        _declared_nondeterministic_sources,
-        _diagnose_live_output,
-        _execute_sparse_call,
-        _finalize_provider_run,
-        _first_failed_live_input_check,
-        _host_rng_unreproduced,
-        _input_derived_layout_stale,
-        _mode_sensitive_op_unwitnessed,
-        _nondeterministic_value_sources,
-        _numeric_attestation_check,
-        _output_container_spec,
-        _output_not_reproduced,
-        _path_faithfulness,
-        _populate_source_slots,
-        _post_execution_contract_checks,
-        _pre_call_contract_checks,
-        _raise_failed_contract_as_divergence,
-        _raise_numeric_attestation_failure,
-        _raw_activation_slot_ids,
-        _reconstruct_output,
-        _run_fork_name,
-        _seed_run_generators,
-        _seeded_fork_devices,
-        _split_mixed_inputs,
-        _state_contract_checks,
-        _tensor_derived_scalar_stale,
-        _tensor_derived_scalar_witness_slot_ids,
-        _unbound_state_escape_stale,
-        _uninit_taint_reaches,
-    )
 
 __all__ = (
     "_execute_loaded_sparse_transaction",
@@ -504,6 +468,40 @@ def _resolve_run_until_plan(trace: Any, until: Any) -> _RunUntilPlan:
     )
 
 
+def _resolve_run_save_labels(trace: Any, save: Any, until: Any) -> frozenset[str]:
+    """Resolve a run-time ``save=`` selection to final layer labels.
+
+    The selection must lie inside the ``until=`` executed window when both are
+    given; out-of-window sites refuse typed.
+    """
+
+    # Reuse the static-form resolver: same accepted family (labels,
+    # module addresses, 'saved'), same typed refusals (pre-S4
+    # predicate gate, junk forms, unknown-site lookup feedback).
+    save_plan = _resolve_run_until_plan(trace, save)
+    run_save_labels = frozenset(save_plan.requested_layer_labels)
+    if until is not None:
+        until_preview = _resolve_run_until_plan(trace, until)
+        executed_raw = frozenset(until_preview.executed_raw_labels)
+        executed_final = {
+            layer.layer_label
+            for layer in trace._layer_list
+            if layer._layer_label_raw in executed_raw
+        }
+        outside = sorted(run_save_labels - executed_final)
+        if outside:
+            raise InvalidArgumentError(
+                "run-time save= selection must lie inside the "
+                "until= executed window; out-of-window site(s): "
+                f"{', '.join(outside)}",
+                code="run_until_form_invalid",
+                remedy="widen until= to cover the save= sites, or "
+                "drop the out-of-window save= sites",
+                argument="save",
+            )
+    return run_save_labels
+
+
 def _validated_until_tokens(until: Any) -> list[Any]:
     """Normalize the until= selection to tokens; refuse empty/non-static forms."""
 
@@ -550,9 +548,9 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
     if token == "saved":
         saved_layers = [
             layer
-            for layer in trace.layer_list
+            for layer in trace._layer_list
             if bool(getattr(layer, "has_saved_activation", False))
-            and layer.layer_type not in ("input", "output")
+            and layer.type not in ("input", "output")
         ]
         if not saved_layers:
             raise InvalidArgumentError(
@@ -564,7 +562,7 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
             )
         labels = [layer.layer_label for layer in saved_layers]
         return saved_layers, labels, list(labels)
-    keys = trace.layer_dict_all_keys
+    keys = trace._layer_dict_all_keys
     if token in keys:
         layer = keys[token]
         return [layer], [layer.layer_label], [layer.layer_label]
@@ -586,48 +584,6 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
         remedy="pass a resolvable layer label or module address",
         argument="until",
     )
-
-
-def _until_stop_raw_index(resolved: list[Any]) -> int:
-    """The stop frontier: the max recorded raw index across resolved sites."""
-
-    from ._errors import InvalidArgumentError
-
-    stop_raw_index = -1
-    for layer in resolved:
-        for op in getattr(layer, "ops", None) or (layer,):
-            raw_index = getattr(op, "raw_index", None)
-            if raw_index is not None:
-                stop_raw_index = max(stop_raw_index, int(raw_index))
-    if stop_raw_index < 0:
-        raise InvalidArgumentError(
-            "until= selection resolved to sites without recorded operation "
-            "indexes; the stop frontier is undecidable",
-            code="run_until_form_invalid",
-            remedy="pass sites that resolve to captured operations",
-            argument="until",
-        )
-    return stop_raw_index
-
-
-def _until_execution_partition(
-    trace: Any, stop_raw_index: int
-) -> tuple[list[str], list[str], str | None]:
-    """Partition the source layers into executed/skipped at the stop frontier."""
-
-    executed: list[str] = []
-    skipped: list[str] = []
-    stopped_at: str | None = None
-    for layer in trace.layer_list:
-        raw_index = getattr(layer, "raw_index", None)
-        raw_label = layer._layer_label_raw
-        if layer.layer_type == "output" or raw_index is None or int(raw_index) > stop_raw_index:
-            skipped.append(raw_label)
-            continue
-        executed.append(raw_label)
-        if int(raw_index) == stop_raw_index:
-            stopped_at = layer.layer_label
-    return executed, skipped, stopped_at
 
 
 def _loaded_until_cut(
@@ -683,45 +639,6 @@ def _loaded_until_cut(
     if candidate_skips:
         return prefix, "sequential_prefix", "unprovable_independence"
     return prefix, "closure", None
-
-
-def _until_dependency_closure(
-    *,
-    prefix: tuple[RunnableCallDescriptor, ...],
-    by_id: dict[str, RunnableCallDescriptor],
-    op_label_to_call: dict[str, str],
-    seed_call_ids: list[str],
-    state_slot_ids: set[str],
-) -> set[str]:
-    """Widened dependency closure: C1 tensor deps, C5 control-witness deps,
-    then the C3 declared-state widening over shared state slots."""
-
-    closure: set[str] = set()
-    frontier = list(seed_call_ids)
-    while frontier:
-        call_id = frontier.pop()
-        if call_id in closure or call_id not in by_id:
-            continue
-        closure.add(call_id)
-        call = by_id[call_id]
-        frontier.extend(call.parent_call_ids)
-        for edge in call.control_dependencies:
-            parent_call_id = op_label_to_call.get(edge.parent_op_label)
-            if parent_call_id is not None:
-                frontier.append(parent_call_id)
-    closure_state_slots = {
-        argument.slot_id
-        for call_id in closure
-        for argument in by_id[call_id].tensor_arguments
-        if argument.slot_id in state_slot_ids
-    }
-    if closure_state_slots:
-        for call in prefix:
-            if call.call_id in closure:
-                continue
-            if any(argument.slot_id in closure_state_slots for argument in call.tensor_arguments):
-                closure.add(call.call_id)
-    return closure
 
 
 def _run_truncation_record(plan: _RunUntilPlan, regime: str, cause: str | None = None) -> Any:
@@ -968,7 +885,7 @@ def _live_readiness_report(trace: Any) -> ReadinessReport:
     return ReadinessReport(
         status=ReadinessStatus.READY,
         provider=RunProvider.LIVE,
-        backend=str(getattr(trace, "backend", "torch")),
+        backend=str(trace._provenance_backend),
         capability="live_model_fast_capture",
         resolver_records=(),
         state_sources_available=(StateSource.LIVE_MODEL_STATE,),
@@ -1281,3 +1198,69 @@ def _live_runtime_input_leaves(input_args: Any, input_kwargs: Any) -> list[torch
         return leaves
     except Exception:
         return None
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_attestation import (  # noqa: E402
+    _control_witness_source_slot_ids,
+    _declared_nondeterministic_sources,
+    _mode_sensitive_op_unwitnessed,
+    _nondeterministic_value_sources,
+    _raw_activation_slot_ids,
+    _uninit_taint_reaches,
+)
+from ._runnable_call_arguments import (  # noqa: E402
+    _execute_sparse_call,
+    _populate_source_slots,
+)
+from ._runnable_call_outputs import (  # noqa: E402
+    _bind_call_outputs,
+    _container_spec_reconstruction_lossy,
+    _output_container_spec,
+    _output_not_reproduced,
+    _reconstruct_output,
+)
+from ._runnable_execution import (  # noqa: E402
+    _HOST_RNG_SOURCE_KIND,
+)
+from ._runnable_input_aliases import (  # noqa: E402
+    _split_mixed_inputs,
+)
+from ._runnable_input_sites import (  # noqa: E402
+    _INPUT_CHECK_UNAVAILABLE,
+    _first_failed_live_input_check,
+    _input_derived_layout_stale,
+)
+from ._runnable_output_contracts import (  # noqa: E402
+    _call_witness_checks,
+    _diagnose_live_output,
+    _post_execution_contract_checks,
+)
+from ._runnable_path_faithfulness import (  # noqa: E402
+    _numeric_attestation_check,
+    _path_faithfulness,
+)
+from ._runnable_providers import (  # noqa: E402
+    _finalize_provider_run,
+    _host_rng_unreproduced,
+    _seed_run_generators,
+    _seeded_fork_devices,
+)
+from ._runnable_state_context import (  # noqa: E402
+    _ambient_execution_context_restored,
+    _call_execution_context_entered,
+    _pre_call_contract_checks,
+    _state_contract_checks,
+)
+from ._runnable_verification import (  # noqa: E402
+    _contract_check,
+    _raise_failed_contract_as_divergence,
+    _raise_numeric_attestation_failure,
+    _run_fork_name,
+)
+from ._runnable_witness_contracts import (  # noqa: E402
+    _tensor_derived_scalar_stale,
+    _tensor_derived_scalar_witness_slot_ids,
+    _unbound_state_escape_stale,
+)

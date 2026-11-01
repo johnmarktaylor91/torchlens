@@ -100,7 +100,7 @@ def _site_outs(trace: Any) -> dict[str, torch.Tensor]:
 def _saved_labels(trace: Any) -> list[str]:
     """Return the labels of every op holding a saved activation."""
 
-    return [op.label for op in trace.layer_list if getattr(op, "has_saved_activation", False)]
+    return [op.label for op in trace._layer_list if getattr(op, "has_saved_activation", False)]
 
 
 def _rerun(trace: Any, model: nn.Module, x: torch.Tensor, **kwargs: Any) -> None:

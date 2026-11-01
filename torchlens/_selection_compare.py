@@ -63,6 +63,7 @@ from typing import Any
 
 import torch
 
+from ._record_type import record_type
 from ._selection import (
     Selection,
     SelectionProvenance,
@@ -81,7 +82,7 @@ from ._selection_values import (
     _resolve_population,
     _validate_real_number,
 )
-from .errors._base import TorchLensWarning
+from .errors._base import TorchLensError, TorchLensWarning
 
 __all__ = [
     "changed",
@@ -99,7 +100,7 @@ __all__ = [
 def _reference_display(reference: Any) -> str:
     """Return a compact reference identity for reprs/sources (never the trace)."""
 
-    label = getattr(reference, "trace_label", None)
+    label = getattr(reference, "name", None)
     return str(label) if label else "<reference trace>"
 
 
@@ -190,7 +191,6 @@ class _JoinGuard:
             occurrence_coordinates,
             site_profile,
         )
-        from .errors._base import TorchLensError
 
         try:
             subject_profile = site_profile(subject)
@@ -310,8 +310,6 @@ def _delta_for_entry(
 def _read_reference_value(node: _CompareTerm, entry: Site, reference_op: Any) -> torch.Tensor:
     """Read the reference op's retained activation with the shared typed refusals."""
 
-    from .errors._base import TorchLensError
-
     if not getattr(reference_op, "has_saved_activation", False):
         raise _unresolvable(
             "value_not_saved",
@@ -364,8 +362,7 @@ def _machinery_entry(entry: Site, source: str) -> Site:
 def _is_machinery_entry(trace: Any, entry: Site) -> bool:
     """Whether one subject entry is an engine-inserted machinery op (D-7)."""
 
-    op = _op_for_entry(trace, entry)
-    return getattr(op, "layer_type", None) in _MACHINERY_LAYER_TYPES
+    return record_type(_op_for_entry(trace, entry), None) in _MACHINERY_LAYER_TYPES
 
 
 def _compared_delta(delta: torch.Tensor, by: str, producer: str, site: Any) -> torch.Tensor:

@@ -23,14 +23,16 @@ import dataclasses
 
 import pytest
 
-from torchlens._ir.container import (
+from torchlens._ir._container_type_probes import (
     _GENERATED_DC_INIT_MARKER,
+    _dataclass_has_foreign_init,
+)
+from torchlens._ir.container import (
     CONTAINER_KIND_CAPABILITIES,
     ContainerSpec,
-    _dataclass_has_foreign_init,
     reconstruction_is_lossy_by_type,
 )
-from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+from torchlens._runnable_call_outputs import _spec_node_reconstruction_lossy
 
 _FIELDS = ("a", "b")
 

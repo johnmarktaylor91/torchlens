@@ -1101,7 +1101,7 @@ def _paused_internal_reads() -> Iterator[None]:
     would register as user raw-pointer escapes on witness-armed captures.
     """
     from .._state import pause_logging
-    from ..backends.torch.completeness_witness import internal_scalar_read
+    from ..backends.torch._internal_read import internal_scalar_read
 
     with pause_logging(), internal_scalar_read():
         yield
@@ -1209,7 +1209,7 @@ def _try_defer_payload_alias(
     state_ptrs = _DEFER_STATE_PTRS
     if state_ptrs is None:
         return None
-    from ..backends.torch.completeness_witness import internal_scalar_read
+    from ..backends.torch._internal_read import internal_scalar_read
 
     with internal_scalar_read():
         key = _deferred_storage_key(x)
@@ -1555,7 +1555,7 @@ def _capture_observed_cuda_device(trace: Any) -> bool | None:
     """
 
     saw_device_fact = False
-    for source in (trace, getattr(trace, "layer_list", None)):
+    for source in (trace, trace._layer_list):
         if source is None:
             continue
         source_saw_fact = False
@@ -1612,7 +1612,7 @@ def capture_touched_cuda(trace: Any) -> bool:
         evidence, was stamped with a KNOWN non-CUDA backend.
     """
 
-    backend = getattr(trace, "forward_memory_backend", None)
+    backend = trace._provenance_forward_memory_backend
     if backend == "cuda":
         return True
     observed = _capture_observed_cuda_device(trace)

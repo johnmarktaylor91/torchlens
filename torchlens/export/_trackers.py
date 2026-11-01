@@ -20,6 +20,7 @@ from .._capture_honesty import (
     capture_honesty_facts,
     honesty_preamble_lines,
 )
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import ArgumentTypeError, KeywordConflictError
 from ._common import _require_trace, _scalarize_cell
 
@@ -55,7 +56,11 @@ def tensorboard(trace: Any, writer: Any, *, step: int, prefix: str = "torchlens"
     # historical exporters had drifted onto three different summary sets.
     for key, value in _summary_metrics(trace).items():
         writer.add_scalar(f"{prefix}/{key}", value, step)
-    writer.add_text(f"{prefix}/model_class_name", str(getattr(trace, "model_class_name", "")), step)
+    writer.add_text(
+        f"{prefix}/model_class_name",
+        str(trace._source_class_name if is_live_trace(trace) else ""),
+        step,
+    )
     add_text = getattr(writer, "add_text", None)
     if callable(add_text):
         add_text(f"{prefix}/capture_honesty", "; ".join(honesty_preamble_lines(trace)), step)
@@ -404,9 +409,11 @@ def _summary_metrics(log: Any) -> dict[str, int]:
     """
 
     return {
-        "num_layers": len(getattr(log, "layer_list", [])),
-        "num_saved_ops": int(getattr(log, "num_saved_ops", 0) or 0),
-        "total_activation_memory": int(getattr(log, "total_activation_memory", 0) or 0),
+        "num_layers": len(log._layer_list),
+        "num_saved_ops": len(getattr(log, "saved_ops", ())),
+        "total_activation_memory": int(
+            (log._cost_total_activation_memory if is_live_trace(log) else 0) or 0
+        ),
     }
 
 

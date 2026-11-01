@@ -113,7 +113,7 @@ import torchlens as tl
 trace = tl.trace(
     nn.ReLU(),
     torch.tensor([[-1.0, 2.0]]),
-    capture=tl.options.CaptureOptions(intervention_ready=True),
+    capture=tl.options.CaptureOptions(replayable=True),
 )
 region = tl.units(trace.input_ops[0].label, [(0, 1)])
 result = tl.attribution.occlusion(
@@ -534,7 +534,7 @@ result = tl.attribution.input_x_grad(model, x, target=0)
 curve = tl.attribution.deletion_curve(model, x, target=0, attribution=result, num_steps=4)
 print(curve.scores[:, 0].tolist(), curve.aopc)
 
-trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 fork = trace.fork()
 for selection, edit in curve.steps[1].build_interventions:
     fork.do(selection, edit)
@@ -704,7 +704,7 @@ audit = tl.attribution.causal_audit(model, x, claim=claim, target=0, k=2, num_ra
 print([(row.index, row.claimed_effect, row.measured_effect) for row in audit.units])
 print(audit.rank_agreement, [(item.kind, item.indices, item.measured_effect) for item in audit.sets[:2]])
 
-trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 fork = trace.fork()
 for selection, edit in audit.set_of("top")[0].build_interventions:
     fork.do(selection, edit)

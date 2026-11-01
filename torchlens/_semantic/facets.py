@@ -431,7 +431,7 @@ class FacetSpec(_SelectionOperand):
             home_kind=home_kind,
             home_label=getattr(home, "label", getattr(home, "call_label", None)),
             home_address=getattr(home, "address", None),
-            pass_index=getattr(home, "pass_index", None),
+            pass_index=getattr(home, "pass_number", None),
             call_index=getattr(home, "call_index", None),
             output_path=tuple(getattr(home, "container_path", ()) or ()),
             capability_flags=flags,
@@ -1785,7 +1785,7 @@ def _snapshot_for_record(record: Any) -> FacetRegistrySnapshot:
     trace = getattr(record, "trace", None)
     if trace is None:
         trace = getattr(record, "source_trace", None)
-    snapshot_value = getattr(trace, "facet_registry_snapshot", None)
+    snapshot_value = getattr(trace, "facet_functions", None)
     if isinstance(snapshot_value, FacetRegistrySnapshot):
         return snapshot_value
     return snapshot()
@@ -1939,9 +1939,9 @@ def _path_component_to_name(component: OutputPathComponent) -> str | None:
     if isinstance(component, TupleIndex):
         return str(component.index)
     if isinstance(component, NamedField | DataclassField):
-        return component.name
+        return component._name
     if isinstance(component, DictKey | HFKey):
-        return str(component.key)
+        return str(component._key)
     if isinstance(component, int):
         return str(component)
     if isinstance(component, str):

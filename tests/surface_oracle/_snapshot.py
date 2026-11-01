@@ -52,7 +52,7 @@ _MEASURED_NAME_TOKENS = frozenset(
 #: Attributes whose values embed process-global counters (the per-process
 #: trace counter and fork counter). Digit runs are normalized so the golden
 #: does not depend on how many traces ran earlier in the process.
-_COUNTER_NORMALIZED_ATTRIBUTES = frozenset({"trace_label", "state_history"})
+_COUNTER_NORMALIZED_ATTRIBUTES = frozenset({"name", "state_history"})
 
 #: Nested mapping keys treated as measured wherever they appear (runtime
 #: object identities inside structured values such as ``state_history``).
@@ -312,7 +312,7 @@ def snapshot_trace_surface(trace: Trace) -> dict[str, Any]:
         # Every row, keyed by label as ``trace.ops.items()`` was before sumfam
         # F1: the counted ``trace.ops`` view leaves out input, output and
         # buffer rows, and the surface oracle snapshots every record.
-        "ops": {op.label: op for op in trace.layer_list},
+        "ops": {op.label: op for op in trace._layer_list},
         "layers": trace.layers,
         "modules": trace.modules,
         "module_calls": trace.module_calls,

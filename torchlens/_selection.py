@@ -47,6 +47,8 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
+from ._errors import SelectionError
+from ._selection_align import align_resolved_selection
 from ._selection_mask import (
     _Mask,
     _mask_complement,
@@ -58,7 +60,8 @@ from ._selection_mask import (
     _mask_union,
     _mask_whole,
 )
-from .errors._base import ConfigurationError, TorchLensError
+from ._utils.fail_open import fail_open
+from .errors._base import TorchLensError
 
 if TYPE_CHECKING:
     from ._data_classes.trace import Trace
@@ -79,16 +82,6 @@ RelationName = Literal["exact", "upper_bound", "lower_bound", "unknown"]
 _RELATIONS: tuple[str, ...] = ("exact", "upper_bound", "lower_bound", "unknown")
 
 _OPERATOR_SYMBOLS = {"or": "|", "and": "&", "sub": "-"}
-
-
-class SelectionError(ConfigurationError, ValueError):
-    """Carrier class for the closed ``selection_*`` refusal codes.
-
-    Branch on ``exc.fields["code"]`` (``selection_trace_mismatch`` /
-    ``selection_bool_ambiguous`` / ``selection_kind_incompatible`` /
-    ``selection_unresolvable`` / ``selection_apply_invalid`` /
-    ``selection_alignment_invalid``), never on message text.
-    """
 
 
 # ---------------------------------------------------------------------------
@@ -215,16 +208,14 @@ def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
     site-key sort, appended after placed entries deterministically.
     """
 
-    from ._utils.fail_open import fail_open
-
     placed = _canonical_entry_order(entries)
 
     def _execution_order() -> dict[tuple[Any, ...], int]:
         """Map each ``(layer_label, pass_index)`` address to its graph step."""
 
         return {
-            (op.layer_label, op.pass_index): step
-            for step, op in enumerate(getattr(trace, "layer_list", ()) or ())
+            (op.layer_label, op.pass_number): step
+            for step, op in enumerate(trace._layer_list or ())
         }
 
     order = fail_open(_execution_order, lambda _error: {})
@@ -251,7 +242,7 @@ def _entry_label(trace: Any, entry: Site) -> str:
     layer_label, pass_index = entry.key
     for op in _forward_ops(trace):
         if (getattr(op, "layer_label", None) or op.label) == layer_label and (
-            getattr(op, "pass_index", 1) or 1
+            getattr(op, "pass_number", 1) or 1
         ) == pass_index:
             return str(op.label)
     return f"{layer_label}:{pass_index}"
@@ -375,8 +366,6 @@ class Selection:
             ``grouping_stamp_mismatch`` / ``site_key_unavailable`` /
             ``site_not_in_target`` / ``index_space_mismatch``).
         """
-
-        from ._selection_align import align_resolved_selection
 
         return align_resolved_selection(self, target)
 
@@ -639,13 +628,13 @@ class Selector:
     ``Selection`` is truthy on "has any selected element".
     """
 
-    __slots__ = ("_direction", "_kind", "_node")
+    __slots__ = ("_kind", "_node", "_signal")
 
-    _direction: str
     _kind: str
     _node: Any
+    _signal: str
 
-    def __init__(self, node: Any, *, kind: str, direction: str = "forward") -> None:
+    def __init__(self, node: Any, *, kind: str, signal: str = "forward") -> None:
         """Freeze one query AST node (internal constructor).
 
         Users build selections through producers (``__selection__`` lifts,
@@ -657,7 +646,7 @@ class Selector:
             raise ValueError(f"selection kind must be one of {_SELECTION_KINDS}; got {kind!r}.")
         object.__setattr__(self, "_node", node)
         object.__setattr__(self, "_kind", kind)
-        object.__setattr__(self, "_direction", direction)
+        object.__setattr__(self, "_signal", signal)
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Refuse mutation after freeze."""
@@ -714,9 +703,7 @@ class Selector:
     def __invert__(self) -> Selector:
         """Mask complement per touched site (uniform; never predicate negation)."""
 
-        return Selector(
-            _Combinator("invert", (self._node,)), kind=self._kind, direction=self._direction
-        )
+        return Selector(_Combinator("invert", (self._node,)), kind=self._kind, signal=self._signal)
 
     # Resolution ------------------------------------------------------------
 
@@ -824,10 +811,10 @@ def _check_kinds(op: str, left_kind: str, right_kind: str) -> None:
         )
 
 
-def _check_directions(left_direction: str, right_direction: str) -> None:
+def _check_signals(left_signal: str, right_signal: str) -> None:
     """Refuse forward x backward composition (inherited refusal)."""
 
-    if left_direction != right_direction:
+    if left_signal != right_signal:
         from .intervention.errors import SelectorCompositionError
 
         raise SelectorCompositionError(
@@ -884,7 +871,7 @@ def _compose_queries(op: str, lifted_left: Selector, lifted_right: Selector) -> 
     """Compose two query selections into one AST node (n-ary flatten for or)."""
 
     _check_kinds(op, lifted_left._kind, lifted_right._kind)
-    _check_directions(lifted_left._direction, lifted_right._direction)
+    _check_signals(lifted_left._signal, lifted_right._signal)
     if op == "or":
         # n-ary flatten for constant depth under chained composition.
         operands: list[Any] = []
@@ -897,7 +884,7 @@ def _compose_queries(op: str, lifted_left: Selector, lifted_right: Selector) -> 
         node_out: Any = _Combinator("or", tuple(operands))
     else:
         node_out = _Combinator(op, (lifted_left._node, lifted_right._node))
-    return Selector(node_out, kind=lifted_left._kind, direction=lifted_left._direction)
+    return Selector(node_out, kind=lifted_left._kind, signal=lifted_left._signal)
 
 
 def _compose_resolved(op: str, left: Selection, right: Selection) -> Selection:
@@ -1049,7 +1036,7 @@ def _act_entry(op: Any, mask: _Mask, relation: str, source: str) -> Site:
     """Build one ACT site entry for a resolved op."""
 
     layer_label = getattr(op, "layer_label", None) or op.label
-    pass_index = getattr(op, "pass_index", 1) or 1
+    pass_index = getattr(op, "pass_number", 1) or 1
     return Site(
         kind="ACT",
         key=(layer_label, pass_index),
@@ -1110,19 +1097,16 @@ def _resolve_combinator(node: _Combinator, trace: Any, kind: str) -> Selection:
 def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> Selection:
     """Resolve a lifted selector to whole-site masks over its matched sites."""
 
-    from .intervention.resolver import (
-        _indexed_label_match,
-        _iter_sites,
-        _normalize_query,
-        _resolve_unchecked,
-        _selector_resolution_direction,
-    )
+    from .intervention.resolver import _normalize_query, _resolve_branch_sites, split_site_branches
 
-    direction = _selector_resolution_direction(node.selector)
-    matched = _indexed_label_match(trace, direction, _normalize_query(node.selector))
-    if matched is None:
-        sites = tuple(_iter_sites(trace, direction))
-        matched = _resolve_unchecked(sites, node.selector, strict=False)
+    matched: list[Any] = []
+    for branch in split_site_branches(node.selector):
+        if branch.universe == "gradient":
+            from .intervention.selectors import _grad_selection_refusal
+
+            raise _grad_selection_refusal(node.selector, code="grad_selection_unsupported")
+        branch_selector = _normalize_query(branch.selector)
+        matched.extend(_resolve_branch_sites(trace, branch_selector, branch.universe, strict=False))
     entries = [
         _act_entry(op, _mask_whole(_site_shape(op)), "exact", f"selector {node.selector!r}")
         for op in matched
@@ -1203,7 +1187,7 @@ def _resolve_facet_term(node: _FacetTerm, trace: Any) -> Selection:
         )
     pass_index = getattr(spec, "pass_index", None)
     if pass_index is not None:
-        matches = tuple(op for op in matches if getattr(op, "pass_index", 1) == pass_index)
+        matches = tuple(op for op in matches if getattr(op, "pass_number", 1) == pass_index)
         if not matches:
             raise _unresolvable(
                 "site_not_in_trace",
@@ -1308,7 +1292,7 @@ def _resolve_unit_term(node: _UnitTerm, trace: Any) -> Selection:
         from .intervention.resolver import multipass_bare_label_message
 
         layer_label = getattr(matches[0], "layer_label", None) or node.site
-        pass_indices = sorted(int(getattr(op, "pass_index", 1) or 1) for op in matches)
+        pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
         raise _unresolvable(
             "multipass_bare_label",
             multipass_bare_label_message(layer_label, pass_indices),
@@ -1367,7 +1351,7 @@ def _resolve_whole_site_term(node: _WholeSiteTerm, trace: Any) -> Selection:
 
     matches = _find_act_ops(trace, node.site_label)
     if node.pass_index is not None:
-        matches = tuple(op for op in matches if getattr(op, "pass_index", 1) == node.pass_index)
+        matches = tuple(op for op in matches if getattr(op, "pass_number", 1) == node.pass_index)
     if not matches:
         raise _unresolvable(
             "site_not_in_trace",
@@ -1537,10 +1521,16 @@ def random_like(
 def _selection_from_selector(selector: Any) -> Selector:
     """Lift a BaseSelector as a selector-term (predicate meaning intact)."""
 
-    from .intervention.resolver import _selector_resolution_direction
+    from .intervention.resolver import split_site_branches
 
-    direction = _selector_resolution_direction(selector)
-    return Selector(_SelectorTerm(selector=selector), kind="ACT", direction=direction)
+    branches = split_site_branches(selector)
+    if any(branch.universe == "gradient" for branch in branches):
+        from .intervention.selectors import _grad_selection_refusal
+
+        # Gradient selections are not addressable this release (SPEC 1.3).
+        raise _grad_selection_refusal(selector, code="grad_selection_unsupported")
+    signal = "backward" if any(branch.universe == "node" for branch in branches) else "forward"
+    return Selector(_SelectorTerm(selector=selector), kind="ACT", signal=signal)
 
 
 def _selection_from_box(box: Any) -> Selector:
@@ -1565,7 +1555,7 @@ def _selection_from_op(op: Any) -> Selector:
     """Lift one Op (whole-output, one pass)."""
 
     layer_label = getattr(op, "layer_label", None) or op.label
-    pass_index = getattr(op, "pass_index", 1) or 1
+    pass_index = getattr(op, "pass_number", 1) or 1
     return Selector(_WholeSiteTerm(site_label=layer_label, pass_index=pass_index), kind="ACT")
 
 
@@ -1661,12 +1651,12 @@ def edge_address_of(record: Any) -> tuple[Any, ...]:
 def _require_edge_provenance(trace: Any) -> None:
     """Refuse typed when edge provenance was not captured."""
 
-    if not bool(getattr(trace, "intervention_ready", False)):
+    if not bool(getattr(trace, "is_replayable", False)):
         raise SelectionError(
-            "edge provenance requires an intervention_ready capture "
+            "edge provenance requires an replayable capture "
             "(EdgeUseRecords exist only under it). Re-capture with "
             "tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "intervention_ready=True)).",
+            "replayable=True)).",
             code="edge_provenance_unavailable",
         )
 

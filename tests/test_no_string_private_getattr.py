@@ -13,7 +13,11 @@ This module is two things:
 
 1. an AST ratchet over ``getattr``/``setattr``/``hasattr``/``delattr`` calls
    whose attribute name is a private string literal and whose base is a
-   TRACE-shaped identifier -- reach-ins into TorchLens's own central object.
+   TRACE-shaped identifier -- reach-ins into TorchLens's own central object --
+   plus, on ANY base (``self``/``cls`` and non-trace-shaped receivers too),
+   every such call naming a Trace private store: a private
+   ``MODEL_LOG_FIELD_ORDER`` key of one of the seven group views or a v11-rest
+   store (``_TRACE_PRIVATE_STORES``).
    The per-package ledger is exact-equality in BOTH directions: adding one
    fails, and fixing one requires lowering the row (shrink-only). A package
    with NO row must stay at zero, which is how ``_merged/`` (fail-closed by
@@ -37,6 +41,8 @@ from pathlib import Path
 import pytest
 from _source_corpus import package_ast, package_files
 
+from torchlens._constants import MODEL_LOG_FIELD_ORDER
+from torchlens._data_classes._trace_groups import _TraceGroup
 from torchlens._merged._errors import MergeInputError
 from torchlens._merged._presenter import MergedTrace, _rank_raw_to_final_op_labels
 
@@ -63,6 +69,50 @@ _TRACE_IDENTIFIERS = frozenset(
         "source_trace",
         "refreshed",
     }
+)
+
+#: The Trace group prefixes, one per group view (``TraceCost`` -> ``cost``).
+_TRACE_GROUP_PREFIXES = frozenset(
+    cls.__name__.removeprefix("Trace").lower() for cls in _TraceGroup.__subclasses__()
+)
+
+#: The v11-rest private stores: Trace collections and counters whose public
+#: spelling became a private store in v11. Each must stay a private key of
+#: ``MODEL_LOG_FIELD_ORDER`` (checked by ``test_trace_store_names_come_from_field_order``).
+_TRACE_REST_STORES = frozenset(
+    {
+        "_append_history",
+        "_backward_pass_logs",
+        "_decoded_output",
+        "_grad_fn_logs",
+        "_layer_dict_all_keys",
+        "_layer_dict_main_keys",
+        "_layer_list",
+        "_layer_logs",
+        "_layer_num_calls",
+        "_num_backward_passes",
+        "_num_layers_with_params",
+        "_num_ops",
+        "_num_param_tensors",
+        "_orphan_records",
+        "_param_logs",
+        "_parent_run",
+        "_rescue_rerun",
+    }
+)
+
+#: Trace private stores: a string reach-in naming one is counted on EVERY base,
+#: ``self``/``cls`` and non-trace-shaped receivers included (a private
+#: ``MODEL_LOG_FIELD_ORDER`` key of a group, or a v11-rest store).
+_TRACE_PRIVATE_STORES = frozenset(
+    name
+    for name in MODEL_LOG_FIELD_ORDER
+    if name.startswith("_")
+    and not name.startswith("__")
+    and (
+        name in _TRACE_REST_STORES
+        or any(name.startswith(f"_{group}_") for group in _TRACE_GROUP_PREFIXES)
+    )
 )
 
 #: Packages whose reach-in count MUST stay zero. ``_merged/`` is fail-closed by
@@ -97,7 +147,9 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # DROP-gated `_raw_call_fingerprint` witness; absent on a loaded trace,
     # so the None default is the correct "no sealed fingerprint" reading,
     # which keeps the exact-size input guard.
-    "<root>": 20,
+    # 20 -> 11 (capture seam): nine sites moved verbatim from root modules into
+    # _capture (below, 21 -> 30); the package-wide total is unchanged at 381.
+    "<root>": 11,
     # 24 -> 25 (2026-08-15 r3settle reconcile): bundle.py reads the optional
     # `_runnable` seam (absent on non-runnable traces; None default correct),
     # the same f2bc65a6 idiom already ledgered at <root>.
@@ -108,11 +160,19 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # channel" reading (net +1 against a discharged older site).
     "_io": 26,
     "_autoroute": 2,
-    "backends/jax": 7,
-    "backends/mlx": 21,
-    "backends/paddle": 20,
-    "backends/tf": 9,
-    "backends/tinygrad": 5,
+    # Preview-protocol union (2026-11-01): the B009 autofix turned default-less
+    # `getattr(trace, "_x")` reads into direct reads (jax, tinygrad), and the
+    # preview packets' reads of scratch fields the capture start declares
+    # (`_<backend>_module_stack`, `_capture_depth`, `_op_captures`, the mlx
+    # constants censuses and intervention plan) became direct reads; the tf
+    # loaded-flag reads use the try/except seam `_trace_validation.py` already
+    # uses for `_loaded_from_bundle`. The lazy-initialised mlx stores and the
+    # loaded-trace guards keep their defaulted reads (absence is meaningful).
+    "backends/jax": 5,
+    "backends/mlx": 19,
+    "backends/paddle": 18,
+    "backends/tf": 8,
+    "backends/tinygrad": 4,
     # 111 -> 112 (2026-08-14 fixwave-2 reconcile): heavy site churn from the
     # ops.py/completeness_witness.py file splits nets +1, dominated by the
     # intended safetynet stage-2 rescue path (rescue.py) and backward-projection
@@ -165,7 +225,9 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # peak-memory sites converted to direct private reads guarded by
     # try/except AttributeError, net -2 after the new episode/peak-memory
     # additions.
-    "_capture": 21,
+    # 21 -> 30 (capture seam): the nine root-module sites above moved verbatim
+    # into the PREPARE/RUN/FINALIZE modules.
+    "_capture": 30,
     # 25 -> 27 (2026-08-14 fix-wave reconcile, 7f90a885 fix/walkers): the
     # linear ordinal_index cache keys its per-trace memo on the session-time
     # `_backward_projection_revision` counter in grad_fn_call.py (x2); absent
@@ -190,7 +252,10 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # reach-ins (getattr + setattr) and _trace_validation.py's new
     # `_loaded_from_bundle` read converted to direct private reads guarded
     # by try/except AttributeError.
-    "_data_classes": 25,
+    # 25 -> 24 (2026-11-01 batch D, grad-p5 streaming split): op.py's two
+    # `_defer_streaming_bundle_finalization` reads moved into
+    # _op_grad_stream.py as one read (the other reach-ins moved unchanged).
+    "_data_classes": 24,
     "experimental": 1,
     "recording": 2,
     # 43 -> 44 (2026-08-17 privprobes reconcile, d4a2b8a6 one-shot-warning
@@ -205,7 +270,11 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # _retain_layers_to_save_output_parents flag now reads it from the
     # session-only _rerun_save_request through the instance dict.
     "intervention": 40,
-    "_ir": 2,
+    # 2 -> 3 (aliased output slots, net-f26): _output_occurrences.py reads the
+    # runtime-only `_output_container_specs_by_raw_label` map the backend sets
+    # at capture end and the writer contract drops; absent on loaded traces,
+    # so the empty-dict default is the correct "no aliased slots" reading.
+    "_ir": 3,
     # 5 -> 8 (2026-08-16 l2/l3 merge-gate reconcile, 5f0a4f8d aten wave 0):
     # _primitive_profile.py reads the optional DROP-gated
     # `_primitive_op_profile` store (x2) and `_capture_events` stream; absent
@@ -272,7 +341,11 @@ def _package_of(path: Path) -> str:
 
 
 def _trace_reachins(tree: ast.AST) -> list[tuple[int, str, str]]:
-    """Collect ``(lineno, builtin, attr)`` string reach-ins on trace-shaped bases."""
+    """Collect ``(lineno, builtin, attr)`` string reach-ins into a Trace.
+
+    Counted: any private name on a trace-shaped base, and a Trace private store
+    (``_TRACE_PRIVATE_STORES``) on any base, ``self``/``cls`` included.
+    """
 
     found: list[tuple[int, str, str]] = []
     for node in ast.walk(tree):
@@ -287,6 +360,10 @@ def _trace_reachins(tree: ast.AST) -> list[tuple[int, str, str]]:
         if not (isinstance(name_arg, ast.Constant) and isinstance(name_arg.value, str)):
             continue
         if not _is_private_name(name_arg.value):
+            continue
+        # A Trace private store is counted on every base, `self`/`cls` included.
+        if name_arg.value in _TRACE_PRIVATE_STORES:
+            found.append((node.lineno, node.func.id, name_arg.value))
             continue
         base = ast.unparse(node.args[0])
         if base in {"self", "cls"}:
@@ -367,20 +444,51 @@ def test_gate_scanner_detects_planted_offenders() -> None:
         "b = hasattr(log, '_runnable')\n"
         "setattr(ml, '_validation_replay_status', 'ok')\n"
         "delattr(state.trace, '_mlx_module_stack')\n"
-        # Negatives: own state, public name, dunder, non-trace base, non-literal.
+        # Trace private stores count on any base: own state and a non-trace base.
+        "h = getattr(self, '_options_save_mode', 'copy')\n"
+        "i = getattr(session, '_layer_list', [])\n"
+        "j = hasattr(cls, '_provenance_backend')\n"
+        # Negatives: own state, public name, dunder, non-trace base, non-literal,
+        # and a group-prefixed name that is not a Trace store.
         "c = getattr(self, '_private', None)\n"
         "d = getattr(trace, 'public_field', None)\n"
         "e = getattr(trace, '__class__', None)\n"
         "f = getattr(some_module, '_private', None)\n"
         "g = getattr(trace, name, None)\n"
+        "k = getattr(record, '_source_trace_ref', None)\n"
     )
-    attrs = [attr for _, _, attr in _trace_reachins(planted)]
-    assert attrs == [
-        "_raw_to_final_op_labels",
-        "_runnable",
-        "_validation_replay_status",
-        "_mlx_module_stack",
-    ]
+    attrs = sorted(attr for _, _, attr in _trace_reachins(planted))
+    assert attrs == sorted(
+        [
+            "_raw_to_final_op_labels",
+            "_runnable",
+            "_validation_replay_status",
+            "_mlx_module_stack",
+            "_options_save_mode",
+            "_layer_list",
+            "_provenance_backend",
+        ]
+    )
+
+
+def test_trace_store_names_come_from_field_order() -> None:
+    """The any-base store set is derived from the field order, not hand-copied."""
+
+    private_order = {name for name in MODEL_LOG_FIELD_ORDER if name.startswith("_")}
+    assert {
+        "autograd",
+        "cost",
+        "graph",
+        "health",
+        "options",
+        "provenance",
+        "source",
+    } == _TRACE_GROUP_PREFIXES
+    assert private_order >= _TRACE_REST_STORES, sorted(_TRACE_REST_STORES - private_order)
+    assert private_order >= _TRACE_PRIVATE_STORES
+    assert _TRACE_REST_STORES <= _TRACE_PRIVATE_STORES
+    for group in _TRACE_GROUP_PREFIXES:
+        assert any(name.startswith(f"_{group}_") for name in _TRACE_PRIVATE_STORES), group
 
 
 class _MissingSeamTrace:

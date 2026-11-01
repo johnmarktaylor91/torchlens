@@ -29,16 +29,17 @@ import uuid
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
+from .hooks import _UNIVERSE_SIGNAL, NormalizedHookEntry, split_site_branches
 from .types import Edit, FireRecord
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
-    from .hooks import NormalizedHookEntry
-
 _UNSET: Any = object()
 
-#: Closed transaction-status vocabulary (documented-unstable).
-EventStatus = Literal["fired", "no_fire", "error"]
+#: Closed transaction-status vocabulary (documented-unstable). ``"armed"``
+#: marks a gradient edit registered for the next backward pass: no fire has
+#: happened yet, and a later settle row (``door="backward"``) says what did.
+EventStatus = Literal["fired", "no_fire", "error", "armed"]
 
 #: Closed lane vocabulary for the envelope (surgery memo lanes; ``bind`` is
 #: reserved for F01).
@@ -73,17 +74,17 @@ def build_fire_record(
     func_call_id: int | None = None,
     container_path: tuple[Any, ...] = (),
     engine: str | None = None,
-    helper: Edit | None = None,
+    edit: Edit | None = None,
     site_label: str | None = None,
     timing: Literal["pre", "post"] | None = None,
-    direction: Literal["forward", "backward"] | None = None,
-    helper_name: str | None = None,
+    signal: Literal["forward", "backward"] | None = None,
+    edit_name: str | None = None,
     run_ctx: dict[str, Any] | None = None,
     previous_notes: tuple[Any, ...] = (),
     seed: Any = _UNSET,
     determinism_note: str | None = None,
     timestamp: float | None = None,
-    backward_pass_index: int | None = None,
+    backward_pass_number: int | None = None,
     call_index: int | None = None,
     grad_kind: Literal["grad_input", "grad_output"] | None = None,
     tuple_index: int | None = None,
@@ -107,10 +108,10 @@ def build_fire_record(
     feed the note lift and are not stored.
     """
 
-    if helper_name is None and helper is not None:
-        helper_name = helper.helper_name
+    if edit_name is None and edit is not None:
+        edit_name = edit.name
     if seed is _UNSET:
-        helper_kwargs = dict(helper.kwargs) if helper is not None else {}
+        helper_kwargs = dict(edit.kwargs) if edit is not None else {}
         seed = helper_kwargs.get("seed")
     if determinism_note is None and run_ctx is not None:
         new_notes = tuple(run_ctx.get("ledger_notes", ()))[len(previous_notes) :]
@@ -122,15 +123,15 @@ def build_fire_record(
         func_call_id=func_call_id,
         container_path=container_path,
         engine=engine,
-        helper=helper,
+        edit=edit,
         site_label=site_label,
         timing=timing,
-        direction=direction,
-        helper_name=helper_name,
+        signal=signal,
+        edit_name=edit_name,
         seed=seed,
         determinism_note=determinism_note,
         timestamp=time.monotonic() if timestamp is None else timestamp,
-        backward_pass_index=backward_pass_index,
+        backward_pass_number=backward_pass_number,
         call_index=call_index,
         grad_kind=grad_kind,
         tuple_index=tuple_index,
@@ -174,7 +175,7 @@ def fire_records_since(trace: Any, t0: float) -> list[FireRecord]:
     collected: list[FireRecord] = []
     for label in getattr(trace, "op_labels", ()) or ():
         op = trace.ops[label]
-        for record in getattr(op, "interventions", None) or ():
+        for record in getattr(op, "edits", None) or ():
             stamp = getattr(record, "timestamp", None)
             if stamp is not None and stamp >= t0:
                 collected.append(record)
@@ -418,12 +419,34 @@ def rules_payload(spec: Any) -> tuple[dict[str, Any], ...]:
             "rule_id": rule.rule_id,
             "where": rule.where_repr,
             "action": rule.action_repr,
-            "direction": rule.direction,
+            "signal": rule_signal(rule.target),
             "address_class": rule.address_class,
             "payload_fidelity": rule.payload_fidelity,
         }
         for rule in spec.rules
     )
+
+
+def rule_signal(target: Any) -> str:
+    """Return the pass a rule's site fires in: ``forward``, ``backward`` or ``both``.
+
+    Derived from the site, never stored on the rule: a bare site is an
+    activation (forward), ``tl.grad(site)`` and node selectors are backward,
+    and a union of both is ``"both"``.
+
+    Parameters
+    ----------
+    target:
+        The rule's site target.
+
+    Returns
+    -------
+    str
+        ``"forward"``, ``"backward"`` or ``"both"``.
+    """
+
+    signals = {_UNIVERSE_SIGNAL[universe] for universe, _ in split_site_branches(target)}
+    return signals.pop() if len(signals) == 1 else "both"
 
 
 def site_keys_for_labels(trace: Any, labels: tuple[str, ...]) -> tuple[str, ...]:
@@ -453,6 +476,7 @@ __all__ = [
     "EXECUTION_EFFECTS",
     "EventLane",
     "EventStatus",
+    "rule_signal",
     "ExecutionEffect",
     "append_event_audit_row",
     "build_fire_record",
@@ -519,11 +543,11 @@ def _replay_fire_record(
         func_call_id=site.func_call_id,
         container_path=tuple(site.container_path or ()),
         engine="replay",
-        helper=entry.helper_spec,
+        edit=entry.helper_spec,
         site_label=site.layer_label,
         timing="post",
-        direction="forward",
-        helper_name=_hook_name(entry),
+        signal="forward",
+        edit_name=_hook_name(entry),
         run_ctx=run_ctx,
         previous_notes=previous_notes,
         replaced=replaced,

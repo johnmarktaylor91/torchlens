@@ -123,7 +123,7 @@ def _dedup_cached_identity_out(
     if identity_cache is None:
         return None
     source_key = id(source_tensor)
-    from ..backends.torch.completeness_witness import internal_scalar_read
+    from ..backends.torch._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         source_version = tensor_version_or_none(source_tensor)
@@ -227,7 +227,7 @@ def _dedup_saved_activation_out(
     # fires for every saved state source and would spuriously refuse any model whose
     # consumed buffer was ever mutated in place before capture). Imported lazily:
     # ``data_classes`` sits below the torch backend in the layering.
-    from ..backends.torch.completeness_witness import internal_scalar_read
+    from ..backends.torch._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         source_version = tensor_version_or_none(source_tensor)

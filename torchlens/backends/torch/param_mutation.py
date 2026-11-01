@@ -18,7 +18,10 @@ from typing import Any
 import torch
 
 from ... import _state
+from ..._capture.projections import active_recording_state_or_none
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
+from ..._utils.tensor_leaves import iter_tensors
 from ..._utils.tensor_utils import safe_copy
 from ._tl import get_param_meta
 
@@ -46,7 +49,7 @@ def is_unregistered_parameter(trace: Any, value: Any) -> bool:
     address = None if meta is None else meta.param_address
     if not address:
         return True
-    param_logs = getattr(trace, "param_logs", None)
+    param_logs = trace._param_logs
     if param_logs is None or address not in param_logs:
         return True
     return getattr(param_logs[address], "_param_ref", None) is not value
@@ -79,31 +82,7 @@ def is_prepared_parameter_receiver(trace: Any, value: Any) -> bool:
     meta = get_param_meta(value)
     if meta is None:
         return False
-    return not getattr(trace.param_logs[meta.param_address], "_lazy_at_prep", False)
-
-
-def _iter_operand_tensors(value: Any) -> Iterator[torch.Tensor]:
-    """Yield the tensors in one call operand, descending into plain containers.
-
-    Parameters
-    ----------
-    value:
-        A positional or keyword argument of a wrapped call.
-
-    Yields
-    ------
-    torch.Tensor
-        Each tensor found directly or inside nested tuples, lists and dicts.
-    """
-
-    if isinstance(value, torch.Tensor):
-        yield value
-    elif isinstance(value, (tuple, list)):
-        for item in value:
-            yield from _iter_operand_tensors(item)
-    elif isinstance(value, dict):
-        for item in value.values():
-            yield from _iter_operand_tensors(item)
+    return not getattr(trace._param_logs[meta.param_address], "_lazy_at_prep", False)
 
 
 @contextmanager
@@ -127,7 +106,7 @@ def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
         Control for the wrapped call.
     """
 
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with _state.pause_logging(), internal_scalar_read():
         receiver.requires_grad_(False)
@@ -183,7 +162,7 @@ def frozen_parameter_receiver_context(
     receiver = args[0]
     if not isinstance(receiver, torch.nn.Parameter):
         return nullcontext()
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         is_forced_leaf = receiver.requires_grad and receiver.is_leaf
@@ -193,7 +172,7 @@ def frozen_parameter_receiver_context(
     if meta is None or meta.requires_grad_before_capture is not False:
         return nullcontext()
     for operand in (*args[1:], *kwargs.values()):
-        if any(tensor.requires_grad for tensor in _iter_operand_tensors(operand)):
+        if any(tensor.requires_grad for tensor in iter_tensors(operand)):
             return _frozen_receiver_flag(receiver)
     return torch.no_grad()
 
@@ -230,6 +209,41 @@ def receiver_kwarg_as_positional(
     return (kwargs["input"],), rest
 
 
+def _prepared_parameter_lazy_flag(trace: Any, value: torch.nn.Parameter) -> bool | None:
+    """Return whether prepared Parameter ``value`` was lazy at prep; ``None`` if unprepared.
+
+    Exhaustive capture answers from the session ``Param`` registry. Predicate
+    capture (``tl.record``) builds no ``Param`` logs, so it answers from the
+    recording state's per-pass identity registry instead; without it every
+    model Parameter looked unregistered there and a prepared ``param.data =
+    rhs`` rebind or a lazy module's in-forward initialization was logged as an
+    op that ``tl.trace`` never shows.
+    """
+
+    if trace is not None and is_live_trace(trace) and trace._options_mode == "predicate":
+        state = active_recording_state_or_none()
+        entry = None if state is None else state.prepared_params.get(id(value))
+        if entry is None or entry[0]() is not value:
+            return None
+        return entry[1]
+    if is_unregistered_parameter(trace, value):
+        return None
+    return not is_prepared_parameter_receiver(trace, value)
+
+
+def _plain_parameter_snapshot(value: torch.nn.Parameter) -> torch.Tensor:
+    """Return a detached plain-Tensor copy of a mutated Parameter, logging paused."""
+
+    with _state.pause_logging():
+        if HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE:
+            plain_value = value.as_subclass(torch.Tensor)
+        else:
+            plain_value = torch.ops.aten.detach.default(value)
+        tensor = safe_copy(plain_value, detach_tensor=True)
+        tensor.requires_grad_(value.requires_grad)
+    return tensor
+
+
 def parameter_mutation_output_for_logging(
     trace: Any,
     value: Any,
@@ -254,7 +268,9 @@ def parameter_mutation_output_for_logging(
     cases are NOT converted and keep the plain-capture treatment: a
     storage-rebinding ``param.data = rhs`` setter (still visible to the
     completeness tripwire) and the in-forward initialization of a lazy module's
-    Parameter (see ``is_prepared_parameter_receiver``).
+    Parameter (see ``is_prepared_parameter_receiver``). Both capture modes
+    classify alike: predicate capture reads its per-pass identity registry
+    (``_prepared_parameter_lazy_flag``).
 
     Parameters
     ----------
@@ -278,15 +294,7 @@ def parameter_mutation_output_for_logging(
 
     if not was_inplace or not isinstance(source, torch.nn.Parameter):
         return value
-    if not is_unregistered_parameter(trace, source) and (
-        is_storage_rebind or not is_prepared_parameter_receiver(trace, source)
-    ):
+    lazy_at_prep = _prepared_parameter_lazy_flag(trace, source)
+    if lazy_at_prep is not None and (is_storage_rebind or lazy_at_prep):
         return value
-    with _state.pause_logging():
-        if HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE:
-            plain_value = value.as_subclass(torch.Tensor)
-        else:
-            plain_value = torch.ops.aten.detach.default(value)
-        tensor = safe_copy(plain_value, detach_tensor=True)
-        tensor.requires_grad_(value.requires_grad)
-    return tensor
+    return _plain_parameter_snapshot(value)

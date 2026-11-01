@@ -57,6 +57,10 @@ from torchlens._runnable_state import (
     state_metadata_full_violations,
     state_metadata_read_violations,
 )
+from torchlens.backends.torch._completeness_metadata import (
+    host_escape_state_metadata_facts,
+    host_escape_state_metadata_reads,
+)
 from torchlens.backends.torch.completeness_witness import (
     _STATE_METADATA_ALIAS_SAFE_STATE_NAMES,
     _STATE_METADATA_DIRECT_ONLY_NAMES,
@@ -67,13 +71,11 @@ from torchlens.backends.torch.completeness_witness import (
     INPUT_METADATA_PREDICATE_FUNCS,
     INPUT_METADATA_PROPERTY_NAMES,
     STATE_METADATA_MIRROR,
-    host_escape_state_metadata_facts,
-    host_escape_state_metadata_reads,
 )
 from torchlens.errors import RunCapabilityUnavailableError, RunnablePreflightError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
@@ -276,6 +278,7 @@ def test_r65_staging_inside_inference_mode_stays_canonical(tmp_path: Path) -> No
         assert state_metadata_full_violations(value) == [], name
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA staged slots require CUDA")
 def test_r65_cuda_staged_state_satisfies_full_signature(tmp_path: Path) -> None:
     """Staged slots on a NON-CPU (CUDA) slot device exhibit ZERO full-signature violations.
@@ -320,6 +323,7 @@ def test_r65_cuda_staged_state_satisfies_full_signature(tmp_path: Path) -> None:
     assert rerun.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA state read")
 def test_r65_cuda_is_shared_read_stays_verified(tmp_path: Path) -> None:
     """A CUDA ``is_shared()`` state read saves and settles VERIFIED -- no read-divergence.
@@ -537,6 +541,7 @@ def test_r65_grad_presence_read_refuses_when_grad_present(tmp_path: Path) -> Non
     _assert_verified(GradRead(False), torch.randn(3), tmp_path / "nograd.tlspec")
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="pinned memory requires CUDA")
 def test_r65_pinned_read_refuses_when_pinned(tmp_path: Path) -> None:
     """``is_pinned()`` on a pinned captured buffer refuses (transport unpins)."""

@@ -238,6 +238,7 @@ def test_distilgpt2_real_checkpoint_scoped_narration() -> None:
 
 @pytest.mark.rare
 @pytest.mark.real_model
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA metadata zero-sync gate")
 def test_cuda_metadata_echo_is_zero_sync() -> None:
     """Memo test 4: metadata echo under set_sync_debug_mode('error')."""

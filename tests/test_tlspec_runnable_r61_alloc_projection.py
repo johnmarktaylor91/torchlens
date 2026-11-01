@@ -52,19 +52,22 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+import torchlens._runnable_call_arguments
 import torchlens._runnable_execution as rex
+import torchlens._runnable_input_aliases
+import torchlens._runnable_input_metadata
 import torchlens._runnable_state as rstate
 from torchlens._runnable import StateSource
-from torchlens._runnable_execution import (
-    _MAX_DECODE_NESTING_DEPTH,
+from torchlens._runnable_call_arguments import (
     _has_tensor_operand,
     _preflight_call_allocation,
     _projection_required_by_arguments,
 )
+from torchlens._runnable_execution import _MAX_DECODE_NESTING_DEPTH
 from torchlens._runnable_state import RunResourceCeiling, _byte_guarded_clone
 from torchlens.errors import RunCapabilityUnavailableError
 
-_CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
+_CAPTURE = {"capture": tl.options.CaptureOptions(replayable=True)}
 
 
 # --------------------------------------------------------------------------- #
@@ -264,7 +267,9 @@ def test_no_literal_amplifier_families_refused_typed(
     typed at ``op_allocation_preflight`` against a small budget -- with tiny/empty real
     operands and no real output allocation (fake tensors never allocate)."""
 
-    monkeypatch.setattr(rex, "_allocation_budget_bytes", lambda device: 8 << 20)
+    # Home (_runnable_state) plus the modules holding a from-import copy of the budget.
+    for module in (rstate, torchlens._runnable_call_arguments, rex):
+        monkeypatch.setattr(module, "_allocation_budget_bytes", lambda device: 8 << 20)
     operands = args()
     with _rlimit_cap(), pytest.raises(RunCapabilityUnavailableError) as caught:
         _preflight_call_allocation(None, func, list(operands), {}, _stub_call())
@@ -484,15 +489,15 @@ def test_runtime_mirror_clone_routes_guard_and_mirrors_requires_grad() -> None:
     ceiling = RunResourceCeiling(types.SimpleNamespace(calls=[]))  # type: ignore[arg-type]
     slot = types.SimpleNamespace(slot_id="slot:input_1")
     raw = torch.randn(3, requires_grad=True)
-    clone = rex._runtime_mirror_clone(raw, ceiling, slot)  # type: ignore[arg-type]
+    clone = torchlens._runnable_input_metadata._runtime_mirror_clone(raw, ceiling, slot)  # type: ignore[arg-type]
     assert clone.requires_grad and clone.is_leaf
     assert clone.data_ptr() != raw.data_ptr()
-    plain = rex._runtime_mirror_clone(torch.randn(3), ceiling, slot)  # type: ignore[arg-type]
+    plain = torchlens._runnable_input_metadata._runtime_mirror_clone(torch.randn(3), ceiling, slot)  # type: ignore[arg-type]
     assert not plain.requires_grad
     with _rlimit_cap():
         huge = torch.randn(1).expand(10**12)
         with pytest.raises(RunCapabilityUnavailableError) as caught:
-            rex._runtime_mirror_clone(huge, ceiling, slot)  # type: ignore[arg-type]
+            torchlens._runnable_input_metadata._runtime_mirror_clone(huge, ceiling, slot)  # type: ignore[arg-type]
     assert caught.value.fields.get("detection_stage") == "clone_allocation_preflight"
 
 
@@ -569,7 +574,7 @@ def test_run_time_state_clone_routes_through_ceiling_guard(
     ceiling = RunResourceCeiling(types.SimpleNamespace(calls=[]))  # type: ignore[arg-type]
     descriptor = types.SimpleNamespace(tensor_slots=())
     shared = torch.randn(2)
-    cloned = rex._clone_state_values(
+    cloned = torchlens._runnable_input_aliases._clone_state_values(
         descriptor,  # type: ignore[arg-type]
         {"slot:a": shared, "slot:b": shared, "slot:c": torch.randn(2)},
         ceiling,
@@ -578,7 +583,9 @@ def test_run_time_state_clone_routes_through_ceiling_guard(
     assert cloned["slot:c"] is not cloned["slot:a"]
     monkeypatch.setattr(rstate, "_allocation_budget_bytes", lambda device: 4)
     with pytest.raises(RunCapabilityUnavailableError) as caught:
-        rex._clone_state_values(descriptor, {"slot:a": torch.randn(8)}, ceiling)  # type: ignore[arg-type]
+        torchlens._runnable_input_aliases._clone_state_values(
+            descriptor, {"slot:a": torch.randn(8)}, ceiling
+        )  # type: ignore[arg-type]
     assert caught.value.fields.get("detection_stage") == "clone_allocation_preflight"
 
 
@@ -621,10 +628,13 @@ def test_source_tripwires_gate_and_clone_routing() -> None:
     and routes through the guard core; (c) the capture-side save-time snapshot stays
     deliberately UNROUTED (live-model values, no artifact amplification)."""
 
-    gate_src = inspect.getsource(rex._preflight_call_allocation)
+    gate_src = inspect.getsource(torchlens._runnable_call_arguments._preflight_call_allocation)
     assert "_projection_required_by_arguments(" in gate_src
     assert "if not (_has_numeric_literal" not in gate_src
-    for fn in (rex._runtime_mirror_clone, rex._clone_state_values):
+    for fn in (
+        torchlens._runnable_input_metadata._runtime_mirror_clone,
+        torchlens._runnable_input_aliases._clone_state_values,
+    ):
         src = inspect.getsource(fn)
         assert ".detach().clone()" not in src, f"{fn.__name__} has a raw unguarded clone"
         assert "guarded_clone(" in src

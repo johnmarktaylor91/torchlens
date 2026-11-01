@@ -206,8 +206,8 @@ def _get_only_event_id(trace: Trace) -> int:
     int
         Dense conditional id.
     """
-    assert len(trace.conditional_records) == 1
-    return trace.conditional_records[0].id
+    assert len(trace.graph.conditional_records) == 1
+    return trace.graph.conditional_records[0].id
 
 
 def _find_edge_line(dot_source: str, parent_label: str, child_label: str) -> str:
@@ -247,10 +247,10 @@ def test_simple_if_else_graphviz_labels_then_and_else_edges() -> None:
     try:
         positive_conditional_id = _get_only_event_id(positive_log)
         negative_conditional_id = _get_only_event_id(negative_log)
-        then_parent, then_child = positive_log.conditional_arm_entry_edges[
+        then_parent, then_child = positive_log.graph.conditional_arm_entry_edges[
             (positive_conditional_id, "then")
         ][0]
-        else_parent, else_child = negative_log.conditional_arm_entry_edges[
+        else_parent, else_child = negative_log.graph.conditional_arm_entry_edges[
             (negative_conditional_id, "else")
         ][0]
 
@@ -276,7 +276,7 @@ def test_elif_ladder_graphviz_labels_elif_and_else_edges() -> None:
         dot_source, trace = _render_dot_source(ElifLadderModel(), x)
         try:
             conditional_id = _get_only_event_id(trace)
-            parent_label, child_label = trace.conditional_arm_entry_edges[
+            parent_label, child_label = trace.graph.conditional_arm_entry_edges[
                 (conditional_id, branch_kind)
             ][0]
             edge_line = _find_edge_line(dot_source, parent_label, child_label)
@@ -296,16 +296,18 @@ def test_elif_ladder_condition_entry_edges_label_if_then_elif() -> None:
     try:
         # bool_layers is ordered [if_bool, elif_1_bool, elif_2_bool]; the mean feeding each
         # bool is that test's condition-entry child.
-        bool_layers = trace.conditional_records[0].bool_layers
+        bool_layers = trace.graph.conditional_records[0].bool_layers
         expected_by_bool = {bl: ("IF" if i == 0 else "ELIF") for i, bl in enumerate(bool_layers)}
         # map each condition-entry child (mean_N) to its downstream bool via the single child
-        for parent_label, child_label in trace.conditional_branch_edges:
+        for parent_label, child_label in trace.graph.conditional_branch_edges:
             downstream = trace[child_label].children[0]
             expected = expected_by_bool[downstream]
             edge_line = _find_edge_line(dot_source, parent_label, child_label)
             assert expected in edge_line, f"{child_label} -> expected {expected}, line: {edge_line}"
         # sanity: exactly one IF, and at least one ELIF (it is a ladder)
-        kinds = [expected_by_bool[trace[c].children[0]] for _, c in trace.conditional_branch_edges]
+        kinds = [
+            expected_by_bool[trace[c].children[0]] for _, c in trace.graph.conditional_branch_edges
+        ]
         assert kinds.count("IF") == 1
         assert kinds.count("ELIF") == len(kinds) - 1
     finally:
@@ -317,7 +319,7 @@ def test_loop_repeated_if_condition_entries_remain_if() -> None:
 
     dot_source, trace = _render_dot_source(LoopRepeatedIfModel(), torch.ones(2, 2))
     try:
-        event = trace.conditional_records[0]
+        event = trace.graph.conditional_records[0]
         assert len(event.bool_layers) == 4
         assert all(
             {op.conditional_context_kind for op in trace[bool_label].ops.values()} == {"if_test"}
@@ -325,7 +327,7 @@ def test_loop_repeated_if_condition_entries_remain_if() -> None:
         )
         edge_lines = [
             _find_edge_line(dot_source, parent_label, child_label)
-            for parent_label, child_label in trace.conditional_branch_edges
+            for parent_label, child_label in trace.graph.conditional_branch_edges
         ]
         assert len(edge_lines) == 4
         assert all("IF" in line and "ELIF" not in line for line in edge_lines)
@@ -348,13 +350,13 @@ def test_basic_ternary_graphviz_labels_then_and_else_edges() -> None:
     try:
         positive_conditional_id = _get_only_event_id(positive_log)
         negative_conditional_id = _get_only_event_id(negative_log)
-        assert positive_log.conditional_records[0].kind == "ifexp"
-        assert negative_log.conditional_records[0].kind == "ifexp"
+        assert positive_log.graph.conditional_records[0].kind == "ifexp"
+        assert negative_log.graph.conditional_records[0].kind == "ifexp"
 
-        then_parent, then_child = positive_log.conditional_arm_entry_edges[
+        then_parent, then_child = positive_log.graph.conditional_arm_entry_edges[
             (positive_conditional_id, "then")
         ][0]
-        else_parent, else_child = negative_log.conditional_arm_entry_edges[
+        else_parent, else_child = negative_log.graph.conditional_arm_entry_edges[
             (negative_conditional_id, "else")
         ][0]
 
@@ -374,7 +376,9 @@ def test_branch_entry_with_arg_label_keeps_semantic_and_argument_labels_separate
 
     try:
         conditional_id = _get_only_event_id(trace)
-        parent_label, child_label = trace.conditional_arm_entry_edges[(conditional_id, "then")][0]
+        parent_label, child_label = trace.graph.conditional_arm_entry_edges[
+            (conditional_id, "then")
+        ][0]
         edge_line = _find_edge_line(dot_source, parent_label, child_label)
 
         assert 'label=<<FONT POINT-SIZE="18"><b><u>THEN</u></b></FONT>>' in edge_line
@@ -402,7 +406,9 @@ def test_rolled_mixed_arm_graphviz_shows_composite_call_label() -> None:
 
     try:
         conditional_id = _get_only_event_id(trace)
-        parent_label, child_label = trace.conditional_arm_entry_edges[(conditional_id, "then")][0]
+        parent_label, child_label = trace.graph.conditional_arm_entry_edges[
+            (conditional_id, "then")
+        ][0]
         edge_line = _find_edge_line(dot_source, parent_label, child_label)
 
         assert "THEN(1,3) / ELSE(2,4)" in edge_line

@@ -121,6 +121,7 @@ from ..intervention.types import (
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._op_dedup import _dedup_cached_identity_out, _dedup_saved_activation_out
+from ._op_grad_stream import stream_grad_blobs
 from ._op_transforms import (
     apply_transform,
     train_mode_tripwire_armed,
@@ -144,7 +145,7 @@ _DIRECT_WRITE_GUARDED_FIELDS = frozenset(
         "transformed_out",
         "grad",
         "transformed_grad",
-        "interventions",
+        "edits",
     }
 )
 # ``Op.__getattribute__``/``__setattr__`` run on EVERY attribute touch during
@@ -195,8 +196,8 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "func_id": None,
     "container_path": (),
     "multi_output_name": None,
-    "intervention_replaced": False,
-    "interventions": [],
+    "is_edited": False,
+    "edits": [],
     "container_spec": None,
     "args_template": None,
     "kwargs_template": None,
@@ -405,7 +406,7 @@ _UNPOOLED_SLOTS = frozenset(
         "out_versions_by_child",
         "func_rng_states",
         "activation_transform",
-        "interventions",
+        "edits",
         # Per-op UNIQUE injected-op identity record (tlspec v9 entry-dark
         # slot): a mutable mapping distinct per injected op, never a shared
         # internable value. None on every model op until F01 writes it.
@@ -464,7 +465,7 @@ _POOL_MAX_DEPTH = 2
 _POOLED_CONTAINER_FIELDS = frozenset(
     {
         "annotations",
-        "interventions",
+        "edits",
         "var_names",
         "_grad_records",
         "out_versions_by_child",
@@ -538,8 +539,8 @@ _OUTPUT_NODE_REPLACED_FIELDS = frozenset(
         "has_output_descendant",
         "input_to_module_calls",
         "internal_source_parents",
-        "intervention_replaced",
-        "interventions",
+        "is_edited",
+        "edits",
         "io_role",
         "is_atomic_module",
         "is_buffer",
@@ -549,7 +550,7 @@ _OUTPUT_NODE_REPLACED_FIELDS = frozenset(
         "is_module_output",
         "is_output",
         "is_transform",
-        "layer_type",
+        "type",
         "module",
         "module_call_stack",
         "modules",
@@ -574,7 +575,7 @@ _OUTPUT_NODE_REPLACED_FIELDS = frozenset(
         "parent_param_ops",
         "parent_params",
         "parents",
-        "pass_index",
+        "pass_number",
         "raw_index",
         "recurrent_ops",
         "saved_args",
@@ -1312,7 +1313,7 @@ def _effective_activation_save_mode(
 ) -> SaveMode:
     """Return the effective saved-activation mode for one operation."""
 
-    save_mode = cast(SaveMode, getattr(trace, "save_mode", "copy"))
+    save_mode = cast(SaveMode, trace._options_save_mode if trace is not None else "copy")
     if save_mode not in {"copy", "reference", "view", "cpu_async"}:
         raise InvalidArgumentError(
             "save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'; "
@@ -1444,20 +1445,20 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         _tracing_finished: Any
         _construction_done: Any
         label: Any
-        label_short: Any
+        short_label: Any
         layer_label: Any
-        layer_label_short: Any
+        short_layer_label: Any
         type: Any
         type_index: Any
-        pass_index: Any
+        pass_number: Any
         num_passes: Any
         lookup_keys: Any
         out: Any
         has_saved_activation: Any
         output_device: Any
         activation_transform: Any
-        interventions: Any
-        intervention_replaced: Any
+        edits: Any
+        is_edited: Any
         detach_saved_activations: Any
         has_saved_args: Any
         saved_args: Any
@@ -1608,12 +1609,12 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "_construction_done": FieldPolicy.DROP,
         "_is_in_conditional_body": FieldPolicy.KEEP,
         "label": FieldPolicy.KEEP,
-        "label_short": FieldPolicy.KEEP,
+        "short_label": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
-        "layer_label_short": FieldPolicy.KEEP,
+        "short_layer_label": FieldPolicy.KEEP,
         "type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
-        "pass_index": FieldPolicy.KEEP,
+        "pass_number": FieldPolicy.KEEP,
         "num_passes": FieldPolicy.KEEP,
         "lookup_keys": FieldPolicy.KEEP,
         "out": FieldPolicy.BLOB,
@@ -1622,8 +1623,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "output_device": FieldPolicy.KEEP,
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
-        "interventions": FieldPolicy.KEEP,
-        "intervention_replaced": FieldPolicy.KEEP,
+        "edits": FieldPolicy.KEEP,
+        "is_edited": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "has_saved_args": FieldPolicy.KEEP,
         "saved_args": FieldPolicy.BLOB_RECURSIVE,
@@ -1811,19 +1812,19 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         "_pending_transformed_grad_blob_id": FieldPolicy.DROP,
         # Lazily-populated facet-view cache slot: popped by __getstate__,
         # FORK_RECONSTRUCT on fork, disposable. Declared so the Op slot
-        # universe carries no shadow storage outside FIELD_POLICY.
+        # universe carries no shadow storage outside _FIELD_POLICY.
         "_facets_cache": FieldPolicy.DROP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,
         _PORTABLE_STATE_SPEC,
         fork_policy=LAYER_PASS_LOG_FIELD_FORK_POLICY,
         default_fill_state=_LAYER_PASS_LOG_DEFAULT_FILL,
         schema_key="op",
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
-    FIELD_FORK_POLICY = fork_policy_from_policy(FIELD_POLICY)
-    DEFAULT_FILL_STATE = default_fill_state_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
+    _FIELD_FORK_POLICY = fork_policy_from_policy(_FIELD_POLICY)
+    _DEFAULT_FILL_STATE = default_fill_state_from_policy(_FIELD_POLICY)
 
     def _slot(self, name: str, default: Any = None) -> Any:
         """Return one physical slot value, or ``default`` when it is unset."""
@@ -2140,18 +2141,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         set_(self, "_row", row)
 
     @property
-    def layer_type(self) -> str:
-        """Return the operation type token used by existing internal callers."""
-
-        return cast(str, self.type)
-
-    @layer_type.setter
-    def layer_type(self, value: str) -> None:
-        """Set the operation type token through the legacy internal name."""
-
-        self.type = value
-
-    @property
     def compute_record(self) -> Any | None:
         """Two-term compute record (fma_macs / other_flops), derived on read.
 
@@ -2346,7 +2335,11 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def grads(self) -> GradientRecordAccessor:
-        """Per-pass gradient records saved for this Op."""
+        """Per-pass gradient records saved for this Op.
+
+        One record per backward pass that reached this op's output, each the
+        gradient after this trace's ``tl.grad(site)`` edit chain.
+        """
 
         trace = self.source_trace
         raise_if_no_backward_capture(trace, plural_subject="op.grads or saved_grad_ops")
@@ -2705,7 +2698,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         if not _finished:
             return {self._label_raw}
         spellings = {self.layer_label}
-        pass_index = self.pass_index
+        pass_index = self.pass_number
         if isinstance(pass_index, int):
             spellings.add(f"{self.layer_label}:{pass_index}")
         return spellings
@@ -2840,8 +2833,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 parent_ops[parent_index] = trace.ops[parent_label]
             except KeyError:
-                if parent_label in trace.layer_dict_all_keys:
-                    parent_ops[parent_index] = trace.layer_dict_all_keys[parent_label]
+                if parent_label in trace._layer_dict_all_keys:
+                    parent_ops[parent_index] = trace._layer_dict_all_keys[parent_label]
         return OpAccessor(parent_ops)
 
     @input_ops.deleter
@@ -2860,9 +2853,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 parent = trace.ops[parent_label]
             except KeyError:
-                if parent_label not in trace.layer_dict_all_keys:
+                if parent_label not in trace._layer_dict_all_keys:
                     continue
-                parent = trace.layer_dict_all_keys[parent_label]
+                parent = trace._layer_dict_all_keys[parent_label]
             if parent.is_buffer and parent.buffer_write_kind is None:
                 source_ops[parent_index] = parent
         return OpAccessor(source_ops)
@@ -2883,9 +2876,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 child = trace.ops[child_label]
             except KeyError:
-                if child_label not in trace.layer_dict_all_keys:
+                if child_label not in trace._layer_dict_all_keys:
                     continue
-                child = trace.layer_dict_all_keys[child_label]
+                child = trace._layer_dict_all_keys[child_label]
             if child.is_buffer and child.buffer_write_kind is not None:
                 sink_ops[child_index] = child
         return OpAccessor(sink_ops)
@@ -2920,7 +2913,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             try:
                 parent = ops[parent_label]
             except KeyError:
-                parent = cast("Op | None", trace.layer_dict_all_keys.get(parent_label))
+                parent = cast("Op | None", trace._layer_dict_all_keys.get(parent_label))
             if parent is None:
                 activations.append(None)
                 continue
@@ -3033,7 +3026,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         trace = self._source_trace
         if trace is None:
             return None
-        return cast("Callable[..., Any] | None", getattr(trace, "grad_transform", None))
+        return cast("Callable[..., Any] | None", trace._options_grad_transform)
 
     @property
     def is_buffer_source(self) -> bool:
@@ -3053,18 +3046,6 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         """
 
         return bool(self.has_grad)
-
-    @property
-    def ops(self) -> tuple["Op", ...]:
-        """Tuple containing this pass for aggregate-compatible iteration.
-
-        Returns
-        -------
-        tuple[Op, ...]
-            Single-entry tuple containing this pass log.
-        """
-
-        return (self,)
 
     @property
     def _streaming_label(self) -> str:
@@ -3419,13 +3400,13 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         resolver_status_was_present = "resolver_status" in state
         default_fill_state(
             state,
-            defaults=self.DEFAULT_FILL_STATE,
+            defaults=self._DEFAULT_FILL_STATE,
         )
         # Repair present-but-wrong-typed container fields from legacy states
         # (e.g. `_param_barcodes` serialized as a `set` where a `list` is now
         # declared). `default_fill_state` only fills absent keys; this closes
         # the same gap `Trace.__setstate__` already closes for its own fields.
-        coerce_container_typed_state(state, self.DEFAULT_FILL_STATE)
+        coerce_container_typed_state(state, self._DEFAULT_FILL_STATE)
         _clear_property_backed_state_fields(state)
         if state.get("dtype_ref") is None:
             state["dtype_ref"] = _dtype_ref_or_none(state.get("dtype"))
@@ -3499,7 +3480,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         solution = _engine.solve(trace)
         cache = self._slot("_receptive_field_cache")
         if cache is not None and cache._solution is not solution:
-            for op in trace.layer_list:
+            for op in trace._layer_list:
                 if op._slot("_receptive_field_cache") is not None:
                     object.__setattr__(
                         op,
@@ -3752,7 +3733,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                 target_device = torch.device("cpu")
             elif self.output_device not in ("same", str(t.device)):
                 target_device = torch.device(self.output_device)
-            save_raw_activations = getattr(trace, "save_raw_activations", True)
+            save_raw_activations = (
+                trace._options_save_raw_activations if trace is not None else True
+            )
             store_raw = save_raw_activations or activation_transform is None
             # Explorer P2 (same gate as the exhaustive hot path): a declared
             # summary reducer with raw retention off skips the transient
@@ -3882,7 +3865,16 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                     kind="transformed_out",
                 )
 
-        # Tensor args and kwargs:
+        self._save_call_args(t_args, t_kwargs, save_args)
+
+    def _save_call_args(
+        self,
+        t_args: list[Any] | tuple[Any, ...],
+        t_kwargs: dict[str, Any],
+        save_args: bool,
+    ) -> None:
+        """Store copies of the call's tensor args and kwargs, or clear them."""
+
         if save_args:
             self.has_saved_args = True
             self._internal_set("saved_args", [copy_arg_tree(arg) for arg in t_args])
@@ -3901,7 +3893,10 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     ) -> None:
         """Save the grad tensor for this layer's output.
 
-        Called by the backward hook registered during the forward pass.
+        Called by the backward hook registered during the forward pass. The
+        saved value is the gradient of this op's output after TorchLens's edit
+        chain at this site (``tl.grad(site)`` edits run first), so ``.grad``
+        and an edit agree.
         The grad is ``detach().clone()``'d - a bare copy, not deep-copied -
         so it's independent of the autograd graph but cheap to store.
 
@@ -3919,7 +3914,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         self.grad_shape = tuple(raw_grad.shape)
         self.grad_dtype = raw_grad.dtype
         self.gradient_memory = Bytes(get_memory_amount(raw_grad))
-        grad_transform = getattr(trace, "grad_transform", None)
+        grad_transform = trace._options_grad_transform if trace is not None else None
         self._internal_set("transformed_grad", None)
         self.transformed_grad_shape = None
         self.transformed_grad_dtype = None
@@ -3934,19 +3929,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                 self.transformed_gradient_memory = _memory_or_none(self.transformed_grad)
             self._internal_set("grad", raw_payload)
             self.has_grad = True
-            if writer is not None and getattr(trace, "_defer_streaming_bundle_finalization", False):
-                self._stream_tensor_blob(
-                    writer,
-                    tensor_field="grad",
-                    pending_field="_pending_grad_blob_id",
-                    kind="grad",
-                )
-                self._stream_tensor_blob(
-                    writer,
-                    tensor_field="transformed_grad",
-                    pending_field="_pending_transformed_grad_blob_id",
-                    kind="transformed_grad",
-                )
+            stream_grad_blobs(self, trace, writer)
             return
         # Admit BEFORE the transform/clone allocate (r8 R34, fable F1): a
         # policy-DENIED label reaching this legacy slot (callable/selector
@@ -3988,7 +3971,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             self.transformed_grad_dtype = _dtype_or_none(self.transformed_grad)
             self.transformed_gradient_memory = _memory_or_none(self.transformed_grad)
 
-        save_raw_gradients = getattr(trace, "save_raw_gradients", True)
+        save_raw_gradients = trace._options_save_raw_grads if trace is not None else True
         store_raw = save_raw_gradients or grad_transform is None
         # Gradient payloads are ALWAYS genuine snapshots: under
         # save_mode="reference"/"view" an aliased payload would be silently
@@ -3998,7 +3981,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         # through the same chokepoint the event-sidecar path uses.
         from ..backends.torch.tensor_tracking import _copy_grad_payload
 
-        save_mode = cast(SaveMode, getattr(trace, "save_mode", "copy"))
+        save_mode = cast(SaveMode, trace._options_save_mode if trace is not None else "copy")
         self._internal_set(
             "grad",
             _copy_grad_payload(raw_grad, save_mode=save_mode) if store_raw else None,
@@ -4006,19 +3989,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         self.has_grad = True
         if budget is not None and grad_reservation is not None:
             budget.commit(grad_reservation, (self.grad, self.transformed_grad))
-        if writer is not None and getattr(trace, "_defer_streaming_bundle_finalization", False):
-            self._stream_tensor_blob(
-                writer,
-                tensor_field="grad",
-                pending_field="_pending_grad_blob_id",
-                kind="grad",
-            )
-            self._stream_tensor_blob(
-                writer,
-                tensor_field="transformed_grad",
-                pending_field="_pending_transformed_grad_blob_id",
-                kind="transformed_grad",
-            )
+        stream_grad_blobs(self, trace, writer)
 
     def _apply_transform(
         self,
@@ -4074,7 +4045,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
             transformed_tensor=output,
             transform_kind=transform_kind,
             tripwire_armed=train_mode_tripwire_armed(
-                backward_ready=getattr(trace, "backward_ready", False),
+                backward_ready=trace._options_backward_ready if trace is not None else False,
                 transform=transform,
             ),
             label=self._streaming_label,
@@ -4323,7 +4294,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def _str_during_pass(self) -> str:
         """Return a human-readable summary of this tensor entry while the forward pass is still in progress."""
         s = f"Tensor {self._label_raw} (layer {self._layer_label_raw}) (PASS NOT FINISHED):"
-        s += f"\n\tPass: {self.pass_index}"
+        s += f"\n\tPass: {self.pass_number}"
         s += f"\n\tTensor info: shape {self.shape}, dtype {self.dtype}"
         s += f"\n\tComputed from params: {self.has_params}"
         s += f"\n\tComputed in modules: {self.modules}"
@@ -4725,4 +4696,4 @@ def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
 
 # The tlspec v8 coordinated bump retired this class's S3 pre-release
 # registrations (site_key, edge_substitutions, edge_replacement_stamps);
-# their persisting policies are declared directly in FIELD_POLICY above.
+# their persisting policies are declared directly in _FIELD_POLICY above.

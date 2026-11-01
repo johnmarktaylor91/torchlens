@@ -83,6 +83,7 @@ def test_identity_distinguishes_dtype_and_shape_with_equal_bytes() -> None:
     assert len(digests) == 3
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA device")
 def test_identity_is_device_independent() -> None:
     """The same values on CPU and CUDA name the same rule."""
@@ -168,7 +169,7 @@ def test_tensor_free_rule_identity_keeps_its_released_format() -> None:
 
     helper = tl.scale(2.0)
     spec = tl.when(tl.func("relu"), helper)
-    expected = f"helper:{helper.helper_name}:{helper.args!r}:{helper.kwargs!r}"
+    expected = f"helper:{helper.name}:{helper.args!r}:{helper.kwargs!r}"
     assert spec.rules[0].action_repr == expected
 
 

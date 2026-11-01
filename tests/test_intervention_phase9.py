@@ -53,7 +53,7 @@ def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Tr
 
     model = model or _ReluModel()
     x = x if x is not None else torch.randn(2, 3)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def test_bundle_construction_shapes_and_member_indexing() -> None:
@@ -61,8 +61,8 @@ def test_bundle_construction_shapes_and_member_indexing() -> None:
 
     log_a = _log()
     log_b = _log()
-    log_a.trace_label = "auto_a"
-    log_b.trace_label = "auto_b"
+    log_a.name = "auto_a"
+    log_b.name = "auto_b"
 
     from_dict = tl.Bundle({"a": log_a, "b": log_b})
     assert len(from_dict) == 2
@@ -108,9 +108,9 @@ def test_map_is_per_member() -> None:
 
     bundle = tl.Bundle({"a": _log(), "b": _log()})
 
-    assert bundle.map(lambda member: len(member.layer_list)) == {
-        "a": len(bundle["a"].layer_list),
-        "b": len(bundle["b"].layer_list),
+    assert bundle.map(lambda member: len(member._layer_list)) == {
+        "a": len(bundle["a"]._layer_list),
+        "b": len(bundle["b"]._layer_list),
     }
 
 
@@ -134,21 +134,21 @@ def test_relationship_matrix_gates_at_operations() -> None:
     good = _log(_ReluModel())
     different = _log(_TanhModel())
     for member in (good, different):
-        member.model_object_id = None
-        member.model_class_qualname = None
-        member.param_hash_quick = None
-        member.param_hash_full = None
-        member.graph_shape_hash = None
-        member.input_signature_hash = None
+        member._provenance_model_object_id = None
+        member._source_class_qualname = None
+        member._provenance_param_hash_quick = None
+        member._provenance_param_hash_full = None
+        member._provenance_fingerprint = None
+        member._provenance_input_signature_hash = None
     bundle = tl.Bundle({"good": good, "different": different})
 
     assert bundle.comparability("good", "different") is Relationship.UNKNOWN
     with pytest.raises(BundleComparisonError, match="'at'"):
         bundle.at(tl.func("relu"))
 
-    assert bundle.map(lambda member: member.trace_label) == {
-        "good": good.trace_label,
-        "different": different.trace_label,
+    assert bundle.map(lambda member: member.name) == {
+        "good": good.name,
+        "different": different.name,
     }
 
 

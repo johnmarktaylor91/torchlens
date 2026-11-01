@@ -46,19 +46,6 @@ from ._tl import (
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        _LIVE_FIRE_RESULTS_ATTR,
-        TRANSFORM_FUNC_NAMES,
-        _build_shared_fields_dict,
-        _build_trace_predicate_context,
-        _cache_trace_predicate_context,
-        _extract_arg_tensors_and_params,
-        _output_should_be_logged,
-        _replace_output_value,
-        _walk_output_tensors_with_paths,
-    )
-
 
 _LIVE_FIRE_RESULTS_STORAGE_ATTR = "_tl_live_fire_results_by_tensor_id"
 
@@ -178,11 +165,11 @@ def _apply_live_hooks_to_outputs_legacy(
     if (
         not _st._active_hook_plan
         and not predicate_intervene_active
-        or self.capture_mode not in {"exhaustive", "predicate"}
+        or self._options_mode not in {"exhaustive", "predicate"}
     ):
         return out_orig
     if (
-        self.capture_mode == "predicate"
+        self._options_mode == "predicate"
         and predicate_intervene_active
         and not _st._active_hook_plan
     ):
@@ -220,7 +207,7 @@ def _apply_live_hooks_to_outputs_legacy(
         site_fields["type_index"] = reserved.type_index
         site_fields["_label_raw"] = raw_label
         site_fields["_layer_label_raw"] = raw_label
-        site_fields["pass_index"] = 1
+        site_fields["pass_number"] = 1
         site_fields["step_index"] = None
         site_fields["container_path"] = container_path
         site_fields["is_inplace"] = record_is_inplace
@@ -323,12 +310,12 @@ def _apply_predicate_mode_interventions_to_outputs(
             pass_index=state.pass_index,
             event_index=state.event_index + output_ordinal,
             step_index=state.step_index + output_ordinal,
-            capture_start_time=trace.capture_start_time,
+            capture_start_time=trace._provenance_start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
             address=module_frame.address if module_frame else None,
             module_type=module_frame.module_type if module_frame else None,
-            module_pass_index=module_frame.pass_index if module_frame else None,
+            module_pass_number=module_frame.pass_number if module_frame else None,
             is_transform=func_name in TRANSFORM_FUNC_NAMES,
             transform_kind=func_name if func_name in TRANSFORM_FUNC_NAMES else None,
         )
@@ -355,7 +342,6 @@ def _apply_predicate_mode_interventions_to_outputs(
         hook_entries = normalize_hook_plan(
             decision.hook,
             default_site_target=make_label_selector(ctx.raw_label or ctx.label),
-            direction=decision.direction,
         )
         from ...intervention.runtime import _apply_live_hooks
 
@@ -502,10 +488,7 @@ def _hook_entry_reaches_op_door(entry: Any) -> bool:
 
     if type(entry) is not NormalizedHookEntry:
         return True
-    if (
-        entry.metadata.get("direction", "forward") != "forward"
-        or entry.metadata.get("timing", "post") != "post"
-    ):
+    if entry.signal != "forward" or entry.metadata.get("timing", "post") != "post":
         return False
     if _input_splice_module_scope(entry.site_target, entry) is not None:
         return not _is_plain_module_selector(entry.site_target)
@@ -542,7 +525,6 @@ def _predicate_hook_metadata(entry: Any, decision: InterventionDecision) -> dict
     metadata = {
         **dict(entry.metadata),
         "created_by": "intervene_predicate",
-        "direction": entry.metadata.get("direction", decision.direction),
     }
     if decision.where_repr is not None:
         metadata["spec_where_repr"] = decision.where_repr
@@ -569,7 +551,7 @@ def _record_predicate_intervention_spec(
     Returns
     -------
     None
-        Mutates ``trace._intervention_spec`` once per matched target/helper/direction.
+        Mutates ``trace._intervention_spec`` once per matched target/helper.
     """
 
     if decision.hook is None:
@@ -588,7 +570,7 @@ def _record_predicate_intervention_spec(
     # repr never perturbs the capture in progress.
     with pause_logging():
         hook_repr = repr(decision.hook)
-    key = (target_label, hook_repr, decision.direction)
+    key = (target_label, hook_repr)
     if key in seen:
         return
     seen.add(key)
@@ -596,7 +578,6 @@ def _record_predicate_intervention_spec(
     entries = normalize_hook_plan(
         target,
         decision.hook,
-        direction=decision.direction,
     )
     spec = trace._ensure_intervention_spec()
     # The target dedup was a freeze-and-compare scan over all of spec.targets
@@ -705,7 +686,6 @@ def _apply_predicate_intervention(
     hook_entries = normalize_hook_plan(
         decision.hook,
         default_site_target=make_label_selector(ctx.raw_label or ctx.label),
-        direction=decision.direction,
     )
     from ...intervention.runtime import _apply_live_hooks
 
@@ -750,30 +730,6 @@ def _iter_loggable_live_outputs(
     for out, container_path, container_spec in _walk_output_tensors_with_paths(out_orig):
         if _output_should_be_logged(out, is_bottom_level_func):
             yield out, container_path, container_spec
-
-
-def _replace_output_tensors_by_path(
-    out_orig: Any,
-    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
-) -> Any:
-    """Return an output object with selected tensor paths replaced.
-
-    Parameters
-    ----------
-    out_orig
-        Original output container.
-    replacements
-        Replacement tensors keyed by output path.
-
-    Returns
-    -------
-    Any
-        Rebuilt output object when supported, otherwise the original object.
-    """
-
-    if () in replacements:
-        return replacements[()]
-    return _replace_output_value(out_orig, (), replacements)
 
 
 def _set_tensor_live_fire_results(
@@ -843,3 +799,32 @@ def _pop_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...
                 kind=INTERVENTION_FIRE_RESULTS_CLEANUP_FAILED,
             ) from exc
     return tuple(fire_results)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_containers import (  # noqa: E402
+    _walk_output_tensors_with_paths,
+)
+from ._ops_exhaustive import (  # noqa: E402
+    _output_should_be_logged,
+)
+from ._ops_finalize import (  # noqa: E402
+    _cache_trace_predicate_context,
+)
+from ._ops_predicate_events import (  # noqa: E402
+    _extract_arg_tensors_and_params,
+)
+from ._ops_predicates import (  # noqa: E402
+    _replace_output_tensors_by_path,
+)
+from ._ops_retention import (  # noqa: E402
+    _build_trace_predicate_context,
+)
+from ._ops_shared_fields import (  # noqa: E402
+    _build_shared_fields_dict,
+)
+from .ops import (  # noqa: E402
+    _LIVE_FIRE_RESULTS_ATTR,
+    TRANSFORM_FUNC_NAMES,
+)

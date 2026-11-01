@@ -15,7 +15,7 @@ oracle-backed, deterministic):
   module -- ``per_firing`` pass draws differ, ``per_rule`` draws are equal,
   both byte-stable across a re-push.
 - A1/A1b analog: ``tl.mean_ablate(dim=)`` axis semantics vs the global scalar;
-  typo'd and named ``over=`` tokens refuse; ``batch_independent`` is derived.
+  typo'd and named ``over=`` tokens refuse; ``is_batch_independent`` is derived.
 - A8: eager derivation equality -- the recorded derived seed re-derives from
   the recorded coordinate.
 """
@@ -63,7 +63,7 @@ def _toy_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _Toy()
     x = torch.randn(5, 4)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def test_permute_batch_oracle_reproducibility_and_extent() -> None:
@@ -87,9 +87,7 @@ def test_permute_batch_oracle_reproducibility_and_extent() -> None:
     assert sampling_records(other)[-1]["permutation"] != permutation
     # Batch extent 1 refuses at fire.
     torch.manual_seed(0)
-    single = tl.trace(
-        _Toy(), torch.randn(1, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    single = tl.trace(_Toy(), torch.randn(1, 4), capture=tl.options.CaptureOptions(replayable=True))
     with pytest.raises(Exception) as excinfo:
         single.fork().do(tl.label("relu_1_2"), permute_batch(seed=1, axis=0))
     assert excinfo.value.fields["code"] == "permute_batch_extent_invalid"
@@ -115,14 +113,14 @@ def test_permute_batch_gradients_route_to_permuted_sources() -> None:
     assert edit.factory is not None
     hook_fn = edit.factory()
     x = torch.randn(4, 3, requires_grad=True)
-    run_ctx: dict[str, object] = {}
+    run_state: dict[str, object] = {}
     context = make_hook_context(
         name="permute_batch",
-        op={"label": "unit", "pass_index": 1},
-        run_context=run_ctx,
+        op={"label": "unit", "pass_number": 1},
+        run_context=run_state,
     )
     out = hook_fn(x, ctx=context)
-    permutation = run_ctx["sampling_records"][-1]["permutation"]  # type: ignore[index]
+    permutation = run_state["sampling_records"][-1]["permutation"]  # type: ignore[index]
     weights = torch.tensor([1.0, 10.0, 100.0, 1000.0]).reshape(4, 1)
     (out * weights).sum().backward()
     # Row j of the output is row permutation[j] of the input, so input row
@@ -143,7 +141,7 @@ def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
     torch.manual_seed(0)
     model = _Tied()
     x = torch.randn(6, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     layer = next(lab for lab in log.layer_labels if lab.startswith("linear"))
     assert log[layer].num_passes == 2, "the fixture must be a real two-pass layer"
 
@@ -191,7 +189,7 @@ def test_derived_seed_is_rederivable_from_recorded_facts() -> None:
 
 
 def test_seed_is_required_and_auto_derives_from_trace_seed() -> None:
-    """D4/D5: seed=None refuses; 'auto' canonicalizes against trace.random_seed."""
+    """D4/D5: seed=None refuses; 'auto' canonicalizes against trace.options.seed."""
 
     with pytest.raises(Exception) as excinfo:
         permute_batch(seed=None, axis=0)  # type: ignore[arg-type]
@@ -208,7 +206,7 @@ def test_seed_is_required_and_auto_derives_from_trace_seed() -> None:
     # No run context -> no trace seed -> typed refusal, never ambient RNG.
     edit = permute_batch(seed="auto", axis=0)
     assert edit.factory is not None
-    context = make_hook_context(name="p", op={"label": "u", "pass_index": 1})
+    context = make_hook_context(name="p", op={"label": "u", "pass_number": 1})
     with pytest.raises(Exception) as excinfo:
         edit.factory()(torch.randn(3, 2), ctx=context)
     assert excinfo.value.fields["code"] == "sampling_trace_seed_unavailable"
@@ -227,9 +225,9 @@ def test_mask_equivariance_law() -> None:
     expected = baseline.clone()
     expected[:, 1:3] = baseline[permutation][:, 1:3]
     assert torch.allclose(fork["relu_1_2"].out, expected)
-    fire = list(fork.ops["relu_1_2"].interventions or ())[-1]
-    assert fire.helper is not None
-    metadata = dict(fire.helper.metadata)
+    fire = list(fork.ops["relu_1_2"].edits or ())[-1]
+    assert fire.edit is not None
+    metadata = dict(fire.edit.metadata)
     assert "selection_mask_digest" in metadata
     assert metadata["selection_mask_rows_equal"] is True
     # Per-row-differing masks refuse typed, stably across seeds.
@@ -300,7 +298,7 @@ def test_singleton_agreement_class_discloses_and_strict_refuses() -> None:
 
 
 def test_mean_ablate_axis_semantics_and_derived_flag() -> None:
-    """A1/A1b analog: real dim= vocabulary; batch_independent DERIVED."""
+    """A1/A1b analog: real dim= vocabulary; is_batch_independent DERIVED."""
 
     log = _toy_trace()
     baseline = log["relu_1_2"].out
@@ -322,9 +320,9 @@ def test_mean_ablate_axis_semantics_and_derived_flag() -> None:
         tl.mean_ablate(dim="batch")
     assert excinfo.value.fields["code"] == "axis_semantics_unknown"
     # D18: derived, never tabled. Self-sourced reads the traced batch.
-    assert tl.mean_ablate(dim=None).batch_independent is False
+    assert tl.mean_ablate(dim=None).is_batch_independent is False
     donors = population(torch.randn(4, *baseline.shape), origin="pop")
-    assert tl.mean_ablate(donors, dim=None).batch_independent is True
+    assert tl.mean_ablate(donors, dim=None).is_batch_independent is True
     # The legacy 'self' and 'all' spellings are gone: no alias, a typed refusal.
     for legacy in ("self", "all"):
         with pytest.raises(Exception) as excinfo:
@@ -407,7 +405,7 @@ def test_chunked_capture_refuses_batch_coherent_edits() -> None:
 
     log = _toy_trace()
     fork = log.fork()
-    fork.chunked_forward = True
+    fork._options_chunk_size = True
     with pytest.raises(Exception) as excinfo:
         fork.do(tl.label("relu_1_2"), permute_batch(seed=1, axis=0))
     assert excinfo.value.fields["code"] == "chunked_replay_batch_coupling"
@@ -425,7 +423,7 @@ def test_fire_record_carries_the_sampling_note_via_one_builder() -> None:
     log = _toy_trace()
     fork = log.fork()
     fork.do(tl.label("relu_1_2"), permute_batch(seed=11, axis=0))
-    fire = list(fork.ops["relu_1_2"].interventions or ())[-1]
+    fire = list(fork.ops["relu_1_2"].edits or ())[-1]
     note = fire.determinism_note or ""
     assert "sampling[permute_batch]" in note
     assert "base_seed=11" in note

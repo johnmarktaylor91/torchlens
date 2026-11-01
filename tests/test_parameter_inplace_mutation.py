@@ -19,9 +19,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.tensor_leaves import iter_tensors
 from torchlens.backends.torch import param_mutation, wrappers
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
+from torchlens.validation import last_validation_failure
+from torchlens.validation.diagnostics import CHECK_BACKWARD
 from torchlens.validation.invariants import MetadataInvariantError
 
 
@@ -182,7 +185,7 @@ def test_plain_capture_graph_unchanged_without_mutation() -> None:
     assert [layer.type for layer in trace.layers] == ["input", "linear", "truediv", "output"]
     truediv = _ops_by_type(trace, "truediv")[0]
     assert [p.address for p in truediv.params] == ["temp"]
-    assert trace.num_ops == 2
+    assert trace._num_ops == 2
 
 
 def _drop_prepared_parameter_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -456,8 +459,8 @@ def test_keyword_receiver_is_captured_like_a_positional_one() -> None:
         assert torch.equal(value, eager_state[key]), key
 
     positional = tl.trace(_KeywordReceiver("positional"), x)
-    assert [layer.layer_type for layer in trace.layer_list] == [
-        layer.layer_type for layer in positional.layer_list
+    assert [layer.type for layer in trace._layer_list] == [
+        layer.type for layer in positional._layer_list
     ]
     assert tl.validate(copy.deepcopy(keyword_model), x, scope="forward") is True
 
@@ -508,7 +511,7 @@ def test_operand_scan_reaches_nested_containers() -> None:
     grad = torch.ones(2, requires_grad=True)
     plain = torch.ones(2)
     operand = (plain, [{"values": grad}], 3)
-    found = list(param_mutation._iter_operand_tensors(operand))
+    found = list(iter_tensors(operand))
     assert len(found) == 2
     assert found[0] is plain and found[1] is grad
 
@@ -531,14 +534,14 @@ def test_lazy_materialization_is_not_a_parameter_mutation() -> None:
     """Lazy init writes stay out of the graph; an initialized Parameter's write is logged."""
 
     trace = tl.trace(_LazyThenMutate(), torch.randn(3, 4))
-    assert sorted(layer.layer_type for layer in trace.layer_list) == [
+    assert sorted(layer.type for layer in trace._layer_list) == [
         "clamp",
         "input",
         "linear",
         "output",
         "truediv",
     ]
-    assert trace.num_ops == 3
+    assert trace._num_ops == 3
     clamp = _ops_by_type(trace, "clamp")[0]
     assert [p.address for p in clamp.params] == ["temp"]
     assert clamp.label in _parent_labels(trace, _ops_by_type(trace, "truediv")[0])
@@ -571,11 +574,11 @@ def test_materialized_lazy_parameter_mutation_is_captured() -> None:
     # grouping rule row 27: one weighted module called from two lines is one
     # layer with 2 passes, so the two linear calls are the two passes (ops) of
     # one layer; address every op per pass.
-    mutations = [op for op in trace.layer_list if op.type == "mul"]
-    assert len(mutations) == 1, [op.label for op in trace.layer_list]
+    mutations = [op for op in trace._layer_list if op.type == "mul"]
+    assert len(mutations) == 1, [op.label for op in trace._layer_list]
     mutation = mutations[0]
     assert [p.address for p in mutation.params] == ["lazy.weight"]
-    linears = [op for op in trace.layer_list if op.type == "linear"]
+    linears = [op for op in trace._layer_list if op.type == "linear"]
     assert len(linears) == 2
     assert len({op.layer_label for op in linears}) == 1
     assert mutation.label in _parent_labels(trace, linears[1])
@@ -660,6 +663,9 @@ def test_backward_validation_refuses_an_already_run_model_loudly() -> None:
         assert tl.validate(model, x, scope="backward") is False
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert "backward_validation_non_leaf_parameter" in codes
+    failure = last_validation_failure()
+    assert failure is not None and failure.check_name == CHECK_BACKWARD
+    assert failure.extra["reason"] == "non_leaf_parameter"
     assert model.temp.is_leaf is False
 
 

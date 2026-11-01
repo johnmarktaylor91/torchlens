@@ -119,7 +119,7 @@ def _canonical_targets(trace: Trace, target_ops: Iterable[Op | str]) -> tuple[Op
             "Projective descriptor solving requires at least one target operation."
         )
     targets = tuple(
-        op for op in trace.layer_list if op.label in resolved and _operation_is_live(op)
+        op for op in trace._layer_list if op.label in resolved and _operation_is_live(op)
     )
     keys = [target.io_role or target.label for target in targets]
     if len(keys) != len(set(keys)):
@@ -135,7 +135,7 @@ def _solve_projective_uncached(
 ) -> _ProjectiveFieldSolution:
     """Run the reverse dynamic program for one canonical target set."""
 
-    operations = tuple(op for op in trace.layer_list if _operation_is_live(op))
+    operations = tuple(op for op in trace._layer_list if _operation_is_live(op))
     by_reference = {
         reference: op
         for op in operations

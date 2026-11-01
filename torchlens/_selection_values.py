@@ -165,7 +165,7 @@ def _op_for_entry(trace: Any, entry: Site, *, sample_name: str | None = None) ->
     ops = [
         op
         for op in _find_act_ops(trace, layer_label)
-        if (getattr(op, "pass_index", 1) or 1) == pass_index
+        if (getattr(op, "pass_number", 1) or 1) == pass_index
     ]
     if not ops:
         where = "this trace" if sample_name is None else sample_name
@@ -835,7 +835,7 @@ def _table_rows_by_label(node: _TableScoreTerm, trace: Any) -> tuple[dict[str, A
 
     Enforces: table bound to THIS trace and not stale (the trace's autograd
     registry token must match the read-time token), single-target only
-    (multi-target tables teach ``for_target``/``aggregate_targets``), one
+    (multi-target tables teach ``target``/``aggregate_targets``), one
     uniform grain, ACT rows only.
     """
 
@@ -982,7 +982,7 @@ def _table_population(
             (
                 candidate
                 for candidate in ops
-                if (getattr(candidate, "pass_index", 1) or 1) == int(label.rsplit(":", 1)[1])
+                if (getattr(candidate, "pass_number", 1) or 1) == int(label.rsplit(":", 1)[1])
             ),
             None,
         )

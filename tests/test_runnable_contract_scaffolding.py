@@ -40,8 +40,8 @@ def test_frozen_runnable_schema_values() -> None:
     assert RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION == "selected_activation_v2"
     assert frozenset({"sparse_recorded_taken_path_v1"}) == LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS
     assert WitnessCompleteness.COMPLETE.value == "complete"
-    assert RunnableErrorCode.UNSUPPORTED_BACKEND_REPLAY.value == "unsupported_backend_replay"
-    assert RunnableErrorCode.NUMERIC_ATTESTATION_FAILED.value == "numeric_attestation_failed"
+    assert RunnableErrorCode.UNSUPPORTED_BACKEND_REPLAY.value == "backend_replay_unsupported"
+    assert RunnableErrorCode.NUMERIC_ATTESTATION_FAILED.value == "replay_value_mismatch"
     assert (
         RunnableErrorCode.INPUT_ALIAS_TOPOLOGY_UNRESOLVED.value == "input_alias_topology_unresolved"
     )
@@ -217,8 +217,8 @@ _S1_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
     "torchlens._runnable_execution": (
         "run_loaded_sparse_trace",
         "run_live_trace",
-        "_finalize_provider_run",
     ),
+    "torchlens._runnable_providers": ("_finalize_provider_run",),
     "torchlens._runnable_state": ("load_trace_state_dict",),
     # Coordinator verbs reached through the RunnableCoordinator boundary keep
     # their transport-side homes (contract E2).

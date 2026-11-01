@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
@@ -46,14 +46,6 @@ from .errors import (
     ReplayValueMismatchError,
     RunPreconditionError,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _ALLOWED_TORCH_SYMBOL_TYPES,
-        _MAX_DECODE_NESTING_DEPTH,
-        _RUN_FORK_COUNTER,
-        _container_field_names,
-    )
 
 __all__ = (
     "_call_consumes_seeded_rng",
@@ -689,11 +681,11 @@ def _input_error(
 def _op_for_label(trace: Any, label: str) -> Any | None:
     """Resolve a descriptor op label against a fork's lookup aliases."""
 
-    layer_dict = getattr(trace, "layer_dict_all_keys", {}) or {}
+    layer_dict = trace._layer_dict_all_keys or {}
     if label in layer_dict:
         return layer_dict[label]
     return next(
-        (op for op in getattr(trace, "layer_list", ()) if str(getattr(op, "label", "")) == label),
+        (op for op in trace._layer_list if str(getattr(op, "label", "")) == label),
         None,
     )
 
@@ -707,5 +699,17 @@ def _op_for_slot(trace: Any, slot_id: str) -> Any | None:
 def _run_fork_name(trace: Any) -> str:
     """Return a process-unique monotonic Trace label for a run transaction."""
 
-    base_name = trace.trace_label or "trace"
+    base_name = trace.name or "trace"
     return f"{base_name}_fork_{next(_RUN_FORK_COUNTER)}"
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_execution import (  # noqa: E402
+    _ALLOWED_TORCH_SYMBOL_TYPES,
+    _MAX_DECODE_NESTING_DEPTH,
+    _RUN_FORK_COUNTER,
+)
+from ._runnable_witness_contracts import (  # noqa: E402
+    _container_field_names,
+)

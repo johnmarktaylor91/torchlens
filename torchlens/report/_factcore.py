@@ -22,6 +22,7 @@ import weakref
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from ._compute_truth import ComputeAggregation, compute_aggregation
 
@@ -253,14 +254,14 @@ def capture_fingerprint(trace: Any) -> str:
     payloads -- a cheap identity fingerprint.
     """
 
-    ops = list(getattr(trace, "layer_list", ()) or ())
+    ops = list((trace._layer_list if is_live_trace(trace) else None) or ())
     label_digest = hashlib.sha256()
     for op in ops:
         label_digest.update(str(getattr(op, "layer_label", "?")).encode())
         label_digest.update(b"|")
     parts = (
-        str(getattr(trace, "backend", None)),
-        str(getattr(trace, "model_class_name", None)),
+        str(trace._provenance_backend if is_live_trace(trace) else None),
+        str(trace._source_class_name if is_live_trace(trace) else None),
         str(len(ops)),
         str(getattr(trace, "num_params", None)),
         label_digest.hexdigest()[:16],
@@ -271,7 +272,7 @@ def capture_fingerprint(trace: Any) -> str:
 def _counts(trace: Any) -> CountsRecord:
     """Derive the counts record from the identity partition."""
 
-    ops = list(getattr(trace, "layer_list", ()) or ())
+    ops = list((trace._layer_list if is_live_trace(trace) else None) or ())
     alias_rows = sum(
         1
         for op in ops
@@ -295,7 +296,7 @@ def _counts(trace: Any) -> CountsRecord:
 def _identity(trace: Any) -> IdentityIndex:
     """Derive the identity spine."""
 
-    ops = list(getattr(trace, "layer_list", ()) or ())
+    ops = list((trace._layer_list if is_live_trace(trace) else None) or ())
     op_labels = tuple(str(getattr(op, "label", getattr(op, "layer_label", "?"))) for op in ops)
     op_layers = tuple(str(getattr(op, "layer_label", "?")) for op in ops)
     op_sites = tuple(getattr(op, "site_key", None) for op in ops)
@@ -408,7 +409,7 @@ def _memory(trace: Any) -> MemoryFacts:
     retained_bytes = 0
     present = 0
     lazy = 0
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in (trace._layer_list if is_live_trace(trace) else None) or ():
         if not getattr(op, "has_saved_activation", False):
             continue
         memory = getattr(op, "activation_memory", None)

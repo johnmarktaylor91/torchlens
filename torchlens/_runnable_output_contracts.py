@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import torch
 
@@ -22,23 +22,6 @@ from ._runnable import (
 from .errors import (
     RunPreconditionError,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _INPUT_STRUCTURE_SITE_PREFIX,
-        _MODULE_TRAINING_MODE_SITE_PREFIX,
-        _container_kind,
-        _container_leaf_paths,
-        _contract_check,
-        _decode_literal,
-        _input_site_value,
-        _inventory_site_positions,
-        _is_model_input_literal_witness,
-        _is_model_input_metadata_witness,
-        _is_state_metadata_fact_witness,
-        _is_unbound_state_escape_witness,
-        _op_for_label,
-    )
 
 __all__ = (
     "LiveOutputDiagnosis",
@@ -75,7 +58,7 @@ _LIVE_OUTPUT_REASON_REMEDIES: dict[str, str] = {
         "this capture recorded the output leaf paths but no output-container contract "
         "(the default capture does not persist it); re-capture with "
         "capture=CaptureOptions(capture_container_structure=True) -- or "
-        "intervention_ready=True, which implies it -- so the live run can rebuild the "
+        "replayable=True, which implies it -- so the live run can rebuild the "
         "exact tuple/dict/ModelOutput, or wrap the model to return a bare tensor"
     ),
     "opaque_root": (
@@ -171,7 +154,7 @@ def _diagnose_live_output(trace: Any) -> LiveOutputDiagnosis:
     # globals.
     from ._data_classes.container import container_from_op
     from ._ir.container import declared_leaf_slots
-    from ._runnable_execution import (
+    from ._runnable_call_outputs import (
         _container_spec_reconstruction_lossy,
         _fresh_bare_tensor_root,
         _output_container_spec,
@@ -742,3 +725,30 @@ def _codec_component(key: Any) -> str | int | None:
         return encode_mapping_key(key)
     except ValueError:
         return None
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_execution import (  # noqa: E402
+    _INPUT_STRUCTURE_SITE_PREFIX,
+    _MODULE_TRAINING_MODE_SITE_PREFIX,
+)
+from ._runnable_input_aliases import (  # noqa: E402
+    _input_site_value,
+)
+from ._runnable_input_sites import (  # noqa: E402
+    _inventory_site_positions,
+    _is_model_input_literal_witness,
+    _is_model_input_metadata_witness,
+)
+from ._runnable_verification import (  # noqa: E402
+    _contract_check,
+    _decode_literal,
+    _op_for_label,
+)
+from ._runnable_witness_contracts import (  # noqa: E402
+    _container_kind,
+    _container_leaf_paths,
+    _is_state_metadata_fact_witness,
+    _is_unbound_state_escape_witness,
+)

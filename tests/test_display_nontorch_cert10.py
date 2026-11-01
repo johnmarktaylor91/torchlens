@@ -102,7 +102,7 @@ class TestOpStrDisplayNonTorch:
         model = nn.Linear(3, 5)
         x = torch.randn(2, 3)
         log = tl.trace(model, x, save=lambda op: True)
-        assert log.num_ops > 0
+        assert log._num_ops > 0
 
         op = None
         for op_label in log.op_labels:

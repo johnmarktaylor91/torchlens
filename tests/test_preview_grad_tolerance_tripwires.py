@@ -19,7 +19,7 @@ band; ``atol = rtol * finfo.tiny``) at every remaining site:
 * ``jax/backend.py::_values_close`` (JAX replay oracle; pure derivation
   helper tested framework-free),
 * ``paddle/backend.py::_paddle_values_close`` (paddle replay divergence gate),
-* ``mlx/backend.py::_mlx_values_close`` (MLX GradOptions divergence refusal).
+* ``mlx/_grad_oracle.py::_mlx_values_close`` (MLX GradOptions divergence refusal).
 
 The comparison cores are numpy-level, so everything but the jax live check
 runs without the optional backend runtimes installed.
@@ -32,7 +32,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from torchlens.backends.mlx.backend import _mlx_values_close
+from torchlens.backends.mlx._grad_oracle import _mlx_values_close
 from torchlens.backends.paddle.backend import _paddle_values_close
 from torchlens.backends.tf.derived_grads import _tf_values_close
 from torchlens.backends.tf.validation import _payloads_close as tf_payloads_close

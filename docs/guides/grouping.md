@@ -46,7 +46,7 @@ class Looped(torch.nn.Module):
 x = torch.ones(2, 4)
 for model in (Unrolled(), Looped()):
     trace = tl.trace(model, x)
-    layers = [layer for layer in trace.layer_logs.values() if layer.func_name == "tanh"]
+    layers = [layer for layer in trace.layers if layer.func_name == "tanh"]
     print(type(model).__name__, [(layer.layer_label, layer.num_passes) for layer in layers])
 ```
 
@@ -157,7 +157,7 @@ single-pass layers. Inputs and outputs are always single-pass layers.
   their Python call site; TorchLens does not see inside them.
 - Capturing across concurrent Python threads, including `nn.DataParallel`, is not supported.
 - Captures without Python call-site evidence (the JAX and preview backends, and the predicate mode
-  of `tl.record`) use the older structural grouper. `trace.grouping_policy["detector"]` says which
+  of `tl.record`) use the older structural grouper. `trace.options.grouping_policy["detector"]` says which
   ran: `"callsite_v1"` for the call-site rule, `"grouper_v1"` for the structural grouper.
 - Saved traces keep the labels they were saved with; loading never regroups.
 
@@ -166,5 +166,5 @@ single-pass layers. Inputs and outputs are always single-pass layers.
 `op.site_key` names an op's position within one module call (module address, op type, output
 slot and an ordinal), and it is the same whichever grouping ran. Grouping uses the call site, not
 the position. Most layers have one site key; a loop inside one module call gives a layer whose
-passes sit at different positions, and `layer.site_key` refuses for it with
-`layer_site_ambiguous`. Read per-pass keys with `layer.ops[k].site_key`.
+passes sit at different positions and carry different keys.
+Read per-pass keys with `layer.ops[k].site_key`.

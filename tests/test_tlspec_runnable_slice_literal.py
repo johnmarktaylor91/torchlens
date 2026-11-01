@@ -112,7 +112,7 @@ def _save_runnable(model: nn.Module, capture_input: torch.Tensor, path: Path) ->
         model,
         capture_input,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -220,7 +220,7 @@ def test_callable_literal_argument_still_refuses_with_unsupported_literal(
         model,
         capture_input,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -267,7 +267,7 @@ def test_encode_literal_rejects_a_non_integer_slice_component() -> None:
 def test_encode_literal_round_trips_slice_ellipsis_and_none() -> None:
     """Unit-level encode/decode parity for the three new literal shapes."""
 
-    from torchlens._runnable_execution import _decode_literal
+    from torchlens._runnable_verification import _decode_literal
 
     assert _decode_literal(_encode_literal(slice(3, None, None))) == slice(3, None, None)
     assert _decode_literal(_encode_literal(slice(1, 5, None))) == slice(1, 5, None)
@@ -314,9 +314,7 @@ def _b_capture(model: nn.Module, inputs: Any) -> tl.Trace:
     return tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
 
 
@@ -355,7 +353,7 @@ def test_r71b_semantic_slice_component_refuses_typed_at_save(name: str, tmp_path
     with pytest.raises(RunnablePreflightError) as excinfo:
         _b_save(_b_capture(_SliceInput(), [x, slice(0, value)]), tmp_path / f"b_{name}.tlspec")
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "missing_input_container_contract" in diagnostics
+    assert "input_container_contract_missing" in diagnostics
     assert "semantic_scalar_type" in diagnostics
 
 
@@ -387,7 +385,7 @@ def test_r71b_ratified_stock_wrapper_slice_component_normalizes() -> None:
     """The ratified stock-numpy wrapper int lane normalizes to the exact builtin atom
     at the encoder (value-transparent; no semantic refusal)."""
 
-    from torchlens._runnable_execution import _decode_literal
+    from torchlens._runnable_verification import _decode_literal
 
     encoded = _encode_literal(slice(_np.int64(1), _np.int64(5), _np.int64(2)))
     assert _decode_literal(encoded) == slice(1, 5, 2)
@@ -454,7 +452,7 @@ def test_r71b_composite_component_policy_covers_every_edge() -> None:
     assert slice_source.index("classify_scalar") < slice_source.index("isinstance(")
 
     # _literal_leaf_equal descends slices component-by-component, never slice.__eq__.
-    from torchlens import _runnable_execution
+    import torchlens._runnable_input_metadata
 
-    compare_source = inspect.getsource(_runnable_execution._literal_leaf_equal)
+    compare_source = inspect.getsource(torchlens._runnable_input_metadata._literal_leaf_equal)
     assert "isinstance(recorded, slice)" in compare_source

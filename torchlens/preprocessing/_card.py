@@ -1,7 +1,7 @@
 """The on-request preprocessing card check.
 
 :func:`check_card` compares the preprocessing a capture RECORDED
-(``Trace.input_preprocessor``) with the model's known card -- its HF image
+(``Trace.provenance.input_preprocessor``) with the model's known card -- its HF image
 processor, torchvision weights preset, timm config or open_clip config, or an
 authority the caller names -- and warns when they disagree. Nothing in
 TorchLens calls it automatically: it runs only when asked, matching the
@@ -15,6 +15,10 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any
 
+from torchlens._errors import InvalidArgumentError
+from torchlens.errors import TorchLensWarning
+
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ._audit import VERDICT_MISMATCH, PreprocessingComparison, compare
 from ._records import COMPARABLE_FIELDS, DeclaredPreprocessing, Resolution
 
@@ -74,8 +78,6 @@ def check_card(
     else:
         source = model if model is not None else _live_model(trace)
         if source is None:
-            from torchlens._errors import InvalidArgumentError
-
             raise InvalidArgumentError(
                 "check_card needs a card to compare against: no authority= was "
                 "given and the trace has no live source model.",
@@ -86,8 +88,6 @@ def check_card(
     report = compare(card, declared_from_record(record))
     report = _relabel_recorded(report, record)
     if report.verdict == VERDICT_MISMATCH:
-        from torchlens.errors import TorchLensWarning
-
         rows = "; ".join(
             f"{name}: card={finding.authority_value!r} recorded={finding.applied_value!r}"
             for name in report.mismatched_fields
@@ -140,13 +140,15 @@ def _record_of(trace_or_record: Any) -> ResolvedPreprocessing | None:
 
     if isinstance(trace_or_record, ResolvedPreprocessing):
         return trace_or_record
-    return getattr(trace_or_record, "input_preprocessor", None)
+    return (
+        trace_or_record._provenance_input_preprocessor if is_live_trace(trace_or_record) else None
+    )
 
 
 def _live_model(trace_or_record: Any) -> Any:
     """Return the trace's live source model, or ``None``."""
 
-    ref = getattr(trace_or_record, "_source_model_ref", None)
+    ref = trace_or_record._source_model_ref if is_live_trace(trace_or_record) else None
     return ref() if callable(ref) else None
 
 

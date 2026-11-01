@@ -260,7 +260,7 @@ def test_projective_target_set_cache_is_canonical_lru_and_epoch_guarded() -> Non
 
     _register_exact_rules()
     trace = tl.trace(nn.Sequential(*(nn.ReLU() for _ in range(9))), torch.randn(1, 2, 4, 4))
-    targets = [op for op in trace.layer_list if op.func_name == "relu"]
+    targets = [op for op in trace._layer_list if op.func_name == "relu"]
     paired = solve_projective(trace, [targets[1], targets[0]])
 
     assert solve_projective(trace, [targets[0], targets[1]]) is paired

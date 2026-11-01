@@ -9,6 +9,10 @@ import pickle
 import struct
 from typing import Any
 
+import torch
+
+from ._inline_tensor import reduce_inline_tensor
+
 __all__ = ["dump_canonical_metadata"]
 
 
@@ -41,9 +45,22 @@ class _CanonicalMetadataPickler(pickle._Pickler):
     """
 
     def reducer_override(self, obj: Any) -> Any:
-        """Return the sorted-members reduction for exact set/frozenset values."""
+        """Return the canonical reduction for exact set/frozenset and plain tensor values.
+
+        A plain dense ``torch.Tensor`` is emitted through the TorchLens-owned
+        inline reduction (``_inline_tensor``: raw bytes, dtype, shape,
+        ``requires_grad``, device) instead of torch's default reduction, whose
+        storage leg (``torch.storage._load_from_bytes``) the restricted loader
+        refuses. Every other tensor kind keeps torch's own reduction, which the
+        loader judges.
+        """
 
         cls = type(obj)
+        if cls is torch.Tensor:
+            inline = reduce_inline_tensor(obj)
+            if inline is not None:
+                return inline
+            return NotImplemented
         if cls is frozenset or cls is set:
             members_list = list(obj)
             if any(isinstance(member, float) and member != member for member in members_list):

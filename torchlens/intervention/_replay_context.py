@@ -12,12 +12,12 @@ the engine.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from .edge_substitution import tensor_content_digest
+from ._replay_values import tensor_content_digest
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -72,9 +72,9 @@ def _final_label_for_ref(log: Trace, label: str) -> str:
     if raw_label not in op_labels:
         raw_label = (log._final_to_raw_layer_labels or {}).get(label, "")
     exact_label = op_labels.get(raw_label)
-    if isinstance(exact_label, str) and exact_label in log.layer_dict_all_keys:
+    if isinstance(exact_label, str) and exact_label in log._layer_dict_all_keys:
         return exact_label
-    if label in log.layer_dict_all_keys:
+    if label in log._layer_dict_all_keys:
         return label
     return cast(str, getattr(log, "_raw_to_final_layer_labels", {}).get(label, label))
 
@@ -98,7 +98,7 @@ def _ensure_replay_run_ctx(log: Trace) -> dict[str, Any]:
     run_ctx = cast(dict[str, Any], log.last_run)
     # Seed law D5 (F02): thread the capture's recorded seed so seed='auto'
     # stochastic edits canonicalize their base seed on the replay door too.
-    trace_seed = getattr(log, "random_seed", None)
+    trace_seed = log._options_seed
     if trace_seed is not None:
         run_ctx.setdefault("trace_random_seed", trace_seed)
     return run_ctx
@@ -170,8 +170,8 @@ _JOURNAL_OP_FIELDS = (
     "activation_memory",
     "transformed_activation_memory",
     "has_saved_activation",
-    "interventions",
-    "intervention_replaced",
+    "edits",
+    "is_edited",
     "edge_substitutions",
     "edge_replacement_stamps",
 )
@@ -182,7 +182,7 @@ _JOURNAL_TRACE_FIELDS = (
     "state",
     "_out_recipe_revision",
     "_has_direct_writes",
-    "replay_frontier",
+    "_replay_frontier",
     "state_history",
     "intervention_audit",
 )
@@ -222,7 +222,7 @@ def journal_replay_state(trace: Trace) -> tuple[list[tuple[Any, dict[str, Any]]]
 
     ops = [
         (op, {name: _journal_copy(getattr(op, name, None)) for name in _JOURNAL_OP_FIELDS})
-        for op in trace.layer_list
+        for op in trace._layer_list
     ]
     fields = {
         name: _journal_copy(getattr(trace, name))
@@ -248,3 +248,85 @@ def restore_replay_state(
             current[:] = value
         else:
             setattr(trace, name, _journal_copy(value))
+
+
+def _func_call_groups(log: Trace) -> dict[int | None, tuple[Op, ...]]:
+    """Return function-call groups in topological order.
+
+    Parameters
+    ----------
+    log:
+        Model log to inspect.
+
+    Returns
+    -------
+    dict[int | None, tuple[Op, ...]]
+        Sites grouped by ``func_call_id``.
+    """
+
+    groups: dict[int | None, list[Op]] = {}
+    for layer in log._layer_list:
+        groups.setdefault(layer.func_call_id, []).append(layer)
+    return {call_id: tuple(layers) for call_id, layers in groups.items()}
+
+
+def _group_for_site(
+    site: Op,
+    call_groups: Mapping[int | None, Sequence[Op]],
+    cone_keys: Collection[str],
+) -> tuple[Op, ...]:
+    """Return same-call group members for a site.
+
+    Parameters
+    ----------
+    site:
+        Representative site.
+    call_groups:
+        Function-call grouping map.
+    cone_keys:
+        Replay keys of the current replay cone, computed once per replay.
+
+    Returns
+    -------
+    tuple[Op, ...]
+        Same-call members in topological order.
+    """
+
+    if site.func_call_id is None:
+        return (site,)
+    return tuple(
+        member
+        for member in call_groups.get(site.func_call_id, (site,))
+        if _replay_site_key(member) in cone_keys
+    )
+
+
+def _group_representative(
+    replay_group: Sequence[Op],
+    call_groups: Mapping[int | None, Sequence[Op]],
+    site: Op,
+) -> Op:
+    """Return the member whose recorded call the group replays through.
+
+    A synthesized boundary output node carries the parent call's template but
+    ``func=identity`` -- it replays THROUGH its parent's function call, so a
+    member that carries the call's real func must execute the group. Fall back
+    to the full (cone-unfiltered) call group when the cone holds only boundary
+    nodes (an output-node origin replayed with recomputation).
+    """
+
+    representative = next(
+        (member for member in replay_group if not getattr(member, "is_output", False)),
+        None,
+    )
+    if representative is None:
+        representative = next(
+            (
+                member
+                for member in call_groups.get(site.func_call_id, ())
+                if not getattr(member, "is_output", False)
+                and not getattr(member, "is_buffer", False)
+            ),
+            replay_group[0],
+        )
+    return representative

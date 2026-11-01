@@ -38,10 +38,10 @@ def _op_kinds(trace: Any) -> list[str]:
     """Every captured row's kind in capture order, input rows included.
 
     ``trace.ops`` covers only the counted ops (no input or output rows), so
-    this every-row reader walks ``trace.layer_list``.
+    this every-row reader walks ``trace._layer_list``.
     """
 
-    return [str(getattr(op, "func_name", "")) for op in trace.layer_list]
+    return [str(getattr(op, "func_name", "")) for op in trace._layer_list]
 
 
 def _activation_layer_classes() -> list[tuple[str, type[Any]]]:
@@ -79,7 +79,7 @@ def test_every_activation_layer_records_an_op(name: str) -> None:
     layer = layer_cls(**_LAYER_ARGS.get(name, {}))
     x = mx.array([[-1.5, -0.25, 0.5, 2.0]])
     trace = tl.trace(layer, x, backend="mlx")
-    assert trace.num_ops >= 1, f"nn.{name} recorded no op: {list(trace.layer_labels)}"
+    assert trace._num_ops >= 1, f"nn.{name} recorded no op: {list(trace.layer_labels)}"
 
 
 def test_sequential_relu_layer_is_captured() -> None:

@@ -269,7 +269,7 @@ def test_pass_qualification_pin_on_albert_two_pass_adds():
     torch.manual_seed(SEED)
     model = _HiddenOnly(spec.build("sdpa")).eval()
     ids = spec.input_kwargs()["input_ids"]
-    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
     sites = _multipass_add_sites(trace)
     assert len(sites) >= 2, (
         f"expected 2-pass residual-add sites on the 2-layer shared ALBERT, found {sites}"
@@ -327,7 +327,7 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     model = spec.build("sdpa")
     ids = spec.input_kwargs()["input_ids"]
     trace = tl.trace(
-        model, (), {"input_ids": ids}, capture=tl.options.CaptureOptions(intervention_ready=True)
+        model, (), {"input_ids": ids}, capture=tl.options.CaptureOptions(replayable=True)
     )
     # grouping rule row 12: distilgpt2's residual adds are single-pass layers;
     # the container path needs only an edited hidden-state add, so any one serves.
@@ -339,7 +339,7 @@ def test_container_output_do_lands_through_model_output_container(r0_capture):
     fork.do(fork[tl.units(f"{sites[0]}:1", mask)], tl.zero_ablate())
     assert torch.all(fork[f"{sites[0]}:1"].out[0, 0, :] == 0), "edited slice not ablated"
     output_nodes = [
-        op for op in fork.layer_list if getattr(op, "is_output", False) and op.out is not None
+        op for op in fork._layer_list if getattr(op, "is_output", False) and op.out is not None
     ]
     assert output_nodes, "no boundary output nodes on the ModelOutput-container trace"
     for node in output_nodes:
@@ -414,8 +414,8 @@ def test_config_fingerprint_use_cache_row():
     ids = torch.randint(0, VOCAB, (1, 8), generator=generator)
     # Every captured row (layer_list): use_cache adds output rows, which the
     # counted ``trace.ops`` view leaves out (sumfam F1).
-    ops_no_cache = len(tl.trace(model_no_cache, (), {"input_ids": ids}).layer_list)
-    ops_cache = len(tl.trace(model_cache, (), {"input_ids": ids}).layer_list)
+    ops_no_cache = len(tl.trace(model_no_cache, (), {"input_ids": ids})._layer_list)
+    ops_cache = len(tl.trace(model_cache, (), {"input_ids": ids})._layer_list)
     assert ops_no_cache != ops_cache, (
         "use_cache flipped without changing the captured graph? the"
         " config-fingerprint class lost its measured basis; re-measure"

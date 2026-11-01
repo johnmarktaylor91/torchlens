@@ -265,7 +265,7 @@ def test_dla_recorded_ablations_replay_to_their_measured_effects(exact: bool) ->
     ids = IDS
     audit = attribution.causal_audit(model, ids, claim=_dla(model), k=2, num_random_draws=2)
     for item in (*audit.units, *audit.sets):
-        trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
+        trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
         fork = trace.fork()
         with torch.no_grad():
             for selection, edit in item.build_interventions:
@@ -462,7 +462,7 @@ def test_read_recorded_ablations_replay_to_their_measured_effects(reduce: str | 
         model, X, claim=_read(model, reduce=reduce), target=_seed(), k=2, num_random_draws=2
     )
     for item in (*audit.units, *audit.sets):
-        trace = tl.trace(model, X, capture=tl.options.CaptureOptions(intervention_ready=True))
+        trace = tl.trace(model, X, capture=tl.options.CaptureOptions(replayable=True))
         fork = trace.fork()
         with torch.no_grad():
             for selection, edit in item.build_interventions:

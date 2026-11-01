@@ -30,14 +30,21 @@ from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.errors import TorchLensWarning
 
 _VERDICT_FIELDS = (
-    "capture_verified",
-    "capture_verification_reason",
-    "completeness_witness_verified",
-    "completeness_witness_event_count",
-    "completeness_witness_accounted_count",
-    "completeness_witness_expected_opaque_count",
-    "completeness_witness_unaccounted_count",
+    "provenance.verified",
+    "provenance.verification_reason",
+    "health.completeness_verified",
+    "health.num_witness_events",
+    "health.num_accounted_witness_events",
+    "health.num_expected_opaque_witness_events",
+    "health.num_unaccounted_witness_events",
 )
+
+
+def _read(trace: Any, dotted: str) -> Any:
+    """Read a grouped Trace field such as ``"provenance.verified"``."""
+
+    group, name = dotted.split(".")
+    return getattr(getattr(trace, group), name)
 
 
 @torch.jit.script
@@ -143,7 +150,7 @@ def test_eager_twin_emits_nothing() -> None:
     trace, caught = _capture(_EagerTwin())
 
     assert _advisories(caught) == []
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
 
 
 def test_scripted_static_method_through_self_is_resolved() -> None:
@@ -170,7 +177,7 @@ def test_verdict_fields_equal_with_and_without_the_advisory(
     without_advisory, _ = _capture(model_class())
 
     for field in _VERDICT_FIELDS:
-        assert getattr(with_advisory, field) == getattr(without_advisory, field), field
+        assert _read(with_advisory, field) == _read(without_advisory, field), field
     assert len(with_advisory.completeness_diagnostics) == len(
         without_advisory.completeness_diagnostics
     )
@@ -275,7 +282,7 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
     unwrap_torch()
     wrap_torch(completeness_witness=True)
     trace = tl.trace(M(), torch.randn(2, 4))
-    print(json.dumps({"verified": trace.capture_verified,
+    print(json.dumps({"verified": trace.provenance.verified,
                       "funcs": [layer.func_name for layer in trace.layers]}))
     """
 )

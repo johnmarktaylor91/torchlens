@@ -9,7 +9,7 @@ from typing import Any, TypeAlias, cast
 import torch
 
 from .._errors import ArgumentTypeError
-from .types import Edit, HelperDirection, InterventionDecision
+from .types import Edit, InterventionDecision
 
 InterventionPredicateDecision: TypeAlias = InterventionDecision | Edit | Callable[..., Any] | None
 InterventionPredicate: TypeAlias = Callable[[Any], InterventionPredicateDecision]
@@ -17,17 +17,16 @@ InterventionPredicate: TypeAlias = Callable[[Any], InterventionPredicateDecision
 
 def as_intervention_decision(
     action: InterventionPredicateDecision,
-    *,
-    direction: HelperDirection | None = None,
 ) -> InterventionDecision | None:
     """Normalize predicate action sugar to an intervention decision.
+
+    The decision carries no pass: the site it is applied at decides whether
+    it edits an activation or a gradient.
 
     Parameters
     ----------
     action:
         Helper spec, callable transform, intervention decision, or ``None``.
-    direction:
-        Optional signal direction override.
 
     Returns
     -------
@@ -38,15 +37,6 @@ def as_intervention_decision(
     if action is None:
         return None
     if isinstance(action, InterventionDecision):
-        if direction is not None:
-            action = InterventionDecision(
-                action=action.action,
-                hook=action.hook,
-                template_ref=action.template_ref,
-                keep_grad=action.keep_grad,
-                isolate=action.isolate,
-                direction=direction,
-            )
         if action.keep_grad and action.hook is not None:
             from ._gradient_contract import keep_grad
 
@@ -54,27 +44,9 @@ def as_intervention_decision(
             return dataclasses.replace(action, hook=keep_grad(action.hook))
         return action
     if isinstance(action, Edit):
-        resolved_direction = direction or action.direction or action.kind
-        return InterventionDecision(action="add_hook", hook=action, direction=resolved_direction)
+        return InterventionDecision(action="add_hook", hook=action)
     if callable(action):
-        callable_direction = direction or getattr(action, "signal", "forward")
-        if callable_direction not in {"forward", "backward", "both"}:
-            # TypeError lineage since the 2.16 intervention era: the live
-            # capture-path callers catch TypeError to convert a bad predicate
-            # result into PredicateError with op context. Distinct code from
-            # the ValueError-lineage trace-side `intervention_direction_invalid`
-            # doors so the code determines the catchable builtin.
-            raise ArgumentTypeError(
-                f"Intervention direction={callable_direction!r} is not supported",
-                code="intervention_action_direction_invalid",
-                remedy="set direction to 'forward', 'backward', or 'both'",
-                argument="direction",
-            )
-        return InterventionDecision(
-            action="transform",
-            hook=action,
-            direction=cast(HelperDirection, callable_direction),
-        )
+        return InterventionDecision(action="transform", hook=action)
     raise ArgumentTypeError(
         f"Intervention action has unsupported type {type(action).__name__}",
         code="intervention_action_type_invalid",
@@ -114,12 +86,12 @@ def add(delta: torch.Tensor | float | int, *, allow_shape_change: bool = False) 
         return _hook
 
     return Edit(
-        helper_name="add",
+        name="add",
         args=(delta,),
         kwargs=(("allow_shape_change", allow_shape_change),),
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -166,12 +138,12 @@ def replace_with(
         return _hook
 
     return Edit(
-        helper_name="replace_with",
+        name="replace_with",
         args=(value,),
         kwargs=(("allow_shape_change", allow_shape_change),),
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 

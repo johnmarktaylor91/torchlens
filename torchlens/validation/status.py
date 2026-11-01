@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 ValidationReplayState = Literal["available", "passed", "failed", "unavailable", "unverified"]
@@ -333,7 +333,7 @@ class ValidationStatus:
             num_unverified_ops + num_pure_unverified_ops + num_effect_region_ops
         )
         if num_failed_ops:
-            return cls.result(
+            failed = cls.result(
                 passed=False,
                 backend=backend,
                 source=source,
@@ -347,6 +347,7 @@ class ValidationStatus:
                 exempted_reason_counts=exempted_reason_counts,
                 decisions=decisions,
             )
+            return replace(failed, message=_failed_replay_message(decisions))
         if total_unverified_count:
             return cls.unverified(
                 backend=backend,
@@ -356,13 +357,11 @@ class ValidationStatus:
                     if num_pure_unverified_ops or num_effect_region_ops
                     else "region_not_per_op_replayable"
                 ),
-                message=(
-                    "Replay validation partially verified this trace: "
-                    f"{num_replayed_ops} nodes replayed, "
-                    f"{num_pure_unverified_ops} pure nodes unverified, "
-                    f"{num_effect_region_ops} effect regions unverified, "
-                    f"{num_unverified_ops} legacy regions unverified, "
-                    "0 failures."
+                message=_partial_replay_message(
+                    num_replayed_ops,
+                    num_pure_unverified_ops,
+                    num_effect_region_ops,
+                    num_unverified_ops,
                 ),
                 num_replayed_ops=num_replayed_ops,
                 num_unverified_ops=total_unverified_count,
@@ -559,7 +558,7 @@ def count_importer_region_annotations(trace: Any) -> int:
 
     trace_annotations = getattr(trace, "annotations", None)
     region_count = 0
-    for op in getattr(trace, "layer_list", ()):
+    for op in trace._layer_list:
         op_annotations = getattr(op, "annotations", None)
         if not is_region_replay_annotation(op_annotations):
             continue
@@ -584,3 +583,115 @@ __all__ = [
     "has_importer_region_provenance",
     "is_region_replay_annotation",
 ]
+
+
+def _partial_replay_message(
+    num_replayed_ops: int,
+    num_pure_unverified_ops: int,
+    num_effect_region_ops: int,
+    num_unverified_ops: int,
+) -> str:
+    """Message for a trace that replayed some nodes but left regions unverified."""
+
+    return (
+        "Replay validation partially verified this trace: "
+        f"{num_replayed_ops} nodes replayed, "
+        f"{num_pure_unverified_ops} pure nodes unverified, "
+        f"{num_effect_region_ops} effect regions unverified, "
+        f"{num_unverified_ops} legacy regions unverified, "
+        "0 failures."
+    )
+
+
+def _failed_replay_message(decisions: Sequence[Mapping[str, Any]] | None) -> str:
+    """The failed-status message, naming the first failed decision's op and reason.
+
+    A caller reading only ``message`` learns which op failed and why; the
+    per-op record stays in ``decisions``. A failure with no decision rows (or
+    none marked failed) keeps the bare message.
+    """
+
+    for row in decisions or ():
+        if str(row.get("decision", "")) != "failed":
+            continue
+        reason = str(row.get("reason", "") or "unknown")
+        op_label = row.get("op_label")
+        if op_label:
+            return f"Replay validation failed at {op_label} ({reason})."
+        return f"Replay validation failed ({reason})."
+    return "Replay validation failed."
+
+
+#: Status-level reason codes the factories above write to ``reason``: the
+#: trace-wide verdicts, as opposed to the per-op decision reasons in
+#: ``torchlens.backends._backend_protocol.VALIDATION_REASONS``.
+STATUS_REASONS: frozenset[str] = frozenset(
+    {
+        "no_nodes_replay_validated",
+        "loaded_trace_runtime_capture_stripped",
+        "backend_validation_replay_unsupported",
+        "ground_truth_mismatch",
+        "ground_truth_matched",
+        "output_missing",
+        "output_count_mismatch",
+        "metadata_invariant_exception",
+        "bfs_incomplete",
+        "edge_boundary_reexecuted",
+    }
+)
+
+#: Per-op decision reasons torch's replay engine already writes to
+#: ``decisions[*]["reason"]`` and the ``*_reason_counts`` mappings, kept here
+#: so the shared list stays a superset of them.
+TORCH_DECISION_REASONS: frozenset[str] = frozenset(
+    {
+        "intentional_intervention_replacement",
+        "edge_boundary_reexecuted",
+    }
+)
+
+
+def known_validation_reasons() -> frozenset[str]:
+    """Every reason code a validation status may carry, per op or trace-wide.
+
+    The union of the shared per-op list (``VALIDATION_REASONS``), torch's
+    existing per-op decision reasons and the status-level verdict reasons.
+    The conformance suite checks membership of the keys of
+    ``unverified_reason_counts`` and ``exempted_reason_counts`` against it.
+    """
+
+    from ..backends._backend_protocol import VALIDATION_REASONS
+
+    return VALIDATION_REASONS | TORCH_DECISION_REASONS | STATUS_REASONS
+
+
+def is_known_validation_reason(code: object) -> bool:
+    """Whether ``code`` is a registered validation reason (any level)."""
+
+    return isinstance(code, str) and code in known_validation_reasons()
+
+
+def unknown_reason_codes(status: ValidationStatus) -> tuple[str, ...]:
+    """Reason codes on ``status`` that are outside the registered lists.
+
+    Parameters
+    ----------
+    status:
+        A replay-validation status.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The unregistered codes, sorted; empty when the status conforms.
+    """
+
+    codes: set[str] = set()
+    if status.reason is not None:
+        codes.add(status.reason)
+    codes.update(str(key) for key in status.unverified_reason_counts)
+    codes.update(str(key) for key in status.exempted_reason_counts)
+    for decision in status.decisions:
+        reason = decision.get("reason") if isinstance(decision, Mapping) else None
+        if reason is not None:
+            codes.add(str(reason))
+    return tuple(sorted(code for code in codes if not is_known_validation_reason(code)))

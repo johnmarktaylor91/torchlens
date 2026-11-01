@@ -200,15 +200,7 @@ def _verb_meaning(edit: Any) -> str:
 
     if not isinstance(edit, Edit):
         return "coordinates"
-    verb = edit.helper_name
-    if edit.kind != "forward" or edit.direction == "backward":
-        raise _unsupported(
-            verb,
-            "backward-direction verbs edit gradients, not the forward component",
-            "attach the gradient verb at capture time: tl.trace(model, x, "
-            "intervene=tl.when(tl.module(name), tl.zero_grad()))",
-            code="subspace_edit_unsupported",
-        )
+    verb = edit.name
     if verb == AFFINE_SOURCE_NAME:
         return "source"
     if verb in _COORDINATE_VERBS or verb in _VALUE_VERBS:
@@ -339,7 +331,7 @@ class SubspaceProjection:
         if meaning == "source":
             check_source_shape(edit, self.rows)
         if edit.factory is None:
-            raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
+            raise _refusal_for(edit.name, code="subspace_edit_unsupported")
         return edit.factory
 
     def derive(self, edit: Any, entry: Site, site_label: str) -> Any:
@@ -347,7 +339,7 @@ class SubspaceProjection:
 
         self.check_population(entry, site_label)
         meaning = _verb_meaning(edit)
-        verb = edit.helper_name if isinstance(edit, Edit) else "hook callable"
+        verb = edit.name if isinstance(edit, Edit) else "hook callable"
         if isinstance(edit, Edit):
             inner_factory: Callable[[], Any] = self._inner_factory(edit, meaning)
         else:
@@ -376,7 +368,7 @@ class SubspaceProjection:
         """Return the builtin ``subspace_edit`` for a builtin verb (the reload path)."""
 
         meaning = _verb_meaning(edit)
-        factory = self._factory(self._inner_factory(edit, meaning), meaning, edit.helper_name)
+        factory = self._factory(self._inner_factory(edit, meaning), meaning, edit.name)
         return self._portable_edit(edit, factory, self._disclosure(meaning))
 
     def _disclosure(self, meaning: str) -> tuple[tuple[str, Any], ...]:
@@ -409,7 +401,7 @@ class SubspaceProjection:
         # replace() keeps the verb's direction and batch flags on the wrapper.
         return dataclasses.replace(
             edit,
-            helper_name=SUBSPACE_EDIT_NAME,
+            name=SUBSPACE_EDIT_NAME,
             args=(edit,),
             kwargs=self.stored_kwargs(),
             factory=factory,
@@ -469,14 +461,14 @@ def masked_subspace_edit(edit: Edit, mask: _Mask, site_label: str) -> Edit:
     from .masked_edit import _masked_factory
 
     if edit.factory is None:
-        raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
+        raise _refusal_for(edit.name, code="subspace_edit_unsupported")
     dense = mask.to_dense().cpu().contiguous()
     stored = dict(edit.kwargs)
     if isinstance(stored.get("mask"), torch.Tensor):
         # A reloaded masked edit under another mask: the session scatters through
         # both, which is the intersection, so that is the one mask stored.
         if tuple(stored["mask"].shape) != tuple(dense.shape):
-            raise _refusal_for(edit.helper_name, code="subspace_edit_unsupported")
+            raise _refusal_for(edit.name, code="subspace_edit_unsupported")
         dense = dense & stored["mask"]
     kwargs = tuple(item for item in edit.kwargs if item[0] not in ("mask", "mask_sha256"))
     return dataclasses.replace(

@@ -23,9 +23,7 @@ def _capture(model: nn.Module, args: Any) -> Any:
     return tl.trace(
         model,
         args,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
 
 
@@ -97,6 +95,8 @@ def test_r35_no_float_torch_equal_in_runnable_modules() -> None:
         Path("_io/runnable.py"),
         Path("backends/torch/completeness_witness.py"),
         Path("backends/torch/backend.py"),
+        Path("backends/torch/_outputs.py"),
+        Path("backends/torch/_failed_session.py"),
         Path("backends/torch/ops.py"),
     )
     offenders: list[str] = []
@@ -207,6 +207,7 @@ class _CudaDrawModel(nn.Module):
         return x + noise.cpu()
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_r35_seeded_run_restores_produced_only_cuda_rng(tmp_path: Path) -> None:
     """corr2_4 repro: a produced-only-CUDA seeded run leaks no CUDA RNG state."""
@@ -246,7 +247,7 @@ def test_r35_cpu_only_seeded_run_never_touches_cuda_lazy_seed(tmp_path: Path) ->
     path = tmp_path / "cpuonly.tlspec"
     trace.save(str(path), level="runnable")
     loaded = tl.load(str(path))
-    from torchlens._runnable_execution import _seeded_fork_devices
+    from torchlens._runnable_providers import _seeded_fork_devices
 
     descriptor = loaded._runnable.descriptor
     if torch.cuda.is_available() and torch.cuda.is_initialized():
@@ -321,12 +322,12 @@ def test_r35_repr_parsers_are_deleted() -> None:
 
     import inspect
 
-    import torchlens._runnable_execution as execution
-    import torchlens.backends.torch.ops as ops
+    import torchlens._runnable_witness_contracts
+    import torchlens.backends.torch._ops_container_base
 
     for source in (
-        inspect.getsource(ops._torch_return_type_fields),
-        inspect.getsource(execution._torch_structseq_field_names),
+        inspect.getsource(torchlens.backends.torch._ops_container_base._torch_return_type_fields),
+        inspect.getsource(torchlens._runnable_witness_contracts._torch_structseq_field_names),
     ):
         assert "re.findall" not in source
         assert "re.finditer" not in source

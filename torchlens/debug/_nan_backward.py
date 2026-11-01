@@ -312,12 +312,12 @@ def _select_backward_pass(trace: Trace, bwd: int | None) -> tuple[Any, int]:
                 code="bwd_selector_required",
                 remedy="pass bwd=1..N",
             )
-        bwd = int(backward_passes[0].pass_index)
-    selected = next((bp for bp in backward_passes if int(bp.pass_index) == int(bwd)), None)
+        bwd = int(backward_passes[0].pass_number)
+    selected = next((bp for bp in backward_passes if int(bp.pass_number) == int(bwd)), None)
     if selected is None:
         raise InvalidArgumentError(
             f"backward pass {bwd} was not captured "
-            f"(captured: {[int(bp.pass_index) for bp in backward_passes]})",
+            f"(captured: {[int(bp.pass_number) for bp in backward_passes]})",
             code="bwd_selector_unknown",
             remedy="pass one of the captured pass indexes",
         )
@@ -368,7 +368,7 @@ class _LedgerWalk:
 def _classify_call(trace: Trace, nodes_by_label: dict[str, Any], call: Any) -> BackwardTransition:
     """Classify one GradFnCall into its five-word transition verdict."""
 
-    label = str(getattr(call, "label", ""))
+    label = str(getattr(call, "grad_fn_label", ""))
     node = nodes_by_label.get(label)
     fire_index = _fire_index(node) if node is not None else 0
     grad_fn_class = str(getattr(node, "class_name", "")) if node is not None else ""
@@ -472,6 +472,26 @@ def _compose_message(
     return message
 
 
+def _amp_hint_for(transitions: Any) -> str | None:
+    """Return the GradScaler overflow hint when the first bad kind is ``inf``."""
+
+    # The GradScaler overflow signature is an INF-kind FIRST bad thing
+    # (downstream inf*0 legitimately cascades into nan, so later kinds
+    # cannot disqualify the disclosure). A hint, never a verdict.
+    first_bad_kind = next(
+        (
+            kind
+            for t in transitions
+            for kind in (t.arriving, t.emitted)
+            if kind not in ("none", "unchecked")
+        ),
+        None,
+    )
+    if first_bad_kind == "inf":
+        return amp_scaled_grads_hint(all_nonfinite=True)
+    return None
+
+
 def bisect_nan_backward(
     trace: Trace,
     *,
@@ -519,7 +539,9 @@ def bisect_nan_backward(
     nodes_by_label = _grad_fn_rows(trace)
     calls = sorted(
         selected.grad_fn_calls,
-        key=lambda call: _fire_index(nodes_by_label.get(getattr(call, "label", ""), None) or call),
+        key=lambda call: _fire_index(
+            nodes_by_label.get(getattr(call, "grad_fn_label", ""), None) or call
+        ),
     )
 
     walk = _LedgerWalk()
@@ -539,22 +561,7 @@ def bisect_nan_backward(
     else:
         verdict_scope = "clean_complete" if unchecked_calls == 0 else "clean_among_checked"
 
-    amp_hint: str | None = None
-    if found and grad_scale is None:
-        # The GradScaler overflow signature is an INF-kind FIRST bad thing
-        # (downstream inf*0 legitimately cascades into nan, so later kinds
-        # cannot disqualify the disclosure). A hint, never a verdict.
-        first_bad_kind = next(
-            (
-                kind
-                for t in transitions
-                for kind in (t.arriving, t.emitted)
-                if kind not in ("none", "unchecked")
-            ),
-            None,
-        )
-        if first_bad_kind == "inf":
-            amp_hint = amp_scaled_grads_hint(all_nonfinite=True)
+    amp_hint = _amp_hint_for(transitions) if found and grad_scale is None else None
 
     message = _compose_message(walk, verdict_scope=verdict_scope, bwd=bwd, amp_hint=amp_hint)
 

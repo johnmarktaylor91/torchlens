@@ -189,4 +189,4 @@ def render_helper(helper: Edit, *, exact: bool) -> str:
 
     args = render_value(helper.args, exact=exact)
     kwargs = render_value(helper.kwargs, exact=exact)
-    return f"helper:{helper.helper_name}:{args}:{kwargs}"
+    return f"helper:{helper.name}:{args}:{kwargs}"

@@ -106,7 +106,7 @@ def test_everything_else_takes_the_deepcopy_path() -> None:
 def test_a_fork_with_the_flat_copy_equals_one_without(monkeypatch: pytest.MonkeyPatch) -> None:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
-    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(replayable=True))
     original = trace_fork._flat_container_copy
     monkeypatch.setattr(trace_fork, "_flat_container_copy", lambda *_args: trace_fork._NO_FLAT_COPY)
     control, without = trace.fork(), trace.fork()
@@ -114,7 +114,7 @@ def test_a_fork_with_the_flat_copy_equals_one_without(monkeypatch: pytest.Monkey
     with_flat = trace.fork()
     labels = {}
     for fork in (control, without, with_flat):
-        labels.update({id(op): op.layer_label for op in fork.layer_list})
+        labels.update({id(op): op.layer_label for op in fork._layer_list})
 
     def normalize(item: Any) -> Any:
         if id(item) in labels:
@@ -141,6 +141,6 @@ def test_a_fork_with_the_flat_copy_equals_one_without(monkeypatch: pytest.Monkey
     for name in stable:
         assert normalize(states[2][name]) == normalize(states[1][name]), name
     # Isolation: the fork's tables are its own.
-    assert with_flat.layer_dict_all_keys is not trace.layer_dict_all_keys
-    with_flat.layer_dict_all_keys["probe"] = None
-    assert "probe" not in trace.layer_dict_all_keys
+    assert with_flat._layer_dict_all_keys is not trace._layer_dict_all_keys
+    with_flat._layer_dict_all_keys["probe"] = None
+    assert "probe" not in trace._layer_dict_all_keys

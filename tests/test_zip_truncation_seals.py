@@ -48,8 +48,8 @@ def test_bundle_output_delta_refuses_output_arity_mismatch() -> None:
 
     torch.manual_seed(3)
     x = torch.randn(2, 3)
-    two = tl.trace(_TwoOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    one = tl.trace(_OneOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    two = tl.trace(_TwoOutputModel(), x, capture=tl.options.CaptureOptions(replayable=True))
+    one = tl.trace(_OneOutputModel(), x, capture=tl.options.CaptureOptions(replayable=True))
     bundle = tl.Bundle({"baseline": two, "lost_output": one}, baseline="baseline")
 
     # The comparison gate now refuses the pair first (the two graphs are not
@@ -66,12 +66,8 @@ def test_bundle_output_delta_still_works_on_matching_arity() -> None:
 
     torch.manual_seed(4)
     x = torch.randn(2, 3)
-    first = tl.trace(
-        _TwoOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
-    second = tl.trace(
-        _TwoOutputModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    first = tl.trace(_TwoOutputModel(), x, capture=tl.options.CaptureOptions(replayable=True))
+    second = tl.trace(_TwoOutputModel(), x, capture=tl.options.CaptureOptions(replayable=True))
     bundle = tl.Bundle({"baseline": first, "other": second}, baseline="baseline")
 
     delta = bundle.output_delta("baseline")
@@ -85,7 +81,7 @@ def test_fast_run_refuses_slot_label_parity_tamper(tmp_path) -> None:
 
     model = _OneOutputModel()
     x = torch.randn(2, 3)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     bundle = tmp_path / "runnable.tlspec"
     trace.save(str(bundle), level="runnable", include_weights=True)
     loaded = tl.load(str(bundle))

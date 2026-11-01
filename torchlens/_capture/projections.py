@@ -25,8 +25,9 @@ from .._ir.events import (
 from .._ir.predicate import EventKind, coerce_deferred_value
 from .._ir.refs import DeviceRef, DtypeRef, TensorRef
 from .._ir.semantics import BackendSemantics, CapturePolicy
+from .._record_type import record_type
 from .._utils._torch_compat import tensor_version_or_none
-from .._utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import torch_dtype_named
 from .._utils.tensor_utils import get_memory_amount_from_metadata
 from ..recording.exceptions import PredicateError
 from ..recording.types import (
@@ -39,6 +40,7 @@ from ..recording.types import (
     Recording,
     StorageIntent,
 )
+from ._record_stores import _GradFnContextMap, _StorageBackend
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -66,65 +68,6 @@ _EMPTY_BACKEND_SEMANTICS = BackendSemantics(
     bytes_peak_at_call=None,
 )
 _CAPTURE_POLICY_CACHE: dict[tuple[bool, bool, str], CapturePolicy] = {}
-
-
-class _GradFnContextMap:
-    """Map autograd nodes to record contexts with weak keys when supported."""
-
-    def __init__(self) -> None:
-        """Initialize weak-key and object-key fallback storage."""
-
-        self._weak: weakref.WeakKeyDictionary[Any, RecordContext] = weakref.WeakKeyDictionary()
-        self._strong: dict[Any, RecordContext] = {}
-
-    def __setitem__(self, key: Any, value: RecordContext) -> None:
-        """Store a context by grad_fn_handle object."""
-
-        try:
-            self._weak[key] = value
-        except TypeError:
-            self._strong[key] = value
-
-    def get(self, key: Any, default: RecordContext | None = None) -> RecordContext | None:
-        """Return the context for a grad_fn_handle object, if present."""
-
-        try:
-            value = self._weak.get(key)
-        except TypeError:
-            value = None
-        if value is not None:
-            return value
-        return self._strong.get(key, default)
-
-
-class _StorageBackend(Protocol):
-    """Protocol implemented by fastlog storage backends."""
-
-    def append(self, record: ActivationRecord) -> None:
-        """Append one retained record."""
-
-    def resolve_payloads(
-        self,
-        tensor: torch.Tensor,
-        spec: CaptureSpec,
-        intent: StorageIntent,
-        *,
-        options: RecordingOptions,
-        ctx: RecordContext | GradRecordContext | None,
-        kind: str = "activation",
-    ) -> tuple[
-        torch.Tensor | None,
-        torch.Tensor | None,
-        torch.Tensor | None,
-        torch.Tensor | None,
-    ]:
-        """Resolve payloads for one selected tensor."""
-
-    def finalize(self) -> None:
-        """Finalize storage."""
-
-    def abort(self, reason: str) -> None:
-        """Abort storage."""
 
 
 def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
@@ -200,6 +143,14 @@ class RecordingState:
         tuple[ModuleStackFrame, ...],
         tuple[tuple[ModuleFrame, ...], tuple[tuple[str, int], ...]],
     ] = field(default_factory=dict)
+    # The model's own Parameters at this pass's prep, ``id -> (weak ref, lazy at
+    # prep)``. Predicate capture builds no ``Param`` logs, so this is the only
+    # place a Parameter write can learn it targets prepared model state (see
+    # ``param_mutation.parameter_mutation_output_for_logging``). Weak refs keep
+    # the registry from extending any Parameter's lifetime.
+    prepared_params: dict[int, tuple[weakref.ref[torch.nn.Parameter], bool]] = field(
+        default_factory=dict
+    )
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -355,6 +306,12 @@ def get_active_recording_state() -> RecordingState:
     return _active_recording_state
 
 
+def active_recording_state_or_none() -> RecordingState | None:
+    """Return the active recording state, or ``None`` outside a recording pass."""
+
+    return _active_recording_state
+
+
 @contextmanager
 def active_recording_state(state: RecordingState) -> Iterator[RecordingState]:
     """Install fastlog recording state for one active logging scope."""
@@ -395,7 +352,7 @@ def _normalize_module_stack(
                 address=str(frame.get("address", "")),
                 module_type=str(frame.get("module_type", "")),
                 module_id=int(frame.get("module_id", 0)),
-                pass_index=int(frame.get("pass_index", 0)),
+                pass_number=int(frame.get("pass_number", 0)),
             )
         )
     return tuple(frames)
@@ -462,7 +419,7 @@ def _build_record_context(
         kind=kind,
         label=str(label),
         raw_label=raw_label,
-        pass_index=pass_index,
+        pass_number=pass_index,
         event_index=event_index,
         step_index=step_index,
         layer_type=layer_type,
@@ -471,7 +428,7 @@ def _build_record_context(
         func_name=_read_field(data, "func_name"),
         address=_read_field(data, "address"),
         module_type=_read_field(data, "module_type"),
-        module_pass_index=_read_field(data, "module_pass_index"),
+        module_pass_number=_read_field(data, "module_pass_number"),
         module_stack=stack,
         recent_events=recent_events,
         recent_ops=_recent_ops_for_event(recent_events, include_source_events),
@@ -502,7 +459,7 @@ def _module_frames_from_record_context(ctx: RecordContext) -> tuple[ModuleFrame,
             address=_module_frame_address(frame),
             address_normalized=None,
             module_type=frame.module_type,
-            call_index=frame.pass_index,
+            call_index=frame.pass_number,
             fx_qualpath=None,
             entry_argnames=(),
         )
@@ -778,9 +735,9 @@ def _record_from_record_context(
         raw_index=ctx.raw_index or ctx.event_index,
         type_index=ctx.type_index or 0,
         step_index=ctx.step_index or 0,
-        pass_index=ctx.pass_index,
+        pass_index=ctx.pass_number,
         parents=tuple(
-            ParentEdge(parent_label_raw=parent, arg_position=None, edge_use="unknown")
+            ParentEdge(parent_label_raw=parent, arg_position=None, _edge_use="unknown")
             for parent in ctx.parent_labels
         ),
         output=_sparse_output_ref(
@@ -969,11 +926,10 @@ def append_projected_event(
         _add_tensor_backward_hook(trace, tensor, label_raw)
     recording_state = _active_recording_state
     module_fields = None if recording_state is None else recording_state.module_fields_for(ctx)
-    detach_unkept = (
-        bool(getattr(trace, "detach_saved_activations", True))
-        if recording_state is None
-        else recording_state.options.detach_saved_activations
-    )
+    if recording_state is None:
+        detach_unkept = bool(trace._options_detach_saved_activations)
+    else:
+        detach_unkept = recording_state.options.detach_saved_activations
     commit_op(
         trace,
         SparseOpDraft(
@@ -1000,9 +956,9 @@ _OPLOG_FIELDS_KNOWN_LATE = frozenset(
     {
         "final_out",
         "layer_label",
-        "layer_label_short",
+        "short_layer_label",
         "label",
-        "label_short",
+        "short_label",
     }
 )
 
@@ -1068,7 +1024,7 @@ _LIVE_FIELD_GETTER_PAIRS: tuple[tuple[str, Callable[[Trace, OpEvent], Any]], ...
     ("_construction_done", lambda trace, event: event.construction_done),
     ("type", lambda trace, event: event.layer_type),
     ("type_index", lambda trace, event: event.type_index),
-    ("pass_index", lambda trace, event: event.pass_index),
+    ("pass_number", lambda trace, event: event.pass_index),
     ("num_passes", lambda trace, event: 1),
     ("lookup_keys", lambda trace, event: []),
     ("out", lambda trace, event: event.output.tensor.payload),
@@ -1238,8 +1194,8 @@ _LIVE_FIELD_GETTER_PAIRS: tuple[tuple[str, Callable[[Trace, OpEvent], Any]], ...
     ("is_module_output", lambda trace, event: False),
     ("is_atomic_module", lambda trace, event: False),
     ("atomic_module_call", lambda trace, event: None),
-    ("interventions", _live_interventions),
-    ("intervention_replaced", lambda trace, event: event.intervention_replaced),
+    ("edits", _live_interventions),
+    ("is_edited", lambda trace, event: event.is_edited),
     ("func_config", lambda trace, event: dict(event.function.func_config)),
 )
 
@@ -1455,7 +1411,7 @@ def sync_recording_grad_records_from_sidecar(state: RecordingState) -> None:
     state.recording.grad_by_pass.clear()
     state.recording.grad_by_label.clear()
     state.recording.grad_by_grad_fn_label.clear()
-    backward_passes = getattr(trace, "backward_pass_logs", {})
+    backward_passes = trace._backward_pass_logs
     backward_events = tuple(getattr(trace, "backward_events", ()))
     # Public grad-record contexts expose the position of an event within the
     # BACKWARD sidecar (its lane ordinal), not the raw global journal ``seq``:
@@ -1502,10 +1458,10 @@ def _maybe_add_grad_fn_metadata_record(
 
     from ..recording.types import GradRecord
 
-    grad_fn = getattr(trace, "grad_fn_logs", {}).get(event.object_id)
+    grad_fn = trace._grad_fn_logs.get(event.object_id)
     if grad_fn is None or getattr(grad_fn, "has_op", False):
         return
-    pass_record = getattr(trace, "backward_pass_logs", {}).get(event.pass_index)
+    pass_record = trace._backward_pass_logs.get(event.pass_index)
     ctx = GradRecordContext(
         label=grad_fn.label,
         grad_fn_class_name=grad_fn.class_name,
@@ -1514,7 +1470,7 @@ def _maybe_add_grad_fn_metadata_record(
         grad_kind="grad_output",
         has_forward_op=False,
         has_op=False,
-        pass_index=event.pass_index,
+        pass_number=event.pass_index,
         order=getattr(pass_record, "order", None),
         event_index=ordinal,
     )
@@ -1541,7 +1497,7 @@ def _grad_record_context_from_op_grad_event(
     """Build a ``GradRecordContext`` from one op-gradient sidecar event."""
 
     pass_record = backward_passes.get(event.pass_index)
-    if event.op_label not in getattr(trace, "layer_dict_all_keys", {}):
+    if event.op_label not in trace._layer_dict_all_keys:
         fastlog_ctx = getattr(trace, "_fastlog_grad_contexts", {}).get(event.op_label)
         if fastlog_ctx is not None:
             return GradRecordContext(
@@ -1556,7 +1512,7 @@ def _grad_record_context_from_op_grad_event(
                 module_stack=tuple(getattr(fastlog_ctx, "module_stack", ()) or ()),
                 has_forward_op=True,
                 has_op=True,
-                pass_index=event.pass_index,
+                pass_number=event.pass_index,
                 order=getattr(pass_record, "order", None),
                 event_index=ordinal,
                 shape=event.shape,
@@ -1573,18 +1529,18 @@ def _grad_record_context_from_op_grad_event(
             grad_kind="grad_output",
             has_forward_op=False,
             has_op=False,
-            pass_index=event.pass_index,
+            pass_number=event.pass_index,
             order=getattr(pass_record, "order", None),
             event_index=ordinal,
             shape=event.shape,
             dtype=_torch_dtype_from_string(event.dtype),
             tensor_device=None,
         )
-    op = trace.layer_dict_all_keys[event.op_label]
+    op = trace._layer_dict_all_keys[event.op_label]
     return GradRecordContext(
         label=event.op_label,
         grad_fn_class_name=getattr(op, "grad_fn_class_name", None) or "",
-        kind=getattr(op, "layer_type", None) or "op",
+        kind=record_type(op, None) or "op",
         backward_call_index=event.pass_index,
         grad_kind="grad_output",
         grad_output_index=0,
@@ -1593,7 +1549,7 @@ def _grad_record_context_from_op_grad_event(
         module_stack=tuple(getattr(op, "module_stack", ()) or ()),
         has_forward_op=True,
         has_op=True,
-        pass_index=event.pass_index,
+        pass_number=event.pass_index,
         order=getattr(pass_record, "order", None),
         event_index=ordinal,
         shape=event.shape,
@@ -1616,10 +1572,7 @@ def _torch_dtype_from_string(dtype_name: str | None) -> torch.dtype | None:
     if dtype_name is None:
         return None
     if dtype_name.startswith("torch."):
-        dtype_attr = dtype_name.removeprefix("torch.")
-        dtype = torch_attr(dtype_attr)  # r47 secD_1: no lazy ``torch.__getattr__``
-        if isinstance(dtype, torch.dtype):
-            return dtype
+        return torch_dtype_named(dtype_name.removeprefix("torch."))
     return None
 
 

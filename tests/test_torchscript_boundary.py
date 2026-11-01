@@ -20,6 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._errors import CaptureGapWarning
+from torchlens._record_type import record_type
 from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.backends.torch._script_boundary import (
     SCRIPT_FUNCTION_FUNC_NAME,
@@ -158,7 +159,7 @@ class _UnregisteredScriptModuleModel(nn.Module):
 def _boundary_ops(trace: tl.Trace) -> list:
     """Return the ``jitscript`` ops of a trace."""
 
-    return [op for op in trace.layer_list if op.func_name == SCRIPT_FUNCTION_FUNC_NAME]
+    return [op for op in trace._layer_list if op.func_name == SCRIPT_FUNCTION_FUNC_NAME]
 
 
 def _trace_with_disclosure(model: nn.Module, x: torch.Tensor, **kwargs) -> tl.Trace:
@@ -205,9 +206,9 @@ def test_scripted_helper_is_one_boundary_op_and_validates() -> None:
     assert op.transform_config["source"].startswith(__file__)
     assert op.transform_fn_qualname == "scripted_gate"
     assert is_script_function_recorder(op.func)
-    assert [trace[label].layer_type for label in op.parents] == ["linear"]
-    assert [trace[label].layer_type for label in op.children] == ["relu"]
-    assert not any(other.layer_type in {"sin", "ge", "__ge__"} for other in trace.layer_list)
+    assert [record_type(trace[label]) for label in op.parents] == ["linear"]
+    assert [record_type(trace[label]) for label in op.children] == ["relu"]
+    assert not any(other.type in {"sin", "ge", "__ge__"} for other in trace._layer_list)
     torch.testing.assert_close(op.out, scripted_gate(model.fc(x), 0.1))
     _assert_validates_clean(model, x)
 
@@ -225,11 +226,11 @@ def test_scripted_helper_owns_its_interior_dispatches() -> None:
         unwrap_torch()
         wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
 
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
     assert trace.completeness_diagnostics == []
     rows = [
         entry
-        for entry in trace.completeness_decompositions
+        for entry in trace.health.completeness_decompositions
         if entry["owner_wrapper"] == SCRIPT_FUNCTION_WRAPPER_NAME
     ]
     assert len(rows) == 1
@@ -259,8 +260,8 @@ def test_scripted_helper_inside_an_autograd_function() -> None:
     trace = _trace_with_disclosure(model, x)
 
     (op,) = _boundary_ops(trace)
-    assert [trace[label].layer_type for label in op.parents] == ["linear"]
-    assert not any(other.func_name == "autogradfunction" for other in trace.layer_list)
+    assert [record_type(trace[label]) for label in op.parents] == ["linear"]
+    assert not any(other.func_name == "autogradfunction" for other in trace._layer_list)
     _assert_validates_clean(model, x)
 
 
@@ -290,7 +291,7 @@ def test_pytorch_jit_disabled_gives_the_op_by_op_graph() -> None:
         warnings.simplefilter("error", TorchLensWarning)
         trace = tl.trace(model, x)
     assert _boundary_ops(trace) == []
-    assert "sin" in {op.layer_type for op in trace.layer_list}
+    assert "sin" in {op.type for op in trace._layer_list}
     _assert_validates_clean(model, x)
 
 
@@ -331,7 +332,7 @@ def test_boundary_selector_row_and_hook_lifecycle() -> None:
     trace = _trace_with_disclosure(
         _GateModel(), torch.randn(2, 4), save=tl.func_transform(SCRIPT_FUNCTION_TRANSFORM_KIND)
     )
-    saved = [op for op in trace.layer_list if op.has_saved_activation]
+    saved = [op for op in trace._layer_list if op.has_saved_activation]
     assert [op.func_name for op in saved] == [SCRIPT_FUNCTION_FUNC_NAME]
     rows = [
         row

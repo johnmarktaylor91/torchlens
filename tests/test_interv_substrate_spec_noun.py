@@ -34,7 +34,7 @@ def _ready_trace(model: nn.Module) -> tl.Trace:
     return tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -154,7 +154,7 @@ def test_spec_door_refuses_extra_arguments() -> None:
         log.fork().do(spec, tl.scale(0.5))
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
     with pytest.raises(InvalidArgumentError) as excinfo:
-        log.fork().attach_hooks(spec, direction="forward", confirm_mutation=True)
+        log.fork().attach_hooks(spec, tl.scale(0.5), confirm_mutation=True)
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
 
 
@@ -236,7 +236,7 @@ def test_backward_rules_of_multi_clause_spec_not_dropped() -> None:
     """A multi-clause spec's backward rule builds its sticky backward hook."""
 
     model = _TinyModel()
-    spec = tl.when(tl.grad_fn(name="relu"), tl.zero_grad()).merge(
+    spec = tl.when(tl.grad_fn(name="relu"), tl.zero_ablate()).merge(
         tl.when(tl.in_module("fc1"), tl.scale(1.0))
     )
     x = torch.randn(2, 4, requires_grad=True)

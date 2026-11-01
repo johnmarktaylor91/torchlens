@@ -21,6 +21,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import Recording
 from torchlens._ir.events import OpEvent
+from torchlens._record_type import record_type
 
 from ._models import build_model_case, side_effect_count
 
@@ -349,7 +350,7 @@ def _event_identity(event: OpEvent) -> dict[str, Any]:
         "is_scalar_bool": event.is_scalar_bool,
         "bool_value": event.bool_value,
         "intervention_fired": event.intervention_fired,
-        "intervention_replaced": event.intervention_replaced,
+        "is_edited": event.is_edited,
     }
 
 
@@ -368,7 +369,7 @@ def _is_predicate_wart_path(path: str) -> bool:
     """
 
     if path.startswith("parents["):
-        return path.endswith(".arg_position") or path.endswith(".edge_use")
+        return path.endswith(".arg_position") or path.endswith("._edge_use")
     return path.startswith(_PREDICATE_WART_PREFIXES[1:])
 
 
@@ -397,7 +398,7 @@ def _project_event(event: OpEvent) -> dict[str, Any]:
             "params_count": len(event.params),
             "parent_params_count": len(event.parent_params),
             "parent_arg_positions": [edge.arg_position for edge in event.parents],
-            "parent_edge_uses": [edge.edge_use for edge in event.parents],
+            "parent_edge_uses": [edge._edge_use for edge in event.parents],
             "is_inplace": event.function.is_inplace,
         },
     }
@@ -446,7 +447,9 @@ def _install_instrumentation() -> _Instrumentation:
     event_snapshots: list[list[dict[str, Any]]] = []
     restore_callbacks: list[Callable[[], None]] = []
 
-    ops_module = importlib.import_module("torchlens.backends.torch.ops")
+    # The torch backend imports the setter from its home at call time, so the
+    # home module is the one place a wrapper intercepts it.
+    ops_module = importlib.import_module("torchlens.backends.torch._ops_capture_records")
     original_set_policy = ops_module.set_capture_producer_policy
 
     def observing_set_policy(trace: Any, mode: str) -> None:
@@ -810,8 +813,8 @@ def _final_op_projection(product: Any) -> list[dict[str, Any]]:
     layers: Iterable[Any]
     if hasattr(product, "raw_layers"):
         layers = product.raw_layers
-    elif hasattr(trace, "layer_list"):
-        layers = trace.layer_list
+    elif hasattr(trace, "_layer_list"):
+        layers = trace._layer_list
     else:
         return []
     rows: list[dict[str, Any]] = []
@@ -820,7 +823,7 @@ def _final_op_projection(product: Any) -> list[dict[str, Any]]:
             {
                 "label": getattr(op, "layer_label", getattr(op, "_label_raw", None)),
                 "label_raw": getattr(op, "_label_raw", None),
-                "layer_type": getattr(op, "layer_type", None),
+                "layer_type": record_type(op, None),
                 "func_name": getattr(op, "func_name", None),
                 "parents": list(getattr(op, "parents", ()) or ()),
                 "children": list(getattr(op, "children", ()) or ()),
@@ -858,14 +861,14 @@ def _payload_projection(product: Any) -> list[dict[str, Any]]:
             payloads.append(
                 {
                     "label_raw": record.ctx.raw_label or record.ctx.label,
-                    "pass_index": record.ctx.pass_index,
+                    "pass_index": record.ctx.pass_number,
                     "tensor": _tensor_fingerprint(record.ram_payload),
                 }
             )
         return payloads
     trace = getattr(product, "trace", product)
     layers = (
-        product.raw_layers if hasattr(product, "raw_layers") else getattr(trace, "layer_list", ())
+        product.raw_layers if hasattr(product, "raw_layers") else getattr(trace, "_layer_list", ())
     )
     for op in layers:
         if not getattr(op, "has_saved_activation", False):
@@ -876,7 +879,7 @@ def _payload_projection(product: Any) -> list[dict[str, Any]]:
         payloads.append(
             {
                 "label_raw": getattr(op, "_label_raw", None),
-                "pass_index": getattr(op, "pass_index", None),
+                "pass_index": getattr(op, "pass_number", None),
                 "tensor": _tensor_fingerprint(out),
             }
         )
@@ -911,7 +914,7 @@ def _gradient_projection(product: Any) -> dict[str, Any]:
         ]
     else:
         payloads = []
-        for op in getattr(product, "layer_list", ()):
+        for op in getattr(product, "_layer_list", ()):
             for grad in getattr(op, "grads", ()):
                 if isinstance(grad, torch.Tensor):
                     payloads.append(
@@ -944,7 +947,7 @@ def _outcome_projection(product: Any, exception: BaseException | None) -> dict[s
             "status": product.status,
             "failed": product.is_failed,
             "halted": product.is_stopped,
-            "halt_reason": product.stop_reason,
+            "stop_reason": product.stop_reason,
             "n_ops_completed": product.num_committed_ops,
             "last_successful_op_label": product.last_successful_op_label,
             "last_event_label": product.last_event_label,
@@ -972,12 +975,12 @@ def _outcome_projection(product: Any, exception: BaseException | None) -> dict[s
             "error_type": type(exception).__name__,
             "error_message": str(exception),
         }
-    halted = bool(getattr(product, "halted", False))
+    halted = bool(getattr(product, "is_stopped", False))
     return {
         "status": "halted" if halted else "complete",
         "failed": False,
         "halted": halted,
-        "halt_reason": getattr(product, "halt_reason", None),
+        "stop_reason": getattr(product, "stop_reason", None),
         "halt_frontier": getattr(product, "halt_frontier", None),
         "output_layers": list(getattr(product, "output_layers", ())),
     }

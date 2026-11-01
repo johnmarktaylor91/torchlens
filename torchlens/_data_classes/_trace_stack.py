@@ -99,7 +99,7 @@ class TraceStackMixin(_TraceMixinBase):
             not saved, a primary output is not one tensor, or shapes differ.
         """
 
-        max_fanout = max(1, len(self.layer_list))
+        max_fanout = max(1, len(self._layer_list))
         sites = tuple(self.find_sites(selector, max_fanout=max_fanout))
         if not sites:
             raise InvalidArgumentError(

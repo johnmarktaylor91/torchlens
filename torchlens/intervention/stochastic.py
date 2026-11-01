@@ -15,7 +15,7 @@ pass, step, and site. The fix is one stateless mechanism:
 - ``seed=`` is a REQUIRED int or the literal ``"auto"``; ``None`` never
   reaches a hook (D4).
 - ``"auto"`` canonicalizes ONCE per capture into
-  ``base_seed = H(trace.random_seed, rule_identity, population_identity)``
+  ``base_seed = H(trace._options_seed, rule_identity, population_identity)``
   (D5 with the DIS-4 adjudication: the identity component is PERSISTED helper
   identity, never a transient construction ordinal) -- never the ambient
   global RNG, and recorded.
@@ -225,7 +225,7 @@ def _require_seed(seed: Any, verb: str) -> int | str:
             "edits, so unacknowledged stochasticity never reaches a hook",
             code="sampling_seed_required",
             remedy="pass an explicit integer seed, or seed='auto' to derive one "
-            "from the capture's recorded trace.random_seed",
+            "from the capture's recorded trace.options.seed",
             argument="seed",
         )
     return seed
@@ -242,17 +242,17 @@ def _base_seed(
     """Resolve the base seed for one firing (D5, DIS-4 spelling).
 
     An explicit int is its own base. ``"auto"`` derives from the capture's
-    recorded ``trace.random_seed`` (threaded through ``run_ctx`` by the
+    recorded ``trace.options.seed`` (threaded through ``run_ctx`` by the
     live/replay doors), the helper's persisted identity, and the population
     identity -- never the ambient RNG, never a transient construction ordinal.
     """
 
     if isinstance(seed, int):
         return seed
-    trace_seed = ctx.run_ctx.get("trace_random_seed")
+    trace_seed = ctx.run_state.get("trace_random_seed")
     if trace_seed is None:
         raise InvalidArgumentError(
-            f"{verb} seed='auto' needs the capture's recorded trace.random_seed, "
+            f"{verb} seed='auto' needs the capture's recorded trace.options.seed, "
             "and this door's run context does not carry one",
             code="sampling_trace_seed_unavailable",
             remedy="pass an explicit integer seed=, or run the edit on a door "
@@ -282,8 +282,8 @@ def _firing_coordinate(ctx: HookContext, share_draw: str) -> tuple[Any, ...]:
     if share_draw == "per_rule":
         return ()
     layer_log = ctx.op or {}
-    pass_index = layer_log.get("pass_index")
-    generation_step = ctx.run_ctx.get("generation_step")
+    pass_index = layer_log.get("pass_number")
+    generation_step = ctx.run_state.get("generation_step")
     if share_draw == "per_group":
         return (pass_index, generation_step)
     site = layer_log.get("site_key") or layer_log.get("label") or layer_log.get("layer_label")
@@ -316,7 +316,7 @@ def _derived_seed(  # noqa: PLR0913 -- the D6 formula's seven NAMED components A
 def _leaf_path(ctx: HookContext) -> tuple[int, ...]:
     """Read the composed-leaf path threaded by ``tl.compose`` (D6/D20)."""
 
-    path = ctx.ctx.get("compose_leaf_path", ())
+    path = ctx.state.get("compose_leaf_path", ())
     return tuple(path) if isinstance(path, (tuple, list)) else ()
 
 
@@ -329,7 +329,7 @@ def _record_sampling(ctx: HookContext, verb: str, record: dict[str, Any]) -> Non
     persisted ``FireRecord.determinism_note`` -- no parallel audit path.
     """
 
-    ctx.run_ctx.setdefault("sampling_records", []).append(dict(record))
+    ctx.run_state.setdefault("sampling_records", []).append(dict(record))
     draw = record.get("donor_ids", record.get("permutation"))
     draw_repr = repr(list(draw)[:16]) if isinstance(draw, (list, tuple)) else repr(draw)
     note = (
@@ -340,8 +340,8 @@ def _record_sampling(ctx: HookContext, verb: str, record: dict[str, Any]) -> Non
         f"draw={draw_repr} draw_digest={record.get('realized_draw_digest')} "
         f"population={record.get('population_identity')}"
     )
-    ctx.run_ctx.setdefault("ledger_notes", []).append(note)
-    state_history = ctx.run_ctx.get("state_history")
+    ctx.run_state.setdefault("ledger_notes", []).append(note)
+    state_history = ctx.run_state.get("state_history")
     if isinstance(state_history, list):
         state_history.append(note)
 
@@ -815,7 +815,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
                     "realized_draw_digest": _draw_digest([member_index]),
                     "replacement_mode": "whole_event",
                     "donor_grad": "detached",
-                    "recomputation": bool(ctx.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
                 },
             )
             # External donors are detached snapshots by design (D37): target
@@ -829,7 +829,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
         kwargs={"plan": "sampling_plan", **plan.identity_kwargs()},
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
         metadata={"stochastic": True, "seeded": True},
     )
     # Session-only handle for the D8 batch normalizer (object-identity
@@ -1000,7 +1000,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
                 "realized_draw_digest": _draw_digest(indices),
                 "replacement_mode": "row_exchange",
                 "donor_grad": "graph_connected_permuted",
-                "recomputation": bool(ctx.run_ctx.get("recomputation", False)),
+                "recomputation": bool(ctx.run_state.get("recomputation", False)),
                 "axis": fire_axis,
                 "axis_proof": "explicit",
             }
@@ -1019,8 +1019,8 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
         "permute_batch",
         kwargs={"seed": validated_seed, "axis": explicit_axis},
         factory=factory,
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
         metadata={
             "stochastic": True,
             "seeded": True,
@@ -1183,7 +1183,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
                     "realized_draw_digest": _draw_digest(donor_ids),
                     "replacement_mode": "per_row",
                     "donor_grad": "detached",
-                    "recomputation": bool(ctx.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
                     "axis": fire_axis,
                     "axis_proof": "explicit",
                 },
@@ -1205,8 +1205,8 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
         metadata={
             "stochastic": True,
             "seeded": True,
@@ -1349,7 +1349,7 @@ def set_direction_mean(
                     "realized_draw_digest": None,
                     "replacement_mode": "direction_mean",
                     "donor_grad": "orthogonal_component_only",
-                    "recomputation": bool(ctx.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
                     "mean_coefficient": site_coef,
                 },
             )
@@ -1374,6 +1374,6 @@ def set_direction_mean(
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
         metadata={"stochastic": False},
     )

@@ -50,7 +50,7 @@ from torchlens.errors import (
 )
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
@@ -176,10 +176,8 @@ def test_r63_state_metadata_read_emits_escape_witness(
     escape names AND records its read kind for the producer gate.
     """
 
-    from torchlens.backends.torch.completeness_witness import (
-        host_escape_state_metadata_reads,
-        host_escape_state_source_names,
-    )
+    from torchlens.backends.torch._completeness_escape_state import host_escape_state_source_names
+    from torchlens.backends.torch._completeness_metadata import host_escape_state_metadata_reads
 
     trace = _trace(model_cls(), x)
     assert state_name in host_escape_state_source_names(trace)

@@ -2,7 +2,7 @@
 
 Before r21 the bundle ``metadata.pkl`` unpickler admitted the ENTIRE ``torchlens.*``
 callable namespace as a pickle REDUCE target (``callable(obj) and
-_is_torchlens_owned(obj)``). Because ``torchlens._utils._module_is_installed`` does
+_is_torchlens_owned(obj)``). Because ``torchlens.report._environment._module_is_installed`` does
 ``importlib.import_module(<arg>)``, a crafted ``metadata.pkl`` whose REDUCE named it
 ran an arbitrary import -- attacker top-level code -- on a plain ``tl.load(path)``,
 BEFORE ``.run()`` and before any downstream callable-safety gate could fire (a
@@ -34,16 +34,16 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._utils as tlutils
 from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._utils._callable_safety import is_inert_first_party_callable
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.save import _resolve_import_ref
 from torchlens.options import CaptureOptions
+from torchlens.report import _environment as tl_environment
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -62,7 +62,7 @@ def _load_ref(module: str, name: str) -> object:
 
 
 class _ModuleInstalledGadget:
-    """``__reduce__`` -> ``torchlens._utils._module_is_installed('<attacker>')``.
+    """``__reduce__`` -> ``torchlens.report._environment._module_is_installed('<attacker>')``.
 
     On a vulnerable tree the unpickler admits the private helper and pickle INVOKES
     it, importing the attacker module (whose top-level code writes a sentinel).
@@ -72,7 +72,7 @@ class _ModuleInstalledGadget:
         self._attacker = attacker_module
 
     def __reduce__(self):  # type: ignore[no-untyped-def]
-        return (tlutils._module_is_installed, (self._attacker,))
+        return (tl_environment._module_is_installed, (self._attacker,))
 
 
 def _has_unpickling_error(exc: BaseException | None) -> bool:
@@ -133,7 +133,7 @@ def test_module_is_installed_denied_by_direct_unpickler() -> None:
     """The restricted unpickler refuses the private import gadget as a bare GLOBAL."""
 
     with pytest.raises(pickle.UnpicklingError):
-        _load_ref("torchlens._utils", "_module_is_installed")
+        _load_ref("torchlens.report._environment", "_module_is_installed")
 
 
 # --------------------------------------------------------------------------- #
@@ -201,9 +201,9 @@ def test_inert_first_party_gate_discriminates() -> None:
     """The gate admits public inert helpers and denies private / side-effecting ones."""
 
     from torchlens._semantic.recipes.norm import layer_norm
-    from torchlens._utils import _module_is_installed
     from torchlens._utils.display import identity
     from torchlens.intervention.helpers import clamp, zero_ablate
+    from torchlens.report._environment import _module_is_installed
 
     assert is_inert_first_party_callable(identity)
     assert is_inert_first_party_callable(layer_norm)
@@ -249,7 +249,7 @@ def test_resolver_denies_first_party_import_gadget_but_resolves_helper() -> None
 
     assert _resolve_import_ref("torchlens.intervention.helpers:zero_ablate") is zero_ablate
     with pytest.raises((UntrustedCallableError, Exception)) as excinfo:
-        _resolve_import_ref("torchlens._utils:_module_is_installed")
+        _resolve_import_ref("torchlens.report._environment:_module_is_installed")
     # The refusal must originate from the untrusted-callable gate.
     chain: list[BaseException] = []
     exc: BaseException | None = excinfo.value
@@ -391,7 +391,7 @@ def test_untrusted_callable_refusals_carry_code_and_subject() -> None:
     assert not_listed.value.fields["code"] == "custom_callable_module_not_allowlisted"
 
     with pytest.raises(UntrustedCallableError) as private:
-        resolve_import_ref("torchlens._utils:_module_is_installed")
+        resolve_import_ref("torchlens.report._environment:_module_is_installed")
     assert private.value.fields["code"] == "custom_callable_private_first_party"
 
     with pytest.raises(UntrustedCallableError) as impure:

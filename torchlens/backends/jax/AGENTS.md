@@ -1,7 +1,8 @@
 # backends/jax/ - Implementation Guide
 
-Jaxpr-first JAX backend preview. Tier-1 standalone spec (no `capture_backend`);
-the `BackendSpec` in `../default_specs.py` is the only capability truth.
+Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+`BackendSpec` in `../default_specs.py` and its protocol shell in
+`../_protocols/jax.py` are the capability truth (contract: `../AGENTS.md`).
 
 ## backend.py
 - `JAXBackend.capture_trace()` derives a closed jaxpr from the callable

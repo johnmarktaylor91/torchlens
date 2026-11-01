@@ -36,14 +36,17 @@ tl.release_model(model)  # restore whole-model pickle / torch.save serializabili
 # Steered rerun: a module-targeted staged spec reruns through the guarded fast engine
 # (native forward + hooks, close to plain-forward cost); any typed refusal falls back
 # to the capture engine and says why.
-direction = torch.randn(4)               # one entry per channel of encoder's output
-steered = tl.trace(model, x, save=tl.module("encoder"),
-                   intervene=tl.when(tl.module("encoder"),
-                                     tl.steer(direction, strength=4, dim=1)))
+direction = torch.randn(4)  # one entry per channel of encoder's output
+steered = tl.trace(
+    model,
+    x,
+    save=tl.module("encoder"),
+    intervene=tl.when(tl.module("encoder"), tl.steer(direction, strength=4, dim=1)),
+)
 steered.run(model, torch.randn(1, 3, 20, 20))  # larger input, same graph structure
-steered.last_run["engine"]              # "guarded_fast", or "rerun" after a fallback
-steered.last_run["fast_refused"]        # None, or "<code>:<stage>" naming the guard
-steered.last_run["shape_varied"]        # True when the input size differed from capture
+steered.last_run["engine"]  # "guarded_fast", or "rerun" after a fallback
+steered.last_run["fast_refused"]  # None, or "<code>:<stage>" naming the guard
+steered.last_run["shape_varied"]  # True when the input size differed from capture
 
 # Influence geometry is lazy: the first property access solves the captured DAG.
 op = log["relu_1_2"]
@@ -105,18 +108,18 @@ recording = tl.record(model, x, save=tl.func("relu"))
 full_structure = recording.to_trace()
 
 # Selection algebra (L6): compose regions, resolve explicitly, edit with do().
-log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 u1, u2 = log["relu_1_2"], log["conv2d_2_3"]
 inter = u1.receptive_field.at((3, 3)) & u2.receptive_field.at((5, 5))  # a Selection
-resolved = log[inter]                      # frozen, trace-bound, session-only
+resolved = log[inter]  # frozen, trace-bound, session-only
 fork = log.fork()
-fork.do(inter, tl.zero_ablate())           # edit-then-scatter: only masked elements
+fork.do(inter, tl.zero_ablate())  # edit-then-scatter: only masked elements
 fork2 = log.fork()
 fork2.do(fork2[tl.units("relu_1_2", [(0, 0, 1, 1)])], tl.patch_from(log))
 fork3 = log.fork()
 fork3.do(tl.param("head.weight"), tl.scale(0.5))  # "as if" the weight changed, replay-only:
 # every consumption is substituted; the live nn.Parameter is NEVER written.
-print(fork.intervention_audit[-1])         # query repr + resolve digest + relations
+print(fork.intervention_audit[-1])  # query repr + resolve digest + relations
 ```
 
 Use `backend=` only when the backend is intentionally part of the test or example:
@@ -124,13 +127,55 @@ Use `backend=` only when the backend is intentionally part of the test or exampl
 ```python
 torch_trace = tl.trace(model, x, backend="torch")
 tf_trace = tl.trace(tf_model, tf_x, backend="tf")
-assert torch_trace.backend == "torch"
+assert torch_trace.provenance.backend == "torch"
 ```
 
 Before debugging wrapper-specific failures, run:
 
 ```python
 print(tl.report.doctor(model, x).to_markdown())
+```
+
+### Gradient sites
+
+A gradient is a site: `tl.grad("relu_1_2")` is the gradient of relu_1_2's OUTPUT, bare `"relu_1_2"` is
+its activation, `tl.grad(s) | s` is both. No site door takes a pass keyword.
+
+```python
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_grads="all"))
+
+
+def loss(t):
+    return t[t.output_layers[0]].out.sum()
+
+
+# Block the gradient at relu_1_2 in one call: rerun with the edit armed, then backward.
+r = trace.do(tl.grad("relu_1_2"), tl.scale(0), model=model, inputs=x, loss=loss)
+assert r["relu_1_2"].grad.abs().sum() == 0
+
+# Two steps: arm now (status "armed"), apply on the next backward.
+r = trace.do(tl.grad("relu_1_2"), tl.clamp(low=-1.0, high=1.0), model=model, inputs=x)
+assert r.intervention_audit[-1]["status"] == "armed"
+r.backward(loss(r))  # fires
+
+# Both: halve every relu's activation on the rerun and its gradient on the backward.
+relus = tl.func("relu")
+r = trace.do(tl.grad(relus) | relus, tl.scale(0.5), model=model, inputs=x, loss=loss)
+
+# Refusals, each before any mutation: no model/x (replay cannot edit gradients),
+# a nested address, an activation-only edit on a gradient site.
+refusals = [
+    lambda: trace.do(tl.grad("relu_1_2"), tl.scale(0)),  # replay_gradient_edit_unsupported
+    lambda: tl.grad(tl.grad("relu_1_2")),  # grad_selector_nested
+    lambda: trace.do(tl.grad("relu_1_2"), tl.patch_from(trace), model=model, inputs=x),  # edit_signal_mismatch
+]
+for attempt in refusals:
+    try:
+        attempt()
+    except Exception as exc:
+        print(type(exc).__name__)
+    else:
+        raise AssertionError("expected a refusal")
 ```
 
 ### Steering many forwards / generation
@@ -173,9 +218,14 @@ import transformers
 
 torch.manual_seed(0)
 lm = transformers.LlamaForCausalLM(  # a tiny random decoder stands in for your model
-    transformers.LlamaConfig(vocab_size=128, hidden_size=32, intermediate_size=64,
-                             num_hidden_layers=2, num_attention_heads=4,
-                             num_key_value_heads=2)
+    transformers.LlamaConfig(
+        vocab_size=128,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+    )
 ).eval()
 ids = torch.tensor([[1, 5, 9, 2]])
 direction = torch.randn(32)
@@ -214,12 +264,19 @@ import transformers
 
 torch.manual_seed(0)
 lm = transformers.LlamaForCausalLM(
-    transformers.LlamaConfig(vocab_size=128, hidden_size=32, intermediate_size=64,
-                             num_hidden_layers=2, num_attention_heads=4,
-                             num_key_value_heads=2)
+    transformers.LlamaConfig(
+        vocab_size=128,
+        hidden_size=32,
+        intermediate_size=64,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+    )
 ).eval()
-batch = {"input_ids": torch.tensor([[1, 5, 9, 2], [7, 3, 0, 0]]),
-         "attention_mask": torch.tensor([[1, 1, 1, 1], [1, 1, 0, 0]])}
+batch = {
+    "input_ids": torch.tensor([[1, 5, 9, 2], [7, 3, 0, 0]]),
+    "attention_mask": torch.tensor([[1, 1, 1, 1], [1, 1, 0, 0]]),
+}
 tl.bridge.transformers.register_attention(lm)
 with torch.no_grad(), tl.bridge.transformers.record_attention(lm, check_sdpa=True) as attn:
     lm(**batch)
@@ -263,13 +320,13 @@ assert pair.higher == {"cka": "layer1", "rsa": "layer2"}
 score = tl.stats.cka(torch.randn(8, 3), torch.randn(8, 5))
 assert isinstance(score, tl.stats.SimilarityScore)  # a float that names its measure
 measure = score.similarity_repository_id
-# An output_style no detector resolves refuses before the forward.
+# Output decoding is read-time: a style no detector resolves refuses typed.
 try:
-    tl.trace(model, x, capture=tl.options.CaptureOptions(output_style="no_such_style"))
-except tl.errors.OutputStyleUnknownError as error:
-    assert error.fields["code"] == "output_style_unknown"
+    tl.trace(model, x).decode_output(style="no_such_style")
+except tl.errors.DecodeStyleUnknownError as error:
+    assert error.fields["code"] == "decode_style_unknown"
 else:
-    raise AssertionError("output_style_unknown did not refuse")
+    raise AssertionError("decode_style_unknown did not refuse")
 # Also exported: tl.report.Report (base class of report-shaped tl.debug results),
 # tl.report.PrunedParamFacts (prune state in the FactCore parameter facts),
 # torchlens.trackers.MLflowSink and torchlens.trackers.CometSink (forward-watch sinks over a run or

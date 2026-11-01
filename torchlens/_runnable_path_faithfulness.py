@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
@@ -29,19 +29,6 @@ from ._runnable_state import (
     PreparedRunnableState,
     runnable_tensor_byte_digest,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _LAYOUT_SENSITIVE_BLAS_QUALNAMES,
-        _attestation_inputs_match,
-        _attestation_state_matches,
-        _contract_check,
-        _descriptor_has_nondeterministic_rng,
-        _has_journaled_buffer_activation_member,
-        _has_out_mutated_activation_member,
-        _is_benign_downstream_nonreproducible,
-        _lacks_recorded_original_input_eligibility,
-    )
 
 __all__ = (
     "_path_faithfulness",
@@ -386,7 +373,7 @@ def _numeric_attestation_check(
             # skipped only when the archive is intact and the same tight bound
             # holds. This stays fail-closed: a tampered archive
             # (archived_digest != byte_digest) or any divergence beyond the tight
-            # ULP bound STILL raises numeric_attestation_failed -- the byte-exact
+            # ULP bound STILL raises replay_value_mismatch -- the byte-exact
             # tripwire is preserved, never widened into a tolerance gate.
             if archived_digest == member.byte_digest and _is_benign_layout_nonreproducible(
                 descriptor, member, recomputed, archived_value
@@ -540,7 +527,7 @@ def _is_benign_layout_nonreproducible(
     the F1 fallback: such a slot reports ``not_applicable`` instead of raising,
     because a byte-faithful replay is genuinely infeasible from the no-grad run
     path. Every other mismatch (non-BLAS op, larger-than-ULP divergence, or a
-    non-tensor slot) still raises ``numeric_attestation_failed``.
+    non-tensor slot) still raises ``replay_value_mismatch``.
 
     Parameters
     ----------
@@ -564,3 +551,22 @@ def _is_benign_layout_nonreproducible(
     if not _member_producer_is_layout_sensitive_blas(descriptor, member):
         return False
     return _within_layout_reduction_tolerance(recomputed, archived_value)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_attestation import (  # noqa: E402
+    _descriptor_has_nondeterministic_rng,
+    _has_journaled_buffer_activation_member,
+    _has_out_mutated_activation_member,
+    _is_benign_downstream_nonreproducible,
+)
+from ._runnable_execution import (  # noqa: E402
+    _LAYOUT_SENSITIVE_BLAS_QUALNAMES,
+)
+from ._runnable_verification import (  # noqa: E402
+    _attestation_inputs_match,
+    _attestation_state_matches,
+    _contract_check,
+    _lacks_recorded_original_input_eligibility,
+)

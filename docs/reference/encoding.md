@@ -51,7 +51,7 @@ size dominates the minimum — the taper motif reads on compact nodes.
 ### stack_by — rank columns (the classic timestep diagram)
 
 `draw(stack_by=True, direction="leftright")` pins nodes sharing an
-annotation value to one Graphviz rank. The auto form derives `pass_index`
+annotation value to one Graphviz rank. The auto form derives `pass_number`
 on multi-pass ops under the LOCKSTEP LICENSE (globally monotone execution
 windows); the caption and legend disclose the annotation used.
 

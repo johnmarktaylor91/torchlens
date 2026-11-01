@@ -33,7 +33,7 @@ Allowlist policy (fail-closed):
   that walks attributes off a torchlens module to reach ``os.system`` (real module
   ``posix``) is denied. Crucially, a pickle ``REDUCE`` INVOKES the admitted callable
   with attacker args, so the pre-r21 blanket "any torchlens-owned callable" policy
-  was a load-time RCE: it trusted the PRIVATE ``torchlens._utils._module_is_installed``
+  was a load-time RCE: it trusted the PRIVATE ``torchlens.report._environment._module_is_installed``
   (which ``importlib.import_module``s its argument). The narrowed gate is
   deterministic (public-name + side-effect-name guard, no live-registry lookup) and
   admits our vetted first-party code without admitting that gadget.
@@ -70,12 +70,16 @@ Allowlist policy (fail-closed):
   *safe* wrapper that restricts the target object to the enumerated torch C
   callable-holder classes, which structurally blocks the classic
   ``getattr(obj, "__globals__")`` pivot to ``eval`` / ``exec``.
-* ``torch.storage._load_from_bytes`` reconstructs tensors embedded by legacy
-  metadata (current bundles route every tensor through manifest-bound blobs) but
-  internally calls ``torch.load`` with the *unsafe* default, i.e. a nested
-  unrestricted unpickler. It is admitted only through a wrapper that forces
-  ``weights_only=True`` so the nested load routes through torch's own restricted
-  unpickler.
+* ``torch.storage._load_from_bytes`` (the storage leg of torch's default tensor
+  reduction) runs a nested ``torch.load`` over bytes taken from the file. It is
+  REFUSED by name: no file bytes ever reach torch's unpickler. A plain tensor that
+  genuinely lives in metadata (an annotation value, a small raw input/output) is
+  written by the canonical metadata pickler through the TorchLens-owned inline
+  reduction ``_inline_tensor.rebuild_inline_tensor`` (raw bytes, dtype, shape,
+  ``requires_grad``, device), admitted here by exact pair; it allocates exactly the
+  bytes present in the stream into a non-resizable storage. A file written by an
+  earlier TorchLens that embedded a tensor storage refuses typed, with a re-save
+  remedy.
 
 If a future legitimate class is not yet covered, loading it fails closed with a
 clear error; we NEVER admit a code-exec gadget to make a load succeed.
@@ -89,8 +93,9 @@ RESOLVABLE at ``find_class`` (legit metadata references ``torch.Tensor`` /
 module_type values -- resolving a global only references it), but their BARE
 CONSTRUCTION from pickle-supplied args is DENIED. Two layers enforce it:
 (1) torch STORAGE constructors are denied by IDENTITY at ``find_class``
-(``_is_torch_storage_type``); a legacy embedded storage routes through the wrapped
-``("torch.storage", "_load_from_bytes")`` path (a separate nested ``weights_only`` VM).
+(``_is_torch_storage_type``); an inline metadata tensor arrives through
+``rebuild_inline_tensor`` as a finished tensor over a non-resizable storage, and the
+embedded-storage route ``torch.storage._load_from_bytes`` is refused by name.
 (2) the opcode-level belt: a BUILD may not apply a ``__setstate__`` / storage-rebind to a
 torch Tensor / Storage / Parameter, and a REDUCE / NEWOBJ / NEWOBJ_EX / INST / OBJ may
 not CONSTRUCT (or mediate) an attacker-sized ALLOCATION type
@@ -109,7 +114,7 @@ from __future__ import annotations
 
 import io
 import pickle
-import warnings
+import struct
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from types import ModuleType
@@ -124,7 +129,12 @@ from .._utils._callable_safety import (
     _STDLIB_AND_BUILTIN_TOP_LEVEL as _CALLABLE_STDLIB_AND_BUILTIN_TOP_LEVEL,
     is_denied_stdlib_or_builtin_module,
 )
+from ._durability import _stream_bytes_left
+from ._inline_tensor import INLINE_TENSOR_GLOBAL, rebuild_inline_tensor
 from ._pickle_prescan import (
+    _CORRUPT_PREFIX,
+    _EXT_REFUSAL,
+    _FRAME_REFUSAL,
     GuardedCallable,
     PrescanPlan,
     StreamNeedsInterpreter,
@@ -303,9 +313,9 @@ def _torch_type_denied(pickled_module: str, pickled_name: str, obj: type) -> boo
 # real ``torch.storage.{Typed,Untyped}Storage`` classes, so denying them here makes
 # this unpickler a documented STRICT SUBSET of that baseline. No legitimate ``.tlspec``
 # metadata references a storage type in the outer stream: tensor payloads are
-# ``BlobRef``s, and any embedded storage is reconstructed by the wrapped
-# ``_safe_load_from_bytes`` path (a separate nested ``weights_only`` load), never by an
-# outer storage global. The set is built from ``torch._storage_classes`` (all 31
+# ``BlobRef``s, and an inline metadata tensor is rebuilt whole by
+# ``rebuild_inline_tensor`` over a non-resizable storage, never by an outer storage
+# global. The set is built from ``torch._storage_classes`` (all 31
 # typed/untyped classes) plus the canonical ``TypedStorage`` / ``UntypedStorage``, and
 # an ``issubclass`` belt covers any future storage subclass (e.g. a legacy typed
 # ``FloatStorage`` is a ``TypedStorage`` subclass).
@@ -1135,178 +1145,6 @@ def _safe_getattr(obj: Any, name: Any) -> Any:
     return resolved
 
 
-def _safe_load_from_bytes(data: bytes) -> Any:
-    """Restricted replacement for ``torch.storage._load_from_bytes``.
-
-    The stock helper reconstructs an embedded tensor storage by calling
-    ``torch.load`` with the *unsafe* legacy default (an unrestricted nested
-    unpickler == RCE). This wrapper forces ``weights_only=True`` so the nested
-    load routes through torch's own restricted unpickler; a malicious embedded
-    payload therefore fails closed instead of executing.
-
-    Parameters
-    ----------
-    data:
-        Serialized tensor-storage bytes from the pickle stream.
-
-    Returns
-    -------
-    Any
-        The reconstructed storage/tensor from a weights-only nested load.
-
-    Raises
-    ------
-    pickle.UnpicklingError
-        If the running torch is affected by CVE-2025-32434 (so even
-        ``weights_only=True`` is a working RCE), or if the nested weights-only load
-        fails (including because it refused a disallowed global).
-    """
-
-    # CVE-2025-32434: on torch <= 2.5.1, ``torch.load(..., weights_only=True)`` is
-    # ITSELF a remote-code-execution -- the pre-2.6 weights-only unpickler could be
-    # bypassed -- so forwarding attacker bytes into it is not a safe restricted
-    # load at all. Fail closed on any runtime that lacks the 2.6.0 fix (feature-
-    # detected via the named ``HAS_SAFE_WEIGHTS_ONLY_LOAD`` capability, surfaced in
-    # ``tl.report.doctor()``). Imported lazily to keep this early
-    # security front door free of import-order coupling (mirrors ``_safe_getattr``).
-    from .._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
-
-    if not HAS_SAFE_WEIGHTS_ONLY_LOAD:
-        raise pickle.UnpicklingError(
-            "Refusing to reconstruct an embedded tensor during bundle metadata "
-            "unpickle: the running torch is affected by CVE-2025-32434 "
-            "(torch.load(weights_only=True) remote-code-execution, fixed in torch "
-            "2.6.0). Upgrade torch to >= 2.6 to load bundles that embed tensor "
-            "storages."
-        )
-    try:
-        loaded = torch.load(io.BytesIO(data), weights_only=True)
-    except Exception as exc:  # noqa: BLE001 -- fail closed, never re-exec unsafely
-        raise pickle.UnpicklingError(
-            "Blocked unsafe embedded-tensor load during bundle metadata unpickle."
-        ) from exc
-    return _freeze_embedded_storage(loaded)
-
-
-def _frozen_untyped_storage(storage: Any) -> Any:
-    """Return a NON-resizable ``UntypedStorage`` holding the same bytes as ``storage``.
-
-    ``torch.frombuffer`` over a host ``bytearray`` produces a storage whose allocator
-    cannot reallocate, so ``resizable()`` is ``False`` and torch's own ``set_`` refuses to
-    grow it. The copy is bounded by ``storage`` -- itself bounded by the embedded blob
-    already present in the pickle stream -- so it is strictly proportional.
-
-    Parameters
-    ----------
-    storage:
-        Host (CPU) untyped storage to copy.
-
-    Returns
-    -------
-    Any
-        A non-resizable untyped storage with identical bytes.
-    """
-
-    return torch.frombuffer(bytearray(bytes(storage)), dtype=torch.uint8).untyped_storage()
-
-
-def _freeze_embedded_storage(loaded: Any) -> Any:
-    """Make an embedded-blob result NON-RESIZABLE so it cannot be amplified (r6).
-
-    The nested ``weights_only`` load bounds the embedded payload by the bytes present in
-    the stream, but it does not bound what a LATER opcode may grow that payload into. When
-    the embedded blob uses the LEGACY (non-zipfile) ``torch.save`` format the reconstructed
-    storage is RESIZABLE, and the vetted ``torch._utils._rebuild*`` reconstructors -- which
-    must stay REDUCE-invocable, they are the legitimate tensor path -- accept a
-    pickle-supplied ``size``/``stride`` and call ``set_``, which RESIZES the storage
-    upward. Measured: a 354-byte pickle chaining
-    ``_rebuild_tensor_v2(_load_from_bytes(<4-byte legacy blob>), 0, (100_000_000,), (1,),
-    False, None)`` yielded a 100 MB tensor -- roughly 282,000x amplification, unbounded in
-    the requested size, and reached through a callable the belt deliberately allows.
-
-    Bounding this at the CONSUMER would mean re-deriving the byte extent for every
-    ``_rebuild*`` signature and keeping that in step with torch. Bounding it at the SOURCE
-    is signature-independent and enforced by torch itself: a non-resizable storage makes
-    ``set_`` raise ``RuntimeError("Trying to resize storage that is not resizable")`` for
-    EVERY present and future consumer, while an exact-fit view -- the only thing an honest
-    stream asks for -- still succeeds unchanged.
-
-    A resizable storage on a non-CPU device cannot be frozen (torch exposes no
-    same-device non-resizable allocation), so it fails closed. That refuses nothing real:
-    a genuine torchlens bundle never emits ``_load_from_bytes`` at all (asserted by
-    ``tests/test_r4_metadata_unpickle_rce.py``), and the modern zipfile ``torch.save``
-    format -- what every current writer produces -- already yields a non-resizable storage
-    and is returned untouched.
-
-    Parameters
-    ----------
-    loaded:
-        Object returned by the nested weights-only load.
-
-    Returns
-    -------
-    Any
-        ``loaded`` itself when already non-resizable, else a frozen equivalent.
-
-    Raises
-    ------
-    pickle.UnpicklingError
-        If a resizable storage cannot be frozen (non-CPU device, or a failed copy).
-    """
-
-    typed_storage_type = getattr(torch.storage, "TypedStorage", ())
-    storage: Any
-    if isinstance(loaded, torch.Tensor):
-        storage = loaded.untyped_storage()
-    elif isinstance(loaded, torch.UntypedStorage):
-        storage = loaded
-    elif typed_storage_type and isinstance(loaded, typed_storage_type):
-        # ``TypedStorage.untyped()`` emits torch's TypedStorage-removal ``UserWarning``;
-        # the private attribute it delegates to is the same object and stays quiet, so a
-        # security load never spends a warning the caller cannot act on.
-        storage = getattr(loaded, "_untyped_storage", None)
-        if storage is None:  # pragma: no cover - torch layout drift.
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", UserWarning)
-                storage = loaded.untyped()
-    else:
-        # Not a storage-backed result; nothing a ``_rebuild*`` can grow.
-        return loaded
-
-    try:
-        if not storage.resizable():
-            return loaded
-    except Exception:  # pragma: no cover - defensive; exotic storage without the predicate.
-        pass
-
-    if str(getattr(storage, "device", "cpu")) != "cpu":
-        raise pickle.UnpicklingError(
-            "Blocked a RESIZABLE non-CPU embedded tensor storage during bundle metadata "
-            "unpickle: it can be grown by a following _rebuild* REDUCE into an "
-            "attacker-sized allocation, and torch exposes no same-device non-resizable "
-            "allocation to bound it. Re-save the artifact with the modern (zipfile) "
-            "torch.save format, which yields a non-resizable storage."
-        )
-
-    try:
-        frozen = _frozen_untyped_storage(storage)
-        if isinstance(loaded, torch.Tensor):
-            rebuilt = torch.empty(0, dtype=loaded.dtype, device=loaded.device)
-            rebuilt.set_(frozen, loaded.storage_offset(), loaded.size(), loaded.stride())
-            if loaded.requires_grad:
-                rebuilt.requires_grad_(True)
-            return rebuilt
-        if isinstance(loaded, torch.UntypedStorage):
-            return frozen
-        return torch.storage.TypedStorage(wrap_storage=frozen, dtype=loaded.dtype, _internal=True)
-    except Exception as exc:  # noqa: BLE001 -- fail closed, never hand back a growable storage
-        raise pickle.UnpicklingError(
-            "Blocked an embedded tensor storage during bundle metadata unpickle: it is "
-            "RESIZABLE (legacy torch.save format) and could not be frozen, so a following "
-            "_rebuild* REDUCE could grow it into an attacker-sized allocation."
-        ) from exc
-
-
 # Base pure-Python opcode handlers (typeshed does not name them on ``pickle._Unpickler``).
 _BASE_LOAD_BUILD = pickle._Unpickler.dispatch[pickle.BUILD[0]]
 _BASE_LOAD_REDUCE = pickle._Unpickler.dispatch[pickle.REDUCE[0]]
@@ -1420,6 +1258,8 @@ def _construction_refusal(opcode: str, func: Any, args: Any, kwargs: Any = None)
 
 
 def _build_refusal_text(module: str, qualname: str) -> str:
+    """Return the BUILD refusal text for a torch tensor / storage class ``module.qualname``."""
+
     return (
         f"Blocked BUILD applied to a torch {module}.{qualname} during bundle metadata "
         "unpickle: a pickle BUILD invokes __setstate__ / storage rebind (Tensor.set_) on "
@@ -1440,13 +1280,14 @@ def _build_refusal(inst: Any) -> str | None:
 def _build_type_refusal(cls: type) -> str | None:
     """Return the BUILD refusal when instances of ``cls`` are torch tensors / storages."""
 
-    try:
-        is_tensor = issubclass(cls, torch.Tensor)
-    except TypeError:  # pragma: no cover - defensive; odd metaclasses
-        is_tensor = False
-    if is_tensor or _is_torch_storage_type(cls):
+    if not isinstance(cls, type):
+        return None
+    if issubclass(cls, torch.Tensor) or _is_torch_storage_type(cls):
         return _build_refusal_text(cls.__module__, cls.__qualname__)
     return None
+
+
+_Importer = Callable[[str, str], Any]
 
 
 class _BundleAllowlistPolicy:
@@ -1467,6 +1308,8 @@ class _BundleAllowlistPolicy:
         trust_custom_callables: bool,
         allowed_custom_callable_modules: Collection[str] | None,
     ) -> None:
+        """Store the trust flags the policy consults for foreign callables."""
+
         self._trust_custom_callables = trust_custom_callables
         self._allowed_custom_callable_modules = (
             frozenset(allowed_custom_callable_modules)
@@ -1526,7 +1369,9 @@ class _BundleAllowlistPolicy:
             return module in self._allowed_custom_callable_modules
         return self._trust_custom_callables
 
-    def _resolve_global(self, module: str, name: str) -> Any:  # noqa: C901 -- explicit policy
+    def _resolve_global(  # noqa: C901 -- explicit policy
+        self, module: str, name: str, import_global: _Importer | None = None
+    ) -> Any:
         """Resolve a pickled global only if it is on the metadata allowlist.
 
         Parameters
@@ -1535,6 +1380,11 @@ class _BundleAllowlistPolicy:
             Pickled module path.
         name:
             Pickled global name.
+        import_global:
+            The base machine's importer to resolve an admitted pair with; it carries the
+            protocol state the stream set (a dotted name attribute-walks only at protocol
+            4 and above, so the walk must be the machine's, read at the opcode). Defaults
+            to this object's own importer (a direct ``find_class`` probe).
 
         Returns
         -------
@@ -1547,51 +1397,42 @@ class _BundleAllowlistPolicy:
             If the global is not admitted by the allowlist.
         """
 
+        if import_global is None:
+            import_global = self._import_global
         refuse_pre_3_module_path(module, name)
 
-        # Safe wrappers for the two legitimately-needed but individually-dangerous
-        # callables.
+        # Safe wrapper for the one legitimately-needed but individually-dangerous
+        # callable.
         if (module, name) == ("builtins", "getattr"):
             return _safe_getattr
+        # The storage leg of torch's default tensor reduction is a nested
+        # ``torch.load`` over file bytes. Refused by name, before anything else
+        # resolves: no byte from the file ever reaches torch's unpickler.
         if (module, name) == ("torch.storage", "_load_from_bytes"):
-            return _safe_load_from_bytes
+            raise pickle.UnpicklingError(
+                "Blocked torch.storage._load_from_bytes during bundle metadata "
+                "unpickle: this file embeds a tensor in its metadata in the format "
+                "TorchLens 2.36.2 and earlier wrote (an annotation value such as one "
+                "logged with tl.observers.log_value, or a small raw input or output), "
+                "which this release no longer reads. To recover it, re-run the capture "
+                "with this release and save it again; or load the file with the "
+                "release that wrote it, replace the tensors in trace.annotations with "
+                "plain values (for example tensor.tolist()), set "
+                "trace._options_save_raw_input = False and trace._options_save_transformed_output = False, and "
+                "save: the re-saved file loads here. If no TorchLens release wrote "
+                "this file, it is corrupt."
+            )
+        # The TorchLens-owned inline tensor reduction: validated arguments, an exact
+        # byte-length check and a non-resizable buffer-backed storage.
+        if (module, name) == INLINE_TENSOR_GLOBAL:
+            return rebuild_inline_tensor
 
         # Exact-pair allowlist of inert data/value types and tensor reconstructors.
         if (module, name) in _SAFE_EXPLICIT_GLOBALS:
-            return self._import_global(module, name)
+            return import_global(module, name)
 
-        # Pure torch tensor reconstruction helpers. ``_rebuild_*`` functions only
-        # reassemble tensors from already-resolved (allowlisted) components; any
-        # class they receive as an argument was itself gated through find_class.
-        #
-        # HARDENING (r28, A-R28-1 CRITICAL default-victim RCE): the prior fast-path
-        # returned ``super().find_class`` for ANY ``name`` starting with ``_rebuild``
-        # with NO further gate. Under pickle protocol >= 4 the pickled ``name`` is
-        # attribute-walked, so a DOTTED name such as
-        # ``_rebuild_tensor_v2.__globals__.get`` walks OFF the reconstructor function
-        # into ``torch._utils`` module globals and returns a REDUCE-invocable bound
-        # ``dict.get`` -> ``_import_dotted_name`` -> ``os.system`` -- a load-time RCE
-        # (fires at metadata unpickle, no ``.run()`` needed). This is the SAME
-        # dotted-walk escape class the r27 torch-type / preview branches close; the
-        # ``_rebuild`` branch was MISSED. Legit ``_rebuild_*`` reconstructor names NEVER
-        # contain a dot, so (a) refuse any DOTTED ``name`` BEFORE resolving (never
-        # trigger the walk), and (b) after resolving, positively require a torch-owned,
-        # non-type CALLABLE (the reconstructors are functions of ``torch._utils``).
         if module == "torch._utils" and name.startswith("_rebuild"):
-            if "." in name:
-                raise pickle.UnpicklingError(
-                    "Blocked dotted torch._utils._rebuild name during bundle metadata "
-                    f"unpickle: {module}.{name} (a dotted name attribute-walks off the "
-                    "reconstructor into module globals; legit _rebuild_* names have no dot)."
-                )
-            obj = self._import_global(module, name)
-            if not (callable(obj) and _is_torch_owned(obj) and not isinstance(obj, type)):
-                raise pickle.UnpicklingError(
-                    "Blocked non-torch-owned / non-callable torch._utils._rebuild "
-                    f"resolution during bundle metadata unpickle: {module}.{name} "
-                    f"(resolved to {str(getattr(obj, '__module__', '') or '')!r})."
-                )
-            return obj
+            return self._find_torch_rebuild(module, name, import_global)
 
         # torch package: admit value instances (dtype / layout / memory_format /
         # ``torch.Size`` etc.) and a resolved DATA ``type`` (tensor / Module /
@@ -1607,7 +1448,7 @@ class _BundleAllowlistPolicy:
         # callables (e.g. ``torch.serialization.load``) are denied; the two
         # individually-dangerous ones are wrapped above.
         if module == "torch" or module.startswith("torch."):
-            obj = self._import_global(module, name)
+            obj = import_global(module, name)
             if isinstance(obj, (torch.dtype, torch.layout, torch.memory_format)):
                 return obj
             if isinstance(obj, type):
@@ -1636,16 +1477,16 @@ class _BundleAllowlistPolicy:
                 # could rebind onto a tensor. torch's own ``weights_only`` baseline
                 # lists the real ``torch.storage.{Typed,Untyped}Storage`` classes, so
                 # denying them makes this unpickler a STRICT SUBSET of that baseline.
-                # ``.tlspec`` never needs one (payloads are BlobRefs; embedded storages
-                # route through the wrapped ``_safe_load_from_bytes`` nested load).
+                # ``.tlspec`` never needs one (payloads are BlobRefs; inline metadata
+                # tensors arrive whole through ``rebuild_inline_tensor``).
                 if _is_torch_storage_type(obj):
                     raise pickle.UnpicklingError(
                         "Blocked torch storage constructor during bundle metadata "
                         f"unpickle: {module}.{name} (constructing a storage allocates "
                         "raw memory -- an UntypedStorage(N) out-of-memory DoS and the "
                         "source of an uninitialized-heap tensor; .tlspec tensor "
-                        "payloads are BlobRefs and embedded storages load through the "
-                        "wrapped weights_only _load_from_bytes path)."
+                        "payloads are BlobRefs and inline metadata tensors arrive "
+                        "whole through the TorchLens inline tensor reduction)."
                     )
                 if _torch_type_denied(module, name, obj):
                     raise pickle.UnpicklingError(
@@ -1663,7 +1504,7 @@ class _BundleAllowlistPolicy:
         if any(
             module == root or module.startswith(root + ".") for root in _PREVIEW_ARRAY_MODULE_ROOTS
         ):
-            obj = self._import_global(module, name)
+            obj = import_global(module, name)
             if isinstance(obj, type):
                 # As in the torch branch: a resolved TYPE is admitted only when its
                 # OWN real module is within a preview-array root. A DOTTED pickled
@@ -1707,7 +1548,7 @@ class _BundleAllowlistPolicy:
         # / helper that cannot import/exec/open/spawn): a pickle ``REDUCE`` INVOKES
         # the admitted callable with attacker args, and the pre-r21 blanket
         # ``_is_torchlens_owned`` admission trusted EVERY torchlens-owned callable --
-        # including the private import gadget ``torchlens._utils._module_is_installed``
+        # including the private import gadget ``torchlens.report._environment._module_is_installed``
         # (``importlib.import_module`` of attacker input == confirmed load-time RCE).
         # The gate is DETERMINISTIC (public-name + side-effect-name guard), never
         # keyed off the live facet registry (that ordering-dependent snapshot was a
@@ -1720,7 +1561,7 @@ class _BundleAllowlistPolicy:
         if (
             module == "torchlens" or module.startswith("torchlens.")
         ) and not _is_torchlens_appliance_module(module):
-            obj = self._import_global(module, name)
+            obj = import_global(module, name)
             if isinstance(obj, type):
                 # A resolved TYPE is NO LONGER admitted unconditionally: a pickle
                 # ``REDUCE`` INVOKES the type (or its reconstructed instance) with
@@ -1794,7 +1635,7 @@ class _BundleAllowlistPolicy:
                     "into __globals__/__builtins__/__dict__ escapes the resolved-module "
                     "denylist recheck)."
                 )
-            obj = self._import_global(module, name)
+            obj = import_global(module, name)
             # A resolved MAPPING (e.g. a module's ``__globals__`` / ``__dict__`` reached
             # by a dotted walk that the dunder guard above did not already refuse) is
             # never a legitimate foreign recipe callable/type, and its real
@@ -1907,6 +1748,40 @@ class _BundleAllowlistPolicy:
         #    to CALL it (facet computation, or a ``__reduce__`` gadget) fails closed.
         return _DeferredForeignCallable(module, name)
 
+    def _find_torch_rebuild(self, module: str, name: str, import_global: _Importer) -> Any:
+        """Resolve a ``torch._utils._rebuild*`` reconstructor for ``find_class``."""
+        # Pure torch tensor reconstruction helpers. ``_rebuild_*`` functions only
+        # reassemble tensors from already-resolved (allowlisted) components; any
+        # class they receive as an argument was itself gated through find_class.
+        #
+        # HARDENING (r28, A-R28-1 CRITICAL default-victim RCE): the prior fast-path
+        # returned ``super().find_class`` for ANY ``name`` starting with ``_rebuild``
+        # with NO further gate. Under pickle protocol >= 4 the pickled ``name`` is
+        # attribute-walked, so a DOTTED name such as
+        # ``_rebuild_tensor_v2.__globals__.get`` walks OFF the reconstructor function
+        # into ``torch._utils`` module globals and returns a REDUCE-invocable bound
+        # ``dict.get`` -> ``_import_dotted_name`` -> ``os.system`` -- a load-time RCE
+        # (fires at metadata unpickle, no ``.run()`` needed). This is the SAME
+        # dotted-walk escape class the r27 torch-type / preview branches close; the
+        # ``_rebuild`` branch was MISSED. Legit ``_rebuild_*`` reconstructor names NEVER
+        # contain a dot, so (a) refuse any DOTTED ``name`` BEFORE resolving (never
+        # trigger the walk), and (b) after resolving, positively require a torch-owned,
+        # non-type CALLABLE (the reconstructors are functions of ``torch._utils``).
+        if "." in name:
+            raise pickle.UnpicklingError(
+                "Blocked dotted torch._utils._rebuild name during bundle metadata "
+                f"unpickle: {module}.{name} (a dotted name attribute-walks off the "
+                "reconstructor into module globals; legit _rebuild_* names have no dot)."
+            )
+        obj = import_global(module, name)
+        if not (callable(obj) and _is_torch_owned(obj) and not isinstance(obj, type)):
+            raise pickle.UnpicklingError(
+                "Blocked non-torch-owned / non-callable torch._utils._rebuild "
+                f"resolution during bundle metadata unpickle: {module}.{name} "
+                f"(resolved to {str(getattr(obj, '__module__', '') or '')!r})."
+            )
+        return obj
+
 
 class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
     """Default-deny unpickler for untrusted TorchLens bundle ``metadata.pkl``.
@@ -1981,8 +1856,9 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
 
         Outside a ``load()`` (a direct probe) this is the bare policy. Inside one, every
         global the stream names was already resolved by the pre-scan through the same
-        policy; a name the pre-scan did not see is a stream that changed under the
-        loader and is refused.
+        policy (or refused by it: the refusal is raised here, at the GLOBAL that named
+        it); a name the pre-scan did not see is a stream that changed under the loader
+        and is refused.
         """
 
         plan = self._plan
@@ -1990,6 +1866,10 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
             return self._resolve_global(module, name)
         pair = (module, name)
         plan.global_lookups += 1
+        if plan.refused is not None and pair == plan.refused[0]:
+            # The pre-scan's deferred refusal: raised here, at the GLOBAL that named it,
+            # after every earlier opcode ran for real (the pure-Python machine's order).
+            raise plan.refused[1]
         try:
             obj = plan.resolved[pair]
         except KeyError:
@@ -2005,8 +1885,8 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
         """Return the pre-scan plan, or ``None`` when the interpreter must run instead."""
 
         ceiling = self._max_opcodes if len(self._data) > self._count_opcodes_above else None
-        self.prescan_opcodes = scan_opcodes(self._data, ceiling)
         try:
+            self.prescan_opcodes = scan_opcodes(self._data, ceiling)
             plan = prescan_stream(
                 self._data,
                 resolve=self._resolve_global,
@@ -2064,6 +1944,7 @@ class _PurePythonBundleUnpickler(_BundleAllowlistPolicy, pickle._Unpickler):
         """Initialize the interpreter with the same trust flags as the fast path."""
 
         super().__init__(file)
+        self._stream = file
         self._init_policy(trust_custom_callables, allowed_custom_callable_modules)
 
     def load(self) -> Any:
@@ -2142,8 +2023,37 @@ class _PurePythonBundleUnpickler(_BundleAllowlistPolicy, pickle._Unpickler):
             raise pickle.UnpicklingError(reason)
         return super()._instantiate(klass, args)  # type: ignore[misc]
 
+    def load_ext(self) -> None:
+        """Refuse EXT1 / EXT2 / EXT4 before any extension-registry lookup.
+
+        They resolve a code through the process-wide ``copyreg`` registry and cache the
+        result process-wide. The writer emits one only for a code registered in the
+        writing process, which no other process could load, so metadata never uses them.
+        The C path refuses the same opcodes in the reader pass (``scan_opcodes``).
+        """
+
+        raise pickle.UnpicklingError(_CORRUPT_PREFIX + _EXT_REFUSAL)
+
+    def load_frame(self) -> None:
+        """Refuse a FRAME declaring more bytes than remain in the stream, before reading it.
+
+        The base VM passes the declared size to ``file.read``, which a buffered file
+        allocates up front. A stream that cannot report its length is refused. The C
+        path holds the whole stream in memory and bounds every FRAME in the reader pass.
+        """
+
+        (frame_size,) = struct.unpack("<Q", self.read(8))  # type: ignore[attr-defined]
+        left = _stream_bytes_left(self._stream)
+        if left is None or frame_size > left:
+            raise pickle.UnpicklingError(_CORRUPT_PREFIX + _FRAME_REFUSAL)
+        self._unframer.load_frame(frame_size)  # type: ignore[attr-defined]
+
     dispatch = _DenyMissingDispatch(pickle._Unpickler.dispatch)
     dispatch[pickle.BUILD[0]] = load_build
     dispatch[pickle.REDUCE[0]] = load_reduce
     dispatch[pickle.NEWOBJ[0]] = load_newobj
     dispatch[pickle.NEWOBJ_EX[0]] = load_newobj_ex
+    dispatch[pickle.EXT1[0]] = load_ext
+    dispatch[pickle.EXT2[0]] = load_ext
+    dispatch[pickle.EXT4[0]] = load_ext
+    dispatch[pickle.FRAME[0]] = load_frame

@@ -48,7 +48,7 @@ def runnable_artifact(
         model,
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -140,7 +140,7 @@ def test_load_state_dict_maps_names_to_slots_and_does_not_execute(
 
     trace = _load(runnable_artifact)
     state = runnable_artifact[1]
-    descriptor_before = trace.runnable_descriptor
+    descriptor_before = trace._sparse_run_descriptor
     calls_before = dict(trace._runnable.callables_by_call_id)
     for call_id in calls_before:
         trace._runnable.callables_by_call_id[call_id] = _execution_forbidden
@@ -152,7 +152,7 @@ def test_load_state_dict_maps_names_to_slots_and_does_not_execute(
     assert trace.readiness is not None
     assert trace.readiness.state_sources_available[0] is StateSource.USER_STATE_DICT
     assert prepared.random_filled_slot_ids == ()
-    assert trace.runnable_descriptor is descriptor_before
+    assert trace._sparse_run_descriptor is descriptor_before
     for slot in descriptor_before.tensor_slots:
         if slot.state_binding is None:
             assert slot.slot_id not in prepared.slot_values
@@ -217,7 +217,7 @@ def test_load_state_dict_verifies_module_path_and_semantic_role(
     """Verify recorded ownership and role only after canonical name mapping."""
 
     trace = _load(runnable_artifact)
-    descriptor = trace.runnable_descriptor
+    descriptor = trace._sparse_run_descriptor
     assert descriptor is not None
     slots = list(descriptor.tensor_slots)
     index = next(
@@ -242,7 +242,7 @@ def test_alias_groups_reject_conflicts_and_share_one_staged_value(
     """Require coherent alias entries and stage one shared tensor allocation."""
 
     trace = _load(runnable_artifact)
-    descriptor = trace.runnable_descriptor
+    descriptor = trace._sparse_run_descriptor
     assert descriptor is not None
     original = next(
         slot
@@ -318,7 +318,7 @@ def test_n1a_initializes_every_role_deterministically_and_names_every_slot(
     """Allocate parameters/buffers per N1-a with isolated seeded determinism."""
 
     trace = _load(runnable_artifact)
-    descriptor = trace.runnable_descriptor
+    descriptor = trace._sparse_run_descriptor
     assert descriptor is not None
     template = next(
         slot for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.PARAMETER

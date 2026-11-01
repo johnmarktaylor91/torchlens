@@ -328,7 +328,7 @@ def test_subclass_output_capture():
 def test_parameter_outputs_stay_excluded():
     """The nn.Parameter carve-out of the emit gate must survive the isinstance fix."""
 
-    from torchlens.backends.torch.ops import _output_should_be_logged
+    from torchlens.backends.torch._ops_exhaustive import _output_should_be_logged
 
     assert not _output_should_be_logged(nn.Parameter(torch.zeros(2)), True)
     assert _output_should_be_logged(torch.zeros(2), True)
@@ -394,11 +394,11 @@ def test_custom_passthrough_module_boundary_connectivity():
 
 
 def test_label_version_snapshot_session_scoped():
-    from torchlens.backends.torch._tl import begin_label_session, end_label_session
-    from torchlens.backends.torch.ops import (
+    from torchlens.backends.torch._ops_capture_records import (
         _label_version_baseline,
         _record_label_version_snapshot,
     )
+    from torchlens.backends.torch._tl import begin_label_session, end_label_session
 
     t = torch.zeros(3)
     try:

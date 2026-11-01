@@ -33,13 +33,13 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-import hashlib
-import json
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from .._utils.hashing import sha256_canonical_json
+from ..errors.episode import EpisodeCaptureError, EpisodeLedgerError
 from ._episode_derivation import (
     _call_returned,
     _declaration_error,
@@ -1083,16 +1083,9 @@ def producer_digest(outcome_payload: Mapping[str, Any], ledger: EpisodeLedger) -
     DOCUMENTED-UNSTABLE (naming session 2).
     """
 
-    canonical = json.dumps(
-        {
-            "outcome": dict(outcome_payload),
-            "ledger": ledger.to_payload(),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
+    return sha256_canonical_json(
+        {"outcome": dict(outcome_payload), "ledger": ledger.to_payload()}, default=str
     )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -1140,8 +1133,6 @@ class ResolvedEpisode:
 
 def _ledger_error(message: str, *, code: str) -> Exception:
     """Build the typed ledger refusal."""
-
-    from ..errors.episode import EpisodeLedgerError
 
     return EpisodeLedgerError(message, code=code)
 
@@ -1477,7 +1468,7 @@ def _build_header(
 ) -> EpisodeLedgerHeader:
     """Build the finalized ledger header from the settled trace."""
 
-    entry_seed = getattr(trace, "random_seed", None)
+    entry_seed = trace._options_seed
     if not isinstance(entry_seed, int) or isinstance(entry_seed, bool):
         raise _ledger_error(
             "episode ledger requires the capture's effective random_seed (the "
@@ -1636,8 +1627,6 @@ def _attach_settlement_partial_log(exc: BaseException, trace: Any) -> None:
     propagates unmodified (the refusal itself is never masked).
     """
 
-    from ..errors.episode import EpisodeCaptureError
-
     if not isinstance(exc, EpisodeCaptureError):
         return
     if getattr(exc, "partial_log", None) is not None:
@@ -1717,7 +1706,7 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
     )
 
     frontier: dict[str, str] | None = None
-    halt_frontier = getattr(trace, "halt_frontier", None)
+    halt_frontier = trace._graph_stop_frontier
     if halt_frontier:
         first = halt_frontier[0] if isinstance(halt_frontier, (list, tuple)) else halt_frontier
         frontier = {"boundary_kind": "op", "boundary_label": str(first)}
@@ -1863,7 +1852,7 @@ def capture_kind_for(trace: Any) -> str:
     otherwise, including fresh re-execution products whose episode evidence
     the annotations travel policy dropped (those are not episode products;
     the in-key note is the disclosure). Implementation behind the public
-    ``Trace.capture_kind`` spelling (lane F40a; DOCUMENTED-UNSTABLE).
+    ``Trace.provenance.kind`` spelling (lane F40a; DOCUMENTED-UNSTABLE).
     """
 
     annotations = getattr(trace, "annotations", None)

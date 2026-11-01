@@ -20,6 +20,7 @@ from typing import Any, Literal
 
 from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning
+from ..errors.episode import BundleRelationError
 from . import ArtifactError
 
 #: Writer-owned bare ``bundle.json`` section keys. ``_tlspec_prerelease`` is
@@ -165,7 +166,6 @@ def _load_gated_member_relations(
     if relations_payload is None:
         return None
     from ..bundle._relations import MemberRelationTable
-    from ..errors.episode import BundleRelationError
 
     try:
         table = MemberRelationTable.from_payload(relations_payload, unknown_kinds=unknown_relations)
@@ -203,7 +203,6 @@ def _refuse_kinds_unadmitted_at(rows: tuple[Any, ...], tlspec_version: Any) -> N
     if not isinstance(tlspec_version, int) or isinstance(tlspec_version, bool):
         return
     from ..bundle._relations import RELATION_KIND_ADMITTED_FROM
-    from ..errors.episode import BundleRelationError
 
     for index, row in enumerate(rows):
         admitted = RELATION_KIND_ADMITTED_FROM.get(row.kind)
@@ -279,7 +278,6 @@ def _load_lineage_sections(
     """
 
     from ..bundle._lineage import validate_member_construction
-    from ..errors.episode import BundleRelationError
 
     loaded: dict[str, Any] = {
         "bundle_id": None,

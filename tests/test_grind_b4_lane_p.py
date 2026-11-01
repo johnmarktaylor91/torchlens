@@ -12,6 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.prepare.cache as prepare_cache
 from torchlens import _user_funcs as user_funcs
 from torchlens._capture_state_helpers import (
     _facet_recipe_cache_key,
@@ -64,23 +65,23 @@ def test_capture_cache_separates_training_and_nonpersistent_state(tmp_path: Path
     x = torch.ones(1)
     model = _NonPersistentBufferModel().eval()
     first = tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     assert (
         tl.trace(
             model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
-        ).capture_cache_hit
+        ).provenance.cache_hit
         is True
     )
 
     model.train()
     training = tl.trace(model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
-    assert training.capture_cache_hit is False
+    assert training.provenance.cache_hit is False
 
     model.offset.fill_(3)
     changed_buffer = tl.trace(
         model, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
     )
-    assert changed_buffer.capture_cache_hit is False
+    assert changed_buffer.provenance.cache_hit is False
     assert torch.equal(changed_buffer[changed_buffer.output_layers[0]].out, torch.tensor([4.0]))
 
 
@@ -155,7 +156,7 @@ def test_static_attr_cache_never_self_retains_its_weak_key() -> None:
 def test_capture_cache_lru_and_clear(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Capture cache enforces its entry cap and exposes bounded clearing."""
 
-    monkeypatch.setattr(user_funcs, "_CAPTURE_CACHE_MAX_ENTRIES", 2)
+    monkeypatch.setattr(prepare_cache, "_CAPTURE_CACHE_MAX_ENTRIES", 2)
     x = torch.ones(1, 1)
     for value in (1.0, 2.0, 3.0):
         model = nn.Linear(1, 1, bias=False)
@@ -394,13 +395,13 @@ def test_over_ceiling_entry_is_refused_at_store_not_wiped_at_evict(
     total_small = sum(path.stat().st_size for path in cache_root.glob("*.pkl"))
 
     # Ceiling above the two valid entries combined, below the big capture.
-    monkeypatch.setattr(user_funcs, "_CAPTURE_CACHE_MAX_BYTES", max(total_small + 4096, 200_000))
+    monkeypatch.setattr(prepare_cache, "_CAPTURE_CACHE_MAX_BYTES", max(total_small + 4096, 200_000))
 
     big = nn.Linear(1, 1, bias=False)
     big.register_buffer("big_buffer", torch.arange(120_000, dtype=torch.float32))
     with pytest.warns(UserWarning, match="above the .*byte cache-entry ceiling"):
         first = tl.trace(big, x, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path))
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
 
     surviving = sorted(path.name for path in cache_root.glob("*.pkl"))
     assert surviving == small_entries, (
@@ -477,14 +478,14 @@ def test_accessor_caches_invalidate_on_rebind_resize_and_invalidator(tmp_path: P
     ops_before = trace.ops
     # Rows 1 and 2 are the two counted ops (linear, relu); row 0 is the input
     # row, which the counted ``trace.ops`` view leaves out (sumfam F1).
-    first_two = list(trace.layer_list[1:3])
+    first_two = list(trace._layer_list[1:3])
 
     # Unchanged containers re-serve the memo (identity-stable, O(1) key).
     assert trace.ops is ops_before
 
     # Equal-length in-place swap + the explicit invalidator (the supported
     # spelling for direct in-place edits of trace build products).
-    trace.layer_list[1], trace.layer_list[2] = trace.layer_list[2], trace.layer_list[1]
+    trace._layer_list[1], trace._layer_list[2] = trace._layer_list[2], trace._layer_list[1]
     _invalidate_trace_op_layer_accessor_caches(trace)
     swapped = trace.ops
     assert swapped is not ops_before
@@ -492,18 +493,18 @@ def test_accessor_caches_invalidate_on_rebind_resize_and_invalidator(tmp_path: P
 
     # Equal-length reassignment auto-invalidates via container identity.
     layers_before = trace.layers
-    items = list(trace.layer_logs.items())
-    trace.layer_logs = dict(reversed(items))
+    items = list(trace._layer_logs.items())
+    trace._layer_logs = dict(reversed(items))
     layers_after = trace.layers
     assert layers_after is not layers_before
 
     # A size change auto-invalidates via the length axis.
     ops_full = trace.ops
-    removed = trace.layer_list.pop()
+    removed = trace._layer_list.pop()
     try:
         assert trace.ops is not ops_full
     finally:
-        trace.layer_list.append(removed)
+        trace._layer_list.append(removed)
 
     # Unchanged content still re-serves the memo (no per-access rebuilds).
     assert trace.layers is layers_after
@@ -574,7 +575,7 @@ def test_barcode_remap_scrubs_every_registered_barcode(tmp_path: Path) -> None:
         equivalence = getattr(op, "equivalence_class", None)
         if isinstance(equivalence, str):
             leaked.extend(b for b in raw_barcodes if b in equivalence)
-    for key in getattr(loaded, "op_equivalence_classes", {}) or {}:
+    for key in getattr(loaded, "_graph_op_equivalence_classes", {}) or {}:
         if isinstance(key, str):
             leaked.extend(b for b in raw_barcodes if b in key)
     assert not leaked, f"raw capture barcodes leaked into persisted identity keys: {leaked!r}"

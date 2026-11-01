@@ -6,7 +6,7 @@ import inspect
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
@@ -18,53 +18,6 @@ from ... import _state
 from ..._utils import _torch_compat
 from ..._utils._torch_symbols import torch_attr
 from ._tl import DescriptorCompatProperty
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _HOST_ESCAPE_OBSERVER_FAILED,
-        _INPUT_METADATA_INT_PROPERTY_NAMES,
-        _INPUT_METADATA_PRESENCE_PROPERTY_NAMES,
-        _MODULE_ESCAPE_TARGETS,
-        _STATE_METADATA_DIRECT_ONLY_NAMES,
-        _STATE_METADATA_PLACEMENT_OBSERVED_NAMES,
-        _STATE_ROUTE_READ_KIND,
-        _STORAGE_RAW_POINTER_TARGETS,
-        _STORAGE_WRAPPED_DISPOSITIONS,
-        HOST_VALUE_ESCAPE_METHODS,
-        HOST_VALUE_ESCAPE_MODULE_FUNCS,
-        INPUT_METADATA_BOOL_METHODS,
-        INPUT_METADATA_PREDICATE_FUNCS,
-        INPUT_METADATA_PROPERTY_NAMES,
-        INVISIBLE_HOST_ESCAPE_FUNCS,
-        INVISIBLE_HOST_ESCAPE_PROPERTIES,
-        STATE_METADATA_MIRROR,
-        STORAGE_BRIDGE_ESCAPE_FUNCS,
-        STORAGE_METADATA_ACCESSOR_DISPOSITIONS,
-        _check_writeback_watch,
-        _discharge_placement_dispatch,
-        _internal_read_active,
-        _make_host_value_escape_method,
-        _make_host_value_predicate_module_wrapper,
-        _make_invisible_escape_property,
-        _make_invisible_escape_wrapper,
-        _make_module_escape_wrapper,
-        _make_nonowner_ops_call,
-        _make_nonowner_private_c_callable,
-        _make_storage_metadata_wrapper,
-        _make_storage_property_wrapper,
-        _make_storage_raw_pointer_wrapper,
-        _nonowner_escape_observe,
-        _observe_input_metadata_read,
-        _observe_state_metadata_read,
-        _observe_state_metadata_read_direct,
-        _observe_state_placement_read,
-        _observe_state_property_read,
-        _placement_read_witnessed,
-        _private_c_module_callables,
-        _StorageOriginRegistry,
-        _torch_ops_call_classes,
-        _WitnessState,
-    )
 
 __all__ = (
     "_make_input_metadata_wrapper",
@@ -738,3 +691,64 @@ def _observe_invisible_host_escapes(state: _WitnessState) -> Iterator[None]:
     finally:
         _restore_installed()
         _check_writeback_watch(state)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._completeness_boundaries import (  # noqa: E402
+    _observe_input_metadata_read,
+)
+from ._completeness_cross_thread import (  # noqa: E402
+    _internal_read_active,
+    _make_nonowner_ops_call,
+    _make_nonowner_private_c_callable,
+    _nonowner_escape_observe,
+    _private_c_module_callables,
+    _torch_ops_call_classes,
+)
+from ._completeness_dispatch import (  # noqa: E402
+    _make_invisible_escape_wrapper,
+)
+from ._completeness_finalize import (  # noqa: E402
+    _MODULE_ESCAPE_TARGETS,
+    _STORAGE_RAW_POINTER_TARGETS,
+    _check_writeback_watch,
+)
+from ._completeness_metadata import (  # noqa: E402
+    _discharge_placement_dispatch,
+    _observe_state_metadata_read,
+    _observe_state_metadata_read_direct,
+    _observe_state_placement_read,
+    _observe_state_property_read,
+    _placement_read_witnessed,
+)
+from ._completeness_storage import (  # noqa: E402
+    _make_host_value_escape_method,
+    _make_host_value_predicate_module_wrapper,
+    _make_invisible_escape_property,
+    _make_module_escape_wrapper,
+    _make_storage_metadata_wrapper,
+    _make_storage_property_wrapper,
+    _make_storage_raw_pointer_wrapper,
+)
+from .completeness_witness import (  # noqa: E402
+    _HOST_ESCAPE_OBSERVER_FAILED,
+    _INPUT_METADATA_INT_PROPERTY_NAMES,
+    _INPUT_METADATA_PRESENCE_PROPERTY_NAMES,
+    _STATE_METADATA_DIRECT_ONLY_NAMES,
+    _STATE_METADATA_PLACEMENT_OBSERVED_NAMES,
+    _STATE_ROUTE_READ_KIND,
+    _STORAGE_WRAPPED_DISPOSITIONS,
+    HOST_VALUE_ESCAPE_METHODS,
+    HOST_VALUE_ESCAPE_MODULE_FUNCS,
+    INPUT_METADATA_BOOL_METHODS,
+    INPUT_METADATA_PREDICATE_FUNCS,
+    INPUT_METADATA_PROPERTY_NAMES,
+    INVISIBLE_HOST_ESCAPE_FUNCS,
+    INVISIBLE_HOST_ESCAPE_PROPERTIES,
+    STATE_METADATA_MIRROR,
+    STORAGE_BRIDGE_ESCAPE_FUNCS,
+    STORAGE_METADATA_ACCESSOR_DISPOSITIONS,
+    _StorageOriginRegistry,
+    _WitnessState,
+)

@@ -69,13 +69,13 @@ def _mlp(x: Any, w1: Any, b1: Any, w2: Any, b2: Any) -> Any:
 def _output_op(trace: Any) -> Any:
     """Return the output-parent op of a trace."""
 
-    return next(op for op in trace.layer_list if op.is_output_parent)
+    return next(op for op in trace._layer_list if op.is_output_parent)
 
 
 def _relu_op(trace: Any) -> Any:
     """Return the relu op of a trace."""
 
-    return next(op for op in trace.layer_list if "relu" in op.label)
+    return next(op for op in trace._layer_list if "relu" in op.label)
 
 
 def _ablated_trace() -> Any:
@@ -93,8 +93,8 @@ def test_paddle_capability_lift_is_real() -> None:
     """The lifted flag binds a resolvable implementing surface."""
 
     spec = tl.backends.spec("paddle")
-    assert spec.capabilities.interventions is True
-    implementation = require_capability_implementation(spec, "interventions")
+    assert spec.capabilities.can_intervene is True
+    implementation = require_capability_implementation(spec, "can_intervene")
     assert implementation is not None
 
 
@@ -106,10 +106,10 @@ def test_paddle_zero_ablate_e2e_changes_downstream_and_validates() -> None:
 
     relu = _relu_op(ablated)
     assert float(relu.out.abs().max()) == 0.0
-    assert relu.intervention_replaced is True
-    fire_records = list(relu.interventions)
+    assert relu.is_edited is True
+    fire_records = list(relu.edits)
     assert fire_records and fire_records[0].replaced is True
-    assert fire_records[0].helper_name == "zero_ablate"
+    assert fire_records[0].edit_name == "zero_ablate"
 
     downstream_delta = np.abs(_output_op(plain).out.numpy() - _output_op(ablated).out.numpy()).max()
     assert downstream_delta > 1.0
@@ -202,9 +202,9 @@ def test_paddle_halt_stops_execution_at_frontier() -> None:
 
     trace = tl.trace(mlp_with_flag, _inputs(), backend="paddle", halt=tl.func("functional.relu"))
     assert executed == []
-    assert trace.halted is True
-    assert "relu" in str(trace.halt_reason)
-    assert trace.halt_frontier == trace.halt_reason
+    assert trace.is_stopped is True
+    assert "relu" in str(trace.stop_reason)
+    assert trace.graph.stop_frontier == trace.stop_reason
     assert not any("linear_2" in label for label in trace.layer_labels)
     assert any("relu" in label for label in trace.layer_labels)
     assert PaddleBackend().validate_trace(trace) is True
@@ -219,7 +219,7 @@ def test_paddle_halt_value_dependent_predicate() -> None:
         backend="paddle",
         halt=lambda ctx: ctx.func_name == "functional.relu",
     )
-    assert trace.halted is True
+    assert trace.is_stopped is True
 
 
 def test_paddle_halt_non_bool_predicate_refuses_typed() -> None:
@@ -239,8 +239,8 @@ def test_paddle_tamper_stripped_evidence_fails_validation() -> None:
     index = next(i for i, capture in enumerate(captures) if capture.intervention is not None)
     captures[index] = dataclasses.replace(captures[index], intervention=None)
     relu = _relu_op(trace)
-    relu.intervention_replaced = False
-    relu.interventions = []
+    relu.is_edited = False
+    relu.edits = []
     assert PaddleBackend().validate_trace(trace) is False
 
 
@@ -257,8 +257,8 @@ def test_paddle_tamper_stripped_op_fire_records_fails_validation() -> None:
 
     trace = _ablated_trace()
     relu = _relu_op(trace)
-    relu.intervention_replaced = False
-    relu.interventions = []
+    relu.is_edited = False
+    relu.edits = []
     assert PaddleBackend().validate_trace(trace) is False
 
 
@@ -283,9 +283,8 @@ def test_paddle_backward_direction_refuses_typed() -> None:
             _inputs(),
             backend="paddle",
             intervene=tl.when(
-                tl.func("functional.relu"),
+                tl.grad(tl.func("functional.relu")),
                 tl.zero_ablate(),
-                direction="backward",
             ),
         )
 
@@ -370,7 +369,7 @@ def test_paddle_recipes_snapshot_dispatches() -> None:
         return {"is_relu": "relu" in str(getattr(record, "label", ""))}
 
     trace = tl.trace(_mlp, _inputs(), backend="paddle", facets=[recipe])
-    snapshot = trace.facet_registry_snapshot
+    snapshot = trace.facet_functions
     assert snapshot is not None
     assert any("recipe" in entry.public.name for entry in snapshot.functions)
 
@@ -398,7 +397,7 @@ def test_paddle_intervene_and_save_predicates_compose() -> None:
     relu = _relu_op(trace)
     assert relu.has_saved_activation is True
     assert float(relu.out.abs().max()) == 0.0
-    linear_ops = [op for op in trace.layer_list if "linear" in op.label]
+    linear_ops = [op for op in trace._layer_list if "linear" in op.label]
     assert all(not op.has_saved_activation for op in linear_ops)
 
 
@@ -410,6 +409,6 @@ def test_paddle_intervened_trace_round_trips_metadata(tmp_path: Any) -> None:
     trace.save(path)
     loaded = tl.load(path)
     relu = _relu_op(loaded)
-    assert relu.intervention_replaced is True
-    assert any(record.replaced for record in relu.interventions)
+    assert relu.is_edited is True
+    assert any(record.replaced for record in relu.edits)
     assert float(relu.out.abs().max()) == 0.0

@@ -39,14 +39,13 @@ def _save(model: nn.Module, args: Any, path: Path) -> Path:
     trace = tl.trace(
         model,
         args,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
     return path
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_r35_device_diverged_run_is_never_attested(tmp_path: Path) -> None:
     """corr2_7 repro: a device-diverged poisoned run must be not_applicable."""
@@ -93,7 +92,7 @@ def test_r35_report_constructor_rejects_attested_nonverified() -> None:
         StateSource,
         WitnessCompleteness,
     )
-    from torchlens._runnable_execution import _run_report
+    from torchlens._runnable_path_faithfulness import _run_report
     from torchlens.types import ReadinessReport
 
     readiness = ReadinessReport(

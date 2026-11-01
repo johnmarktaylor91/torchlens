@@ -397,7 +397,7 @@ def test_save_new_outs_train_mode_inherits() -> None:
 
     saved = trace[trace.output_layers[0]].out
     assert saved.grad_fn is not None
-    assert trace.backward_ready is True
+    assert trace.options.backward_ready is True
     trace.cleanup()
 
 
@@ -421,8 +421,8 @@ def test_save_new_outs_train_mode_overrides() -> None:
 
     saved = trace[trace.output_layers[0]].out
     assert saved.grad_fn is not None
-    assert trace.detach_saved_activations is True
-    assert trace.backward_ready is False
+    assert trace.options.detach_saved_activations is True
+    assert trace.options.backward_ready is False
     assert [layer.detach_saved_activations for layer in trace] == original_layer_flags
     trace.cleanup()
 
@@ -512,7 +512,7 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     else:
         raise AssertionError("Expected fast-pass graph mismatch")
 
-    assert trace.detach_saved_activations is True
-    assert trace.backward_ready is False
+    assert trace.options.detach_saved_activations is True
+    assert trace.options.backward_ready is False
     assert [layer.detach_saved_activations for layer in trace] == original_layer_flags
     trace.cleanup()

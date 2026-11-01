@@ -11,21 +11,34 @@ from __future__ import annotations
 
 import pytest
 
-from torchlens.backends.torch import completeness_witness as witness_module
+import torchlens.backends.torch._completeness_dispatch_names
+from torchlens.backends.torch import (
+    _completeness_dispatch_names,
+    completeness_witness as witness_module,
+)
 
 
 def _call_dispatch_callsite_from(filename: str) -> None:
     """Invoke ``_dispatch_callsite`` with ``filename`` as the walked frame."""
 
     code = compile("probe()", filename, "exec")
-    exec(code, {"probe": lambda: witness_module._dispatch_callsite()})  # noqa: S102 - test-owned source
+    exec(
+        code,
+        {
+            "probe": lambda: (
+                torchlens.backends.torch._completeness_dispatch_names._dispatch_callsite()
+            )
+        },
+    )  # noqa: S102 - test-owned source
 
 
 def test_framework_filename_verdicts_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     """Distinct generated filenames beyond the cap evict FIFO, never grow."""
 
     cap = 64
-    monkeypatch.setattr(witness_module, "_FRAMEWORK_FILENAME_VERDICTS_MAX_ENTRIES", cap)
+    # The defining module and the witness module that reads the cap through its import.
+    for module in (witness_module, _completeness_dispatch_names):
+        monkeypatch.setattr(module, "_FRAMEWORK_FILENAME_VERDICTS_MAX_ENTRIES", cap)
     snapshot = dict(witness_module._FRAMEWORK_FILENAME_VERDICTS)
     witness_module._FRAMEWORK_FILENAME_VERDICTS.clear()
     try:

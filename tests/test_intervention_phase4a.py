@@ -33,21 +33,21 @@ class _MultiOutputModel(torch.nn.Module):
 
 
 def test_intervention_ready_sets_relationship_evidence() -> None:
-    """``intervention_ready=True`` marks the log and seeds relationship evidence."""
+    """``replayable=True`` marks the log and seeds relationship evidence."""
 
     model = _TinyInterventionModel()
     x = torch.randn(2, 3)
 
-    log = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=CaptureOptions(replayable=True))
 
-    assert log.intervention_ready is True
-    assert log.model_object_id == id(model)
-    assert log.model_class_qualname == f"{type(model).__module__}.{type(model).__qualname__}"
-    assert log.param_hash_quick is not None
-    assert log.param_hash_full == log.param_hash_quick
-    assert log.input_object_id == id(x)
-    assert log.input_signature_hash is not None
-    assert log.save_arg_values is False
+    assert log.is_replayable is True
+    assert log.provenance.model_object_id == id(model)
+    assert log.source.class_qualname == f"{type(model).__module__}.{type(model).__qualname__}"
+    assert log.provenance.param_hash_quick is not None
+    assert log.provenance.param_hash_full == log.provenance.param_hash_quick
+    assert log.provenance.input_object_id == id(x)
+    assert log.provenance.input_signature_hash is not None
+    assert log.options.save_args is False
 
 
 def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:
@@ -56,12 +56,12 @@ def test_intervention_ready_allows_default_and_empty_layer_selections() -> None:
     tl.trace(
         _TinyInterventionModel(),
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
     tl.trace(
         _TinyInterventionModel(),
         torch.randn(2, 3),
-        capture=CaptureOptions(intervention_ready=True, layers_to_save=[]),
+        capture=CaptureOptions(replayable=True, layers_to_save=[]),
     )
 
 
@@ -71,13 +71,13 @@ def test_func_call_id_is_assigned_and_shared_for_multi_output_calls() -> None:
     log = tl.trace(
         _MultiOutputModel(),
         torch.randn(4, 5),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
-    ids = [layer.func_call_id for layer in log.layer_list if layer.func_call_id is not None]
+    ids = [layer.func_call_id for layer in log._layer_list if layer.func_call_id is not None]
     assert ids
 
-    max_layers = [layer for layer in log.layer_list if layer.func_name == "max"]
+    max_layers = [layer for layer in log._layer_list if layer.func_name == "max"]
     assert len(max_layers) == 2
     assert len({layer.func_call_id for layer in max_layers}) == 1
 

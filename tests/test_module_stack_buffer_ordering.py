@@ -56,8 +56,8 @@ def test_dynamic_buffer_module_attribution() -> None:
     model = BufferParent()
     trace = tl.trace(model, torch.randn(2, 4))
 
-    creation_ops = [op for op in trace.layer_list if op.func_name == "ones"]
+    creation_ops = [op for op in trace._layer_list if op.func_name == "ones"]
     assert creation_ops, "expected the dynamic buffer creation op to be captured"
     assert any("dynamic" in str(module) for op in creation_ops for module in op.modules)
-    assert any("consumer" in str(module) for op in trace.layer_list for module in op.modules)
-    assert any("mul" in op.layer_label for op in trace.layer_list), "expected child buffer use"
+    assert any("consumer" in str(module) for op in trace._layer_list for module in op.modules)
+    assert any("mul" in op.layer_label for op in trace._layer_list), "expected child buffer use"

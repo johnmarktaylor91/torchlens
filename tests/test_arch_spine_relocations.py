@@ -126,17 +126,21 @@ class TestInterventionTripleHandoff:
     """The published-closure facts for the deferred intervention-triple move."""
 
     def test_closure_still_drags_the_selection_substrate(self) -> None:
-        """The blocker is real: types/errors eagerly import torchlens._selection.
+        """The blocker is real: types eagerly imports torchlens._selection.
 
-        If this test starts failing, the closure shrank (C03 or a later lane
-        broke the selection dependency) and the triple move is unblocked --
-        execute it as the C01/F35 amendment instead of deleting this pin.
+        ``intervention/errors.py`` left the closure with the capture batch (it
+        takes ``SelectionError`` from ``torchlens._errors`` now); ``types.py``
+        still drags the substrate. If this test starts failing, the closure
+        shrank (C03 or a later lane broke the selection dependency) and the
+        triple move is unblocked -- execute it as the C01/F35 amendment
+        instead of deleting this pin.
         """
 
         types_source = (REPO / "torchlens/intervention/types.py").read_text()
         errors_source = (REPO / "torchlens/intervention/errors.py").read_text()
         assert "from .._selection import" in types_source
-        assert "from .._selection import" in errors_source
+        assert "from .._selection import" not in errors_source
+        assert "from .._errors import" in errors_source
 
     def test_selectors_depend_on_types(self) -> None:
         selectors_source = (REPO / "torchlens/intervention/selectors.py").read_text()

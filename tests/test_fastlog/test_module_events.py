@@ -84,7 +84,7 @@ def test_shared_module_pass_counter_increments_for_two_calls() -> None:
         "module_enter",
         "module_exit",
     ]
-    assert [ctx.module_pass_index for ctx in child_events] == [1, 1, 2, 2]
+    assert [ctx.module_pass_number for ctx in child_events] == [1, 1, 2, 2]
 
 
 def test_identity_sequence_pass_through_tensor_is_visible() -> None:

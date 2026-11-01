@@ -21,7 +21,7 @@ import torch
 
 from torchlens._ir.container import _CONTAINER_REGISTRY, register_container
 from torchlens._ir.container_registry import _build_container_spec
-from torchlens._runnable_execution import _container_kind, _container_leaf_paths
+from torchlens._runnable_witness_contracts import _container_kind, _container_leaf_paths
 
 
 @dataclasses.dataclass

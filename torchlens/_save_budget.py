@@ -33,16 +33,24 @@ or any other drop of the last live reference — credits its storage back.
 from __future__ import annotations
 
 import contextlib
-import os
 import warnings
 import weakref
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypeGuard
 
 import torch
 
 from ._errors import InvalidArgumentError
+from ._memory_probes import (  # noqa: F401  (``_available_host_bytes`` is read by diagnostics)
+    _available_host_bytes,
+    available_device_bytes,
+)
+from ._state import pause_logging
 from .errors._base import CaptureError
+
+#: A retained payload the accountant charges: a tensor, or a storage kept as a
+#: saved argument (``Tensor.set_(storage, ...)``).
+RetainedPayload = torch.Tensor | torch.UntypedStorage | torch.TypedStorage
 
 __all__ = [
     "ACCOUNTING_PHASES",
@@ -100,80 +108,6 @@ def format_bytes(num_bytes: float) -> str:
                 return f"{int(num_bytes)} B"
             return f"{num_bytes / scale:.2f} {unit}"
     return f"{int(num_bytes)} B"
-
-
-def _available_host_bytes() -> int | None:
-    """Return available host RAM in bytes, or ``None`` when unmeasurable.
-
-    Returns
-    -------
-    int | None
-        Available bytes. Prefers ``MemAvailable`` from ``/proc/meminfo`` because
-        it accounts for reclaimable cache, then the POSIX available-pages count,
-        then ``psutil`` when installed. macOS has neither procfs nor
-        ``SC_AVPHYS_PAGES``, so without the ``psutil`` fallback every default
-        ``save_budget="auto"`` capture there warned that CPU budgeting was off.
-    """
-
-    try:
-        with open("/proc/meminfo", encoding="ascii") as meminfo:
-            for line in meminfo:
-                if line.startswith("MemAvailable:"):
-                    return int(line.split()[1]) * 1024
-    except Exception:
-        pass
-    try:
-        pages = os.sysconf("SC_AVPHYS_PAGES")
-        page_size = os.sysconf("SC_PAGE_SIZE")
-        if pages > 0 and page_size > 0:
-            return int(pages) * int(page_size)
-    except Exception:
-        pass
-    try:
-        import psutil
-    except ImportError:
-        return None
-    try:
-        available = int(psutil.virtual_memory().available)
-    except Exception:
-        return None
-    return available if available > 0 else None
-
-
-def available_device_bytes(device: torch.device) -> int | None:
-    """Return the memory headroom for one device, or ``None`` when unmeasurable.
-
-    Parameters
-    ----------
-    device:
-        Device whose free memory is queried.
-
-    Returns
-    -------
-    int | None
-        Free bytes, or ``None`` when this device type exposes no headroom query.
-        ``None`` means *unbudgeted and reported as such*, never "assume
-        infinite silently".
-    """
-
-    device_type = device.type
-    if device_type == "cpu":
-        return _available_host_bytes()
-    if device_type == "cuda":
-        try:
-            # Pin the query to THIS device explicitly (R36-7b): mem_get_info
-            # resolves an index-less device to the CURRENT device, so a
-            # capture saving to cuda:1 while cuda:0 is current read the wrong
-            # card's headroom.
-            with torch.cuda.device(device):
-                free_bytes, _total = torch.cuda.mem_get_info(device)
-            return int(free_bytes)
-        except Exception:
-            return None
-    if device_type == "meta":
-        # Meta tensors have no storage, so nothing is ever really committed.
-        return None
-    return None
 
 
 @dataclass(frozen=True)
@@ -368,7 +302,7 @@ class _PayloadWatcher(weakref.ref):
 
     def __new__(
         cls,
-        payload: torch.Tensor,
+        payload: RetainedPayload,
         budget_ref: weakref.ref,
         ledger_key: str,
         identity: tuple[Any, ...],
@@ -381,7 +315,7 @@ class _PayloadWatcher(weakref.ref):
 
     def __init__(
         self,
-        payload: torch.Tensor,
+        payload: RetainedPayload,
         budget_ref: weakref.ref,
         ledger_key: str,
         identity: tuple[Any, ...],
@@ -590,7 +524,7 @@ class SaveBudget:
     def commit(
         self,
         reservation: _BudgetReservation | None,
-        payloads: tuple[torch.Tensor | None, ...],
+        payloads: tuple[RetainedPayload | None, ...],
     ) -> None:
         """Replace one estimate with alias-aware physical retained storage.
 
@@ -625,7 +559,7 @@ class SaveBudget:
     def charge_retained(
         self,
         label: str,
-        payloads: tuple[torch.Tensor | None, ...],
+        payloads: tuple[RetainedPayload | None, ...],
     ) -> None:
         """Charge already-allocated retained payloads with no prior admission.
 
@@ -650,7 +584,7 @@ class SaveBudget:
     def _charge_physical(
         self,
         label: str,
-        payloads: tuple[torch.Tensor | None, ...],
+        payloads: tuple[RetainedPayload | None, ...],
         *,
         phase: str,
     ) -> None:
@@ -667,7 +601,7 @@ class SaveBudget:
         """
 
         for payload in payloads:
-            if not isinstance(payload, torch.Tensor) or payload.is_meta:
+            if not _is_chargeable_payload(payload):
                 # A meta tensor has no physical storage to charge (see the
                 # is_meta short-circuit in _retained_storage_identities,
                 # which makes the identity loop below a no-op for it
@@ -704,7 +638,7 @@ class SaveBudget:
 
     def _watch_payload(
         self,
-        payload: torch.Tensor,
+        payload: RetainedPayload,
         ledger_key: str,
         identity: tuple[Any, ...],
     ) -> None:
@@ -868,13 +802,40 @@ class SaveBudget:
         )
 
 
-def _retained_storage_identities(tensor: torch.Tensor) -> list[tuple[tuple[Any, ...], int]]:
+def _is_chargeable_payload(payload: object) -> TypeGuard[RetainedPayload]:
+    """Return whether ``payload`` is a non-meta tensor or storage the ledger charges."""
+
+    if isinstance(payload, torch.Tensor):
+        return not payload.is_meta
+    if isinstance(payload, (torch.UntypedStorage, torch.TypedStorage)):
+        return payload.device.type != "meta"
+    return False
+
+
+def _storage_payload_identities(
+    storage: torch.UntypedStorage | torch.TypedStorage,
+) -> list[tuple[tuple[Any, ...], int]]:
+    """Return the physical identity and byte size of a storage payload.
+
+    The identity has the strided-tensor form, so a storage argument and a
+    tensor on the same storage are charged once.
+    """
+
+    if storage.device.type == "meta":
+        return []
+    with pause_logging():
+        untyped = storage.untyped() if isinstance(storage, torch.TypedStorage) else storage
+        num_bytes = int(untyped.nbytes())
+        return [((str(untyped.device), int(untyped.data_ptr()), num_bytes), num_bytes)]
+
+
+def _retained_storage_identities(tensor: RetainedPayload) -> list[tuple[tuple[Any, ...], int]]:
     """Return one device-scoped physical identity + byte size per storage.
 
     Parameters
     ----------
     tensor:
-        Retained tensor payload.
+        Retained tensor payload, or a storage kept as a saved argument.
 
     Returns
     -------
@@ -903,10 +864,10 @@ def _retained_storage_identities(tensor: torch.Tensor) -> list[tuple[tuple[Any, 
     # over a meta-device argument spuriously creates and warns on a "meta"
     # device ledger). Checking this up front is correct on every torch
     # version, not a version-gated shim.
+    if isinstance(tensor, (torch.UntypedStorage, torch.TypedStorage)):
+        return _storage_payload_identities(tensor)
     if tensor.is_meta:
         return []
-
-    from ._state import pause_logging
 
     with pause_logging():
         try:

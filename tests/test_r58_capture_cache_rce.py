@@ -83,17 +83,17 @@ def test_authenticated_cache_still_hits(cache_root: Path) -> None:
     the assertion pins the self-authenticating record rather than the pair.
     """
 
-    from torchlens._user_funcs import _CAPTURE_CACHE_MAGIC
+    from torchlens._capture.prepare.cache import _CAPTURE_CACHE_MAGIC
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
     first = tl.trace(
         model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True)
     )
-    assert first.capture_cache_hit is False
+    assert first.provenance.cache_hit is False
     second = tl.trace(
         model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True)
     )
-    assert second.capture_cache_hit is True
+    assert second.provenance.cache_hit is True
     entry = _cache_entry(cache_root)
     assert entry.read_bytes().startswith(_CAPTURE_CACHE_MAGIC)
     assert not entry.with_name(entry.name + ".hmac").exists()
@@ -135,7 +135,7 @@ def test_planted_code_exec_pickle_is_never_unpickled(cache_root: Path, tmp_path:
         )
 
     assert not marker.exists(), "the planted __reduce__ gadget executed"
-    assert refreshed.capture_cache_hit is False
+    assert refreshed.provenance.cache_hit is False
     assert isinstance(refreshed, tl.Trace)
 
 
@@ -160,12 +160,12 @@ def test_headerless_entry_is_a_miss_not_a_load(cache_root: Path, tmp_path: Path)
         )
 
     assert not marker.exists()
-    assert refreshed.capture_cache_hit is False
+    assert refreshed.provenance.cache_hit is False
     # The rewrite re-commits an authenticated record, so the next run hits.
     assert (
         tl.trace(
             model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True)
-        ).capture_cache_hit
+        ).provenance.cache_hit
         is True
     )
 
@@ -176,7 +176,7 @@ def test_tag_from_a_foreign_secret_does_not_authenticate(cache_root: Path, tmp_p
     import hashlib
     import hmac
 
-    from torchlens._user_funcs import _CAPTURE_CACHE_MAGIC
+    from torchlens._capture.prepare.cache import _CAPTURE_CACHE_MAGIC
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
     tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
@@ -362,7 +362,7 @@ def test_authenticated_bytes_are_the_bytes_unpickled(cache_root: Path, tmp_path:
     )
     assert not hook.swapped, "the between-reads swap was reachable"
     # The benign bytes authenticated and loaded, so this is an ordinary hit.
-    assert refreshed.capture_cache_hit is True
+    assert refreshed.provenance.cache_hit is True
     assert isinstance(refreshed, tl.Trace)
 
 
@@ -380,7 +380,7 @@ def test_no_bare_pickle_read_in_the_package() -> None:
         # The authenticated capture-cache reader: verifies an HMAC tag over the exact
         # bytes BEFORE unpickling, and refuses a non-private cache directory. See this
         # module's docstring for why the SafeBundleUnpickler allowlist cannot apply.
-        "_user_funcs.py",
+        "_capture/prepare/cache.py",
     }
     package_root = Path(tl.__file__).resolve().parent
     offenders: list[str] = []

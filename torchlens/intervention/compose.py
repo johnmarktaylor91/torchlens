@@ -15,7 +15,7 @@ The D20 laws implemented:
   (never a forward/backward mix); no fusion in v1.
 - ONE fire, ONE final scatter, ONE FireRecord, with the ordered leaf names on
   the helper identity and per-leaf failures naming ``compose[i]``.
-- Flags AND-combine (``batch_independent``/``compatible_with_append``);
+- Flags AND-combine (``is_batch_independent``/``is_compatible_with_append``);
   portability is the WEAKEST leaf; a leaf failure aborts the whole fire
   (atomic -- the engine never sees a half-applied chain).
 
@@ -57,7 +57,7 @@ def _flatten(edits: tuple[Any, ...]) -> list[Edit]:
 
     leaves: list[Edit] = []
     for edit in edits:
-        if isinstance(edit, Edit) and edit.helper_name == "compose":
+        if isinstance(edit, Edit) and edit.name == "compose":
             leaves.extend(spec for spec in edit.args if isinstance(spec, Edit))
         else:
             leaves.append(edit)
@@ -87,7 +87,7 @@ def _validate_leaves(leaves: list[Edit]) -> None:
             )
         if leaf.factory is None:
             raise InvalidArgumentError(
-                f"compose[{index}] ({leaf.helper_name!r}) carries no runtime "
+                f"compose[{index}] ({leaf.name!r}) carries no runtime "
                 "factory (an audit-only spec cannot fire)",
                 code="compose_leaf_invalid",
                 remedy="compose executable helper specs only",
@@ -96,18 +96,18 @@ def _validate_leaves(leaves: list[Edit]) -> None:
         kwargs = dict(leaf.kwargs)
         if "seed" in kwargs and kwargs["seed"] is None:
             raise InvalidArgumentError(
-                f"compose[{index}] ({leaf.helper_name!r}) is stochastic and "
+                f"compose[{index}] ({leaf.name!r}) is stochastic and "
                 "UNSEEDED; the honest-draw law admits no unacknowledged RNG "
                 "into a chain (an unseeded leaf is silently re-rolled by later "
                 "unrelated edits)",
                 code="compose_unseeded_stochastic",
-                remedy=f"pass an explicit seed to {leaf.helper_name} (or "
+                remedy=f"pass an explicit seed to {leaf.name} (or "
                 "seed='auto' on the derived-seed family)",
                 argument="edits",
             )
         if kwargs.get("allow_shape_change"):
             raise InvalidArgumentError(
-                f"compose[{index}] ({leaf.helper_name!r}) declares a shape "
+                f"compose[{index}] ({leaf.name!r}) declares a shape "
                 "change; v1 refuses ANY shape-changing leaf (the "
                 "next-leaf-declares-contract rule is the documented relaxation)",
                 code="compose_shape_change_unsupported",
@@ -115,21 +115,16 @@ def _validate_leaves(leaves: list[Edit]) -> None:
                 "shape-changing edit alone",
                 argument="edits",
             )
-    kinds = {leaf.kind for leaf in leaves}
-    if kinds != {"forward"}:
-        names = ", ".join(
-            f"compose[{i}]={leaf.helper_name}:{leaf.kind}" for i, leaf in enumerate(leaves)
-        )
-        raise InvalidArgumentError(
-            f"compose chains forward VALUE edits only in v1 ({names}); backward "
-            "hook signatures vary by grad kind, so a backward chain would fire "
-            "wrong call shapes silently -- the exact defect class this family "
-            "exists to kill",
-            code="compose_kind_mismatch",
-            remedy="chain forward helpers only; attach backward helpers as "
-            "separate rules (tl.when per site)",
-            argument="edits",
-        )
+
+
+def _chain_portability(leaves: list[Edit]) -> HelperPortability:
+    """Return the weakest portability across the chained leaves."""
+
+    portability: HelperPortability = "builtin"
+    for leaf in leaves:
+        if _PORTABILITY_RANK[leaf.portability] > _PORTABILITY_RANK[portability]:
+            portability = leaf.portability
+    return portability
 
 
 def compose(*edits: Any) -> Edit:
@@ -172,39 +167,34 @@ def compose(*edits: Any) -> Edit:
             for index, leaf_hook in enumerate(leaf_hooks):
                 # Thread the composed-leaf path for the derived-seed law (D6):
                 # two stochastic leaves inside one compose cannot collide.
-                ctx.ctx["compose_leaf_path"] = (index,)
+                ctx.state["compose_leaf_path"] = (index,)
                 try:
                     current = leaf_hook(current, ctx=ctx)
                 except Exception as exc:
                     if isinstance(exc, HookValueError):
                         raise
                     raise HookValueError(
-                        f"compose[{index}] ({leaves[index].helper_name!r}) failed: "
+                        f"compose[{index}] ({leaves[index].name!r}) failed: "
                         f"{exc}. Remedy: fix the named leaf; a leaf failure aborts "
                         "the whole composed fire (atomic, never half-applied)",
                         code="compose_leaf_failed",
                         leaf_index=index,
-                        leaf_name=leaves[index].helper_name,
+                        leaf_name=leaves[index].name,
                     ) from exc
                 if not isinstance(current, torch.Tensor):
                     raise HookValueError(
-                        f"compose[{index}] ({leaves[index].helper_name!r}) "
+                        f"compose[{index}] ({leaves[index].name!r}) "
                         f"returned {type(current).__name__}; every leaf must "
                         "return a tensor for the next leaf to consume. Remedy: "
                         "make the named leaf return a tensor",
                         code="compose_leaf_failed",
                         leaf_index=index,
-                        leaf_name=leaves[index].helper_name,
+                        leaf_name=leaves[index].name,
                     )
-            ctx.ctx.pop("compose_leaf_path", None)
+            ctx.state.pop("compose_leaf_path", None)
             return current
 
         return _hook
-
-    portability: HelperPortability = "builtin"
-    for leaf in leaves:
-        if _PORTABILITY_RANK[leaf.portability] > _PORTABILITY_RANK[portability]:
-            portability = leaf.portability
 
     from .helpers import _helper_spec
 
@@ -212,11 +202,13 @@ def compose(*edits: Any) -> Edit:
         "compose",
         args=tuple(leaves),
         factory=factory,
-        portability=portability,
-        batch_independent=all(leaf.batch_independent for leaf in leaves),
-        compatible_with_append=all(leaf.compatible_with_append for leaf in leaves),
+        portability=_chain_portability(leaves),
+        # A chain that reads recorded forward state anywhere reads it as a whole.
+        signal="forward" if any(leaf.signal == "forward" for leaf in leaves) else None,
+        is_batch_independent=all(leaf.is_batch_independent for leaf in leaves),
+        is_compatible_with_append=all(leaf.is_compatible_with_append for leaf in leaves),
         metadata={
-            "compose_leaves": "|".join(leaf.helper_name for leaf in leaves),
+            "compose_leaves": "|".join(leaf.name for leaf in leaves),
             "compose_leaf_count": len(leaves),
             # Row-coherent leaves keep their mask-equivariance obligation
             # through the chain (the D23 check reads these facts).

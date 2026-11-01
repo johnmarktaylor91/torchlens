@@ -57,13 +57,13 @@ def test_tensorboard_writes_layer_count_memory_and_model_name() -> None:
     returned = tl.export.tensorboard(log, writer, step=7, prefix="tlx")
 
     assert returned is writer
-    assert writer.scalars["tlx/num_layers"] == (len(log.layer_list), 7)
+    assert writer.scalars["tlx/num_layers"] == (len(log._layer_list), 7)
     memory_value, memory_step = writer.scalars["tlx/total_activation_memory"]
     assert memory_step == 7
-    assert memory_value == int(log.total_activation_memory or 0)
+    assert memory_value == int(log.cost.total_activation_memory or 0)
     text_value, text_step = writer.texts["tlx/model_class_name"]
     assert text_step == 7
-    assert text_value == str(log.model_class_name)
+    assert text_value == str(log.source.class_name)
     assert writer.flushed
 
 
@@ -119,7 +119,7 @@ def test_mlflow_logs_prefixed_metrics_and_returns_them() -> None:
         "capture_honesty",
     }
     assert metrics["capture_honesty"]["capture_status"] == "complete"
-    assert metrics["num_layers"] == len(log.layer_list)
+    assert metrics["num_layers"] == len(log._layer_list)
     numeric = {
         key: metrics[key] for key in ("num_layers", "num_saved_ops", "total_activation_memory")
     }
@@ -210,7 +210,7 @@ def test_wandb_builds_scalar_safe_table_and_logs_to_run(
     assert result["artifact"] is None
     assert run.logged["my_table"] is built[0]
     dataframe = built[0].dataframe
-    assert len(dataframe) == len(log.layer_list)
+    assert len(dataframe) == len(log._layer_list)
     primitive = (str, int, float, bool)
     for column in dataframe.columns:
         for cell in dataframe[column]:
@@ -272,7 +272,7 @@ def test_xarray_flattens_scalar_vector_and_matrix_outs(
 
     captured = _stub_xarray(monkeypatch)
     log = SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             SimpleNamespace(out=torch.tensor(2.5), layer_label="scalar_1_1"),
             SimpleNamespace(out=torch.tensor([1.0, 2.0, 3.0]), layer_label="vector_1_1"),
             SimpleNamespace(out="not a tensor", layer_label="skipped_1_1"),
@@ -293,7 +293,7 @@ def test_xarray_flattens_scalar_vector_and_matrix_outs(
     assert array.attrs["assembly"] == "NeuroidAssembly"
 
     batched = SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             SimpleNamespace(out=torch.ones(2, 3), layer_label="a_1_1"),
             SimpleNamespace(out=torch.zeros(2, 2, 2), layer_label="b_1_1"),
         ]
@@ -310,7 +310,7 @@ def test_xarray_exports_buffers_as_module_state_variables(
 
     _stub_xarray(monkeypatch)
     log = SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             SimpleNamespace(
                 out=torch.arange(3.0), layer_label="buffer_1", is_buffer=True, address="bn.mean"
             ),
@@ -346,7 +346,7 @@ def test_xarray_rejects_mismatched_presentation_counts_and_empty_logs(
 
     _stub_xarray(monkeypatch)
     mismatched = SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             SimpleNamespace(out=torch.ones(2, 3), layer_label="first_1_1"),
             SimpleNamespace(out=torch.ones(3, 3), layer_label="second_1_1"),
         ]
@@ -355,7 +355,7 @@ def test_xarray_rejects_mismatched_presentation_counts_and_empty_logs(
         tl.export.xarray(mismatched)
 
     with pytest.raises(ValueError, match="No saved tensor outs"):
-        tl.export.xarray(SimpleNamespace(layer_list=[]))
+        tl.export.xarray(SimpleNamespace(_layer_list=[], _layer_dict_main_keys={}))
 
 
 def test_xarray_missing_dependency_raises_import_error(
@@ -434,7 +434,7 @@ def test_chrome_trace_diff_places_members_on_separate_timelines(tmp_path: Path) 
     torch.manual_seed(20)
     x = torch.randn(2, 3)
     model = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
-    capture = tl.options.CaptureOptions(intervention_ready=True)
+    capture = tl.options.CaptureOptions(replayable=True)
     first = tl.trace(model, x, capture=capture)
     second = tl.trace(model, x, capture=capture)
     bundle = tl.Bundle({"first": first, "second": second})

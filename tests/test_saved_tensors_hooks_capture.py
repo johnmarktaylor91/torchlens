@@ -221,7 +221,7 @@ def test_checkpoint_still_validates_with_hook_scope() -> None:
     model = CkptModel()
     x = torch.randn(2, 4, requires_grad=True)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
-    func_names = [getattr(layer, "func_name", None) for layer in trace.layer_list]
+    func_names = [getattr(layer, "func_name", None) for layer in trace._layer_list]
     assert "linear" in func_names and "relu" in func_names
     assert func_names.count("linear") == 1, "phantom checkpoint recompute op"
     with warnings.catch_warnings():

@@ -24,7 +24,7 @@ from torchlens._runnable import (
     RunnableErrorCode,
     WitnessCompleteness,
 )
-from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
+from torchlens.backends.torch._completeness_dispatch import runnable_ledger_facts
 from torchlens.errors import RuntimeSignatureDriftError
 from torchlens.options import CaptureOptions
 
@@ -35,7 +35,7 @@ def _capture(model: nn.Module, x: Any) -> Any:
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(intervention_ready=True, cache=False),
+        capture=CaptureOptions(replayable=True, cache=False),
     )
 
 

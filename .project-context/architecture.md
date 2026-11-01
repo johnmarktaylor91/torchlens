@@ -70,9 +70,10 @@ across `_render_*.py`), smart collapse v2 (`auto_collapse.py`, `collapse_plan.py
 dagua renderer itself is explicit opt-in via `torchlens.experimental.dagua`.
 
 ### `torchlens/_utils/`
-Focused stateless helpers: `_torch_compat.py` (the ONLY home for fragile torch-private
-probes and cross-version signatures), `rng.py`, `hashing.py`, tensor ops, argument
-handling, introspection, collections, display.
+Helpers shared by two or more packages: `_torch_compat.py` (the ONLY home for fragile
+torch-private probes and cross-version signatures), `rng.py`, `hashing.py`, tensor ops,
+argument handling, introspection, collections, display. A helper with one owning package
+lives in that package (environment checks in `report/_environment.py`).
 
 ## Data Flow
 
@@ -262,7 +263,6 @@ one-liners derived from each module's docstring or a skim of its contents.
 | `_runnable_witness_contracts.py` | Control, shape, and host-escape witness checks |
 | `_save_budget.py` | Running budget for retained activation bytes with typed refusal (`SaveBudgetExceededError`) |
 | `_source_links.py` | Source-location link formatting helpers |
-| `_split_rebind.py` | Compatibility helpers for behavior-preserving module decomposition |
 | `_state.py` | Global state for toggle-gated decoration; single source of truth for capture-control mutable state |
 | `_trace_selector_helpers.py` | Internal predicate and selector helpers for public trace capture |
 | `_trace_state.py` | Run-state ownership for intervention execution (deliberately outside `intervention/`) |

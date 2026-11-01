@@ -28,6 +28,10 @@ import threading
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import torch
 
 DEFAULT_MAX_PENDING_BYTES = 256 * 1024 * 1024
 """Default pending-snapshot byte budget for the async streaming writer."""
@@ -43,6 +47,26 @@ class AsyncWriteFailedError(Exception):
     ``ArtifactError`` after marking the temp bundle PARTIAL; it never
     escapes to users.
     """
+
+
+@dataclass(frozen=True)
+class _PreparedPayload:
+    """One serialization-ready payload plus its origin-tensor manifest facts.
+
+    Parameters
+    ----------
+    payload:
+        Contiguous tensor to serialize (CPU-resident when prepared for the
+        async worker).
+    device_at_save:
+        Device string of the ORIGINAL tensor at submission time.
+    requires_grad:
+        ``requires_grad`` of the original tensor at submission time.
+    """
+
+    payload: torch.Tensor
+    device_at_save: str
+    requires_grad: bool
 
 
 @dataclass(frozen=True)

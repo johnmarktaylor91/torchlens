@@ -45,7 +45,7 @@ from torchlens.errors import (
 )
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, x) -> tl.Trace:
@@ -63,7 +63,7 @@ def _assert_refuses_contract(trace: tl.Trace, path: Path, *needles: str) -> None
     with pytest.raises(RunnablePreflightError) as excinfo:
         _save(trace, path)
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "missing_input_container_contract" in diagnostics
+    assert "input_container_contract_missing" in diagnostics
     for needle in needles:
         assert needle in diagnostics, needle
 
@@ -710,14 +710,14 @@ def test_r67_consumer_source_scan() -> None:
 
     import inspect
 
-    from torchlens import _runnable_execution
+    import torchlens._runnable_output_contracts
     from torchlens._capture import trace as capture_trace
 
     assert "snapshot_input_boundary" in inspect.getsource(
         capture_trace._record_runnable_input_structure
     )
     assert "snapshot_input_boundary" in inspect.getsource(
-        _runnable_execution._input_structure_witness_check
+        torchlens._runnable_output_contracts._input_structure_witness_check
     )
 
 

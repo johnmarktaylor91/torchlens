@@ -10,12 +10,14 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, fields, is_dataclass, replace
 from enum import Enum
+from functools import partial
 from hashlib import sha256
 from typing import Any, cast
 
 import numpy as np
 import torch
 
+from torchlens._data_classes import layer as _layer_mod, op as _op_mod
 from torchlens._runnable import RunnableCompatibility, RunnableDiagnostic
 
 from .. import __version__ as TORCHLENS_VERSION
@@ -328,7 +330,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
 
     _normalize_trace_numpy_scalar_metadata(trace)
     diagnostics: list[RunnableDiagnostic] = []
-    backend = str(getattr(trace, "backend", "torch"))
+    backend = str(trace._provenance_backend)
     try:
         runnable_supported = "runnable" in get_backend_spec(backend).capabilities.save_levels
     except BackendRegistryError:
@@ -359,7 +361,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             )
         )
 
-    ops = list(getattr(trace, "layer_list", ()))
+    ops = list(trace._layer_list)
 
     # Deephunt F1: a user intervention REPLACED at least one op's value during this
     # capture, so the archived provenance (activations, downstream taken path) reflects
@@ -370,7 +372,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     # permanently-unverifiable artifact whose cause is unfindable from the report.
     # Zero-fire selectors leave every op unreplaced and stay runnable.
     intervention_replaced_labels = tuple(
-        str(op.label) for op in ops if bool(getattr(op, "intervention_replaced", False))
+        str(op.label) for op in ops if bool(getattr(op, "is_edited", False))
     )
     if intervention_replaced_labels:
         diagnostics.append(
@@ -410,7 +412,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
                 _diagnostic(
                     RunnableErrorCode.MISSING_CALLABLE_REF,
                     "Computational call has no cooked FunctionRegistryKey; capture with "
-                    "intervention_ready=True before saving level='runnable'.",
+                    "replayable=True before saving level='runnable'.",
                     affected_ops=tuple(str(op.label) for op in call_ops),
                     detection_stage="producer_callable",
                 )
@@ -661,7 +663,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
         # coverage for its forward, so it ceilings through the observer-uncertain
         # gap (unverifiable), never a silent false VERIFIED.
         _gap(WitnessGapKind.ESCAPE_OBSERVER_UNCERTAIN, "capture")
-    if getattr(trace, "capture_verified", None) is False:
+    if trace._provenance_verified is False:
         # r35 I2 completion: a capture whose own verification tripwire fired
         # (unaccounted dispatches, escaped callables, unverified transform
         # routes) cannot claim complete witness coverage for replay either.
@@ -820,7 +822,7 @@ def _runnable_ledger_facts_for_trace(trace: Any) -> tuple[Mapping[str, Any], ...
     """Read the capture-time event-lifecycle ledger facts for one trace (r35 I2)."""
 
     try:
-        from ..backends.torch.completeness_witness import runnable_ledger_facts
+        from ..backends.torch._completeness_dispatch import runnable_ledger_facts
     except ImportError:  # pragma: no cover - torch backend always present for runnable
         return ()
     return runnable_ledger_facts(trace)
@@ -840,7 +842,7 @@ def _normalize_trace_numpy_scalar_metadata(trace: Any) -> None:
         Cooked trace whose runnable projection is being built.
     """
 
-    for op in getattr(trace, "layer_list", ()):
+    for op in trace._layer_list:
         for field_name in (
             "non_tensor_pos_args",
             "non_tensor_kwargs",
@@ -914,7 +916,7 @@ def _build_rng_profile(trace: Any) -> RunnableRngProfile:
     """
 
     consumed = bool(trace._runnable.host_rng_consumed)
-    seed = getattr(trace, "random_seed", None)
+    seed = trace._options_seed
     capture_seed = int(seed) if isinstance(seed, int) and not isinstance(seed, bool) else None
     # r37 hon1_2: a touch on any NON-global monitored channel (RNG instances,
     # SystemRandom/secrets, os entropy, clocks, the default_rng factory) is
@@ -1190,7 +1192,7 @@ def assert_sparse_core_has_no_tensor_payload(value: Any) -> None:
     ------
     SparseCorePayloadError
         If a tensor, parameter, or portable tensor blob reference is present.
-        The error carries ``fields["code"] == "sparse_core_tensor_payload"``
+        The error carries ``fields["code"] == "sparse_core_payload_invalid"``
         (:attr:`RunnableErrorCode.SPARSE_CORE_TENSOR_PAYLOAD`) plus the dotted
         payload path; ``AssertionError`` remains in its MRO for historical
         callers of this ``assert_``-named tripwire.
@@ -1355,7 +1357,7 @@ def _build_parameter_slot_drafts(trace: Any) -> dict[str, _SlotDraft]:
     """Build value-free parameter slots from cooked Param metadata."""
 
     drafts: dict[str, _SlotDraft] = {}
-    param_logs = getattr(trace, "param_logs", {})
+    param_logs = trace._param_logs
     values = getattr(param_logs, "values", lambda: ())()
     for param in values:
         device_type, device_index = _device_parts(getattr(param, "device_ref", None))
@@ -1405,7 +1407,7 @@ def _add_persistent_buffer_slot_drafts(
     buffers, and the capture-time alias-topology snapshot supplies buffer alias groups.
     A silent early return here DROPPED never-forward-used persistent buffers (BN's
     ``num_batches_tracked``) from the declared slot universe, so the embedded snapshot
-    failed strict binding with ``state_unexpected_key`` -- the second, downstream leg of
+    failed strict binding with ``state_key_unknown`` -- the second, downstream leg of
     the same gc-timing honest-save over-refusal as the parameter-identity rung.
 
     Parameters
@@ -1467,7 +1469,7 @@ def _add_persistent_buffer_slot_drafts(
             snapshot = trace._runnable.embedded_state
         if isinstance(snapshot, Mapping):
             parameter_names = set()
-            param_logs = getattr(trace, "param_logs", None)
+            param_logs = trace._param_logs
             for param_log in tuple(param_logs) if param_logs is not None else ():
                 address = getattr(param_log, "address", None)
                 if address is not None:
@@ -1510,7 +1512,7 @@ def _add_persistent_buffer_slot_drafts(
             # names against ``named_parameters``/``named_buffers`` and survives
             # extra state). A silent return here DROPPED never-forward-used
             # buffers (``num_batches_tracked``) and refused honest binds with
-            # ``state_unexpected_key``.
+            # ``state_key_unknown``.
             universe = trace._runnable.persistent_buffer_universe
             if not isinstance(universe, Mapping):
                 # No capture-time record either (``state_dict()`` failed at the
@@ -1682,12 +1684,25 @@ def _build_call_arguments(
     diagnostics: list[RunnableDiagnostic],
 ) -> tuple[list[TensorArgumentRef], list[LiteralArgumentRef], bool]:
     """Build tensor and literal call leaves from one cooked argument template."""
-
     tensor_args: list[TensorArgumentRef] = []
     literal_args: list[LiteralArgumentRef] = []
-    parameter_candidates = list(getattr(op, "_param_logs", ()) or ())
+    is_record = isinstance(op, (_op_mod.Op, _layer_mod.Layer))
+    parameter_candidates = list((op._param_logs if is_record else ()) or ())
     non_tensor_positional = iter(getattr(op, "non_tensor_pos_args", ()) or ())
     has_unmodelled_host_write = False
+    append_component = partial(
+        _append_argument_component,
+        op=op,
+        call_id=call_id,
+        registry_id=registry_id,
+        op_by_alias=op_by_alias,
+        slot_for_op=slot_for_op,
+        slot_drafts=slot_drafts,
+        parameter_candidates=parameter_candidates,
+        tensor_args=tensor_args,
+        literal_args=literal_args,
+        diagnostics=diagnostics,
+    )
 
     for index, component in enumerate(template.args):
         path: tuple[str | int, ...] = ("args", index)
@@ -1718,40 +1733,12 @@ def _build_call_arguments(
         override = None
         if not _component_contains_tensor(component):
             override = next(non_tensor_positional, _NO_OVERRIDE)
-        _append_argument_component(
-            component,
-            path=path,
-            literal_override=override,
-            op=op,
-            call_id=call_id,
-            registry_id=registry_id,
-            op_by_alias=op_by_alias,
-            slot_for_op=slot_for_op,
-            slot_drafts=slot_drafts,
-            parameter_candidates=parameter_candidates,
-            tensor_args=tensor_args,
-            literal_args=literal_args,
-            diagnostics=diagnostics,
-        )
+        append_component(component, path=path, literal_override=override)
     non_tensor_kwargs = getattr(op, "non_tensor_kwargs", {}) or {}
     for key, component in template.kwargs:
         path = ("kwargs", str(key))
         override = non_tensor_kwargs.get(key, _NO_OVERRIDE)
-        _append_argument_component(
-            component,
-            path=path,
-            literal_override=override,
-            op=op,
-            call_id=call_id,
-            registry_id=registry_id,
-            op_by_alias=op_by_alias,
-            slot_for_op=slot_for_op,
-            slot_drafts=slot_drafts,
-            parameter_candidates=parameter_candidates,
-            tensor_args=tensor_args,
-            literal_args=literal_args,
-            diagnostics=diagnostics,
-        )
+        append_component(component, path=path, literal_override=override)
     return tensor_args, literal_args, has_unmodelled_host_write
 
 
@@ -2216,7 +2203,7 @@ def _match_parameter(
       with the model (postprocess releases ``_param_ref``, session cleanup strips the
       registry meta; a caller that never held the model plus one ``gc.collect()`` between
       trace and save kills the weakref), so BN-like models with two same-shape+dtype
-      params refused ``unsupported_tensor_constant`` nondeterministically. A missing
+      params refused ``tensor_constant_unsupported`` nondeterministically. A missing
       snapshot (pre-r75 template, foreign/unstamped parameter) falls back to the live
       registry meta and then simply falls through -- this rung only ever ADDS a positive
       match, never blocks the others.
@@ -2352,8 +2339,8 @@ def _op_alias_index(trace: Any, ops: Sequence[Any]) -> dict[str, Any]:
         for value in (
             getattr(op, "label", None),
             getattr(op, "layer_label", None),
-            getattr(op, "label_short", None),
-            getattr(op, "layer_label_short", None),
+            getattr(op, "short_label", None),
+            getattr(op, "short_layer_label", None),
         ):
             if isinstance(value, str):
                 aliases[value] = op
@@ -2370,7 +2357,7 @@ def _op_alias_index(trace: Any, ops: Sequence[Any]) -> dict[str, Any]:
 def _resolve_op(trace: Any, label: str) -> Any | None:
     """Resolve one cooked op label through the Trace lookup tables."""
 
-    layer_dict = getattr(trace, "layer_dict_all_keys", {}) or {}
+    layer_dict = trace._layer_dict_all_keys or {}
     if label in layer_dict:
         return layer_dict[label]
     try:
@@ -2427,7 +2414,7 @@ def _input_binding_for_op(
                             RunnableErrorCode.MISSING_INPUT_CONTAINER_CONTRACT,
                             "Model input binding path carries a non-grammar mapping "
                             "key; the runnable save is refused "
-                            "(missing_input_container_contract).",
+                            "(input_container_contract_missing).",
                             affected_ops=(str(op.label),),
                             detection_stage="producer_input_binding",
                         )
@@ -2453,7 +2440,7 @@ def _input_binding_for_op(
             )
         )
         return None
-    input_ops = [item for item in getattr(trace, "layer_list", ()) if item.is_input]
+    input_ops = [item for item in trace._layer_list if item.is_input]
     input_index = next((index for index, item in enumerate(input_ops) if item is op), 0)
     return InputSlotBinding(
         io_role="model_input",
@@ -2560,7 +2547,7 @@ def _build_control_witnesses(
             # stripped alias so a loop-arm child resolves to its first owning call.
             if ":" in str(label):
                 call_by_op_label.setdefault(str(label).rsplit(":", 1)[0], call.call_id)
-    arm_edges = getattr(trace, "conditional_arm_entry_edges", {}) or {}
+    arm_edges = trace._graph_conditional_arm_entry_edges or {}
     for (conditional_id, arm_kind), edges in sorted(
         arm_edges.items(), key=lambda item: (int(item[0][0]), str(item[0][1]))
     ):
@@ -2714,7 +2701,7 @@ def _has_input_metadata_view_read(trace: Any) -> bool:
     producer must downgrade witness completeness to keep the run honest.
     """
 
-    from ..backends.torch.completeness_witness import input_metadata_view_read
+    from ..backends.torch._completeness_escape_state import input_metadata_view_read
 
     return bool(input_metadata_view_read(trace))
 
@@ -2732,7 +2719,7 @@ def _has_pruned_rng_control_flow(trace: Any) -> bool:
     (or one with only genuinely-dead RNG draws) records nothing here.
     """
 
-    from ..backends.torch.completeness_witness import pruned_rng_control_source_labels
+    from ..backends.torch._completeness_escape_state import pruned_rng_control_source_labels
 
     return bool(pruned_rng_control_source_labels(trace))
 
@@ -2750,7 +2737,7 @@ def _has_pruned_alias_mutation(trace: Any) -> bool:
     ops all target graph-connected (labelled) tensors records nothing here.
     """
 
-    from ..backends.torch.completeness_witness import pruned_alias_mutation_source_labels
+    from ..backends.torch._completeness_escape_state import pruned_alias_mutation_source_labels
 
     return bool(pruned_alias_mutation_source_labels(trace))
 
@@ -2769,7 +2756,7 @@ def _has_data_alias_mutation(trace: Any) -> bool:
         ``True`` when the canonical getter's alias lineage was mutated.
     """
 
-    from ..backends.torch.completeness_witness import data_alias_mutation_detected
+    from ..backends.torch._completeness_escape_state import data_alias_mutation_detected
 
     return data_alias_mutation_detected(trace)
 
@@ -2788,17 +2775,17 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
 
     Only forward-direction, value-replacing interventions are flagged. An
     observe-only intervention (``replaced=False``) or a backward/grad intervention
-    (``direction != "forward"``) leaves the forward output reproducible byte-for-byte
+    (``signal != "forward"``) leaves the forward output reproducible byte-for-byte
     and is intentionally NOT flagged, so it still saves and VERIFIES. A plain,
     non-intervened capture records no such op and is unchanged.
     """
 
-    for op in getattr(trace, "layer_list", ()) or ():
-        if not getattr(op, "intervention_replaced", False):
+    for op in trace._layer_list or ():
+        if not getattr(op, "is_edited", False):
             continue
-        for record in getattr(op, "interventions", ()) or ():
-            direction = getattr(record, "direction", None)
-            if bool(getattr(record, "replaced", False)) and direction == "forward":
+        for record in getattr(op, "edits", ()) or ():
+            signal = getattr(record, "signal", None)
+            if bool(getattr(record, "replaced", False)) and signal == "forward":
                 return True
     return False
 
@@ -2928,7 +2915,7 @@ def _stamp_state_binding_facts(
     describe both observations.
     """
 
-    from ..backends.torch.completeness_witness import host_escape_state_metadata_facts
+    from ..backends.torch._completeness_metadata import host_escape_state_metadata_facts
 
     signatures = trace._runnable.capture_state_signatures
     signature_map: Mapping[str, Any] = signatures if isinstance(signatures, Mapping) else {}
@@ -3113,13 +3100,13 @@ def _escape_witnesses(
     are the control-witness net's domain and excluded from the tensor-op gate here.
     """
 
-    from ..backends.torch.completeness_witness import (
+    from ..backends.torch._completeness_cross_thread import host_escape_observer_install_failed
+    from ..backends.torch._completeness_escape_state import (
         host_escape_has_cross_thread_captured_tensor,
         host_escape_has_mutable_writeback,
         host_escape_has_raw_pointer,
         host_escape_has_unattributable_bool,
         host_escape_has_unattributable_opaque,
-        host_escape_observer_install_failed,
         host_escape_state_source_names,
     )
 
@@ -3331,7 +3318,7 @@ def _escape_witnesses(
 
     # ---- Structural invariant: every recorded escape fact is witnessed OR gapped ----
     # No net-exclusion may silently drop a recognized escape.
-    from ..backends.torch.completeness_witness import host_escape_bool_source_labels
+    from ..backends.torch._completeness_escape_state import host_escape_bool_source_labels
 
     raw_bool = host_escape_bool_source_labels(trace)
     raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
@@ -3378,7 +3365,7 @@ def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], frozenset[st
     STATE source is covered by the state net and never closes as a pruned chain.
     """
 
-    from ..backends.torch.completeness_witness import (
+    from ..backends.torch._completeness_escape_state import (
         host_escape_label_leaf_origins,
         host_escape_source_labels,
         host_escape_state_source_labels,
@@ -3582,7 +3569,7 @@ def required_witness_family_members(
     typed ``context_field_invalid`` refusal.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable_verification import _decode_literal
 
     members: dict[str, list[str]] = {family: [] for family in WITNESS_FAMILY_REGISTRY}
     for witness in witnesses:
@@ -3679,7 +3666,7 @@ def _preflight_input_structure(trace: Any) -> list[RunnableDiagnostic]:
     (non-grammar) mapping key, undeclared dataclass/namedtuple/subclass instance state,
     throwing/nonconforming/state-incomplete container registration, unsafe registered
     aux -- refuses the runnable save through the EXISTING
-    ``missing_input_container_contract`` (no new enum). An absent snapshot on an
+    ``input_container_contract_missing`` (no new enum). An absent snapshot on an
     intervention-ready capture refuses the same way: absence of proof is never proof.
     """
 
@@ -3705,7 +3692,7 @@ def _preflight_input_structure(trace: Any) -> list[RunnableDiagnostic]:
                     f"path {tuple(refusal.get('path', ()))!r}: {refusal.get('reason')!r}. "
                     "Opaque mapping keys, undeclared per-instance container state, and "
                     "unproven container registrations cannot be replayed faithfully, so "
-                    "the runnable save is refused (missing_input_container_contract); "
+                    "the runnable save is refused (input_container_contract_missing); "
                     "analysis save levels remain available.",
                     detection_stage="producer_input_structure",
                 )
@@ -4135,7 +4122,7 @@ def _preflight_state_metadata(trace: Any) -> list[RunnableDiagnostic]:
     """
 
     from .._runnable_state import state_metadata_read_violations
-    from ..backends.torch.completeness_witness import (
+    from ..backends.torch._completeness_metadata import (
         host_escape_state_metadata_facts,
         host_escape_state_metadata_observations,
         host_escape_state_metadata_reads,
@@ -4267,7 +4254,7 @@ def _preflight_output_contracts(trace: Any, ops: Sequence[Any]) -> list[Runnable
                 "Model output contains no tensor leaves (zero output slots), so the "
                 "v2 descriptor has no carrier for its container contract and the "
                 "loaded artifact could not reconstruct it "
-                "(missing_output_container_contract). The runnable save is refused; "
+                "(output_container_contract_missing). The runnable save is refused; "
                 "ordinary analysis save levels remain available.",
                 detection_stage="producer_output_binding",
                 details=(("reason", "zero_tensor_slot_output"),),
@@ -4939,13 +4926,13 @@ def _normalize_container_path(path: Iterable[Any]) -> tuple[str | int, ...]:
             # accounting instead of silently vanishing. A non-grammar key still raises
             # (the caller's refusal/skip semantics are unchanged).
             try:
-                normalized.append(encode_mapping_key(component.key))
+                normalized.append(encode_mapping_key(component._key))
             except ValueError as exc:
                 raise ValueError(
                     "Runnable container paths require grammar-encodable mapping keys."
                 ) from exc
         elif isinstance(component, (NamedField, DataclassField)):
-            normalized.append(component.name)
+            normalized.append(component._name)
         elif isinstance(component, (str, int)):
             normalized.append(component)
         else:

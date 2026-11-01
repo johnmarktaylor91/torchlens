@@ -55,6 +55,7 @@ from ... import _state
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils._torch_symbols import torch_attr
 from ...errors._base import TorchLensError
+from ._completeness_cross_thread import _internal_read_active
 from ._tl import DescriptorCompatProperty, get_tensor_label
 from .completeness_witness import (
     _TORCHLENS_ROOT,
@@ -63,7 +64,6 @@ from .completeness_witness import (
     INVISIBLE_HOST_ESCAPE_FUNCS,
     INVISIBLE_HOST_ESCAPE_PROPERTIES,
     STORAGE_BRIDGE_ESCAPE_FUNCS,
-    _internal_read_active,
 )
 
 _TORCH_ROOT: Final[Path] = Path(torch.__file__).resolve().parent
@@ -351,13 +351,13 @@ def _install_property_belt(
 def structure_only_escape_belt(trace: Any) -> Iterator[None]:
     """LAYER 1: install the escalated escape belt for one capture.
 
-    No-op unless ``trace.structure_only`` (default path zero-diff). Install
+    No-op unless ``trace.options.structure_only`` (default path zero-diff). Install
     and unwind are BaseException-safe with shadow-aware restore (the R07
     unwind standard): a name set on ``torch.Tensor`` that shadowed a C-level
     slot member must be DELETED on restore, never written back.
     """
 
-    if not bool(getattr(trace, "structure_only", False)):
+    if not bool(trace._options_structure_only):
         yield
         return
 
@@ -546,12 +546,12 @@ def _frame_operand_substrates(frame: types.FrameType) -> tuple[bool, bool]:
 def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
     """LAYER 2: classify exceptions escaping the user forward (memo 2.2/2.4).
 
-    No-op unless ``trace.structure_only``. TorchLens-typed exceptions
+    No-op unless ``trace.options.structure_only``. TorchLens-typed exceptions
     (including Layer-1 refusals and halt/stop signals) always pass through
     byte-untouched.
     """
 
-    if not bool(getattr(trace, "structure_only", False)):
+    if not bool(trace._options_structure_only):
         yield
         return
     try:

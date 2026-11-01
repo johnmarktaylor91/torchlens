@@ -88,7 +88,7 @@ def test_recurrent_ops_values_and_order_are_correct(loop_trace) -> None:
         members = [loop_trace[label] for label in value]
         raw_orders = [member.raw_index for member in members]
         assert raw_orders == sorted(raw_orders), "group order must follow raw capture order"
-        assert value[op.pass_index - 1] == op.label
+        assert value[op.pass_number - 1] == op.label
 
 
 def test_recurrent_ops_reads_are_alias_safe(loop_trace) -> None:

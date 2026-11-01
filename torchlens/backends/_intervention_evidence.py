@@ -10,7 +10,7 @@ reading is ``None`` (not recorded), never ``True``.
 
 from __future__ import annotations
 
-from .registry import TORCH_BACKEND_NAME
+from ._backend_names import TORCH_BACKEND_NAME
 
 
 def records_intervention_evidence(backend_name: str) -> bool:

@@ -53,7 +53,7 @@ x = torch.randn(2, 8)
 
 if torch.cuda.is_available():
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(emit_nvtx=True))
-    assert log.emit_nvtx
+    assert log.options.emit_nvtx
 else:
     # Without CUDA there is nothing to emit to: TorchLens refuses typed, as
     # torch.autograd.profiler.emit_nvtx() does on such a host.

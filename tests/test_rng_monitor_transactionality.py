@@ -31,6 +31,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+import torchlens._capture.run as capture_run
 from torchlens._utils import rng as rng_module
 from torchlens._utils._torch_compat import autocast_is_enabled
 from torchlens._utils.rng import AutocastRestore, host_nondeterminism_monitor
@@ -90,7 +91,7 @@ def test_base_exception_during_arm_leaks_nothing(monkeypatch):
         tl.trace(
             _tiny_model(),
             torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
     assert _surface_leaks(before) == []
@@ -116,7 +117,7 @@ def test_base_exception_after_profile_install_leaks_nothing(monkeypatch):
         tl.trace(
             _tiny_model(),
             torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
     assert _surface_leaks(before) == []
@@ -195,9 +196,7 @@ def test_patch_stacks_do_not_grow_across_captures():
 
     model = _tiny_model()
     for _ in range(3):
-        tl.trace(
-            model, torch.randn(1, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
-        )
+        tl.trace(model, torch.randn(1, 4), capture=tl.options.CaptureOptions(replayable=True))
     assert rng_module._PATCH_STACKS == {}
 
 
@@ -360,17 +359,15 @@ def test_autocast_restore_exits_outer_contexts_when_inner_raises():
 def test_rng_monitor_verdict_is_prestamped_fail_closed(monkeypatch):
     """An unreached verdict stamp must read as UNCERTAIN, never as a clean window."""
 
-    import torchlens._capture.trace as capture_trace
-
     def _raise(*args, **kwargs):
         raise RuntimeError("injected after the monitor window")
 
-    monkeypatch.setattr(capture_trace, "host_rng_advanced", _raise, raising=False)
+    monkeypatch.setattr(capture_run, "host_rng_advanced", _raise, raising=False)
     with pytest.raises(Exception) as excinfo:
         tl.trace(
             _tiny_model(),
             torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     partial = getattr(excinfo.value, "partial_log", None)
     assert partial is not None, "the failed capture must still expose its partial trace"

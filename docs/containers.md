@@ -41,7 +41,7 @@ output = trace.reconstruct_output()
 
 The FINAL model-output snapshot is recorded on every capture (one `ContainerSpec` per capture), so `trace.reconstruct_output()` and a live `trace.run()` rebuild the exact tuple/dict/namedtuple/dataclass/`ModelOutput` the model returned on a default capture too; the output op records still carry `container_spec=None` unless the structure opt-in below is set. A container holding a tensor-bearing object the codec cannot represent (for example a HuggingFace `DynamicCache`) is recorded as `opaque`: `reconstruct_output()` refuses typed and the runnable save refuses at preflight instead of advertising a contract it cannot fill.
 
-Input-container reconstruction and module-boundary container records require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or per-op container specs recorded after capture or after `.tlspec` load without enabling intervention replay metadata. `intervention_ready=True` also captures that structure as part of its broader replay-template metadata. (The former `capture_output_structure=` alias is removed.)
+Input-container reconstruction and module-boundary container records require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or per-op container specs recorded after capture or after `.tlspec` load without enabling intervention replay metadata. `replayable=True` also captures that structure as part of its broader replay-template metadata. (The former `capture_output_structure=` alias is removed.)
 
 ## Visualization
 
@@ -54,6 +54,8 @@ trace.draw(show_containers="nodes")
 `show_containers="nodes"` renders one collapsed container node labeled with the container type and role, such as `dict[3] (model input)` or `CausalLMOutputWithPast (model output)`. Model-input containers fan out from that node to their input leaves; model-output leaves fan into a sink node. Field, key, or index labels appear on the relevant edges.
 
 For mid-graph containers, TorchLens does not route tensor dataflow through the container node. The key label stays on the real producer-to-consumer edge, and a light dashed arrowless member-of tie associates producer ops with the collapsed container node. Single-owner module clusters and large homogeneous-container collapse still apply as visual enhancers.
+
+A container that is the model's input or output is drawn as that boundary container even when a submodule built it: its node carries the model-input or model-output role and its leaves connect only through the keyed source or sink edges, never through member-of ties. When the homogeneous-container collapse already summarizes every leaf of a container, the summary node is the container node: it carries the role (for example `tuple x16 (model output)`) and no second node is drawn.
 
 Existing modes are unchanged: `False`, `"labels"`, `"cluster"`, `"collapsed"`, and `"auto"` keep their prior rendering behavior.
 

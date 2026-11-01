@@ -31,6 +31,7 @@ from typing import Any
 
 from .._io import _json
 from .._io._durability import fsync_dir, fsync_tree
+from .._utils.hashing import update_hasher_from_file
 from ._engine import derive_merge
 from ._enums import (
     MERGED_BUNDLE_FORMAT,
@@ -42,10 +43,10 @@ from ._enums import (
 from ._errors import MergedArtifactError, MergeInputError
 from ._evidence import extract_rank_evidence
 from ._presenter import MergedTrace, _RankHandle
+from ._rules import is_strict_int
+from ._witness import witness_consistency
 
 __all__ = ["canonical_json_bytes", "load_merged", "save_merged", "tree_hash"]
-
-_TREE_HASH_CHUNK_BYTES = 1 << 20
 
 _EXC_TEXT_LIMIT = 300
 
@@ -143,15 +144,8 @@ def tree_hash(root: Path) -> str:
             continue
         # Chunked: a rank core's safetensors blobs are legitimately multi-GiB, so
         # ``read_bytes()`` materialized the whole file just to hash it.
-        size = 0
         digest = hashlib.sha256()
-        with candidate.open("rb") as handle:
-            while True:
-                chunk = handle.read(_TREE_HASH_CHUNK_BYTES)
-                if not chunk:
-                    break
-                size += len(chunk)
-                digest.update(chunk)
+        size = update_hasher_from_file(digest, candidate)
         entry = _tree_hash_entry(
             candidate.relative_to(root).as_posix(),
             size,
@@ -340,7 +334,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
     # a live input trace whose distributed annotations were mutated between
     # merge_ranks and save() would otherwise produce an artifact whose members
     # never rederive to the cached descriptor -- every future load refuses as
-    # merged_descriptor_tamper, a permanent false tamper accusation for an
+    # merged_descriptor_invalid, a permanent false tamper accusation for an
     # honest sequence. The refusal belongs at save time, where it is fixable.
     reverified = derive_merge(
         {
@@ -453,7 +447,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
         # cannot leave a "successfully saved" artifact holding zero-length or
         # partial files. load_merged requires EXACT descriptor-sha + per-member
         # tree-hash equality, so a torn publish reads back as a PERMANENT false
-        # merged_descriptor_tamper accusation on an honest save (deep-hunt F12);
+        # merged_descriptor_invalid accusation on an honest save (deep-hunt F12);
         # the previous version is already renamed aside. Mirrors the .tlspec
         # writers (_io/bundle.py, _io/tlspec.py).
         fsync_tree(staging_root)
@@ -555,9 +549,7 @@ def _cached_join_refs(join: Any, index: int) -> tuple[dict[str, Any], dict[int, 
         raise refuse("backend is not a string or null")
     for name in ("membership", "presence", "missing"):
         value = join.get(name)
-        if not isinstance(value, list) or any(
-            isinstance(rank, bool) or not isinstance(rank, int) for rank in value
-        ):
+        if not isinstance(value, list) or not all(is_strict_int(rank) for rank in value):
             raise refuse(f"{name} is not a list of integers")
     per_rank_payload = join.get("per_rank")
     if not isinstance(per_rank_payload, dict):
@@ -578,16 +570,14 @@ def _cached_join_refs(join: Any, index: int) -> tuple[dict[str, Any], dict[int, 
             digests[field] = None if value is None else tuple(value)
         for field in ("rank", "boundary_index", "seq_abs"):
             value = ref.get(field)
-            if isinstance(value, bool) or not isinstance(value, int):
+            if not is_strict_int(value):
                 raise refuse(f"per_rank entry {rank_key} {field} is not an integer")
         group_rank = ref.get("group_rank")
-        if group_rank is not None and (
-            isinstance(group_rank, bool) or not isinstance(group_rank, int)
-        ):
+        if group_rank is not None and not is_strict_int(group_rank):
             raise refuse(f"per_rank entry {rank_key} group_rank is not an integer or null")
         for field in ("n_contribution_roles", "n_destination_roles"):
             value = ref.get(field)
-            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            if not is_strict_int(value) or value < 0:
                 raise refuse(f"per_rank entry {rank_key} {field} is not a non-negative integer")
         op_labels = ref.get("op_labels_raw")
         if not isinstance(op_labels, list) or any(
@@ -644,7 +634,7 @@ def _check_degraded_cache_coherence(cached: dict[str, Any], rederived: Any) -> N
        ranks (references to lost ranks stay unprovable and untouched).
     """
 
-    from ._engine import _STRUCTURAL_KINDS, _witness_consistency
+    from ._engine import _STRUCTURAL_KINDS
     from ._enums import BoundaryConsistency, MergeAlignment, MergeValueStatus
 
     cached_joins = cached.get("joins")
@@ -674,7 +664,7 @@ def _check_degraded_cache_coherence(cached: dict[str, Any], rederived: Any) -> N
                 f"descriptor cache join {index} consistency "
                 f"{join.get('consistency')!r} is outside the closed vocabulary"
             ) from exc
-        recomputed = _witness_consistency(
+        recomputed = witness_consistency(
             join["kind"],
             join["backend"],
             tuple(join["membership"]),
@@ -884,7 +874,7 @@ def load_merged(path: str | Path) -> MergedTrace:
                 f"{sorted(_MEMBER_ENTRY_KEYS)}"
             )
         rank = entry["rank"]
-        if isinstance(rank, bool) or not isinstance(rank, int) or rank < 0:
+        if not is_strict_int(rank) or rank < 0:
             raise _schema_refusal(f"descriptor member rank {rank!r} is not a non-negative integer")
         if rank in validated_members:
             raise _schema_refusal(f"descriptor member rank {rank} is duplicated")
@@ -1012,8 +1002,7 @@ def load_merged(path: str | Path) -> MergedTrace:
     # against the closed shape (null or a list of non-negative ints) first.
     expected = cached.get("expected_ranks")
     if expected is not None and (
-        not isinstance(expected, list)
-        or any(isinstance(r, bool) or not isinstance(r, int) or r < 0 for r in expected)
+        not isinstance(expected, list) or any(not is_strict_int(r) or r < 0 for r in expected)
     ):
         raise _schema_refusal(
             "descriptor derivation cache expected_ranks is not null or a list of "

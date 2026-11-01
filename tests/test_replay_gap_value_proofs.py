@@ -42,7 +42,7 @@ def _capture(model: nn.Module, x: torch.Tensor) -> Any:
 
 
 def _op(trace: Any, *func_names: str) -> Any:
-    return next(op for op in trace.layer_list if op.func_name in func_names)
+    return next(op for op in trace._layer_list if op.func_name in func_names)
 
 
 def _edge(trace: Any, op: Any, slot: Any) -> Any:

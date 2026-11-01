@@ -47,9 +47,9 @@ def _linear_traffic_case(bias: bool) -> None:
     x = torch.randn(4, 256)
     trace = tl.trace(lin, x)
     try:
-        # The roofline reads Op records (trace.layer_list); the Layer facade
+        # The roofline reads Op records (trace._layer_list); the Layer facade
         # deliberately serves only the per-layer total_param_memory.
-        op = next(o for o in trace.layer_list if o.layer_label == "linear_1_1")
+        op = next(o for o in trace._layer_list if o.layer_label == "linear_1_1")
         param_bytes = int(op.param_memory)
         expected_param_bytes = (256 * 512 + (512 if bias else 0)) * 4
         assert param_bytes == expected_param_bytes

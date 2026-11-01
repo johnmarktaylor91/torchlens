@@ -121,7 +121,7 @@ def _register_query_rules() -> None:
 def _last_op(trace: object, func_name: str) -> object:
     """Return the final captured operation with a normalized function name."""
 
-    matches = [op for op in trace.layer_list if op.func_name == func_name]  # type: ignore[attr-defined]
+    matches = [op for op in trace._layer_list if op.func_name == func_name]  # type: ignore[attr-defined]
     assert matches
     return matches[-1]
 

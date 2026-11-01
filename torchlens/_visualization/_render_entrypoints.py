@@ -143,7 +143,7 @@ def render_backward_graph(
         If no explicit backward graph has been captured.
     """
 
-    if not self.has_backward_pass or not self.grad_fn_logs:
+    if not self._autograd_has_backward_pass or not self._grad_fn_logs:
         raise PayloadUnavailableError(
             "No backward graph is available",
             code="backward_graph_unavailable",
@@ -168,9 +168,9 @@ def render_backward_graph(
 
     graph_caption = (
         f"<<FONT COLOR='{skin.default_font}'>"
-        f"<B>{html_escape(self.model_class_name)} backward graph</B><br align='left'/>"
+        f"<B>{html_escape(self._source_class_name)} backward graph</B><br align='left'/>"
         f"{len(self.autograd.grad_fns)} grad_fn_handle nodes"
-        f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
+        f"<br align='left'/>{self._num_backward_passes} backward pass(es)"
         f"{_format_backward_filter_caption(pass_filter)}"
         f"<br align='left'/>mode: {vis_mode}<br align='left'/></FONT>>"
     )
@@ -233,12 +233,12 @@ def render_backward_graph(
                 for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
                     if next_grad_fn_id not in visible_ids:
                         continue
-                    head_name = _backward_dot_node_name(self.grad_fn_logs[next_grad_fn_id])
+                    head_name = _backward_dot_node_name(self._grad_fn_logs[next_grad_fn_id])
                     ir_builder.edge(
                         tail_name,
                         head_name,
                         **_backward_edge_attrs(
-                            grad_fn_handle, self.grad_fn_logs[next_grad_fn_id], trace=self
+                            grad_fn_handle, self._grad_fn_logs[next_grad_fn_id], trace=self
                         ),
                     )
         else:
@@ -251,8 +251,8 @@ def render_backward_graph(
 
     source_text = resolve_code_panel_source(
         code_panel,
-        getattr(self, "_source_code_blob", {}),
-        getattr(self, "_source_model_ref", None),
+        self._source_code_blob,
+        self._source_model_ref,
     )
     # Compose the code panel side by side when the format supports it so it never
     # distorts the backward graph; otherwise fall back to an in-graph subgraph.
@@ -274,7 +274,7 @@ def render_backward_graph(
         fileformat=vis_fileformat,
         save_only=vis_save_only,
         viewer=not vis_save_only,
-        graph_name=f"{self.model_class_name}_backward",
+        graph_name=f"{self._source_class_name}_backward",
         graph_comment="Backward grad_fn_handle graph",
         timeout=_RENDER_TIMEOUT,
     )
@@ -408,7 +408,7 @@ def render_combined_graph(
             remedy="pass vis_mode='unrolled' or 'rolled'",
             argument="vis_mode",
         )
-    if not self.has_backward_pass or not self.grad_fn_logs:
+    if not self._autograd_has_backward_pass or not self._grad_fn_logs:
         raise PayloadUnavailableError(
             "No backward graph is available",
             code="backward_graph_unavailable",
@@ -433,9 +433,9 @@ def render_combined_graph(
     )
 
     graph_caption = (
-        f"<<B>{html_escape(self.model_class_name)} combined forward/backward graph</B><br align='left'/>"
+        f"<<B>{html_escape(self._source_class_name)} combined forward/backward graph</B><br align='left'/>"
         f"{len(self)} forward nodes, {len(self.autograd.grad_fns)} grad_fn_handle nodes"
-        f"<br align='left'/>{self.num_backward_passes} backward pass(es)"
+        f"<br align='left'/>{self._num_backward_passes} backward pass(es)"
         f"{_format_backward_filter_caption(pass_filter)}<br align='left'/>>"
     )
     graph_args = {
@@ -555,7 +555,7 @@ def render_combined_graph(
         fileformat=vis_fileformat,
         save_only=vis_save_only,
         viewer=not vis_save_only,
-        graph_name=f"{self.model_class_name}_combined",
+        graph_name=f"{self._source_class_name}_combined",
         graph_comment="Combined forward and backward graph",
         timeout=_RENDER_TIMEOUT,
     )

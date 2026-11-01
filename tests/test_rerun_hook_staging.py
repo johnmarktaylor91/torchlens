@@ -244,7 +244,7 @@ def test_fork_do_then_rerun_does_not_restage_hooks(steered: dict[str, Any]) -> N
     """A forked ``do`` edit applies once, and reruns of the fork keep it single."""
 
     model, x = steered["model"], steered["x"]
-    root = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    root = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = root.fork()
     fork.do(tl.module(_SITE), _steer())
     assert torch.equal(_readout(fork), steered["out"])

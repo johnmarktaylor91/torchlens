@@ -19,11 +19,12 @@ from safetensors.torch import load_file, save_file
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_dir, fsync_file
 from .._io._json import read_bounded
-from .._io.manifest import TensorEntry, sha256_of_file
+from .._io.manifest import TensorEntry
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
 from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._utils.hashing import sha256_file
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from .errors import (
     DirectActivationWriteWarning,
@@ -286,7 +287,7 @@ def save_intervention(
             save_level=save_level.value,
         )
         _write_text_file(tmp_path / _README_FILE, _readme_text(spec_json, tensor_entries))
-        # Blob file data is fsynced at write time (_fsync_file), but directory
+        # Blob file data is fsynced at write time (fsync_file), but directory
         # ENTRIES must be flushed bottom-up: without fsyncing tensors/ first, a
         # power crash just after publish can leave a durable spec.json whose
         # tensors/*.safetensors entries were lost (R59; siblings use fsync_tree).
@@ -495,9 +496,9 @@ def _append_state_for_json(log: Any) -> dict[str, Any]:
         if isinstance(record, dict) and record.get("op") == "append"
     ]
     return {
-        "is_appended": bool(getattr(log, "is_appended", False)),
+        "is_appended": bool(log._provenance_is_appended),
         "append_sequence_id": int(getattr(log, "_append_sequence_id", 0)),
-        "append_history": list(getattr(log, "append_history", [])),
+        "append_history": list(log._append_history),
         "state_history": append_records,
     }
 
@@ -697,15 +698,13 @@ def _trace_fire_records(log: Any) -> list[FireRecord]:
     """
 
     records: list[FireRecord] = []
-    for layer in getattr(log, "layer_list", []) or []:
+    for layer in log._layer_list or []:
         records.extend(
-            record
-            for record in getattr(layer, "interventions", []) or []
-            if isinstance(record, FireRecord)
+            record for record in getattr(layer, "edits", []) or [] if isinstance(record, FireRecord)
         )
-    for grad_fn in getattr(log, "grad_fn_logs", {}).values():
+    for grad_fn in log._grad_fn_logs.values():
         for call in getattr(getattr(grad_fn, "calls", None), "_list", []):
-            records.extend(_flatten_fire_ref(getattr(call, "intervention_fire_ref", None)))
+            records.extend(_flatten_fire_ref(getattr(call, "fire_record", None)))
     return records
 
 
@@ -741,20 +740,20 @@ def _fire_record_key(record: FireRecord) -> tuple[Any, ...]:
     Returns
     -------
     tuple[Any, ...]
-        Key covering direction, site, pass/call position, tuple slot, and
+        Key covering signal, site, pass/call position, tuple slot, and
         helper identity.
     """
 
     return (
-        record.direction,
+        record.signal,
         record.engine,
         record.target_label,
         record.call_label,
         record.site_label,
-        record.helper_name,
-        _helper_identity(record.helper),
+        record.edit_name,
+        _helper_identity(record.edit),
         record.timing,
-        record.backward_pass_index,
+        record.backward_pass_number,
         record.call_index,
         record.grad_kind,
         record.tuple_index,
@@ -783,7 +782,7 @@ def _helper_identity(helper: Edit | None) -> tuple[Any, ...] | None:
 
     return (
         helper.name,
-        helper.kind,
+        helper.signal,
         helper.portability,
         tuple(render_value(arg) for arg in helper.args),
         tuple((key, render_value(value)) for key, value in helper.kwargs),
@@ -819,7 +818,7 @@ def _serialize_fire_record(
     # payload shallowly: the two structured fields are serialized below and
     # every other FireRecord field is a scalar/string.
     data = {field.name: getattr(record, field.name) for field in dataclass_fields(record)}
-    data["helper"] = _serialize_value(record.helper, save_level, state)
+    data["edit"] = _serialize_value(record.edit, save_level, state)
     data["container_path"] = _serialize_value(record.container_path, save_level, state)
     return data
 
@@ -1061,16 +1060,16 @@ def _serialize_output_path_component(
     if isinstance(value, DictKey):
         return {
             "__output_path_component__": "dict_key",
-            "key": _serialize_value(value.key, save_level, state),
+            "key": _serialize_value(value._key, save_level, state),
         }
     if isinstance(value, HFKey):
         return {
             "__output_path_component__": "hf_key",
-            "key": _serialize_value(value.key, save_level, state),
+            "key": _serialize_value(value._key, save_level, state),
         }
     if isinstance(value, NamedField):
-        return {"__output_path_component__": "named_field", "name": value.name}
-    return {"__output_path_component__": "dataclass_field", "name": value.name}
+        return {"__output_path_component__": "named_field", "name": value._name}
+    return {"__output_path_component__": "dataclass_field", "name": value._name}
 
 
 def _serialize_helper(
@@ -1114,20 +1113,19 @@ def _serialize_helper(
             "portability": "opaque_audit",
             "name": helper.name,
             "repr": repr(helper),
-            "batch_independent": bool(helper.batch_independent),
-            "compatible_with_append": bool(helper.compatible_with_append),
+            "is_batch_independent": bool(helper.is_batch_independent),
+            "is_compatible_with_append": bool(helper.is_compatible_with_append),
         }
 
     return {
         "portability": "builtin",
         "name": helper.name,
-        "kind": helper.kind,
-        "direction": helper.direction,
+        "signal": helper.signal,
         "args": [_serialize_value(arg, save_level, state) for arg in helper.args],
         "kwargs": {key: _serialize_value(value, save_level, state) for key, value in helper.kwargs},
         "metadata": _jsonish_metadata(dict(helper.metadata)),
-        "batch_independent": bool(helper.batch_independent),
-        "compatible_with_append": bool(helper.compatible_with_append),
+        "is_batch_independent": bool(helper.is_batch_independent),
+        "is_compatible_with_append": bool(helper.is_compatible_with_append),
     }
 
 
@@ -1302,7 +1300,7 @@ def _deserialize_fire_record(
     """
 
     helper = _deserialize_value(
-        data.get("helper"),
+        data.get("edit"),
         tensors,
         trust_custom_callables=trust_custom_callables,
         allowed_custom_callable_modules=allowed_custom_callable_modules,
@@ -1319,15 +1317,15 @@ def _deserialize_fire_record(
         func_call_id=data.get("func_call_id"),
         container_path=tuple(container_path or ()),
         engine=data.get("engine"),
-        helper=helper if isinstance(helper, Edit) else None,
+        edit=helper if isinstance(helper, Edit) else None,
         site_label=data.get("site_label"),
         timing=data.get("timing"),
-        direction=data.get("direction"),
-        helper_name=data.get("helper_name"),
+        signal=data.get("signal"),
+        edit_name=data.get("edit_name"),
         seed=data.get("seed"),
         determinism_note=data.get("determinism_note"),
         timestamp=data.get("timestamp"),
-        backward_pass_index=data.get("backward_pass_index"),
+        backward_pass_number=data.get("backward_pass_number"),
         call_index=data.get("call_index"),
         grad_kind=data.get("grad_kind"),
         tuple_index=data.get("tuple_index"),
@@ -1444,14 +1442,14 @@ def _deserialize_value(
                 allowed_custom_callable_modules=allowed_tuple,
             )
         return Edit(
-            helper_name="opaque_audit",
+            name="opaque_audit",
             portability="opaque_audit",
             metadata=(("repr", callable_payload.get("repr", "")), ("executable", False)),
         )
     if isinstance(value, dict) and "__opaque_audit__" in value:
         payload = value["__opaque_audit__"]
         return Edit(
-            helper_name=str(payload.get("type", "opaque_audit")),
+            name=str(payload.get("type", "opaque_audit")),
             portability="opaque_audit",
             metadata=(("repr", payload.get("repr", "")), ("executable", False)),
         )
@@ -1725,7 +1723,7 @@ def _build_target_manifest(
                     "resolved_labels": [],
                     "resolved_status": status,
                     "resolution_error": str(exc),
-                    "graph_shape_hash": getattr(log, "graph_shape_hash", None),
+                    "graph_shape_hash": log._provenance_fingerprint,
                     "_address_normalized": _normalized_address(target),
                 }
             )
@@ -1740,7 +1738,7 @@ def _build_target_manifest(
                 # legacy captures) record None.
                 "resolved_site_keys": _site_keys_for_table(log, resolved),
                 "resolved_status": "resolved",
-                "graph_shape_hash": getattr(log, "graph_shape_hash", None),
+                "graph_shape_hash": log._provenance_fingerprint,
                 "_address_normalized": _normalized_address(target),
             }
         )
@@ -1781,7 +1779,7 @@ def _serialize_function_registry_keys(log: Any) -> list[dict[str, Any]]:
     """
 
     entries: list[dict[str, Any]] = []
-    for layer in getattr(log, "layer_list", []):
+    for layer in log._layer_list:
         key = _function_key_for_layer(layer)
         if key is None:
             continue
@@ -1930,7 +1928,7 @@ def _write_tlspec_tensor_blob(
     relative_path = Path(_TENSOR_DIR) / f"{blob_id}.safetensors"
     blob_path = tmp_path / relative_path
     save_file({_BLOB_TENSOR_KEY: contiguous}, str(blob_path))
-    _fsync_file(blob_path)
+    fsync_file(blob_path)
     return TensorEntry(
         blob_id=blob_id,
         kind=kind,
@@ -1942,7 +1940,7 @@ def _write_tlspec_tensor_blob(
         device_at_save=str(tensor.device),
         layout=str(contiguous.layout).replace("torch.", ""),
         bytes=int(contiguous.numel() * contiguous.element_size()),
-        sha256=sha256_of_file(blob_path),
+        sha256=sha256_file(blob_path),
         requires_grad=bool(tensor.requires_grad),
     )
 
@@ -1966,7 +1964,7 @@ def _load_tensor_refs(spec_path: Path, entries: list[TensorEntry]) -> dict[str, 
     tensors: dict[str, torch.Tensor] = {}
     for entry in entries:
         path = _resolve_intervention_tensor_path(spec_path, entry.relative_path)
-        if sha256_of_file(path) != entry.sha256:
+        if sha256_file(path) != entry.sha256:
             raise ReplayPreconditionError(f"Tensor sidecar checksum mismatch: {entry.blob_id}")
         tensor = load_file(str(path))[_BLOB_TENSOR_KEY]
         if entry.requires_grad:
@@ -2226,18 +2224,6 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ReplayPreconditionError(f"{path} must contain a JSON object")
     return data
-
-
-def _fsync_file(path: Path) -> None:
-    """Fsync an existing file (write-capable handle on Windows; see ``_durability``).
-
-    Parameters
-    ----------
-    path:
-        File path.
-    """
-
-    fsync_file(path)
 
 
 def _fsync_directory(path: Path) -> None:

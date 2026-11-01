@@ -162,7 +162,7 @@ def _fire_boundary_predicate_hooks(
     """
 
     from .._capture.predicates import _evaluate_intervene_op
-    from ..backends.torch.ops import _record_predicate_intervention_spec
+    from ..backends.torch._ops_interventions import _record_predicate_intervention_spec
     from .hooks import normalize_hook_plan
     from .runtime import (
         _apply_live_hooks,
@@ -182,7 +182,6 @@ def _fire_boundary_predicate_hooks(
     hook_entries = normalize_hook_plan(
         decision.hook,
         default_site_target=predicate_selector,
-        direction=decision.direction,
     )
     # F01 log_injections: anchor this boundary firing's injected ops to the
     # PERSISTED rule id (the public spec threads it through the decision),

@@ -47,6 +47,11 @@ import torch
 
 import torchlens as tl
 from torchlens._io import ArtifactError
+from torchlens._io._small_raw import (
+    _RAW_IMAGE_SENTINEL,
+    _RAW_INPUT_IMAGE_BYTES_LIMIT,
+    _RAW_INPUT_IMAGE_MAX_EDGE,
+)
 from torchlens._io.bundle_container import (
     _MAX_BUNDLE_NESTING_DEPTH,
     _load_unified_bundle_directory,
@@ -54,11 +59,6 @@ from torchlens._io.bundle_container import (
 )
 from torchlens._io.rehydrate import _rehydrate_small_raw_images
 from torchlens._io.runnable_load import _parse_literal
-from torchlens._io.scrub import (
-    _RAW_IMAGE_SENTINEL,
-    _RAW_INPUT_IMAGE_BYTES_LIMIT,
-    _RAW_INPUT_IMAGE_MAX_EDGE,
-)
 from torchlens._runnable import LiteralAtom, LiteralAtomKind
 from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.intervention.errors import UntrustedCallableError

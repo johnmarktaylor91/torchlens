@@ -109,11 +109,11 @@ def capture(model: nn.Module, x: torch.Tensor) -> object:
 
 
 def sole_input(trace: object) -> object:
-    return next(op for op in trace.layer_list if op.is_input)
+    return next(op for op in trace._layer_list if op.is_input)
 
 
 def op_named(trace: object, fragment: str) -> object:
-    matches = [op for op in trace.layer_list if fragment in op.func_name]
+    matches = [op for op in trace._layer_list if fragment in op.func_name]
     assert matches, f"no op matching {fragment!r}"
     return matches[-1]
 
@@ -577,7 +577,7 @@ def test_adjoint_duality_law(model_factory) -> None:
     x = torch.randn(1, 1, extent)
     trace = capture(model, x)
     source = sole_input(trace)
-    target = [op for op in trace.layer_list if not op.is_input and not op.is_output][-1]
+    target = [op for op in trace._layer_list if not op.is_input and not op.is_output][-1]
     out_extent = int(target.shape[-1])
     for src in range(extent):
         pf_box = source.projective_field.at((src,))
@@ -612,7 +612,7 @@ def test_layer_to_layer_composition_law() -> None:
     )
     x = torch.randn(1, 1, 17)
     trace = capture(model, x)
-    convs = [op for op in trace.layer_list if "conv" in op.func_name]
+    convs = [op for op in trace._layer_list if "conv" in op.func_name]
     mid, final = convs[0], convs[1]
     source = sole_input(trace)
     for out_pos in range(int(final.shape[-1])):
@@ -643,7 +643,7 @@ def test_translation_equivariance() -> None:
     )
     x = torch.randn(1, 1, 33)
     trace = capture(model, x)
-    final = [op for op in trace.layer_list if "conv" in op.func_name][-1]
+    final = [op for op in trace._layer_list if "conv" in op.func_name][-1]
     view = final.receptive_field
     jump = view.jump[-1]
     base = view.at((5,), clip=False)

@@ -14,11 +14,13 @@ from collections.abc import Callable, Mapping
 from typing import Any, Literal, cast
 
 import torch
+from torch import nn
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .errors import AmbiguousAxisError, HookValueError, NonExecutableSpecError
 from .hooks import HookContext
 from .stochastic import _NAMED_AXIS_TOKENS, _resolve_over_axes
-from .types import Edit, HelperDirection, HelperPortability
+from .types import Edit, HelperPortability, Signal
 
 
 def _mean_ablate_axes(dim: Any) -> Literal["all"] | tuple[int, ...] | None:
@@ -49,13 +51,12 @@ def _helper_spec(
     *,
     args: tuple[Any, ...] = (),
     kwargs: dict[str, Any] | None = None,
-    kind: str = "forward",
     portability: HelperPortability = "builtin",
     factory: Callable[[], Callable[..., Any]],
     metadata: dict[str, Any] | None = None,
-    direction: HelperDirection | None = None,
-    batch_independent: bool = False,
-    compatible_with_append: bool = False,
+    signal: Signal | None = None,
+    is_batch_independent: bool = False,
+    is_compatible_with_append: bool = False,
 ) -> Edit:
     """Build a Edit with stable tuple metadata.
 
@@ -67,19 +68,18 @@ def _helper_spec(
         Positional helper arguments.
     kwargs:
         Keyword helper arguments.
-    kind:
-        Forward or backward helper class.
     portability:
         Portability tag.
     factory:
         Runtime hook factory.
     metadata:
         Extra helper metadata.
-    direction:
-        Optional default signal direction requested by legacy helpers.
-    batch_independent:
+    signal:
+        ``None`` for a neutral edit; ``"forward"`` for an edit that reads
+        recorded forward state (refused on a gradient site).
+    is_batch_independent:
         Whether this helper can be applied independently to each batch item.
-    compatible_with_append:
+    is_compatible_with_append:
         Whether this helper opts into append when it changes out shape.
 
     Returns
@@ -89,16 +89,15 @@ def _helper_spec(
     """
 
     return Edit(
-        helper_name=helper_name,
+        name=helper_name,
         args=args,
         kwargs=tuple(sorted((kwargs or {}).items())),
-        kind=kind,  # type: ignore[arg-type]
         portability=portability,
         factory=factory,
         metadata=tuple(sorted((metadata or {}).items())),
-        direction=direction,
-        batch_independent=batch_independent,
-        compatible_with_append=compatible_with_append,
+        signal=signal,
+        is_batch_independent=is_batch_independent,
+        is_compatible_with_append=is_compatible_with_append,
     )
 
 
@@ -207,17 +206,16 @@ def _non_executable_builtin_placeholder(
         )
 
     return Edit(
-        helper_name=name,
+        name=name,
         portability="opaque_audit",
-        kind=cast(Any, data.get("kind", "forward")),
-        direction=cast(Any, data.get("direction")),
+        signal=cast(Any, data.get("signal")),
         factory=factory,
         metadata=(
             ("repr", f"<non-executable {name} helper (audit-only argument)>"),
             ("executable", False),
         ),
-        batch_independent=bool(data.get("batch_independent", False)),
-        compatible_with_append=bool(data.get("compatible_with_append", False)),
+        is_batch_independent=bool(data.get("is_batch_independent", False)),
+        is_compatible_with_append=bool(data.get("is_compatible_with_append", False)),
     )
 
 
@@ -262,8 +260,8 @@ def _enqueue_nondeterminism_note(ctx: HookContext, helper_name: str) -> None:
         note = f"{helper_name} used unseeded stochastic RNG at {site}"
     else:
         note = f"{helper_name} used unseeded stochastic RNG"
-    ctx.run_ctx.setdefault("ledger_notes", []).append(note)
-    state_history = ctx.run_ctx.get("state_history")
+    ctx.run_state.setdefault("ledger_notes", []).append(note)
+    state_history = ctx.run_state.get("state_history")
     if isinstance(state_history, list):
         state_history.append(note)
 
@@ -399,10 +397,77 @@ def _live_capture_donor(source: Any, context: Mapping[str, Any]) -> tuple[Any, A
         if not raw_label.endswith("_raw"):
             continue
         final_label = raw_to_final.get(raw_label)
-        donor = None if final_label is None else source.layer_dict_all_keys.get(final_label)
+        donor = None if final_label is None else source._layer_dict_all_keys.get(final_label)
         if donor is None:
             return None, None
         if tuple(getattr(donor, "shape", None) or ()) != tuple(context.get("shape") or ()):
             return None, None
         return final_label, donor
     return None, None
+
+
+def _swap_with_spec(
+    other_label: Any,
+    factory: Callable[[], Callable[..., Any]],
+    *,
+    allow_shape_change: bool,
+) -> Edit:
+    """Build the ``swap_with`` helper spec around its runtime hook factory."""
+
+    return _helper_spec(
+        "swap_with",
+        args=(other_label,),
+        kwargs={"allow_shape_change": allow_shape_change},
+        factory=factory,
+        # A fixed tensor donor is neutral; a site or trace donor reads
+        # recorded forward state.
+        signal=None if isinstance(other_label, torch.Tensor) else "forward",
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
+    )
+
+
+def _splice_module_spec(
+    module: nn.Module,
+    factory: Callable[[], Callable[..., Any]],
+    *,
+    input_route: str,
+    output_route: str,
+    allow_shape_change: bool,
+) -> Edit:
+    """Build the ``splice_module`` helper spec around its runtime hook factory."""
+
+    return _helper_spec(
+        "splice_module",
+        args=(module,),
+        kwargs={
+            "input_route": input_route,
+            "output_route": output_route,
+            "allow_shape_change": allow_shape_change,
+        },
+        factory=factory,
+        metadata={"input_route": input_route, "output_route": output_route},
+        signal="forward",
+        is_batch_independent=False,
+        is_compatible_with_append=False,
+    )
+
+
+def _patch_source_identity(
+    source: Any, source_site: Any, pairs: Any, position_axis: int
+) -> dict[str, str]:
+    """Return the persisted source-trace identity args of a ``patch_from`` spec."""
+
+    identity = {
+        "source_trace_label": str(getattr(source, "trace_label", "") or ""),
+        "source_model_class": str(
+            (source._source_class_qualname if is_live_trace(source) else "") or ""
+        ),
+        "source_object_id": str(id(source)),
+    }
+    if source_site is not None:
+        identity["source_site"] = repr(source_site)
+    if pairs is not None:
+        identity["positions"] = repr(pairs)
+        identity["position_axis"] = str(int(position_axis))
+    return identity

@@ -36,11 +36,13 @@ from torchlens.backends.registry import BackendPayloadUnsupportedError
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._data_classes._state_adapter import state_items
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
+from .._utils.hashing import sha256_file
 from ..backends.registry import BackendSpec, get_backend_spec
-from ..errors import TorchLensWarning
+from ..errors import RunnablePreflightError, TorchLensWarning
 from . import (
     TLSPEC_VERSION,
     ArtifactError,
@@ -64,8 +66,9 @@ from ._save_gates import (
     _save_bundle_via_container_door,
 )
 from .lazy import LazyActivationRef
-from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy, sha256_of_file
+from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
+    _make_tmp_bundle_path,
     reject_symlink_path as _reject_symlink_path,
     resolve_bundle_blob_path,
     resolve_bundle_blobs_dir,
@@ -391,7 +394,7 @@ def save(
         raise SelectionError(
             "trace.save() does not support TraceSlice: a slice is a VIEW with "
             "declared dangling boundary edges, not a self-contained capture. "
-            "Save the underlying trace (slice.source_trace.save(path)) "
+            "Save the trace the slice was taken from (trace.save(path)) "
             "and re-derive the view after loading.",
             code="slice_save_unsupported",
         )
@@ -479,7 +482,7 @@ def save(
     if (peek_injection_state(trace) or {}).get("records"):
         refuse_injection_logged_runnable_save(trace, coerce_tlspec_save_level(level))
     # A PartialTrace is a failed-capture inspection wrapper, never a savable
-    # product (its FIELD_POLICY declares both fields session-time DROP). Every
+    # product (its _FIELD_POLICY declares both fields session-time DROP). Every
     # SHIPPED wrapper settles FAILED and refuses through the gate above; this
     # closes the hand-built wrapper-around-a-settled-trace residual, which
     # before the b1-opus-R06-1 outcome delegation fail-closed only by ACCIDENT
@@ -518,7 +521,6 @@ def save(
         except CaptureOutcomeError as outcome_exc:
             if outcome_exc.fields.get("code") == "N4":
                 from .._runnable import RunnableErrorCode
-                from ..errors import RunnablePreflightError
 
                 raise RunnablePreflightError(
                     "Runnable save refuses a HALTED capture: the recorded graph "
@@ -601,7 +603,7 @@ def save(
                 input_fingerprints=input_fingerprints,
             )
         sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
-    backend_name = str(getattr(trace, "backend", "torch"))
+    backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
     backend_spec = get_backend_spec(backend_name)
     _reject_audit_only_materialized_payload_save(
         backend_name=backend_name,
@@ -742,7 +744,7 @@ def save(
         if skipped_blob_ids:
             _apply_skipped_blobs_to_scrubbed_state(scrubbed_state, skipped_blob_ids)
 
-        persisted_rows = scrubbed_state.get("layer_list")
+        persisted_rows = scrubbed_state.get("_layer_list")
         manifest = _build_manifest(
             trace=trace,
             tensor_entries=tensor_entries,
@@ -905,7 +907,6 @@ def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) 
     """
 
     from .._runnable import RunnableErrorCode
-    from ..errors import RunnablePreflightError
 
     for name in names:
         if not isinstance(name, str) or name == "":
@@ -1053,7 +1054,7 @@ def _capture_activation_blob_specs(
     """
 
     from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
-    from .._runnable_execution import build_input_attestation_fingerprint
+    from .._runnable_input_aliases import build_input_attestation_fingerprint
     from .._runnable_state import runnable_tensor_byte_digest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
@@ -1064,7 +1065,7 @@ def _capture_activation_blob_specs(
     members: list[ActivationPayloadMember] = []
     input_digests: list[SlotByteDigest] = []
     input_fingerprints: list[Any] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         op_label = str(op.label)
         slot_id = f"slot:{op_label}"
         if slot_id not in slot_ids:
@@ -1611,7 +1612,7 @@ def _load_trace_payload(
     reanchor_loaded_episode_evidence(trace)
     _reanchor_visualizer_paths(trace, bundle_path)
     setattr(trace, "_loaded_from_bundle", True)
-    setattr(trace, "_source_bundle_manifest_sha256", sha256_of_file(manifest_path))
+    setattr(trace, "_source_bundle_manifest_sha256", sha256_file(manifest_path))
     setattr(trace, "_source_bundle_path", bundle_path)
     setattr(trace, "_source_bundle_created_at", manifest.created_at)
     setattr(trace, "_source_bundle_provenance", manifest.provenance)
@@ -1727,7 +1728,7 @@ def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str
 
     from .._runnable import RunProvider
 
-    if trace.runnable_descriptor is not None:
+    if trace._sparse_run_descriptor is not None:
         return "bind"
     readiness = trace._runnable.readiness
     if getattr(readiness, "provider", None) is RunProvider.LOADED_SPARSE:
@@ -1770,7 +1771,7 @@ def _bind_embedded_nonpersistent_buffer_payload(
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)
-    descriptor = trace.runnable_descriptor
+    descriptor = trace._sparse_run_descriptor
     entries = tuple(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_NONPERSISTENT_BUFFER_KIND
     )
@@ -1807,7 +1808,7 @@ def _bind_embedded_nonpersistent_buffer_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_of_file(blob_path)
+        observed_sha256 = sha256_file(blob_path)
         if observed_sha256 != entry.sha256:
             raise ArtifactError(
                 "Checksum mismatch for embedded non-persistent buffer "
@@ -1860,7 +1861,7 @@ def _bind_embedded_weight_payload(
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)
-    descriptor = trace.runnable_descriptor
+    descriptor = trace._sparse_run_descriptor
     weight_entries = tuple(
         entry for entry in manifest.tensors if entry.kind == _RUNNABLE_WEIGHT_KIND
     )
@@ -1893,7 +1894,7 @@ def _bind_embedded_weight_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_of_file(blob_path)
+        observed_sha256 = sha256_file(blob_path)
         if observed_sha256 != entry.sha256:
             raise ArtifactError(
                 f"Checksum mismatch for embedded state blob_id={entry.blob_id} at {blob_path}."
@@ -1943,7 +1944,7 @@ def _bind_archived_activation_payload(
 
     if resolved_blobs_dir is None:
         resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)
-    descriptor = trace.runnable_descriptor
+    descriptor = trace._sparse_run_descriptor
     activation_entries = {
         entry.blob_id: entry
         for entry in manifest.tensors
@@ -1983,7 +1984,7 @@ def _bind_archived_activation_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_of_file(blob_path)
+        observed_sha256 = sha256_file(blob_path)
         if observed_sha256 != entry.sha256:
             raise ArtifactError(
                 f"Checksum mismatch for archived activation blob_id={entry.blob_id} at {blob_path}."
@@ -2661,7 +2662,7 @@ def _directories_content_equal(left: Path, right: Path) -> bool:
     bundle directory is a provable duplicate of the live bundle (safe to
     delete) versus genuinely distinct data that must not be silently
     destroyed. Compares the set of relative file paths and, for each,
-    the file's SHA-256 digest via :func:`sha256_of_file`.
+    the file's SHA-256 digest via :func:`sha256_file`.
 
     Parameters
     ----------
@@ -2687,7 +2688,7 @@ def _directories_content_equal(left: Path, right: Path) -> bool:
     if left_files != right_files:
         return False
     try:
-        return all(sha256_of_file(left / rel) == sha256_of_file(right / rel) for rel in left_files)
+        return all(sha256_file(left / rel) == sha256_file(right / rel) for rel in left_files)
     except OSError:
         return False
 
@@ -2734,6 +2735,8 @@ def _scrub_trace_for_bundle(
         Scrubbed metadata, blob specs, and unsupported tensor audit records.
     """
 
+    backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
+    payload_materialization = get_backend_spec(backend_name).capabilities.payload_materialization
     transient_attrs = {}
     for attr_name in LOAD_PROVENANCE_TRANSIENT_ATTRS:
         if hasattr(trace, attr_name):
@@ -2750,10 +2753,8 @@ def _scrub_trace_for_bundle(
             include_custom_attributes=include_custom_attributes,
             include_buffer_values=include_buffer_values,
             sparse_runnable=sparse_runnable,
-            backend_name=str(getattr(trace, "backend", "torch")),
-            payload_materialization=get_backend_spec(
-                str(getattr(trace, "backend", "torch"))
-            ).capabilities.payload_materialization,
+            backend_name=backend_name,
+            payload_materialization=payload_materialization,
         )
     finally:
         for attr_name, attr_value in transient_attrs.items():
@@ -2781,7 +2782,7 @@ def _apply_visualization_save_policy(
         Temporary bundle directory.
     """
 
-    scrubbed_layers = scrubbed_state.get("layer_list")
+    scrubbed_layers = scrubbed_state.get("_layer_list")
     if not isinstance(scrubbed_layers, list):
         return
     if not bool(getattr(trace, "save_visualizations", False)):
@@ -2791,10 +2792,10 @@ def _apply_visualization_save_policy(
         return
 
     visualizer_dir = tmp_path / "visualizers"
-    # scrubbed_layers is a 1:1 scrub of trace.layer_list; pairing a truncated
+    # scrubbed_layers is a 1:1 scrub of trace._layer_list; pairing a truncated
     # prefix would silently skip visualizer copies for the tail layers.
     for index, (live_layer, scrubbed_layer) in enumerate(
-        zip(trace.layer_list, scrubbed_layers, strict=True)
+        zip(trace._layer_list, scrubbed_layers, strict=True)
     ):
         source_path_value = getattr(live_layer, "visualizer_path", None)
         if not isinstance(source_path_value, str):
@@ -2864,7 +2865,7 @@ def _write_tensor_blob(
         device_at_save=str(tensor.device),
         layout=str(contiguous_tensor.layout).replace("torch.", ""),
         bytes=int(contiguous_tensor.numel() * contiguous_tensor.element_size()),
-        sha256=sha256_of_file(blob_path),
+        sha256=sha256_file(blob_path),
         requires_grad=bool(tensor.requires_grad),
     )
 
@@ -2918,7 +2919,7 @@ def _write_payload_blob(
         device_at_save=encoded.logical_device,
         layout=str(transport_tensor.layout).replace("torch.", ""),
         bytes=int(transport_tensor.numel() * transport_tensor.element_size()),
-        sha256=sha256_of_file(blob_path),
+        sha256=sha256_file(blob_path),
         requires_grad=False,
         **manifest_fields,
     )
@@ -2954,15 +2955,15 @@ def _attach_fast_copy_specs(
         bundles into the new bundle.
     """
 
-    scrubbed_layers = scrubbed_state.get("layer_list")
+    scrubbed_layers = scrubbed_state.get("_layer_list")
     if not isinstance(scrubbed_layers, list):
         return []
 
     used_blob_ids = {blob_spec.blob_id for blob_spec in blob_specs}
     fast_copy_specs: list[_FastCopySpec] = []
-    # 1:1 scrub of trace.layer_list -- a truncated pairing would silently drop
+    # 1:1 scrub of trace._layer_list -- a truncated pairing would silently drop
     # fast-copy specs for the tail layers, losing their payloads in the copy.
-    for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers, strict=True):
+    for live_layer, scrubbed_layer in zip(trace._layer_list, scrubbed_layers, strict=True):
         if include_outs:
             fast_copy_spec = _maybe_make_fast_copy_spec(
                 live_layer=live_layer,
@@ -3110,7 +3111,7 @@ def _load_and_verify_fast_copy_source(
         raise ArtifactError(
             "source bundle manifest fingerprint is unavailable; materialize refs and retry"
         )
-    observed_manifest_sha256 = sha256_of_file(manifest_path)
+    observed_manifest_sha256 = sha256_file(manifest_path)
     if observed_manifest_sha256 != expected_manifest_sha256:
         raise ArtifactError(
             "source bundle manifest has changed since load; materialize refs and retry"
@@ -3157,7 +3158,7 @@ def _fast_copy_tensor_blob(
     if not source_blob_path.exists():
         raise ArtifactError(f"Tensor blob not found at {source_blob_path}.")
 
-    observed_sha256 = sha256_of_file(source_blob_path)
+    observed_sha256 = sha256_file(source_blob_path)
     if observed_sha256 != fast_copy_spec.source_ref.expected_sha256:
         raise ArtifactError(
             f"blob at {source_blob_path} sha256 mismatch; expected "
@@ -3455,7 +3456,7 @@ def _build_manifest(
             "Z",
         ),
         bundle_format="directory",
-        n_layers=len(trace.layer_list) if n_layers is None else n_layers,
+        n_layers=len(trace._layer_list) if n_layers is None else n_layers,
         n_out_blobs=n_out_blobs,
         n_grad_blobs=n_grad_blobs,
         n_auxiliary_blobs=n_auxiliary_blobs,
@@ -3503,7 +3504,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
     devices = sorted(
         {
             str(device)
-            for op in getattr(trace, "layer_list", ())
+            for op in trace._layer_list
             if (device := getattr(op, "device_ref", None)) is not None
         }
     )
@@ -3511,7 +3512,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
     default_dtype = ambient.get("default_dtype") if isinstance(ambient, Mapping) else None
     autocast_facts: list[dict[str, Any]] = []
     seen_autocast: set[str] = set()
-    for op in getattr(trace, "layer_list", ()):
+    for op in trace._layer_list:
         state = getattr(op, "func_autocast_state", None)
         if not isinstance(state, Mapping) or not state:
             continue
@@ -3666,9 +3667,11 @@ def _validate_activation_transform_outputs(
         If a saved out is not a plain tensor.
     """
 
-    if not include_outs or getattr(trace, "activation_transform", None) is None:
+    if not include_outs or not is_live_trace(trace):
         return
-    for layer in trace.layer_list:
+    if trace._options_activation_transform is None:
+        return
+    for layer in trace._layer_list:
         if not getattr(layer, "has_saved_activation", False):
             continue
         transformed_out = getattr(layer, "transformed_out", None)
@@ -3699,26 +3702,20 @@ def _apply_skipped_blobs_to_scrubbed_state(
     for field_name, field_value in list(scrubbed_state.items()):
         scrubbed_state[field_name] = _replace_skipped_blob_refs(field_value, skipped_blob_ids)
 
-    layer_list = scrubbed_state.get("layer_list")
+    layer_list = scrubbed_state.get("_layer_list")
     if isinstance(layer_list, list):
-        out_labels = [
-            layer.layer_label
-            for layer in layer_list
-            if bool(getattr(layer, "has_saved_activation", False))
-        ]
         grad_labels = [
             layer.layer_label for layer in layer_list if bool(getattr(layer, "has_grad", False))
         ]
-        scrubbed_state["num_saved_ops"] = len(out_labels)
-        scrubbed_state["num_saved_layers"] = len(
-            {getattr(layer, "layer_label", layer.layer_label) for layer in layer_list}
+        scrubbed_state["_num_saved_ops"] = sum(
+            1 for layer in layer_list if bool(getattr(layer, "has_saved_activation", False))
         )
-        scrubbed_state["saved_activation_memory"] = sum(
+        scrubbed_state["_cost_saved_activation_memory"] = sum(
             int(getattr(layer, "activation_memory", 0) or 0)
             for layer in layer_list
             if bool(getattr(layer, "has_saved_activation", False))
         )
-        scrubbed_state["has_gradients"] = bool(grad_labels)
+        scrubbed_state["_autograd_has_grads"] = bool(grad_labels)
 
 
 def _replace_skipped_blob_refs(value: Any, skipped_blob_ids: set[str]) -> Any:
@@ -3953,7 +3950,7 @@ def _check_unknown_blob_entries(manifest: Manifest, blobs_path: Path) -> None:
     colliding_extra_names: list[str] = []
     for extra_name in extra_names:
         extra_path = blobs_path / extra_name
-        extra_sha256 = sha256_of_file(extra_path)
+        extra_sha256 = sha256_file(extra_path)
         if extra_sha256 in expected_sha256s:
             colliding_extra_names.append(extra_name)
 
@@ -4041,7 +4038,7 @@ def _eager_verify_blob_payloads(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_of_file(blob_path)
+        observed_sha256 = sha256_file(blob_path)
         if observed_sha256 != entry.sha256:
             raise ArtifactError(f"Checksum mismatch for blob_id={entry.blob_id} at {blob_path}.")
         tensor_map = _load_safetensors_file(blob_path, map_location)
@@ -4120,23 +4117,6 @@ def _load_safetensors_file(
         ) from exc
     except (OSError, SafetensorError, ValueError) as exc:
         raise ArtifactError(f"Failed to read safetensors blob at {blob_path}.") from exc
-
-
-def _make_tmp_bundle_path(bundle_path: Path) -> Path:
-    """Create the deterministic sibling temp path for one bundle target.
-
-    Parameters
-    ----------
-    bundle_path:
-        Final bundle directory path.
-
-    Returns
-    -------
-    Path
-        Temporary working directory path.
-    """
-
-    return bundle_path.parent / f"{bundle_path.name}.tmp.{uuid.uuid4().hex}"
 
 
 def _make_backup_path(bundle_path: Path) -> Path:
@@ -4249,7 +4229,7 @@ def _reanchor_visualizer_paths(trace: Trace, bundle_path: Path) -> None:
         Root of the loaded bundle.
     """
 
-    layer_list = getattr(trace, "layer_list", None)
+    layer_list = trace._layer_list
     if not layer_list:
         return
     visualizers_dir = bundle_path / "visualizers"

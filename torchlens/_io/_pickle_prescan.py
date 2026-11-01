@@ -18,8 +18,8 @@ probes, before any real object is built:
   type before BUILD can reach it;
 * stream corruption surfaces from the dry run as the C machine's own failures and is
   normalised by the unpickler's boundary, as the pure-Python boundary did;
-* persistent ids, extension codes and out-of-band buffers fail in the dry run as they
-  fail in the real run.
+* persistent ids and out-of-band buffers fail in the dry run as they fail in the real
+  run; extension codes and over-declared frames are refused by the reader pass below.
 
 A stream shape the dry run cannot classify (a constructed object called, a construction
 with arguments built at run time, a global or a REDUCE result used both as a callable
@@ -55,7 +55,13 @@ __all__ = [
 ]
 
 #: Refusal-text prefix shared with the pure-Python machine's load boundary.
-_CORRUPT = "corrupt or malformed pickle stream: "
+_CORRUPT_PREFIX = "corrupt or malformed pickle stream: "
+_CORRUPT = _CORRUPT_PREFIX
+#: Refusal texts shared with the pure-Python machine's EXT and FRAME handlers.
+_EXT_REFUSAL = "extension codes are not used in bundle metadata"
+_FRAME_REFUSAL = "FRAME declares more bytes than remain"
+#: Importer of an admitted ``(module, name)`` pair: the base machine's ``find_class``.
+Importer = Callable[[str, str], Any]
 #: Largest literal argument tree checked statically for a construction; bigger argument
 #: trees are not what a constructor call looks like and take the interpreter.
 _MAX_STATIC_NODES = 256
@@ -71,6 +77,10 @@ class StreamNeedsInterpreter(Exception):
 
 class OpcodeCeilingExceeded(pickle.UnpicklingError):
     """The stream holds more opcodes than the caller's allocation ceiling allows."""
+
+
+class _StopDryRun(Exception):
+    """The policy refused a global: the dry run ends and the plan carries the refusal."""
 
 
 @dataclass(eq=False)
@@ -96,6 +106,10 @@ class PrescanPlan:
     build_refusal: BuildRefusal
     cursor: int = 0
     global_lookups: int = field(default=0)
+    #: A global the policy refused, with the refusal: the real run re-raises it when it
+    #: reaches that GLOBAL, so the refusal fires in stream order (after any earlier
+    #: REDUCE failure), exactly where the pure-Python machine raises it.
+    refused: tuple[tuple[str, str], BaseException] | None = None
 
     def take_reduce_site(self) -> ReduceSite:
         """Return the next REDUCE site; refuse when the stream calls more than planned."""
@@ -158,6 +172,8 @@ class GuardedCallable:
 
 
 def _corrupt(detail: str) -> pickle.UnpicklingError:
+    """Return the corruption refusal for ``detail`` (the load boundary's wording)."""
+
     return pickle.UnpicklingError(_CORRUPT + detail)
 
 
@@ -315,12 +331,18 @@ class _Node:
         self.items.append(value)
 
     def append(self, value: Any) -> None:
+        """Record an APPEND / APPENDS member of the node."""
+
         self.items.append(value)
 
     def extend(self, values: Any) -> None:
+        """Record the APPENDS members of the node."""
+
         self.items.extend(values)
 
     def add(self, value: Any) -> None:
+        """Record an ADDITEMS member of the node."""
+
         self.items.append(value)
 
 
@@ -352,7 +374,9 @@ class _DryRunUnpickler(pickle.Unpickler):
         self._planner = planner
 
     def find_class(self, module: str, name: str) -> Any:
-        return self._planner.probe_for(module, name)
+        """Hand the planner a probe; the base importer carries this machine's protocol."""
+
+        return self._planner.probe_for(module, name, super().find_class)
 
 
 class _DryRunPlanner:
@@ -370,7 +394,7 @@ class _DryRunPlanner:
     def __init__(
         self,
         *,
-        resolve: Callable[[str, str], Any],
+        resolve: Callable[[str, str, Importer], Any],
         construction_refusal: ConstructionRefusal,
         build_refusal: BuildRefusal,
         build_type_refusal: BuildTypeRefusal,
@@ -384,12 +408,27 @@ class _DryRunPlanner:
         self.reduce_sites: list[ReduceSite] = []
         self.called_pairs: set[tuple[str, str]] = set()
         self.cls_pairs: set[tuple[str, str]] = set()
+        self.refused: tuple[tuple[str, str], BaseException] | None = None
 
-    def probe_for(self, module: str, name: str) -> type:
+    def probe_for(self, module: str, name: str, import_global: Importer) -> type:
+        """Return the recording probe for ``(module, name)``, resolving it once.
+
+        ``import_global`` is the dry-run machine's own ``find_class``: it carries the
+        protocol the stream declared, so a dotted name attribute-walks exactly when the
+        real machine would (protocol 4 and above) and the policy judges the same object.
+        """
+
         pair = (module, name)
         probe = self.probes.get(pair)
         if probe is None:
-            real = self.resolve(module, name)
+            try:
+                real = self.resolve(module, name, import_global)
+            except Exception as exc:  # noqa: BLE001 -- deferred, not handled: see below
+                # A refusal (allowlist, belt, too-old module path) or an import failure
+                # is the real run's to raise, at this GLOBAL, after every earlier opcode
+                # ran for real; the load boundary classifies it there. The dry run ends.
+                self.refused = (pair, exc)
+                raise _StopDryRun from exc
             self.resolved[pair] = real
             probe = _ProbeMeta(
                 "_Probe", (_ProbeBase,), {"_pair": pair, "_real": real, "_planner": self}
@@ -398,6 +437,8 @@ class _DryRunPlanner:
         return probe
 
     def on_reduce(self, probe: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> _Node:
+        """Record a REDUCE of a probe's real callable; the C phase guards the real call."""
+
         pair = probe._pair
         site = ReduceSite(len(self.reduce_sites), pair, -1)
         self.reduce_sites.append(site)
@@ -405,6 +446,8 @@ class _DryRunPlanner:
         return _Node(self, site=site.index, args=args, kwargs=kwargs or None)
 
     def on_derived_call(self, node: _Node, args: tuple[Any, ...], kwargs: dict[str, Any]) -> _Node:
+        """Record a REDUCE whose callable is itself a REDUCE result."""
+
         if node.site < 0:
             raise StreamNeedsInterpreter("REDUCE on a constructed object")
         self.reduce_sites[node.site].result_callable = True
@@ -414,6 +457,8 @@ class _DryRunPlanner:
         return _Node(self, site=site.index, args=args, kwargs=kwargs or None)
 
     def on_construct(self, probe: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> _Node:
+        """Run the construction belt statically on a NEWOBJ / NEWOBJ_EX / INST / OBJ."""
+
         pair = probe._pair
         self.cls_pairs.add(pair)
         budget = [_MAX_STATIC_NODES]
@@ -431,6 +476,8 @@ class _DryRunPlanner:
         return _Node(self, cls_real=probe._real, args=args, kwargs=kwargs or None)
 
     def on_build(self, node: _Node) -> None:
+        """Record a BUILD on a node; refuse it when the node's class refuses BUILD."""
+
         if node.site >= 0:
             self.reduce_sites[node.site].build_target = True
         elif isinstance(node.cls_real, type):
@@ -439,13 +486,33 @@ class _DryRunPlanner:
                 raise pickle.UnpicklingError(reason)
 
     def run(self, data: bytes) -> PrescanPlan:
-        root = _DryRunUnpickler(data, self).load()
+        """Dry-run ``data`` and return the plan; hand the interpreter what it cannot finish.
+
+        A policy refusal ends the dry run and rides in the plan (``refused``). Any other
+        failure of the dry run (truncation, a stack fault, a probe the C machine cannot
+        stand in for) is not a verdict: the pure-Python machine runs the stream and decides
+        exactly as it always did.
+        """
+
+        try:
+            root = _DryRunUnpickler(data, self).load()
+        except StreamNeedsInterpreter:
+            raise
+        except _StopDryRun:
+            return self._plan()
+        except Exception as exc:  # noqa: BLE001 -- classified: not a verdict, a hand-off
+            raise StreamNeedsInterpreter(f"dry run stopped: {type(exc).__name__}") from exc
         value_pairs = _walk_values(root)
         mixed = self.called_pairs & (value_pairs | self.cls_pairs)
         if mixed:
             raise StreamNeedsInterpreter(
                 f"globals used both as callables and otherwise: {sorted(mixed)}"
             )
+        return self._plan()
+
+    def _plan(self) -> PrescanPlan:
+        """Return the plan for what the dry run recorded (and any deferred refusal)."""
+
         return PrescanPlan(
             opcode_count=0,
             resolved=self.resolved,
@@ -453,6 +520,7 @@ class _DryRunPlanner:
             reduce_sites=self.reduce_sites,
             construction_refusal=self.construction_refusal,
             build_refusal=self.build_refusal,
+            refused=self.refused,
         )
 
 
@@ -476,8 +544,8 @@ def _literal(value: Any, budget: list[int]) -> Any:
     if isinstance(value, dict):
         return {_literal(k, budget): _literal(v, budget) for k, v in value.items()}
     if isinstance(value, (set, frozenset)):
-        members = {_literal(item, budget) for item in value}
-        return members if isinstance(value, set) else frozenset(members)
+        elements = {_literal(item, budget) for item in value}
+        return elements if isinstance(value, set) else frozenset(elements)
     return value
 
 
@@ -518,17 +586,23 @@ def _walk_values(root: Any) -> set[tuple[str, str]]:
     return value_pairs
 
 
-def _next_opcode(ops: Any) -> tuple[Any, Any, int]:
-    """Return the next ``(opcode, arg, pos)``; map reader failures to corruption."""
+def _next_opcode(ops: Any, enforcing_ceiling: bool) -> tuple[Any, Any, int]:
+    """Return the next ``(opcode, arg, pos)``; a stream the reader cannot walk steps aside.
+
+    Truncation, an unknown opcode or a bad operand is not this pass's verdict: the
+    pure-Python machine runs such a stream and refuses it in opcode order (a blocked global
+    before the damage is still reported as the blocked global). Under an opcode ceiling the
+    walk must reach STOP to count, so there the unreadable stream is refused outright.
+    """
 
     try:
         return next(ops)
     except StopIteration:
         raise _corrupt("pickle exhausted before seeing STOP") from None
     except (ValueError, EOFError, OverflowError, struct.error) as exc:
-        # The reader reports truncation, unknown opcodes and bad operands with these
-        # builtins; the C machine would refuse the same bytes.
-        raise _corrupt(f"{type(exc).__name__}: {exc}") from exc
+        if enforcing_ceiling:
+            raise _corrupt(f"{type(exc).__name__}: {exc}") from exc
+        raise StreamNeedsInterpreter(f"reader pass stopped: {exc}") from exc
 
 
 def scan_opcodes(data: bytes, max_opcodes: int | None) -> int:
@@ -539,29 +613,44 @@ def scan_opcodes(data: bytes, max_opcodes: int | None) -> int:
     before any check can run); the dict-backed pure-Python machine never did. A pickler
     assigns memo indices sequentially, so an index above the running opcode count is
     never honest and is refused here, before the dry run or the real run touch the
-    stream. The same pass counts opcodes against ``max_opcodes`` when one is given.
+    stream. The same pass refuses the extension-code opcodes (EXT1 / EXT2 / EXT4, a
+    process-wide registry lookup no writer emits) and a FRAME that declares more bytes
+    than remain (the C machine sizes its read buffer from that length), and counts
+    opcodes against ``max_opcodes`` when one is given.
     """
 
     count = 0
+    end = len(data)
     ops = _iter_opcodes(data)
     while True:
-        name, arg, _pos = _next_opcode(ops)
+        name, arg, pos = _next_opcode(ops, max_opcodes is not None)
         count += 1
         if max_opcodes is not None and count > max_opcodes:
             raise OpcodeCeilingExceeded(_CORRUPT + "opcode count exceeds the allocation ceiling")
         if name in _PUT_OPCODES and (arg < 0 or arg > count):
             raise _corrupt("memo PUT index above the opcode count")
+        if name in _EXT_OPCODES:
+            # Extension codes resolve through the process-wide ``copyreg`` registry and
+            # cache process-wide; refused before either machine can look one up.
+            raise _corrupt(_EXT_REFUSAL)
+        if name == "FRAME" and arg > end - pos - _FRAME_HEADER_LEN:
+            # The C machine grows its input buffer to the declared frame length before
+            # reading it; a declaration beyond the bytes that remain is refused first.
+            raise _corrupt(_FRAME_REFUSAL)
         if name == "STOP":
             return count
 
 
 _PUT_OPCODES = frozenset({"PUT", "BINPUT", "LONG_BINPUT"})
+_EXT_OPCODES = frozenset({"EXT1", "EXT2", "EXT4"})
+#: One opcode byte plus the eight-byte little-endian length of a FRAME.
+_FRAME_HEADER_LEN = 9
 
 
 def prescan_stream(
     data: bytes,
     *,
-    resolve: Callable[[str, str], Any],
+    resolve: Callable[[str, str, Importer], Any],
     construction_refusal: ConstructionRefusal,
     build_refusal: BuildRefusal,
     build_type_refusal: BuildTypeRefusal,
@@ -573,7 +662,8 @@ def prescan_stream(
     data:
         The complete pickle stream.
     resolve:
-        The ``find_class`` policy; called once per distinct ``(module, name)``.
+        The ``find_class`` policy, ``(module, name, import_global) -> object``; called
+        once per distinct ``(module, name)`` with the dry-run machine's own importer.
     construction_refusal:
         ``(opcode, callable_or_class, args, kwargs) -> reason | None``: the allocation
         belt for a construction with literal arguments.

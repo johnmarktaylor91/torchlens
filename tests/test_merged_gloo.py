@@ -229,7 +229,7 @@ class TestArtifact:
         Fail-before: a live input trace whose distributed annotations were
         mutated between merge_ranks and save() produced an artifact whose
         members never rederive to the cached descriptor -- every future load
-        refused as merged_descriptor_tamper, a permanent false tamper
+        refused as merged_descriptor_invalid, a permanent false tamper
         accusation for an honest sequence.
         """
 
@@ -284,7 +284,7 @@ class TestTamperMatrix:
         descriptor.write_text(json.dumps(data))
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
+        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
     def test_coherent_descriptor_rewrite_fails_rederivation(self, gloo_world, tmp_path):
         # Delete the join from the descriptor AND fix the root checksum: the
@@ -303,7 +303,7 @@ class TestTamperMatrix:
         manifest_path.write_text(json.dumps(manifest))
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
+        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
     def test_member_byte_edit_fails_tree_hash(self, gloo_world, tmp_path):
         art = self._saved(tmp_path)
@@ -311,14 +311,14 @@ class TestTamperMatrix:
         member_manifest.write_text(member_manifest.read_text() + " ")
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
+        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
     def test_member_deletion_refuses_never_a_gap(self, gloo_world, tmp_path):
         art = self._saved(tmp_path)
         shutil.rmtree(art / "members" / "rank_0000.tlspec")
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
+        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
     def test_foreign_bundle_format_refuses_closed_vocabulary(self, gloo_world, tmp_path):
         art = self._saved(tmp_path)
@@ -435,7 +435,7 @@ class TestDegradedLoadCoherence:
         )
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
+        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
     def test_forged_join_consistency_refuses(self, gloo_world, tmp_path):
         """A cache whose join verdicts contradict their own digest rows refuses."""
@@ -449,7 +449,7 @@ class TestDegradedLoadCoherence:
         self._rewrite_cache(art, forge)
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
+        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
     def test_forged_survivor_digest_rows_refuse(self, gloo_world, tmp_path):
         """Fabricated per-rank digest rows for a SURVIVING rank refuse.
@@ -471,7 +471,7 @@ class TestDegradedLoadCoherence:
         self._rewrite_cache(art, forge)
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
+        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
     @pytest.mark.smoke
     def test_honest_unwitnessed_degraded_load_still_loads(self, gloo_world, tmp_path):
@@ -489,7 +489,7 @@ class TestDegradedLoadCoherence:
         self._rewrite_cache(art, lambda d: d.__setitem__("stored_alignment", "partial"))
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
+        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
     def test_divergent_survivors_cannot_present_attested(self, gloo_world, tmp_path, monkeypatch):
         """Monotone coherence: a cache claiming better than the survivors refuses.
@@ -515,7 +515,7 @@ class TestDegradedLoadCoherence:
         monkeypatch.setattr(artifact_mod, "derive_merge", diverging)
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
+        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
     def test_conflicting_survivors_refuse(self, gloo_world, tmp_path, monkeypatch):
         """Survivors that structurally conflict could never have merged honestly."""
@@ -539,7 +539,7 @@ class TestDegradedLoadCoherence:
         monkeypatch.setattr(artifact_mod, "derive_merge", conflicted)
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_tamper"
+        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
 
 class TestArtifactHardening:

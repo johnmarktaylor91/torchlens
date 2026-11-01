@@ -14,7 +14,7 @@ Classification is 4-way and closed:
   gated by tests/test_api_surface.py::test_submodules_have_all).
 - ``deprecated`` -- the name is registered in the deprecation-door registry
   (``data/deprecated_doors.tsv``; empty today -- the package is pinned
-  deprecation-free by tests/test_deprecation_inventory.py).
+  deprecation-free by scripts/checks/deprecation_inventory.py).
 - ``undeclared`` -- everything else. An undeclared name is RED unless a
   dated KNOWN-GAP row licenses it (D25).
 
@@ -329,7 +329,7 @@ def _class_body_names(cls: type) -> frozenset[str]:
 def _module_assigned_names(cls: type) -> frozenset[str]:
     """Return members statically assigned onto ``cls`` in its home module.
 
-    ``Trace.FIELD_FORK_POLICY = ...`` at the top level of ``trace.py`` is as
+    ``Trace._FIELD_FORK_POLICY = ...`` at the top level of ``trace.py`` is as
     conscious as a class-body declaration -- it is committed, reviewed source
     in the class's own defining module. Only TOP-LEVEL attribute assignments
     naming the class count (a setattr inside a function is a runtime act and

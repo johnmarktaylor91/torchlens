@@ -331,6 +331,7 @@ def test_kernel_telemetry_lane_is_detachable_from_package_and_other_tests() -> N
 
 @pytest.mark.heavy
 @pytest.mark.optional
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA/CUPTI matrix NOT-RUN-DISCLOSED")
 def test_real_cuda_cupti_correlation_matrix() -> None:
     """Run the real CUDA/CUPTI correlation gate when a device leg exists."""

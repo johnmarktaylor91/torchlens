@@ -44,7 +44,7 @@ def zoo_trace():
     trace = tl.trace(
         _EdgeZoo().eval(),
         torch.randn(2, 8),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     yield trace
     trace.cleanup()
@@ -54,7 +54,7 @@ def _edges_by_child(trace):
     """Map child label -> its slot-0 positional edge record."""
 
     result = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         for record in getattr(op, "edge_uses", ()) or ():
             if record.arg_kind == "positional" and tuple(record.arg_path) == (0,):
                 result.setdefault(record.child_label, record)

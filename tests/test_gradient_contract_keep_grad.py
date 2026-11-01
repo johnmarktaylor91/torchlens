@@ -15,7 +15,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import add, replace_with, scale, zero_ablate, zero_grad
+from torchlens import add, replace_with, scale, zero_ablate
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import (
     compose,
@@ -140,7 +140,7 @@ def test_keep_grad_is_idempotent_and_marks_the_edit() -> None:
     assert once.portability == "opaque_audit"
 
 
-@pytest.mark.parametrize("bad", [zero_grad(), object()], ids=["backward_edit", "not_an_edit"])
+@pytest.mark.parametrize("bad", [object()], ids=["not_an_edit"])
 def test_keep_grad_refuses_what_is_not_a_forward_edit(bad: Any) -> None:
     with pytest.raises(InvalidArgumentError) as caught:
         keep_grad(bad)
@@ -152,7 +152,7 @@ def test_keep_grad_inside_a_subspace_checks_the_coordinates() -> None:
     """The component an interchange writes is the donor's (detached): the check fires."""
 
     model = _Net()
-    options = tl.options.CaptureOptions(intervention_ready=True)
+    options = tl.options.CaptureOptions(replayable=True)
     target = tl.trace(model, _X, capture=options)
     source = tl.trace(model, _X * 2.0, capture=options)
     basis = 0.5 * torch.tensor([[1.0, 1.0, 1.0, 1.0]], dtype=torch.float64)

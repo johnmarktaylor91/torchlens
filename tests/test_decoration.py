@@ -113,7 +113,7 @@ def test_ignored_tensor_producers_are_wrapped(route: str) -> None:
     """Ignored tensor producers emit capture ops, including input provenance."""
 
     log = trace_fn(IgnoredFunctionModel(route), torch.tensor([-2.0, 4.0]))
-    op = next(layer for layer in log.layer_list if layer.func_name == route)
+    op = next(layer for layer in log._layer_list if layer.func_name == route)
 
     if route in {"asarray", "fill"}:
         assert op.parents == ("input_1",)

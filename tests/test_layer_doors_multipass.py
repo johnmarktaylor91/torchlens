@@ -57,7 +57,7 @@ def captured() -> Iterator[tuple[_SharedThenFresh, torch.Tensor, tl.Trace]]:
     torch.manual_seed(0)
     model = _SharedThenFresh().eval()
     x = torch.randn(2, 3)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         yield model, x, trace
     finally:
@@ -67,7 +67,7 @@ def captured() -> Iterator[tuple[_SharedThenFresh, torch.Tensor, tl.Trace]]:
 def _linear_labels(trace: tl.Trace) -> tuple[str, str]:
     """Return the multi-pass shared and the single-pass fresh linear layer labels."""
 
-    linears = [layer for layer in trace.layer_logs.values() if layer.layer_type == "linear"]
+    linears = [layer for layer in trace._layer_logs.values() if layer.layer_type == "linear"]
     shared = [layer.layer_label for layer in linears if layer.num_passes == 2]
     fresh = [layer.layer_label for layer in linears if layer.num_passes == 1]
     assert len(shared) == 1 and len(fresh) == 1
@@ -107,7 +107,7 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
     want = _oracle(model, x, shared_edit=_zero if door == "set" else _double)
     assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
     for pass_index in (1, 2):
-        assert fork[f"{shared}:{pass_index}"].interventions
+        assert fork[f"{shared}:{pass_index}"].edits
 
 
 def test_layer_door_on_single_pass_layer_edits_only_that_layer(captured) -> None:
@@ -120,4 +120,4 @@ def test_layer_door_on_single_pass_layer_edits_only_that_layer(captured) -> None
     assert torch.allclose(
         fork[fork.output_layers[0]].out, _oracle(model, x, fresh_edit=_double), atol=1e-6
     )
-    assert not any(fork[f"{shared}:{pass_index}"].interventions for pass_index in (1, 2))
+    assert not any(fork[f"{shared}:{pass_index}"].edits for pass_index in (1, 2))

@@ -15,7 +15,7 @@ from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.errors import MetadataInvariantError
-from torchlens.validation.invariants import _check_loop_detection_invariants
+from torchlens.validation._invariants_equivalence import _check_loop_detection_invariants
 
 
 class _TwoLinearChain(nn.Module):
@@ -49,9 +49,9 @@ def test_corruption_arm_param_sharing_key_forgery() -> None:
         capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        first, second = [lay for lay in log.layer_list if lay.layer_label.startswith("linear")][:2]
-        donor = first.ops[0]
-        for op in second.ops:
+        first, second = [lay for lay in log._layer_list if lay.layer_label.startswith("linear")][:2]
+        donor = first
+        for op in (second,):
             op._param_barcodes = _copy.copy(donor._param_barcodes)
             op.equivalence_class = donor.equivalence_class
         with pytest.raises(MetadataInvariantError, match="Param sharing violation"):
@@ -77,9 +77,9 @@ def test_corruption_arm_call_site_key_forgery_fails_contract_ii() -> None:
         capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        assert log.grouping_policy["detector"] == "callsite_v1"
+        assert log.options.grouping_policy["detector"] == "callsite_v1"
         classes = dict(contract.call_site_classes_for(log) or {})
-        first, second = [op for op in log.layer_list if op.func_name == "linear"][:2]
+        first, second = [op for op in log._layer_list if op.func_name == "linear"][:2]
         assert classes[first._label_raw] != classes[second._label_raw]
         classes[second._label_raw] = classes[first._label_raw]
         contract.remember_call_site_classes(log, classes)

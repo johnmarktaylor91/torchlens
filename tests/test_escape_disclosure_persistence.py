@@ -38,17 +38,17 @@ def test_negative_verification_verdict_survives_save_load(tmp_path) -> None:
     """capture_verified=False + reason must round-trip through .tlspec."""
 
     trace = _traced(tmp_path)
-    trace.capture_verified = False
-    trace.capture_verification_reason = "escape_rescue_unrecovered"
+    trace._provenance_verified = False
+    trace._provenance_verification_reason = "escape_rescue_unrecovered"
 
     bundle = tmp_path / "disclosed.tlspec"
     trace.save(str(bundle))
     loaded = tl.load(str(bundle))
 
-    assert loaded.capture_verified is False, (
+    assert loaded.provenance.verified is False, (
         "the producer's negative verification claim was erased by save/load"
     )
-    assert loaded.capture_verification_reason == "escape_rescue_unrecovered"
+    assert loaded.provenance.verification_reason == "escape_rescue_unrecovered"
 
 
 def test_positive_verification_claim_never_persists(tmp_path) -> None:
@@ -57,15 +57,15 @@ def test_positive_verification_claim_never_persists(tmp_path) -> None:
     verified capture."""
 
     trace = _traced(tmp_path)
-    trace.capture_verified = True
-    trace.capture_verification_reason = "witness_verified"
+    trace._provenance_verified = True
+    trace._provenance_verification_reason = "witness_verified"
 
     bundle = tmp_path / "positive.tlspec"
     trace.save(str(bundle))
     loaded = tl.load(str(bundle))
 
-    assert loaded.capture_verified is None
-    assert loaded.capture_verification_reason is None
+    assert loaded.provenance.verified is None
+    assert loaded.provenance.verification_reason is None
 
 
 def test_deepcopy_keeps_the_full_live_verdict(tmp_path) -> None:
@@ -73,17 +73,17 @@ def test_deepcopy_keeps_the_full_live_verdict(tmp_path) -> None:
     directions survive it."""
 
     trace = _traced(tmp_path)
-    trace.capture_verified = True
-    trace.capture_verification_reason = "witness_verified"
+    trace._provenance_verified = True
+    trace._provenance_verification_reason = "witness_verified"
     clone = copy.deepcopy(trace)
-    assert clone.capture_verified is True
-    assert clone.capture_verification_reason == "witness_verified"
+    assert clone.provenance.verified is True
+    assert clone.provenance.verification_reason == "witness_verified"
 
-    trace.capture_verified = False
-    trace.capture_verification_reason = "mode_rescue_rerun"
+    trace._provenance_verified = False
+    trace._provenance_verification_reason = "mode_rescue_rerun"
     clone = copy.deepcopy(trace)
-    assert clone.capture_verified is False
-    assert clone.capture_verification_reason == "mode_rescue_rerun"
+    assert clone.provenance.verified is False
+    assert clone.provenance.verification_reason == "mode_rescue_rerun"
 
 
 def test_deferred_storage_key_never_touches_fake_tensor_storage() -> None:

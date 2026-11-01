@@ -2,10 +2,10 @@
 
 ``Trace._intervention_spec`` is session-only (``FieldPolicy.DROP``): an
 ordinary save keeps the INTERVENED activations and their per-op provenance
-(``intervention_replaced``, fire records, ``intervention_audit``) but not the
+(``is_edited``, fire records, ``intervention_audit``) but not the
 recipe that produced them. The recipe travels separately through
 ``save_intervention``; the runnable save already refuses intervened captures
-(``user_intervention_not_replayable``) and names the analysis save as the door
+(``user_intervention_unsupported``) and names the analysis save as the door
 for them. The one place the split could mislead is the legacy rerun of a loaded
 artifact whose recorded values were intervened: it would re-execute without
 the recorded intervention (an edit staged after loading would run alone), so it
@@ -20,8 +20,9 @@ from typing import Any
 from .errors import EngineDispatchError
 
 _LOADED_PROVIDERS = frozenset({"loaded_sparse", "loaded_analysis"})
-# Audit rows that record an edit which changed no recorded value.
-_VALUE_NEUTRAL_AUDIT_STATUSES = frozenset({"no_fire", "error"})
+# Audit rows that record an edit which changed no recorded value (an armed
+# gradient edit changes no forward value; its settle row says what fired).
+_VALUE_NEUTRAL_AUDIT_STATUSES = frozenset({"no_fire", "error", "armed"})
 
 
 def _carries_intervened_values(trace: Any) -> bool:
@@ -39,8 +40,8 @@ def _carries_intervened_values(trace: Any) -> bool:
         a fired edit (attempts that failed or fired nowhere changed nothing).
     """
 
-    for layer in getattr(trace, "layer_list", None) or ():
-        if getattr(layer, "intervention_replaced", False) or getattr(layer, "interventions", None):
+    for layer in trace._layer_list or ():
+        if getattr(layer, "is_edited", False) or getattr(layer, "edits", None):
             return True
     return any(
         isinstance(row, dict) and row.get("status") not in _VALUE_NEUTRAL_AUDIT_STATUSES

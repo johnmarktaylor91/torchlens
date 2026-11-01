@@ -139,7 +139,7 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
             "from torch.nn.modules.instancenorm import _InstanceNorm",
         }
     ),
-    "torchlens/_user_funcs.py": frozenset(
+    "torchlens/_capture/prepare/door.py": frozenset(
         {
             "from torch.nn.modules.batchnorm import _BatchNorm",
             "from torch.nn.modules.instancenorm import _InstanceNorm",
@@ -158,6 +158,13 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
             "from tensorflow.python.framework",
             "from tensorflow.python.framework.convert_to_constants",
         }
+    ),
+    # Loaded-trace callable resolution maps a ``custom`` key naming a torch C
+    # builtin to its public namespace only when that public attribute, unwrapped,
+    # IS the C function; an absent module or attribute leaves the op unresolved
+    # and validation refuses the bundle by name (fail-closed).
+    "torchlens/validation/_loaded_callables.py": frozenset(
+        {"torch._C._VariableFunctions", "torch._C._nn"}
     ),
 }
 

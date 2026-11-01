@@ -4,40 +4,18 @@ from __future__ import annotations
 
 import weakref
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
 from ._completeness_types import _WitnessState
+from ._internal_read import internal_scalar_read
 from ._tl import (
     get_tensor_label,
 )
 from .buffer_writes import session_validated_buffer_address
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _CAPTURED_STORAGE_PTRS,
-        _DISPATCH_TENSOR_ORIGINS,
-        _ORIGIN_FLATTEN_DEPTH_LIMIT,
-        _ORIGIN_LABEL_PREFIX,
-        _ORIGIN_RNG,
-        _ORIGIN_STATE_PREFIX,
-        _ORIGIN_UNINIT,
-        _ORIGIN_UNKNOWN,
-        _STORAGE_REBIND_BARRIER_LABELS,
-        HOST_ESCAPE_OPERATORS,
-        _as_strided_result_contained,
-        _internal_read_active,
-        _internal_read_state,
-        _is_aten_operator,
-        _operator_base_name,
-        _raw_storage_ptr_no_observe,
-        _record_escape_source_tensor,
-        _TensorOriginRegistry,
-    )
 
 __all__ = (
     "internal_scalar_read",
@@ -58,40 +36,6 @@ __all__ = (
     "_live_deterministic_fill_governs",
     "_register_dispatch_result_origins",
 )
-
-
-@contextmanager
-def internal_scalar_read() -> Iterator[None]:
-    """Mark a region as a genuine TorchLens capture-internal scalar/comparison read.
-
-    TorchLens itself reads a scalar/bool from a tensor during capture -- extracting a
-    scalar-``bool`` op-output value (``ops._log_output_tensor_info``), comparing a
-    pre-call input copy against its post-call value for mutation/alias detection
-    (``tensor_nanequal`` via ``detect_torch_alias_contract`` and the child-version
-    snapshot), and similar bookkeeping reads. Those reads lower to
-    ``aten._local_scalar_dense`` (or, for content comparisons, ``aten.equal`` /
-    ``aten.allclose`` returning a Python ``bool``) and would otherwise be misrecorded as
-    USER host escapes and falsely trip the fail-closed INCOMPLETE gates. This context
-    manager marks them EXPLICITLY so the internal-vs-user classifier is an
-    allowlist-BY-CONSTRUCTION: an escape is "internal" iff this marker is active, never
-    because a stack frame's filename happens to resolve inside the ``torchlens`` package
-    (which is spoofable by an ``exec``-compiled user helper carrying a torchlens
-    ``co_filename``, and fails for a frameless C-callable). A genuine user escape runs
-    with the marker inactive and is always recorded.
-    """
-
-    depth = getattr(_internal_read_state, "depth", 0)
-    _internal_read_state.depth = depth + 1
-    # An internal read is not a model call: keep it out of the ordered call
-    # fingerprint under the same owner-thread rule as ``pause_logging()``.
-    counted = _state.hold_fingerprint()
-    try:
-        try:
-            yield
-        finally:
-            _state.release_fingerprint(counted)
-    finally:
-        _internal_read_state.depth = depth
 
 
 def _escape_source_is_torchlens_internal() -> bool:
@@ -551,3 +495,34 @@ def _register_dispatch_result_origins(
         # atomic dict-value reassignment).
         live = tuple(ref for ref in captured_ptrs.get(produced_ptr, ()) if ref() is not None)
         captured_ptrs[produced_ptr] = (*live, produced_ref)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._completeness_cross_thread import (  # noqa: E402
+    _internal_read_active,
+)
+from ._completeness_dispatch import (  # noqa: E402
+    _as_strided_result_contained,
+)
+from ._completeness_dispatch_names import (  # noqa: E402
+    _is_aten_operator,
+    _operator_base_name,
+    _record_escape_source_tensor,
+)
+from ._completeness_escape_state import (  # noqa: E402
+    _raw_storage_ptr_no_observe,
+)
+from .completeness_witness import (  # noqa: E402
+    _CAPTURED_STORAGE_PTRS,
+    _DISPATCH_TENSOR_ORIGINS,
+    _ORIGIN_FLATTEN_DEPTH_LIMIT,
+    _ORIGIN_LABEL_PREFIX,
+    _ORIGIN_RNG,
+    _ORIGIN_STATE_PREFIX,
+    _ORIGIN_UNINIT,
+    _ORIGIN_UNKNOWN,
+    _STORAGE_REBIND_BARRIER_LABELS,
+    HOST_ESCAPE_OPERATORS,
+    _TensorOriginRegistry,
+)
