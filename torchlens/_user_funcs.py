@@ -77,6 +77,7 @@ from ._chunked_capture_helpers import (
     _append_chunk_trace_state,
     _ChunkAppend,
     _should_store_auto_coerced_raw_input,
+    _typed_chunk_forward,
     _validate_chunked_forward_capture,
 )
 from ._chunking import iter_chunked_inputs, normalize_chunk_paths, normalize_chunk_size, plan_chunks
@@ -3666,92 +3667,11 @@ def _trace_torch_model(
         recursive_save_raw_gradients: bool | MissingType = (
             save_raw_grads if save_predicate is not None and save_raw_grads is not True else MISSING
         )
-        trace = _trace_torch_model(
-            model=model,
-            input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
-            input_kwargs=None,
-            layers_to_save=MISSING,
-            transform=MISSING,
-            save_raw_input=MISSING,
-            batch_render=MISSING,
-            output_transform=MISSING,
-            save_transformed_output=MISSING,
-            keep_orphans=MISSING,
-            output_device=MISSING,
-            activation_transform=recursive_activation_transform,
-            grad_transform=recursive_grad_transform,
-            save_raw_activations=recursive_save_raw_activations,
-            save_raw_grads=recursive_save_raw_gradients,
-            save_mode=cast(SaveMode, save_mode_value),
-            capture_tensor_grad_hooks=MISSING,
-            mark_layer_depths=MISSING,
-            detach_saved_activations=MISSING,
-            save_args=MISSING,
-            save_grads=MISSING,
-            save_source_context=MISSING,
-            save_rng=MISSING,
-            reconstruction_ready=MISSING,
-            seed=MISSING,
-            num_context_lines=MISSING,
-            optimizer=MISSING,
-            save_outs_to=MISSING,
-            keep_outs_in_memory=MISSING,
-            out_sink=MISSING,
-            intervention_ready=MISSING,
-            capture_container_structure=MISSING,
-            hooks=MISSING,
-            unwrap_when_done=MISSING,
-            verbose=MISSING,
-            source_context_lines=MISSING,
-            compute_input_output_distances=MISSING,
-            recurrence_detection=MISSING,
-            capture=recursive_capture_options,
-            save=recursive_save_value,
-            intervene=None,
-            halt=halt,
-            lookback=lookback,
-            lookback_payload_policy=lookback_payload_policy,
-            storage=None,
-            streaming=None,
-            backward_ready=MISSING,
-            inference_only=MISSING,
-            name=MISSING,
-            cache=MISSING,
-            cache_dir=MISSING,
-            module_filter=MISSING,
-            stop_after=MISSING,
-            raise_on_nan=MISSING,
-            profile=profile_enabled,
-            jax_control_flow=MISSING,
-            jax_max_control_flow_unroll=MISSING,
-            module_identity_mode=MISSING,
-            payload_policy=MISSING,
-            save_preview=MISSING,
-            facets=facet_recipes,
-            capture_output_structure=MISSING,
-            chunk_size=None,
-            chunk_paths=None,
-            retain_output_parents_for_layers_to_save=uses_selective_layers_to_save,
-            _selective_layers_to_save_request=(
-                requested_layers_to_save if uses_selective_layers_to_save else None
-            ),
-        )
-        initial_chunk_size = min(normalized_chunk_size, chunk_plan.total_size)
-        initial_record = {
-            "engine": "trace",
-            "append": False,
-            "chunk_size": initial_chunk_size,
-            "total_batch_size": chunk_plan.total_size,
-            "append_sequence_id": 0,
-            "chunk_paths": normalize_chunk_paths(chunk_paths_value),
-        }
-        for chunk_index, chunk in enumerate(chunks[1:], start=1):
-            if save_predicate is None:
-                trace.run(model, chunk, replay=ReplayOptions(append=True), input_transform=False)
-                continue
-            new_trace = _trace_torch_model(
+        total_rows = chunk_plan.total_size
+        with _typed_chunk_forward(0, min(normalized_chunk_size, total_rows), total_rows):
+            trace = _trace_torch_model(
                 model=model,
-                input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunk),
+                input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
                 input_kwargs=None,
                 layers_to_save=MISSING,
                 transform=MISSING,
@@ -3819,20 +3739,109 @@ def _trace_torch_model(
                     requested_layers_to_save if uses_selective_layers_to_save else None
                 ),
             )
-            appended_chunk_size = min(
-                normalized_chunk_size,
-                chunk_plan.total_size - (chunk_index * normalized_chunk_size),
+        initial_chunk_size = min(normalized_chunk_size, chunk_plan.total_size)
+        initial_record = {
+            "engine": "trace",
+            "append": False,
+            "chunk_size": initial_chunk_size,
+            "total_batch_size": chunk_plan.total_size,
+            "append_sequence_id": 0,
+            "chunk_paths": normalize_chunk_paths(chunk_paths_value),
+        }
+        for chunk_index, chunk in enumerate(chunks[1:], start=1):
+            chunk_rows = min(
+                normalized_chunk_size, total_rows - chunk_index * normalized_chunk_size
             )
-            _append_chunk_trace_state(
-                trace,
-                new_trace,
-                _ChunkAppend(
-                    chunk_size=appended_chunk_size,
-                    total_batch_size=chunk_plan.total_size,
-                    append_sequence_id=chunk_index,
-                    chunk_paths=normalize_chunk_paths(chunk_paths_value),
-                ),
-            )
+            with _typed_chunk_forward(chunk_index, chunk_rows, total_rows):
+                if save_predicate is None:
+                    trace.run(
+                        model, chunk, replay=ReplayOptions(append=True), input_transform=False
+                    )
+                    continue
+                new_trace = _trace_torch_model(
+                    model=model,
+                    input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunk),
+                    input_kwargs=None,
+                    layers_to_save=MISSING,
+                    transform=MISSING,
+                    save_raw_input=MISSING,
+                    batch_render=MISSING,
+                    output_transform=MISSING,
+                    save_transformed_output=MISSING,
+                    keep_orphans=MISSING,
+                    output_device=MISSING,
+                    activation_transform=recursive_activation_transform,
+                    grad_transform=recursive_grad_transform,
+                    save_raw_activations=recursive_save_raw_activations,
+                    save_raw_grads=recursive_save_raw_gradients,
+                    save_mode=cast(SaveMode, save_mode_value),
+                    capture_tensor_grad_hooks=MISSING,
+                    mark_layer_depths=MISSING,
+                    detach_saved_activations=MISSING,
+                    save_args=MISSING,
+                    save_grads=MISSING,
+                    save_source_context=MISSING,
+                    save_rng=MISSING,
+                    reconstruction_ready=MISSING,
+                    seed=MISSING,
+                    num_context_lines=MISSING,
+                    optimizer=MISSING,
+                    save_outs_to=MISSING,
+                    keep_outs_in_memory=MISSING,
+                    out_sink=MISSING,
+                    intervention_ready=MISSING,
+                    capture_container_structure=MISSING,
+                    hooks=MISSING,
+                    unwrap_when_done=MISSING,
+                    verbose=MISSING,
+                    source_context_lines=MISSING,
+                    compute_input_output_distances=MISSING,
+                    recurrence_detection=MISSING,
+                    capture=recursive_capture_options,
+                    save=recursive_save_value,
+                    intervene=None,
+                    halt=halt,
+                    lookback=lookback,
+                    lookback_payload_policy=lookback_payload_policy,
+                    storage=None,
+                    streaming=None,
+                    backward_ready=MISSING,
+                    inference_only=MISSING,
+                    name=MISSING,
+                    cache=MISSING,
+                    cache_dir=MISSING,
+                    module_filter=MISSING,
+                    stop_after=MISSING,
+                    raise_on_nan=MISSING,
+                    profile=profile_enabled,
+                    jax_control_flow=MISSING,
+                    jax_max_control_flow_unroll=MISSING,
+                    module_identity_mode=MISSING,
+                    payload_policy=MISSING,
+                    save_preview=MISSING,
+                    facets=facet_recipes,
+                    capture_output_structure=MISSING,
+                    chunk_size=None,
+                    chunk_paths=None,
+                    retain_output_parents_for_layers_to_save=uses_selective_layers_to_save,
+                    _selective_layers_to_save_request=(
+                        requested_layers_to_save if uses_selective_layers_to_save else None
+                    ),
+                )
+                appended_chunk_size = min(
+                    normalized_chunk_size,
+                    chunk_plan.total_size - (chunk_index * normalized_chunk_size),
+                )
+                _append_chunk_trace_state(
+                    trace,
+                    new_trace,
+                    _ChunkAppend(
+                        chunk_size=appended_chunk_size,
+                        total_batch_size=chunk_plan.total_size,
+                        append_sequence_id=chunk_index,
+                        chunk_paths=normalize_chunk_paths(chunk_paths_value),
+                    ),
+                )
         trace.append_history = [initial_record, *trace.append_history]
         trace.chunked_forward = True
         trace.last_run = dict(trace.last_run or {})
