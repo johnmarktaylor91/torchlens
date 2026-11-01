@@ -1008,7 +1008,7 @@ def _scrub_mutable_collection(
 def _scrub_tuple_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     """Rebuild a tuple-like container (see :func:`_rebuild_tuple_value`)."""
 
-    return _scrub_immutable_collection(value, walk, depth, _rebuild_tuple_value, "tuple")
+    return _scrub_immutable_collection(value, walk, depth, _rebuild_tuple_value, "tuple", False)
 
 
 def _rebuild_frozenset_value(
@@ -1022,7 +1022,9 @@ def _rebuild_frozenset_value(
 def _scrub_frozenset_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     """Rebuild a frozenset as a plain frozenset of scrubbed items."""
 
-    return _scrub_immutable_collection(value, walk, depth, _rebuild_frozenset_value, "frozenset")
+    return _scrub_immutable_collection(
+        value, walk, depth, _rebuild_frozenset_value, "frozenset", True
+    )
 
 
 def _scrub_immutable_collection(
@@ -1031,12 +1033,16 @@ def _scrub_immutable_collection(
     depth: int,
     rebuild: Callable[[Any, Iterable[Any], _ScrubOptions | None], Any],
     noun: str,
+    disclose_subclass: bool,
 ) -> Any:
     """Rebuild an immutable container whose identity exists only once built.
 
     A tuple or frozenset cannot be memoized before its items are scrubbed
     (there is no empty instance to fill in), so a re-entry while it is in
-    progress is a true cycle and is refused rather than looped on.
+    progress is a true cycle and is refused rather than looped on. A
+    frozenset subclass flattens to a plain frozenset, disclosed once on the
+    metadata walk (``disclose_subclass``); tuple subclasses are disclosed by
+    :func:`_rebuild_tuple_value` itself, which preserves the loadable ones.
     """
 
     memo = walk.memo
@@ -1046,6 +1052,13 @@ def _scrub_immutable_collection(
         raise ArtifactError(f"Portable {walk.noun} contains a cycle through a {noun}.")
     if cached is not None:
         return cached
+    if disclose_subclass and type(value) is not frozenset and walk.payload_owner is None:
+        _disclose_container_downgrade(
+            walk.options,
+            value,
+            "Dropping non-portable frozenset subclass {name} in portable "
+            "metadata; it rebuilds as a plain frozenset.",
+        )
     _pin_in_memo(memo, value)
     memo[obj_id] = _SCRUB_IN_PROGRESS
     try:
