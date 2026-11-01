@@ -122,7 +122,7 @@ def views_part_of_its_storage(tensor: torch.Tensor) -> bool:
     if not holds_rebindable_storage(tensor) or tensor.numel() == 0:
         return False
     last = tensor.storage_offset() + sum(
-        (size - 1) * stride for size, stride in zip(tensor.size(), tensor.stride())
+        (size - 1) * stride for size, stride in zip(tensor.size(), tensor.stride(), strict=True)
     )
     spanned = (last + 1) * tensor.element_size()
     return tensor.storage_offset() != 0 or spanned != tensor.untyped_storage().nbytes()

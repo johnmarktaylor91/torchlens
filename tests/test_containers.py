@@ -612,7 +612,7 @@ def _assert_same_output(rebuilt: Any, plain: Any) -> None:
     want = _alias_leaves(plain)
     got = _alias_leaves(rebuilt)
     assert len(got) == len(want)
-    for got_leaf, want_leaf in zip(got, want):
+    for got_leaf, want_leaf in zip(got, want, strict=True):
         assert torch.equal(got_leaf, want_leaf)
 
 
