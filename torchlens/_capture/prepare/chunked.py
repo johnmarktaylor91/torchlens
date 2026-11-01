@@ -8,15 +8,17 @@ from __future__ import annotations
 import collections.abc
 import re
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NoReturn
 
 import torch
 
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING
 from ..._trace_state import TraceState
+from ...errors._base import TorchLensError
 from ...intervention.errors import (
     AmbiguousBatchInputError,
     AppendMismatchError,
@@ -45,6 +47,16 @@ def _should_store_auto_coerced_raw_input(original: Any, coerced: Any) -> bool:
     """
 
     return coerced is not original and _contains_auto_coercible_raw_input(original)
+
+
+def _refuse_chunk_option_conflict(message: str, alternative: str) -> NoReturn:
+    """Raise the typed refusal for an option that cannot compose with ``chunk_size``."""
+
+    raise ChunkedForwardConfigError(
+        message,
+        code="trace_option_unsupported",
+        remedy=f"{alternative}, or run without chunk_size",
+    )
 
 
 def _validate_chunked_forward_capture(
@@ -81,25 +93,70 @@ def _validate_chunked_forward_capture(
     ChunkedForwardConfigError
         If chunked forward capture cannot compose with the requested options.
     """
-
     if input_kwargs:
-        raise ChunkedForwardConfigError(
-            "chunk_size capture is positional-input only in v1; keyword inputs are unsupported."
+        _refuse_chunk_option_conflict(
+            "chunk_size capture is positional-input only in v1; keyword inputs are unsupported.",
+            "pass the inputs positionally",
         )
     if backward_ready:
-        raise ChunkedForwardConfigError("chunk_size cannot be combined with backward_ready=True.")
-    if save_grads:
-        raise ChunkedForwardConfigError("chunk_size cannot be combined with save_grads.")
-    if hooks is not None:
-        raise ChunkedForwardConfigError("chunk_size cannot be combined with hooks=.")
-    if intervene is not None:
-        raise ChunkedForwardConfigError("chunk_size cannot be combined with intervene=.")
-    if halt is not None:
-        raise ChunkedForwardConfigError("chunk_size cannot be combined with halt=.")
-    if streaming.path is not None or streaming.on_save is not None:
-        raise ChunkedForwardConfigError(
-            "chunk_size is in-memory only in v1 and cannot be combined with streaming storage."
+        _refuse_chunk_option_conflict(
+            "chunk_size cannot combine with backward_ready=True.", "drop it"
         )
+    if save_grads:
+        _refuse_chunk_option_conflict(
+            "chunk_size cannot be combined with save_grads.", "drop save_grads"
+        )
+    if hooks is not None:
+        _refuse_chunk_option_conflict("chunk_size cannot be combined with hooks=.", "drop hooks=")
+    if intervene is not None:
+        _refuse_chunk_option_conflict(
+            "chunk_size cannot be combined with intervene=.", "drop intervene="
+        )
+    if halt is not None:
+        _refuse_chunk_option_conflict("chunk_size cannot be combined with halt=.", "drop halt=")
+    if streaming.path is not None or streaming.on_save is not None:
+        _refuse_chunk_option_conflict(
+            "chunk_size is in-memory only in v1 and cannot be combined with streaming storage.",
+            "drop storage=tl.to_disk(...)",
+        )
+
+
+@contextmanager
+def _typed_chunk_forward(chunk_index: int, chunk_size: int, plan: Any) -> Iterator[int]:
+    """Run one chunk's capture, yielding its row count; a failure refuses typed.
+
+    ``AppendMismatchError`` from chunk assembly means an activation is not row-wise over the
+    batch; any other error is the forward failing on a partial batch. Both become
+    ``ChunkedForwardConfigError`` (``trace_option_unsupported``) pointing at a plain capture.
+    """
+
+    total_rows = int(plan.total_size)
+    chunk_rows = min(chunk_size, total_rows - chunk_index * chunk_size)
+    where = f"chunk {chunk_index} ({chunk_rows} of {total_rows} rows)"
+    try:
+        yield chunk_rows
+    except AppendMismatchError as exc:
+        raise ChunkedForwardConfigError(
+            f"chunk_size: assembling {where} found an activation that is not row-wise "
+            f"over the batch ({exc}); this forward is batch-coupled, so a chunked capture "
+            "cannot stand for the whole batch.",
+            code="trace_option_unsupported",
+            remedy="run without chunk_size",
+            chunk_index=chunk_index,
+        ) from exc
+    except TorchLensError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - the model's own failure on a partial batch
+        raise ChunkedForwardConfigError(
+            f"chunk_size: the forward failed on {where} with {type(exc).__name__}: {exc}; "
+            "a forward that needs the whole batch cannot run in chunks.",
+            code="trace_option_unsupported",
+            remedy=(
+                "run without chunk_size (a forward that also fails on the whole batch "
+                "is failing on its own)"
+            ),
+            chunk_index=chunk_index,
+        ) from exc
 
 
 def _validate_chunk_append_candidate(old_trace: Trace, new_trace: Trace) -> None:

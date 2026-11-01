@@ -119,6 +119,7 @@ from .chunked import (
     _append_chunk_trace_state,
     _ChunkAppend,
     _should_store_auto_coerced_raw_input,
+    _typed_chunk_forward,
     _validate_chunked_forward_capture,
     iter_chunked_inputs,
     normalize_chunk_paths,
@@ -1338,44 +1339,43 @@ def _run_chunked_capture(state: _DoorState, request: CaptureRequest) -> Trace:
     normalized_chunk_size = cast(int, state.normalized_chunk_size)
     chunks = iter_chunked_inputs(state.input_args, chunk_plan)
     recursive_kwargs = _recursive_door_kwargs(state)
-    trace = _trace_torch_model(
-        state.model,
-        cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
-        None,
-        **recursive_kwargs,
-    )
+    with _typed_chunk_forward(0, normalized_chunk_size, chunk_plan) as initial_chunk_size:
+        trace = _trace_torch_model(
+            state.model,
+            cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
+            None,
+            **recursive_kwargs,
+        )
     initial_record = {
         "engine": "trace",
         "append": False,
-        "chunk_size": min(normalized_chunk_size, chunk_plan.total_size),
+        "chunk_size": initial_chunk_size,
         "total_batch_size": chunk_plan.total_size,
         "append_sequence_id": 0,
         "chunk_paths": normalize_chunk_paths(state.chunk_paths_value),
     }
+    append = ReplayOptions(append=True)
     for chunk_index, chunk in enumerate(chunks[1:], start=1):
-        if state.save_predicate is None:
-            trace.run(state.model, chunk, replay=ReplayOptions(append=True), input_transform=False)
-            continue
-        new_trace = _trace_torch_model(
-            state.model,
-            cast(torch.Tensor | list[Any] | tuple[Any, ...], chunk),
-            None,
-            **recursive_kwargs,
-        )
-        appended_chunk_size = min(
-            normalized_chunk_size,
-            chunk_plan.total_size - (chunk_index * normalized_chunk_size),
-        )
-        _append_chunk_trace_state(
-            trace,
-            new_trace,
-            _ChunkAppend(
-                chunk_size=appended_chunk_size,
-                total_batch_size=chunk_plan.total_size,
-                append_sequence_id=chunk_index,
-                chunk_paths=normalize_chunk_paths(state.chunk_paths_value),
-            ),
-        )
+        with _typed_chunk_forward(chunk_index, normalized_chunk_size, chunk_plan) as rows:
+            if state.save_predicate is None:
+                trace.run(state.model, chunk, replay=append, input_transform=False)
+                continue
+            new_trace = _trace_torch_model(
+                state.model,
+                cast(torch.Tensor | list[Any] | tuple[Any, ...], chunk),
+                None,
+                **recursive_kwargs,
+            )
+            _append_chunk_trace_state(
+                trace,
+                new_trace,
+                _ChunkAppend(
+                    chunk_size=rows,
+                    total_batch_size=chunk_plan.total_size,
+                    append_sequence_id=chunk_index,
+                    chunk_paths=normalize_chunk_paths(state.chunk_paths_value),
+                ),
+            )
     trace._append_history = [initial_record, *trace._append_history]
     return _finish_chunked_trace(state, request, trace)
 

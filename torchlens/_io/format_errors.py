@@ -10,6 +10,8 @@ historical spelling unchanged.
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 from ..errors._base import CompatibilityError
 
 __tl_layer__ = "L0"
@@ -93,3 +95,23 @@ for _cls in (
 ):
     _cls.__module__ = "torchlens._io"
 del _cls
+
+
+def refuse_bundle_exists(path: object) -> NoReturn:
+    """Raise the ``bundle_save_failed`` refusal for a streaming target that already exists."""
+
+    raise ArtifactError(
+        f"Bundle path already exists: {path}",
+        code="bundle_save_failed",
+        remedy="stream to a path that does not exist yet, or remove the old bundle first",
+    )
+
+
+def refuse_missing_blobs(blob_ids: list[str]) -> NoReturn:
+    """Raise the ``bundle_load_failed`` refusal for a manifest whose blob files are gone."""
+
+    raise ArtifactError(
+        f"Bundle manifest references missing blob files for blob_id(s): {', '.join(blob_ids)}.",
+        code="bundle_load_failed",
+        remedy="restore the missing blob files, or re-save the bundle from its source capture",
+    )

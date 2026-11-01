@@ -1580,9 +1580,12 @@ def to_disk(
     Parameters
     ----------
     path:
-        Destination bundle directory. The path must not already exist.
+        Destination bundle directory; it must not exist yet (``bundle_save_failed``).
     retain_in_memory:
-        Whether streamed payloads should also remain as RAM copies.
+        Whether streamed payloads also remain as RAM copies. Two stay in memory
+        either way: the model output the forward returns (the output op's payload
+        may alias it) and every payload after ``trace.run(...)``, which re-captures
+        into RAM while the bundle at ``path`` keeps the first capture; save again.
     include_custom_attributes:
         Whether harvested module attributes are persisted verbatim in the
         streamed bundle (the ``Trace.save`` opt-out, mirrored for streaming).
@@ -1590,27 +1593,24 @@ def to_disk(
         Whether captured pre-forward buffer values are persisted in the
         streamed bundle (the ``Trace.save`` opt-out, mirrored for streaming).
     async_writes:
-        Whether ``trace(..., storage=...)`` blob writes overlap capture on a
-        bounded single-worker pipeline instead of pausing the forward for
-        each write (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI
-        sprint). Tri-state: ``None`` (default) means async for ``trace``
-        captures and synchronous for ``tl.record`` streaming; ``False``
-        forces synchronous writes; ``True`` requires the async pipeline and
-        refuses typed where it cannot be honored (``tl.record``). Writes
-        land in submission order, a failed write raises
-        ``ArtifactError`` and marks the bundle PARTIAL, and finalization
-        waits for every pending write before the bundle publishes.
+        Whether ``trace(..., storage=...)`` blob writes overlap capture on a bounded
+        single-worker pipeline instead of pausing the forward for each write
+        (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI sprint). Tri-state:
+        ``None`` (default) means async for ``trace`` captures and synchronous for
+        ``tl.record`` streaming; ``False`` forces synchronous writes; ``True`` requires the
+        async pipeline and refuses typed where it cannot be honored (``tl.record``). Writes
+        land in submission order, a failed write raises ``ArtifactError`` and marks the
+        bundle PARTIAL, and finalization waits for every pending write before the bundle
+        publishes.
     max_pending_bytes:
-        Pending snapshot byte budget for the async pipeline (``None`` uses
-        the 256 MiB default). Once pending writes hold this many bytes,
-        capture blocks until the disk catches up, bounding the RAM the
-        deferred writes may occupy.
+        Pending snapshot byte budget for the async pipeline (``None`` uses the
+        256 MiB default); once pending writes hold this many bytes, capture blocks
+        until the disk catches up, bounding the RAM the deferred writes may occupy.
 
     Returns
     -------
     StorageOptions
-        Storage options suitable for ``trace(..., storage=...)`` and
-        ``record(..., streaming=...)``.
+        Storage options for ``trace(..., storage=...)`` and ``record(..., streaming=...)``.
     """
 
     return StorageOptions(
