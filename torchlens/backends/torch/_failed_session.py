@@ -2,7 +2,7 @@
 
 Moved verbatim from ``torchlens.backends.torch.backend`` by the capture seam: the bodies of
 ``TorchBackend.cleanup_stopped_forward_session`` and ``TorchBackend.cleanup_failed_forward_session``,
-which delegate here.
+which bind these functions as methods.
 """
 
 from __future__ import annotations

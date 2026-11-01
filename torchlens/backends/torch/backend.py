@@ -20,7 +20,6 @@ from ..._ir.intervention import FireResult, FunctionEventInput
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
-from ..._ir.workspaces import RawGraphWorkspace
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.arg_handling import (
     INPUT_WAS_PARAMETER_ATTR,
@@ -668,26 +667,7 @@ class TorchBackend:
             cast(ModuleStackFrame, frame),
         )
 
-    def extract_and_mark_outputs(
-        self,
-        session: object,
-        outputs: object,
-    ) -> tuple[list[torch.Tensor], list[str]]:
-        """Extract torch output tensors, deduplicate them, and mark output parents.
-
-        Parameters
-        ----------
-        session:
-            Active trace.
-        outputs:
-            Raw model output object returned by the captured forward pass.
-
-        Returns
-        -------
-        tuple[list[torch.Tensor], list[str]]
-            Output tensors and their display addresses.
-        """
-        return _extract_and_mark_outputs_body(self, session, outputs)
+    extract_and_mark_outputs = _extract_and_mark_outputs_body
 
     @staticmethod
     def _scalar_bool_value(tensor: torch.Tensor | None) -> bool | None:
@@ -857,17 +837,9 @@ class TorchBackend:
         )
         return ()
 
-    def finalize_forward_session(
-        self,
-        session: object,
-        trace_state: RawGraphWorkspace,
-    ) -> None:
-        """Run torch post-forward reconciliation before output extraction."""
-        return _finalize_forward_session_body(self, session, trace_state)
+    finalize_forward_session = _finalize_forward_session_body
 
-    def cleanup_stopped_forward_session(self, session: object, prepared_model: object) -> None:
-        """Clean up torch metadata after a halted forward capture."""
-        return _cleanup_stopped_forward_session_body(self, session, prepared_model)
+    cleanup_stopped_forward_session = _cleanup_stopped_forward_session_body
 
     @staticmethod
     def _warn_without_masking(
@@ -896,14 +868,7 @@ class TorchBackend:
                     f"as {type(advisory_error).__name__}): {message}",
                 )
 
-    def cleanup_failed_forward_session(
-        self,
-        session: object,
-        prepared_model: object,
-        exc: Exception,
-    ) -> None:
-        """Attach partial trace diagnostics and clean up failed torch capture state."""
-        return _cleanup_failed_forward_session_body(self, session, prepared_model, exc)
+    cleanup_failed_forward_session = _cleanup_failed_forward_session_body
 
     def cleanup_forward_memory(self, session: object) -> None:
         """Release torch transient forward-memory caches.

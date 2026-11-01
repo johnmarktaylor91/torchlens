@@ -989,7 +989,7 @@ torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boun
 torchlens/backends/torch/_tl.py	1813
 torchlens/backends/torch/_tl.py::set_tensor_label	63
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
-torchlens/backends/torch/backend.py	933
+torchlens/backends/torch/backend.py	898
 torchlens/backends/torch/backend.py::TorchBackend.fetch_label_move_input_tensors	153
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	89
 torchlens/backends/torch/backward.py	4403
