@@ -568,7 +568,7 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
     ("kwargs", "pattern"),
     (
         ({"save": tl.where(lambda op: op.out is not None)}, "concrete activation values"),
-        ({"layers_to_save": ["relu"]}, "full-save only.*save shaping"),
+        ({"save": ["relu"]}, "full-save only.*save shaping"),
         ({"lookback": 1}, "full-save only.*save-window"),
         # Gated options refuse through the central capability gate, whose
         # canonical message names the owning flag and the refused option.

@@ -1096,7 +1096,7 @@ def test_jax_rejects_callback_effects() -> None:
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
     (
-        ({"layers_to_save": ["tanh"]}, "full-save only"),
+        ({"save": ["tanh"]}, "full-save only"),
         ({"lookback": 1}, "full-save only"),
         # Gated options refuse through the central capability gate, whose
         # canonical message names the owning flag and the refused option.

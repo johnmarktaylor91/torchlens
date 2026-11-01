@@ -227,14 +227,14 @@ def test_resnet18_batch8_deferred_spellings_complete_and_materialize_bit_exact()
     # attached default's spill disclosure is pinned in test_module_save_live_retention.
     # grouping rule row 28: each BasicBlock's one ReLU module called twice is one
     # Layer with 2 passes, so layer1.1.conv2 is the 14th Layer, not the 15th.
-    capture = _detached(layers_to_save=["conv2d_5_14"])
-    log = tl.trace(model, x, capture=capture)
+    capture = _detached()
+    log = tl.trace(model, x, capture=capture, save=["conv2d_5_14"])
     op = log["conv2d_5_14"]
     assert op.output_of_modules == ("layer1.1.conv2",)
     assert torch.equal(op.out, _eager_module_output(model, "layer1.1.conv2", x))
 
-    ordinal_capture = _detached(layers_to_save=[5])
-    ordinal_log = tl.trace(model, x, capture=ordinal_capture)
+    ordinal_capture = _detached()
+    ordinal_log = tl.trace(model, x, capture=ordinal_capture, save=[5])
     saved = [
         op
         for op in ordinal_log.layer_list
@@ -244,8 +244,8 @@ def test_resnet18_batch8_deferred_spellings_complete_and_materialize_bit_exact()
     for op in saved:
         assert torch.equal(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
 
-    output_capture = _detached(layers_to_save=["output"])
-    output_log = tl.trace(model, x, capture=output_capture)
+    output_capture = _detached()
+    output_log = tl.trace(model, x, capture=output_capture, save=["output"])
     with torch.no_grad():
         direct = model(x)
     output_ops = [
@@ -266,8 +266,8 @@ def test_resnet50_batch1_op_label_selective_save_completes():
 
     model = torchvision.models.resnet50(weights="IMAGENET1K_V1").eval()
     x = torch.randn(1, 3, 224, 224, generator=torch.Generator().manual_seed(1))
-    capture = _detached(layers_to_save=["conv2d_10_30"])
-    log = tl.trace(model, x, capture=capture)
+    capture = _detached()
+    log = tl.trace(model, x, capture=capture, save=["conv2d_10_30"])
     op = log["conv2d_10_30"]
     assert torch.equal(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
 

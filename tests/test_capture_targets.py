@@ -84,7 +84,7 @@ def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:
     ("kwargs", "capture_kwargs", "saved_type"),
     [
         ({"save": tl.func("relu")}, {}, "relu"),
-        ({}, {"layers_to_save": ["relu"]}, "relu"),
+        ({"save": ["relu"]}, {}, "relu"),
     ],
 )
 def test_selective_capture_cache_preserves_unsaved_payload_contract(

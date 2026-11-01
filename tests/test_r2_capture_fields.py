@@ -38,9 +38,9 @@ def test_public_save_selects_final_labels_and_none() -> None:
     full = tl.trace(model, x)
     label = next(op.label for op in full.ops if op.func_name == "relu")
     selected = tl.trace(model, x, save=[label])
-    assert selected[label].has_saved_out
-    assert not next(op for op in selected.ops if op.func_name == "linear").has_saved_out
-    assert not any(op.has_saved_out for op in tl.trace(model, x, save=None).ops)
+    assert selected[label].has_saved_activation
+    assert not next(op for op in selected.ops if op.func_name == "linear").has_saved_activation
+    assert not any(op.has_saved_activation for op in tl.trace(model, x, save=None).ops)
 
 
 def test_module_filter_retained_until_where_composes_with_save_forms() -> None:
@@ -53,8 +53,8 @@ def test_module_filter_retained_until_where_composes_with_save_forms() -> None:
             module_filter=lambda fields: any(address == "1" for address, _ in fields.modules)
         ),
     )
-    assert any(op.has_saved_out for op in trace.ops if op.func_name == "relu")
-    assert not any(op.has_saved_out for op in trace.ops if op.func_name == "linear")
+    assert any(op.has_saved_activation for op in trace.ops if op.func_name == "relu")
+    assert not any(op.has_saved_activation for op in trace.ops if op.func_name == "linear")
     predicate = tl.where(lambda context: "1" in context.module_stack)
     for selection in ("all", ["relu"], lambda context: True):
         with pytest.raises(TypeError):
@@ -64,3 +64,13 @@ def test_module_filter_retained_until_where_composes_with_save_forms() -> None:
 def test_explicit_all_preserves_structure_only_refusal() -> None:
     with pytest.raises(ValueError, match="structure_only=True cannot honor"):
         tl.trace(nn.ReLU(), torch.ones(1), save="all", capture=CaptureOptions(structure_only=True))
+
+
+def test_debug_seed_copy_preserves_private_selection() -> None:
+    from torchlens.debug._rerun import isolated_capture
+
+    model = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    capture = merge_capture_options(capture=CaptureOptions(), _layers_to_save=["relu"])
+    trace = isolated_capture(model, torch.ones(1, 3), seed=7, capture=capture)
+    assert any(op.has_saved_activation for op in trace if op.func_name == "relu")
+    assert not any(op.has_saved_activation for op in trace if op.func_name == "linear")
