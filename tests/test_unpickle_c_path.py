@@ -206,7 +206,12 @@ def _honest_streams() -> dict[str, bytes]:
     for label, value in _honest_values().items():
         protocols = (4, 5) if label in _PROTOCOL_3_PLUS_LABELS else (2, 4, 5)
         for protocol in protocols:
-            streams[f"{label}@p{protocol}"] = pickle.dumps(value, protocol=protocol)
+            data = pickle.dumps(value, protocol=protocol)
+            if protocol == 2 and b"__builtin__\n" in data:
+                # Protocol 2 names builtins by their Python 2 module, which the policy
+                # does not admit; no TorchLens writer emits protocol 2.
+                continue
+            streams[f"{label}@p{protocol}"] = data
     # A tensor pickles through the writer's inline reduction; the stock torch reduction
     # (``torch.storage._load_from_bytes``) is refused by name on both machines.
     buffer = io.BytesIO()
@@ -476,13 +481,24 @@ _HOSTILE = _hostile_streams()
 _CORPUS = {**_HONEST, **_HOSTILE, **_variants({**_HONEST, **_HOSTILE})}
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("label", sorted(_HONEST) + sorted(_HOSTILE))
 def test_corpus_decisions_match_the_interpreter(label: str) -> None:
     """Every honest and hostile stream gets the same decision on both machines."""
 
     data = _CORPUS[label]
     assert _outcome(_new_path, data) == _outcome(_old_path, data)
+
+
+@pytest.mark.smoke
+def test_corpus_decisions_match_the_interpreter_in_one_pass() -> None:
+    """The whole corpus, as one smoke item: every mismatch in one report."""
+
+    mismatches = {
+        label: (_outcome(_new_path, data), _outcome(_old_path, data))
+        for label, data in {**_HONEST, **_HOSTILE}.items()
+        if _outcome(_new_path, data) != _outcome(_old_path, data)
+    }
+    assert not mismatches, f"{len(mismatches)} streams differ: {mismatches}"
 
 
 def test_generated_variants_match_the_interpreter() -> None:
