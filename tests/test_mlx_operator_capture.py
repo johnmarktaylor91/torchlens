@@ -38,10 +38,9 @@ _GLOBAL_SCALE = None
 
 
 def _code(exc: BaseException) -> str:
-    """The typed refusal code as the suite reads it (instance field first, class code after)."""
+    """The typed refusal code (SPEC 1.3 rule 4: ``exc.code`` is the contract)."""
 
-    fields = getattr(exc, "fields", None)
-    return str((fields or {}).get("code") or getattr(exc, "code", ""))
+    return str(getattr(exc, "code", ""))
 
 
 def _kinds(trace: tl.Trace) -> tuple[str, ...]:
