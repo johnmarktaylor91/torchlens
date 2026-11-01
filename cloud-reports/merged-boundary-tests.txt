@@ -1,8 +1,0 @@
-tests/test_merged_boundary_rules.py
-tests/test_merged_engine.py
-tests/test_merged_engine_hardening.py
-tests/test_merged_slice_witness.py
-tests/test_w051_capt3_merged_ledger_shape.py
-tests/test_merged_gloo.py
-tests/oracles/test_oracle_w0_lints.py::test_numeral_census_baseline_mechanics
-tests/composition_expectations/test_diagnostic_site_contract.py

@@ -1,8 +1,0 @@
-tests/test_conditional_integration.py
-tests/validation_goldens/test_arm_campaign_killers_mutants3.py
-tests/test_fastlog_halt.py
-tests/test_themes_families_budget.py
-tests/test_tlspec_rehydrate_no_planted_call.py
-tests/test_perf_method.py
-tests/test_io_security_r27.py
-tests/test_metadata.py

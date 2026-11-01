@@ -1,8 +1,0 @@
-tests/test_merged_derive_steps.py
-tests/test_merged_engine.py
-tests/test_merged_engine_hardening.py
-tests/test_distributed_shard_local_marker.py
-tests/test_global_state_inventory.py
-tests/producer_parity/test_ledger.py::test_static_ledger_artifacts_are_current
-tests/composition_expectations/test_diagnostic_site_contract.py
-tests/oracles/test_oracle_w0_lints.py::test_numeral_census_baseline_mechanics
