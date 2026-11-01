@@ -403,13 +403,14 @@ def _param_items(params: Any) -> list[Any]:
 
     from torchlens._data_classes.layer import Layer
     from torchlens._data_classes.op import Op
-    from torchlens._visualization._render_common import BoundaryNode
+    from torchlens._visualization._render_common import BoundaryNode, FocusNode
 
     barcodes = getattr(params, "_param_barcodes", None)
     if barcodes is not None and len(barcodes) == 0:
         return []
 
-    param_logs = params._param_logs if isinstance(params, (Op, Layer, BoundaryNode)) else None
+    source = params.original if isinstance(params, FocusNode) else params
+    param_logs = source._param_logs if isinstance(source, (Op, Layer, BoundaryNode)) else None
     if param_logs:
         return list(param_logs)
 

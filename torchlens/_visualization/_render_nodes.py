@@ -1840,7 +1840,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     """
     from torchlens._data_classes.layer import Layer
     from torchlens._data_classes.op import Op
-    from torchlens._visualization._render_common import BoundaryNode
+    from torchlens._visualization._render_common import BoundaryNode, FocusNode
 
     if node.is_input:
         bg_color = INPUT_COLOR
@@ -1851,7 +1851,8 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR
     elif node.has_params:
-        param_logs = node._param_logs if isinstance(node, (Op, Layer, BoundaryNode)) else []
+        source = node.original if isinstance(node, FocusNode) else node
+        param_logs = source._param_logs if isinstance(source, (Op, Layer, BoundaryNode)) else []
         if param_logs:
             trainable_flags = [pl.is_trainable for pl in param_logs]
             all_trainable = all(trainable_flags)

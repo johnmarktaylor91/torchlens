@@ -157,7 +157,7 @@ def test_read_time_head_decodes_the_named_retained_head() -> None:
 
     trace = tl.trace(model, torch.ones(1, 2))
 
-    assert trace.decoded_output is None
+    assert trace._decoded_output is None
     assert trace.provenance.output_postprocessor is not None
     assert trace.provenance.output_postprocessor.ambiguous is True
 
@@ -167,7 +167,7 @@ def test_read_time_head_decodes_the_named_retained_head() -> None:
     aux = trace.decode_output(style="classification", head="aux")
     assert aux["rows"][0]["label"] == "hot"
     # The read-time decode returns rows and never rewrites the captured record.
-    assert trace.decoded_output is None
+    assert trace._decoded_output is None
 
 
 def test_custom_registered_output_detector_decodes() -> None:
@@ -197,7 +197,7 @@ def test_custom_registered_output_detector_decodes() -> None:
             )
 
         trace = tl.trace(model, torch.ones(1, 2))
-        assert trace.decoded_output is None
+        assert trace._decoded_output is None
         decoded = trace.decode_output(style="custom_labels")
 
     assert decoded["rows"][0]["label"] == "left"
