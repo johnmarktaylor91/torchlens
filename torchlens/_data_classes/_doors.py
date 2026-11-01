@@ -1,4 +1,4 @@
-"""Deferred doors from the records to the packages above them (Rule F).
+"""Doors from the records to the packages above them (Rule F).
 
 The records (``Trace``, ``Op``, ``Layer``, ``Bundle``) live in layer L1 and
 may not import the packages above them at module top. This module is the

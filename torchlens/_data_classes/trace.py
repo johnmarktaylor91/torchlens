@@ -94,6 +94,7 @@ from ..intervention.types import (
     Relationship,
 )
 from ..types import _ActivationPostfunc, _GradientPostfunc
+from . import _trace_rehydrate
 from ._preprocessing_provenance import status_of
 from ._state_adapter import state_items, state_restore
 from ._trace_accessors import (
@@ -102,7 +103,6 @@ from ._trace_accessors import (
 )
 from ._trace_missing_attrs import _raise_missing_trace_attribute
 from ._trace_narrate import TraceNarrateMixin
-from ._trace_rehydrate import rehydrate_trace_core
 from ._transform_repr import _scrubbed_transform_repr
 from .backward_pass import BackwardPass
 from .container import reconstruct_container, reconstruct_output
@@ -3359,7 +3359,7 @@ class Trace(
         # preserves the coreless-island behavior; backward records stay
         # detached by design). See _data_classes/_trace_rehydrate.py.
 
-        rehydrate_trace_core(self)
+        _trace_rehydrate.rehydrate_trace_core(self)
         if pickle_module_accessor_state is not None:
             from .._io.accessor_rebuild import rebuild_trace_accessors
 

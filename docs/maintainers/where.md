@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1319 modules, 623291 lines, 0 modules without a docstring.
+83 packages, 1319 modules, 623285 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 43 | 24726 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1487 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 7 | 4463 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 38781 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 38775 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
@@ -274,7 +274,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (7 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (77 modules, 38781 lines)
+Core data structures for representing a logged forward pass. (77 modules, 38775 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -284,7 +284,7 @@ Core data structures for representing a logged forward pass. (77 modules, 38781 
 | `_call_tree` | ModuleCall tree display and call-scope resolution helpers. | 241 |
 | `_compaction` | Freeze-seam Op metadata compaction ( fold of the standalone pass). | 87 |
 | `_container_labels` | Pure value helpers for container views. | 78 |
-| `_doors` | Deferred doors from the records to the packages above them (Rule F). | 108 |
+| `_doors` | Doors from the records to the packages above them (Rule F). | 108 |
 | `_fork_lineage` | Fork lineage: whether two traces are related through the fork parent chain. | 44 |
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
 | `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 111 |
@@ -325,7 +325,7 @@ Core data structures for representing a logged forward pass. (77 modules, 38781 
 | `_trace_narrate` | Post-hoc narration mixin for ''Trace'' (snoop ). | 41 |
 | `_trace_pristine` | The pristine reading of a Trace, derived from the evidence it carries. | 171 |
 | `_trace_profile` | Trace model-profile helpers. | 155 |
-| `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 224 |
+| `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 218 |
 | `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays (record rebuild destination; empty until its bodies move in). | 5 |
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 169 |
 | `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__'' (record rebuild destination; empty until its bodies move... | 5 |
