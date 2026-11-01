@@ -484,3 +484,16 @@ def test_rerun_doors_zero_fire_name_the_distribution_output() -> None:
     (warning,) = _zero_fire_warnings(caught, "rerun_zero_fire")
     assert warning.fields["reason"] == NON_TENSOR_MODULE_OUTPUT_REASON
     assert "module 'policy' output is a Normal" in warning.fields["reason_detail"]
+
+
+@pytest.mark.parametrize(
+    "factory", [NormalHead, CategoricalHead, IndependentHead, PolicyWithInnerDistribution]
+)
+def test_forward_validation_passes_on_distribution_outputs(factory: Any) -> None:
+    """Replay and the metadata invariants (module output paths included) hold unchanged."""
+
+    torch.manual_seed(0)
+    model = factory().eval()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert bool(tl.validate(model, _x(), scope="forward", seed=0)) is True
