@@ -46,9 +46,8 @@ def tiny() -> tuple[nn.Module, torch.Tensor]:
         ["no_such_layer_anywhere"],
         {"mine": "no_such_layer_anywhere"},
         ["lin:3"],
-        ["self"],
     ],
-    ids=["list", "mapping", "module-pass-beyond-count", "bare-module-address"],
+    ids=["list", "mapping", "module-pass-beyond-count"],
 )
 def test_extract_unknown_layer_refuses_op_lookup_not_found(
     tiny: tuple[nn.Module, torch.Tensor], layers: Any
@@ -59,6 +58,20 @@ def test_extract_unknown_layer_refuses_op_lookup_not_found(
     assert _code(info.value) in {"op_lookup_not_found", "op_lookup_pass_out_of_range"}, info.value
     assert info.value.fields.get("remedy")
     assert "not enough values to unpack" not in str(info.value)
+
+
+def test_extract_root_module_address_is_the_output_not_a_crash(
+    tiny: tuple[nn.Module, torch.Tensor],
+) -> None:
+    """``self`` is the root module's address: extract returns its output instead of crashing.
+
+    At the base this key reached ``key.rsplit(":", 1)`` with no colon and raised the builtin
+    ``ValueError: not enough values to unpack``.
+    """
+
+    model, x = tiny
+    out = tl.extract(model, x, ["self"])
+    torch.testing.assert_close(out["self"], model(x))
 
 
 def test_extract_unknown_layer_message_still_suggests_candidates(
