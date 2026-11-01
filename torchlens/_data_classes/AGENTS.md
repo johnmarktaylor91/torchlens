@@ -28,6 +28,16 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 |------|---------|
 | `__init__.py` | Public exports for core data classes and accessors |
 | `_accessor_base.py` | Shared ordered dict-like accessor base |
+| `_doors.py` | FACADE-role deferred doors from the records to the packages above them (Rule F); the only record-side module holding upward imports |
+| `_labels.py` | The one label vocabulary: raw, pass-qualified op and pass-free layer label conversions |
+| `_trace_views.py` | Trace group-view and field-derived accessor functions (record rebuild destination) |
+| `_trace_state_io.py` | Trace pickle state helpers off `__getstate__`/`__setstate__` (record rebuild destination) |
+| `_trace_rerun_state.py` | Trace rerun-state family (record rebuild destination) |
+| `_trace_annotations.py` | Trace annotation family (record rebuild destination) |
+| `_op_save.py` | Op tensor-save and payload functions (record rebuild destination) |
+| `_op_relations.py` | Op relation functions: parents, children, siblings, containment (record rebuild destination) |
+| `_op_cost.py` | Op cost functions: FLOPs, bytes, timing (record rebuild destination) |
+| `_layer_views.py` | Layer view functions: pass delegation and graph unions (record rebuild destination) |
 | `trace.py` | `Trace`, conditional event records, save/load/intervention/summary helpers |
 | `_trace_accessors.py` | Trace-level typed accessor construction |
 | `_trace_export.py` | Trace tabular export, decoded-output helpers, and the `to_agent_json()` agent dump entry point |
