@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import weakref
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -16,6 +16,7 @@ from ..._ir import BufferWriteEvent
 from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils.tensor_utils import safe_copy
 from ._identity_cache import IdentityCache, identity_cached
+from ._storage_overlap import _ranges_overlap, _storage_range
 from ._tl import (
     clear_tensor_label,
     get_buffer_address,
@@ -28,6 +29,26 @@ if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
     from ..._ir.workspaces import RawGraphWorkspace
 
+
+_RECEIVER_REBIND_NAMES = frozenset({"set_", "share_memory_"})
+"""Calls that rebind the receiver's storage and are recorded as one storage rebind.
+
+``Tensor.set_`` points the receiver at another storage. ``Tensor.share_memory_``
+moves the receiver's storage to shared memory in place: the storage object
+stays, its data pointer changes, and every tensor on that storage moves with it,
+so the rebind covers each registered buffer sharing the receiver's storage. The
+move happens once (a shared storage is left where it is), so the record never
+depends on whether the storage had been shared before the forward.
+"""
+
+_RECEIVER_RESIZE_NAMES = frozenset({"resize_", "resize_as_"})
+"""In-place resizes whose receiver keeps its identity and element prefix.
+
+Whether one of these calls reallocates the receiver's storage, changes its
+shape, or changes nothing depends only on the receiver's size and storage
+capacity at entry, so a resize of a registered buffer is journaled the same
+way from every entry state (see ``BufferWriteTracker._journal_resize``).
+"""
 
 _FUSED_MUTATOR_NAMES = {
     "batch_norm",
@@ -50,6 +71,15 @@ class BufferSnapshot:
     write is already accounted (W1-BUF-2 dedup — on the meta substrate both
     ``F.batch_norm`` and the inner ``torch.batch_norm`` carry snapshots
     because neither is bottom-level once the decomposition runs below them).
+
+    ``rebinds_storage`` marks the registered buffer itself as the receiver of
+    ``Tensor.set_`` or ``Tensor.share_memory_`` (or, for ``share_memory_``, a
+    buffer sharing the receiver's storage): the call rebinds its storage, so it
+    is recorded as a storage rebind, never journaled as an in-place write.
+
+    ``resizes_in_place`` marks the registered buffer itself as the receiver of
+    ``Tensor.resize_`` / ``Tensor.resize_as_``: the call keeps the object and
+    its element prefix, so it is always journaled as one in-place write.
     """
 
     address: str
@@ -59,6 +89,8 @@ class BufferSnapshot:
     version: int | None
     value: torch.Tensor
     writes_at_snapshot: int = 0
+    rebinds_storage: bool = False
+    resizes_in_place: bool = False
 
 
 @dataclass(slots=True)
@@ -143,344 +175,6 @@ def register_session_buffer_stamp(trace: Trace, value: torch.Tensor, address: st
     except Exception:
         storage = None
     registry[id(value)] = _SessionBufferStamp(tensor=value, address=address, storage=storage)
-
-
-_HELD_SCAN_MAX_DEPTH = 4
-"""Container levels below a module attribute that the held-tensor scan descends.
-
-Level 1 is an item of the attribute's own container (``attr.<i>`` / ``attr[<key>]``);
-a container found at level 4 is not entered. Mirrors ``_FIDELITY_MAX_DEPTH``.
-"""
-
-_HELD_SCAN_MAX_OBJECTS = 4096
-"""Plain tensors the held-tensor scan stamps per module.
-
-Mirrors ``_robustness._ITER_TENSORS_MAX_NODES``. Only tensors count: a tensor-free
-container (a merge table of string pairs, a deep config dict) never trips the bound.
-"""
-
-_HELD_SCAN_MAX_VISITS = 1 << 16
-"""Container items the held-tensor scan examines per module, of any type.
-
-A hard cost cap independent of what the containers hold, so a 200k-entry scalar table
-costs at most this many type checks. Reaching it with items left unexamined ends the
-module's scan and is disclosed as a cut naming the container where it ended: a tensor
-past that point is missed. Only a module whose containers hold this many items reaches
-it, so ordinary tensor-free holders stay silent.
-"""
-
-_HELD_KEY_MAX_CHARS = 40
-_HELD_KEY_ESCAPES = (("%", "%25"), (".", "%2E"), (":", "%3A"))
-
-
-def _render_held_key(key: Any) -> str:
-    """Render one dict key as a dot-free, colon-free address segment.
-
-    ``repr(key)`` reads like the Python access (``cache['cpu']``, ``cache[1]``), so a str
-    key never collides with an int that prints the same. ``%``, ``.`` and ``:`` are
-    percent-escaped because ``.`` separates the owning module from the buffer name and
-    ``:`` separates an address from a pass number. A hostile ``__repr__`` falls back to
-    the key's type name; long renderings are cut to ``_HELD_KEY_MAX_CHARS``.
-
-    Parameters
-    ----------
-    key:
-        Dict key.
-
-    Returns
-    -------
-    str
-        Escaped rendering without brackets.
-    """
-
-    try:
-        rendered = repr(key)
-    except Exception:  # noqa: BLE001 - a hostile __repr__ must not break capture setup
-        rendered = f"<{type(key).__name__}>"
-    for raw, escaped in _HELD_KEY_ESCAPES:
-        rendered = rendered.replace(raw, escaped)
-    if len(rendered) > _HELD_KEY_MAX_CHARS:
-        rendered = rendered[: _HELD_KEY_MAX_CHARS - 1] + "~"
-    return rendered
-
-
-class _HeldScan:
-    """Bounded, cycle-guarded preorder walk of one module's held containers.
-
-    Shared across the module's attributes so the bounds are per module. Names are
-    reserved in scan order; a repeat gets ``#2``, ``#3``, ... so no tensor is dropped.
-    A bound cut is recorded only when a plain tensor is actually found past it: a
-    container at the depth bound is searched (detect only, never stamped), and the
-    object bound is recorded at the first tensor beyond the stamped ones. A depth cut
-    whose tensors are all stamped elsewhere in the module (or are its registered
-    buffers) is dropped in ``finish``, since every read of them resolves. Every item
-    examined, in either mode, counts against ``_HELD_SCAN_MAX_VISITS``; reaching it with
-    items left ends the module's scan and records a visit-cap cut naming the container.
-    """
-
-    def __init__(self, truncations: list[str] | None, module_address: str) -> None:
-        self.prefix = f"{module_address}." if module_address else ""
-        self.taken: set[str] = set()
-        self.stamped = 0
-        self.stamped_ids: set[int] = set()
-        self.depth_cuts: list[tuple[str, list[int]]] = []
-        self.visits = 0
-        self.entered: set[int] = set()
-        self.truncations = truncations
-        self.exhausted = False
-
-    def reserve(self, name: str) -> str:
-        """Return ``name``, or ``name#<n>`` with the smallest free ``n >= 2``; reserve it."""
-
-        unique = name
-        ordinal = 2
-        while unique in self.taken:
-            unique = f"{name}#{ordinal}"
-            ordinal += 1
-        self.taken.add(unique)
-        return unique
-
-    def _cut(self, note: str) -> None:
-        """Record one bound cut for the caller's disclosure."""
-
-        if self.truncations is not None:
-            self.truncations.append(self.prefix + note)
-
-    def _visit(self, holder: str) -> bool:
-        """Count one examined item of ``holder``; at the visit cap record the cut and stop.
-
-        Called only once an item has been fetched, so reaching the cap here always leaves
-        that item (and anything after it) unexamined.
-        """
-
-        if self.visits >= _HELD_SCAN_MAX_VISITS:
-            if not self.exhausted:
-                self._cut(f"{holder} (visit cap {_HELD_SCAN_MAX_VISITS} items)")
-            self.exhausted = True
-            return False
-        self.visits += 1
-        return True
-
-    def stamp(self, tensor: torch.Tensor) -> None:
-        """Remember a yielded tensor so a depth cut holding only it is not disclosed."""
-
-        self.stamped_ids.add(id(tensor))
-
-    def finish(self) -> None:
-        """Record the depth cuts that hide at least one tensor not stamped by this module."""
-
-        for name, found in self.depth_cuts:
-            if any(found_id not in self.stamped_ids for found_id in found):
-                self._cut(f"{name} (depth bound {_HELD_SCAN_MAX_DEPTH})")
-
-    def admit(self, name: str) -> bool:
-        """Count one plain tensor to stamp; at the object bound record the cut and stop."""
-
-        if self.stamped >= _HELD_SCAN_MAX_OBJECTS:
-            self.exhausted = True
-            self._cut(f"{name} (object bound {_HELD_SCAN_MAX_OBJECTS})")
-            return False
-        self.stamped += 1
-        return True
-
-    def held_tensor_ids(self, container: Any, name: str) -> list[int]:
-        """Detect-only search: ids of the plain tensors ``container`` holds at any depth.
-
-        Nothing is stamped or entered for the main walk; items share the visit cap.
-        """
-
-        found: list[int] = []
-        seen = {id(container)}
-        stack = [_held_items(container)]
-        while stack:
-            entry = next(stack[-1], None)
-            if entry is None:
-                stack.pop()
-                continue
-            if not self._visit(name):
-                break
-            item = entry[1]
-            if _is_plain_tensor(item):
-                found.append(id(item))
-            elif _is_enterable(item) and id(item) not in seen and id(item) not in self.entered:
-                seen.add(id(item))
-                stack.append(_held_items(item))
-        return found
-
-    def walk(self, container: Any, path: str, depth: int) -> Iterator[tuple[str, torch.Tensor]]:
-        """Yield plain tensors under ``container`` (named ``path``, items at ``depth``).
-
-        Iterative with lazy item iterators, so a huge dict costs nothing past the bounds
-        and the depth bound is independent of Python's recursion limit.
-        """
-
-        self.entered.add(id(container))
-        stack: list[tuple[str, int, Iterator[tuple[Any, Any]]]] = [
-            (path, depth, _held_items(container))
-        ]
-        while stack and not self.exhausted:
-            parent, level, items = stack[-1]
-            entry = next(items, None)
-            if entry is None:
-                stack.pop()
-                continue
-            if not self._visit(parent):
-                return
-            (key, is_key), item = entry
-            is_tensor = _is_plain_tensor(item)
-            if not is_tensor and not (_is_enterable(item) and id(item) not in self.entered):
-                continue
-            segment = _render_held_key(key) if is_key else str(key)
-            name = self.reserve(f"{parent}[{segment}]")
-            if is_tensor:
-                if self.admit(name):
-                    self.stamp(item)
-                    yield name, item
-            elif level < _HELD_SCAN_MAX_DEPTH:
-                self.entered.add(id(item))
-                stack.append((name, level + 1, _held_items(item)))
-            else:
-                found = self.held_tensor_ids(item, name)
-                if found:
-                    self.depth_cuts.append((name, found))
-
-
-def _is_plain_tensor(item: Any) -> bool:
-    """True for a tensor that is not a Parameter (Parameters have their own sources)."""
-
-    return isinstance(item, torch.Tensor) and not isinstance(item, nn.Parameter)
-
-
-def _is_enterable(item: Any) -> bool:
-    """True for a non-empty list/tuple/dict; str, bytes and numbers are leaves."""
-
-    return isinstance(item, (list, tuple, dict)) and bool(item)
-
-
-def _held_items(container: Any) -> Iterator[tuple[tuple[Any, bool], Any]]:
-    """Yield ``((key_or_index, is_dict_key), item)`` lazily for a list/tuple/dict."""
-
-    if isinstance(container, dict):
-        for key, item in container.items():
-            yield (key, True), item
-    else:
-        for index, item in enumerate(container):
-            yield (index, False), item
-
-
-def iter_module_held_plain_tensors(
-    module: nn.Module, truncations: list[str] | None = None, module_address: str = ""
-) -> Iterator[tuple[str, torch.Tensor]]:
-    """Yield the plain tensors a module holds outside its parameter/buffer registries.
-
-    A module-held plain tensor exists before the forward and is read from module
-    state, so model preparation stamps it as a buffer source exactly like a
-    registered buffer (its reads then root at a ``buffer`` node instead of
-    dangling). Holder shapes and their address suffixes:
-
-    * a public tensor attribute: ``name``;
-    * an item of a list/tuple attribute: ``name.<index>`` (the original spelling);
-    * a dict value, e.g. timm's eval-mode attention-bias cache filled by an earlier
-      forward: ``name[<key>]`` with the key rendered by ``_render_held_key``
-      (``attention_bias_cache['cpu']``), so the address's last ``.`` still splits the
-      owning module from the buffer name;
-    * nested list/tuple/dict values below those: ``[<index>]`` / ``[<key>]`` appended
-      per level (``cache['outer']['cpu']``, ``lists['k'][0]``, ``pairs.0[1]``).
-
-    Names are never dropped: a rendering that repeats an earlier name gets ``#2``,
-    ``#3``, ... in scan order. Below the attribute's own list/tuple items the scan is
-    bounded (``_HELD_SCAN_MAX_DEPTH`` levels and ``_HELD_SCAN_MAX_OBJECTS`` tensors
-    per module, cycle-guarded). A depth or object cut is described in ``truncations``
-    only when a plain tensor actually lies past it (and, for a depth cut, is not
-    stamped elsewhere in the module), so tensor-free containers never produce one.
-    Cost is capped at ``_HELD_SCAN_MAX_VISITS`` examined items per module; reaching
-    that cap with items left ends the module's scan and is described too, naming the
-    container where it ended (a tensor past that point is missed).
-
-    Private (``_``) and ``tl_`` attributes and Parameters are never yielded.
-    A tensor created inside ``forward`` is not module state at preparation time
-    and is never seen here.
-
-    Parameters
-    ----------
-    module:
-        Module whose own ``__dict__`` is scanned (no recursion into submodules).
-    truncations:
-        Optional collector for one description per bound that cut the scan.
-    module_address:
-        The module's address, prefixed to each ``truncations`` description.
-
-    Yields
-    ------
-    tuple[str, torch.Tensor]
-        Address suffix relative to the module, and the held tensor.
-    """
-
-    scan = _HeldScan(truncations, module_address)
-    scan.taken.update(name for name in module.__dict__ if not name.startswith(("_", "tl_")))
-    for _, registered in module.named_buffers(recurse=False):
-        scan.stamp(registered)
-    for attr_name, attr_val in module.__dict__.items():
-        if attr_name.startswith(("_", "tl_")):
-            continue
-        if isinstance(attr_val, torch.Tensor):
-            if not isinstance(attr_val, nn.Parameter):
-                scan.stamp(attr_val)
-                yield attr_name, attr_val
-        elif isinstance(attr_val, dict) and attr_val:
-            yield from scan.walk(attr_val, attr_name, 1)
-        elif isinstance(attr_val, (list, tuple)):
-            # Top-level items keep the original unbounded ``name.<index>`` scan; only
-            # containers below them enter the bounded walk.
-            scan.entered.add(id(attr_val))
-            for index, item in enumerate(attr_val):
-                name = scan.reserve(f"{attr_name}.{index}")
-                if isinstance(item, torch.Tensor):
-                    if not isinstance(item, nn.Parameter):
-                        scan.stamp(item)
-                        yield name, item
-                elif _is_enterable(item) and id(item) not in scan.entered:
-                    yield from scan.walk(item, name, 2)
-    scan.finish()
-
-
-def warn_held_scan_truncated(truncations: list[str], trace: Trace | None = None) -> None:
-    """Disclose, once per capture, held-tensor scans cut by their bounds.
-
-    Parameters
-    ----------
-    truncations:
-        Descriptions collected by ``iter_module_held_plain_tensors``.
-    trace:
-        Capture trace; when given, the cut is persisted as a
-        ``held_tensor_scan_truncated`` capture advisory BEFORE warning, which
-        forward validation reads as a source-provenance failure.
-    """
-
-    if not truncations:
-        return
-    import warnings
-
-    from ..._capture_honesty import ADVISORY_HELD_SCAN_TRUNCATED, append_capture_advisory
-    from ..._errors import TorchLensWarning
-
-    if trace is not None:
-        append_capture_advisory(trace, ADVISORY_HELD_SCAN_TRUNCATED, truncations)
-
-    shown = "; ".join(truncations[:5])
-    suffix = "" if len(truncations) <= 5 else f" (+{len(truncations) - 5} more)"
-    warnings.warn(
-        TorchLensWarning(
-            f"TorchLens stopped scanning module-held containers for plain tensors at "
-            f"{len(truncations)} place(s): {shown}{suffix}. A tensor past a cut that "
-            "the forward reads gets no buffer source: the capture warns about an input "
-            "with no provenance and the graph shows the read without the held tensor; "
-            "forward validation of this capture fails. Remedy: register tensors the forward "
-            "reads with register_buffer, or hold them in shallower or smaller containers",
-            code="held_tensor_scan_truncated",
-        ),
-        stacklevel=3,
-    )
 
 
 def session_validated_buffer_address(trace: Trace, value: torch.Tensor) -> str | None:
@@ -684,6 +378,11 @@ class BufferWriteTracker:
         # record the count at pre-call time so an OUTER wrapped mutator can
         # tell a nested call already journaled the address in its window.
         self.address_write_counts: dict[str, int] = {}
+        # Addresses whose registered buffer was the receiver of ``Tensor.set_`` or
+        # ``Tensor.share_memory_`` (or shared the storage ``share_memory_`` moved)
+        # in this forward. ``reconcile`` records each as a ``data_reassign``
+        # rebind, whether or not the call changed the storage key.
+        self.storage_rebound_addresses: set[str] = set()
         # Weakref-validated: an id reused within a window never inherits a dead entry.
         self._storage_key_cache: IdentityCache[tuple[Any, ...] | None] = {}
         self._storage_range_cache: IdentityCache[tuple[int, int]] = {}
@@ -1001,14 +700,71 @@ class BufferWriteTracker:
             current = self.address_to_tensor.get(snapshot.address)
             if current is None or id(current) != snapshot.object_id:
                 continue
-            if self.storage_key(current) != snapshot.storage_key:
+            if snapshot.rebinds_storage:
+                self._record_storage_rebind(snapshot, current)
                 continue
             if self.address_write_counts.get(snapshot.address, 0) > snapshot.writes_at_snapshot:
                 # A NESTED wrapped call already journaled this address inside
                 # this call's window (W1-BUF-2 dedup); recording again would
                 # double the declared mutation.
                 continue
+            if snapshot.resizes_in_place:
+                self._journal_resize(func_name, snapshot, current, producer_label_raw)
+                continue
+            if self.storage_key(current) != snapshot.storage_key:
+                continue
             self._journal_snapshot_write(func_name, snapshot, current, producer_label_raw)
+
+    def _journal_resize(
+        self,
+        func_name: str,
+        snapshot: BufferSnapshot,
+        current: torch.Tensor,
+        producer_label_raw: str | None,
+    ) -> None:
+        """Journal a ``resize_`` / ``resize_as_`` on a registered buffer as one in-place write.
+
+        The same call reallocates the storage when it grows past the storage's
+        capacity (a fresh or emptied buffer), changes only the shape when it
+        shrinks, and changes nothing when the buffer already has the target
+        size (the state after one forward). The storage-key guard dropped the
+        reallocating call to the end-of-forward ``data_reassign`` record, and
+        the value/version gate dropped the unchanged call entirely, so the
+        captured graph depended on the entry state and validation's re-trace
+        of a copy taken after one forward disagreed with the first trace.
+        Every resize of the buffer itself is therefore journaled as an
+        ``inplace`` write produced by the resize op: later reads link to that
+        version, and the journal registers the post-call storage so the
+        reconcile sees no rebind. ``value_changed`` stays the observed
+        tri-state (``False`` for a same-size resize).
+        """
+
+        current_value = _copy_tensor_value(current)
+        values_equal = _tensor_equal_tristate(snapshot.value, current_value)
+        value_changed = None if values_equal is None else not values_equal
+        self._record_write(
+            snapshot.address, current, "inplace", producer_label_raw, value_changed, func_name
+        )
+        self._reconcile_journaled_buffer(snapshot, current_value)
+
+    def _record_storage_rebind(self, snapshot: BufferSnapshot, current: torch.Tensor) -> None:
+        """Defer a ``set_`` / ``share_memory_`` on a buffer to the end-of-forward rebind record.
+
+        Whether ``set_`` changes the buffer's storage key depends only on the
+        entry state: emptying an already empty buffer, or re-applying a view of
+        a storage the buffer already views, keeps the key, while the same call
+        on a fresh buffer changes it. Journaling the unchanged-key call as an
+        ``inplace`` write gave the two entry states different graphs, so every
+        ``set_`` on the buffer itself is recorded one way: later reads link to
+        the ``set_`` output and ``reconcile`` records one ``data_reassign`` node.
+        The journal-expected value advances to the rebound value after the same
+        pre-op host-write check a journaled op gets, so a later journaled op on
+        the buffer reconciles against the bytes ``set_`` bound.
+        """
+
+        self.storage_rebound_addresses.add(snapshot.address)
+        self.clear_storage_metadata_cache()
+        self._reconcile_journaled_buffer(snapshot, _copy_tensor_value(current))
 
     def _journal_snapshot_write(
         self,
@@ -1113,9 +869,6 @@ class BufferWriteTracker:
         an opaque host write-back so the run reports UNVERIFIABLE, never crashing capture.
         """
 
-        # Imported lazily to avoid an import cycle with the completeness-witness dispatcher.
-        from .completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
-
         model = self.model_ref()
         if model is None:
             return
@@ -1125,53 +878,64 @@ class BufferWriteTracker:
                 if tensor is None or isinstance(tensor, nn.Parameter):
                     continue
                 address = f"{module_address}.{name}" if module_address else name
-                expected = self.address_to_snapshot.get(address)
-                if expected is None:
-                    continue
-                current_value = _copy_tensor_value(tensor)
-                object_changed = id(tensor) != self.address_to_object_id.get(address)
-                storage_changed = storage_key(tensor) != self.address_to_storage_key.get(address)
-                values_equal = _tensor_equal_tristate(expected, current_value)
-                value_changed = None if values_equal is None else not values_equal
-                # W1-FAB: an UNKNOWN value verdict (weights-free) never
-                # journals a write on its own; identity/storage rebinds are
-                # real observations and still record below.
-                if not (object_changed or storage_changed or value_changed is True):
-                    continue
-                # Classify the STORAGE rebind first. The live buffer object keeping its
-                # identity while its storage changed is definitionally a ``.data =``/
-                # ``set_`` swap, never an attribute rebind: rebinding the attribute
-                # (``self.b = x + 1``) installs a NEW tensor object, so it always shows
-                # ``object_changed``. Reading the producer label first mis-sorted this
-                # case as ``reassign`` once the ``Tensor.data`` surface began stamping
-                # the rebound buffer with the ``data`` op's own label -- the two kinds
-                # replay differently (``.data =`` detaches; an attribute rebind keeps the
-                # graph), so the distinction has to key on identity, not on the label.
-                if not object_changed and storage_changed:
-                    self._record_write(address, tensor, "data_reassign", None, value_changed, None)
-                    continue
-                producer = get_tensor_label(tensor)
-                if producer is not None and not producer.startswith("buffer_"):
-                    self._record_write(
-                        address,
-                        tensor,
-                        "reassign",
-                        producer,
-                        True if value_changed is not None else None,
-                        None,
-                    )
-                    continue
-                # Same object, same storage, changed value, no journal entry (r15-C2): a zero-copy
-                # HOST write-back into the buffer's existing storage -- ``self.b.detach().numpy()[0]
-                # = 99`` / a raw ``data_ptr`` / storage ``__setitem__`` write. The mutation bypassed
-                # every aten dispatch and version bump, so the sparse DAG cannot model it and the
-                # replay recomputes the pre-write value. This is an opaque host write-back exactly
-                # like the activation-alias case: flag it so the run reports UNVERIFIABLE, and do
-                # NOT crash capture. Recording it as ``data_reassign`` keeps the buffer journal's
-                # expected-final snapshot consistent for any downstream buffer.
-                _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
-                self._record_write(address, tensor, "data_reassign", None, value_changed, None)
-                continue
+                self._reconcile_registered_buffer(address, tensor)
+        self.storage_rebound_addresses.clear()
+
+    def _reconcile_registered_buffer(self, address: str, tensor: torch.Tensor) -> None:
+        """Record what changed about one registered buffer since its pre-forward snapshot."""
+        # Imported lazily to avoid an import cycle with the completeness-witness dispatcher.
+        from .completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
+
+        expected = self.address_to_snapshot.get(address)
+        if expected is None:
+            return
+        current_value = _copy_tensor_value(tensor)
+        object_changed = id(tensor) != self.address_to_object_id.get(address)
+        storage_changed = storage_key(tensor) != self.address_to_storage_key.get(address)
+        rebound = address in self.storage_rebound_addresses
+        values_equal = _tensor_equal_tristate(expected, current_value)
+        value_changed = None if values_equal is None else not values_equal
+        # W1-FAB: an UNKNOWN value verdict (weights-free) never
+        # journals a write on its own; identity/storage rebinds are
+        # real observations and still record below.
+        if not (object_changed or storage_changed or rebound or value_changed is True):
+            return
+        # Classify the STORAGE rebind first. The live buffer object keeping its
+        # identity while its storage changed is definitionally a ``.data =``/
+        # ``set_`` swap, never an attribute rebind: rebinding the attribute
+        # (``self.b = x + 1``) installs a NEW tensor object, so it always shows
+        # ``object_changed``. Reading the producer label first mis-sorted this
+        # case as ``reassign`` once the ``Tensor.data`` surface began stamping
+        # the rebound buffer with the ``data`` op's own label -- the two kinds
+        # replay differently (``.data =`` detaches; an attribute rebind keeps the
+        # graph), so the distinction has to key on identity, not on the label.
+        # A ``set_`` on the buffer is the same rebind even when its storage key
+        # came out unchanged (an empty buffer emptied again, a view re-applied).
+        if not object_changed and (storage_changed or rebound):
+            self._record_write(address, tensor, "data_reassign", None, value_changed, None)
+            return
+        producer = get_tensor_label(tensor)
+        if producer is not None and not producer.startswith("buffer_"):
+            self._record_write(
+                address,
+                tensor,
+                "reassign",
+                producer,
+                True if value_changed is not None else None,
+                None,
+            )
+            return
+        # Same object, same storage, changed value, no journal entry (r15-C2): a zero-copy
+        # HOST write-back into the buffer's existing storage -- ``self.b.detach().numpy()[0]
+        # = 99`` / a raw ``data_ptr`` / storage ``__setitem__`` write. The mutation bypassed
+        # every aten dispatch and version bump, so the sparse DAG cannot model it and the
+        # replay recomputes the pre-write value. This is an opaque host write-back exactly
+        # like the activation-alias case: flag it so the run reports UNVERIFIABLE, and do
+        # NOT crash capture. Recording it as ``data_reassign`` keeps the buffer journal's
+        # expected-final snapshot consistent for any downstream buffer.
+        _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
+        self._record_write(address, tensor, "data_reassign", None, value_changed, None)
+        return
 
     def _reconcile_params(self, model: nn.Module) -> None:
         """Flag ANY within-forward PARAMETER storage-byte change (r18 + r19-A, fail closed).
@@ -1228,11 +992,29 @@ class BufferWriteTracker:
                     if not _param_storage_unchanged(tensor, before):
                         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
 
-    def snapshot_buffer_args(self, tensors: list[torch.Tensor]) -> list[BufferSnapshot]:
-        """Return pre-call snapshots for tensor args backed by registered buffers."""
+    def snapshot_buffer_args(
+        self,
+        tensors: list[torch.Tensor],
+        *,
+        receiver_rebinds_storage: bool = False,
+        receiver_resizes: bool = False,
+        rebind_moves_whole_storage: bool = False,
+    ) -> list[BufferSnapshot]:
+        """Return pre-call snapshots for tensor args backed by registered buffers.
+
+        ``receiver_rebinds_storage`` is set for ``Tensor.set_`` and
+        ``Tensor.share_memory_``: when the receiver (the first tensor argument)
+        is a registered buffer itself, that snapshot is marked
+        ``rebinds_storage``. ``rebind_moves_whole_storage`` (``share_memory_``)
+        adds a rebind snapshot for every other registered buffer on the
+        receiver's storage, which the call moves with it. ``receiver_resizes``
+        is set for ``Tensor.resize_`` / ``Tensor.resize_as_`` and marks the
+        receiver's snapshot ``resizes_in_place`` the same way.
+        """
 
         self.clear_storage_metadata_cache()
         snapshots: list[BufferSnapshot] = []
+        receiver = tensors[0] if tensors else None
         for tensor in tensors:
             if isinstance(tensor, nn.Parameter):
                 continue
@@ -1240,18 +1022,49 @@ class BufferWriteTracker:
             if address is None:
                 continue
             registered = self.address_to_tensor[address]
+            is_receiver = tensor is receiver is registered
             snapshots.append(
-                BufferSnapshot(
-                    address=address,
-                    tensor=registered,
-                    object_id=id(registered),
-                    storage_key=self.storage_key(registered),
-                    version=_tensor_version(registered),
-                    value=_copy_tensor_value(registered),
-                    writes_at_snapshot=self.address_write_counts.get(address, 0),
+                self._snapshot_address(
+                    address,
+                    rebinds_storage=receiver_rebinds_storage and is_receiver,
+                    resizes_in_place=receiver_resizes and is_receiver,
                 )
             )
+            if receiver_rebinds_storage and rebind_moves_whole_storage and is_receiver:
+                snapshots.extend(self._co_resident_rebind_snapshots(address, registered))
         return snapshots
+
+    def _snapshot_address(
+        self, address: str, *, rebinds_storage: bool = False, resizes_in_place: bool = False
+    ) -> BufferSnapshot:
+        """Return the pre-call snapshot of one registered buffer address."""
+
+        registered = self.address_to_tensor[address]
+        return BufferSnapshot(
+            address=address,
+            tensor=registered,
+            object_id=id(registered),
+            storage_key=self.storage_key(registered),
+            version=_tensor_version(registered),
+            value=_copy_tensor_value(registered),
+            writes_at_snapshot=self.address_write_counts.get(address, 0),
+            rebinds_storage=rebinds_storage,
+            resizes_in_place=resizes_in_place,
+        )
+
+    def _co_resident_rebind_snapshots(
+        self, receiver_address: str, receiver: torch.Tensor
+    ) -> list[BufferSnapshot]:
+        """Return rebind snapshots for the other registered buffers on the receiver's storage."""
+
+        key = self.storage_key(receiver)
+        if key is None:
+            return []
+        return [
+            self._snapshot_address(address, rebinds_storage=True)
+            for address in self.addresses_for_storage_key(key)
+            if address != receiver_address and address in self.address_to_tensor
+        ]
 
     def _record_write(
         self,
@@ -1342,8 +1155,8 @@ class BufferWriteTracker:
         # ``storage_key_to_addresses`` would be O(aliases) instead of O(registered
         # buffers), but that index goes STALE under a mid-forward storage rebind and
         # both vectors have live repros: ``buf.data = other`` fires no hook and bumps
-        # no version, and ``buf.set_(other)`` is dropped by ``record_op_writes``'
-        # storage-key guard, so neither re-registers the address. The old full scan
+        # no version, and ``buf.set_(other)`` is never journaled by ``record_op_writes``
+        # (a deferred rebind), so neither re-registers the address. The old full scan
         # is what still catches the resulting alias, and a journaled write must not
         # silently stop refreshing it.
         #
@@ -1565,7 +1378,12 @@ def snapshot_buffer_args(
         return []
     if not _is_fused_mutator(func_name) and not _could_mutate(func_name, kwargs):
         return []
-    return tracker.snapshot_buffer_args(tensors)
+    return tracker.snapshot_buffer_args(
+        tensors,
+        receiver_rebinds_storage=func_name in _RECEIVER_REBIND_NAMES,
+        receiver_resizes=func_name in _RECEIVER_RESIZE_NAMES,
+        rebind_moves_whole_storage=func_name == "share_memory_",
+    )
 
 
 def record_op_buffer_writes(
@@ -1916,22 +1734,6 @@ def _resolve_buffer_address(
         if tensor_start >= reg_start and tensor_end <= reg_end:
             return address
     return None
-
-
-def _storage_range(tensor: torch.Tensor) -> tuple[int, int]:
-    """Return byte range occupied by a tensor inside its storage."""
-
-    with _state.pause_logging():
-        element_size = tensor.element_size()
-        start = int(tensor.storage_offset()) * element_size
-        end = start + int(tensor.numel()) * element_size
-    return start, end
-
-
-def _ranges_overlap(left: tuple[int, int], right: tuple[int, int]) -> bool:
-    """Return whether two half-open byte ranges overlap."""
-
-    return left[0] < right[1] and right[0] < left[1]
 
 
 def _could_mutate(func_name: str, kwargs: dict[str, Any] | None = None) -> bool:

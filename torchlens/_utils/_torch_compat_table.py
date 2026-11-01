@@ -208,6 +208,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_MEMORY_PROFILE", measured=False),
     _row("HAS_META_ITEM_GUARD", measured=False),
     _row("HAS_MHA_FASTPATH_SWITCH", measured=False),
+    _row("HAS_MODULE_CALL_DISPATCH_FRAME", measured=False),
     _row("HAS_NAMED_TENSOR_API", absent_on=("2.13.0",)),
     _row("HAS_NN_ATTENTION_MODULE", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_NODE_PREHOOK"),

@@ -22,7 +22,7 @@ from torchlens._data_classes.module import Module, ModuleCall
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
 from torchlens._data_classes.trace import Trace
-from torchlens._io.scrub import _RAW_IMAGE_SENTINEL, _RAW_INPUT_IMAGE_BYTES_LIMIT
+from torchlens._io._small_raw import _RAW_IMAGE_SENTINEL, _RAW_INPUT_IMAGE_BYTES_LIMIT
 
 
 class _TinyIOModel(nn.Module):

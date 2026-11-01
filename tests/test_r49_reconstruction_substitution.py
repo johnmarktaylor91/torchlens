@@ -26,9 +26,9 @@ import typing
 
 import pytest
 
+from torchlens._ir._container_type_probes import _metaclass_defines_foreign_call
 from torchlens._ir.container import (
     ContainerSpec,
-    _metaclass_defines_foreign_call,
     _reconstruction_would_substitute_plain,
     rebuild_container_from_spec,
     reconstruction_is_lossy_by_type,

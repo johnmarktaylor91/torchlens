@@ -529,6 +529,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # runtime capabilities of the interpreter, so mirror the live values.
         "HAS_CODE_POSITIONS": tc.HAS_CODE_POSITIONS,
         "HAS_CODE_QUALNAME": tc.HAS_CODE_QUALNAME,
+        # Direct ``module.forward(x)`` detection: the caller frame against torch's
+        # Module.__call__ dispatch code. Present across the supported range;
+        # without it the fast run keeps refusing hook-invisible module calls.
+        "HAS_MODULE_CALL_DISPATCH_FRAME": True,
         # Identity-shim sites (sf-fastpath): torch-internal `x is F.y` checks
         # normalized while wrappers are installed. The transformer flag and the
         # private expanded-weights machinery exist across the supported range

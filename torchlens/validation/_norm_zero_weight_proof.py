@@ -21,11 +21,16 @@ non-finite saved output keeps the check strict (``0 * inf`` is NaN, so the
 input would reach the output).
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import torch
 
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
+
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
 
 # Normalizations of the form ``normalized(args[0]) * weight (+ bias)`` whose
 # affine weight is ``args[2]`` (or the ``weight`` keyword).
@@ -122,3 +127,20 @@ def norm_input_annihilated_by_zero_weight(
         return False
     weight = _norm_weight_operand(layer, args)
     return isinstance(weight, torch.Tensor) and _is_all_zero_value(weight)
+
+
+def _batch_norm_weight_operand(layer: Op) -> Any:
+    """Return the saved ``weight`` (gamma) operand of a batch_norm/instance_norm op.
+
+    Positional layout matches torch's real ATen call signature:
+    ``(input, weight, bias, running_mean, running_var, training, momentum,
+    eps, cudnn_enabled)`` -- NOT ``F.batch_norm``'s Python-level
+    ``(input, running_mean, running_var, weight, bias, ...)`` ordering, which
+    is why ``_check_norm_running_stat_exempt`` reads running_mean/running_var
+    from positions 3/4, not 1/2.
+    """
+
+    args = layer.saved_args
+    if args is None or len(args) <= 1:
+        return None
+    return args[1]

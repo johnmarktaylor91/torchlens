@@ -1,0 +1,5 @@
+# Generated from tools/packaging/matrix.toml by tools/packaging/generate_constraints.py.
+# Do not edit: change matrix.toml and rerun the generator.
+# set: model-explorer; extras: model-explorer; python: 3.10; expect: install
+ai-edge-model-explorer==0.1.33
+torch==2.13.0+cpu

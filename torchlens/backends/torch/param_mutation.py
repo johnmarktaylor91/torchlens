@@ -18,6 +18,7 @@ from typing import Any
 import torch
 
 from ... import _state
+from ..._capture.projections import active_recording_state_or_none
 from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
 from ..._utils.tensor_leaves import iter_tensors
 from ..._utils.tensor_utils import safe_copy
@@ -207,6 +208,41 @@ def receiver_kwarg_as_positional(
     return (kwargs["input"],), rest
 
 
+def _prepared_parameter_lazy_flag(trace: Any, value: torch.nn.Parameter) -> bool | None:
+    """Return whether prepared Parameter ``value`` was lazy at prep; ``None`` if unprepared.
+
+    Exhaustive capture answers from the session ``Param`` registry. Predicate
+    capture (``tl.record``) builds no ``Param`` logs, so it answers from the
+    recording state's per-pass identity registry instead; without it every
+    model Parameter looked unregistered there and a prepared ``param.data =
+    rhs`` rebind or a lazy module's in-forward initialization was logged as an
+    op that ``tl.trace`` never shows.
+    """
+
+    if getattr(trace, "capture_mode", None) == "predicate":
+        state = active_recording_state_or_none()
+        entry = None if state is None else state.prepared_params.get(id(value))
+        if entry is None or entry[0]() is not value:
+            return None
+        return entry[1]
+    if is_unregistered_parameter(trace, value):
+        return None
+    return not is_prepared_parameter_receiver(trace, value)
+
+
+def _plain_parameter_snapshot(value: torch.nn.Parameter) -> torch.Tensor:
+    """Return a detached plain-Tensor copy of a mutated Parameter, logging paused."""
+
+    with _state.pause_logging():
+        if HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE:
+            plain_value = value.as_subclass(torch.Tensor)
+        else:
+            plain_value = torch.ops.aten.detach.default(value)
+        tensor = safe_copy(plain_value, detach_tensor=True)
+        tensor.requires_grad_(value.requires_grad)
+    return tensor
+
+
 def parameter_mutation_output_for_logging(
     trace: Any,
     value: Any,
@@ -231,7 +267,9 @@ def parameter_mutation_output_for_logging(
     cases are NOT converted and keep the plain-capture treatment: a
     storage-rebinding ``param.data = rhs`` setter (still visible to the
     completeness tripwire) and the in-forward initialization of a lazy module's
-    Parameter (see ``is_prepared_parameter_receiver``).
+    Parameter (see ``is_prepared_parameter_receiver``). Both capture modes
+    classify alike: predicate capture reads its per-pass identity registry
+    (``_prepared_parameter_lazy_flag``).
 
     Parameters
     ----------
@@ -255,15 +293,7 @@ def parameter_mutation_output_for_logging(
 
     if not was_inplace or not isinstance(source, torch.nn.Parameter):
         return value
-    if not is_unregistered_parameter(trace, source) and (
-        is_storage_rebind or not is_prepared_parameter_receiver(trace, source)
-    ):
+    lazy_at_prep = _prepared_parameter_lazy_flag(trace, source)
+    if lazy_at_prep is not None and (is_storage_rebind or lazy_at_prep):
         return value
-    with _state.pause_logging():
-        if HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE:
-            plain_value = value.as_subclass(torch.Tensor)
-        else:
-            plain_value = torch.ops.aten.detach.default(value)
-        tensor = safe_copy(plain_value, detach_tensor=True)
-        tensor.requires_grad_(value.requires_grad)
-    return tensor
+    return _plain_parameter_snapshot(value)

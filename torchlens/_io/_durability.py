@@ -17,7 +17,6 @@ available guarantee.
 
 from __future__ import annotations
 
-import contextlib
 import io
 import os
 from pathlib import Path
@@ -133,16 +132,25 @@ def _stream_bytes_left(stream: Any) -> int | None:
 
 
 def _restrict_mode(path: Path, mode: int) -> None:
-    """Best-effort tighten a written artifact path's permissions (POSIX only).
+    """Best-effort tighten a streamed bundle path's permissions (POSIX only).
 
-    ``mkdir`` / file writes honor the ambient umask, so under umask 002 a staged
-    bundle directory and its sidecars were left group-writable while the core
-    bundle writer tightens them (R59). The publish rename preserves the staged
-    directory's mode, so tightening it tightens the published artifact.
-    Best-effort: a filesystem that ignores mode bits is not a save failure.
+    Twin of ``_io/bundle.py::_restrict_mode``: ``mkdir``/``open`` honor the
+    ambient umask, so under umask 002 the streaming bundle dir and its metadata
+    sidecars were left group-writable while the core bundle writer tightens
+    them. Best-effort: a filesystem that ignores mode bits is not a save
+    failure.
+
+    Parameters
+    ----------
+    path:
+        Bundle directory or file to tighten.
+    mode:
+        Target permission bits (``0o700`` for directories, ``0o600`` for files).
     """
 
     if os.name != "posix":
         return
-    with contextlib.suppress(OSError):
+    try:
         path.chmod(mode)
+    except OSError:
+        pass

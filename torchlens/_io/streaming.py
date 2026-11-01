@@ -14,7 +14,6 @@ import io
 import pickle
 import platform
 import threading
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -29,7 +28,7 @@ from . import TLSPEC_VERSION, ArtifactError
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import _restrict_mode, fsync_dir, fsync_tree
 from .manifest import Manifest, TensorEntry, _runtime_python_version
-from .paths import reject_symlink_path
+from .paths import _make_tmp_bundle_path, reject_symlink_path
 from .scrub import BlobSpec
 from .streaming_async import (
     DEFAULT_MAX_PENDING_BYTES,
@@ -117,7 +116,7 @@ class BundleStreamWriter:
         if self.final_path.exists():
             raise ArtifactError(f"Bundle path already exists: {self.final_path}")
 
-        self.tmp_path = self.final_path.parent / f"{self.final_path.name}.tmp.{uuid.uuid4().hex}"
+        self.tmp_path = _make_tmp_bundle_path(self.final_path)
         self.blobs_path = self.tmp_path / "blobs"
         self._blob_counter = 0
         self._closed = False
@@ -209,17 +208,8 @@ class BundleStreamWriter:
         self._blob_counter += 1
         return next_blob_id(self._blob_counter)
 
-    def issued_blob_count(self) -> int:
-        """Return how many blob ids this writer has issued so far.
-
-        Save-time scrubbing numbers its own blobs from this count so a scrub id
-        can never equal an id the stream already wrote.
-
-        Returns
-        -------
-        int
-            Number of ids issued by :meth:`next_blob_id`.
-        """
+    def _issued_blob_count(self) -> int:
+        """Return how many ids :meth:`next_blob_id` issued; save-time scrub ids start past it."""
 
         return self._blob_counter
 
