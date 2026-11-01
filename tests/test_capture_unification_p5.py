@@ -172,7 +172,7 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
         assert torch.count_nonzero(relu_layer.out) == 0
         assert len(relu_layer.interventions) == 1
         assert relu_layer.interventions[0].timing == "post"
-        assert relu_layer.interventions[0].direction == "forward"
+        assert relu_layer.interventions[0].signal == "forward"
     else:
         output, recording = cast(
             tuple[torch.Tensor, Recording],
