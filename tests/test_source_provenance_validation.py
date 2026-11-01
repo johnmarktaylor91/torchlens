@@ -24,6 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._state import pause_logging
 from torchlens.backends.torch import rescue
 from torchlens.validation import last_validation_failure
 
@@ -208,28 +209,35 @@ def test_submodule_returning_an_outside_tensor_returns_a_constant(make_sub: Any)
     assert _validate(model, x) is True
 
 
-class _OpaqueItemSink(nn.Module):
-    """An opaque C call's untagged output is consumed only by ``.item()`` (orphan-pruned)."""
+def _unseen_tanh(x: torch.Tensor) -> torch.Tensor:
+    """A value built where TorchLens cannot see it (logging paused): no provenance."""
+
+    with pause_logging():
+        return x.tanh()
+
+
+class _UnseenItemSink(nn.Module):
+    """An unseen tensor is consumed only by ``.item()`` (orphan-pruned)."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + torch._C._VariableFunctions.tanh(x).sum().item()
+        return x + _unseen_tanh(x).sum().item()
 
 
-class _OpaqueControlFlowSink(nn.Module):
-    """The opaque output only drives a branch predicate, which is orphan-pruned."""
+class _UnseenControlFlowSink(nn.Module):
+    """The unseen tensor only drives a branch predicate, which is orphan-pruned."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x * 2 if (torch._C._VariableFunctions.tanh(x).sum() > 0).item() else x * 3
+        return x * 2 if (_unseen_tanh(x).sum() > 0).item() else x * 3
 
 
 @pytest.mark.parametrize(
-    "model", [_OpaqueItemSink(), _OpaqueControlFlowSink()], ids=["item", "control_flow"]
+    "model", [_UnseenItemSink(), _UnseenControlFlowSink()], ids=["item", "control_flow"]
 )
 def test_orphan_pruned_consumer_keeps_the_source_less_witness(
     model: nn.Module, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     x = torch.randn(5)
-    # Keep the primary capture: the rescue re-run's aten recording recovers the stand-in.
+    # Keep the primary capture: a rescue re-run could record the unseen op.
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

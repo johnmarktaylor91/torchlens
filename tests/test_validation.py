@@ -779,26 +779,26 @@ def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
     try:
         model = GlobalTensorForwardModel()
 
-        # The forward-global tensor the child module consumes has no graph/source
-        # provenance: each capture discloses its module-entry adoption (and forward
-        # validation would fail on source_provenance); the concern under test is
-        # stale-label clearing.
-        with pytest.warns(UserWarning, match="closure or forward-global tensor"):
-            tl.trace(
-                model,
-                x,
-                save=None,
-                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
-            )
-        with pytest.warns(UserWarning, match="closure or forward-global tensor"):
-            second_trace = tl.trace(
-                model,
-                x,
-                save=None,
-                capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
-            )
-
-        assert second_trace.num_ops > 0
+        # The forward-global tensor the child module consumes is a closure
+        # constant (SPEC 2): each session records it as a fresh ``constant``
+        # source op with no provenance warning. A stale label surviving from the
+        # first session would hide it from the pre-forward rule, so the second
+        # session recording it again is the stale-label clearing under test.
+        traces = []
+        for _session in range(2):
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", UserWarning)
+                traces.append(
+                    tl.trace(
+                        model,
+                        x,
+                        save=None,
+                        capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
+                    )
+                )
+        for trace in traces:
+            assert [op.func_name for op in trace.layer_list].count("constant") == 1
+        assert traces[1].num_ops > 0
     finally:
         _TEST_FORWARD_GLOBAL_TENSOR = None
 
@@ -833,22 +833,21 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
     try:
         model = GlobalPayloadForwardModel()
 
-        # The global-container tensor genuinely has no graph/source provenance,
-        # so each capture correctly emits the unattributed-tensor-args warning
-        # (cert10 diagnostic) and forward validation fails on source_provenance;
-        # the concern under test is stale-label clearing.
-        with pytest.warns(UserWarning, match="no graph/source provenance"):
-            assert validate_forward_pass(model, x, validate_metadata=True) is False
-        failure = last_validation_failure()
-        assert failure is not None and failure.check_name == "source_provenance"
-        with pytest.warns(UserWarning, match="no graph/source provenance"):
+        # The global-container tensor is a closure constant (SPEC 2): validation
+        # records it as a ``constant`` source op and passes, and a second session
+        # records it again with no provenance warning, which a stale label left by
+        # the first session would prevent (the stale-label clearing under test).
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            assert validate_forward_pass(model, x, validate_metadata=True) is True
             second_trace = tl.trace(
                 model,
                 x,
                 save=None,
                 capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
             )
-
+        assert last_validation_failure() is None
+        assert [op.func_name for op in second_trace.layer_list].count("constant") == 1
         assert second_trace.num_ops > 0
     finally:
         _TEST_FORWARD_GLOBAL_PAYLOAD = None
