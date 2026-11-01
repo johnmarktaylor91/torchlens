@@ -163,7 +163,6 @@ TorchLens - extract outs and metadata from PyTorch models. (88 modules, 55795 li
 | `_selection_subspace` | Subspace selection producer: directions in activation space (L6 producer wave). | 336 |
 | `_selection_values` | Value-based and statistical selection producers (L6 producer wave). | 1179 |
 | `_source_links` | Source-location link formatting helpers. | 110 |
-| `_split_rebind` | Compatibility helpers for behavior-preserving module decomposition. | 87 |
 | `_state` | Global state for torchlens toggle-gated decoration. | 1395 |
 | `_storage_bindings` | Record and restore the storage binding of a parameter or buffer. | 91 |
 | `_surface` | SURFACE-table machinery: the root surface as machine-readable rows ( item 7). | 121 |

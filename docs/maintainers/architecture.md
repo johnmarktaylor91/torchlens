@@ -134,9 +134,11 @@ a lower layer calls upward: `Trace._postprocess` imports `postprocess` inside th
 `user_funcs.py` carries about 40 in-function imports, `_data_classes/trace.py` about 45,
 `backends/torch/wrappers.py` and `_capture/trace.py` about 25 each. A module-level layer
 diagram therefore understates the coupling; read the in-function imports of any module
-before you move it. `_split_rebind.py` rebinds four split modules' functions back onto the
-old module's globals, and `_postprocess/_executor.py` reads its own package through
-`sys.modules`, both so tests can keep patching private names.
+before you move it. The four split hubs (`backends/torch/ops.py`,
+`backends/torch/completeness_witness.py`, `validation/invariants.py`, `_runnable_execution.py`)
+import their split modules at the bottom of the file, after their own definitions; a test
+patches a private name on the module that defines it and on every module that binds it
+(`docs/agent-reference/known-gotchas.md`).
 
 **The god objects.** `Trace` is `_data_classes/trace.py` (about 4,000 lines) plus 15
 `_data_classes/_trace_*.py` mixin modules; its behaviour for validation, visualization,
