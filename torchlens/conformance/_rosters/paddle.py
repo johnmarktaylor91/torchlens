@@ -306,12 +306,47 @@ def _conv_layer_model(rank: int) -> tuple[Any, Any]:
     return model, paddle.to_tensor(value)
 
 
-def _config_built_rows() -> tuple[RosterModel, ...]:
+@dataclasses.dataclass(frozen=True)
+class PaddleRowSpec:
+    """One config_built row with its full roster contract.
+
+    Parameters
+    ----------
+    family:
+        Row name.
+    builder:
+        Zero-arg factory returning ``(model, example_input)``.
+    kinds:
+        Expected op kinds in execution order.
+    intermediates:
+        ``func_name -> array | list[array]`` computed with NumPy.
+    has_constants:
+        Whether the forward reads a closure constant or a literal producer.
+    """
+
+    family: str
+    builder: Callable[[], tuple[Any, Any]]
+    kinds: tuple[str, ...]
+    intermediates: dict[str, Any]
+    has_constants: bool
+
+
+def config_built_specs() -> tuple[PaddleRowSpec, ...]:
+    """The config_built rows with their contract fields (also read by tests).
+
+    Returns
+    -------
+    tuple[PaddleRowSpec, ...]
+        Rows in a stable order.
+    """
+
     a = _X24 + 1.0
     mu = _X24.mean(-1, keepdims=True)
     normed = (_X24 - mu) / np.sqrt(_X24.var(-1, keepdims=True) + 1e-5)
     loop_kinds = ("matmul", "tensor.__add__", "functional.relu")
-    specs: tuple[tuple[str, Callable[[], tuple[Any, Any]], tuple[str, ...], dict, bool], ...] = (
+    specs: tuple[
+        tuple[str, Callable[[], tuple[Any, Any]], tuple[str, ...], dict[str, Any], bool], ...
+    ] = (
         (
             "fn_chain_branch",
             _fn_chain_branch,
@@ -420,18 +455,22 @@ def _config_built_rows() -> tuple[RosterModel, ...]:
             False,
         ),
     )
+    return tuple(PaddleRowSpec(*spec) for spec in specs)
+
+
+def _config_built_rows() -> tuple[RosterModel, ...]:
     return tuple(
         _row(
-            family=family,
+            family=spec.family,
             realism="config_built",
-            builder=builder,
-            expected_op_kinds=kinds,
-            expected_intermediates=intermediates,
-            has_constants=has_constants,
+            builder=spec.builder,
+            expected_op_kinds=spec.kinds,
+            expected_intermediates=spec.intermediates,
+            has_constants=spec.has_constants,
             random_init=False,
             group=GROUP_CONFIG_BUILT,
         )
-        for family, builder, kinds, intermediates, has_constants in specs
+        for spec in config_built_specs()
     )
 
 
