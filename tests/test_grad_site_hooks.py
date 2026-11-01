@@ -201,7 +201,6 @@ def test_patch_from_on_gradient_site_refuses_before_attaching() -> None:
 
 def test_hook_context_signal_state_and_run_state() -> None:
     model, x = _double()
-    mul = _label(tl.trace(model, x, capture=_CAPTURE), "mul")
     seen: list[tuple[str, object, int, object, object]] = []
 
     def observe(tensor: torch.Tensor, *, ctx: HookContext) -> None:
@@ -219,7 +218,10 @@ def test_hook_context_signal_state_and_run_state() -> None:
         )
         return None
 
-    trace = tl.trace(model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(mul) | mul, observe))
+    # Live capture cannot match a finalized label, so the activation half is
+    # spelled by function; the gradient half resolves after the forward.
+    site = tl.func("mul")
+    trace = tl.trace(model, x, capture=_CAPTURE, intervene=tl.when(tl.grad(site) | site, observe))
     out = trace[trace.output_layers[0]].out
     trace.backward(out.sum(), retain_graph=True)
     trace.backward(out.sum())
