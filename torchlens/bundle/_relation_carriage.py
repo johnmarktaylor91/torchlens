@@ -11,13 +11,18 @@ both names and installs them on the accessor table.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 from ..errors.episode import BundleRelationError
 from ._compare_gate import _ORDERING_RELATION_KINDS
 from ._fed_by import FED_BY_KIND, settle_fed_by_params
-from ._relations import MEMBER_ROW_KINDS, MemberRelationRow, MemberRelationTable
+from ._relations import (
+    MEMBER_ROW_KINDS,
+    MemberRelationRow,
+    MemberRelationTable,
+    OpaqueRelationRow,
+)
 
 if TYPE_CHECKING:
     from .._capture._episode_fold import EpisodeFoldResult
@@ -312,4 +317,65 @@ def _bundle_derive_episode_status(
         n_declared=n_declared,
         ledger=ledger,
         escalation_members=frozenset(excluded),
+    )
+
+
+def build_relation_table(
+    self: Bundle,
+    existing_rows: Sequence[MemberRelationRow | OpaqueRelationRow],
+    new_rows: Sequence[MemberRelationRow | OpaqueRelationRow | Mapping[str, Any]],
+    *,
+    assess_unclaimed: bool = False,
+) -> MemberRelationTable:
+    """Return a NEW validated relation table (existing + coerced new rows)."""
+
+    rows: list[MemberRelationRow | OpaqueRelationRow] = list(existing_rows)
+    for row in new_rows:
+        if isinstance(row, (MemberRelationRow, OpaqueRelationRow)):
+            rows.append(row)
+            continue
+        try:
+            rows.append(MemberRelationRow.from_payload(row))
+        except BundleRelationError:
+            # Distinct-code refusals (evidence over budget) keep their
+            # own code; re-wrapping would flatten them to schema_invalid.
+            raise
+        except (TypeError, ValueError) as exc:
+            raise BundleRelationError(
+                f"Bundle member-relation row is outside the closed S6 schema: {exc}",
+                code="bundle_relation_schema_invalid",
+            ) from exc
+    table = MemberRelationTable(rows)
+    table.validate_against_members(self._members.keys())
+    return settle_relation_rows(
+        table, self._members, first_new=len(existing_rows), assess_unclaimed=assess_unclaimed
+    )
+
+
+def relation_table_for_removal(
+    self: Bundle,
+    removed_names: Sequence[str],
+    *,
+    cascade_relations: bool,
+    operation: str,
+) -> MemberRelationTable | None:
+    """Return the cascaded relation table a removal must install, or ``None`` (S6 R5)."""
+
+    removed = set(removed_names)
+    related = sorted({name for name in removed if self._member_relations.rows_naming(name)})
+    if not related:
+        return None
+    if not cascade_relations:
+        raise BundleRelationError(
+            f"Bundle.{operation} would orphan member-relation rows naming "
+            f"{related}; pass cascade_relations=True to drop those rows "
+            "explicitly, or remove the relations first (S6 R5).",
+            code="bundle_member_has_relations",
+            operation=operation,
+            related_members=related,
+        )
+    return MemberRelationTable(
+        tuple(
+            row for row in self._member_relations.rows if not (set(row.named_members()) & removed)
+        )
     )
