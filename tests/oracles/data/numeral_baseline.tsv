@@ -8115,7 +8115,6 @@ test-docstrings	tests/test_order_isolation_infra.py	24
 test-docstrings	tests/test_order_isolation_infra.py	3.11
 test-docstrings	tests/test_order_isolation_infra.py	72
 test-docstrings	tests/test_order_isolation_infra.py	76
-test-docstrings	tests/test_orphan_rendering.py	63
 test-docstrings	tests/test_output_walker_independence.py	11
 test-docstrings	tests/test_output_walker_independence.py	12
 test-docstrings	tests/test_output_walker_independence.py	200,
@@ -8332,12 +8331,6 @@ test-docstrings	tests/test_r58_merged_distributed_rce.py	58
 test-docstrings	tests/test_r7_torch_type_io_rce.py	49
 test-docstrings	tests/test_r8_operator_gate_rce.py	32
 test-docstrings	tests/test_r8_operator_gate_rce.py	41
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	11
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	17
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	17,
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	26
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	29
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	51
 test-docstrings	tests/test_real_world_models.py	10
 test-docstrings	tests/test_real_world_models.py	79
 test-docstrings	tests/test_recipe_dissection.py	12
@@ -8524,8 +8517,6 @@ test-docstrings	tests/test_run_until.py	3.3.1
 test-docstrings	tests/test_run_until.py	3.3.2
 test-docstrings	tests/test_run_until.py	3.3.3
 test-docstrings	tests/test_run_until.py	36
-test-docstrings	tests/test_run_until_backbone_grad.py	18
-test-docstrings	tests/test_run_until_backbone_grad.py	62
 test-docstrings	tests/test_runnable_ambient_restore.py	32
 test-docstrings	tests/test_runnable_ambient_restore.py	32_
 test-docstrings	tests/test_runnable_code_provocation.py	27
@@ -9443,7 +9434,6 @@ test-names	tests/test_extract_v2_workflows.py	18_
 test-names	tests/test_factcore_tensor_stats.py	16_
 test-names	tests/test_factcore_tensor_stats.py	64
 test-names	tests/test_fast_until.py	18_
-test-names	tests/test_fixa_escrow_replay_output_contract.py	18_
 test-names	tests/test_fixa_escrow_spill.py	16_
 test-names	tests/test_fixa_escrow_spill.py	18_
 test-names	tests/test_fixa_escrow_spill.py	50_
@@ -9565,7 +9555,6 @@ test-names	tests/test_obs_substrate_kernels.py	64
 test-names	tests/test_onebackward_core.py	15
 test-names	tests/test_onebackward_edgeplumbing.py	10_
 test-names	tests/test_onebackward_realmodel.py	18
-test-names	tests/test_orphan_rendering.py	63_
 test-names	tests/test_paddle_payload_codec.py	16_
 test-names	tests/test_postprocess_executor.py	17_5_
 test-names	tests/test_postprocess_executor.py	19_
@@ -9633,7 +9622,6 @@ test-names	tests/test_rf_crossval.py	18_
 test-names	tests/test_rf_ext_integration.py	18_
 test-names	tests/test_rf_integration.py	18_
 test-names	tests/test_robustness_pr1.py	313_
-test-names	tests/test_run_until_backbone_grad.py	18_
 test-names	tests/test_runnable_ambient_restore.py	32_
 test-names	tests/test_runnable_r36_regressions.py	11
 test-names	tests/test_runnable_r36_regressions.py	12
