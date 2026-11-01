@@ -105,8 +105,6 @@ TRACE_OPTION_PROBES: dict[str, Callable[[], Any]] = {
     "save_preview": lambda: True,
     "capture_container_structure": lambda: True,
     "inference_only": lambda: True,
-    "output_style": lambda: "semantic",
-    "output_head": lambda: "lm_head",
     "chunk_size": lambda: 1,
     "chunk_paths": lambda: (0,),
 }
@@ -128,8 +126,6 @@ CAPTURE_OPTION_SPINE_FIELDS: frozenset[str] = frozenset(
         "save_preview",
         "capture_container_structure",
         "inference_only",
-        "output_style",
-        "output_head",
     }
 )
 
