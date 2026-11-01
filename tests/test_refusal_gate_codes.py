@@ -342,7 +342,7 @@ def test_capture_option_probe_marks_only_its_own_fields(flag: str) -> None:
     explicit = {
         field.name
         for field in dataclass_fields(CaptureOptions)
-        if not field.name.startswith("_") and capture.is_field_explicit(field.name)
+        if not field.name.startswith("_") and capture._is_field_explicit(field.name)
     }
     assert explicit == {str(request.option)}, explicit
 

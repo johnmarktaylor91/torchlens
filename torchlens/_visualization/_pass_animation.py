@@ -25,9 +25,9 @@ def pass_animation_html(trace: Any, site: Any) -> str:
 
     label = str(getattr(site, "layer_label", site))
     base_label = label.split(":", 1)[0]
-    if base_label not in trace.layer_logs:
+    if base_label not in trace.layers:
         raise KeyError(f"Unknown layer site {label!r}.")
-    layer = trace.layer_logs[base_label]
+    layer = trace.layers[base_label]
     pass_entries = list(getattr(layer, "ops", ()) or [])
     if not pass_entries:
         pass_entries = [trace[label]]

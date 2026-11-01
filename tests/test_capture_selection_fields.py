@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._selection.selector_base import CompositeSelector
 from torchlens.options import CaptureOptions, merge_capture_options
 
 
@@ -56,7 +57,10 @@ def test_module_filter_retained_until_where_composes_with_save_forms() -> None:
     assert any(op.has_saved_activation for op in trace.ops if op.func_name == "relu")
     assert not any(op.has_saved_activation for op in trace.ops if op.func_name == "linear")
     predicate = tl.where(lambda context: "1" in context.module_stack)
-    for selection in ("all", ["relu"], lambda context: True):
+    # A bare label string composes with a selector (the selector algebra lifts it);
+    # a list or a callable is not a selector operand and keeps Python's TypeError.
+    assert isinstance("all" & predicate, CompositeSelector)
+    for selection in (["relu"], lambda context: True):
         with pytest.raises(TypeError):
             selection & predicate
 

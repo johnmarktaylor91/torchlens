@@ -33,7 +33,7 @@ class RecurrentLinear(nn.Module):
 
 
 def _recurrent_label(trace: tl.Trace) -> str:
-    return next(label for label, count in trace.layer_num_calls.items() if count > 1)
+    return next(layer.layer_label for layer in trace.layers if layer.num_passes > 1)
 
 
 def test_animate_returns_an_html_drawing(tmp_path: Path) -> None:
@@ -89,7 +89,7 @@ def test_visualization_options_animate_redirects_to_trace_animate() -> None:
 
     with pytest.raises(FacadeTeachingError) as excinfo:
         _ = VisualizationOptions().animate
-    assert excinfo.value.code == "facade_redirect"
+    assert excinfo.value.fields["code"] == "facade_redirect"
     assert "trace.animate" in str(excinfo.value)
 
 

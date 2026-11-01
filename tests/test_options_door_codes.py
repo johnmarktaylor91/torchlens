@@ -45,7 +45,7 @@ def test_on_nonfinite_warn_emits_one_capture_nonfinite_detected_warning() -> Non
         w.message.fields.get("code") for w in caught if isinstance(w.message, TorchLensWarning)
     ]
     assert codes.count("capture_nonfinite_detected") == 1
-    assert trace.num_ops >= 1
+    assert len(trace) >= 1
 
 
 def test_door_probe_skips_a_non_capture_options_object() -> None:
