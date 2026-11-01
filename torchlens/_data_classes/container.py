@@ -24,6 +24,12 @@ from .._ir.container_registry import (
     Role,
     Site,
 )
+from ._container_labels import (
+    _display_key,
+    _leaf_reference,
+    _path_component_text,
+    _same_container_spec,
+)
 
 if TYPE_CHECKING:
     from .op import Op
@@ -902,15 +908,6 @@ def _opaque_member_text(spec: ContainerSpec | None) -> str | None:
     return None
 
 
-def _path_component_text(component: OutputPathComponent) -> str:
-    """Return the key, index or field name of one container path component."""
-
-    for attr in ("key", "name", "index"):
-        if hasattr(component, attr):
-            return str(getattr(component, attr))
-    return str(component)
-
-
 def reconstruct_container(
     trace: Any,
     *,
@@ -1055,25 +1052,6 @@ def _op_is_final_output(op: Op) -> bool:
     return any(trace.ops[label] is op for label in output_labels if label in trace.ops)
 
 
-def _same_container_spec(left: ContainerSpec | None, right: ContainerSpec | None) -> bool:
-    """Return whether two specs represent the same captured container root.
-
-    Parameters
-    ----------
-    left:
-        Candidate sibling spec.
-    right:
-        Seed op spec.
-
-    Returns
-    -------
-    bool
-        ``True`` when specs are the same object or equal frozen dataclasses.
-    """
-
-    return left is right or (left is not None and right is not None and left == right)
-
-
 def _value_for_op(op: Op, source: str) -> Any:
     """Return a leaf value from an op.
 
@@ -1189,43 +1167,6 @@ def _leaf_paths(
             yield child_path
         else:
             yield from _leaf_paths(child_spec, prefix=child_path)
-
-
-def _display_key(key: Any) -> str:
-    """Return a display label for an immediate key.
-
-    Parameters
-    ----------
-    key:
-        User-facing key.
-
-    Returns
-    -------
-    str
-        Readable key label.
-    """
-
-    return f"[{key!r}]" if not isinstance(key, str) else key
-
-
-def _leaf_reference(value: Any) -> str:
-    """Return a stable leaf reference for a container tree line.
-
-    Parameters
-    ----------
-    value:
-        Leaf value, usually an ``Op``.
-
-    Returns
-    -------
-    str
-        Output-style layer label when available, otherwise ``repr(value)``.
-    """
-
-    layer_label = getattr(value, "layer_label", None)
-    if layer_label is not None:
-        return str(layer_label)
-    return repr(value)
 
 
 __all__ = [
