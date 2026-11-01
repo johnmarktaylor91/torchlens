@@ -27,6 +27,8 @@ from .bundle_metadata import (
     _partition_bundle_sections,
 )
 
+_CEILING_CODE = _bundle_module._OPCODE_CEILING_CODE
+
 if TYPE_CHECKING:
     from ..bundle import Bundle
 
@@ -121,7 +123,7 @@ def _load_unified_bundle(
                 )
             bundle = _bundle_module._metadata_unpickler(handle).load()
     except OpcodeCeilingExceeded:
-        raise _bundle_module._opcode_ceiling_error(legacy_pickle_path) from None
+        raise _bundle_module._opcode_ceiling_error(legacy_pickle_path, code=_CEILING_CODE) from None
     except (
         pickle.UnpicklingError,
         EOFError,

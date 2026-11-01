@@ -1554,7 +1554,7 @@ def _load_trace_payload(
     except ArtifactError:
         raise
     except OpcodeCeilingExceeded:
-        raise _opcode_ceiling_error(metadata_path) from None
+        raise _opcode_ceiling_error(metadata_path, code=_OPCODE_CEILING_CODE) from None
     except (pickle.UnpicklingError, EOFError) as exc:
         hint = ""
         if python_major_mismatch:
@@ -4057,7 +4057,10 @@ def _metadata_unpickler(
     )
 
 
-def _opcode_ceiling_error(metadata_path: Path) -> ArtifactError:
+_OPCODE_CEILING_CODE = "metadata_object_count_exceeded"
+
+
+def _opcode_ceiling_error(metadata_path: Path, *, code: str) -> ArtifactError:
     """Return the refusal for a metadata pickle above the opcode allocation ceiling.
 
     The byte ceiling alone does not bound allocation (R60/F6): a pickle packed
@@ -4070,7 +4073,7 @@ def _opcode_ceiling_error(metadata_path: Path) -> ArtifactError:
         f"Bundle metadata {metadata_path} exceeds the "
         f"{_MAX_METADATA_PKL_OPCODES}-opcode allocation ceiling; refusing "
         "to load a structurally implausible artifact.",
-        code="metadata_object_count_exceeded",
+        code=code,
     )
 
 
