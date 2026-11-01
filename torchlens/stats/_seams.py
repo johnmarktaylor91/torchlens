@@ -26,6 +26,7 @@ from typing import Any, Literal
 
 import torch
 
+from ..intervention.spec import site_signal
 from ._stats_render import render_core_line, sparkline
 from ._tensor_stats import FamilyEvidence, TensorStats, tensor_stats
 
@@ -145,8 +146,6 @@ class NarrationObserver:
     @property
     def signal(self) -> Literal["forward", "backward", "both"]:
         """The pass this observer narrates, derived from its site."""
-
-        from ..intervention.spec import site_signal
 
         return site_signal(self.site)
 
