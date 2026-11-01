@@ -25,6 +25,7 @@ from .._capture.projections import (
 )
 from .._capture.stop import StopDirective, stop_directive_for_trace
 from .._capture.trace import _extract_and_mark_outputs
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureNotActiveError, KeywordConflictError
@@ -401,8 +402,6 @@ class Recorder:
         traceback: TracebackType | None,
     ) -> None:
         """Finalize or abort the recorder resource scope."""
-
-        from .._data_classes._trace_missing_attrs import is_live_trace
 
         _ = exc_type, traceback
         if not self._entered or self._exited or self._state is None:

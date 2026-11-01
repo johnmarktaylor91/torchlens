@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any
 
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._utils.display import atomic_write_text
 from ..errors._base import TorchLensWarning
@@ -686,8 +687,6 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
     import torch
 
     import torchlens
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     manifest: dict[str, Any] = {
         "schema": REPORT_SCHEMA,

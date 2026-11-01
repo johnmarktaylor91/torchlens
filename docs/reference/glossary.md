@@ -3754,7 +3754,7 @@ The sections above describe each surface in depth.
 | `DiffReport.rows_with_status` | Return the rows carrying one closed-vocabulary status |
 | `DiffRow.pass_number` | Pass number of the compared op |
 | `DryRun.filter` | Return a new trace with decisions from a new op predicate |
-| `Edit.is_compatible_with_append` | Whether the edit keeps the output shape, so `tl.append` may stack it with other edits |
+| `Edit.is_compatible_with_append` | Whether the edit keeps the output shape, so an append rerun may stack it with other edits |
 | `Edit.name` | The edit's public name (the builder that made it, such as `zero_ablate`) |
 | `Edit.signal` | Pass an edit is bound to: `"forward"` for edits that read recorded activations, `None` for neutral edits |
 | `EffectsView.rank_changes` | Rank candidates by the size of their change from baseline, descending |

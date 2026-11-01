@@ -33,6 +33,7 @@ import hashlib
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, NamedTuple
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from ._compute_truth import ComputeAggregation, compute_aggregation, row_mac_flops
 
@@ -305,8 +306,6 @@ class _TreeBuilder:
         fold_repeats: bool,
     ) -> None:
         """Capture the view arguments and derive the shared indexes."""
-
-        from .._data_classes._trace_missing_attrs import is_live_trace
 
         self.trace = trace
         self.agg = agg

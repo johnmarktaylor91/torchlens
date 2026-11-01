@@ -23,6 +23,7 @@ from typing import Any, cast
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import _actionable_message, _ActionableErrorMixin
 from ..errors._base import ConfigurationError
 
@@ -391,7 +392,6 @@ def _source_kind(source: Any) -> str:
         ``neuro_source_invalid`` for unsupported source types.
     """
 
-    from .._data_classes._trace_missing_attrs import is_live_trace
     from ..dataset_extraction import LoadedExtraction
 
     if isinstance(source, (LoadedExtraction, str, Path)):
@@ -852,7 +852,6 @@ def base_descriptors(
 
     import torchlens
 
-    from .._data_classes._trace_missing_attrs import is_live_trace
     from ..features import SHAPING_OP
 
     descriptors: dict[str, Any] = {

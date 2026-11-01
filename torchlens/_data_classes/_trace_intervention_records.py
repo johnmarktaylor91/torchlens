@@ -31,15 +31,21 @@ class _DoTransaction(NamedTuple):
     audit_rows_before: int
 
 
-def _edit_identity(edit: Any) -> str:
-    """String identity of an edit for an audit row: its ``Edit.name`` when that is a string,
-    else the callable's ``__name__``, else its type name (a replacement tensor answers
-    ``name`` with a non-string)."""
+def _edit_identity(edit: Any, fallback: str | None = None) -> str:
+    """String identity of an edit for an audit row or message.
 
-    name = getattr(edit, "name", None)
-    if isinstance(name, str) and name:
-        return name
-    return str(getattr(edit, "__name__", type(edit).__name__))
+    An ``Edit`` carries its ``name`` and a hook callable carries ``__name__``;
+    only non-empty string attributes count (a replacement tensor answers
+    ``name`` with ``None``), and the persisted audit contract requires a string
+    ``edit`` field. Otherwise the answer is ``fallback``, or the edit's type
+    name when no fallback is given.
+    """
+
+    for attribute in ("name", "__name__"):
+        candidate = getattr(edit, attribute, None)
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return type(edit).__name__ if fallback is None else fallback
 
 
 def do_event_edit_names(

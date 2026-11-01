@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR
 from ._render_utils import html_escape
@@ -169,8 +170,6 @@ def _stand_in(value: Any) -> str:
     short ``name`` shows that name (else ``trace``); a persisted trace identity
     shows its label; a callable shows its name (else ``fn``); anything else ``…``.
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     literal = _literal(value)
     if literal is None and isinstance(value, torch.Tensor):

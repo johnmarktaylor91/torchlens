@@ -12,6 +12,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .trace import Trace
 
+#: Where the live ``Trace`` class is defined; ``is_live_trace`` matches by identity.
+_TRACE_MODULE = __name__.rsplit(".", 1)[0] + ".trace"
+
 # Plausible-but-absent attribute names, mapped to the fields that answer them. A
 # frontier-scale user's first question is "how big is this capture?", and the
 # singular ``activation_memory`` spelling (which IS an ``Op`` field, meaning that
@@ -111,6 +114,9 @@ def is_live_trace(obj: Any) -> bool:
     keeps the reader's empty answer.
     """
 
-    from .trace import Trace
-
-    return isinstance(obj, Trace) and not obj.__dict__.get("_tl_cleaned_up", False)
+    # Identity by class, not isinstance: importing ``trace`` here would make
+    # this module part of the Trace import cycle, and every reader imports it.
+    for cls in type(obj).__mro__:
+        if cls.__name__ == "Trace" and cls.__module__ == _TRACE_MODULE:
+            return not obj.__dict__.get("_tl_cleaned_up", False)
+    return False

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._utils.fail_open import fail_open
 
 #: Sentinel for a payload read that raised (distinct from a freed ``None``).
@@ -132,8 +133,6 @@ def _edited_token(op: Any) -> str | None:
 
 def _trace_token(record: Any) -> str | None:
     """Short owning-trace token (model class name), or None when detached."""
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     trace = fail_open(lambda: record.source_trace, lambda _error: None)
     return trace._source_class_name if is_live_trace(trace) else None

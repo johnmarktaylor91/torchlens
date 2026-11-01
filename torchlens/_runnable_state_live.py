@@ -25,6 +25,7 @@ from ._capture_attr_observer import (
     settle_module_attrs,
     snapshot_module_attrs,
 )
+from ._data_classes._trace_missing_attrs import is_live_trace
 from ._runnable_state import (
     LiveDeclaredStateSnapshot,
     declared_slot_unchanged,
@@ -82,8 +83,6 @@ def _unalias_trace_payloads(trace: Any, changed: list[torch.Tensor]) -> None:
     would rewrite what the trace recorded. Each such payload is replaced by a
     copy of its forward-time value first; the model keeps its buffer objects.
     """
-
-    from ._data_classes._trace_missing_attrs import is_live_trace
 
     if (
         trace is None

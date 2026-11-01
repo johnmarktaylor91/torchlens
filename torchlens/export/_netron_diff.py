@@ -26,6 +26,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ._netron_records import NetronNode, NetronProjection
 
 __tl_layer__ = "L8"
@@ -150,8 +151,6 @@ def build_baseline_diff(
     """
 
     from torchlens.differential import diff
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     report = diff(subject, reference)
     rows_by_label: dict[str, Any] = {}

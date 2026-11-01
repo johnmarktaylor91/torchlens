@@ -40,6 +40,7 @@ from typing import Any, Literal
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 
 __all__ = [
@@ -510,8 +511,6 @@ def _prepare_tensor_members(source: Any) -> tuple[torch.Tensor, ...] | None:
 
 def _looks_like_trace(value: Any) -> bool:
     """Whether a member is a captured-trace-like donor (duck-typed)."""
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     return is_live_trace(value) and hasattr(value, "ops")
 

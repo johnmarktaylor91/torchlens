@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .._capture_honesty import capture_honesty_facts
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import ArgumentTypeError
 from .._literals import BufferVisibilityLiteral
 from .._options_validation import _validate_buffer_visibility
@@ -184,8 +185,6 @@ def _metadata_props(
     log: Any, projection: NetronProjection, show_buffers: str, baseline: str | None
 ) -> list[tuple[str, str]]:
     """Assemble the ordered honesty metadata rows (memo D-19)."""
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     rows: list[tuple[str, str]] = [
         ("torchlens.lossy_export", "true"),
@@ -360,8 +359,6 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
     Path | None
         The written JSON path, or ``None`` for the memory-only serve mode.
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     _require_trace(trace, exporter="tl.export.netron")
     _validate_options(granularity, depth, show_buffers)

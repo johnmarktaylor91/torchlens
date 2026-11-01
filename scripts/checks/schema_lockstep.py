@@ -22,7 +22,7 @@ so this module is the MECHANISM instead:
    gate.
 
 The live-record half (every attribute a captured record actually carries must
-be declared in its ``FIELD_POLICY``) captures a model and stays in
+be declared in its ``_FIELD_POLICY``) captures a model and stays in
 ``tests/test_schema_lockstep.py``.
 """
 
@@ -79,7 +79,7 @@ def _for_each_case(
 
 
 # ---------------------------------------------------------------------------
-# Authority 1: field catalogs (``*_FIELD_ORDER``) vs their owning FIELD_POLICY.
+# Authority 1: field catalogs (``*_FIELD_ORDER``) vs their owning _FIELD_POLICY.
 # ---------------------------------------------------------------------------
 
 
@@ -92,7 +92,7 @@ class Catalog:
     constant:
         Name of the catalog list in :mod:`torchlens._constants`.
     owner:
-        Record class whose ``FIELD_POLICY`` generates the catalog, or ``None``
+        Record class whose ``_FIELD_POLICY`` generates the catalog, or ``None``
         for a pure alias.
     alias_of:
         Name of the catalog this one is a compatibility alias for, or ``None``
@@ -193,7 +193,7 @@ def policy_catalog_diff(
     Parameters
     ----------
     policy:
-        Owning record's ``FIELD_POLICY`` table.
+        Owning record's ``_FIELD_POLICY`` table.
     catalog:
         Checked-in ordered field list.
 
@@ -211,14 +211,14 @@ _ALIAS_CATALOGS = tuple(c for c in CATALOGS if c.alias_of is not None)
 
 
 def _check_catalog_is_generated_from_its_owning_field_policy(catalog: Catalog) -> None:
-    """The checked-in catalog equals the view generated from ``FIELD_POLICY``."""
+    """The checked-in catalog equals the view generated from ``_FIELD_POLICY``."""
 
     assert catalog.owner is not None
     generated, declared = policy_catalog_diff(
-        catalog.owner.FIELD_POLICY, getattr(constants, catalog.constant)
+        catalog.owner._FIELD_POLICY, getattr(constants, catalog.constant)
     )
     assert generated == declared, (
-        f"{catalog.constant} drifted from {catalog.owner.__name__}.FIELD_POLICY; "
+        f"{catalog.constant} drifted from {catalog.owner.__name__}._FIELD_POLICY; "
         f"only in policy: {sorted(set(generated) - set(declared))}; "
         f"only in catalog: {sorted(set(declared) - set(generated))}"
     )
@@ -355,7 +355,7 @@ def _private_ordered_fields_by_tier(
     for catalog in catalogs:
         if catalog.owner is None:
             continue
-        policy = catalog.owner.FIELD_POLICY
+        policy = catalog.owner._FIELD_POLICY
         for name in getattr(constants, catalog.constant):
             if not name.startswith("_"):
                 continue
@@ -948,8 +948,14 @@ VERSION_AUTHORITY_PINS: dict[str, int] = {
     # with fail-closed load validation. Contract of record:
     # torchlens/schemas/writer_contract_v10.json. MERGED_TLSPEC_VERSION
     # versions the merged ROOT manifest independently and did not move.
-    "TLSPEC_VERSION": 10,
-    "MIN_TLSPEC_VERSION": 6,
+    # v11: the saved-format write (2026-10-31/11-01, lanes v11-final, v11-tri-1..3,
+    # v11-rest) — group-view stores (cost/graph/autograd/source/provenance/
+    # options/health), the label renames (pass_number, Edit.name, FireRecord.edit),
+    # the privatised Trace members and the floor raised to v11 (older artifacts
+    # re-save from source; tests/test_rehydration_floor.py). Contract of record:
+    # torchlens/schemas/writer_contract_v11.json. MERGED_TLSPEC_VERSION did not move.
+    "TLSPEC_VERSION": 11,
+    "MIN_TLSPEC_VERSION": 11,
     "MERGED_TLSPEC_VERSION": 7,
 }
 
@@ -1076,7 +1082,7 @@ def check_policy_catalog_diff_detects_a_dropped_field() -> None:
     """A field present in the policy but missing from the catalog differs."""
 
     generated, declared = policy_catalog_diff(
-        Trace.FIELD_POLICY, constants.MODEL_LOG_FIELD_ORDER[:-1]
+        Trace._FIELD_POLICY, constants.MODEL_LOG_FIELD_ORDER[:-1]
     )
     assert generated != declared
 
@@ -1086,7 +1092,7 @@ def check_policy_catalog_diff_detects_a_reordering() -> None:
 
     reordered = list(constants.MODEL_LOG_FIELD_ORDER)
     reordered[0], reordered[1] = reordered[1], reordered[0]
-    generated, declared = policy_catalog_diff(Trace.FIELD_POLICY, reordered)
+    generated, declared = policy_catalog_diff(Trace._FIELD_POLICY, reordered)
     assert generated != declared
 
 
@@ -1204,7 +1210,7 @@ def check_field_policy_entries_declare_a_portable_policy() -> None:
 
     for catalog in _PRIMARY_CATALOGS:
         assert catalog.owner is not None
-        for name, item in catalog.owner.FIELD_POLICY.items():
+        for name, item in catalog.owner._FIELD_POLICY.items():
             assert isinstance(item.portable_policy, FieldPolicy), (
                 f"{catalog.owner.__name__}.{name} has a non-FieldPolicy portable policy"
             )

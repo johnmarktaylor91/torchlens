@@ -12,6 +12,7 @@ from typing import Any
 
 import torch
 
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._record_type import record_type
 from ..._utils._multipass_access import get_multipass_attr
 from ..._utils.display import human_readable_size
@@ -208,8 +209,6 @@ def build_render_audit(trace: Any) -> TorchLensRenderAudit:
 
 def build_torchlens_caption(trace: Any) -> str:
     """Build the user-facing graph caption."""
-    from ..._data_classes._trace_missing_attrs import is_live_trace
-
     num_params = int(getattr(trace, "num_params", 0) or 0)
     trainable = int(getattr(trace, "num_params_trainable", 0) or 0)
     frozen = int(getattr(trace, "num_params_frozen", 0) or 0)
@@ -764,8 +763,6 @@ def trace_to_dagua_graph(
 ) -> Any:
     """Translate a TorchLens Trace into a DaguaGraph."""
     import dagua
-
-    from ..._data_classes._trace_missing_attrs import is_live_trace
 
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))
     entries = _entries_for_mode(trace, vis_mode)

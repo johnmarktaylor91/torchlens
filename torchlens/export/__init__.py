@@ -24,6 +24,7 @@ from .._capture.structure_only import (
     require_structure_only_capability as _require_structure_only_capability,
 )
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._io._json import loads_bounded
 from .._record_type import record_type
 from .._utils.display import atomic_write_text
@@ -384,8 +385,6 @@ def speedscope(trace: Any, path: str | Path) -> Path:
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
     _require_structure_only_capability(trace, "measurement_exports")
 
     destination = Path(path)
@@ -444,8 +443,6 @@ def flamegraph(trace: Any, path: str | Path) -> Path:
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
     _require_structure_only_capability(trace, "measurement_exports")
 
     destination = Path(path)
@@ -903,8 +900,6 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
     list[dict[str, Any]]
         Chrome trace event records.
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     events: list[dict[str, Any]] = [
         {

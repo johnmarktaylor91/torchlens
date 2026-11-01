@@ -14,15 +14,6 @@ if TYPE_CHECKING:
     )
     from ..report._explain import ExplainReport
     from ..report._profile import ProfileReport
-    from ._trace_groups import (
-        TraceAutograd,
-        TraceCost,
-        TraceGraph,
-        TraceHealth,
-        TraceOptions,
-        TraceProvenance,
-        TraceSource,
-    )
     from .buffer import BufferAccessor
     from .layer import LayerAccessor
     from .module import Module, ModuleCall
@@ -45,6 +36,15 @@ from ._trace_accessors import (
     TraceModuleCallAccessor,
     TraceOpAccessor,
     boundary_label_ops,
+)
+from ._trace_groups import (
+    TraceAutograd,
+    TraceCost,
+    TraceGraph,
+    TraceHealth,
+    TraceOptions,
+    TraceProvenance,
+    TraceSource,
 )
 from ._trace_profile import (
     ModelProfile,
@@ -139,15 +139,11 @@ class TraceStatsMixin(_TraceMixinBase):
     def cost(self: "Trace") -> "TraceCost":
         """Compute, memory and timing totals of a Trace."""
 
-        from ._trace_groups import TraceCost
-
         return TraceCost(self)
 
     @property
     def graph(self: "Trace") -> "TraceGraph":
         """Graph-shape facts of a Trace: edges, degrees, branching and conditionals."""
-
-        from ._trace_groups import TraceGraph
 
         return TraceGraph(self)
 
@@ -155,15 +151,11 @@ class TraceStatsMixin(_TraceMixinBase):
     def autograd(self: "Trace") -> "TraceAutograd":
         """Backward-pass records and grad_fn facts of a Trace."""
 
-        from ._trace_groups import TraceAutograd
-
         return TraceAutograd(self)
 
     @property
     def source(self: "Trace") -> "TraceSource":
         """Source facts of the traced model class: locations, signatures, docstrings."""
-
-        from ._trace_groups import TraceSource
 
         return TraceSource(self)
 
@@ -171,23 +163,17 @@ class TraceStatsMixin(_TraceMixinBase):
     def provenance(self: "Trace") -> "TraceProvenance":
         """How, when and from what this Trace was captured."""
 
-        from ._trace_groups import TraceProvenance
-
         return TraceProvenance(self)
 
     @property
     def options(self: "Trace") -> "TraceOptions":
         """The capture options this Trace ran with (the stored snapshot)."""
 
-        from ._trace_groups import TraceOptions
-
         return TraceOptions(self)
 
     @property
     def health(self: "Trace") -> "TraceHealth":
         """Honesty diagnostics of the capture: witness and escape-detector facts."""
-
-        from ._trace_groups import TraceHealth
 
         return TraceHealth(self)
 

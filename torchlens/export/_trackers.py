@@ -20,6 +20,7 @@ from .._capture_honesty import (
     capture_honesty_facts,
     honesty_preamble_lines,
 )
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import ArgumentTypeError, KeywordConflictError
 from ._common import _require_trace, _scalarize_cell
 
@@ -49,8 +50,6 @@ def tensorboard(trace: Any, writer: Any, *, step: int, prefix: str = "torchlens"
     """
 
     # a non-Trace input used to write plausible zeros (getattr defaults).
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
     _require_trace(trace, exporter="tl.export.tensorboard")
     _require_tracker_object(writer, method_name="tensorboard", required_method="add_scalar")
     # One converter for every tracker exporter (F26 unification): the four
@@ -408,8 +407,6 @@ def _summary_metrics(log: Any) -> dict[str, int]:
     dict[str, int]
         Scalar metrics.
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     return {
         "num_layers": len(log._layer_list),

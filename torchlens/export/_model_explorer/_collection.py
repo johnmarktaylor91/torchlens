@@ -18,6 +18,7 @@ import json
 from typing import Any
 
 from ..._capture_honesty import capture_honesty_facts
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._errors import InvalidArgumentError
 from ...errors._base import TorchLensError
 from .._common import _iter_layers, _require_trace
@@ -76,8 +77,6 @@ def to_model_explorer_dict(trace: Any, **options: Any) -> dict[str, Any]:
     dict[str, Any]
         A strict vendor ``GraphCollection`` payload.
     """
-
-    from ..._data_classes._trace_missing_attrs import is_live_trace
 
     _require_trace(trace, exporter="tl.export.model_explorer")
     opts = ModelExplorerOptions(**options)
@@ -175,8 +174,6 @@ def _base_root_facts(log: Any, privacy_profile: str) -> dict[str, str]:
     """Build the shared ``""`` provenance facts (memo D7 disclosure block)."""
 
     import torchlens
-
-    from ..._data_classes._trace_missing_attrs import is_live_trace
 
     facts: dict[str, str] = {
         "produced_by": f"torchlens {torchlens.__version__}",

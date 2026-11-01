@@ -26,6 +26,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field as dataclasses_field
 from typing import TYPE_CHECKING, Any, Final
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ..errors._base import CaptureError
 
 if TYPE_CHECKING:
@@ -649,8 +650,6 @@ def require_structure_only_capability(
     marker persists plainly as of tlspec v8 and the row is supported.
     """
 
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
     if not bool(trace._options_structure_only if is_live_trace(trace) else False):
         return None
     row = STRUCTURE_ONLY_CAPABILITIES[capability]
@@ -831,8 +830,6 @@ def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
     structurally by the W1-RPT alignment (dropout/BN-stat records diverge).
     """
 
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
     structure_class = structure_trace._source_class_name if is_live_trace(structure_trace) else None
     real_class = real_trace._source_class_name if is_live_trace(real_trace) else None
     if structure_class and real_class and structure_class != real_class:
@@ -956,8 +953,6 @@ def _structural_alignment_contradiction(structure_trace: Any, real_trace: Any) -
 
 def _require_discharge_preconditions(structure_trace: Any, real_trace: Any) -> None:
     """Typed precondition refusals (never silent Nones)."""
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     if not bool(
         structure_trace._options_structure_only if is_live_trace(structure_trace) else False

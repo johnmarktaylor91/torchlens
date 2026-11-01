@@ -908,8 +908,6 @@ class Recording(TraceLike):
         # output to root the backward walk -- the same capability boundary
         # that refuses halted-no-payload ``to_trace()``. Documented in
         # docs/reference/capture_outcomes.md.
-        from .._data_classes._trace_missing_attrs import is_live_trace
-
         if self.is_failed:
             from .exceptions import RecorderStateError
 
@@ -936,11 +934,8 @@ class Recording(TraceLike):
         # no autograd graph: either backward would capture nothing.
         state = getattr(self, "_recording_state", None)
         runtime_trace = getattr(state, "runtime_trace", None)
-        if (
-            runtime_trace is not None
-            and is_live_trace(runtime_trace)
-            and runtime_trace._options_inference_only
-        ):
+        runtime_options = getattr(runtime_trace, "options", None)
+        if runtime_options is not None and getattr(runtime_options, "inference_only", False):
             from .exceptions import RecorderStateError
 
             raise RecorderStateError(

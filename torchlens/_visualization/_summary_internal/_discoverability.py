@@ -13,6 +13,8 @@ from typing import (
     cast,
 )
 
+from ..._data_classes._trace_missing_attrs import is_live_trace
+
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
@@ -466,8 +468,6 @@ def _parent_run_summary(trace: Trace) -> str:
         Parent summary.
     """
 
-    from ..._data_classes._trace_missing_attrs import is_live_trace
-
     parent_ref = trace._parent_run
     if parent_ref is None:
         return "none"
@@ -490,8 +490,6 @@ def _fork_chain_summary(trace: Trace) -> str:
     str
         Fork chain from root to current log.
     """
-
-    from ..._data_classes._trace_missing_attrs import is_live_trace
 
     names = [str(getattr(trace, "name", None))]
     seen = {id(trace)}

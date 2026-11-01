@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._record_type import first_op
 from ._access import CopyRoot, resolve_copy_root
 from ._axis_labels import sdpa_attention_hint
@@ -131,8 +132,6 @@ def _proof_section(trace_like: Any) -> CardSection:
 
     Rendered OPEN (honesty is never folded).
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     facts: list[CardNode] = []
     outcome = getattr(trace_like, "outcome", None)
@@ -374,8 +373,6 @@ def _layer_proof(layer: Any) -> tuple[CardNode, ...]:
 
 def trace_card(trace: Any, *, root: str | None = None) -> Card:
     """Assemble the Trace overview card (replaces the 525-byte box)."""
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     resolved_root = resolve_copy_root(trace, explicit_root=root)
     layers = list(trace._layer_logs or {})

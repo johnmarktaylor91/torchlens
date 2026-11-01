@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ..distributed._ledger import GroupLifecycleLedger
 
 # The boundary vocabularies and parse rules live in ``_boundary_rules`` (the
@@ -165,8 +166,6 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
         If the trace carries no distributed record, its journal is malformed,
         or its boundary records disagree about the rank's own identity.
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     record = getattr(trace, "annotations", {}).get("distributed")
     if not isinstance(record, dict) or not record.get("boundaries"):

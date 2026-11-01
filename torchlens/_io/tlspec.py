@@ -690,8 +690,6 @@ class _TlSpecWriter:
             Module-qualified identity string.
         """
 
-        from .._data_classes._trace_missing_attrs import is_live_trace
-
         if kind == "bundle":
             return "torchlens.intervention.bundle.Bundle"
         model_class_qualname = source._source_class_qualname if is_live_trace(source) else None
@@ -728,8 +726,6 @@ class _TlSpecWriter:
         dict[str, Any]
             Fingerprint metadata.
         """
-
-        from .._data_classes._trace_missing_attrs import is_live_trace
 
         if kind == "bundle":
             return cls._bundle_fingerprint(source, model_signature)
@@ -810,8 +806,6 @@ class _TlSpecWriter:
         list[dict[str, Any]]
             Site descriptor objects.
         """
-
-        from .._data_classes._trace_missing_attrs import is_live_trace
 
         if kind == "bundle":
             sites: list[dict[str, Any]] = []
@@ -902,8 +896,6 @@ class _TlSpecWriter:
         dict[str, Any]
             JSON-serializable summary of backward records and gradient blobs.
         """
-
-        from .._data_classes._trace_missing_attrs import is_live_trace
 
         grad_kinds = {"grad", "transformed_grad", "grad_fn_grad"}
         backend_name = str(source._provenance_backend if is_live_trace(source) else "torch")
@@ -1023,8 +1015,6 @@ def _source_model(source: Any) -> torch.nn.Module | None:
         Source model, or ``None`` when unavailable.
     """
 
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
     source_ref = source._source_model_ref if is_live_trace(source) else None
     if source_ref is None:
         return None
@@ -1063,8 +1053,6 @@ def _extra_metadata_for_source(source: Any) -> dict[str, Any]:
     dict[str, Any]
         Extra metadata object.
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     return {
         "model_class_name": _json_str_or_none(

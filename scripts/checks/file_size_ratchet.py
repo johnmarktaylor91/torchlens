@@ -132,7 +132,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # dedup split to _op_dedup.py (T77) lands on the merged tree alongside
     # the F10 deletions; re-keyed down to the next 50-line step above the
     # merged measurement (4794).
-    "torchlens/_data_classes/op.py": 4800,
+    # 4800 -> 4700 (2026-11-01 v11-group): the privatised member rows shrank the
+    # file to 4690; re-keyed down to the next 50-line step as the slack check asks.
+    "torchlens/_data_classes/op.py": 4700,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline

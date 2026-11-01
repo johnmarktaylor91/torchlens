@@ -12,6 +12,7 @@ import torch
 from torch import nn
 
 from .._capture_state_helpers import unwrap_compiled_model
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._input_coerce import _coerce_input_args
 from .._input_walk import INPUT_TREE_MAX_DEPTH, raise_input_tree_depth_refusal
 from .._robustness import check_model_and_input_variants
@@ -469,8 +470,6 @@ def _is_appended_trace(value: Any) -> bool:
     bool
         True only for objects carrying the appended Trace state marker.
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     return bool(value._provenance_is_appended if is_live_trace(value) else False)
 

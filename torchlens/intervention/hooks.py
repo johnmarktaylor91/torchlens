@@ -11,15 +11,6 @@ from typing import Any, Literal, TypeAlias, cast
 import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
-from .._ir.selector_eval import (
-    _UPFRONT_UNSUPPORTED_KINDS,
-    _capability_error,
-    _grad_fn_forward_op,
-    evaluate,
-    live_label_error_message,
-    looks_like_finalized_label,
-    normalize_selector_like,
-)
 from ..errors import TorchLensWarning
 from ._hooks_support import (
     _display_label,
@@ -597,6 +588,8 @@ def _reject_live_incapable_selector(
         carve-out; the rerun preflight never sets it).
     """
 
+    from .._ir.selector_eval import _UPFRONT_UNSUPPORTED_KINDS, _capability_error
+
     kind = str(selector.selector_kind)
     if kind in _UPFRONT_UNSUPPORTED_KINDS["live"] and not (allow_replay_only and kind == "site"):
         raise _capability_error(kind, "live")
@@ -660,6 +653,8 @@ def _backward_context_op(grad_fn_handle: Any) -> Any:
         The paired pass-level op, the GradFn's op, or ``grad_fn_handle`` itself
         when it carries no ``op``.
     """
+
+    from .._ir.selector_eval import _grad_fn_forward_op
 
     if not hasattr(grad_fn_handle, "op"):
         return grad_fn_handle
@@ -1194,6 +1189,12 @@ def live_selector_matches_site(selector_like: Any, site: Any) -> bool:
         If the selector kind is unsupported or a predicate fails.
     """
 
+    from .._ir.selector_eval import (
+        evaluate,
+        live_label_error_message,
+        looks_like_finalized_label,
+    )
+
     selector = _normalize_live_selector(selector_like)
     matched = evaluate(selector, site, lifecycle="live")
     if not matched and selector.selector_kind == "label":
@@ -1216,6 +1217,8 @@ def _normalize_live_selector(selector_like: Any) -> BaseSelector:
     BaseSelector
         Normalized selector.
     """
+
+    from .._ir.selector_eval import normalize_selector_like
 
     return normalize_selector_like(selector_like, lifecycle="live")
 

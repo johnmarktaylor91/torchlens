@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import ArgumentTypeError
 
 __tl_layer__ = "L7"
@@ -148,8 +149,6 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
     dict[str, Any]
         Node and edge metadata for SVG/HTML exporters.
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     entries = _iter_layers(log)
     repeated_labels = _repeated_layer_labels(entries)

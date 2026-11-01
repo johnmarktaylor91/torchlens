@@ -21,6 +21,7 @@ from typing import Any
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from .._observability._kernels import RunningStats, _as_reduction_tensor
 
@@ -223,8 +224,6 @@ def unpack_spine(vector: torch.Tensor, *, name: str | None = None) -> RunningSta
 
 def is_stats_capture(trace: Any) -> bool:
     """Whether ``trace`` was captured with ``save="stats"`` (live or reloaded)."""
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     if trace._options_save_raw_activations if is_live_trace(trace) else True:
         return False

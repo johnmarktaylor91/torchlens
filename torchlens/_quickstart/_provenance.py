@@ -20,6 +20,7 @@ from typing import Any
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import ResolvedPreprocessing
 from ._plan import ORIGIN_BY_RUNG, RUNG_GOLD, InputPlan, tensor_leaves
 
@@ -306,8 +307,6 @@ def trace_input_provenance(trace: Any) -> InputProvenance | None:
         before the resolver existed (absent record = caller-authoritative
         gold history).
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     return provenance_from_record(
         trace._provenance_input_preprocessor if is_live_trace(trace) else None

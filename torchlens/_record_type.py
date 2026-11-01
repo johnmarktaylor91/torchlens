@@ -14,6 +14,16 @@ from typing import Any
 __tl_layer__ = "L0"
 
 _MISSING: Any = object()
+#: Where ``Op`` is defined; an L0 module identifies it by class, not by import.
+_OP_MODULE = __name__.rsplit(".", 1)[0] + "._data_classes.op"
+
+
+def _is_op(record: Any) -> bool:
+    """Return whether ``record`` is an ``Op`` (matched by class identity)."""
+
+    return any(
+        cls.__name__ == "Op" and cls.__module__ == _OP_MODULE for cls in type(record).__mro__
+    )
 
 
 def record_type(record: Any, default: Any = _MISSING) -> Any:
@@ -33,9 +43,7 @@ def record_type(record: Any, default: Any = _MISSING) -> Any:
         The operation type token (for example ``"linear"``).
     """
 
-    from ._data_classes.op import Op
-
-    if isinstance(record, Op):
+    if _is_op(record):
         return record.type
     if default is _MISSING:
         return record.layer_type
@@ -56,8 +64,6 @@ def first_op(record: Any) -> Any:
         The ``Op`` the record's first pass names.
     """
 
-    from ._data_classes.op import Op
-
-    if isinstance(record, Op):
+    if _is_op(record):
         return record
     return record.ops[0]

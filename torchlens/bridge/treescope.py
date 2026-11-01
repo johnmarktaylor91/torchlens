@@ -55,6 +55,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, MissingDependencyError
 
 __all__ = [
@@ -485,8 +486,6 @@ def treescope_repr(obj: Any, path: str | None, subtree_renderer: Any) -> Any:
     any fault.
     """
 
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
     if _STATE.disabled_depth > 0:
         return NotImplemented
     try:
@@ -520,8 +519,6 @@ def treescope_repr(obj: Any, path: str | None, subtree_renderer: Any) -> Any:
 
 def _trace_fact_lines(obj: Any) -> list[str]:
     """Bounded fact lines for the Trace/PartialTrace method route."""
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     lines = [_bounded_summary(obj)]
     outcome = getattr(obj, "outcome", None)

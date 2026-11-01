@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._debug_report import FoundReport, Report
 from ..errors import CaptureError
 
@@ -764,7 +765,6 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
     """
 
     from .._data_classes._nonfinite import nonfinite_coverage
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     if is_live_trace(subject) or hasattr(subject, "ops"):
         trace = subject

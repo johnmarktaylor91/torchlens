@@ -15,6 +15,7 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ._audit import VERDICT_MISMATCH, PreprocessingComparison, compare
 from ._records import COMPARABLE_FIELDS, DeclaredPreprocessing, Resolution
 
@@ -138,8 +139,6 @@ def _record_of(trace_or_record: Any) -> ResolvedPreprocessing | None:
 
     from torchlens._data_classes.trace import ResolvedPreprocessing
 
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
     if isinstance(trace_or_record, ResolvedPreprocessing):
         return trace_or_record
     return (
@@ -149,8 +148,6 @@ def _record_of(trace_or_record: Any) -> ResolvedPreprocessing | None:
 
 def _live_model(trace_or_record: Any) -> Any:
     """Return the trace's live source model, or ``None``."""
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     ref = trace_or_record._source_model_ref if is_live_trace(trace_or_record) else None
     return ref() if callable(ref) else None

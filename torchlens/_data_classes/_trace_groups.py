@@ -611,7 +611,7 @@ class TraceProvenance(_TraceGroup):
             Multi-section capture/provenance text.
         """
 
-        from ..visualization._summary_internal._discoverability import (
+        from .._visualization._summary_internal._discoverability import (
             format_discoverability_summary,
         )
 

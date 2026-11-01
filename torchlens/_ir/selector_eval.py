@@ -47,6 +47,7 @@ import re
 from collections.abc import Iterator, Sequence
 from typing import Any, Literal, cast
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._record_type import record_type
 from ..backends import TORCH_BACKEND_NAME
 from ..intervention.errors import (
@@ -709,8 +710,6 @@ def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
         Module-pass candidates whose address may match.
     """
 
-    from .._data_classes._trace_missing_attrs import is_live_trace
-
     module_outputs = tuple(getattr(subject, "output_of_module_calls", ()) or ())
     if lifecycle == "capture" and not module_outputs:
         # Capture subjects include backend ``OpEvent`` records, which carry the
@@ -793,8 +792,6 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
     tuple[Any, ...]
         Module addresses and pass-qualified module labels.
     """
-
-    from .._data_classes._trace_missing_attrs import is_live_trace
 
     candidates: list[str] = []
     address = getattr(ctx, "address", None)

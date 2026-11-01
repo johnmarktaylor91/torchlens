@@ -17,6 +17,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._errors import InvalidArgumentError
 from ..._visualization.overlays import builtin_overlay_value, normalize_overlay_name
 from ...errors._base import TorchLensError
@@ -120,8 +121,6 @@ def _resolve_source(
     log: Any, source: str | Callable[[Any], Any], privacy_profile: str
 ) -> tuple[str, str, Callable[[Any], Any]]:
     """Resolve a provider source into (display name, slug, node resolver)."""
-
-    from ..._data_classes._trace_missing_attrs import is_live_trace
 
     if callable(source) and not isinstance(source, str):
         name = f"callable:{getattr(source, '__name__', 'anonymous')}"

@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
+from ._data_classes._trace_intervention_records import _edit_identity as _edit_identity
 from ._selection_align import align_resolved_selection
 from ._selection_mask import (
     _Mask,
@@ -1765,19 +1766,3 @@ def register_term_resolver(term_type: type, resolver: Any) -> None:
     """
 
     _TERM_RESOLVERS.append((term_type, resolver))
-
-
-def _edit_identity(edit: Any, fallback: str) -> str:
-    """Return the string identity of one edit for audit rows and messages.
-
-    An ``Edit`` carries its ``name`` and a hook callable carries ``__name__``.
-    Only string attributes count: a replacement tensor exposes a ``name``
-    attribute that is ``None``, and the persisted audit contract requires a
-    string ``edit`` field, so a value edit falls back to ``fallback``.
-    """
-
-    for attribute in ("name", "__name__"):
-        candidate = getattr(edit, attribute, None)
-        if isinstance(candidate, str):
-            return candidate
-    return fallback

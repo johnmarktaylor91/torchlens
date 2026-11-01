@@ -25,6 +25,7 @@ import weakref
 from dataclasses import dataclass
 from typing import Any
 
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._utils._torch_compat import get_gradient_edge_support
 from ._errors import ReadError
 
@@ -193,8 +194,6 @@ def _refuse_trace(trace: Any, reason: str, detail: str, remedy: str) -> None:
         Exact recapture or ordering remedy, without the ``Remedy:`` prefix.
     """
 
-    from ..._data_classes._trace_missing_attrs import is_live_trace
-
     raise ReadError(
         f"One-backward reads need a live autograd registry, and this trace "
         f"cannot serve one: {detail} Remedy: {remedy}",
@@ -214,8 +213,6 @@ def _check_trace_liveness(trace: Any) -> None:
         ``TRACE_REFUSAL_REASONS`` on loaded / cleaned / inference-only /
         chunked / structure-only / detached / non-torch traces.
     """
-
-    from ..._data_classes._trace_missing_attrs import is_live_trace
 
     backend = trace._provenance_backend if is_live_trace(trace) else None
     if backend is not None and backend != _SUPPORTED_BACKEND:

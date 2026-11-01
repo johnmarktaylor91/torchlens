@@ -25,10 +25,8 @@ if TYPE_CHECKING:
 else:
     _TraceMixinBase = object
 from .._errors import InvalidArgumentError
-from .._selection import _edit_identity
 from .._trace_state import TraceState
 from ..intervention.types import (
-    Edit,
     FrozenInterventionSpec,
     InterventionSpec,
     TargetSpec,
@@ -52,7 +50,12 @@ from ._trace_grad_sites import (
     signal_plan,
     sticky_hook_entry,
 )
-from ._trace_intervention_records import _DoTransaction, do_event_edit_names, do_event_extra
+from ._trace_intervention_records import (
+    _DoTransaction,
+    _edit_identity,
+    do_event_edit_names,
+    do_event_extra,
+)
 
 __all__ = [
     "_STREAM_DERIVED_GUARD_FIELDS",
@@ -1606,6 +1609,8 @@ class TraceInterventionMixin(_TraceMixinBase):
                     f"leaf site {op.label!r} has no saved tensor value to edit.",
                     site=op.label,
                 )
+            from ..intervention.types import Edit
+
             if isinstance(derived, Edit):
                 if derived.factory is None:
                     raise _apply_invalid(

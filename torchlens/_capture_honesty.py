@@ -111,8 +111,6 @@ def capture_verification(log: Any) -> dict[str, Any]:
         ``None``), ``capture_verification_reason``, and ``rescue_rerun``.
     """
 
-    from ._data_classes._trace_missing_attrs import is_live_trace
-
     outcome = getattr(log, "outcome", None)
     status = getattr(outcome, "status", None)
     status_value = getattr(status, "value", None)
@@ -350,8 +348,6 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
         intervention evidence exists; ``None`` for an untouched log.
     """
 
-    from ._data_classes._trace_missing_attrs import is_live_trace
-
     replaced: list[str] = []
     fires = 0
     # Export subjects include accessors, records, a PartialTrace and husked
@@ -394,8 +390,6 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
         poison disclosure, episode disclosure (when present), intervention
         disclosure (when present, M5), and advisories (when present).
     """
-
-    from ._data_classes._trace_missing_attrs import is_live_trace
 
     facts: dict[str, Any] = {
         "schema": CAPTURE_HONESTY_SCHEMA,

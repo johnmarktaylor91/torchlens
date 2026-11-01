@@ -19,6 +19,7 @@ from typing import Any
 
 import torch
 
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._errors import InvalidArgumentError
 from ..._utils.display import atomic_write_text
 from ...errors._base import TorchLensError
@@ -58,8 +59,6 @@ def model_explorer_diff(
     Path
         The written directory.
     """
-
-    from ..._data_classes._trace_missing_attrs import is_live_trace
 
     left, right, names = _resolve_pair(members)
     destination = Path(path)
