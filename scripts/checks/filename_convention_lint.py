@@ -131,6 +131,7 @@ _LEDGERED_SPRINT_TOKEN_FILES: frozenset[str] = frozenset(
         "test_tlspec_runnable_r39_bounded_holders.py",
         "test_tlspec_runnable_r39_witness_exec.py",
         "test_tlspec_runnable_r41_crossthread_witness.py",
+        "test_tlspec_runnable_r45_crossthread_provenance.py",
         "test_tlspec_runnable_r45_rng_inventory.py",
         "test_tlspec_runnable_r53_alloc_bomb.py",
         "test_tlspec_runnable_r53_ambient_grad.py",

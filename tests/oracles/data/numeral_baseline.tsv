@@ -8569,6 +8569,8 @@ test-docstrings	tests/test_reprs.py	715
 test-docstrings	tests/test_rerun_push_head_ablation_parity.py	12
 test-docstrings	tests/test_rerun_push_head_ablation_parity.py	29
 test-docstrings	tests/test_rerun_push_head_ablation_parity.py	52
+test-docstrings	tests/test_rerun_subset.py	11
+test-docstrings	tests/test_rerun_subset.py	47
 test-docstrings	tests/test_rescue_rerun.py	16
 test-docstrings	tests/test_rescue_rerun.py	63
 test-docstrings	tests/test_rescue_rerun.py	67
