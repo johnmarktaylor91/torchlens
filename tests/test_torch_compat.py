@@ -1099,7 +1099,7 @@ def test_unimported_rng_extras_are_classified_whatever_was_imported_first() -> N
     RNG endpoint. On torch without the module the row must be absent.
     """
 
-    from torchlens._utils.rng import _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS, TORCH_RNG_SURFACE
+    from torchlens._utils.rng.registry import _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS, TORCH_RNG_SURFACE
 
     targets = {row.target for row in TORCH_RNG_SURFACE}
     torch_root = Path(torch.__file__).parent

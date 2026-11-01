@@ -24,6 +24,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._utils.rng as rng
 import torchlens.intervention.rerun as rerun_module
+from torchlens._utils.rng import inventory_types as rng_inventory_types
 from torchlens.options import CaptureOptions, InterventionOptions
 
 _FIELDS = (
@@ -210,10 +211,10 @@ def test_classifiers_entered_only_past_their_own_first_exits(
     trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(intervention_ready=True))
     assert _verdict(trace) == EXPECTED["numpy_returned"][1]
     assert c_call_entries
-    inert = rng._INERT_PROFILE_C_CALL_RECEIVER_TYPES
+    inert = rng_inventory_types._INERT_PROFILE_C_CALL_RECEIVER_TYPES
     for held, receiver_type in c_call_entries:
         assert held or (receiver_type is not None and receiver_type not in inert)
     # A return reaches the helper only when its caller is uncached or a user frame.
-    if rng._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
+    if rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
         assert return_entries
     assert not any(return_entries)

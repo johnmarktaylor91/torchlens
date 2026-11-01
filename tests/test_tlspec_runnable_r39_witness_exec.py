@@ -47,6 +47,7 @@ from torchlens._runnable import (
     RunnableErrorCode,
 )
 from torchlens._utils import rng as rng_utils
+from torchlens._utils.rng import inventory_types as rng_inventory_types
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
@@ -377,7 +378,7 @@ def test_deterministic_model_stays_verified(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 @pytest.mark.parametrize(
@@ -413,7 +414,7 @@ def test_numpy_frame_digest_scope_cache_keys_code_identity() -> None:
     internal_namespace: dict[str, Any] = {}
     user_namespace: dict[str, Any] = {}
     internal_filename = (
-        rng_utils._NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES[0] + "synthetic_internal.py"
+        rng_inventory_types._NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES[0] + "synthetic_internal.py"
     )
     exec(compile(source, internal_filename, "exec"), internal_namespace)
     exec(compile(source, "/home/user/my_model.py", "exec"), user_namespace)
@@ -428,7 +429,7 @@ def test_numpy_frame_digest_scope_cache_keys_code_identity() -> None:
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 def test_numpy2_structurally_equal_code_origins_never_false_verified(tmp_path: Path) -> None:
@@ -444,7 +445,7 @@ def test_numpy2_structurally_equal_code_origins_never_false_verified(tmp_path: P
     internal_namespace: dict[str, Any] = {"RNG": _ConstantRng()}
     user_namespace: dict[str, Any] = {"RNG": np.random.default_rng()}
     internal_filename = (
-        rng_utils._NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES[0] + "synthetic_internal.py"
+        rng_inventory_types._NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES[0] + "synthetic_internal.py"
     )
     exec(compile(source, internal_filename, "exec"), internal_namespace)
     exec(compile(source, "/home/user/my_model.py", "exec"), user_namespace)
@@ -469,7 +470,7 @@ def test_numpy2_structurally_equal_code_origins_never_false_verified(tmp_path: P
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 def test_numpy2_returned_bit_generator_draw_never_false_verified(tmp_path: Path) -> None:
@@ -498,8 +499,8 @@ def test_inert_profile_receiver_types_are_inert_to_tail_classifiers(
 ) -> None:
     """Every early-return receiver remains meaningless to all tail classifiers."""
 
-    assert type(receiver) in rng_utils._INERT_PROFILE_C_CALL_RECEIVER_TYPES
-    monkeypatch.setattr(rng_utils, "_INERT_PROFILE_C_CALL_RECEIVER_TYPES", frozenset())
+    assert type(receiver) in rng_inventory_types._INERT_PROFILE_C_CALL_RECEIVER_TYPES
+    monkeypatch.setattr(rng_inventory_types, "_INERT_PROFILE_C_CALL_RECEIVER_TYPES", frozenset())
     monitor = rng_utils.host_nondeterminism_monitor(None)
     frame = types.SimpleNamespace(f_globals={})
     monitor._classify_c_call(frame, getattr(receiver, method_name))
@@ -509,7 +510,7 @@ def test_inert_profile_receiver_types_are_inert_to_tail_classifiers(
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 def test_numpy2_frame_digest_deterministic_control_stays_verified(tmp_path: Path) -> None:
@@ -680,9 +681,13 @@ def test_rng_registry_has_no_numpy_draw_method_enumeration() -> None:
     import torchlens._utils.rng as rng_mod
 
     banned = {"standard_normal", "random_sample", "integers", "random_raw"}
-    source = Path(rng_mod.__file__).read_text()
-    for name in banned:
-        assert name not in source, f"numpy draw-method name {name!r} enumerated in rng.py"
+    package_dir = Path(rng_mod.__file__).parent
+    for module in sorted(package_dir.glob("*.py")):
+        source = module.read_text()
+        for name in banned:
+            assert name not in source, (
+                f"numpy draw-method name {name!r} enumerated in {module.name}"
+            )
 
 
 def test_rng_clock_namespace_fully_classified() -> None:
@@ -1477,7 +1482,7 @@ def _draw_from_b4_module_namespace() -> float:
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 def test_module_held_generator_preexisting_thread_draw_witnessed() -> None:
@@ -1513,7 +1518,7 @@ def test_module_held_generator_preexisting_thread_draw_witnessed() -> None:
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 def test_module_held_generator_rebound_between_windows_still_witnessed() -> None:
@@ -1533,13 +1538,13 @@ def test_module_held_generator_rebound_between_windows_still_witnessed() -> None
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 def test_deep_inventory_cap_exhaustion_flags_uncertain(monkeypatch: Any) -> None:
     """Cap invariant: deep-inventory exhaustion flags INCOMPLETE, never silent."""
 
-    monkeypatch.setattr(rng_utils, "_DEEP_INVENTORY_NODE_CAP", 0)
+    monkeypatch.setattr(rng_inventory_types, "_DEEP_INVENTORY_NODE_CAP", 0)
     with rng_utils.host_nondeterminism_monitor(None) as result:
         _reference_b4_fixture_roots()
     assert result.uncertain is True
@@ -1593,7 +1598,7 @@ import sys
 import numpy as np
 from torchlens._utils import rng as rng_utils
 
-if not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
+if not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
     print("PROBE_SKIP: numpy build emits c_call for RNG draw methods")
     sys.exit(0)
 
@@ -1619,7 +1624,7 @@ print("PROBE_OK")
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 def test_numpy_local_nested_holder_joins_deep_inventory(tmp_path: Path) -> None:
@@ -1760,7 +1765,7 @@ def test_numpy_threading_local_generator_never_false_verified(tmp_path: Path) ->
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="partial-mediated draws emit no c_call; the frame digest is the only witness",
 )
 def test_numpy_partial_interior_generator_never_false_verified(tmp_path: Path) -> None:
@@ -1811,7 +1816,7 @@ def _reference_r38_opaque_queue() -> None:
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 def test_threading_local_generator_preexisting_thread_draw_witnessed() -> None:
@@ -1845,7 +1850,7 @@ def test_threading_local_generator_preexisting_thread_draw_witnessed() -> None:
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 def test_frame_reachable_opaque_queue_fails_closed() -> None:
@@ -1866,7 +1871,7 @@ def test_frame_reachable_opaque_queue_fails_closed() -> None:
 
 
 @pytest.mark.skipif(
-    not rng_utils._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
+    not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST,
     reason="NumPy build emits c_call for RNG draw methods",
 )
 def test_frame_reachable_empty_opaque_queue_no_over_ceiling() -> None:

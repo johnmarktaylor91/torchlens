@@ -61,12 +61,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens._utils import rng as rng_mod
-from torchlens._utils.rng import (
-    _AMBIENT_BRIDGE_LEAF_TYPES,
-    _rng_exempt_instances,
-    host_nondeterminism_monitor,
-)
+from torchlens._utils.rng import host_nondeterminism_monitor, inventory_types as rng_inventory_types
+from torchlens._utils.rng.inventory_types import _AMBIENT_BRIDGE_LEAF_TYPES, _rng_exempt_instances
 from torchlens.options import CaptureOptions
 
 
@@ -313,7 +309,7 @@ def test_benign_deep_model_not_over_walked_or_ceilinged(monkeypatch: Any) -> Non
 
     torchvision = pytest.importorskip("torchvision")
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 50_000)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 50_000)
     model = torchvision.models.resnet18()
     monitor = _make_monitor(model)
     assert monitor._sweep_model_generators() == []
@@ -326,7 +322,7 @@ def test_benign_plain_model_with_callables_not_ceilinged(monkeypatch: Any) -> No
     function references (whose ``__globals__`` must be identity-excluded, not
     walked into the module namespace)."""
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 50_000)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 50_000)
 
     class _Benign(nn.Module):
         def __init__(self) -> None:
@@ -753,7 +749,7 @@ def test_sweep_independent_of_ambient_abc_cache_state(monkeypatch: Any) -> None:
     and the cap was exhausted BEFORE the model's generator (the r55 full-suite
     failure on ``test_r47_generator_container_subclass``)."""
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 20_000)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 20_000)
     planted: list[Any] = []
     ambient_keep: list[Any] = []
     for i in range(400):
@@ -902,7 +898,7 @@ def test_wrapped_torch_op_model_attribute_bounded_under_large_ambient_graph(
         isinstance(inst, cabc.Collection)
         ambient_keep.append(inst)
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 50_000)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 50_000)
 
     class _OpCaching(nn.Module):
         def __init__(self) -> None:
@@ -950,7 +946,7 @@ def test_synthetic_globals_function_attribute_never_walks_its_namespace(
     shared_ids = host_nondeterminism_monitor._shared_namespace_dict_ids()
     assert id(generated.__globals__) not in shared_ids  # genuinely unregistered
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 50_000)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 50_000)
     model = _HolderModel(generated)
     monitor = _make_monitor(model)
     snapshots = monitor._sweep_model_generators()

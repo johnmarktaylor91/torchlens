@@ -42,8 +42,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._utils import _rng_channels
-from torchlens._utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
+from torchlens._utils.rng import (
+    HOST_NONDETERMINISM_REGISTRY,
+    channels as _rng_channels,
+    host_nondeterminism_monitor,
+)
 
 
 class _LinearNoBias(nn.Module):

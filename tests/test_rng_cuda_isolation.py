@@ -29,6 +29,7 @@ import pytest
 import torch
 
 from torchlens._utils import rng as tl_rng, tensor_utils
+from torchlens._utils.rng import streams as rng_streams
 
 # Markers are additive: a file-level smoke pytestmark would keep the heavy tests
 # in the `-m smoke` tier, so tier marks are applied per test instead.
@@ -196,7 +197,7 @@ def test_snapshot_skips_cuda_until_initialized(monkeypatch: pytest.MonkeyPatch) 
 
         raise AssertionError("get_rng_state_all() must not run before CUDA init")
 
-    monkeypatch.setattr(tl_rng, "_cuda_rng_unusable", False)
+    monkeypatch.setattr(rng_streams, "_cuda_rng_unusable", False)
     monkeypatch.setattr(tl_rng, "_is_cuda_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "is_initialized", lambda: False)
     monkeypatch.setattr(torch.cuda, "get_rng_state_all", _forbidden)
@@ -223,7 +224,7 @@ def test_initialized_cuda_snapshot_shape_is_unchanged(
 
     fake_states = [torch.tensor([7], dtype=torch.uint8), torch.tensor([9], dtype=torch.uint8)]
 
-    monkeypatch.setattr(tl_rng, "_cuda_rng_unusable", False)
+    monkeypatch.setattr(rng_streams, "_cuda_rng_unusable", False)
     monkeypatch.setattr(tl_rng, "_is_cuda_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "is_initialized", lambda: True)
     monkeypatch.setattr(torch.cuda, "get_rng_state_all", lambda: fake_states)
@@ -254,7 +255,7 @@ def test_failing_cuda_rng_read_warns_latches_and_skips_restore(
 
         raise AssertionError("set_rng_state_all() must not run after a latched failure")
 
-    monkeypatch.setattr(tl_rng, "_cuda_rng_unusable", False)
+    monkeypatch.setattr(rng_streams, "_cuda_rng_unusable", False)
     monkeypatch.setattr(tl_rng, "_is_cuda_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "is_initialized", lambda: True)
     monkeypatch.setattr(torch.cuda, "get_rng_state_all", _explode)
@@ -293,7 +294,7 @@ def test_transient_cuda_rng_failure_rearms_at_next_capture_entry(
             raise RuntimeError("simulated transient CUDA failure (busy device)")
         return healthy
 
-    monkeypatch.setattr(tl_rng, "_cuda_rng_unusable", False)
+    monkeypatch.setattr(rng_streams, "_cuda_rng_unusable", False)
     monkeypatch.setattr(tl_rng, "_is_cuda_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "is_initialized", lambda: True)
     monkeypatch.setattr(torch.cuda, "get_rng_state_all", _transiently_broken)

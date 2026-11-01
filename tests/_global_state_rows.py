@@ -120,17 +120,17 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # ledger catches.
         ("torchlens/intervention/runtime.py", "_CONTEXT_ENTRIES"),
         ("torchlens/_utils/introspection.py", "_FUNC_CALL_LOCATION"),
-        ("torchlens/_utils/rng.py", "_ACTIVE_MONITOR"),
+        ("torchlens/_utils/rng/monitor_state.py", "_ACTIVE_MONITOR"),
         # Live monitor patches per (id(holder), name), spliced back on window
         # unwind -- a survivor past monitor exit is exactly the leak class this
         # row exists to catch (d327e3aa's non-LIFO restore bug).
-        ("torchlens/_utils/rng.py", "_PATCH_STACKS"),
+        ("torchlens/_utils/rng/monitor_state.py", "_PATCH_STACKS"),
         # CUDA RNG snapshot retry latch: set by a failed generator read, RE-ARMED
         # at every capture entry by set_random_seed (grind p5, B2P3-16). It was
         # misfiled as an immutable capability memo, which contractually forbade
         # ever recovering from a TRANSIENT read failure (busy device, momentary
         # OOM) -- a capture-fidelity latch, not a fact of the torch build.
-        ("torchlens/_utils/rng.py", "_cuda_rng_unusable"),
+        ("torchlens/_utils/rng/streams.py", "_cuda_rng_unusable"),
         # Accumulate/drain fence for in-flight cpu_async D2H copies (R36-1):
         # armed per copy on the wrapper hot path, drained at the capture
         # finalize seam and on the failure-scrub arms.

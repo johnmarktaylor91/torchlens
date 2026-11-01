@@ -67,13 +67,12 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens._utils import rng as rng_mod
-from torchlens._utils.rng import (
+from torchlens._utils.rng import host_nondeterminism_monitor, inventory_types as rng_inventory_types
+from torchlens._utils.rng.inventory_types import (
     _AMBIENT_BRIDGE_LEAF_TYPES,
     _NUMERIC_PAYLOAD_LEAF_TYPES,
     _resolve_slot_member,
     _rng_exempt_instances,
-    host_nondeterminism_monitor,
 )
 from torchlens.options import CaptureOptions
 
@@ -780,4 +779,4 @@ def test_source_tripwire_numeric_payloads_not_hard_leaves() -> None:
     assert host_nondeterminism_monitor._inert_gc_children((lambda: None).__code__, shared_ids) == []
     # the r61 split must not resurrect ambient members inside the payload tuple
     assert not set(_NUMERIC_PAYLOAD_LEAF_TYPES) & set(_AMBIENT_BRIDGE_LEAF_TYPES)
-    assert rng_mod._INVENTORY_LEAF_TYPES  # element-iteration wall still declared
+    assert rng_inventory_types._INVENTORY_LEAF_TYPES  # element-iteration wall still declared
