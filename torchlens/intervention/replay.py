@@ -1201,7 +1201,13 @@ def _execute_group_call(
             "captured graph (an index, shape or dtype path fixed at capture). Nothing was "
             "committed. Choose an edit that keeps the edited site inside the range the "
             "downstream ops accept, or rerun the model with the edit staged: "
-            "trace.run(model, inputs)"
+            "trace.run(model, inputs)",
+            code="replay_downstream_op_raised",
+            remedy=(
+                "Choose an edit that keeps the edited site inside the range the downstream "
+                "ops accept, or rerun the model with the edit staged: trace.run(model, inputs)"
+            ),
+            raised_type=type(exc).__name__,
         ) from exc
 
 
@@ -1459,8 +1465,18 @@ def _preflight_group(group: Sequence[Op], *, loaded: bool = False) -> None:
     for site in group:
         if _is_source_record(site):
             continue
+        if site.func is None and loaded:
+            raise ReplayPreconditionError(
+                _no_func_message(site, loaded=True),
+                code="replay_loaded_trace_has_no_callables",
+                remedy=(
+                    "Edit a trace captured in this process with "
+                    "CaptureOptions(replayable=True), or rerun the model with the edit "
+                    "staged: trace.run(model, inputs)"
+                ),
+            )
         if site.func is None:
-            raise ReplayPreconditionError(_no_func_message(site, loaded=loaded))
+            raise ReplayPreconditionError(_no_func_message(site, loaded=False))
         _template_for_site(site)
 
 

@@ -514,7 +514,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   because a run would re-capture every payload into RAM while the bundle kept the first
   capture; capture again with `to_disk` to a new path, or without `to_disk`, and run that trace
   (a trace loaded from the bundle runs through its loaded providers). A `path` that already
-  exists refuses with `bundle_save_failed`, as does `Trace.save` or `Bundle.save` to an existing
+  exists refuses with `bundle_path_exists`, as does `Trace.save` or `Bundle.save` to an existing
   path without `overwrite=True`.
 
 **Capture cache**
