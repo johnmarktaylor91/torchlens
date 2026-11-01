@@ -90,7 +90,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "annotation_namespace_invalid",
         "annotation_tensor_not_portable",
         "backend_capability_conformance",
-        "backend_error",
         "backward_capture_conflict",
         "backward_pass_filter_invalid",
         "batch_items_invalid",
