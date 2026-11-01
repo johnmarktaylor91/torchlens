@@ -19,11 +19,12 @@ from . import _state
 from ._call_fingerprint import fingerprinting, install_module_token_hooks
 from ._data_classes._trace_accessors import boundary_label_rows
 from ._fast_live_plans import (
+    _drop_uncollected_payloads,
     _FastOutputPlan,
+    _module_call_budget,
     _pair_output_leaves,
     build_function_plans,
     build_module_plans,
-    recorded_module_call_counts,
 )
 from ._fast_live_steer import (
     SteerPlan,
@@ -329,33 +330,6 @@ def _fast_input_check(
     )
 
 
-def _module_call_budget(
-    trace: Any, module_plans: Sequence[_FastOutputPlan]
-) -> tuple[dict[str, frozenset[int]], dict[str, int]]:
-    """Return the planned calls per module address and each address's recorded call count.
-
-    Parameters
-    ----------
-    trace:
-        Source trace whose ``module_calls`` the counts come from.
-    module_plans:
-        Module output plans the fast session collects.
-
-    Returns
-    -------
-    tuple[dict[str, frozenset[int]], dict[str, int]]
-        The 1-based call numbers planned per address, and the number of calls
-        the capture recorded per planned address.
-    """
-
-    planned: dict[str, frozenset[int]] = {}
-    for plan in module_plans:
-        planned[plan.address_or_name] = planned.get(plan.address_or_name, frozenset()) | {
-            int(plan.call_index or 1)
-        }
-    return planned, recorded_module_call_counts(trace, frozenset(planned))
-
-
 def _admitted_collection_labels(trace: Any, plans: Sequence[_FastOutputPlan]) -> set[str]:
     """Return the op labels the fast live session refreshes, refusing uncollectable saves.
 
@@ -399,25 +373,6 @@ def _admitted_collection_labels(trace: Any, plans: Sequence[_FastOutputPlan]) ->
             detection_stage="fast_live_function_plan",
         )
     return supported_labels
-
-
-def _drop_uncollected_payloads(trace: Any, supported_labels: set[str]) -> None:
-    """Clear saved payloads the fast live session will not refresh.
-
-    Parameters
-    ----------
-    trace:
-        Source trace whose ops are updated in place.
-    supported_labels:
-        Op labels the session's module and function plans collect, plus the
-        model's boundary ops.
-    """
-
-    for op in trace.layer_list:
-        if bool(getattr(op, "has_saved_activation", False)) and op.label not in supported_labels:
-            op._internal_set("out", None)
-            op._internal_set("transformed_out", None)
-            op._internal_set("has_saved_activation", False)
 
 
 def _remove_fast_live_hooks(handles: list[Any]) -> None:

@@ -17,6 +17,8 @@ import torch
 
 __all__ = [
     "_FastOutputPlan",
+    "_drop_uncollected_payloads",
+    "_module_call_budget",
     "_module_output_paths",
     "_pair_output_leaves",
     "build_function_plans",
@@ -281,3 +283,49 @@ def recorded_module_call_counts(trace: Any, addresses: frozenset[str]) -> dict[s
         if address in counts:
             counts[address] += 1
     return counts
+
+
+def _module_call_budget(
+    trace: Any, module_plans: Sequence[_FastOutputPlan]
+) -> tuple[dict[str, frozenset[int]], dict[str, int]]:
+    """Return the planned calls per module address and each address's recorded call count.
+
+    Parameters
+    ----------
+    trace:
+        Source trace whose ``module_calls`` the counts come from.
+    module_plans:
+        Module output plans the fast session collects.
+
+    Returns
+    -------
+    tuple[dict[str, frozenset[int]], dict[str, int]]
+        The 1-based call numbers planned per address, and the number of calls
+        the capture recorded per planned address.
+    """
+
+    planned: dict[str, frozenset[int]] = {}
+    for plan in module_plans:
+        planned[plan.address_or_name] = planned.get(plan.address_or_name, frozenset()) | {
+            int(plan.call_index or 1)
+        }
+    return planned, recorded_module_call_counts(trace, frozenset(planned))
+
+
+def _drop_uncollected_payloads(trace: Any, supported_labels: set[str]) -> None:
+    """Clear saved payloads the fast live session will not refresh.
+
+    Parameters
+    ----------
+    trace:
+        Source trace whose ops are updated in place.
+    supported_labels:
+        Op labels the session's module and function plans collect, plus the
+        model's boundary ops.
+    """
+
+    for op in trace.layer_list:
+        if bool(getattr(op, "has_saved_activation", False)) and op.label not in supported_labels:
+            op._internal_set("out", None)
+            op._internal_set("transformed_out", None)
+            op._internal_set("has_saved_activation", False)
