@@ -695,10 +695,10 @@ torchlens/_visualization/auto_collapse.py::_split_run_by_member_uniformity	80
 torchlens/_visualization/auto_collapse.py::_synthetic_child_condensed_flow_graph	87
 torchlens/_visualization/auto_collapse.py::resolve_collapse_fn	89
 torchlens/_visualization/auto_collapse.py::resolve_repeat_folds	180
-torchlens/_visualization/bundle_diff.py	889
+torchlens/_visualization/bundle_diff.py	886
 torchlens/_visualization/bundle_diff.py::_add_side_cluster	64
 torchlens/_visualization/bundle_diff.py::_build_dot	136
-torchlens/_visualization/bundle_diff.py::bundle_diff	102
+torchlens/_visualization/bundle_diff.py::bundle_diff	101
 torchlens/_visualization/code_panel.py::resolve_code_panel_source	80
 torchlens/_visualization/collapse_ladder.py::collapse_schedule	128
 torchlens/_visualization/collapse_optimizer.py	4093
@@ -1095,9 +1095,9 @@ torchlens/bridge/shap.py::explain	68
 torchlens/bridge/transformers.py	804
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	62
 torchlens/bridge/transformers.py::trace_text	67
-torchlens/bundle/__init__.py	2338
+torchlens/bundle/__init__.py	2016
 torchlens/bundle/__init__.py::Bundle.rank_changes	83
-torchlens/bundle/_alternatives.py::_bundle_add_alternative	64
+torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
 torchlens/bundle/_compare_gate.py::require_comparable	143
 torchlens/bundle/_lineage.py::validate_member_construction	77
 torchlens/bundle/_outcome_fold.py::_fold_member_outcomes	63
@@ -1166,7 +1166,7 @@ torchlens/distributed/_lifecycle.py	882
 torchlens/distributed/_lifecycle.py::_install_lifecycle_wraps	67
 torchlens/distributed/_lifecycle.py::_seed_group_locked	80
 torchlens/distributed/_lifecycle.py::maybe_auto_arm	68
-torchlens/experiment/_engine.py	1044
+torchlens/experiment/_engine.py	964
 torchlens/experiment/_engine.py::_resolve_candidate	80
 torchlens/experiment/_engine.py::sweep_sites	138
 torchlens/experiment/_head_sugar.py::head_ablation_candidates	75
@@ -1272,7 +1272,7 @@ torchlens/intervention/runtime.py::_apply_live_hooks	159
 torchlens/intervention/runtime.py::_execute_hook	80
 torchlens/intervention/runtime.py::_validate_grad_tuple	66
 torchlens/intervention/runtime.py::validate_hook_output	70
-torchlens/intervention/save.py	1070
+torchlens/intervention/save.py	1058
 torchlens/intervention/save.py::_build_target_manifest	73
 torchlens/intervention/save.py::_resolve_intervention_tensor_path	61
 torchlens/intervention/save.py::load_intervention_spec	87
