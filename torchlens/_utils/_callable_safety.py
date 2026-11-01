@@ -1502,7 +1502,7 @@ _APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens._n
 # that mutable registry was a prior ordering-dependent load-failure bug). It lets a
 # genuine but PRIVATE-named registration callable (e.g. the built-in residual
 # predicate ``_is_transformer_block``) be admitted while a private import gadget
-# (``torchlens._utils._module_is_installed``) -- which is never a registration entry
+# (``torchlens.report._environment._module_is_installed``) -- which is never a registration entry
 # point -- stays denied. Set via ``torchlens._semantic.facets.register``.
 FACET_RECIPE_MARKER_ATTR = "_torchlens_facet_recipe"
 
@@ -1565,7 +1565,7 @@ def is_inert_first_party_callable(func: Callable[..., Any]) -> bool:
     A pickle ``REDUCE`` (and an intervention ``custom`` import ref) INVOKES the
     admitted callable with attacker-supplied args. Trusting *every* torchlens-owned
     callable (the pre-r21 policy) was a confirmed load-time RCE: the private helper
-    ``torchlens._utils._module_is_installed`` performs ``importlib.import_module`` on
+    ``torchlens.report._environment._module_is_installed`` performs ``importlib.import_module`` on
     its argument. The pre-r22 narrowing kept a "PUBLIC name proves inertness"
     fallthrough, which was STILL unsound: the verb denylist omitted the filesystem /
     registry / capability-mutation verb class, so PUBLIC side-effecting callables such
