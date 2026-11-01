@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 import numpy as np
 
-from ... import _state
 from ...validation.status import ValidationReplaySource, ValidationStatus
 from .._constants import CONSTANT_PARENT_PAYLOAD_REASON, CONSTANT_PRODUCER_LEAF_REASON
 from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
+from ._raw_op_replay import _import_tensorflow, _replay_raw_op
 from .op_callback_capture import TFOpCapture
 
 TFOpClass = Literal[
@@ -318,14 +318,38 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
         phase = "perturbation" if outcome == _REASON_PERTURBATION else "replay"
         decisions_list.append(_decision(op_label, op_type, phase, "failed", outcome))
 
-    decisions = tuple(decisions_list)
-    return TFValidationResult(
+    return _detailed_result(
         counts=TFValidationCounts(
             replayed_node_count=replayed_count,
             pure_unverified_node_count=pure_unverified_count,
             effect_region_node_count=effect_region_count,
             failed_node_count=len(failures),
         ),
+        failures=failures,
+        classes=classes,
+        histograms=(replayed_histogram, pure_unverified_histogram, effect_region_histogram),
+        decisions_list=decisions_list,
+        unverified_reasons=unverified_reasons,
+        exempted_reasons=exempted_reasons,
+    )
+
+
+def _detailed_result(
+    *,
+    counts: TFValidationCounts,
+    failures: list[str],
+    classes: Mapping[str, TFOpClass],
+    histograms: tuple[Counter[str], Counter[str], Counter[str]],
+    decisions_list: list[Mapping[str, Any]],
+    unverified_reasons: Counter[str],
+    exempted_reasons: Counter[str],
+) -> TFValidationResult:
+    """Assemble the detailed result from the replay loop's tallies."""
+
+    replayed_histogram, pure_unverified_histogram, effect_region_histogram = histograms
+    decisions = tuple(decisions_list)
+    return TFValidationResult(
+        counts=counts,
         failures=tuple(failures),
         classes=classes,
         replayed_histogram=replayed_histogram,
@@ -696,15 +720,7 @@ def _validate_self_consistency(
             f"unresolved_producer:{item.consumer_op_type}:{item.input_index}" for item in unresolved
         )
     produced_labels: set[str] = set()
-    source_labels: set[str] = set()
-    for label, op in ops_by_label.items():
-        if label != getattr(op, "_label_raw", None):
-            continue
-        if bool(getattr(op, "is_input", False)) or getattr(op, "func_name", None) in {
-            "input",
-            "constant",
-        }:
-            source_labels.add(label)
+    source_labels = _source_labels(ops_by_label)
     for capture in captures_by_label.values():
         if capture.label_raw not in ops_by_label:
             failures.append(f"captured_output_missing_materialized_op:{capture.label_raw}")
@@ -758,6 +774,21 @@ def _validate_self_consistency(
                 f"graph_parent_edges_not_conserved:{capture.label_raw}:"
                 f"{sorted(expected_graph_parents)!r}:{sorted(graph_parents)!r}"
             )
+
+
+def _source_labels(ops_by_label: Mapping[str, Any]) -> set[str]:
+    """Raw labels of the trace's source ops: inputs and constants."""
+
+    source_labels: set[str] = set()
+    for label, op in ops_by_label.items():
+        if label != getattr(op, "_label_raw", None):
+            continue
+        if bool(getattr(op, "is_input", False)) or getattr(op, "func_name", None) in {
+            "input",
+            "constant",
+        }:
+            source_labels.add(label)
+    return source_labels
 
 
 def _replay_and_perturb_op(
@@ -848,401 +879,6 @@ def _rebuild_inputs(
             continue
         raise LookupError(f"unresolved input {capture.label_raw}:{input_record.input_index}")
     return inputs
-
-
-def _replay_raw_op(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay one TensorFlow raw op from rebuilt callback inputs.
-
-    Parameters
-    ----------
-    capture
-        Callback capture containing op type and attrs.
-    inputs
-        Rebuilt TensorFlow inputs.
-
-    Returns
-    -------
-    Any
-        Replayed TensorFlow output tensor.
-    """
-
-    dispatch: dict[str, Callable[[TFOpCapture, Sequence[Any]], Any]] = {
-        "AddV2": lambda item, args: _raw(item).AddV2(x=args[0], y=args[1]),
-        "AvgPool": _replay_pool,
-        "BatchMatMulV2": _replay_batch_matmul_v2,
-        "BiasAdd": _replay_bias_add,
-        "Cast": _replay_cast,
-        "ConcatV2": _replay_concat_v2,
-        "Conv2D": _replay_conv2d,
-        "DepthwiseConv2dNative": _replay_depthwise_conv2d,
-        "Einsum": _replay_einsum,
-        "Elu": lambda item, args: _raw(item).Elu(features=args[0]),
-        "Erf": lambda item, args: _raw(item).Erf(x=args[0]),
-        "Erfc": lambda item, args: _raw(item).Erfc(x=args[0]),
-        "Exp": lambda item, args: _raw(item).Exp(x=args[0]),
-        "ExpandDims": lambda item, args: _raw(item).ExpandDims(input=args[0], dim=args[1]),
-        "Fill": lambda item, args: _raw(item).Fill(dims=args[0], value=args[1]),
-        "Greater": lambda item, args: _raw(item).Greater(x=args[0], y=args[1]),
-        "Less": lambda item, args: _raw(item).Less(x=args[0], y=args[1]),
-        "Log": lambda item, args: _raw(item).Log(x=args[0]),
-        "MatMul": _replay_matmul,
-        "Maximum": lambda item, args: _raw(item).Maximum(x=args[0], y=args[1]),
-        "Minimum": lambda item, args: _raw(item).Minimum(x=args[0], y=args[1]),
-        "Pow": lambda item, args: _raw(item).Pow(x=args[0], y=args[1]),
-        "Prod": lambda item, args: _replay_reduction(item, args, "Prod"),
-        "Sigmoid": lambda item, args: _raw(item).Sigmoid(x=args[0]),
-        "Sin": lambda item, args: _raw(item).Sin(x=args[0]),
-        "Sum": lambda item, args: _replay_reduction(item, args, "Sum"),
-        "Tile": lambda item, args: _raw(item).Tile(input=args[0], multiples=args[1]),
-        "MaxPool": _replay_pool,
-        "Mean": _replay_mean,
-        "Mul": lambda item, args: _raw(item).Mul(x=args[0], y=args[1]),
-        "Neg": lambda item, args: _raw(item).Neg(x=args[0]),
-        "Pad": lambda item, args: _raw(item).Pad(input=args[0], paddings=args[1]),
-        "RealDiv": lambda item, args: _raw(item).RealDiv(x=args[0], y=args[1]),
-        "Relu": lambda item, args: _raw(item).Relu(features=args[0]),
-        "Relu6": lambda item, args: _raw(item).Relu6(features=args[0]),
-        "Reshape": lambda item, args: _raw(item).Reshape(tensor=args[0], shape=args[1]),
-        "Rsqrt": lambda item, args: _raw(item).Rsqrt(x=args[0]),
-        "Softmax": lambda item, args: _raw(item).Softmax(logits=args[0]),
-        "Sqrt": lambda item, args: _raw(item).Sqrt(x=args[0]),
-        "SquaredDifference": lambda item, args: _raw(item).SquaredDifference(
-            x=args[0],
-            y=args[1],
-        ),
-        "Sub": lambda item, args: _raw(item).Sub(x=args[0], y=args[1]),
-        "Squeeze": lambda item, args: _raw(item).Squeeze(
-            input=args[0],
-            axis=_optional_int_list(item.attrs.get("squeeze_dims")),
-        ),
-        "Tanh": lambda item, args: _raw(item).Tanh(x=args[0]),
-        "Transpose": lambda item, args: _raw(item).Transpose(x=args[0], perm=args[1]),
-    }
-    replay = dispatch.get(capture.op_type)
-    if replay is None:
-        raise ValueError(f"op is not raw-op replayable: {capture.op_type}")
-    with _state.pause_logging():
-        return replay(capture, inputs)
-
-
-def _raw(_capture: TFOpCapture) -> Any:
-    """Return TensorFlow raw ops module.
-
-    Parameters
-    ----------
-    _capture
-        Unused capture, accepted for dispatch lambdas.
-
-    Returns
-    -------
-    Any
-        ``tf.raw_ops``.
-    """
-
-    return _import_tensorflow().raw_ops
-
-
-def _replay_batch_matmul_v2(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``BatchMatMulV2``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).BatchMatMulV2(
-        x=inputs[0],
-        y=inputs[1],
-        adj_x=bool(capture.attrs.get("adj_x", False)),
-        adj_y=bool(capture.attrs.get("adj_y", False)),
-    )
-
-
-def _replay_bias_add(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``BiasAdd``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    data_format = capture.attrs.get("data_format")
-    kwargs = {} if data_format is None else {"data_format": _attr_str(data_format)}
-    return _raw(capture).BiasAdd(value=inputs[0], bias=inputs[1], **kwargs)
-
-
-def _replay_cast(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``Cast``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).Cast(
-        x=inputs[0],
-        DstT=capture.attrs["DstT"],
-        Truncate=bool(capture.attrs.get("Truncate", False)),
-    )
-
-
-def _replay_concat_v2(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``ConcatV2``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    del capture
-    return _import_tensorflow().raw_ops.ConcatV2(values=list(inputs[:-1]), axis=inputs[-1])
-
-
-def _replay_conv2d(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``Conv2D``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).Conv2D(
-        input=inputs[0],
-        filter=inputs[1],
-        strides=list(capture.attrs["strides"]),
-        padding=_attr_str(capture.attrs["padding"]),
-        explicit_paddings=list(capture.attrs.get("explicit_paddings", [])),
-        data_format=_attr_str(capture.attrs.get("data_format", "NHWC")),
-        dilations=list(capture.attrs.get("dilations", [1, 1, 1, 1])),
-        use_cudnn_on_gpu=bool(capture.attrs.get("use_cudnn_on_gpu", True)),
-    )
-
-
-def _replay_depthwise_conv2d(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``DepthwiseConv2dNative``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    # ``tf.nn.depthwise_conv2d`` records unset attrs as ``None``.
-    return _raw(capture).DepthwiseConv2dNative(
-        input=inputs[0],
-        filter=inputs[1],
-        strides=list(capture.attrs["strides"]),
-        padding=_attr_str(capture.attrs["padding"]),
-        explicit_paddings=list(capture.attrs.get("explicit_paddings") or []),
-        data_format=_attr_str(capture.attrs.get("data_format") or "NHWC"),
-        dilations=list(capture.attrs.get("dilations") or [1, 1, 1, 1]),
-    )
-
-
-def _replay_einsum(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``Einsum``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).Einsum(
-        inputs=list(inputs),
-        equation=_attr_str(capture.attrs["equation"]),
-    )
-
-
-def _replay_matmul(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``MatMul``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).MatMul(
-        a=inputs[0],
-        b=inputs[1],
-        transpose_a=bool(capture.attrs.get("transpose_a", False)),
-        transpose_b=bool(capture.attrs.get("transpose_b", False)),
-    )
-
-
-def _replay_reduction(capture: TFOpCapture, inputs: Sequence[Any], op_name: str) -> Any:
-    """Replay ``Sum`` or ``Prod`` (same raw-op signature as ``Mean``).
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-    op_name
-        ``"Sum"`` or ``"Prod"``.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return getattr(_raw(capture), op_name)(
-        input=inputs[0],
-        axis=inputs[1],
-        keep_dims=bool(capture.attrs.get("keep_dims", False)),
-    )
-
-
-def _replay_mean(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``Mean``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).Mean(
-        input=inputs[0],
-        axis=inputs[1],
-        keep_dims=bool(capture.attrs.get("keep_dims", False)),
-    )
-
-
-def _replay_pool(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``MaxPool`` or ``AvgPool``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    raw_op = getattr(_raw(capture), capture.op_type)
-    return raw_op(
-        input=inputs[0],
-        ksize=list(capture.attrs["ksize"]),
-        strides=list(capture.attrs["strides"]),
-        padding=_attr_str(capture.attrs["padding"]),
-        explicit_paddings=list(capture.attrs.get("explicit_paddings", [])),
-        data_format=_attr_str(capture.attrs.get("data_format", "NHWC")),
-    )
-
-
-def _attr_str(value: Any) -> str:
-    """Return a TensorFlow string attr as text.
-
-    Parameters
-    ----------
-    value
-        TensorFlow callback attr value.
-
-    Returns
-    -------
-    str
-        Decoded text attr.
-    """
-
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return str(value)
-
-
-def _optional_int_list(value: Any) -> list[int]:
-    """Return a TensorFlow optional int-list attr.
-
-    Parameters
-    ----------
-    value
-        Callback attr value.
-
-    Returns
-    -------
-    list[int]
-        Empty list for omitted attrs, otherwise the integer list.
-    """
-
-    if value is None:
-        return []
-    return [int(item) for item in value]
 
 
 def _parent_perturbations_change_output(
@@ -1449,20 +1085,6 @@ def _captures_by_label(trace: Any) -> dict[str, TFOpCapture]:
         for capture in getattr(trace, "_tf_op_captures", ())
         if isinstance(capture, TFOpCapture)
     }
-
-
-def _import_tensorflow() -> Any:
-    """Import TensorFlow lazily.
-
-    Returns
-    -------
-    Any
-        Imported TensorFlow module.
-    """
-
-    import tensorflow as tf
-
-    return tf
 
 
 __all__ = [
