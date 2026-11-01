@@ -159,7 +159,7 @@ def test_attached_tokenizer_decodes_text_automatically_only_from_a_logits_head()
             self.weight = nn.Parameter(torch.ones(()))
 
         def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:  # noqa: D102
-            hidden = torch.ones(1, 2, 4) * self.weight
+            hidden = torch.ones(1, 2, 4) * self.weight + x.sum() * 0
             return {"last_hidden_state": hidden}
 
     encoder = _Encoder().eval()
@@ -170,7 +170,8 @@ def test_attached_tokenizer_decodes_text_automatically_only_from_a_logits_head()
 
     class _LM(_Encoder):
         def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:  # noqa: D102
-            return {"logits": torch.tensor([[[0.0, 5.0], [6.0, 1.0]]]) * self.weight}
+            logits = torch.tensor([[[0.0, 5.0], [6.0, 1.0]]]) * self.weight
+            return {"logits": logits + x.sum() * 0}
 
     language_model = _LM().eval()
     language_model._torchlens_output_tokenizer = _Tokenizer()

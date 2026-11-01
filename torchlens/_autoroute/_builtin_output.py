@@ -198,6 +198,7 @@ def decode_trace_output(
     """
 
     view, heads = _retained_output_view(trace)
+    heads_text = "the single output tensor (no named heads)" if heads == ("",) else ", ".join(heads)
     if view is None:
         raise PayloadUnavailableError(
             "no output tensor retained; re-decode unavailable",
@@ -206,7 +207,8 @@ def decode_trace_output(
         )
     if head is not None and _select_tensor_by_head(view, head) is None:
         raise InvalidArgumentError(
-            f"{HEAD_KW}={head!r} is not an output head of this trace; available heads: {heads}",
+            f"{HEAD_KW}={head!r} is not an output head of this trace; "
+            f"available heads: {heads_text}",
             code=HEAD_UNKNOWN_CODE,
             remedy=f"pass one of the available heads as {HEAD_KW}=",
             argument=HEAD_KW,
@@ -222,7 +224,7 @@ def decode_trace_output(
     if logits_info is None:
         raise InvalidArgumentError(
             f"several output heads qualify for {STYLE_KW}={resolved.style!r} and none was "
-            f"named; available heads: {heads}",
+            f"named; available heads: {heads_text}",
             code=HEAD_AMBIGUOUS_CODE,
             remedy=f"pass {HEAD_KW}= naming one of the available heads",
             argument=HEAD_KW,
