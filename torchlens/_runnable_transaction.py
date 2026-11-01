@@ -12,6 +12,7 @@ import torch
 from torchlens._runnable import ContractCheck, ReadinessReport
 
 from . import _state
+from ._errors import InvalidArgumentError
 from ._runnable import (
     ActivationPayloadLayerDescriptor,
     DivergencePolicy,
@@ -465,6 +466,40 @@ def _resolve_run_until_plan(trace: Any, until: Any) -> _RunUntilPlan:
         skipped_raw_labels=tuple(skipped),
         requested_layer_labels=tuple(dict.fromkeys(requested_layer_labels)),
     )
+
+
+def _resolve_run_save_labels(trace: Any, save: Any, until: Any) -> frozenset[str]:
+    """Resolve a run-time ``save=`` selection to final layer labels.
+
+    The selection must lie inside the ``until=`` executed window when both are
+    given; out-of-window sites refuse typed.
+    """
+
+    # Reuse the static-form resolver: same accepted family (labels,
+    # module addresses, 'saved'), same typed refusals (pre-S4
+    # predicate gate, junk forms, unknown-site lookup feedback).
+    save_plan = _resolve_run_until_plan(trace, save)
+    run_save_labels = frozenset(save_plan.requested_layer_labels)
+    if until is not None:
+        until_preview = _resolve_run_until_plan(trace, until)
+        executed_raw = frozenset(until_preview.executed_raw_labels)
+        executed_final = {
+            layer.layer_label
+            for layer in trace.layer_list
+            if layer._layer_label_raw in executed_raw
+        }
+        outside = sorted(run_save_labels - executed_final)
+        if outside:
+            raise InvalidArgumentError(
+                "run-time save= selection must lie inside the "
+                "until= executed window; out-of-window site(s): "
+                f"{', '.join(outside)}",
+                code="run_until_form_invalid",
+                remedy="widen until= to cover the save= sites, or "
+                "drop the out-of-window save= sites",
+                argument="save",
+            )
+    return run_save_labels
 
 
 def _validated_until_tokens(until: Any) -> list[Any]:

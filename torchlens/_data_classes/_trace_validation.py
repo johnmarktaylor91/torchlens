@@ -848,32 +848,9 @@ class TraceValidationMixin(_TraceMixinBase):
                 )
             run_save_labels: Any = None
             if save is not None:
-                from .._runnable_transaction import _resolve_run_until_plan
+                from .._runnable_transaction import _resolve_run_save_labels
 
-                # Reuse the static-form resolver: same accepted family (labels,
-                # module addresses, 'saved'), same typed refusals (pre-S4
-                # predicate gate, junk forms, unknown-site lookup feedback).
-                save_plan = _resolve_run_until_plan(self, save)
-                run_save_labels = frozenset(save_plan.requested_layer_labels)
-                if until is not None:
-                    until_preview = _resolve_run_until_plan(self, until)
-                    executed_raw = frozenset(until_preview.executed_raw_labels)
-                    executed_final = {
-                        layer.layer_label
-                        for layer in self.layer_list
-                        if layer._layer_label_raw in executed_raw
-                    }
-                    outside = sorted(run_save_labels - executed_final)
-                    if outside:
-                        raise InvalidArgumentError(
-                            "run-time save= selection must lie inside the "
-                            "until= executed window; out-of-window site(s): "
-                            f"{', '.join(outside)}",
-                            code="run_until_form_invalid",
-                            remedy="widen until= to cover the save= sites, or "
-                            "drop the out-of-window save= sites",
-                            argument="save",
-                        )
+                run_save_labels = _resolve_run_save_labels(self, save, until)
             if carry_state and loaded_provider in {
                 RunProvider.LOADED_SPARSE,
                 RunProvider.LOADED_ANALYSIS,
