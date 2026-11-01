@@ -498,6 +498,7 @@ FEATURES: tuple[Feature, ...] = (
 
 # wave-3 fills
 from tests.behaviour._fill_capture import FEATURES  # noqa: E402, F811 (re-points claimed rows)
+from tests.behaviour._fill_io import FEATURES  # noqa: E402, F811 (re-points the io rows)
 
 FEATURES_BY_NAME: dict[str, Feature] = {feature.name: feature for feature in FEATURES}
 
