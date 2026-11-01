@@ -651,7 +651,7 @@ def _validate_self_consistency(
     for label, op in ops_by_label.items():
         if label != getattr(op, "_label_raw", None):
             continue
-        if bool(getattr(op, "is_input", False)):
+        if bool(getattr(op, "is_input", False)) or label in source_labels:
             continue
         if label not in captures_by_label:
             failures.append(f"materialized_op_missing_capture:{label}")
