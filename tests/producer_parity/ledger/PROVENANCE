@@ -3555,3 +3555,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: b46153d5309da0430f4bb41e2b6759e708fbfdcc (dirty)
 recorded: 2026-11-01T21:31:04.687325+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-f: Layer bodies moved to _layer_views and receptive_field/_layer_fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 95cb3f0be5193efef806c7b5aa09d7c6071bd29f (clean)
+recorded: 2026-11-01T21:57:35.968076+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-f: Layer bodies moved to _layer_views and receptive_field/_layer_fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 95cb3f0be5193efef806c7b5aa09d7c6071bd29f (clean)
+recorded: 2026-11-01T21:57:39.185346+00:00
