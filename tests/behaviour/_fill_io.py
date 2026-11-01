@@ -610,7 +610,7 @@ def _check_tabular_exports(cell: Cell, live: Any, frame: Any) -> None:
     import pandas as pd
 
     csv_path = tl.export.csv(live, cell.tmp / "export.csv")
-    back = pd.read_csv(csv_path)
+    back = pd.read_csv(csv_path, comment="#")  # the honesty preamble rides # comment lines
     cell.expect(len(back) == len(frame), f"csv round-trip has {len(back)} rows")
     json_path = tl.export.json(live, cell.tmp / "export.json")
     text = Path(json_path).read_text(encoding="utf-8")
