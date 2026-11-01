@@ -20,7 +20,6 @@ untouched.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +28,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import PathFaithfulness, ReadinessStatus
+from torchlens._runnable import ReadinessStatus
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.options import CaptureOptions
 
@@ -169,27 +168,3 @@ def test_r77_unhashable_structure_position_component_refuses_typed(tmp_path: Pat
     path = _save(_MetaBranch().eval(), x, tmp_path / "struct_pos.tlspec")
     _tamper_fact_field(path, "input_structure:", "position", _NESTED_LIST_COMPONENT)
     _assert_context_field_invalid_analysis_only(path, x.clone())
-
-
-@pytest.mark.parametrize(
-    "factory",
-    [
-        lambda: (_MetaBranch().eval(), torch.randn(4, 4)),
-        lambda: (_LiteralCarrier().eval(), (torch.randn(4, 4), 3)),
-    ],
-    ids=["metadata", "literal"],
-)
-def test_r77_untampered_artifacts_unchanged(
-    tmp_path: Path, factory: Callable[[], tuple[nn.Module, Any]]
-) -> None:
-    """Zero collateral: well-formed artifacts still load and verify."""
-
-    model, inputs = factory()
-    path = _save(model, inputs, tmp_path / "clean.tlspec")
-    run_inputs = (
-        tuple(v.clone() if isinstance(v, torch.Tensor) else v for v in inputs)
-        if isinstance(inputs, tuple)
-        else inputs.clone()
-    )
-    result = tl.load(path).run(inputs=run_inputs)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

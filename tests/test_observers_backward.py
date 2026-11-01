@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch import nn
 
@@ -82,31 +83,33 @@ def _trace_with_tap(tap: TapObserver) -> object:
     return trace
 
 
-def test_tap_backward_tensor_mount_forward_selector() -> None:
-    """tl.grad(label) taps the output gradient of a forward site."""
+@pytest.mark.parametrize(
+    "label",
+    ["output_1", "relu_1_2"],
+    ids=[
+        "tap_backward_tensor_mount_forward_selector",
+        "tap_backward_tensor_mount_compute_op_still_matches",
+    ],
+)
+def test_tap_backward_tensor_mount(label: str) -> None:
+    """tl.grad(label) taps the output gradient on either mount point.
 
-    tap = tl.observers.tap(tl.grad(tl.label("output_1")))
+    ``output_1`` mounts through direction-agnostic forward metadata selectors;
+    a tap mounted on the ReLU compute op still sees the gradient stream.
+
+    Parameters
+    ----------
+    label:
+        Final op label the backward tap is mounted on.
+    """
+
+    tap = tl.observers.tap(tl.grad(tl.label(label)))
     _trace_with_tap(tap)
 
     assert len(tap.records) == 1
     record = tap.records[0]
     assert record.signal == "backward"
-    assert record.site_label == "output_1"
-    assert record.grad_kind == "grad_output"
-    assert record.backward_call_index == 1
-    assert torch.equal(record.value, torch.ones(2, 3))
-
-
-def test_tap_backward_tensor_mount_compute_op_still_matches() -> None:
-    """Backward taps mounted on the compute op still see the gradient stream."""
-
-    tap = tl.observers.tap(tl.grad(tl.label("relu_1_2")))
-    _trace_with_tap(tap)
-
-    assert len(tap.records) == 1
-    record = tap.records[0]
-    assert record.signal == "backward"
-    assert record.site_label == "relu_1_2"
+    assert record.site_label == label
     assert record.grad_kind == "grad_output"
     assert record.backward_call_index == 1
     assert torch.equal(record.value, torch.ones(2, 3))

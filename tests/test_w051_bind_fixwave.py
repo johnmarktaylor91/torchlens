@@ -301,34 +301,30 @@ def test_site_key_label_disagreement_refuses_at_load(tmp_path) -> None:
     assert excinfo.value.fields["reason"] == "host_label_mismatch"
 
 
-def test_forged_host_pass_refuses_at_load(tmp_path) -> None:
-    """host_pass must be the host op's own pass index."""
+@pytest.mark.parametrize(
+    ("provenance_key", "forged_value", "reason"),
+    [
+        ("host_pass", 7, "host_pass_mismatch"),
+        ("spec_rule_id", "r-forged", "rule_unrecorded"),
+    ],
+    ids=["forged_host_pass_refuses_at_load", "unrecorded_rule_id_refuses_at_load"],
+)
+def test_forged_injection_provenance_refuses_at_load(
+    tmp_path, provenance_key: str, forged_value: object, reason: str
+) -> None:
+    """host_pass must be the host op's own pass index; spec_rule_id must be a rule
+    the artifact's intervention record ran."""
 
     logged, _spec = _logged_chain()
 
-    def bump_pass(state) -> None:
+    def forge(state) -> None:
         for row in _injected_rows(state):
-            row.injection_provenance["host_pass"] = 7
+            row.injection_provenance[provenance_key] = forged_value
 
     with pytest.raises(Exception) as excinfo:
-        _save_tamper_load(tmp_path, logged, bump_pass)
+        _save_tamper_load(tmp_path, logged, forge)
     assert excinfo.value.fields["code"] == "artifact_injection_codec_invalid"
-    assert excinfo.value.fields["reason"] == "host_pass_mismatch"
-
-
-def test_unrecorded_rule_id_refuses_at_load(tmp_path) -> None:
-    """spec_rule_id must be a rule the artifact's intervention record ran."""
-
-    logged, _spec = _logged_chain()
-
-    def forge_rule(state) -> None:
-        for row in _injected_rows(state):
-            row.injection_provenance["spec_rule_id"] = "r-forged"
-
-    with pytest.raises(Exception) as excinfo:
-        _save_tamper_load(tmp_path, logged, forge_rule)
-    assert excinfo.value.fields["code"] == "artifact_injection_codec_invalid"
-    assert excinfo.value.fields["reason"] == "rule_unrecorded"
+    assert excinfo.value.fields["reason"] == reason
 
 
 def test_honest_artifact_still_loads_and_attests(tmp_path) -> None:

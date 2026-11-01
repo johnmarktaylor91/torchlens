@@ -1814,8 +1814,16 @@ class TestConditionalBranchDetection:
 
     # --- Visualization integration tests ---
 
-    def test_if_label_in_visualization(self):
-        """Rendered graph contains 'IF' edge label."""
+    @pytest.mark.parametrize(
+        ("stem", "view", "message"),
+        [
+            ("cond_if_test", "unrolled", "Graph should contain IF edge label"),
+            ("cond_rolled_test", "rolled", "Rolled graph should contain IF edge label"),
+        ],
+        ids=["if_label_in_visualization", "rolled_graph_conditional_edges"],
+    )
+    def test_if_label_in_visualization(self, stem, view, message):
+        """Rendered graph contains 'IF' edge label; rolled view preserves IF/THEN labels."""
         import os
         import tempfile
 
@@ -1824,11 +1832,11 @@ class TestConditionalBranchDetection:
         model = example_models.ConditionalBranching()
         x = self._cond_input()
         with tempfile.TemporaryDirectory() as tmpdir:
-            outpath = os.path.join(tmpdir, "cond_if_test")
+            outpath = os.path.join(tmpdir, stem)
             show_model_graph(
                 model,
                 x,
-                view="unrolled",
+                view=view,
                 visualization=tl.options.VisualizationOptions(
                     save_only=True, container_path=outpath, file_format="dot"
                 ),
@@ -1837,7 +1845,7 @@ class TestConditionalBranchDetection:
             if os.path.exists(dot_file):
                 with open(dot_file) as f:
                     dot_content = f.read()
-                assert "IF" in dot_content, "Graph should contain IF edge label"
+                assert "IF" in dot_content, message
 
     def test_then_label_in_visualization(self):
         """Rendered graph contains 'THEN' edge label with save_code_context."""
@@ -1862,31 +1870,6 @@ class TestConditionalBranchDetection:
                 assert "THEN" in dot_content, "Graph should contain THEN edge label"
 
     # --- Rolled graph tests ---
-
-    def test_rolled_graph_conditional_edges(self):
-        """Rolled view preserves IF/THEN labels."""
-        import os
-        import tempfile
-
-        from torchlens._visualization import show_model_graph
-
-        model = example_models.ConditionalBranching()
-        x = self._cond_input()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            outpath = os.path.join(tmpdir, "cond_rolled_test")
-            show_model_graph(
-                model,
-                x,
-                view="rolled",
-                visualization=tl.options.VisualizationOptions(
-                    save_only=True, container_path=outpath, file_format="dot"
-                ),
-            )
-            dot_file = outpath + ".dot"
-            if os.path.exists(dot_file):
-                with open(dot_file) as f:
-                    dot_content = f.read()
-                assert "IF" in dot_content, "Rolled graph should contain IF edge label"
 
     def test_cond_fields_survive_deepcopy(self):
         """Fields persist through Trace deepcopy cycle."""

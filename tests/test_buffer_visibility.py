@@ -364,26 +364,18 @@ def test_visible_buffer_uses_cylinder_shape(tmp_path: Path) -> None:
     assert "#888888" not in causal_mask_lines[0]
 
 
-def test_legacy_true_refuses_typed(tmp_path: Path) -> None:
-    """The removed legacy ``True`` buffer-visibility value refuses typed."""
+@pytest.mark.parametrize(
+    "legacy_value",
+    [True, False],
+    ids=["legacy_true_refuses_typed", "legacy_false_refuses_typed"],
+)
+def test_legacy_bool_refuses_typed(tmp_path: Path, legacy_value: bool) -> None:
+    """The removed legacy ``True`` and ``False`` buffer-visibility values refuse typed."""
 
     log = _log_model(_BatchNormWithArchitecturalBuffer())
     try:
         with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
-            _render_dot(log, tmp_path, True)
-    finally:
-        log.cleanup()
-
-    assert exc_info.value.fields["code"] == "buffer_visibility_invalid"
-
-
-def test_legacy_false_refuses_typed(tmp_path: Path) -> None:
-    """The removed legacy ``False`` buffer-visibility value refuses typed."""
-
-    log = _log_model(_BatchNormWithArchitecturalBuffer())
-    try:
-        with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
-            _render_dot(log, tmp_path, False)
+            _render_dot(log, tmp_path, legacy_value)
     finally:
         log.cleanup()
 
