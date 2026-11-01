@@ -3603,7 +3603,7 @@
     "\"relu_1_3_raw\"": "relu_1_2"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class PlainCNN(nn.Module):\n    \"\"\"Small convolutional network for ordinary feed-forward capture.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.conv(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))",
@@ -7830,7 +7830,7 @@
     "\"relu_1_3_raw\"": "relu_1_2"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class PlainCNN(nn.Module):\n    \"\"\"Small convolutional network for ordinary feed-forward capture.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.conv(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))",
@@ -11988,7 +11988,7 @@
     "\"relu_1_3_raw\"": "relu_1_2"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class PlainCNN(nn.Module):\n    \"\"\"Small convolutional network for ordinary feed-forward capture.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.conv(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))",
@@ -16209,7 +16209,7 @@
     "\"relu_1_3_raw\"": "relu_1_2"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class PlainCNN(nn.Module):\n    \"\"\"Small convolutional network for ordinary feed-forward capture.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.conv(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))",
@@ -20285,7 +20285,7 @@
     "\"relu_1_3_raw\"": "relu_1_2"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class PlainCNN(nn.Module):\n    \"\"\"Small convolutional network for ordinary feed-forward capture.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the convolution and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.conv = nn.Conv2d(1, 2, kernel_size=3, padding=1)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Run one convolution followed by ReLU.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Convolved activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.conv(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Run one convolution followed by ReLU.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Convolved activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.conv(x))",

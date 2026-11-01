@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._runnable_execution import (
+from torchlens._runnable.execution import (
     _nondeterministic_value_sources,
     _uninit_taint_reaches,
 )

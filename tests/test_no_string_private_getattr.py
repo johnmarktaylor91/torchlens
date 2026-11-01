@@ -80,7 +80,7 @@ _FAIL_CLOSED_PACKAGES = frozenset({"_merged", "distributed"})
 _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # 14 -> 15 (2026-08-14 fix-wave reconcile, f2bc65a6 fix/interv F2): the
     # live-refresh run report reads the optional `_runnable` seam in
-    # _runnable_transaction.py; absent on non-runnable traces, so the None
+    # _runnable/transaction.py; absent on non-runnable traces, so the None
     # default is the correct "no runnable seam" reading.
     # 15 -> 16 (2026-08-15 fw3settle reconcile, fe2444e3 fix/runnable-r4): the
     # fast-provider host-RNG declaration reads the optional `_runnable` seam in
@@ -90,7 +90,7 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # `_primitive_op_profile` store (x2; absent on non-aten / loaded traces,
     # so the None default is the correct "no primitive layer" reading -- the
     # idiom already ledgered at postprocess/validation for that exact field),
-    # and _runnable_transaction.py (79607e17, declared-state snapshot-restore)
+    # and _runnable/transaction.py (79607e17, declared-state snapshot-restore)
     # latches state_compromised onto the optional `_runnable` seam after a
     # failed live restore (absent = the trace never ran, nothing to latch).
     # 19 -> 20 (guarded fast steered rerun): _fast_run.py reads the optional

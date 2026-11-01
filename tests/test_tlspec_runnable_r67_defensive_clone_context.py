@@ -29,13 +29,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import (
-    _runnable_execution,
-    _runnable_input_aliases,
-    _runnable_input_metadata,
-    _runnable_state,
+from torchlens._runnable import (
+    NumericAttestationStatus,
+    PathFaithfulness,
+    StateSource,
+    execution as _runnable_execution,
+    input_aliases as _runnable_input_aliases,
+    input_metadata as _runnable_input_metadata,
+    state as _runnable_state,
 )
-from torchlens._runnable import NumericAttestationStatus, PathFaithfulness, StateSource
 from torchlens.errors import PathDivergenceError, RunPreconditionError
 from torchlens.options import CaptureOptions
 

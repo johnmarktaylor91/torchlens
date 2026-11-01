@@ -308,8 +308,8 @@ def test_r71_registry_closure_meta() -> None:
         else:
             assert spec.site_prefix is None, family
     # Named runtime consumers must exist (replay-consumed, never decorative).
-    import torchlens._runnable_execution as execution
-    import torchlens._runnable_state as state
+    import torchlens._runnable.execution as execution
+    import torchlens._runnable.state as state
 
     symbolic = {"terminal_slot_accounting", "strict_state_preparation"}
     for family, spec in WITNESS_FAMILY_REGISTRY.items():
@@ -842,8 +842,8 @@ def test_r71_floor_source_scan_tripwire() -> None:
     the single derivation function + the parse-time equality/re-assert belts."""
 
     import torchlens._io.runnable_load as runnable_load
-    import torchlens._runnable_execution as execution
-    import torchlens._runnable_state as state
+    import torchlens._runnable.execution as execution
+    import torchlens._runnable.state as state
 
     # The verdict gate consults ONLY the derived floor.
     verdict_source = inspect.getsource(execution._path_faithfulness)
@@ -852,7 +852,9 @@ def test_r71_floor_source_scan_tripwire() -> None:
     # The ONLY raw read left in the executor is the run-preparation equality
     # re-assert (defense in depth), and staging never reads it at all.
     execution_source = "\n".join(
-        path.read_text() for path in sorted(Path(execution.__file__).parent.glob("_runnable_*.py"))
+        path.read_text()
+        for path in sorted(Path(execution.__file__).parent.glob("*.py"))
+        if path.name != "__init__.py"
     )
     assert execution_source.count("descriptor.witness_completeness") == 1
     assert "witness_completeness" not in inspect.getsource(state._apply_state_metadata_facts)

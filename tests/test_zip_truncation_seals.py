@@ -101,7 +101,7 @@ def test_fast_run_refuses_slot_label_parity_tamper(tmp_path) -> None:
             descriptor = calls
             break
     if descriptor is None:
-        from torchlens._runnable_seam import runnable_trace_state
+        from torchlens._runnable.seam import runnable_trace_state
 
         descriptor = runnable_trace_state(loaded).descriptor.calls
     tampered = [call for call in descriptor if getattr(call, "output_slot_ids", ())]

@@ -606,7 +606,7 @@ def test_r63_staging_canonicalizes_physical_form(tmp_path: Path) -> None:
 def test_r63_source_tripwire_state_binding_uses_staging_helper() -> None:
     """No state-binding path calls bare ``_byte_guarded_clone`` around the staging helper."""
 
-    import torchlens._runnable_state as module
+    import torchlens._runnable.state as module
 
     source = Path(module.__file__).read_text()
 

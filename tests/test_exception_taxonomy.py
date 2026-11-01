@@ -1210,7 +1210,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # L4 declared-state restore bracket: an INTERNAL carrier converted into
     # the typed run_state_restore_failed refusal at the transaction boundary
     # (never user-facing; parked by the L6 merge train post-merge repair).
-    "torchlens._runnable_state_live.LiveStateRestoreFailure": (
+    "torchlens._runnable.state_live.LiveStateRestoreFailure": (
         "internal mid-bracket carrier; surfaced as run_state_restore_failed"
     ),
     # tl.stats.aggregate(cache=True) key builder: raised while hashing a run's inputs
@@ -1298,10 +1298,10 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "internal control-flow cut signal (BaseException) for trace.run(fast=True, until=); "
         "raised and caught inside the fast live session, never escapes _fast_run"
     ),
-    "torchlens._runnable_execution._ProjectionCountExceeded": (
+    "torchlens._runnable.execution._ProjectionCountExceeded": (
         "private internal bound signal; caught inside the projection walk"
     ),
-    "torchlens._runnable_execution._UnreadableProjectedOutput": (
+    "torchlens._runnable.execution._UnreadableProjectedOutput": (
         "private allocation-preflight signal (grind-r5 b7 R22); raised when a "
         "projected output's size cannot be read and converted by the caller to "
         "the typed op_allocation_preflight refusal"

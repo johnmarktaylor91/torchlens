@@ -345,7 +345,7 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
     guard failure was indistinguishable from inputs-match.
     """
 
-    import torchlens._runnable_execution as execution
+    import torchlens._runnable.execution as execution
     from torchlens.errors import RunCapabilityUnavailableError
 
     model = _PlainLinear().eval()

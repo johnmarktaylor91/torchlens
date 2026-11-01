@@ -256,7 +256,7 @@ def test_escape_detector_teardown_frees_the_tool_id_and_clears_the_guard(
 def test_call_execution_context_unwind_exits_every_context() -> None:
     """A raising inner `__exit__` must not strand the outer contexts."""
 
-    from torchlens import _runnable_state_context
+    from torchlens._runnable import state_context as _runnable_state_context
 
     exited: list[str] = []
 

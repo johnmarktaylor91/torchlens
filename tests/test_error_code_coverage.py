@@ -534,7 +534,7 @@ def test_every_enum_member_is_reachable_in_source() -> None:
     texts = _iter_python_texts(_PACKAGE_ROOT)
     dead: list[str] = []
     for enum_cls, declaring in (
-        (RunnableErrorCode, _PACKAGE_ROOT / "_runnable.py"),
+        (RunnableErrorCode, _PACKAGE_ROOT / "_runnable/__init__.py"),
         (MergedErrorCode, _PACKAGE_ROOT / "merged" / "_enums.py"),
     ):
         for member in enum_cls:

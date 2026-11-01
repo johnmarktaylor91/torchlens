@@ -31332,7 +31332,7 @@
     "\"view_7_25_raw\"": "view_7_24"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TinyTransformer(nn.Module):\n    \"\"\"Minimal Transformer encoder layer with deterministic dropout settings.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the encoder and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.encoder = nn.TransformerEncoderLayer(\n            d_model=4,\n            nhead=2,\n            dim_feedforward=8,\n            dropout=0.0,\n            batch_first=True,\n        )\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.eval()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return self.encoder(x)",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Encode a short sequence.\n\n    Parameters\n    ----------\n    x:\n        Sequence batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Encoded sequence.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return self.encoder(x)",
@@ -65759,7 +65759,7 @@
     "\"view_7_25_raw\"": "view_7_24"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TinyTransformer(nn.Module):\n    \"\"\"Minimal Transformer encoder layer with deterministic dropout settings.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the encoder and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.encoder = nn.TransformerEncoderLayer(\n            d_model=4,\n            nhead=2,\n            dim_feedforward=8,\n            dropout=0.0,\n            batch_first=True,\n        )\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.eval()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return self.encoder(x)",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Encode a short sequence.\n\n    Parameters\n    ----------\n    x:\n        Sequence batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Encoded sequence.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return self.encoder(x)",
@@ -100238,7 +100238,7 @@
     "\"view_7_25_raw\"": "view_7_24"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TinyTransformer(nn.Module):\n    \"\"\"Minimal Transformer encoder layer with deterministic dropout settings.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the encoder and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.encoder = nn.TransformerEncoderLayer(\n            d_model=4,\n            nhead=2,\n            dim_feedforward=8,\n            dropout=0.0,\n            batch_first=True,\n        )\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.eval()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return self.encoder(x)",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Encode a short sequence.\n\n    Parameters\n    ----------\n    x:\n        Sequence batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Encoded sequence.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return self.encoder(x)",
@@ -133467,7 +133467,7 @@
     "\"view_7_25_raw\"": "view_7_24"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TinyTransformer(nn.Module):\n    \"\"\"Minimal Transformer encoder layer with deterministic dropout settings.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the encoder and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.encoder = nn.TransformerEncoderLayer(\n            d_model=4,\n            nhead=2,\n            dim_feedforward=8,\n            dropout=0.0,\n            batch_first=True,\n        )\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.eval()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Encode a short sequence.\n\n        Parameters\n        ----------\n        x:\n            Sequence batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Encoded sequence.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return self.encoder(x)",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Encode a short sequence.\n\n    Parameters\n    ----------\n    x:\n        Sequence batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Encoded sequence.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return self.encoder(x)",

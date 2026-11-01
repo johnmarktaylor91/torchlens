@@ -48,14 +48,14 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._runnable_execution as rex
-import torchlens._runnable_state as rstate
-from torchlens._runnable_execution import (
+import torchlens._runnable.execution as rex
+import torchlens._runnable.state as rstate
+from torchlens._runnable.execution import (
     _count_bounded_fake_tensor_mode_class,
     _preflight_call_allocation,
     _ProjectionCountExceeded,
 )
-from torchlens._runnable_state import (
+from torchlens._runnable.state import (
     _OUTPUT_COUNT_FLOOR,
     _OUTPUT_COUNT_MARGIN,
     RunResourceCeiling,
@@ -408,7 +408,7 @@ def test_retained_slots_resolve_op_labels_like_bind() -> None:
     """Run-prep decides which op outputs the run copies with the same label lookup bind
     uses, so an op found only by its ``layer_list`` label still counts as saved."""
 
-    from torchlens._runnable_retention import _retained_output_slot_ids
+    from torchlens._runnable.retention import _retained_output_slot_ids
 
     saved = types.SimpleNamespace(label="add_1", has_saved_activation=True)
     trace = types.SimpleNamespace(layer_dict_all_keys={}, layer_list=[saved])

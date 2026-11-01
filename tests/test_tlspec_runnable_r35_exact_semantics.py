@@ -68,7 +68,7 @@ def test_r35_tied_nan_state_binds_and_saves(tmp_path: Path) -> None:
 def test_r35_distinct_nan_payload_bytes_still_conflict() -> None:
     """Tripwire intact: alias values with DIFFERENT NaN payload bytes refuse."""
 
-    from torchlens._runnable_state import _alias_values_coherent
+    from torchlens._runnable.state import _alias_values_coherent
 
     quiet_nan = torch.tensor([float("nan")], dtype=torch.float32)
     # Same logical NaN-ness, different payload bits.
@@ -93,7 +93,11 @@ def test_r35_no_float_torch_equal_in_runnable_modules() -> None:
 
     package_root = Path(torchlens.__file__).parent
     runnable_modules = (
-        *sorted(path.relative_to(package_root) for path in package_root.glob("_runnable_*.py")),
+        *sorted(
+            path.relative_to(package_root)
+            for path in (package_root / "_runnable").glob("*.py")
+            if path.name != "__init__.py"
+        ),
         Path("_io/runnable.py"),
         Path("backends/torch/completeness_witness.py"),
         Path("backends/torch/backend.py"),
@@ -157,7 +161,7 @@ def test_r35_empty_slot_initializes_without_rng(shape: tuple[int, ...]) -> None:
         TensorSlotDescriptor,
         TensorSlotRole,
     )
-    from torchlens._runnable_state import _initialize_slot
+    from torchlens._runnable.state import _initialize_slot
 
     slot = TensorSlotDescriptor(
         slot_id="slot:weight_test",
@@ -247,7 +251,7 @@ def test_r35_cpu_only_seeded_run_never_touches_cuda_lazy_seed(tmp_path: Path) ->
     path = tmp_path / "cpuonly.tlspec"
     trace.save(str(path), level="runnable")
     loaded = tl.load(str(path))
-    from torchlens._runnable_execution import _seeded_fork_devices
+    from torchlens._runnable.execution import _seeded_fork_devices
 
     descriptor = loaded._runnable.descriptor
     if torch.cuda.is_available() and torch.cuda.is_initialized():
@@ -322,7 +326,7 @@ def test_r35_repr_parsers_are_deleted() -> None:
 
     import inspect
 
-    import torchlens._runnable_execution as execution
+    import torchlens._runnable.execution as execution
     import torchlens.backends.torch.ops as ops
 
     for source in (

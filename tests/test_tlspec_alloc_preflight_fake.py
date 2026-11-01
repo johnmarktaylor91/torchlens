@@ -37,7 +37,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
-import torchlens._runnable_execution as rex
+import torchlens._runnable.execution as rex
 from tests.test_tlspec_runnable_alloc_bomb import _tamper
 from torchlens._runnable import (
     LiteralAtom,
@@ -46,7 +46,7 @@ from torchlens._runnable import (
     LiteralSequenceKind,
     LiteralTorchSymbol,
 )
-from torchlens._runnable_execution import (
+from torchlens._runnable.execution import (
     _MAX_DECODE_NESTING_DEPTH,
     _decode_literal,
     _fake_tensor_mode_class,
@@ -545,8 +545,8 @@ _HUGE_VIEW_HOST_BUDGET_BYTES = 64 << 20
 def _fix_host_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make every module that reads the host allocation budget see the fixed figure."""
 
-    import torchlens._runnable_call_arguments as call_arguments
-    import torchlens._runnable_state as runnable_state
+    import torchlens._runnable.call_arguments as call_arguments
+    import torchlens._runnable.state as runnable_state
 
     def fixed_budget(device: torch.device) -> int:
         return _HUGE_VIEW_HOST_BUDGET_BYTES
@@ -654,7 +654,7 @@ def test_admitted_views_share_one_logical_ceiling(
     """The view work ceiling bounds the admitted views of a run together: two views each
     under it are refused once their sum passes it."""
 
-    import torchlens._runnable_retention as retention
+    import torchlens._runnable.retention as retention
 
     _fix_host_budget(monkeypatch)
     monkeypatch.setattr(retention, "_VIEW_LOGICAL_ELEMENT_CEILING", 6 * 10**7)
@@ -804,7 +804,7 @@ def _admission_call(
 
 
 def _resolved_op(namespace: str, name: str) -> Any:
-    from torchlens._runnable_retention import _resolved_ops
+    from torchlens._runnable.retention import _resolved_ops
 
     (func,) = _resolved_ops(((namespace, name),))
     return func
@@ -819,7 +819,7 @@ def _admits(
 ) -> bool:
     """Decide ``view`` (produced by ``expand``) with the projection pinned to "is a view"."""
 
-    from torchlens._runnable_retention import _unretained_view_lookup
+    from torchlens._runnable.retention import _unretained_view_lookup
 
     monkeypatch.setattr(rex, "_pure_view_projector", lambda _d, _c: lambda _slot: True)
     producer = _admission_call("c:expand", writes=(view.slot_id,))
@@ -949,7 +949,7 @@ def test_alias_reader_map_is_linear_in_slots() -> None:
     """The view-admission reader map holds one entry per read and per direct alias read,
     however long a version-alias chain the descriptor carries."""
 
-    from torchlens._runnable_retention import _readers_through_version_aliases
+    from torchlens._runnable.retention import _readers_through_version_aliases
 
     chain = 2000
     slots = [_admission_slot("s:a0")] + [
@@ -969,7 +969,7 @@ def test_admitted_view_realized_off_cpu_refused_at_bind() -> None:
     device (the recorded label lied) is refused at bind, before any reader runs; an
     unadmitted output there, or an admitted one on CPU, passes."""
 
-    from torchlens._runnable_retention import _check_unretained_extent
+    from torchlens._runnable.retention import _check_unretained_extent
 
     labels = {"call_id": "c:expand", "slot_id": "s:view"}
     _check_unretained_extent(torch.empty(4, device="meta"), **labels)

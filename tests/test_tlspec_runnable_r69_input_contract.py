@@ -440,7 +440,7 @@ def test_r69_duplicate_same_bit_nan_keys_refuse_ambiguous(tmp_path: Path) -> Non
 
 def test_r69_runtime_duplicate_token_matches_fail_closed() -> None:
     """Bind side: multiple runtime keys encoding to one token fail closed, typed."""
-    from torchlens._runnable_execution import _value_at_path
+    from torchlens._runnable.execution import _value_at_path
 
     n1, n2 = float("nan"), float("nan")
     mapping = {n1: 1, n2: 2}
@@ -537,8 +537,8 @@ def test_r71d_reserved_registry_meta_test() -> None:
 
     import inspect
 
-    from torchlens import _runnable_execution
     from torchlens._input_walk import encode_mapping_key, reserved_input_path_components
+    from torchlens._runnable import execution as _runnable_execution
 
     registry = reserved_input_path_components()
     # The one sentinel _value_at_path interprets positionally before mapping lookup.
@@ -603,8 +603,9 @@ def test_r69_key_codec_is_injective_and_round_trips() -> None:
 def test_r69_classifier_choke_points_source_scan() -> None:
     """Snapshot, literal encode, literal compare, and key codec share the classifier."""
 
-    from torchlens import _input_walk, _runnable_execution
+    from torchlens import _input_walk
     from torchlens._io import runnable as io_runnable
+    from torchlens._runnable import execution as _runnable_execution
 
     for func in (
         _input_walk.snapshot_input_boundary,
@@ -636,7 +637,7 @@ def test_r69_classifier_choke_points_source_scan() -> None:
 def test_r69_snapshot_key_tokens_paths_and_lookup_share_the_authority() -> None:
     """Snapshot ordered-key facts and leaf paths speak encode_mapping_key tokens."""
 
-    from torchlens._runnable_execution import _value_at_path
+    from torchlens._runnable.execution import _value_at_path
 
     value = {2.5: {"inner": 1}, True: 2, "s": 3}
     snapshot = snapshot_input_boundary(value)

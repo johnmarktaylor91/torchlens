@@ -52,16 +52,16 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._runnable_execution as rex
-import torchlens._runnable_state as rstate
+import torchlens._runnable.execution as rex
+import torchlens._runnable.state as rstate
 from torchlens._runnable import StateSource
-from torchlens._runnable_execution import (
+from torchlens._runnable.execution import (
     _MAX_DECODE_NESTING_DEPTH,
     _has_tensor_operand,
     _preflight_call_allocation,
     _projection_required_by_arguments,
 )
-from torchlens._runnable_state import RunResourceCeiling, _byte_guarded_clone
+from torchlens._runnable.state import RunResourceCeiling, _byte_guarded_clone
 from torchlens.errors import RunCapabilityUnavailableError
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
