@@ -150,6 +150,9 @@ pins the high-risk members against exception and interruption paths.
 
 _INSTALL_STATE_AND_CACHES = frozenset(
     {
+        # Backend protocol shells resolve their spec through one lookup hook that
+        # the registry installs once at import (install-time fact, never rebound).
+        ("torchlens/backends/_backend_protocol.py", "_spec_lookup"),
         # Call-site grouping: the module forward wrapper code object, registered
         # idempotently when submodule forwards are decorated (one constant).
         ("torchlens/_utils/_call_site.py", "_BOUNDARY_CODES"),
