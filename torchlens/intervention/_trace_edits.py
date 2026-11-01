@@ -580,7 +580,7 @@ def record_do_intervention_event(
 
 
 def warn_if_root_mutation(trace: Trace, *, confirm_mutation: bool) -> None:
-    """Emit the once-per-root mutate-in-place warning when appropriate.
+    """Emit the once-per-root mutate-in-place warning, attributed past the thin method.
 
     Parameters
     ----------
@@ -596,8 +596,6 @@ def warn_if_root_mutation(trace: Trace, *, confirm_mutation: bool) -> None:
         "TraceMutationWarning: Trace mutators modify root logs in place. "
         "Use log.fork(...) for isolated edits or pass confirm_mutation=True.",
         TraceMutationWarning,
-        # One frame deeper than the method body this replaced: the record's thin
-        # method sits between the caller and this function.
         stacklevel=4,
     )
     trace._warned_mutate_in_place = True
