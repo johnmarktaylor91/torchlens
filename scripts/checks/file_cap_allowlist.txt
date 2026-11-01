@@ -604,7 +604,7 @@ torchlens/_utils/rng.py::host_nondeterminism_monitor._numpy_frame_candidate_chil
 torchlens/_utils/rng.py::host_nondeterminism_monitor._snapshot_numpy_frame_rngs	103
 torchlens/_utils/rng.py::host_nondeterminism_monitor._sweep_model_generators	371
 torchlens/_utils/rng.py::host_nondeterminism_monitor._teardown	79
-torchlens/_utils/tensor_utils.py	1956
+torchlens/_utils/tensor_utils.py	1958
 torchlens/_utils/tensor_utils.py::_clone_tensor_payload	74
 torchlens/_utils/tensor_utils.py::_copy_tensor_payload	105
 torchlens/_utils/tensor_utils.py::tensor_nanequal	181
