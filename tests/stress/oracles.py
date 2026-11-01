@@ -9,6 +9,12 @@ never reached the point the oracle judges, with the reason).
 The oracles never loosen a product check: ``invariants_pass`` reads the
 default ``tl.validate`` verdict, and the torch-clean checks are the same
 process-global reads the suite's autouse leak fixtures make.
+
+Each TorchLens stage catches only ``TorchLensError`` (a typed refusal, judged by
+``typed_refusal_names_condition``). Any other exception from a TorchLens stage
+is an untyped escape and propagates out of ``run_cell``, so every test of that
+cell errors with the real traceback. The eager forward catches only the errors a
+model's own ops raise for a row they do not fit (``EAGER_MISFIT_ERRORS``).
 """
 
 from __future__ import annotations
@@ -43,6 +49,12 @@ from .generator import Cell, Inputs
 BUILD_SEED = 0
 INPUT_SEED = 1
 RUN_SEED = 0
+
+#: What a model's own ops raise when a row does not fit it (a dtype or input its
+#: kernels reject: ``not implemented for 'Half'``, a dtype mismatch, a bad shape).
+#: ``NotImplementedError`` is a ``RuntimeError``. Anything else from the eager
+#: forward is a harness or row bug and propagates.
+EAGER_MISFIT_ERRORS: tuple[type[Exception], ...] = (RuntimeError, TypeError, ValueError)
 
 #: Torch callables whose identity shows whether the lazy wrappers were
 #: installed, re-installed or left half-swapped by a cell.
@@ -148,15 +160,15 @@ class CellResult:
     before: TorchSnapshot
     after: TorchSnapshot | None = None
     rng_changed: dict[str, list[str]] = field(default_factory=dict)
-    eager_error: BaseException | None = None
-    trace_error: BaseException | None = None
+    eager_error: Exception | None = None
+    trace_error: TorchLensError | None = None
     op_count: int | None = None
     validate_verdict: bool | None = None
-    validate_error: BaseException | None = None
+    validate_error: TorchLensError | None = None
     validate_failure_check: str | None = None
     validate_failure_summary: str | None = None
-    save_error: BaseException | None = None
-    load_error: BaseException | None = None
+    save_error: TorchLensError | None = None
+    load_error: TorchLensError | None = None
     loaded_labels_equal: bool | None = None
     loaded_outs_compared: int | None = None
     loaded_outs_unequal: tuple[str, ...] = ()
@@ -166,8 +178,8 @@ class CellResult:
     warnings_seen: tuple[str, ...] = ()
     notes: list[str] = field(default_factory=list)
 
-    def refusals(self) -> tuple[tuple[str, BaseException], ...]:
-        """Return every exception TorchLens raised, with the stage that raised it."""
+    def refusals(self) -> tuple[tuple[str, TorchLensError], ...]:
+        """Return every typed refusal TorchLens raised, with the stage that raised it."""
 
         stages = (
             ("trace", self.trace_error),
@@ -248,8 +260,8 @@ def _run_save_load(result: CellResult, trace: Any, tmp_path: Path) -> None:
     bundle = tmp_path / "cell.tlspec"
     rng_before = rng_state()
     try:
-        tl.save(trace, bundle, level="portable")
-    except Exception as error:
+        trace.save(bundle, level="portable")
+    except TorchLensError as error:
         result.save_error = error
         return
     finally:
@@ -257,7 +269,7 @@ def _run_save_load(result: CellResult, trace: Any, tmp_path: Path) -> None:
     rng_before = rng_state()
     try:
         loaded = tl.load(bundle)
-    except Exception as error:
+    except TorchLensError as error:
         result.load_error = error
         return
     finally:
@@ -283,8 +295,8 @@ def _run_validate(result: CellResult, model: nn.Module, inputs: Inputs) -> None:
     torch.manual_seed(RUN_SEED)
     rng_before = rng_state()
     try:
-        verdict = tl.validate(model, args, kwargs, scope="forward", random_seed=RUN_SEED)
-    except Exception as error:
+        verdict = tl.validate(model, args, kwargs, scope="forward", seed=RUN_SEED)
+    except TorchLensError as error:
         result.validate_error = error
         return
     finally:
@@ -292,7 +304,7 @@ def _run_validate(result: CellResult, model: nn.Module, inputs: Inputs) -> None:
     result.validate_verdict = bool(verdict)
     if not verdict:
         failure = last_validation_failure()
-        result.validate_failure_check = failure.check if failure is not None else None
+        result.validate_failure_check = failure.check_name if failure is not None else None
         result.validate_failure_summary = (
             failure.summary() if failure is not None else "no failure record"
         )
@@ -317,19 +329,19 @@ def _execute(result: CellResult, cell: Cell, tmp_path: Path) -> None:
     try:
         with torch.no_grad():
             model(*copy.deepcopy(args), **copy.deepcopy(kwargs))
-    except Exception as error:
+    except EAGER_MISFIT_ERRORS as error:
         result.eager_error = error
         return
 
     trace_args, trace_kwargs = _trace_inputs(inputs)
-    capture = CaptureOptions(random_seed=RUN_SEED, **dict(cell.options.capture_kwargs))
+    capture = CaptureOptions(seed=RUN_SEED, **dict(cell.options.capture_kwargs))
     torch.manual_seed(RUN_SEED)
     rng_before = rng_state()
     try:
         trace = tl.trace(
             model, trace_args, trace_kwargs, capture=capture, **dict(cell.options.trace_kwargs)
         )
-    except Exception as error:
+    except TorchLensError as error:
         result.trace_error = error
         return
     finally:
@@ -488,7 +500,11 @@ def save_load_equals_live(result: CellResult) -> Verdict:
 
 
 def typed_refusal_names_condition(result: CellResult) -> Verdict:
-    """Every error TorchLens raised is a typed error with a stable code and a message."""
+    """Every error TorchLens raised is a typed error with a stable code and a message.
+
+    Only ``TorchLensError`` reaches this oracle; an untyped error from a TorchLens
+    stage propagates out of ``run_cell`` and errors every test of the cell.
+    """
 
     if result.eager_error is not None:
         return _before_capture(result) or Verdict.passed()
@@ -498,9 +514,6 @@ def typed_refusal_names_condition(result: CellResult) -> Verdict:
     problems = []
     codes = []
     for stage, error in refusals:
-        if not isinstance(error, TorchLensError):
-            problems.append(f"{stage}: untyped {_describe(error)}")
-            continue
         code = error.fields.get("code")
         if not isinstance(code, str) or not code:
             problems.append(f"{stage}: {type(error).__name__} carries no code: {str(error)[:200]}")

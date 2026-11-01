@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 from tests.classics_corpus._loader import CorpusEntry, build_entry, corpus_entries
-from torchlens.utils.arg_handling import normalize_input_args
+from torchlens._utils.arg_handling import normalize_input_args
 
 from ..generator import DtypeSpec, Inputs, ModelSpec
 

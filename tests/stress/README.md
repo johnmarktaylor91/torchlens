@@ -60,6 +60,13 @@ A cell whose eager forward itself raises (a dtype the model's own ops reject,
 for example) ran no TorchLens stage: every oracle reports it as not
 applicable, with the eager error as the reason.
 
+Each stage catches only the errors it judges. A TorchLens stage (trace, save,
+load, validate) records a `TorchLensError` for `typed_refusal_names_condition`;
+any other exception it raises is an untyped escape and propagates, so every
+test of that cell errors with the real traceback. The eager forward records only
+`RuntimeError`, `TypeError` and `ValueError` (`EAGER_MISFIT_ERRORS`), the errors
+a model's own ops raise for a row they do not fit; anything else propagates.
+
 The torch-clean reads are the same process-global reads the suite's autouse
 leak fixtures make in `tests/conftest.py`; those fixtures still run and reset
 state between tests. The memory oracle under-reports resident growth when the

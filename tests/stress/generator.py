@@ -170,7 +170,7 @@ class OptionsSpec:
     trace_kwargs:
         Extra keyword arguments passed to ``tl.trace`` (never ``capture=``).
     capture_kwargs:
-        Extra ``CaptureOptions`` fields (``random_seed`` is set by the runner).
+        Extra ``CaptureOptions`` fields (``seed`` is set by the runner).
     """
 
     id: str
