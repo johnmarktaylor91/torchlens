@@ -204,7 +204,7 @@ def test_answer_hedges_when_nothing_is_saved() -> None:
     trace = tl.trace(
         _plain_model(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     assert unexamined_payload_count(trace, kind="saved") > 0
     assert "could not be examined" in trace.first_nonfinite(link_format="text")

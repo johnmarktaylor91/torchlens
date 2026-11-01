@@ -463,11 +463,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   temporal composition. `save=` is the only selective sparse-capture spelling; removed
   `keep_op=` and `keep_module=` arguments raise `TypeError`. On `tl.trace`, `save=` also takes
   the list form (layer names, pass-qualified labels, module addresses, integer indexes,
-  substrings, `'all'`, `'none'`), which selects exactly what
-  `capture=CaptureOptions(layers_to_save=[...])` selects; passing both refuses
-  `save_selection_conflict`. `save="stats"` is a third level beside `'all'` and `'none'`:
+  substrings, `'all'`, `'none'`), with final-label selection resolved after capture. `save="stats"` is a third level beside `'all'` and `'none'`:
   reduce and discard, one `tl.stats.RunningStats` per op and no payload (see Streaming
   statistics).
+
+**Capture options**
+: `CaptureOptions` configures capture mechanics. Select payloads with the `save=`
+  argument on `tl.trace` and `tl.record`; payload selection is not a public field
+  of `CaptureOptions`. Preview saving is not a capture option. `module_filter`
+  remains an additional gate on the selected payloads.
 
 **Lookback**
 : A bounded window of earlier metadata or detached payloads retained so a later temporal predicate

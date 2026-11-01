@@ -160,16 +160,16 @@ def _refuse_structure_only_payload_selections(
             "activations are never recorded under the structure-only contract",
             "save",
         )
-    if capture_options._is_field_explicit("layers_to_save") and facts.layers_to_save not in (
+    if capture_options._layers_to_save != "all" and facts.layers_to_save not in (
         "none",
         None,
         [],
     ):
         _refuse_values(
-            "structure_only=True cannot honor an explicit layers_to_save "
+            "structure_only=True cannot honor an explicit save= "
             "payload selection; activations are never recorded under the "
             "structure-only contract",
-            "layers_to_save",
+            "save",
         )
     if capture_options._is_field_explicit("save_grads") and facts.should_save_grads:
         _refuse_values(

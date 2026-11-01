@@ -415,9 +415,9 @@ def _saved_all_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> P
             inputs,
             capture=CaptureOptions(
                 intervention_ready=True,
-                layers_to_save="all",
                 cache=False,
             ),
+            save="all",
         )
     captured.save(path, level="runnable", include_weights=True)
     return path

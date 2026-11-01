@@ -598,9 +598,9 @@ def _aggregate_loop(
                 model,
                 model_input,
                 capture=CaptureOptions(
-                    layers_to_save=capture_layers,
                     save_grads=capture_layers,
                 ),
+                save=capture_layers,
             )
             try:
                 if grad_loss_fn is None:
@@ -651,7 +651,7 @@ def _aggregate_loop(
             log = trace(
                 model,
                 model_input,
-                capture=CaptureOptions(layers_to_save=capture_layers),
+                save=capture_layers,
             )
             try:
                 resolved_sites: dict[str, Any] = {}

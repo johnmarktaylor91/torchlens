@@ -54,9 +54,9 @@ def prompts(n, triggered, seed):
     return ids
 
 
-capture = tl.options.CaptureOptions(layers_to_save="all")
-pos = tl.trace(model, prompts(8, True, 1), capture=capture)
-neg = tl.trace(model, prompts(8, False, 2), capture=capture)
+capture = tl.options.CaptureOptions()
+pos = tl.trace(model, prompts(8, True, 1), capture=capture, save="all")
+neg = tl.trace(model, prompts(8, False, 2), capture=capture, save="all")
 condition = fit_direction(pos, neg, CONDITION_SITE, method="pca")
 
 
@@ -66,7 +66,7 @@ def score(activation):
 
 
 def calibration_scores(ids):
-    trace = tl.trace(model, ids, capture=capture)
+    trace = tl.trace(model, ids, capture=capture, save="all")
     out = trace[CONDITION_SITE].out
     return [score(out[i : i + 1]) for i in range(ids.shape[0])]
 

@@ -199,7 +199,8 @@ def test_explicit_metadata_only_save_stays_legal() -> None:
     log = tl.trace(
         TwoLayer(),
         torch.randn(2, 4),
-        capture=CaptureOptions(structure_only=True, layers_to_save="none"),
+        capture=CaptureOptions(structure_only=True),
+        save="none",
     )
     assert log.structure_only is True
 

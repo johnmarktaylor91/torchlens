@@ -71,7 +71,8 @@ def _traced_buf_loop() -> tuple[BufLoop, torch.Tensor, tl.Trace]:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+        save="all",
     )
     return model, x, log
 
@@ -163,7 +164,8 @@ def test_inplace_activation_op_does_not_corrupt_origin_readback() -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True),
+        capture=tl.options.CaptureOptions(intervention_ready=True),
+        save="all",
     )
     fork = log.fork()
     edit = torch.full((2, 4), 5.0)

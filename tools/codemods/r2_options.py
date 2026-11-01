@@ -8,6 +8,9 @@ Rewrites call sites of the ``trace`` and ``record`` doors in Python sources:
   ``lookback=``, ...) move into ``capture=CaptureOptions(...)``, merging into an existing
   ``CaptureOptions(...)`` constructor when the call already has one;
 * ``save=SaveOptions(...)`` spills its keywords into ``capture=CaptureOptions(...)``;
+* ``CaptureOptions(layers_to_save=...)`` moves to the enclosing door's ``save=``;
+  standalone options move when all uses are visible in the same function; conflicts
+  and ``save_preview=True`` require review, while ``save_preview=False`` is dropped;
 * ``record`` recording keywords (``default_op=``, ``history_size=``, ...) move into
   ``recording=RecordingOptions(...)``;
 * a third positional ``trace`` argument becomes ``input_kwargs=``;
@@ -27,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 import re
 import sys
 from collections import Counter
@@ -87,14 +91,26 @@ RECORDER_RENAMES = {"streaming": "storage"}
 PRIVATE_BUILDERS = ("from_values", "is_field_explicit")
 OPTION_CLASSES = ("CaptureOptions", "RecordingOptions")
 DROPS = ("profile",)
-DOORS = {"trace": "trace", "record": "record", "trace_fn": "trace", "record_fn": "record"}
+DOORS = {
+    "trace": "trace",
+    "record": "record",
+    "trace_fn": "trace",
+    "record_fn": "record",
+    "capture_trace": "trace",
+}
 
 
 def _door_name(func: ast.expr) -> str | None:
+    if isinstance(func, ast.Call):
+        if isinstance(func.func, ast.Name) and func.func.id == "cast" and func.args:
+            return _door_name(func.args[-1])
+        if isinstance(func.func, ast.Name) and func.func.id == "_resolve_top_level" and func.args:
+            name = func.args[0]
+            return DOORS.get(name.value) if isinstance(name, ast.Constant) else None
     if isinstance(func, ast.Name):
         return DOORS.get(func.id)
     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-        if func.value.id in {"tl", "torchlens"}:
+        if func.value.id in {"tl", "torchlens", "_tl", "_user_funcs", "tl.bridge.transformers"}:
             return DOORS.get(func.attr)
     return None
 
@@ -278,7 +294,7 @@ def _rewrite_door(
                 moved_capture.extend(
                     _rewrite_recording_options(kw.value, call, ed, counts, reports, path)
                 )
-    if door == "trace" and len(call.args) >= 3:
+    if door == "trace" and len(call.args) == 3:
         third = call.args[2]
         a, _ = ed.span(third)
         ed.replace(a, a, "input_kwargs=")
@@ -377,13 +393,117 @@ def _report_private_builders(tree: ast.Module, reports: list[str], path: Path) -
             )
 
 
+def _extract_capture_selection(
+    tree: ast.Module, ed: _Edits, counts: Counter, reports: list[str], path: Path
+) -> None:
+    """Move removed CaptureOptions fields to every visible capture door."""
+
+    parents = {id(child): node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+    for ctor in calls:
+        if not _ctor_name(ctor.func, "CaptureOptions"):
+            continue
+        removed = [kw for kw in ctor.keywords if kw.arg in {"layers_to_save", "save_preview"}]
+        if not removed:
+            continue
+        selection = next((kw for kw in removed if kw.arg == "layers_to_save"), None)
+        preview = next((kw for kw in removed if kw.arg == "save_preview"), None)
+        if preview is not None:
+            if isinstance(preview.value, ast.Constant) and preview.value.value is False:
+                ed.remove_arg(preview, ctor)
+                counts["drop:save_preview"] += 1
+            else:
+                reports.append(f"{path}:{ctor.lineno}: save_preview=True/expression; REVIEW")
+        if selection is None:
+            continue
+        owner = parents.get(id(ctor))
+        uses: list[tuple[ast.Call, ast.keyword]] = []
+        if isinstance(owner, ast.keyword) and owner.arg == "capture":
+            door = parents.get(id(owner))
+            if isinstance(door, ast.Call) and _door_name(door.func) is not None:
+                uses.append((door, owner))
+        elif isinstance(owner, (ast.Assign, ast.AnnAssign)):
+            targets = owner.targets if isinstance(owner, ast.Assign) else [owner.target]
+            if len(targets) == 1 and isinstance(targets[0], ast.Name):
+                scope = owner
+                while id(scope) in parents and not isinstance(
+                    scope, (ast.FunctionDef, ast.AsyncFunctionDef)
+                ):
+                    scope = parents[id(scope)]
+                name = targets[0].id
+                refs = [
+                    n
+                    for n in ast.walk(scope)
+                    if isinstance(n, ast.Name) and n.id == name and isinstance(n.ctx, ast.Load)
+                ]
+                for ref in refs:
+                    kw = parents.get(id(ref))
+                    door = parents.get(id(kw))
+                    if (
+                        isinstance(kw, ast.keyword)
+                        and kw.arg == "capture"
+                        and isinstance(door, ast.Call)
+                        and _door_name(door.func) is not None
+                    ):
+                        uses.append((door, kw))
+                    else:
+                        uses = []
+                        break
+        if (
+            not uses
+            and isinstance(selection.value, ast.Constant)
+            and selection.value.value == "all"
+        ):
+            ed.remove_arg(selection, ctor)
+            counts["drop:default_layers_to_save"] += 1
+            continue
+        if not uses or any(any(kw.arg == "save" for kw in door.keywords) for door, _ in uses):
+            reports.append(
+                f"{path}:{ctor.lineno}: layers_to_save has no unique visible save= door or conflicts with save=; REVIEW"
+            )
+            continue
+        for door, capture_kw in uses:
+            _, end = ed.span(capture_kw)
+            ed.replace(end, end, f", save={ed.text(selection.value)}")
+        ed.remove_arg(selection, ctor)
+        remaining = [
+            kw
+            for kw in ctor.keywords
+            if kw not in removed
+            or kw is preview
+            and not (isinstance(kw.value, ast.Constant) and kw.value.value is False)
+        ]
+        if not remaining and not ctor.args and isinstance(owner, ast.keyword):
+            # Replace the whole capture argument so nested comma deletions cannot overlap.
+            a, b = ed.span(owner)
+            ed.edits = [edit for edit in ed.edits if not (a <= edit[0] < b)]
+            ed.replace(a, b, f"save={ed.text(selection.value)}")
+            # The insertion at b belongs to this same migration.
+            ed.edits = [edit for edit in ed.edits if not (edit[0] == b and edit[1] == b)]
+        counts["capture_selection_to_save"] += 1
+
+
 def rewrite(path: Path, apply: bool, counts: Counter, reports: list[str]) -> bool:
     source = path.read_text()
+    return rewrite_source(source, path, apply, counts, reports)
+
+
+def rewrite_source(
+    source: str,
+    path: Path,
+    apply: bool,
+    counts: Counter,
+    reports: list[str],
+    result: list[str] | None = None,
+) -> bool:
+    """Rewrite one Python source block, preserving surrounding document text."""
+
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return False
     ed = _Edits(source)
+    _extract_capture_selection(tree, ed, counts, reports, path)
     nested_recording: set[int] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or _door_name(node.func) != "record":
@@ -437,9 +557,47 @@ def rewrite(path: Path, apply: bool, counts: Counter, reports: list[str]) -> boo
     except SyntaxError as exc:
         reports.append(f"{path}: rewrite does not parse ({exc}); left untouched")
         return False
-    if apply:
+    if result is not None:
+        result.append(new)
+    elif apply:
         path.write_text(new)
     return True
+
+
+def rewrite_document(path: Path, apply: bool, counts: Counter, reports: list[str]) -> bool:
+    """Apply the Python migration to Markdown fences and notebook code cells."""
+
+    source = path.read_text()
+    changed = False
+
+    def block(text: str) -> str:
+        nonlocal changed
+        result: list[str] = []
+        if rewrite_source(text, path, False, counts, reports, result):
+            changed = True
+            return result[0]
+        return text
+
+    if path.suffix == ".md":
+        new = re.sub(
+            r"(```(?:python|py)\n)(.*?)(\n```)",
+            lambda m: m[1] + block(m[2]) + m[3],
+            source,
+            flags=re.DOTALL,
+        )
+    else:
+        notebook = json.loads(source)
+        for cell in notebook.get("cells", []):
+            if cell.get("cell_type") == "code":
+                original = cell.get("source", [])
+                rewritten = block("".join(original) if isinstance(original, list) else original)
+                cell["source"] = (
+                    rewritten.splitlines(keepends=True) if isinstance(original, list) else rewritten
+                )
+        new = json.dumps(notebook, indent=1, ensure_ascii=False) + "\n"
+    if changed and apply:
+        path.write_text(new)
+    return changed
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -451,8 +609,13 @@ def main(argv: list[str] | None = None) -> int:
     reports: list[str] = []
     changed = 0
     for root in args.roots:
-        for path in sorted(Path(root).rglob("*.py")):
-            if rewrite(path, args.apply, counts, reports):
+        root_path = Path(root)
+        paths = [root_path] if root_path.is_file() else sorted(root_path.rglob("*"))
+        for path in paths:
+            if path.suffix not in {".py", ".md", ".ipynb"} or not path.is_file():
+                continue
+            rewrite_file = rewrite if path.suffix == ".py" else rewrite_document
+            if rewrite_file(path, args.apply, counts, reports):
                 changed += 1
     for key, n in sorted(counts.items()):
         print(f"{key}: {n}")

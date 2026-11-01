@@ -115,9 +115,7 @@ def test_detectors_receive_the_once_dropped_kwargs() -> None:
 
     with autoroute.input.snapshot():
         autoroute.input.register(name="test_recorder", priority=-1000)(recorder)
-        log = tl.trace(
-            _Identity(), torch.ones(2), capture=tl.options.CaptureOptions(layers_to_save="none")
-        )
+        log = tl.trace(_Identity(), torch.ones(2), save="none")
     assert log is not None
     for key in ("capture", "episode", "stop_after"):
         assert key in received, (

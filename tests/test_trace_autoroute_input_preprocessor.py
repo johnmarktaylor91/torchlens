@@ -26,7 +26,7 @@ def test_text_autoroute_sets_input_preprocessor() -> None:
     transformers = pytest.importorskip("transformers")
     model = transformers.DistilBertModel.from_pretrained("distilbert-base-uncased")
 
-    log = tl.trace(model, "Hello world!", capture=tl.options.CaptureOptions(layers_to_save="none"))
+    log = tl.trace(model, "Hello world!", save="none")
 
     assert log.input_preprocessor is not None
     assert log.input_preprocessor.source == "hf_auto_tokenizer"
@@ -37,9 +37,7 @@ def test_text_autoroute_sets_input_preprocessor() -> None:
 def test_summary_includes_input_preprocessing_when_present() -> None:
     """Trace summary should show preprocessing provenance when present."""
 
-    log = tl.trace(
-        _TinyModel(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save="none")
-    )
+    log = tl.trace(_TinyModel(), torch.ones(1), save="none")
     log.input_preprocessor = ResolvedPreprocessing(
         source="imagenet_default",
         identifier="ImageNet-default-resize256-crop224",
@@ -59,9 +57,7 @@ def test_summary_includes_input_preprocessing_when_present() -> None:
 def test_unverified_input_preprocessing_detail_is_reachable() -> None:
     """The verification/source detail is reachable on trace.input_preprocessor."""
 
-    log = tl.trace(
-        _TinyModel(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save="none")
-    )
+    log = tl.trace(_TinyModel(), torch.ones(1), save="none")
     log.input_preprocessor = ResolvedPreprocessing(
         source="imagenet_default",
         identifier="ImageNet-default-resize256-crop224",
@@ -80,9 +76,7 @@ def test_unverified_input_preprocessing_detail_is_reachable() -> None:
 def test_input_transform_summary_render_is_opt_in() -> None:
     """Input preprocessing text should render only with the draw affordance enabled."""
 
-    log = tl.trace(
-        _TinyModel(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save="none")
-    )
+    log = tl.trace(_TinyModel(), torch.ones(1), save="none")
     log.raw_input = "hello world"
     default_dot = log.draw(vis_save_only=True, file_format="dot")
     log.input_preprocessor = ResolvedPreprocessing(
@@ -109,9 +103,7 @@ def test_input_transform_summary_render_is_opt_in() -> None:
 def test_summary_omits_input_preprocessing_when_absent() -> None:
     """Trace summary should omit preprocessing provenance when absent."""
 
-    log = tl.trace(
-        _TinyModel(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save="none")
-    )
+    log = tl.trace(_TinyModel(), torch.ones(1), save="none")
 
     summary = log.summary()
 

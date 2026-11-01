@@ -141,7 +141,7 @@ def test_compare_matches_diverges_and_skips_unsaved() -> None:
     x = torch.randn(2, 4)
     trace_a = tl.trace(model_a, x)
     trace_b = tl.trace(model_b, x + 0.01)
-    unsaved = tl.trace(model_b, x, capture=tl.options.CaptureOptions(layers_to_save="none"))
+    unsaved = tl.trace(model_b, x, save="none")
 
     same = tl.debug.compare(trace_a, trace_a).to_pandas()
     diff = tl.debug.compare(trace_a, trace_b).to_pandas()

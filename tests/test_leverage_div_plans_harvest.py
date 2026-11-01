@@ -31,7 +31,7 @@ from torchlens._visualization.collapse_plan import (
     reapply_collapse_plan,
 )
 
-_SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
+_SAVE_ALL = {"capture": tl.options.CaptureOptions()}
 
 
 # ---------------------------------------------------------------------------

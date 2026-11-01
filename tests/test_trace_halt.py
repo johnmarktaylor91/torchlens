@@ -77,7 +77,7 @@ def test_trace_halt_supports_selective_layers_to_save() -> None:
         _ThreeStageModel(),
         torch.ones(1, 3),
         stop_after=_halt_on_relu,
-        capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
+        save=["linear"],
     )
 
     assert trace.halted is True

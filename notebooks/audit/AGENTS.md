@@ -96,8 +96,10 @@ Do not hand-maintain coverage counts. Re-derive them:
 ```python
 # from the repo root, with PYTHONPATH set as above
 import json, glob, re, torchlens as tl
+
 text = "\n".join(
-    "".join(c["source"]) for p in glob.glob("notebooks/audit/[0-9]*.ipynb")
+    "".join(c["source"])
+    for p in glob.glob("notebooks/audit/[0-9]*.ipynb")
     for c in json.load(open(p))["cells"]
 )
 missing = [n for n in sorted(tl.__all__) if not re.search(rf"\b{re.escape(n)}\b", text)]

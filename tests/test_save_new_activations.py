@@ -356,9 +356,7 @@ class TestSaveNewActivationsStateReset:
     def test_timing_reset(self) -> None:
         """func_calls_duration should be fresh."""
         model = _SimpleLinear()
-        log = trace_fn(
-            model, torch.randn(2, 10), capture=tl.options.CaptureOptions(layers_to_save="all")
-        )
+        log = trace_fn(model, torch.randn(2, 10), save="all")
         try:
             log.save_new_outs(model, torch.randn(2, 10), layers_to_save="all")
             assert log.func_calls_duration >= 0
@@ -368,9 +366,7 @@ class TestSaveNewActivationsStateReset:
     def test_lookup_keys_clean(self) -> None:
         """Lookup caches should not have stale entries."""
         model = _SimpleLinear()
-        log = trace_fn(
-            model, torch.randn(2, 10), capture=tl.options.CaptureOptions(layers_to_save="all")
-        )
+        log = trace_fn(model, torch.randn(2, 10), save="all")
         try:
             labels_pass1 = set(log.layer_labels)
             log.save_new_outs(model, torch.randn(2, 10), layers_to_save="all")
@@ -405,9 +401,7 @@ class TestSaveNewActivationsStateReset:
     def test_different_values(self) -> None:
         """Each pass should reflect new input values."""
         model = _SimpleLinear()
-        log = trace_fn(
-            model, torch.ones(2, 10), capture=tl.options.CaptureOptions(layers_to_save="all")
-        )
+        log = trace_fn(model, torch.ones(2, 10), save="all")
         try:
             input_val_1 = log["input_1"].out.clone()
             log.save_new_outs(model, torch.zeros(2, 10), layers_to_save="all")

@@ -155,7 +155,8 @@ def _logged_model(
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save=layers_to_save, save_grads=save_grads),
+        capture=CaptureOptions(save_grads=save_grads),
+        save=layers_to_save,
     )
     return model, x, trace
 
@@ -822,9 +823,8 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            layers_to_save="all", save_grads="all", intervention_ready=True, backward_ready=True
-        ),
+        capture=CaptureOptions(save_grads="all", intervention_ready=True, backward_ready=True),
+        save="all",
     )
     trace.log_backward(_output_loss(trace))
     assert trace.has_gradients
@@ -865,7 +865,8 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", intervention_ready=True, backward_ready=True),
+        capture=CaptureOptions(intervention_ready=True, backward_ready=True),
+        save="all",
     )
     address, param_log = next(iter(trace.param_logs.items()))
     param_log._derived_grad_payload = torch.ones(1)
@@ -1023,7 +1024,7 @@ def test_save_grads_true_captures_all_grads() -> None:
     """save_grads=True captures all gradients independent of layers_to_save."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=["relu"], save_grads=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(save_grads=True), save=["relu"])
     trace.log_backward(_output_loss(trace))
     assert trace.saved_grad_ops
     assert any("relu" in label for label in trace.saved_grad_ops.keys())
@@ -2153,7 +2154,8 @@ def test_aliased_label_registrations_emit_one_grad_event_per_pass() -> None:
     trace = tl.trace(
         IdentityWrapper(),
         torch.randn(2, 3),
-        capture=CaptureOptions(layers_to_save="all", save_grads="all", seed=42),
+        capture=CaptureOptions(save_grads="all", seed=42),
+        save="all",
     )
     # Arming proof for the owner rule itself: the identity label is owned by
     # exactly one hooked tensor even though two registrations happened.
@@ -2286,7 +2288,8 @@ def test_foreach_inplace_live_member_owns_its_gradient() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_grads="all", seed=4),
+        capture=CaptureOptions(save_grads="all", seed=4),
+        save="all",
     )
     layer = next(op for op in trace.layer_list if "_foreach_add_" in str(op.func_name))
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
@@ -2332,7 +2335,8 @@ def test_refresh_projection_with_inplace_op_keeps_one_grad_owner_per_label() -> 
     trace = tl.trace(
         model,
         torch.randn(2, 3, requires_grad=True),
-        capture=CaptureOptions(layers_to_save="all", save_grads="all", seed=0),
+        capture=CaptureOptions(save_grads="all", seed=0),
+        save="all",
     )
     trace.save_new_outs(model, torch.randn(2, 3, requires_grad=True), seed=1)
     trace.log_backward(trace[trace.output_layers[0]].out.sum())

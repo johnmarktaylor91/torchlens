@@ -48,7 +48,7 @@ def _full_trace(n_stimuli: int = 6) -> tl.Trace:
     torch.manual_seed(0)
     model = _BNModel().eval()
     x = torch.randn(n_stimuli, 3, 8, 8)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return tl.trace(model, x, save="all")
 
 
 def _partial_trace(n_stimuli: int = 6) -> tl.Trace:

@@ -118,6 +118,7 @@ from ._save_budget import SaveBudgetExceededError, SaveBudgetOption
 from ._trace_selector_helpers import (
     _TRACE_OPTION_FILTERED_NAMES,
     _combine_save_predicates,
+    _is_save_label_selection,
     _is_selective_label_save,
     _layers_to_save_has_negative_index,
     _layers_to_save_live_subset,
@@ -811,7 +812,7 @@ def _trace_mlx_model(
         resolved_activation_transform = activation_transform
     capture_options = merge_capture_options(
         capture=capture,
-        layers_to_save=layers_to_save,
+        _layers_to_save=layers_to_save,
         input_transform=transform,
         save_raw_input=save_raw_input,
         batch_render=batch_render,
@@ -896,7 +897,7 @@ def _trace_mlx_model(
         model,
         model_input_args,
         model_input_kwargs,
-        layers_to_save=capture_options.layers_to_save,
+        layers_to_save=capture_options._layers_to_save,
         keep_orphans=capture_options.keep_orphans,
         output_device=capture_options.output_device,
         activation_transform=save_options.activation_transform,
@@ -974,7 +975,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
                 kwargs["capture"].on_nonfinite if kwargs.get("capture") is not None else "ignore"
             ),
             "payload_policy": kwargs.get("payload_policy", MISSING),
-            "save_preview": kwargs.get("save_preview", MISSING),
             "chunk_size": kwargs.get("chunk_size", MISSING),
             "chunk_paths": kwargs.get("chunk_paths", MISSING),
             "save_outs_to": kwargs.get("save_outs_to", MISSING),
@@ -1077,7 +1077,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
 # inversion exists to kill.
 CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
     {
-        "layers_to_save",
         "save_raw_input",
         "output_transform",
         "output_style",
@@ -1111,7 +1110,6 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "jax_max_control_flow_unroll",
         "module_identity_mode",
         "payload_policy",
-        "save_preview",
         "structure_only",
     }
 )
@@ -2360,12 +2358,6 @@ def _unsupported_trace_option_message(option_name: str, backend_name: str) -> st
             "Non-torch payload codec policy is declared but not implemented in this backend "
             "phase; omit the option or use backend='torch'."
         )
-    if option_name == "save_preview":
-        return (
-            f"backend={backend_name!r} does not yet support save_preview. "
-            "Preview save semantics are declared but not implemented for this backend phase; "
-            "omit the option or use backend='torch'."
-        )
     return (
         f"backend={backend_name!r} does not support trace option {option_name!r}; "
         "omit the option or choose a backend that declares it."
@@ -2486,8 +2478,6 @@ def _reject_unsupported_torch_trace_option_values(capture_options: CaptureOption
         raise BackendUnsupportedError(
             "backend='torch' supports payload_policy=None or 'full' only."
         )
-    if capture_options._is_field_explicit("save_preview") and capture_options.save_preview:
-        raise BackendUnsupportedError("backend='torch' does not support save_preview=True.")
     for option_name in ("jax_control_flow", "jax_max_control_flow_unroll"):
         if capture_options._is_field_explicit(option_name):
             raise BackendUnsupportedError(
@@ -2517,7 +2507,13 @@ def trace(
     *extra_positional: Any,
     input_kwargs: dict[Any, Any] | None = None,
     capture: CaptureOptions | None = None,
-    save: PredicateFn | BaseSelector | str | list[Any] | tuple[Any, ...] | None = None,
+    save: PredicateFn
+    | BaseSelector
+    | str
+    | list[Any]
+    | tuple[Any, ...]
+    | None
+    | MissingType = MISSING,
     intervene: InterventionPredicate | None = None,
     stop_after: Any | None = None,
     storage: StorageOptions | None = None,
@@ -2598,7 +2594,7 @@ def trace(
         gradient transforms ride ``CaptureOptions``.
     capture:
         Grouped capture options (``CaptureOptions``). The one spelling for
-        every capture knob (``layers_to_save``, ``random_seed``,
+        capture behavior (``seed``,
         ``intervention_ready``, ``verbose``, ``structure_only``, ...); the
         former flat kwargs are removed.
     intervene:
@@ -2697,6 +2693,14 @@ def trace(
                     "inspect what torch.compile generated, use tl.bridge.depyf.dump(fn, x, path)"
                 ),
                 argument="model",
+            )
+        if save is MISSING:
+            save = None
+        elif save is None:
+            save = "none"
+        if _is_save_label_selection(save):
+            save, capture = _route_save_label_selection(
+                save, capture, merge_capture_options(capture=capture), model
             )
         public_trace_kwargs = locals().copy()
         public_trace_kwargs.pop("extra_positional")
@@ -2958,7 +2962,6 @@ def _trace_torch_model(
     jax_max_control_flow_unroll: int | MissingType = MISSING,
     module_identity_mode: str | None | MissingType = MISSING,
     payload_policy: str | None | MissingType = MISSING,
-    save_preview: bool | MissingType = MISSING,
     facets: (
         list[Callable[[Any], dict[str, Any]]]
         | tuple[Callable[[Any], dict[str, Any]], ...]
@@ -3027,7 +3030,7 @@ def _trace_torch_model(
 
     capture_options = merge_capture_options(
         capture=capture,
-        layers_to_save=layers_to_save,
+        _layers_to_save=layers_to_save,
         input_transform=transform,
         save_raw_input=save_raw_input,
         batch_render=batch_render,
@@ -3068,16 +3071,15 @@ def _trace_torch_model(
         jax_max_control_flow_unroll=jax_max_control_flow_unroll,
         module_identity_mode=module_identity_mode,
         payload_policy=payload_policy,
-        save_preview=save_preview,
         structure_only=structure_only,
     )
     # One closed vocabulary drives both nonfinite mechanisms: "raise" is the
     # stop-and-throw tripwire, "track" and "warn" record per-op verdicts.
     raise_on_nan_value = capture_options.on_nonfinite == "raise"
     track_nonfinite_value = capture_options.on_nonfinite in ("track", "warn")
-    if isinstance(capture_options.layers_to_save, torch.Tensor):
+    if isinstance(capture_options._layers_to_save, torch.Tensor):
         raise ArgumentTypeError(
-            "capture.layers_to_save received a torch.Tensor -- this is almost "
+            "save received a torch.Tensor -- this is almost "
             "always a model input routed to the wrong slot. Bundle model inputs "
             "as one tuple, e.g. tl.trace(model, (input_a, input_b, input_c)), "
             "and use save= for selective capture.",
@@ -3199,10 +3201,10 @@ def _trace_torch_model(
                 code=STRUCTURE_ONLY_EPISODE_UNSUPPORTED,
             )
         if getattr(episode, "step_output_kind", "tokens") != "none" and (
-            capture_options.layers_to_save in (None, "none", "None", "NONE")
+            capture_options._layers_to_save in (None, "none", "None", "NONE")
             or (
-                isinstance(capture_options.layers_to_save, list)
-                and not capture_options.layers_to_save
+                isinstance(capture_options._layers_to_save, list)
+                and not capture_options._layers_to_save
             )
         ):
             # Kind-conditional save rule (foldA D8, lane F40b): tokens/digest
@@ -3248,7 +3250,7 @@ def _trace_torch_model(
     normalized_chunk_size = normalize_chunk_size(chunk_size_value)
     if chunk_paths_value is not None and normalized_chunk_size is None:
         raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
-    layers_to_save = capture_options.layers_to_save
+    layers_to_save = capture_options._layers_to_save
     save_raw_input_policy = capture_options.save_raw_input
     batch_render_policy = capture_options.batch_render
     output_transform_value = capture_options.output_transform
@@ -3581,7 +3583,6 @@ def _trace_torch_model(
             "jax_max_control_flow_unroll": capture_options.jax_max_control_flow_unroll,
             "module_identity_mode": capture_options.module_identity_mode,
             "payload_policy": capture_options.payload_policy,
-            "save_preview": capture_options.save_preview,
         }
         # The inversion sweep: every CaptureOptions field not hand-curated
         # above and not declared session-neutral enters the key here --
@@ -3648,7 +3649,6 @@ def _trace_torch_model(
             else MISSING
         )
         recursive_capture_options = CaptureOptions(
-            layers_to_save=layers_to_save,
             input_transform=None,
             save_raw_input=save_raw_input_policy,
             batch_render=batch_render_policy,
@@ -3686,7 +3686,6 @@ def _trace_torch_model(
             jax_max_control_flow_unroll=recursive_jax_max_control_flow_unroll,
             module_identity_mode=capture_options.module_identity_mode,
             payload_policy=capture_options.payload_policy,
-            save_preview=capture_options.save_preview,
             # Session knobs the chunk path historically DROPPED (list-A row 26,
             # second clause): the recursive options object was rebuilt from a
             # hand-enumerated field list, so a chunked capture silently reset
@@ -3716,6 +3715,9 @@ def _trace_torch_model(
             jax_static_argnums=capture_options.jax_static_argnums,
             grad_options=capture_options.grad_options,
             chunk_size=None,
+        )
+        recursive_capture_options = merge_capture_options(
+            capture=recursive_capture_options, _layers_to_save=layers_to_save
         )
         recursive_save_value: _SaveTransforms | PredicateFn | BaseSelector | None = (
             save_predicate if save_predicate is not None else save_options
@@ -3795,7 +3797,6 @@ def _trace_torch_model(
             jax_max_control_flow_unroll=MISSING,
             module_identity_mode=MISSING,
             payload_policy=MISSING,
-            save_preview=MISSING,
             facets=facet_recipes,
             capture_output_structure=MISSING,
             chunk_size=None,
@@ -3877,7 +3878,6 @@ def _trace_torch_model(
                 jax_max_control_flow_unroll=MISSING,
                 module_identity_mode=MISSING,
                 payload_policy=MISSING,
-                save_preview=MISSING,
                 facets=facet_recipes,
                 capture_output_structure=MISSING,
                 chunk_size=None,
@@ -4141,7 +4141,7 @@ def _trace_torch_model(
                 f"module_filter suppressed every selected payload "
                 f"({module_filter_suppressed} ops): the returned trace has full "
                 "metadata but ZERO saved activations. module_filter is a third "
-                "save gate composed with save=/layers_to_save, and its argument "
+                "save gate composed with save=, and its argument "
                 "is an op-record namespace (fields such as func_name, "
                 "layer_label, modules), NEVER an nn.Module. "
                 "Remedy: write the filter against op-record fields (e.g. lambda "
@@ -4228,9 +4228,9 @@ def log_model_metadata(
         input_args,
         input_kwargs=input_kwargs,
         capture=CaptureOptions(
-            layers_to_save=None,
             compute_input_output_distances=True,
         ),
+        save=None,
     )
 
 

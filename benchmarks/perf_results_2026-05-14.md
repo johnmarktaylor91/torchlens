@@ -472,7 +472,7 @@ With tensor retention disabled, these rows isolate wrapper dispatch and metadata
 - Sub-ms operations can legitimately show 0.0 MB USS delta because allocators reuse pages.
 - TorchLens Trace captures every tensor-producing torch operation; peer hook rows capture module boundaries only.
 - HF GPT-2 and HookedTransformer GPT-2 are separate model implementations and should not be compared row-by-row.
-- No-save Trace rows use `layers_to_save=[]`, which records metadata for every op but saves no activation tensors.
+- No-save Trace rows use `save=[]`, which records metadata for every op but saves no activation tensors.
 
 ## Rerun Tolerance
 

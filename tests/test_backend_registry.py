@@ -116,7 +116,8 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
         _TinyModel().eval(),
         torch.ones(1),
         backend="torch",
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=1),
+        capture=tl.options.CaptureOptions(seed=1),
+        save="all",
     )
     trace.backend = "fake"
     trace.module_identity_mode = "function_root"
@@ -223,12 +224,13 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
 
     model = _TinyModel()
     x = torch.ones(1)
-    legacy = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all", seed=1))
+    legacy = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=1), save="all")
     explicit = tl.trace(
         model,
         x,
         backend="torch",
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=1),
+        capture=tl.options.CaptureOptions(seed=1),
+        save="all",
     )
     assert explicit.backend == legacy.backend == "torch"
     assert explicit.layer_labels == legacy.layer_labels
@@ -239,7 +241,6 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
     [
         {"module_identity_mode": "object_module"},
         {"payload_policy": "not_a_policy"},
-        {"save_preview": True},
         {"jax_control_flow": "reject"},
     ],
 )
@@ -263,7 +264,7 @@ def test_torch_accepts_default_equivalent_trace_option_values() -> None:
         torch.ones(1),
         backend="torch",
         capture=tl.options.CaptureOptions(
-            module_identity_mode="torch_module", payload_policy="full", save_preview=False
+            module_identity_mode="torch_module", payload_policy="full"
         ),
     )
 

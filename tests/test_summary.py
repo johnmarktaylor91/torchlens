@@ -52,7 +52,7 @@ def tiny_summary_log() -> Generator[tl.Trace, None, None]:
     """Return a metadata-only log for the tiny summary model."""
     model = TinySummaryModel()
     x = torch.randn(1, 3, 8, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = tl.trace(model, x, save=None)
     try:
         yield log
     finally:
@@ -155,7 +155,7 @@ def test_summary_handles_multi_pass_layers(kwargs: dict[str, str]) -> None:
     log = tl.trace(
         RecurrentSummaryModel(),
         torch.randn(1, 3),
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     try:
         summary_text = log.summary(**kwargs)
@@ -187,7 +187,7 @@ def test_repr_remains_short_for_resnet18() -> None:
     torchvision_models = pytest.importorskip("torchvision.models")
     model = torchvision_models.resnet18()
     x = torch.randn(1, 3, 64, 64)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = tl.trace(model, x, save=None)
     try:
         rendered = repr(log)
     finally:

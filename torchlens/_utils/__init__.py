@@ -642,7 +642,6 @@ def _log_ops_for_mode(
     """
 
     from torchlens import trace as trace_fn
-    from torchlens.options import CaptureOptions
 
     # Snapshot every submodule's training flag, not just the root's. A recursive
     # ``model.train(root_mode)`` restore would clobber mixed child states (e.g. a
@@ -657,7 +656,7 @@ def _log_ops_for_mode(
         trace = cast(Callable[..., Any], trace_fn)(
             model,
             x,
-            capture=CaptureOptions(layers_to_save=None),
+            save=None,
         )
     finally:
         for submodule, was_training in original_modes.items():
@@ -769,14 +768,13 @@ def flop_count(
     """
 
     from torchlens import trace as trace_fn
-    from torchlens.options import CaptureOptions
     from torchlens.report._compute_truth import forward_flops_total
 
     _refuse_flop_count_options(flop_convention, unsupported)
     trace = cast(Callable[..., Any], trace_fn)(
         model,
         x,
-        capture=CaptureOptions(layers_to_save=None),
+        save=None,
     )
     fma = 1 if flop_convention == "fma1" else 2
     return int(forward_flops_total(trace, fma=fma))
@@ -811,12 +809,11 @@ def peek_graph(
     """
 
     from torchlens import trace as trace_fn
-    from torchlens.options import CaptureOptions
 
     trace = cast(Callable[..., Any], trace_fn)(
         model,
         x,
-        capture=CaptureOptions(layers_to_save=None),
+        save=None,
     )
     trace.draw(
         vis_mode=view,

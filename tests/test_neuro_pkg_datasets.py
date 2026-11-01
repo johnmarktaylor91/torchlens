@@ -65,7 +65,7 @@ def _full_trace(n_stimuli: int = 6) -> tl.Trace:
     torch.manual_seed(0)
     model = _BNModel().eval()
     x = torch.randn(n_stimuli, 3, 8, 8)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return tl.trace(model, x, save="all")
 
 
 def _extraction_dir(tmp_path: Path, n_stimuli: int = 6) -> Path:
@@ -222,7 +222,7 @@ def test_bf16_widen_to_f32_with_recorded_cast() -> None:
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(3, 4), nn.ReLU()).to(torch.bfloat16).eval()
     x = torch.randn(5, 3, dtype=torch.bfloat16)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         result = datasets(log, ["relu_1_2"])
@@ -233,9 +233,7 @@ def test_bf16_widen_to_f32_with_recorded_cast() -> None:
 
     float_model = nn.Sequential(nn.Linear(3, 4), nn.ReLU()).eval()
     float_model.load_state_dict({key: value.float() for key, value in model.state_dict().items()})
-    float_log = tl.trace(
-        float_model, x.float(), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    float_log = tl.trace(float_model, x.float(), save="all")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         native = datasets(float_log, ["relu_1_2"])
@@ -287,7 +285,7 @@ def test_multipass_bare_lookup_refuses_with_alternatives() -> None:
     log = tl.trace(
         Recurrent().eval(),
         torch.randn(5, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     with pytest.raises(NeuroHandoffError) as excinfo:
         datasets(log, "linear_1_1")

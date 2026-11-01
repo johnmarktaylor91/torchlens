@@ -216,7 +216,8 @@ def _model_hash(captured_model: Any, example_input: Any) -> str:
     captured_trace = capture_trace(
         captured_model,
         example_input,
-        capture=CaptureOptions(layers_to_save=None, inference_only=True),
+        capture=CaptureOptions(inference_only=True),
+        save=None,
     )
     return trace(captured_trace)
 
@@ -225,7 +226,7 @@ def model(model: Any, inputs: Any) -> str:
     """Capture a model cheaply and return its address-free structural hash.
 
     This provisional name may change after public API review. The metadata-only
-    capture deliberately uses ``layers_to_save=None`` so buffer events are
+    capture deliberately uses ``save=None`` so buffer events are
     represented identically to the corresponding metadata-only trace passed to
     :func:`trace`.
 

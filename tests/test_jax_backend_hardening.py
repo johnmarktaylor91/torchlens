@@ -1117,10 +1117,7 @@ def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -
 
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
-    (
-        ({"payload_policy": "full"}, "payload_policy.*not implemented"),
-        ({"save_preview": True}, "save_preview.*not implemented"),
-    ),
+    (({"payload_policy": "full"}, "payload_policy.*not implemented"),),
 )
 def test_jax_rejects_declared_future_public_options(
     kwargs: dict[str, Any],

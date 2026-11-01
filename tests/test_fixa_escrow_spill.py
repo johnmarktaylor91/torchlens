@@ -111,7 +111,7 @@ def test_spilled_real_capture_payload_materializes_bit_exact(force_spill):
     torch.manual_seed(0)
     model = _TwoConv().eval()
     x = torch.randn(2, 3, 8, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["conv2d_2_3"]))
+    log = tl.trace(model, x, save=["conv2d_2_3"])
     oracle = _eager_module_output(model, "conv2", x)
     assert torch.equal(log["conv2d_2_3"].out, oracle), (
         "spilled escrow payload is not bit-exact against the eager module output"
@@ -173,9 +173,7 @@ def test_config_built_clip_visual_projection_bit_equal_through_forced_spill(forc
     }
     kwargs["attention_mask"] = torch.ones_like(kwargs["input_ids"])
 
-    structure = tl.trace(
-        model, (), input_kwargs=kwargs, capture=tl.options.CaptureOptions(layers_to_save="none")
-    )
+    structure = tl.trace(model, (), input_kwargs=kwargs, save="none")
     projection_ops = [
         op
         for op in structure.layer_list
@@ -185,9 +183,7 @@ def test_config_built_clip_visual_projection_bit_equal_through_forced_spill(forc
     assert projection_ops, "no visual_projection op captured on the R0 CLIP fixture"
     label = projection_ops[0].layer_label
 
-    log = tl.trace(
-        model, (), input_kwargs=kwargs, capture=tl.options.CaptureOptions(layers_to_save=[label])
-    )
+    log = tl.trace(model, (), input_kwargs=kwargs, save=[label])
     oracle = _eager_module_output(model, "visual_projection", **kwargs)
     assert torch.equal(log[label].out, oracle), (
         f"R0 CLIP {label} escrow payload not bit-equal to the eager visual projection"
@@ -286,7 +282,7 @@ def test_vit_b_16_op_label_selective_save_completes():
 
     model = torchvision.models.vit_b_16(weights="IMAGENET1K_V1").eval()
     x = torch.randn(2, 3, 224, 224, generator=torch.Generator().manual_seed(1))
-    structure = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="none"))
+    structure = tl.trace(model, x, save="none")
     module_linears = [
         op
         for op in structure.layer_list
@@ -296,7 +292,7 @@ def test_vit_b_16_op_label_selective_save_completes():
     ]
     assert len(module_linears) > 4, "expected module-attributed linear ops on vit_b_16"
     target = module_linears[4]
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=[target.layer_label]))
+    log = tl.trace(model, x, save=[target.layer_label])
     op = log[target.layer_label]
     # Door parity is the exact claim: the deferred escrow door must return the
     # SAME BYTES the live predicate door returns for the same op. The bare
@@ -343,7 +339,7 @@ def test_real_clip_linear_73_288_bit_equal_to_visual_projection():
         model,
         (),
         input_kwargs=kwargs,
-        capture=tl.options.CaptureOptions(layers_to_save=["linear_73_300"]),
+        save=["linear_73_300"],
     )
     op = log["linear_73_300"]
     assert op.output_of_modules == ("visual_projection",)

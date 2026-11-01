@@ -167,7 +167,7 @@ class TestRealGPT2:
         model = transformers.GPT2LMHeadModel.from_pretrained("openai-community/gpt2")
         model.eval()
         tokens = torch.tensor([[464, 3290, 318, 257]])
-        trace = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save=[]))
+        trace = tl.trace(model, tokens, save=[])
         index = ob.read_edge_index(trace)
         assert len(index.edges) >= 500
         output_label = next(label for label in index.edges if label.startswith("output"))

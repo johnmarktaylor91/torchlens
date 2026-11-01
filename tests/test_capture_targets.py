@@ -129,12 +129,14 @@ def test_absorbed_layers_to_save_cache_key_is_stable(tmp_path: Path) -> None:
     first = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path, layers_to_save=["relu"]),
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path),
+        save=["relu"],
     )
     second = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path, layers_to_save=["relu"]),
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path),
+        save=["relu"],
     )
 
     assert first.capture_cache_key == second.capture_cache_key

@@ -32,7 +32,8 @@ def tlens_agreement_demo() -> dict[str, Any]:
     log = tl.trace(
         model,
         ids,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
     dec = mi.residual_decomposition(log)
@@ -72,7 +73,7 @@ def tlens_agreement_demo() -> dict[str, Any]:
     tlens.eval()
     tokens = tlens.to_tokens(prompt)
     _, cache = tlens.run_with_cache(tokens)
-    log2 = tl.trace(tlens, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log2 = tl.trace(tlens, tokens, save="all")
     dec2 = mi.residual_decomposition(log2)
     stack, _labels = cache.decompose_resid(layer=-1, return_labels=True)
     exact = sum(

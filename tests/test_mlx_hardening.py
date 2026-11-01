@@ -239,7 +239,7 @@ def test_mlx_layers_to_save_raises_typed_error() -> None:
             TinyMLP(),
             _tiny_mlp_input(),
             backend="mlx",
-            capture=tl.options.CaptureOptions(layers_to_save=["relu_1_3_raw:1"]),
+            save=["relu_1_3_raw:1"],
         )
 
 

@@ -700,10 +700,10 @@ def validate_backward_pass(
             logged_inputs,
             input_kwargs=logged_kwargs,
             capture=CaptureOptions(
-                layers_to_save="all",
                 save_grads="all",
                 seed=seed,
             ),
+            save="all",
         )
         logged_output = _reconstruct_candidate_output_for_loss(trace)
         logged_loss = loss_fn(logged_output)

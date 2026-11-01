@@ -115,7 +115,8 @@ def test_successful_capture_cleans_deeply_nested_saved_args() -> None:
     trace = tl.trace(
         _NestedSavedArgsModel(),
         torch.ones(2),
-        capture=CaptureOptions(layers_to_save="all", save_args=True),
+        capture=CaptureOptions(save_args=True),
+        save="all",
     )
 
     foreach_ops = [op for op in trace.ops if op.func_name == "_foreach_add"]

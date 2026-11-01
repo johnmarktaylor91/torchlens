@@ -42,7 +42,7 @@ def test_tensor_input_kwargs_refuses_typed_naming_the_tuple_spelling() -> None:
     model = _TinyModel()
     q, k = torch.randn(1, 4), torch.randn(1, 4)
     with pytest.raises(ArgumentTypeError, match="tuple"):
-        tl.trace(model, q, k)
+        tl.trace(model, q, input_kwargs=k)
 
 
 def test_tensor_in_layers_to_save_slot_refuses_typed() -> None:

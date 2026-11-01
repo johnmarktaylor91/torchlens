@@ -303,7 +303,7 @@ Use disk-backed storage for selected payloads that are too large or numerous to 
 Trace repr, notebook HTML, and JSON explanation do not materialize lazy disk payloads for their
 NaN/Inf summary; those refs are reported as unexamined until you call ``op.materialize_out()``.
 This exemption applies to predicate-selected disk-only payloads. Exhaustive saving
-(``layers_to_save="all"``, the default) keeps RAM copies until postprocess, so combine a narrower
+(``save="all"``, the default) keeps RAM copies until postprocess, so combine a narrower
 ``save=`` with disk streaming to reduce peak retained memory. Note that ``save=`` itself takes a
 predicate, selector, or ``CaptureOptions`` — never the string ``"all"``.
 Portable `.tlspec/` bundles store manifest data plus tensor sidecars when the backend supports

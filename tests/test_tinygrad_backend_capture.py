@@ -627,7 +627,6 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
         ({"jax_max_control_flow_unroll": 4}, "control-flow unrolling.*not implemented"),
         ({"module_identity_mode": "pytree_module"}, "module_identity_mode must be"),
         ({"payload_policy": "full"}, "payload_policy.*not implemented"),
-        ({"save_preview": True}, "save_preview.*not implemented"),
     ),
 )
 def test_tinygrad_rejects_declared_future_public_options(

@@ -2141,7 +2141,7 @@
   {
    "id": "A37",
    "pair": [],
-   "summary": "Which sites to keep is spelled save= on trace and record, layers on extract, and layers_to_save in CaptureOptions; using both save= and layers_to_save refuses save_selection_conflict.",
+   "summary": "Which sites to keep is spelled save= on trace and record, and layers on extract. CaptureOptions configures capture mechanics.",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "pending"

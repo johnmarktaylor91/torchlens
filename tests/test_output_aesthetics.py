@@ -1686,9 +1686,7 @@ class TestVisualizationBugfixes:
     def test_vis_selective_save(self):
         """Selective activation saving should render a real PDF, not just not crash."""
         model = _SimpleLinear()
-        log = trace_fn(
-            model, torch.randn(2, 10), capture=tl.options.CaptureOptions(layers_to_save="all")
-        )
+        log = trace_fn(model, torch.randn(2, 10), save="all")
         pdf_path = Path(VIS_DIR) / "test_selective_save.pdf"
         pdf_path.unlink(missing_ok=True)
         try:

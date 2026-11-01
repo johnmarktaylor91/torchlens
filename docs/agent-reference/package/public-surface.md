@@ -108,7 +108,7 @@ image_trace.draw(node_spec_fn=tl.viz.nodes.scree())
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`
 is computed, not persisted. `tl.repgeom.mds_evolution(...)` requires the target batch
 activations to have been saved at capture time; use a curated `save=` subset, not exhaustive
-`layers_to_save="all"`,
+`save="all"`,
 for image batches. `Trace._annotation_blobs` is public-provisional only for render-time
 annotation payloads and compatibility review.
 Sprint C RDM, feature-map, and scree node visuals are PIL-only render-time images composed
