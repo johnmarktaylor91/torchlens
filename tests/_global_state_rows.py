@@ -1152,7 +1152,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_capture/_annotations_travel.py", "__all__"),
         ("torchlens/_capture/_episode_coupling.py", "__all__"),
         ("torchlens/_capture/_episode_derivation.py", "__all__"),
-        ("torchlens/_capture/_episode_failed.py", "__all__"),
         ("torchlens/_capture/_episode_fold.py", "__all__"),
         ("torchlens/_capture/_episode_join.py", "__all__"),
         ("torchlens/_capture/_episode_ledger.py", "__all__"),

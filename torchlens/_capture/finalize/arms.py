@@ -61,7 +61,8 @@ def _postprocess_requested(result: ForwardResult) -> bool:
 
 
 def _attach_note(exc: BaseException, note: str) -> None:
-    """Attach ``note`` to ``exc`` (PEP 678), or warn where notes do not exist (Python 3.10)."""
+    """Attach ``note`` to ``exc``, or warn where exception notes do not exist."""
+    # PEP 678 notes; Python 3.10 has none, so the note surfaces as a warning.
     add_note = getattr(exc, "add_note", None)
     if add_note is not None:
         add_note(note)
@@ -98,11 +99,12 @@ def _fence_device_work(trace: Trace) -> None:
 
     Every cpu_async D2H copy recorded this forward is fenced BEFORE any
     host-side consumer (finalize, postprocess digests, ``op.out``,
-    ``Trace.save`` serialization) can observe partial bytes (R36-1). Deferred
+    ``Trace.save`` serialization) can observe partial bytes. Deferred
     track_nonfinite device flags settle here, after the forward is complete,
     so the record costs one batch of scalar reads instead of a per-op device
     synchronization (the flags' kernels are long done).
     """
+    # R36-1 (the fence) and the deferred-flag drain, in that order.
     from ..._data_classes._nonfinite import drain_pending_nonfinite
     from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
@@ -416,8 +418,8 @@ def finalize_interrupted(result: ForwardResult) -> NoReturn:
     The torch session forces gradient-capable parameters to require grads, so
     its teardown must run before re-raising any such escape. Order (pinned):
     ``count_committed_ops``; ``cleanup_model_session`` (a failure attaches as
-    a note, B8-23); ``settle_failed(interrupted=True)`` and the scrub in
-    ``finally`` (a failure attaches as a note); the interrupt re-raises.
+    a note); ``settle_failed(interrupted=True)`` and the scrub in ``finally``
+    (a failure attaches as a note); the interrupt re-raises.
 
     Parameters
     ----------

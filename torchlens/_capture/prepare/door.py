@@ -86,7 +86,6 @@ from ...options import (
 )
 from ...recording.options import HaltPredicateFn, PredicateFn
 from ...types import _ActivationPostfunc, _GradientPostfunc
-from .._episode_failed import attach_failed_episode_ledger
 from .._episode_ledger import (
     resolve_episode_declaration,
 )
@@ -94,7 +93,11 @@ from .._structure_only_entry import (
     _enforce_structure_only_entry_contract,
     _StructureOnlyEntryFacts,
 )
-from ..finalize.epilogue import _render_layer_visualizers, finish_trace
+from ..finalize.epilogue import (
+    _render_layer_visualizers,
+    attach_failed_episode_ledger,
+    finish_trace,
+)
 from ..run_entry import _run_model_and_save_specified_outs
 from ..stages import CaptureRequest, ForwardResult
 from .cache import (

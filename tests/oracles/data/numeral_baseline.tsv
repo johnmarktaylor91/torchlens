@@ -3651,8 +3651,6 @@ package-docstrings	torchlens/_capture/_episode_derivation.py	3.2
 package-docstrings	torchlens/_capture/_episode_derivation.py	40
 package-docstrings	torchlens/_capture/_episode_derivation.py	42
 package-docstrings	torchlens/_capture/_episode_derivation.py	43
-package-docstrings	torchlens/_capture/_episode_failed.py	40
-package-docstrings	torchlens/_capture/_episode_failed.py	43
 package-docstrings	torchlens/_capture/_episode_fold.py	2.3
 package-docstrings	torchlens/_capture/_episode_fold.py	43
 package-docstrings	torchlens/_capture/_episode_join.py	051,
@@ -3688,6 +3686,10 @@ package-docstrings	torchlens/_capture/_input_records.py	67
 package-docstrings	torchlens/_capture/_nonfinite_prefix.py	1_1
 package-docstrings	torchlens/_capture/_nonfinite_prefix.py	1_1_
 package-docstrings	torchlens/_capture/_nonfinite_prefix.py	1_4_
+package-docstrings	torchlens/_capture/_outcome_payload.py	2.4
+package-docstrings	torchlens/_capture/_outcome_types.py	10
+package-docstrings	torchlens/_capture/_outcome_types.py	21
+package-docstrings	torchlens/_capture/_outcome_types.py	64
 package-docstrings	torchlens/_capture/_plan_check.py	12
 package-docstrings	torchlens/_capture/_plan_check.py	14,
 package-docstrings	torchlens/_capture/_plan_check.py	4.2
@@ -3709,6 +3711,8 @@ package-docstrings	torchlens/_capture/_weightsfree_admission.py	4.3
 package-docstrings	torchlens/_capture/arg_positions.py	2.0
 package-docstrings	torchlens/_capture/arg_positions.py	22
 package-docstrings	torchlens/_capture/arg_positions.py	24
+package-docstrings	torchlens/_capture/finalize/epilogue.py	40
+package-docstrings	torchlens/_capture/finalize/epilogue.py	43
 package-docstrings	torchlens/_capture/finalize/settle.py	11
 package-docstrings	torchlens/_capture/finalize/settle.py	18
 package-docstrings	torchlens/_capture/finalize/settle.py	23
@@ -3717,13 +3721,9 @@ package-docstrings	torchlens/_capture/flops.py	1.0
 package-docstrings	torchlens/_capture/flops.py	10
 package-docstrings	torchlens/_capture/flops.py	2.5
 package-docstrings	torchlens/_capture/flops.py	53.
-package-docstrings	torchlens/_capture/outcome.py	10
 package-docstrings	torchlens/_capture/outcome.py	11
 package-docstrings	torchlens/_capture/outcome.py	14
-package-docstrings	torchlens/_capture/outcome.py	2.4
 package-docstrings	torchlens/_capture/outcome.py	20
-package-docstrings	torchlens/_capture/outcome.py	21
-package-docstrings	torchlens/_capture/outcome.py	64
 package-docstrings	torchlens/_capture/outcome.py	67
 package-docstrings	torchlens/_capture/peak_memory.py	20
 package-docstrings	torchlens/_capture/peak_memory.py	20,

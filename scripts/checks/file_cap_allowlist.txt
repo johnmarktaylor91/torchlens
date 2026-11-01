@@ -34,12 +34,6 @@ torchlens/_capture/finalize/settle.py::_finalize_halted_trace	74
 torchlens/_capture/finalize/settle.py::save_new_outs	185
 torchlens/_capture/flops.py	1942
 torchlens/_capture/flops.py::_einsum_flops	93
-torchlens/_capture/outcome.py	1424
-torchlens/_capture/outcome.py::parse_outcome_payload	121
-torchlens/_capture/outcome.py::require_capture_capability	61
-torchlens/_capture/outcome.py::resolve_loaded_outcome	71
-torchlens/_capture/outcome.py::settle_failed	63
-torchlens/_capture/outcome.py::stamp_backend_finalized	80
 torchlens/_capture/predicates.py::build_op_record_context	109
 torchlens/_capture/preflight.py::_escrow_remedy	69
 torchlens/_capture/prepare/cache.py::_harden_capture_cache_dir	65
@@ -946,7 +940,6 @@ torchlens/backends/torch/_completeness_storage.py::_make_plain_scalar_escape_met
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper	82
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper.wrapper	75
 torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	158
-torchlens/backends/torch/_failed_session.py::cleanup_failed_forward_session	146
 torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	322
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
 torchlens/backends/torch/_ops_activations.py::_save_activation_fields	211
@@ -983,8 +976,6 @@ torchlens/backends/torch/_ops_retention.py::_copy_lookback_payload	78
 torchlens/backends/torch/_ops_retention.py::_save_predicate_activation_fields	91
 torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	171
 torchlens/backends/torch/_ops_shared_fields.py::_get_parent_output_version_snapshot	75
-torchlens/backends/torch/_outputs.py::_promote_layers_to_save_output_parent	127
-torchlens/backends/torch/_outputs.py::extract_and_mark_outputs	159
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	113
 torchlens/backends/torch/_tl.py	1813
 torchlens/backends/torch/_tl.py::set_tensor_label	63
