@@ -161,7 +161,6 @@ def _honest_values() -> dict[str, Any]:
         "ordered": collections.OrderedDict([("k", 1), ("j", [2, 3])]),
         "counter": collections.Counter("abracadabra"),
         "torch_values": {"dtype": torch.float32, "size": torch.Size((2, 3)), "device": "cpu"},
-        "numpy_array": np.arange(12, dtype=np.float64).reshape(3, 4),
         "numpy_scalar": np.float64(1.5),
         "tensor": torch.arange(6, dtype=torch.float32).reshape(2, 3),
         "module_identity": nn.Identity(),
@@ -227,6 +226,10 @@ def _hostile_streams() -> dict[str, bytes]:
             _global("numpy", "ndarray"),
             pickle.MARK + _int(1000) + pickle.TUPLE,
             pickle.SHORT_BINBYTES + b"\x01b",
+        ),
+        # the honest numpy pickling shape itself mediates ndarray.__new__; refused by design
+        "ndarray_pickle_shape": pickle.dumps(
+            np.arange(12, dtype=np.float64).reshape(3, 4), protocol=4
         ),
         "bytearray_sized": _reduce("builtins", "bytearray", _int(1000)),
         "bytes_sized": _reduce("builtins", "bytes", _int(1000)),

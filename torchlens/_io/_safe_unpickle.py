@@ -1474,6 +1474,11 @@ class _BundleAllowlistPolicy:
             else None
         )
 
+    def _import_global(self, module: str, name: str) -> Any:
+        """Resolve ``module.name`` with the base machine's importer (concrete classes bind it)."""
+
+        raise NotImplementedError
+
     def _boundary(self, run: Callable[[], Any]) -> Any:
         """Run ``run`` normalizing ONLY VM-internal corruption failures.
 
@@ -1553,7 +1558,7 @@ class _BundleAllowlistPolicy:
 
         # Exact-pair allowlist of inert data/value types and tensor reconstructors.
         if (module, name) in _SAFE_EXPLICIT_GLOBALS:
-            return super().find_class(module, name)
+            return self._import_global(module, name)
 
         # Pure torch tensor reconstruction helpers. ``_rebuild_*`` functions only
         # reassemble tensors from already-resolved (allowlisted) components; any
@@ -1579,7 +1584,7 @@ class _BundleAllowlistPolicy:
                     f"unpickle: {module}.{name} (a dotted name attribute-walks off the "
                     "reconstructor into module globals; legit _rebuild_* names have no dot)."
                 )
-            obj = super().find_class(module, name)
+            obj = self._import_global(module, name)
             if not (callable(obj) and _is_torch_owned(obj) and not isinstance(obj, type)):
                 raise pickle.UnpicklingError(
                     "Blocked non-torch-owned / non-callable torch._utils._rebuild "
@@ -1602,7 +1607,7 @@ class _BundleAllowlistPolicy:
         # callables (e.g. ``torch.serialization.load``) are denied; the two
         # individually-dangerous ones are wrapped above.
         if module == "torch" or module.startswith("torch."):
-            obj = super().find_class(module, name)
+            obj = self._import_global(module, name)
             if isinstance(obj, (torch.dtype, torch.layout, torch.memory_format)):
                 return obj
             if isinstance(obj, type):
@@ -1658,7 +1663,7 @@ class _BundleAllowlistPolicy:
         if any(
             module == root or module.startswith(root + ".") for root in _PREVIEW_ARRAY_MODULE_ROOTS
         ):
-            obj = super().find_class(module, name)
+            obj = self._import_global(module, name)
             if isinstance(obj, type):
                 # As in the torch branch: a resolved TYPE is admitted only when its
                 # OWN real module is within a preview-array root. A DOTTED pickled
@@ -1715,7 +1720,7 @@ class _BundleAllowlistPolicy:
         if (
             module == "torchlens" or module.startswith("torchlens.")
         ) and not _is_torchlens_appliance_module(module):
-            obj = super().find_class(module, name)
+            obj = self._import_global(module, name)
             if isinstance(obj, type):
                 # A resolved TYPE is NO LONGER admitted unconditionally: a pickle
                 # ``REDUCE`` INVOKES the type (or its reconstructed instance) with
@@ -1789,7 +1794,7 @@ class _BundleAllowlistPolicy:
                     "into __globals__/__builtins__/__dict__ escapes the resolved-module "
                     "denylist recheck)."
                 )
-            obj = super().find_class(module, name)
+            obj = self._import_global(module, name)
             # A resolved MAPPING (e.g. a module's ``__globals__`` / ``__dict__`` reached
             # by a dotted walk that the dunder guard above did not already refuse) is
             # never a legitimate foreign recipe callable/type, and its real
@@ -1961,6 +1966,11 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
         self.guarded_calls = 0
         self.fallback_reason: str | None = None
 
+    def _import_global(self, module: str, name: str) -> Any:
+        """Resolve with the C machine's importer (``fix_imports`` mapping included)."""
+
+        return super().find_class(module, name)
+
     def find_class(self, module: str, name: str) -> Any:
         """Return the pre-resolved global for the C machine, guarded when a REDUCE calls it.
 
@@ -2036,11 +2046,9 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
 class _PurePythonBundleUnpickler(_BundleAllowlistPolicy, pickle._Unpickler):
     """The per-opcode form of the same policy, on the pure-Python ``pickle._Unpickler``.
 
-    Runs the streams the pre-scan cannot classify statically. The pure-Python VM
-    dispatches each opcode through a CLASS-LEVEL ``dispatch`` dict of unbound functions
-    bound at class-body time; merely ``def load_build`` on the subclass is INERT (the
-    dict still points at the base function). The class body therefore REBUILDS
-    ``dispatch`` so the overrides are actually invoked.
+    Runs the streams the pre-scan cannot classify statically. The pure-Python VM reads a
+    CLASS-LEVEL ``dispatch`` dict bound at class-body time (a plain ``def load_build``
+    override is inert), so the class body REBUILDS ``dispatch`` to the overrides below.
     """
 
     def __init__(
@@ -2060,22 +2068,19 @@ class _PurePythonBundleUnpickler(_BundleAllowlistPolicy, pickle._Unpickler):
 
         return self._boundary(super().load)
 
+    def _import_global(self, module: str, name: str) -> Any:
+        """Resolve with the pure-Python machine's importer."""
+
+        return super().find_class(module, name)
+
     def find_class(self, module: str, name: str) -> Any:
         """Resolve a global through the shared allowlist policy."""
 
         return self._resolve_global(module, name)
 
-    # --- Layer 2: opcode-level policy --------------------------------------------------
-    #
-    # ``find_class`` gates which globals resolve, but several opcodes act on objects
-    # ALREADY on the stack, INVISIBLE to ``find_class``: BUILD applies a
-    # ``__setstate__`` / ``__dict__`` update to ``stack[-1]`` (on a torch Tensor /
-    # Storage / Parameter this reaches ``Tensor.__setstate__`` / ``set_`` and can rebind
-    # the target onto an uninitialized or oversized storage), and REDUCE / NEWOBJ /
-    # NEWOBJ_EX / INST / OBJ CALL or ``__new__`` a callable or class on the stack, which
-    # may construct an attacker-sized ALLOCATION type or mediate one through an admitted
-    # callable. The belt text and decisions live in ``_construction_refusal`` and
-    # ``_build_refusal``, shared with the pre-scan and the call-time guards.
+    # Layer 2: opcode-level policy. ``find_class`` gates which globals resolve, but BUILD,
+    # REDUCE, NEWOBJ, NEWOBJ_EX, INST and OBJ act on objects already on the stack; the
+    # belt text and decisions live in ``_construction_refusal`` and ``_build_refusal``.
 
     def load_build(self) -> None:
         """Refuse a BUILD (``__setstate__`` / storage-rebind) on a torch tensor/storage."""
