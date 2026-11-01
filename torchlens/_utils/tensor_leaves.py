@@ -6,8 +6,8 @@ mutation code can import these without pulling the full tensor utilities.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
-from typing import Any
+from collections.abc import Iterable, Iterator, Mapping
+from typing import Any, cast
 
 import torch
 
@@ -91,8 +91,9 @@ def _iter_tensors_at(
     if isinstance(value, (list, tuple)):
         children: Iterable[Any] = value
     elif isinstance(value, mapping_types):
-        keys = sorted(value, key=repr) if sort_keys else value
-        children = [value[key] for key in keys]
+        mapping = cast("Mapping[Any, Any]", value)
+        keys = sorted(mapping, key=repr) if sort_keys else list(mapping)
+        children = [mapping[key] for key in keys]
     else:
         return
     for child in children:

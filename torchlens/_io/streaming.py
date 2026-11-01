@@ -27,7 +27,7 @@ from .._state import pause_logging
 from .._utils.hashing import sha256_file
 from . import TLSPEC_VERSION, ArtifactError
 from ._canonical_pickle import dump_canonical_metadata
-from ._durability import fsync_dir, fsync_tree
+from ._durability import _restrict_mode, fsync_dir, fsync_tree
 from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import reject_symlink_path
 from .scrub import BlobSpec
@@ -39,7 +39,7 @@ from .streaming_async import (
     _PreparedPayload,
 )
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
-from .tlspec import _restrict_mode, _TlSpecWriter
+from .tlspec import _TlSpecWriter
 
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"

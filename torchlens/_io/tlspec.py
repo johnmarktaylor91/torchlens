@@ -21,7 +21,7 @@ from .._errors import InvalidArgumentError
 from .._utils.hashing import sha256_file
 from ..backends.registry import get_backend_spec
 from . import TLSPEC_VERSION, ArtifactError
-from ._durability import fsync_dir, fsync_tree
+from ._durability import _restrict_mode, fsync_dir, fsync_tree
 from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import reject_symlink_path
 
@@ -38,24 +38,6 @@ def _reject_symlink_path(path: Path, *, context: str) -> None:
         context=context,
         message_prefix="Refusing to write through symlink",
     )
-
-
-def _restrict_mode(path: Path, mode: int) -> None:
-    """Best-effort tighten a written ``.tlspec`` path's permissions (POSIX only).
-
-    Permission parity with ``_io/bundle.py::_restrict_mode`` and the streaming
-    writer (R59): ``mkdir`` / file writes honor the ambient umask, so under
-    umask 002 the bundle directory and its sidecars were left group-writable
-    while the core bundle writer tightens them. The publish rename preserves
-    ``tmp_path``'s mode, so tightening the staged directory tightens the
-    published bundle. Best-effort: a filesystem that ignores mode bits is not a
-    save failure.
-    """
-
-    if os.name != "posix":
-        return
-    with contextlib.suppress(OSError):
-        path.chmod(mode)
 
 
 # NOTE: ``TLSPEC_VERSION`` is imported (not redefined) from ``torchlens._io``
