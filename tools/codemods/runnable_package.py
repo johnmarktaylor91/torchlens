@@ -97,6 +97,8 @@ ROOTS = (
 )
 EXCLUDES = (
     "tools/codemods/runnable_package.py",
+    # The tripwire's planted resurrections spell the old names on purpose.
+    "scripts/checks/removed_spelling_lint.py",
     "tests/classics_corpus/models",
     "CHANGELOG.md",
     "MIGRATIONS.md",
