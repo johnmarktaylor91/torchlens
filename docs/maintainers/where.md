@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-81 packages, 1264 modules, 620293 lines, 0 modules without a docstring.
+81 packages, 1265 modules, 620380 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -27,7 +27,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observability` | Observability substrates. | 21 | 7920 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1507 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 737 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17129 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17123 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 2188 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 2 | 473 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14686 |
@@ -52,14 +52,14 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 16 | 6352 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 915 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 9 | 8628 |
-| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 16 | 6721 |
+| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 16 | 6718 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6380 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8498 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 6 | 3892 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 90 | 50838 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8013 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 20 | 7884 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 21 | 7982 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3824 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2017 |
@@ -90,7 +90,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 4862 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 4571 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 5811 |
-| `torchlens.validation` | Validation subpackage for saved outs, backward capture, and invariants. | 53 | 27570 |
+| `torchlens.validation` | Validation subpackage for saved outs, backward capture, and invariants. | 53 | 27568 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 8 | 4085 |
 
 ## Modules by package
@@ -530,7 +530,7 @@ Partial capture helpers for failed TorchLens forward ops. (1 modules, 737 lines)
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (29 modules, 17129 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (29 modules, 17123 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -547,7 +547,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (2
 | `_module_census` | Module-build helpers for the root call's labels, uncalled modules and Layer roles. | 87 |
 | `_multipass_params` | Parameter fields of a layer whose passes consume different parameters (step 14). | 48 |
 | `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 71 |
-| `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 612 |
+| `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 607 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 375 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 374 |
 | `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 343 |
@@ -561,7 +561,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (2
 | `labeling` | Steps 8-11: Label mapping, final info logging, renaming, cleanup, and lookup keys. | 1114 |
 | `loop_detection` | Step 7: Adapt Trace state to the backend-neutral recurrence grouper. | 673 |
 | `loop_grouping_adapter` | Backend-neutral recurrence grouping model and service. | 2592 |
-| `saved_summary` | Shared saved-output summary helpers. | 194 |
+| `saved_summary` | Shared saved-output summary helpers. | 193 |
 | `source_provenance` | Provenance disclosure and source variable names for the postprocess pipeline. | 136 |
 
 ### `torchlens._quickstart`
@@ -1038,13 +1038,13 @@ JAX backend preview exports. (9 modules, 8628 lines)
 
 ### `torchlens.backends.mlx`
 
-Technical-preview MLX backend for TorchLens. (16 modules, 6721 lines)
+Technical-preview MLX backend for TorchLens. (16 modules, 6718 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Technical-preview MLX backend for TorchLens. | 31 |
 | `_capture_records` | Capture records and payload helpers for MLX replay validation. | 238 |
-| `_grad_oracle` | MLX derived-gradient oracle helpers. | 440 |
+| `_grad_oracle` | MLX derived-gradient oracle helpers. | 437 |
 | `_param_tree` | Flattened MLX parameter-tree walkers for the backend's parameter logs. | 104 |
 | `_replay_args` | Saved-payload lookup and replay-argument reconstruction for MLX validation. | 216 |
 | `_replay_frames` | Module-call frames for the MLX AD replay observers. | 51 |
@@ -1257,11 +1257,11 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2700 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (20 modules, 7884 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (21 modules, 7982 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 2000 |
+| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 2015 |
 | `_aligned_sites` | Cross-member site pairing for Bundle site reads. | 85 |
 | `_alternatives` | ''Bundle.add_alternative'': merge a steered re-run of the user's harness. | 357 |
 | `_bytes` | Bundle-level retained-bytes aggregation + retention preflight ( item 5c). | 120 |
@@ -1272,6 +1272,7 @@ Single Bundle type for intervention-ready TorchLens model logs. (20 modules, 788
 | `_fed_by` | The ''fed_by'' relation kind: content provenance between two traced calls. | 531 |
 | `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 190 |
 | `_lineage` | Bundle lineage: bundle_id, member-construction anchors, BundleOperation rows. | 488 |
+| `_measure` | ''Bundle.measure_members'': recompute a metric over the members that still exist. | 83 |
 | `_members` | Member-list coercion behind ''Bundle'' construction, ''add'' and ''remove''. | 187 |
 | `_outcome_fold` | Derived worst-of-members capture-outcome fold for ''Bundle'' (foldB ). | 102 |
 | `_provenance` | The provenance join: ''bundle.why'' / ''bundle.provenance'' ( item 4). | 411 |
@@ -1853,7 +1854,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved outs, backward capture, and invariants. (53 modules, 27570 lines)
+Validation subpackage for saved outs, backward capture, and invariants. (53 modules, 27568 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1896,7 +1897,7 @@ Validation subpackage for saved outs, backward capture, and invariants. (53 modu
 | `_replay_grad_fidelity` | Replay arguments that carry the captured call's ''requires_grad'' and grad mode. | 259 |
 | `_replay_storage_context` | Replay a storage-geometry receiver on a clone of its saved storage context. | 118 |
 | `_replay_warnings` | Keep validation verdicts independent of the caller's warning filters. | 30 |
-| `_saved_outs_steps` | Recorded failure and diagnostic steps of one forward-replay validation run. | 279 |
+| `_saved_outs_steps` | Recorded failure and diagnostic steps of one forward-replay validation run. | 277 |
 | `_script_metadata_proof` | Graph proof that a TorchScript boundary call reads a tensor argument for metadata only. | 269 |
 | `_sdpa_value_proofs` | Value proofs for ''scaled_dot_product_attention'' operands that cannot reach the output. | 294 |
 | `_shift_probe` | Non-uniform perturbation probe for shift-invariant children. | 83 |

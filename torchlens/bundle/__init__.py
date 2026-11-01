@@ -223,7 +223,6 @@ _REMOVED_BUNDLE_MEMBERS: dict[str, str] = {
     "help": "print(bundle) shows the bundle card",
     "cluster": "there is no bundle clustering; compute it over bundle.map(fn)",
     "member_construction": "read bundle.history for how members entered the bundle",
-    "measure_members": "use bundle.map(fn) -- released members read 'unmeasured'",
     "show_diff": "use bundle.draw(graph='diff', members=(a, b), metric=...)",
     "delta_map": "use bundle.compare(a, b, metric=..., on=...) per pair, bundle.rank_changes() across members",
     "norm_delta": "use bundle.compare(baseline, member, metric='relative_l2')",
@@ -1282,6 +1281,22 @@ class Bundle:
         for candidate in self._released_candidates():
             results.setdefault(candidate, "unmeasured")
         return results
+
+    def measure_members(
+        self, *, metric: Callable[[Trace], Any], order: str = "member"
+    ) -> dict[str, Any]:
+        """Recompute a NEW metric over members that still exist, and say so.
+
+        Released candidates are reported ``unmeasured``, never silently
+        re-scored. ``order="chain"`` also orders the members by the bundle's
+        validated operation chain; members no operation recorded are listed
+        apart as ``unchained``, never placed by a guessed position. The flat
+        per-member form is :meth:`map`.
+        """
+
+        from ._measure import measure_members
+
+        return measure_members(self, metric=metric, order=order)
 
     def _released_candidates(self) -> list[str]:
         """Effect-table candidates with no retained member, sorted, each once."""

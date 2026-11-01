@@ -16,7 +16,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import FacadeTeachingError
 from torchlens.errors.episode import BundleExperimentError
 from torchlens.experiment import sweep_sites
 from torchlens.experiment._engine import top_k
@@ -284,9 +283,19 @@ def test_map_reports_released_candidates_as_unmeasured() -> None:
     # The two-argument idiom keeps the same shape.
     named = bundle.map(lambda member, name: name)
     assert named[retained] == retained and named[released] == "unmeasured"
-    with pytest.raises(FacadeTeachingError) as excinfo:
-        _ = bundle.measure_members
-    assert excinfo.value.fields["attribute"] == "measure_members"
+    # measure_members (kept pending the glossary round-2 ruling) is the
+    # structured form: values, the unmeasured list, and the chain order.
+    measured = bundle.measure_members(metric=lambda member: len(member.op_labels))
+    assert measured["values"] == {name: report[name] for name in bundle.names}
+    assert measured["unmeasured"] == [released] and measured["order"] == "member"
+    chained = bundle.measure_members(metric=_output_metric, order="chain")
+    (operation,) = bundle.history
+    assert chained["unchained"] == ["baseline"]
+    assert [row["member"] for row in chained["chain"]] == [retained]
+    assert chained["chain"][0]["operation_id"] == operation.operation_id
+    with pytest.raises(BundleExperimentError) as excinfo:
+        bundle.measure_members(metric=_output_metric, order="time")
+    assert excinfo.value.fields["code"] == "measure_members_order_unavailable"
 
 
 @pytest.mark.smoke

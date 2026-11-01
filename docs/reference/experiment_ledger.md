@@ -72,6 +72,7 @@ axis; `.top(k).selection()` is the explicit tier-c conversion (session-only);
 reports every effect-table candidate the bundle no longer holds (released,
 refused or failed) under its candidate id with the value `"unmeasured"`,
 never silently re-scored and never silently dropped.
+`bundle.measure_members(metric=)` is the structured form of the same read: `values` per live member, `unmeasured` naming the released candidates, and with `order="chain"` the members ordered by the bundle's validated operation chain (`chain`, one row per member with its operation's `seq`, `operation_id` and `kind`) plus `unchained` for the members no operation recorded.
 
 `torchlens.experiment.head_ablation_candidates(baseline, module, heads=)` is
 the head-ablation sugar: mandatory module scoping, v-facet lowering gated on

@@ -139,7 +139,7 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
     # (effects; item 8). The former helper-table methods (stored comparisons,
     # upstream/downstream, token_pairs, token_divergence, add_alternative)
     # and draw are real methods now (max-push walk surface.7, late.26) and
-    # count here; measure_members is gone (surface.8).
+    # count here; measure_members stays pending the glossary round-2 ruling.
     assert len(members) <= 44
     assert "relate" in members
     for removed in ("joint_metric", "set_capacity", "help", "cluster", "node", "compare_at"):
@@ -273,7 +273,6 @@ def test_stored_comparison_unknown_name_refuses_typed() -> None:
         "attach_hooks",
         "node",
         "compare_at",
-        "measure_members",
         "show_diff",
         "delta_map",
         "norm_delta",
