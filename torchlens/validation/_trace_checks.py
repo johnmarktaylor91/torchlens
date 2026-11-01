@@ -131,7 +131,7 @@ def validate_forward_pass(
         verbose=verbose,
         validate_metadata=validate_metadata,
     )
-    if spec.name == "torch":
+    if spec.name == "torch":  # noqa: SIM102  (verbatim check body; the deferred import that sat here was hoisted)
         if isinstance(validation_result, ValidationStatus):
             trace._validation_replay_status = validation_result
             if validation_result.state in {"passed", "failed"}:
