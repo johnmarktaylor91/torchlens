@@ -33,7 +33,7 @@ def _toy_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _Toy()
     x = torch.randn(5, 4)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 _SITE = "relu_1_2"

@@ -13,6 +13,7 @@ import torch
 from .. import _state
 from .._capture.arg_positions import _normalize_func_name
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._ir.intervention import FireResult
 from .._record_type import record_type
@@ -1160,7 +1161,7 @@ def _gradient_site_ops(trace: Any, op: Any) -> list[Any]:
     ops = [op]
     if not getattr(op, "is_output_parent", False):
         return ops
-    layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+    layer_dict = trace._layer_dict_all_keys if is_live_trace(trace) else {}
     for child_label in getattr(op, "children", ()) or ():
         child = layer_dict.get(child_label)
         if child is not None and getattr(child, "is_output", False):

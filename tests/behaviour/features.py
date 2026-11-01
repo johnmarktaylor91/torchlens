@@ -262,7 +262,7 @@ def _after_fast_run(cell: Cell) -> None:
 def _prepare_fork_do(cell: Cell) -> None:
     if cell.facts.single_pass_float_label is None:
         raise NotApplicable("no single-pass floating-point op to edit")
-    cell.capture_fields["intervention_ready"] = True
+    cell.capture_fields["replayable"] = True
 
 
 def _editable_site(cell: Cell, trace: Any) -> str:

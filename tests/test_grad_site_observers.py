@@ -119,7 +119,7 @@ def test_tap_on_a_gradient_site_records_backward_fires() -> None:  # A29
     trace = tl.trace(
         model,
         _X,
-        capture=tl.options.CaptureOptions(intervention_ready=True, backward_ready=True, hooks=tap),
+        capture=tl.options.CaptureOptions(replayable=True, backward_ready=True, hooks=tap),
     )
     trace.backward(trace[trace.output_layers[0]].out.sum())
     (record,) = tap.records
@@ -136,7 +136,7 @@ def test_tap_on_a_mixed_site_records_both_passes() -> None:  # A29
     trace = tl.trace(
         model,
         _X,
-        capture=tl.options.CaptureOptions(intervention_ready=True, backward_ready=True, hooks=tap),
+        capture=tl.options.CaptureOptions(replayable=True, backward_ready=True, hooks=tap),
     )
     trace.backward(trace[trace.output_layers[0]].out.sum())
     assert {record.signal for record in tap.records} == {"forward", "backward"}

@@ -112,7 +112,7 @@ def test_a_structural_facet_save_keeps_every_op() -> None:
     trace = tl.trace(model, x, save=tl.facet("out"))
     full = tl.trace(model, x)
     assert _saved(trace) == _saved(full)
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         torch.testing.assert_close(op.facets["out"].value, full[op.label].out, **TOL)
 
 

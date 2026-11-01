@@ -184,7 +184,7 @@ def test_a11_saved_grad_is_the_edited_gradient() -> None:
     relu = _label(baseline, "relu")
     source = _capture(model, _X)
     result = source.do(tl.grad(relu), tl.scale(0.25), model=model, inputs=_X, loss=_loss)
-    assert result.num_backward_passes == 1
+    assert result._num_backward_passes == 1
     assert torch.allclose(result[relu].grad, 0.25 * baseline[relu].grad)
 
 
@@ -249,7 +249,7 @@ def test_a21_loss_callable_runs_the_backward_inside_do() -> None:
     trace = _capture(model, _X)
     relu = _label(trace, "relu")
     result = trace.do(tl.grad(relu), tl.scale(0), model=model, inputs=_X, loss=_loss)
-    assert result.num_backward_passes == 1
+    assert result._num_backward_passes == 1
     rows = _settle_rows(result)
     assert len(rows) == 1 and rows[0]["status"] == "fired"
     assert torch.count_nonzero(result[relu].grad) == 0
@@ -284,9 +284,7 @@ def test_push_replay_hooks_refuse_a_gradient_edit() -> None:
     trace = tl.trace(
         model,
         _X,
-        capture=tl.options.CaptureOptions(
-            backward_ready=True, save_grads=True, intervention_ready=True
-        ),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True, replayable=True),
     )
     relu = _label(trace, "relu")
     out_before = trace[relu].out.clone()
@@ -422,5 +420,5 @@ def test_rerun_result_counts_only_its_own_backward_passes() -> None:
     source.backward(_loss(source))
     relu = _label(source, "relu")
     result = source.do(tl.grad(relu), tl.scale(0.25), model=model, inputs=_X, loss=_loss)
-    assert result.num_backward_passes == 1
+    assert result._num_backward_passes == 1
     assert torch.allclose(result[relu].grad, 0.25 * source[relu].grad)

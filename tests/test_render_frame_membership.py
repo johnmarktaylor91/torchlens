@@ -178,7 +178,7 @@ def test_rank_layout_edit_marks_keep_module_frames(
     trace = tl.trace(
         _ResStack(),
         torch.randn(1, 8),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     plain = _rank_frame_boxes(trace, tmp_path, monkeypatch)
     fork = trace.fork("edited")

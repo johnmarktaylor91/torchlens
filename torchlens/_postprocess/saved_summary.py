@@ -152,11 +152,11 @@ def _has_retained_gradient_payloads(self: "Trace") -> bool:
     each pass.
     """
 
-    for op in getattr(self, "layer_list", ()):
+    for op in self._layer_list:
         for record in getattr(op, "grads", ()):
             if record.grad is not None or record.transformed_grad is not None:
                 return True
-    for param in getattr(self, "param_logs", {}).values():
+    for param in self._param_logs.values():
         if any(record.grad is not None for record in getattr(param, "grads", ())):
             return True
     return False

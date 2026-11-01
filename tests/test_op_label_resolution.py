@@ -241,9 +241,7 @@ def test_reused_module_raw_spelling_does_not_shadow_a_final_label() -> None:
     model = _ReusedThenFresh()
     trace = tl.trace(model, torch.randn(3, 4))
     try:
-        fresh = next(
-            op for op in trace._layer_list if op.layer_type == "linear" and op.num_passes == 1
-        )
+        fresh = next(op for op in trace._layer_list if op.type == "linear" and op.num_passes == 1)
         shadows = [op for op in trace._layer_list if op.raw_label == fresh.layer_label]
         assert shadows and all(op is not fresh for op in shadows)
         assert trace.ops[fresh.layer_label] is fresh

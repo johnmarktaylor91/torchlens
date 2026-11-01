@@ -57,7 +57,7 @@ def captured() -> Iterator[tuple[_SharedThenFresh, torch.Tensor, tl.Trace]]:
     torch.manual_seed(0)
     model = _SharedThenFresh().eval()
     x = torch.randn(2, 3)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         yield model, x, trace
     finally:

@@ -48,7 +48,7 @@ class _BranchNet(nn.Module):
 
 
 def _trace(model: nn.Module, **capture: Any) -> Any:
-    options = {"intervention_ready": True, **capture}
+    options = {"replayable": True, **capture}
     return tl.trace(model, _X, capture=tl.options.CaptureOptions(**options))
 
 
@@ -490,7 +490,7 @@ def test_set_only_arms_in_place_and_fires_on_this_trace() -> None:  # A25
 
 def test_rerun_forces_backward_readiness_and_discloses_it() -> None:  # A26
     model = _BranchNet()
-    unready = tl.trace(model, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
+    unready = tl.trace(model, _X, capture=tl.options.CaptureOptions(replayable=True))
     result = unready.do(tl.grad(_RELU), tl.scale(0), model=model, inputs=_X, loss=_loss)
     assert result.last_run["backward_ready_forced"] is True
     assert _events(result, door="backward", status="fired")

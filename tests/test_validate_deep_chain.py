@@ -72,7 +72,7 @@ def _relu_at(trace: tl.Trace, module_address: str) -> tl.Op:
     return next(
         op
         for op in trace._layer_list
-        if op.layer_type == "relu" and list(op.modules) == [f"{module_address}:1"]
+        if op.type == "relu" and list(op.modules) == [f"{module_address}:1"]
     )
 
 

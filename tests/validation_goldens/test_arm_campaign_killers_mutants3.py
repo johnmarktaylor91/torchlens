@@ -505,7 +505,7 @@ def test_graph_ordering_fires(first_raw_index: int, second_raw_index: int, match
 
     layer1 = SimpleNamespace(layer_label="a", raw_index=first_raw_index)
     layer2 = SimpleNamespace(layer_label="b", raw_index=second_raw_index)
-    fake_trace = SimpleNamespace(layer_list=[layer1, layer2])
+    fake_trace = SimpleNamespace(_layer_list=[layer1, layer2])
     with pytest.raises(MetadataInvariantError, match=match):
         _check_graph_ordering(fake_trace)  # type: ignore[arg-type]
 
@@ -636,7 +636,7 @@ def test_layer_pass_layer_log_xrefs_fires(
 
     op = SimpleNamespace(pass_number=op_pass_index, layer_label=op_layer_label)
     layer = SimpleNamespace(layer_label="relu_1", num_passes=1, ops={1: op})
-    fake_trace = SimpleNamespace(layer_logs={"relu_1": layer})
+    fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer})
     with pytest.raises(MetadataInvariantError, match=match):
         _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
 
@@ -893,7 +893,7 @@ def test_module_containment_logic_fires(nested_module: str, module: str, match: 
         address="self", address_parent=None, address_depth=0, address_children=[]
     )
     layer = SimpleNamespace(layer_label="relu_1", modules=[nested_module], module=module)
-    fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]), layer_list=[layer])
+    fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]), _layer_list=[layer])
     with pytest.raises(MetadataInvariantError, match=match):
         _check_module_containment_logic(fake_trace)  # type: ignore[arg-type]
 
@@ -1307,7 +1307,7 @@ def test_pass_count_consistency_fires_on_op_mismatch(
 
     op = SimpleNamespace(pass_number=op_pass_index, num_passes=op_num_passes, label="relu_1:1")
     layer_log = SimpleNamespace(ops={1: op}, num_passes=1)
-    fake_trace = SimpleNamespace(layer_logs={"relu_1": layer_log}, layer_num_calls={})
+    fake_trace = SimpleNamespace(_layer_logs={"relu_1": layer_log}, _layer_num_calls={})
     with pytest.raises(MetadataInvariantError, match=match):
         _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
 

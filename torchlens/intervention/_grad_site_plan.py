@@ -446,9 +446,7 @@ def drop_inherited_backward(trace: Trace) -> None:
         The rerun fork, before its forward runs.
     """
 
-    if not (
-        trace._autograd_has_backward_pass or int(getattr(trace, "num_backward_passes", 0) or 0)
-    ):
+    if not (trace._autograd_has_backward_pass or int(trace._num_backward_passes or 0)):
         return
     _reset_backward_projection(trace)
 
@@ -539,7 +537,7 @@ def gradient_rule_sites(trace: Any) -> list[Any]:
     """
 
     spec = trace._intervention_spec
-    ops = tuple(getattr(trace, "layer_list", ()))
+    ops = tuple(trace._layer_list)
     sites: list[Any] = []
     for hook_spec in getattr(spec, "hook_specs", ()) or ():
         for universe, branch in split_site_branches(hook_spec.site_target):
@@ -569,7 +567,7 @@ def apply_gradient_site_edits(trace: Trace, grad: torch.Tensor, tensor_label: st
     """
 
     final_label = trace._raw_to_final_layer_labels.get(tensor_label)
-    layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+    layer_dict = trace._layer_dict_all_keys if is_live_trace(trace) else {}
     op = layer_dict.get(final_label) if final_label is not None else None
     if op is None:
         return grad

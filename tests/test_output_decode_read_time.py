@@ -92,12 +92,12 @@ def test_forced_imagenet_style_decodes_an_unverified_1000_way_model() -> None:
     logits[0, 1] = 9.0  # ImageNet-1k class 1 is "goldfish"
     trace = tl.trace(_Fixed(logits).eval(), torch.ones(1, 2))
 
-    assert trace.decoded_output is None
+    assert trace._decoded_output is None
     decoded = trace.decode_output(style="imagenet", k=1)
     assert decoded["kind"] == "batch_topk"
     assert decoded["rows"][0]["class_index"] == 1
     assert decoded["rows"][0]["label"] == "goldfish"
-    assert trace.decoded_output is None, "the read-time decode must not rewrite the record"
+    assert trace._decoded_output is None, "the read-time decode must not rewrite the record"
     assert trace.output_table(k=1, style="imagenet1k")["label"].tolist() == ["goldfish"]
 
 
@@ -105,7 +105,7 @@ def test_named_head_resolves_an_ambiguous_multi_output_model() -> None:
     labels = {0: "cold", 1: "hot"}
     trace = tl.trace(_TwoHeads(torch.tensor([[1.0, 5.0]]), labels).eval(), torch.ones(1, 2))
 
-    assert trace.decoded_output is None
+    assert trace._decoded_output is None
     assert (
         trace.provenance.output_postprocessor is not None
         and trace.provenance.output_postprocessor.ambiguous
@@ -151,7 +151,7 @@ def test_unknown_style_refuses_even_when_a_builtin_detector_claims_the_output() 
         _Fixed(torch.tensor([[1.0, 5.0]]), {0: "cold", 1: "hot"}).eval(), torch.ones(1, 2)
     )
 
-    assert trace.decoded_output is not None  # the labels detector claims this output
+    assert trace._decoded_output is not None  # the labels detector claims this output
     with pytest.raises(tl.errors.DecodeStyleUnknownError) as excinfo:
         trace.decode_output(style="clasification")
     assert excinfo.value.fields["code"] == "decode_style_unknown"
@@ -162,7 +162,7 @@ def test_hf_text_style_decodes_with_the_passed_tokenizer() -> None:
     logits = torch.tensor([[[0.0, 5.0], [6.0, 1.0]]])
     trace = tl.trace(_Fixed(logits).eval(), torch.ones(1, 2))
 
-    assert trace.decoded_output is None  # no tokenizer attached: no automatic text decode
+    assert trace._decoded_output is None  # no tokenizer attached: no automatic text decode
     decoded = trace.decode_output(style="hf_text", tokenizer=_Tokenizer())
     assert decoded == [{"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}]
     with pytest.raises(tl.errors.DecodeStyleUnknownError) as excinfo:
@@ -185,7 +185,7 @@ def test_attached_tokenizer_decodes_text_automatically_only_from_a_logits_head()
     encoder = _Encoder().eval()
     encoder._torchlens_output_tokenizer = _Tokenizer()
     trace = tl.trace(encoder, torch.ones(1, 2))
-    assert trace.decoded_output is None
+    assert trace._decoded_output is None
     assert trace.provenance.output_postprocessor is None
 
     class _LM(_Encoder):
@@ -199,7 +199,7 @@ def test_attached_tokenizer_decodes_text_automatically_only_from_a_logits_head()
     assert trace.provenance.output_postprocessor is not None
     assert trace.provenance.output_postprocessor.style == "hf_text"
     assert trace.provenance.output_postprocessor.selected_output_head == "logits"
-    assert trace.decoded_output == [
+    assert trace._decoded_output == [
         {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}
     ]
 
@@ -213,7 +213,7 @@ def test_attached_tokenizer_never_overrides_a_labelled_classifier() -> None:
 
     assert trace.provenance.output_postprocessor is not None
     assert trace.provenance.output_postprocessor.style == "classification"
-    assert trace.decoded_output["rows"][0]["label"] == "pos"
+    assert trace._decoded_output["rows"][0]["label"] == "pos"
 
 
 def test_custom_detector_serves_the_read_time_style() -> None:
@@ -236,7 +236,7 @@ def test_custom_detector_serves_the_read_time_style() -> None:
 
     try:
         trace = tl.trace(_Fixed(torch.tensor([[0.0, 0.0, 3.0]])).eval(), torch.ones(1, 2))
-        assert trace.decoded_output is None  # the custom detector declines the automatic pass
+        assert trace._decoded_output is None  # the custom detector declines the automatic pass
         assert trace.decode_output(style="walk_labels")["rows"][0]["label"] == "c"
     finally:
         tl._autoroute.output.unregister("walk_labels")

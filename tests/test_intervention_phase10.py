@@ -333,7 +333,7 @@ def test_stored_helper_keyword_outside_the_constructor_refuses_typed(tmp_path: P
         _ReluModel(),
         torch.randn(2, 3),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("relu"): tl.zero_ablate()},
         ),
     )
