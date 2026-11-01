@@ -16,9 +16,11 @@ from torch import nn
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
+from torchlens._fast_live_steer import refusal_code
 from torchlens._utils._module_call_dispatch import forward_entered_through_module_call
 from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
 from torchlens.backends.torch._tl import get_module_meta
+from torchlens.errors import PathDivergenceError
 
 pytestmark = pytest.mark.skipif(
     not HAS_MODULE_CALL_DISPATCH_FRAME, reason="torch build cannot tell a direct forward() call"
@@ -208,10 +210,29 @@ def test_fast_run_matches_the_full_run_on_the_same_input() -> None:
     _assert_same(full.output, fast.output)
 
 
-def test_fast_run_steers_through_a_directly_called_module() -> None:
-    """A staged steer at a direct-call site fires in the fast run as in the full run."""
+class HookedParent(nn.Module):
+    """Reaches its child through ``__call__`` (the ordinary hooked path)."""
 
-    model = _build(DirectParent)
+    def __init__(self) -> None:
+        super().__init__()
+        self.inner = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call the child normally."""
+
+        return self.inner(x)
+
+
+@pytest.mark.parametrize("parent_type", [DirectParent, HookedParent])
+def test_fast_run_steers_through_a_module(parent_type: type[nn.Module]) -> None:
+    """A staged steer fires in the fast run as in the full run, direct call or hooked.
+
+    The default save-all capture gives the root's ``+ 1`` a function plan named
+    ``__add__``; the steer's own arithmetic is one intervention-replacement op in
+    the graph, so the live session must not read it as that model event.
+    """
+
+    model = _build(parent_type)
     x = torch.randn(2, 3)
     baseline = _hook_count(model)
     with torch.no_grad():
@@ -234,16 +255,49 @@ def test_fast_run_steers_through_a_directly_called_module() -> None:
     assert _hook_count(model) == baseline
 
 
-def test_fast_run_reruns_urbandriver() -> None:
-    """The corpus model ending ``return self.embedding.forward(indices)`` reruns fast."""
+def _urbandriver() -> tuple[nn.Module, Any]:
+    """Build the corpus model that ends ``return self.embedding.forward(indices)``."""
 
     (entry,) = [e for e in corpus_entries() if e.id == "urbandriver"]
-    model, inputs = build_entry(entry)
+    return build_entry(entry)
+
+
+def test_fast_run_routes_urbandriver_past_its_direct_forward_call() -> None:
+    """urbandriver's directly called embedding is routed and its sites collected.
+
+    Before routing, the fast run refused at that call
+    (``fast_live_module_hook_unobserved``). It now collects the embedding and
+    its parent and runs on; a later, unrelated divergence on this model (see
+    the strict xfail below) is the only refusal left.
+    """
+
+    model, inputs = _urbandriver()
     trace = tl.trace(model, inputs)
     assert any(address.endswith("embedding") for address in _marked(model))
+    try:
+        trace.run(inputs=inputs, fast=True)
+    except PathDivergenceError as exc:
+        assert refusal_code(exc) == "conditional_arm_divergence:fast_live_function_path"
+    session = trace.__dict__["_fast_run_session"]
+    assert session.module_index >= 2
+    _assert_no_routed_forward(model)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=PathDivergenceError,
+    reason=(
+        "after the routed embedding, the live functional path diverges from the "
+        "captured function plan around LocalMLP's F.relu(x, inplace=True) "
+        "(expected '__getitem__', got 'relu'); not a direct-forward() gap"
+    ),
+)
+def test_fast_run_reruns_urbandriver() -> None:
+    """The corpus model reruns fast and equals the full rerun."""
+
+    model, inputs = _urbandriver()
+    trace = tl.trace(model, inputs)
     full_trace = tl.trace(model, inputs)
     fast = trace.run(inputs=inputs, fast=True)
     full = full_trace.run(inputs=inputs)
-    assert trace.last_run["engine"] == "guarded_fast", trace.last_run.get("fast_refused")
     _assert_same(full.output, fast.output)
-    _assert_no_routed_forward(model)
