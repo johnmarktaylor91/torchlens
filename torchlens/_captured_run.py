@@ -8,8 +8,6 @@ from typing import Any, Protocol, TypeVar, cast, runtime_checkable
 
 from torchlens._ir.capture_events import CaptureEvents
 
-from ._data_classes._trace_missing_attrs import is_live_trace
-
 ActivationT = TypeVar("ActivationT")
 
 #: Addresses listed in an ``activation_address_unmatched`` refusal before eliding.
@@ -230,6 +228,7 @@ class TraceLike:
 
     def _iter_activation_records(self) -> Iterable[Any]:
         """Iterate projection-specific retained activation records."""
+        from ._data_classes._trace_missing_attrs import is_live_trace
 
         if hasattr(self, "records"):
             ensure_records = getattr(self, "_ensure_records", None)

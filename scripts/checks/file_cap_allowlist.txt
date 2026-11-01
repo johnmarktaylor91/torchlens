@@ -328,7 +328,7 @@ torchlens/_ir/capture_events.py::CaptureEvents._copy_for_replay	119
 torchlens/_ir/capture_events.py::CaptureEvents.append_amendment	69
 torchlens/_ir/capture_events.py::CaptureEvents.concat	187
 torchlens/_ir/capture_events.py::CaptureEvents.release_runtime_sidecars	109
-torchlens/_ir/container.py	1443
+torchlens/_ir/container.py	1441
 torchlens/_ir/container.py::_rebuild_container_from_spec	108
 torchlens/_ir/container.py::_resolve_container_type	73
 torchlens/_ir/container.py::_validate_container_spec	72
@@ -1221,7 +1221,7 @@ torchlens/intervention/_topology/topology.py::_find_alignment	70
 torchlens/intervention/_topology/topology.py::build_supergraph	127
 torchlens/intervention/audit.py::build_fire_record	71
 torchlens/intervention/audit.py::record_intervention_event	152
-torchlens/intervention/binding.py	1577
+torchlens/intervention/binding.py	1576
 torchlens/intervention/binding.py::_consider_op	112
 torchlens/intervention/binding.py::_make_boundary_hook	61
 torchlens/intervention/compose.py::compose	104
@@ -1422,7 +1422,7 @@ torchlens/recording/options.py::RecordingOptions.__init__	89
 torchlens/recording/options.py::_validate_recording_values	136
 torchlens/recording/options.py::merge_recording_options	70
 torchlens/recording/recover.py::_load_from_index	70
-torchlens/recording/types.py	1306
+torchlens/recording/types.py	1304
 torchlens/recording/types.py::Recording.backward	102
 torchlens/recording/types.py::Recording.outcome	72
 torchlens/recording/types.py::Recording.to_trace	172
@@ -1601,7 +1601,7 @@ torchlens/validation/exemptions.py::_posthoc_structural_output_decision	116
 torchlens/validation/exemptions.py::_posthoc_value_proof_decision	115
 torchlens/validation/exemptions.py::_sdpa_zero_query_decision	61
 torchlens/validation/exemptions.py::_softmax_singleton_dim_decision	65
-torchlens/validation/invariants.py	838
+torchlens/validation/invariants.py	835
 torchlens/validation/status.py::ValidationStatus.from_replay_counts	131
 torchlens/validation/status.py::ValidationStatus.result	72
 torchlens/validation/status.py::ValidationStatus.unverified	74

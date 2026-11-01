@@ -17,7 +17,6 @@ from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
 from .._utils.tensor_utils import SaveMode
-from ._types_labels import _distinct_label_index_keys
 
 __all__ = [
     "ActivationRecord",
@@ -33,6 +32,13 @@ __all__ = [
 if TYPE_CHECKING:
     from .._capture.session import CapturedRunCore
     from .._data_classes.trace import Trace
+
+
+def _distinct_label_index_keys(label: str, raw_label: str | None) -> tuple[str, ...]:
+    """Return the distinct label keys (primary, then raw alias) that index one record."""
+    if raw_label is None or raw_label == label:
+        return (label,)
+    return (label, raw_label)
 
 
 def _backfill_cooked_ancestry(events: Any) -> None:
@@ -1286,16 +1292,8 @@ class Recording(TraceLike):
 
 
 def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:
-    """Set halt state on a frozen ``Recording``.
-
-    Parameters
-    ----------
-    recording:
-        Recording to mutate via ``object.__setattr__``.
-    pass_index:
-        Recorder pass index that observed the halt.
-    reason:
-        User-supplied halt reason. Empty string means no reason was provided.
+    """Set halt state on a frozen ``Recording`` (mutated via ``object.__setattr__``); an empty
+    ``reason`` means none was given.
     """
 
     recording.stops_by_pass.setdefault(pass_index, reason)

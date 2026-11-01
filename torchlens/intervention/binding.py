@@ -572,18 +572,17 @@ def _wrap_name_universe() -> frozenset[str]:
     return _WRAP_UNIVERSE
 
 
-def _op_hook_context(
+def _op_hook_ctx(
     session: _BindSession,
     plan: _RulePlan,
     rule: Any,
-    raw_label: str,
-    layer_type: str,
-    func_name: str,
+    op_identity: tuple[str, str, str],  # (raw_label, layer_type, func_name)
     site_key: Any,
 ) -> Any:
     """Build the post-forward hook context for one matched op-level rule firing."""
-
     from .hooks import make_hook_context
+
+    raw_label, layer_type, func_name = op_identity
 
     return make_hook_context(
         name=plan.display_name,
@@ -686,7 +685,7 @@ def _consider_op(
             # rules apply at real module hooks); nothing to fire here.
             continue
         site_key = session.minter.key_for_context(ctx)
-        hook_ctx = _op_hook_context(session, plan, rule, raw_label, layer_type, func_name, site_key)
+        hook_ctx = _op_hook_ctx(session, plan, rule, (raw_label, layer_type, func_name), site_key)
         hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
         session.record_fire(
             plan,

@@ -14,18 +14,16 @@ from typing import Any, ClassVar, Literal, TypeAlias, cast
 from .._errors import _actionable_message, _ActionableErrorMixin
 from .._io import FieldPolicy
 from ..errors._base import TorchLensError
-from ._container_inert_population import (
-    _fields_are_inert_settable,
-    _inert_new,
-    _name_is_data_descriptor,
-    _type_has_instance_dict,
-    _type_has_safe_new,
-)
 from ._container_type_probes import (
     _dataclass_defines_post_init,
     _dataclass_has_foreign_init,
+    _fields_are_inert_settable,
+    _inert_new,
     _is_generated_namedtuple_type,
     _metaclass_defines_foreign_call,
+    _name_is_data_descriptor,
+    _type_has_instance_dict,
+    _type_has_safe_new,
 )
 
 # Canonical ``defaultdict`` factory callables restorable on load WITHOUT importing

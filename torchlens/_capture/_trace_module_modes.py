@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._runnable_seam import runnable_trace_state
-
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -32,6 +30,9 @@ def _record_runnable_module_training_modes(trace: Trace, model: Any) -> None:
     model:
         The prepared source model whose per-module ``training`` flags are recorded.
     """
+    from .._runnable_seam import (
+        runnable_trace_state,
+    )  # deferred: keeps the capture tier eager-import free
 
     named_modules = getattr(model, "named_modules", None)
     if not callable(named_modules):
