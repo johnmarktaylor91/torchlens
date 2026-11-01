@@ -77,7 +77,7 @@ def repr_html(trace: Trace) -> str:
     card = trace_repr_html(trace)
     if card == BRIDGE_SENTINEL_HTML:
         return card
-    if not getattr(trace, "_tracing_finished", False):
+    if not trace._tracing_finished:
         return card
     try:
         summary_html = trace.summary()._repr_html_()
@@ -90,7 +90,7 @@ def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a nam
     trace: Trace,
     level: str | None = None,
     *,
-    # Rebuilt grammar (F08; summary memo 3.10). Spellings
+    # Rebuilt grammar (ratified summary spellings). Spellings
     # DOCUMENTED-UNSTABLE pending naming-session ratification.
     view: str | None = None,
     depth: Any = None,

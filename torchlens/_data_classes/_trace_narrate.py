@@ -10,13 +10,16 @@ that it stays outside the record import cycle.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .trace import Trace
 
 
 class TraceNarrateMixin:
     """Adds the post-hoc ``narrate`` renderer to :class:`Trace`."""
 
-    def narrate(self, last: int | None = None, *, select: Any = None) -> str:
+    def narrate(self: Trace, last: int | None = None, *, select: Any = None) -> str:
         """Render this trace's events in the live-narration grammar (snoop D5).
 
         Post-hoc narration works when ``narrate=`` was never enabled: the same
