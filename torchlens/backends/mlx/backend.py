@@ -483,21 +483,21 @@ def _stamp_param_logs(trace: Trace, module_tree: MLXModuleTree | None) -> None:
     """Record the parameter accessor and counts; empty when no object module was traced."""
 
     if module_tree is not None:
-        trace.param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace._param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
+        trace._num_param_tensors = len(trace._param_logs)
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
+            param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.param_source = "native-module"
+        trace._provenance_param_source = "native-module"
     else:
-        trace.param_logs = ParamAccessor({})
-        trace.num_param_tensors = 0
+        trace._param_logs = ParamAccessor({})
+        trace._num_param_tensors = 0
         trace.num_params = 0
         trace.num_params_trainable = 0
         trace.num_params_frozen = 0
-        trace.param_source = "none"
+        trace._provenance_param_source = "none"
 
 
 class MLXBackend:
@@ -1070,10 +1070,7 @@ class MLXBackend:
         trace._mlx_external_arrays = external_array_ids(model, self.is_tensor)
         trace._mlx_unwrapped_intermediates = 0
         trace._pre_forward_rng_states = None
-        # Trace.random_seed is declared without an annotation (mypy infers None).
-        cast(Any, trace).random_seed = (
-            cast(int, seed) if seed is not None else random.randint(1, 4294967294)
-        )
+        trace._options_seed = cast(int, seed) if seed is not None else random.randint(1, 4294967294)
         self.tensor_store.clear()
         # R07: the try owns the wrap call itself -- a raise anywhere between
         # wrapper install and the forward (session prep, input normalization,
@@ -2226,8 +2223,8 @@ class MLXBackend:
             ),
             stacklevel=4,
         )
-        trace.capture_verified = False
-        trace.capture_verification_reason = UNWRAPPED_OP_REASON
+        trace._provenance_verified = False
+        trace._provenance_verification_reason = UNWRAPPED_OP_REASON
 
     def _finish_trace(self, trace: Trace, module_tree: MLXModuleTree | None = None) -> None:
         """Finalize a manually captured MLX Trace.

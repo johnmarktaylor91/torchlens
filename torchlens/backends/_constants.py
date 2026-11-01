@@ -449,7 +449,7 @@ def constant_kind(op: Any) -> ConstantKind | None:
 def constant_op_labels(trace: Any) -> tuple[str, ...]:
     """Labels of every constant op in a finalized trace, in graph order."""
 
-    return tuple(op.label for op in trace.layer_list if is_constant_op(op))
+    return tuple(op.label for op in trace._layer_list if is_constant_op(op))
 
 
 # ----------------------------------------------------------------------------

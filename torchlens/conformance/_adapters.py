@@ -276,8 +276,8 @@ class FakeProviderAdapter:
             object.__setattr__(trace, "_conformance_dropped_ops", True)
         if self.plant == "flagged_trace":
             # A capture that recorded a gap and flagged itself instead of refusing.
-            trace.capture_verified = False
-            trace.capture_verification_reason = "unwrapped_op_in_capture"
+            trace._provenance_verified = False
+            trace._provenance_verification_reason = "unwrapped_op_in_capture"
         if self.plant == "missing_constant_payload":
             _drop_first_constant_payload(trace)
         if self.plant == "shape_metadata_drift":
@@ -360,7 +360,7 @@ def _drift_first_shape_metadata(trace: Any) -> None:
 
     import warnings
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         shape = getattr(op, "shape", None)
         if getattr(op, "out", None) is None or shape is None:
             continue
@@ -374,7 +374,7 @@ def _drift_first_shape_metadata(trace: Any) -> None:
 def _drift_first_payload_shape(trace: Any) -> None:
     """Give the first saved payload a leading unit axis (values kept, shape drifted)."""
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         payload = getattr(op, "out", None)
         reshape = getattr(payload, "reshape", None)
         if payload is None or not callable(reshape):

@@ -277,14 +277,14 @@ _UNSUPPORTED_CONTAINER_SPEC: Final = object()
 def _stamp_jaxpr_results(trace: Trace, closed_jaxpr: Any, result: Any, static_argnums: Any) -> None:
     """Record the interpreted jaxpr and its captures on the trace."""
 
-    trace.jax_closed_jaxpr = closed_jaxpr
+    trace._provenance_jax_closed_jaxpr = closed_jaxpr
     trace.jax_equation_captures = result.equations
     trace.jax_ordered_captures = result.captures
     trace.jax_region_captures = tuple(
         capture for capture in result.captures if isinstance(capture, JaxRegionCapture)
     )
-    trace.jax_inlined_call_primitives = result.inlined_call_primitives
-    trace.jax_static_argnums = static_argnums
+    trace._provenance_jax_inlined_call_primitives = result.inlined_call_primitives
+    trace._options_jax_static_argnums = static_argnums
 
 
 def _jax_pre_replay_failure_status(
@@ -350,7 +350,7 @@ def _jax_ops_by_label(trace: Trace) -> dict[str, Any]:
     # single-pass parent reference. Index the bare label too (safe: a
     # single-pass op's bare label is unambiguous).
     ops_by_label: dict[str, Any] = {}
-    for op in getattr(trace, "layer_list", []):
+    for op in getattr(trace, "_layer_list", []):
         labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
         if getattr(op, "num_passes", 1) == 1:
             labels.append(getattr(op, "layer_label", None))

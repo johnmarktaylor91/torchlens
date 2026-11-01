@@ -58,7 +58,7 @@ def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
     # Grad info
     fields_dict["grad"] = None
     fields_dict["transformed_grad"] = None
-    fields_dict["save_grads"] = getattr(self, "save_grads", None) not in (None, False)
+    fields_dict["save_grads"] = self._options_save_grads not in (None, False)
     fields_dict["has_grad"] = False
     fields_dict["grad_shape"] = None
     fields_dict["transformed_grad_shape"] = None
@@ -147,7 +147,7 @@ def _build_shared_fields_dict(
         # identity lets replay validation resolve the callable on a loaded
         # bundle (``validation/_loaded_callables.py``), which carries no callables.
         fields_dict["func_id"] = (
-            _function_registry_key(func, func_name) if self.save_arg_values else None
+            _function_registry_key(func, func_name) if self._options_save_args else None
         )
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None

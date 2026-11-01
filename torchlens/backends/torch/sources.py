@@ -130,7 +130,7 @@ def log_closure_constant_if_known(self: "Trace", t: torch.Tensor) -> bool:
         True when a constant source op was logged for ``t``.
     """
 
-    if self.capture_mode != "exhaustive":
+    if self._options_mode != "exhaustive":
         return False
     from ._module_boundary_adoption import is_forward_closure_constant
 
@@ -340,7 +340,7 @@ def _source_grad_fields(self: "Trace") -> dict[str, Any]:
     return {
         "grad": None,
         "transformed_grad": None,
-        "save_grads": getattr(self, "save_grads", None) not in (None, False),
+        "save_grads": self._options_save_grads not in (None, False),
         "has_grad": False,
         "grad_shape": None,
         "transformed_grad_shape": None,

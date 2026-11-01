@@ -73,7 +73,7 @@ def graph_integrity_problems(trace: Any) -> tuple[str, ...]:
     rule records ``is_constant_layer``.
     """
 
-    rows = list(trace.layer_list)
+    rows = list(trace._layer_list)
     by_key: dict[str, Any] = {}
     for op in rows:
         for key in (getattr(op, "_label_raw", None), op.label, getattr(op, "layer_label", None)):
@@ -106,7 +106,7 @@ def shape_metadata_problems(trace: Any, host_copy: Any) -> tuple[str, ...]:
     """Ops whose recorded ``shape`` disagrees with the saved payload's shape."""
 
     problems: list[str] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         shape = getattr(op, "shape", getattr(op, "tensor_shape", None))
         payload = getattr(op, "out", None)
         if shape is None or payload is None:
@@ -131,8 +131,8 @@ def _payload_shape(payload: Any, host_copy: Any) -> tuple[int, ...] | None:
 def silent_gap_reason(trace: Any) -> str | None:
     """The recorded verification ceiling when the capture flagged itself, else ``None``."""
 
-    if getattr(trace, "capture_verified", None) is False:
-        return str(getattr(trace, "capture_verification_reason", None) or "unrecorded reason")
+    if getattr(trace, "_provenance_verified", None) is False:
+        return str(getattr(trace, "_provenance_verification_reason", None) or "unrecorded reason")
     return None
 
 
@@ -275,7 +275,7 @@ def constant_like_ops(trace: Any) -> list[Any]:
     """
 
     rows = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if _is_input(op) or tuple(getattr(op, "parents", None) or ()):
             continue
         if getattr(op, "is_buffer", getattr(op, "is_buffer_layer", False)):
@@ -332,7 +332,7 @@ def intermediates_problems(trace: Any, expected: dict[str, Any], host_copy: Any)
     problems: list[str] = []
     for kind, want in expected.items():
         wants = list(want) if isinstance(want, (list, tuple)) else [want]
-        ops = [op for op in trace.layer_list if str(getattr(op, "func_name", "")) == kind]
+        ops = [op for op in trace._layer_list if str(getattr(op, "func_name", "")) == kind]
         if len(ops) != len(wants):
             problems.append(f"{kind}: {len(ops)} captured ops, {len(wants)} expected values")
             continue
@@ -381,9 +381,9 @@ def payload_equality_problems(live: Any, loaded: Any, host_copy: Any) -> tuple[s
 
     import numpy as np
 
-    loaded_by_label = {op.label: op for op in loaded.layer_list}
+    loaded_by_label = {op.label: op for op in loaded._layer_list}
     problems: list[str] = []
-    for op in live.layer_list:
+    for op in live._layer_list:
         payload = getattr(op, "out", None)
         if payload is None:
             continue
