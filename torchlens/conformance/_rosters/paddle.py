@@ -73,8 +73,9 @@ def _conv(x: np.ndarray, weight: np.ndarray, bias: np.ndarray, padding: int) -> 
     kernel = weight.shape[2:]
     out_shape = tuple(padded.shape[2 + i] - kernel[i] + 1 for i in range(spatial))
     out = np.zeros((x.shape[0], weight.shape[0], *out_shape), dtype=np.float64)
-    for index in np.ndindex(*out_shape):
-        window = tuple(slice(i, i + k) for i, k in zip(index, kernel))
+    for raw_index in np.ndindex(*out_shape):
+        index: tuple[int, ...] = tuple(int(i) for i in raw_index)
+        window = tuple(slice(i, i + int(k)) for i, k in zip(index, kernel))
         patch = padded[(slice(None), slice(None), *window)]
         out[(slice(None), slice(None), *index)] = np.tensordot(
             patch, weight, axes=(list(range(1, 2 + spatial)), list(range(1, 2 + spatial)))
@@ -296,6 +297,9 @@ def _conv_layer_model(rank: int) -> tuple[Any, Any]:
     import paddle
 
     layer: Any
+    weight: np.ndarray
+    bias: np.ndarray
+    value: np.ndarray
     if rank == 1:
         layer, weight, bias, value = paddle.nn.Conv1D(2, 3, 3, padding=1), _CONV1_W, _CONV1_B, _SEQ
     else:
