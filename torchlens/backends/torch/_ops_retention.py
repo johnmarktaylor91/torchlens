@@ -44,6 +44,7 @@ from ...recording.types import (
     RecordContext,
     StorageIntent,
 )
+from ._ops_payload_stream import _stream_predicate_payloads
 from ._tl import (
     mark_detached_saved_activation,
 )
@@ -485,42 +486,6 @@ def _save_predicate_activation_fields(
     out_sink = getattr(trace, "_out_sink", None)
     if out_sink is not None and isinstance(ram_payload, torch.Tensor):
         out_sink(fields_dict["_label_raw"], ram_payload)
-
-
-def _stream_predicate_payloads(
-    trace: Trace,
-    fields_dict: dict[str, Any],
-    *,
-    disk_payload: torch.Tensor | None,
-    transformed_disk_payload: torch.Tensor | None,
-) -> None:
-    """Write predicate-selected disk payloads during forward capture.
-
-    Parameters
-    ----------
-    trace:
-        Active trace whose writer receives payload blobs.
-    fields_dict:
-        Mutable operation fields receiving pending blob ids.
-    disk_payload:
-        Detached raw payload for disk storage.
-    transformed_disk_payload:
-        Detached transformed payload for disk storage.
-    """
-
-    writer = getattr(trace, "_out_writer", None)
-    if writer is None:
-        return
-    label = fields_dict["_label_raw"]
-    for payload, pending_field, kind in (
-        (disk_payload, "_pending_blob_id", "out"),
-        (transformed_disk_payload, "_pending_transformed_out_blob_id", "transformed_out"),
-    ):
-        if payload is None:
-            continue
-        blob_id = writer.next_blob_id()
-        fields_dict[pending_field] = blob_id
-        writer.submit_blob(blob_id, payload, kind=kind, label=label)
 
 
 def _module_stack_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[ModuleStackFrame, ...]:
