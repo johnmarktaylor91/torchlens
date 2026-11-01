@@ -320,6 +320,9 @@ def test_r71_registry_closure_meta() -> None:
         importlib.import_module(f"torchlens.{info.name}")
         for info in pkgutil.iter_modules(torchlens.__path__)
         if info.name.startswith("_runnable")
+    ] + [
+        importlib.import_module(f"torchlens._runnable.{info.name}")
+        for info in pkgutil.iter_modules(torchlens._runnable.__path__)
     ]
 
     symbolic = {"terminal_slot_accounting", "strict_state_preparation"}

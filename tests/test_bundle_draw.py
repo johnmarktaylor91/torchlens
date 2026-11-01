@@ -10,7 +10,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.errors import FacadeTeachingError
+from torchlens.errors import FacadeTeachingError, InvalidArgumentError
 
 _REAL_METHODS = (
     "store_comparison",
@@ -96,3 +96,10 @@ def test_delta_family_is_private_behind_compare(name: str) -> None:
     assert callable(getattr(bundle, f"_{name}"))
     rows = bundle.compare("clean", "changed", metric="relative_l2")
     assert rows and set(dict(rows)) <= set(bundle._delta_map("relative_l2"))
+
+
+def test_bundle_draw_refuses_an_unknown_graph_kind() -> None:
+    with pytest.raises(InvalidArgumentError) as caught:
+        _pair().draw(graph="sideways")
+    assert caught.value.code == "bundle_draw_graph_invalid"
+    assert caught.value.fields.get("argument") == "graph"

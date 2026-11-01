@@ -1380,54 +1380,24 @@ class Bundle:
     ) -> str:
         """Draw the bundle as one picture and return its DOT source.
 
-        Parameters
-        ----------
-        path:
-            Output path; a recognised extension picks the format. A bare call
-            writes a collision-safe ``bundle_modelgraph`` file (``bundle_diff``
-            for ``graph="diff"``) in the working directory.
-        graph:
-            Which picture: ``"forward"`` (default), ``"backward"`` or
-            ``"combined"`` draw the bundle's union op graph for that pass;
-            ``"diff"`` draws two members side by side with their aligned
-            sites coloured by ``metric`` distance.
-        nodes:
-            ``"ops"`` (default) or ``"members"``: one node per member and one
-            edge per relation row (``graph`` must stay ``"forward"``).
-        rolled:
-            Draw the rolled (per-layer) graph instead of every op.
-        direction:
-            Graphviz layout direction; ``None`` is ``"bottomup"``.
-        theme:
-            Skin preset, the names ``Trace.draw`` takes. Defaults to
-            ``"torchlens"``, or ``"paper"`` for ``graph="diff"``.
-        show_legend:
-            ``True`` draws the key under the header.
-        file_format:
-            Output format. Defaults to ``"pdf"``, or ``"svg"`` for ``graph="diff"``.
-        open_viewer:
-            Open the rendered file; ``False`` only writes it.
-        graph_overrides:
-            Graph-level Graphviz attributes.
-        node_overrides:
-            Graphviz node attributes keyed by op label (member name under
-            ``nodes="members"``).
-        edge_overrides:
-            Graphviz edge attributes keyed by ``(source, target)`` labels.
-        members:
-            For ``graph="diff"``: the ``(left, right)`` members to compare.
-            Defaults to the baseline and the next member.
-        metric:
-            For ``graph="diff"``: the per-site tensor metric.
-        on:
-            For ``graph="diff"``: the tensor field compared at each site.
+        ``graph`` picks the picture: ``"forward"`` (default), ``"backward"`` or
+        ``"combined"`` draw the bundle's union op graph for that pass, and ``"diff"``
+        draws the ``members`` pair (default: the baseline and the next member) side by
+        side with their aligned sites coloured by ``metric`` distance over the ``on``
+        tensor field (``"out"`` or ``"grad"``). ``nodes="members"`` draws one node per
+        member and one edge per relation row (``graph`` must stay ``"forward"``);
+        ``rolled`` draws the rolled (per-layer) graph instead of every op.
 
-        Returns
-        -------
-        str
-            Graphviz DOT source of the rendered picture.
+        ``path`` is the output file (a recognised extension picks the format); a bare
+        call writes a collision-safe ``bundle_modelgraph`` file (``bundle_diff`` for
+        ``graph="diff"``) in the working directory. ``file_format`` defaults to
+        ``"pdf"`` (``"svg"`` for diff), ``theme`` to ``"torchlens"`` (``"paper"`` for
+        diff; the names ``Trace.draw`` takes) and ``direction`` to ``"bottomup"``.
+        ``show_legend=True`` draws the key under the header; ``open_viewer`` opens the
+        rendered file. ``graph_overrides``, ``node_overrides`` (keyed by op label, or
+        member name under ``nodes="members"``) and ``edge_overrides`` (keyed by
+        ``(source, target)`` labels) pass Graphviz attributes through.
         """
-
         return _bundle_draw(
             self,
             path,

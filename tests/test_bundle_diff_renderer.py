@@ -265,8 +265,7 @@ def test_bundle_diff_pair_selection_considers_left_delta() -> None:
 
     selected = _select_pairs(
         [(left_high, right_low), (left_low, right_mid)],
-        left_name="left",
-        right_name="right",
+        names=("left", "right"),
         delta_map={
             "node_high": {"left": 9.0, "right": 0.0},
             "node_mid": {"left": 0.0, "right": 5.0},

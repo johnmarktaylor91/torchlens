@@ -99,8 +99,7 @@ def bundle_diff(
     layer_to_node = _layer_to_supergraph_node(bundle)
     pairs = _select_pairs(
         bundle._aligned_pairs(left_name, right_name),
-        left_name=left_name,
-        right_name=right_name,
+        names=(left_name, right_name),
         delta_map=delta_map,
         layer_to_node=layer_to_node,
         max_pairs=max_pairs,
@@ -489,8 +488,7 @@ def _pair_delta_values(
 def _select_pairs(
     pairs: list[tuple[Any, Any]],
     *,
-    left_name: str,
-    right_name: str,
+    names: tuple[str, str],
     delta_map: dict[str, dict[str, float]],
     layer_to_node: dict[str, str],
     max_pairs: int | None,
@@ -501,10 +499,8 @@ def _select_pairs(
     ----------
     pairs:
         Candidate aligned pairs.
-    left_name:
-        Left member name.
-    right_name:
-        Right member name.
+    names:
+        The ``(left, right)`` member names.
     delta_map:
         Per-node metric values.
     layer_to_node:
@@ -518,6 +514,7 @@ def _select_pairs(
         Selected pairs in original trace order.
     """
 
+    left_name, right_name = names
     if max_pairs is None or len(pairs) <= max_pairs:
         return pairs
     if max_pairs < 1:
