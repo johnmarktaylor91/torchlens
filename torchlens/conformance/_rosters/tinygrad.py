@@ -11,8 +11,9 @@ Two groups (SPEC 4.4):
   against the definition; ``expected_intermediates`` is computed here with
   NumPy only (FORKS F-N) and keyed by the recorded op kind.
 - ``random_init``: ``tinygrad.nn`` Linear, Conv2d and LayerNorm with default
-  init. Until realize-once capture lands the backend refuses them typed
-  (``rng_state_in_graph``, FORKS F-K) and the scorecard shows the cells as
+  init. Until RNG consumption under realize-once is proven equal to one
+  eager forward the backend refuses them typed (``rng_state_in_graph``,
+  FORKS F-K) and the scorecard shows the cells as
   unsupported.
 - ``ecosystem``: two pinned pretrained families vendored from tinygrad's own
   ``examples/`` definitions (FORKS F-I, no new dependency). They run only
@@ -798,7 +799,7 @@ def config_built_rows() -> tuple[RosterModel, ...]:
 
 
 def random_init_rows() -> tuple[RosterModel, ...]:
-    """The F11 rows: default-init Linear, Conv2d and LayerNorm (refused until realize-once)."""
+    """The F11 rows: default-init Linear, Conv2d and LayerNorm (refused ``rng_state_in_graph``)."""
 
     return (
         _row("nn_linear_random_init", _build_random_linear, random_init=True),

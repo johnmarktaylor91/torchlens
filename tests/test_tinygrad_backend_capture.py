@@ -457,27 +457,91 @@ def test_tinygrad_spec_registered() -> None:
     assert capabilities.trace_options == ("module_identity_mode", "grad_options")
 
 
-def test_unrealized_closure_constant_refuses_typed() -> None:
-    """A closure constant the forward never realized refuses ``constant_unrealizable``.
+def test_closure_constant_captured_with_payload() -> None:
+    """A closure constant built from a NumPy array is recorded with its payload.
 
-    ``Tensor(ndarray)`` stays a host-side source buffer until something
-    realizes it; the per-uop payload copy of that buffer cannot be written
-    back to its device (tinygrad ``need copyin``). Until realize-once capture
-    lands the backend refuses typed, naming the op, instead of crashing.
+    ``Tensor(ndarray)`` is a host-side source buffer. The former per-uop
+    payload copy rebuilt it on that host device and crashed (``need copyin``);
+    realize-once takes the realized buffer itself, so the constant is a
+    recorded op whose payload equals the array and the trace validates.
     """
 
-    weight = Tensor(np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32))
+    weight_values = np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    weight = Tensor(weight_values)
     bias = Tensor(np.asarray([0.5, -0.5], dtype=np.float32))
     x = Tensor(np.asarray([[1.0, -1.0]], dtype=np.float32))
 
     def forward(value: Any) -> Any:
         return (value.matmul(weight) + bias).relu()
 
+    trace = tl.trace(forward, x, backend="tinygrad")
+
+    closure_payloads = [
+        np.asarray(op.out.numpy())
+        for op in trace.layer_list
+        if dict(getattr(op, "annotations", None) or {}).get("tinygrad_constant_kind") == "closure"
+    ]
+    assert any(
+        payload.size == weight_values.size
+        and np.array_equal(payload.reshape(-1), weight_values.reshape(-1))
+        for payload in closure_payloads
+    )
+    assert trace.validate_forward_pass([forward(x)]) is True
+
+
+def test_unrealizable_value_refuses_typed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A value ``realize_once`` cannot realize refuses ``constant_unrealizable`` naming an op."""
+
+    from torchlens.backends._protocols.tinygrad import TinygradProtocol
+
+    def _need_copyin(self: Any, values: Any) -> None:
+        raise NotImplementedError("need copyin")
+
+    monkeypatch.setattr(TinygradProtocol, "realize_once", _need_copyin)
     with pytest.raises(BackendUnsupportedError) as info:
-        tl.trace(forward, x, backend="tinygrad")
+        tl.trace(_tiny_block, Tensor([1.0, -2.0, 3.0]), backend="tinygrad")
 
     assert info.value.code == "constant_unrealizable"
-    assert "BUFFER" in str(info.value)
+    assert "shape=" in str(info.value)
+
+
+def test_realize_once_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A capture calls ``realize_once`` exactly once, before any op is recorded (A12).
+
+    The per-uop ``_realized_copy`` path is not used for forward payloads, and
+    every recorded payload is the realized tensor itself.
+    """
+
+    from torchlens.backends._protocols.tinygrad import TinygradProtocol
+
+    events: list[str] = []
+    original_realize_once = TinygradProtocol.realize_once
+    original_append = TinygradBackend._append_event
+
+    def _spy_realize_once(self: Any, values: Any) -> None:
+        events.append("realize_once")
+        original_realize_once(self, values)
+
+    def _spy_append(self: Any, **kwargs: Any) -> Any:
+        events.append("record")
+        return original_append(self, **kwargs)
+
+    def _no_copy(self: Any, value: Any, *, uop: Any | None = None) -> Any:
+        raise AssertionError("forward payloads must not use the per-uop realized copy")
+
+    monkeypatch.setattr(TinygradProtocol, "realize_once", _spy_realize_once)
+    monkeypatch.setattr(TinygradBackend, "_append_event", _spy_append)
+    monkeypatch.setattr(TinygradBackend, "_realized_copy", _no_copy)
+
+    x = Tensor([1.0, -2.0, 3.0])
+    trace = tl.trace(_tiny_block, x, backend="tinygrad")
+
+    assert events.count("realize_once") == 1
+    assert events[0] == "realize_once"
+    assert events.count("record") == len(trace.layer_list)
+    assert getattr(trace, "tinygrad_payload_policy") == "realize_once"
+    for op in trace.layer_list:
+        assert isinstance(op.out, Tensor)
 
 
 def test_rng_bearing_graph_refuses_typed() -> None:
@@ -516,7 +580,7 @@ def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
     assert "mul" in layer_types
     assert {"add", "where", "mul"} <= layer_types
     assert trace.validate_forward_pass([_tiny_block(x)]) is True
-    assert getattr(trace, "tinygrad_payload_policy") == "dev_python_realized_copy"
+    assert getattr(trace, "tinygrad_payload_policy") == "realize_once"
     assert trace.output_layers
 
 
