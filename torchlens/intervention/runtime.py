@@ -1458,7 +1458,7 @@ def _fire_gradient_entry(
         Gradient after this hook and its fire record.
     """
 
-    site_label = str(getattr(op, "label", "") or getattr(op, "layer_label", ""))
+    site_label = _forward_site_label(op)
     tuple_index = _op_output_slot(op)
     call_index = _next_gradient_call_index(trace, entry, site_label)
     run_state = _live_run_ctx()
@@ -1655,6 +1655,29 @@ def _inner_selector_matches_op(trace: Any, inner: Any, op: Any) -> bool:
     matched = bool(_resolve_unchecked((op,), selector, strict=False))
     cache[key] = matched
     return matched
+
+
+def _forward_site_label(op: Any) -> str:
+    """Return the forward label a gradient fire records (``relu_3``, ``relu_3:2``).
+
+    The bare layer label names a single-pass layer; a multi-pass layer keeps
+    the pass-qualified label so each pass's fire names its own pass.
+
+    Parameters
+    ----------
+    op:
+        Final forward op record.
+
+    Returns
+    -------
+    str
+        Layer label, pass-qualified only on a multi-pass layer.
+    """
+
+    layer_label = str(getattr(op, "layer_label", "") or "")
+    if layer_label and int(getattr(op, "num_passes", 1) or 1) <= 1:
+        return layer_label
+    return str(getattr(op, "label", "") or layer_label)
 
 
 def _op_output_slot(op: Any) -> int | None:
