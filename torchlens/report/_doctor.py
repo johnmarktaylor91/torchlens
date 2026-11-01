@@ -11,7 +11,6 @@ import torch
 from torch import nn
 
 from .._utils import _environment_checks, capability_snapshot
-from ..backends._scorecard_rows import backend_scorecard_rows
 from ..compat._report import _model_checks, _qualified_type_name
 
 Status = Literal["pass", "known_broken", "scope", "not_tested"]
@@ -340,6 +339,8 @@ def doctor(model: nn.Module | None = None, inputs: Any = None) -> DoctorReport:
         Environment checks, the ``backend_scorecard:<name>`` rows, then model
         compatibility findings, if a model was supplied.
     """
+
+    from ..backends._scorecard_rows import backend_scorecard_rows
 
     checks = tuple(_environment_row(row) for row in _environment_checks())
     checks += backend_scorecard_rows()
