@@ -314,7 +314,11 @@ class SamplingRecord:
 
 @dataclass(frozen=True)
 class FireRecord:
-    """Runtime record for one intervention firing."""
+    """Runtime record for one intervention firing.
+
+    ``sampling`` holds the realized draws of the stochastic verbs that fired here, one
+    :class:`SamplingRecord` per draw, saved with the record as of tlspec 11.
+    """
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "target_label": FieldPolicy.KEEP,

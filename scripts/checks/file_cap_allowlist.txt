@@ -1258,7 +1258,7 @@ torchlens/intervention/stochastic.py::resample_rows_from.factory._hook	88
 torchlens/intervention/stochastic.py::sample_from	73
 torchlens/intervention/stochastic.py::set_direction_mean	144
 torchlens/intervention/sweep.py::sweep	177
-torchlens/intervention/types.py	857
+torchlens/intervention/types.py	861
 torchlens/inventory.py::SiteInventory.resolve	71
 torchlens/inventory.py::sites_of_trace	65
 torchlens/io/__init__.py::detect_tlspec_format	67
