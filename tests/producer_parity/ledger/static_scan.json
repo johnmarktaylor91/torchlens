@@ -129,6 +129,14 @@
  },
  {
   "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/_data_classes/_trace_grad_sites.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/_data_classes/_trace_intervention.py",
   "has_default": false,
@@ -6204,7 +6212,7 @@
   "field": "raw_index",
   "file": "torchlens/capture/session.py",
   "has_default": true,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": true
  },
  {
@@ -6978,14 +6986,6 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/intervention/_edit_repr.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
   "file": "torchlens/intervention/_facet_save.py",
   "has_default": true,
   "sites": 1,
@@ -6998,14 +6998,6 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/intervention/_gradient_contract.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -7038,14 +7030,6 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/intervention/_subspace_projection.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -7104,14 +7088,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/intervention/binding.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/intervention/binding.py",
@@ -7134,14 +7110,6 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/intervention/compose.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -7172,7 +7140,7 @@
   "field": "kind",
   "file": "torchlens/intervention/hooks.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -7245,14 +7213,6 @@
   "file": "torchlens/intervention/population.py",
   "has_default": false,
   "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/intervention/predicates.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {
@@ -7352,12 +7312,12 @@
   "via_getattr": true
  },
  {
-  "ambiguous": true,
-  "field": "kind",
+  "ambiguous": false,
+  "field": "grad_fn_handle",
   "file": "torchlens/intervention/rerun.py",
-  "has_default": false,
+  "has_default": true,
   "sites": 1,
-  "via_getattr": false
+  "via_getattr": true
  },
  {
   "ambiguous": true,
@@ -7433,6 +7393,14 @@
  },
  {
   "ambiguous": false,
+  "field": "is_output_parent",
+  "file": "torchlens/intervention/runtime.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "layer_type",
   "file": "torchlens/intervention/runtime.py",
   "has_default": true,
@@ -7460,7 +7428,7 @@
   "field": "pass_index",
   "file": "torchlens/intervention/runtime.py",
   "has_default": true,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -7470,14 +7438,6 @@
   "has_default": true,
   "sites": 2,
   "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/intervention/save.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
  },
  {
   "ambiguous": true,
