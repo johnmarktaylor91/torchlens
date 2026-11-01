@@ -46,19 +46,6 @@ from ._tl import (
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        _LIVE_FIRE_RESULTS_ATTR,
-        TRANSFORM_FUNC_NAMES,
-        _build_shared_fields_dict,
-        _build_trace_predicate_context,
-        _cache_trace_predicate_context,
-        _extract_arg_tensors_and_params,
-        _output_should_be_logged,
-        _replace_output_value,
-        _walk_output_tensors_with_paths,
-    )
-
 
 _LIVE_FIRE_RESULTS_STORAGE_ATTR = "_tl_live_fire_results_by_tensor_id"
 
@@ -836,3 +823,32 @@ def _pop_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...
                 kind=INTERVENTION_FIRE_RESULTS_CLEANUP_FAILED,
             ) from exc
     return tuple(fire_results)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_containers import (  # noqa: E402
+    _walk_output_tensors_with_paths,
+)
+from ._ops_exhaustive import (  # noqa: E402
+    _output_should_be_logged,
+)
+from ._ops_finalize import (  # noqa: E402
+    _cache_trace_predicate_context,
+)
+from ._ops_predicate_events import (  # noqa: E402
+    _extract_arg_tensors_and_params,
+)
+from ._ops_predicates import (  # noqa: E402
+    _replace_output_value,
+)
+from ._ops_retention import (  # noqa: E402
+    _build_trace_predicate_context,
+)
+from ._ops_shared_fields import (  # noqa: E402
+    _build_shared_fields_dict,
+)
+from .ops import (  # noqa: E402
+    _LIVE_FIRE_RESULTS_ATTR,
+    TRANSFORM_FUNC_NAMES,
+)

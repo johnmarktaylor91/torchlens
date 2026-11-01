@@ -68,17 +68,6 @@ from .tensor_tracking import (
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        TRANSFORM_FUNC_NAMES,
-        _is_default_ram_payload,
-        _iter_loggable_live_outputs,
-        _live_output_index,
-        _predicate_backend_semantics,
-        _predicate_function_ref,
-        _record_predicate_output,
-        _snapshot_exhaustive_module_stack,
-    )
 
 __all__ = (
     "_emit_predicate_operation_events",
@@ -514,3 +503,23 @@ def _build_module_context_fields(
     fields_dict["is_module_output"] = False
     fields_dict["is_atomic_module"] = False
     fields_dict["atomic_module_call"] = None
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_capture_records import (  # noqa: E402
+    _snapshot_exhaustive_module_stack,
+)
+from ._ops_interventions import (  # noqa: E402
+    _iter_loggable_live_outputs,
+    _live_output_index,
+)
+from ._ops_predicates import (  # noqa: E402
+    _is_default_ram_payload,
+    _predicate_backend_semantics,
+    _predicate_function_ref,
+    _record_predicate_output,
+)
+from .ops import (  # noqa: E402
+    TRANSFORM_FUNC_NAMES,
+)

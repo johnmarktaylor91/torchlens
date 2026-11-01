@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import torch
 
@@ -23,16 +23,6 @@ from ._runnable_state import (
     runnable_tensor_byte_digest,
 )
 from ._utils.alias_footprint import touched_bytes_relation
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _FINGERPRINT_ALIGNMENT_MODULUS,
-        _contract_check,
-        _model_input_arity_positions,
-        _model_input_literal_facts,
-        _tensor_leaf_paths,
-        _value_at_path,
-    )
 
 __all__ = (
     "_input_alias_topology_checks",
@@ -498,3 +488,21 @@ def _input_nontensor_tree_contract_checks(
             )
         )
     return tuple(checks)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_execution import (  # noqa: E402
+    _FINGERPRINT_ALIGNMENT_MODULUS,
+)
+from ._runnable_input_sites import (  # noqa: E402
+    _model_input_arity_positions,
+    _model_input_literal_facts,
+)
+from ._runnable_verification import (  # noqa: E402
+    _contract_check,
+    _value_at_path,
+)
+from ._runnable_witness_contracts import (  # noqa: E402
+    _tensor_leaf_paths,
+)

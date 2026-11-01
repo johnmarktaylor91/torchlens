@@ -128,7 +128,7 @@ def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
         Control for the wrapped call.
     """
 
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with _state.pause_logging(), internal_scalar_read():
         receiver.requires_grad_(False)
@@ -184,7 +184,7 @@ def frozen_parameter_receiver_context(
     receiver = args[0]
     if not isinstance(receiver, torch.nn.Parameter):
         return nullcontext()
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         is_forced_leaf = receiver.requires_grad and receiver.is_leaf

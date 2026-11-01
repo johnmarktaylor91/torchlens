@@ -1045,7 +1045,7 @@ def _capture_activation_blob_specs(
     """
 
     from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
-    from .._runnable_execution import build_input_attestation_fingerprint
+    from .._runnable_input_aliases import build_input_attestation_fingerprint
     from .._runnable_state import runnable_tensor_byte_digest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}

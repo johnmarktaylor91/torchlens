@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 import torch
@@ -31,21 +31,6 @@ from ._runnable_state import (
 from .errors import (
     RunPreconditionError,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _bind_runtime_inputs,
-        _clone_state_values,
-        _execute_loaded_sparse_transaction,
-        _raise_first_divergence,
-        _raise_monotonic_divergence,
-        _require_loaded_sparse_provider,
-        _resolve_run_until_plan,
-        _run_fork_name,
-        _run_report,
-        _snapshot_input_byte_digests,
-        _snapshot_input_fingerprints,
-    )
 
 __all__ = (
     "run_loaded_sparse_trace",
@@ -292,9 +277,8 @@ def _finalize_provider_run(
     # ledger, observer values) are dropped here -- VERIFIED must never coexist
     # with foreign step evidence. Runs after divergence enforcement so a
     # raised-and-rolled-back run never scrubs the caller's live trace.
-    # Function-local import: _runnable_execution rebinds this function into
-    # its own globals (_rebind_function), so a module-level name is invisible
-    # at call time.
+    # Function-local import: layering (the capture annotations travel module
+    # imports the runnable package), not a cycle at import.
     from ._capture._annotations_travel import scrub_fresh_execution_annotations
 
     scrub_fresh_execution_annotations(fork)
@@ -313,3 +297,30 @@ def _finalize_provider_run(
         truncation=truncation,
     )
     return RunResult(output=output, trace=fork, report=report)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_input_aliases import (  # noqa: E402
+    _clone_state_values,
+    _snapshot_input_byte_digests,
+    _snapshot_input_fingerprints,
+)
+from ._runnable_input_metadata import (  # noqa: E402
+    _bind_runtime_inputs,
+)
+from ._runnable_input_sites import (  # noqa: E402
+    _require_loaded_sparse_provider,
+)
+from ._runnable_path_faithfulness import (  # noqa: E402
+    _run_report,
+)
+from ._runnable_transaction import (  # noqa: E402
+    _execute_loaded_sparse_transaction,
+    _resolve_run_until_plan,
+)
+from ._runnable_verification import (  # noqa: E402
+    _raise_first_divergence,
+    _raise_monotonic_divergence,
+    _run_fork_name,
+)

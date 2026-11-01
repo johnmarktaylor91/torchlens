@@ -890,14 +890,14 @@ def test_loaded_partial_capture_stays_staging() -> None:
     from unittest import mock
 
     import torchlens as tl
-    import torchlens._postprocess as postprocess
+    import torchlens._postprocess.finalization as finalization
     from torchlens._trace_core.op_store import DetachedOpStore
 
     model = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.ReLU())
 
     # Fail LATE in postprocess (after layer logs exist) so the partial has
     # reachable ops — the case where an unguarded rehydrate would freeze.
-    with mock.patch.object(postprocess, "_build_module_logs", side_effect=RuntimeError("boom")):
+    with mock.patch.object(finalization, "_build_module_logs", side_effect=RuntimeError("boom")):
         with pytest.raises(Exception) as exc_info:
             tl.trace(model, torch.randn(1, 3))
     partial = tl._partial.from_failed_capture(exc_info.value)

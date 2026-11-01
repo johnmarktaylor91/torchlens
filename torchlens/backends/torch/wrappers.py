@@ -63,6 +63,15 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ._callable_location import _callable_source_location
+from ._completeness_boundaries import completeness_scope_for_wrapper
+from ._completeness_cross_thread import (
+    observe_nonowner_operands,
+    record_host_string_escape_source,
+    string_escape_is_owner_thread,
+)
+from ._completeness_dispatch import record_uncaptured_owner_callsite
+from ._completeness_escape_state import record_data_alias_mutation
+from ._completeness_origins import internal_scalar_read
 from ._function_boundary import (
     _BARCODE_TRANSPARENT_FUNCS,
     EXPORT_FUNC_NAMES,
@@ -72,6 +81,14 @@ from ._function_boundary import (
 )
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
+from ._ops_autograd import register_call_input_container_snapshots
+from ._ops_capture_records import (
+    _is_inplace_augmented_assignment_dunder,
+    _record_label_version_snapshot,
+    _stamp_same_object_mutation,
+)
+from ._ops_containers import _walk_output_tensors_with_paths
+from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
 from ._storage_overlap import (
     _storage_overlap_byte_interval,
@@ -96,30 +113,12 @@ from .buffer_writes import (
     resolve_or_late_index_buffer_address,
     snapshot_buffer_args,
 )
-from .completeness_witness import (
-    CompletenessWitnessMode,
-    completeness_scope_for_wrapper,
-    internal_scalar_read,
-    observe_nonowner_operands,
-    record_data_alias_mutation,
-    record_host_string_escape_source,
-    record_uncaptured_owner_callsite,
-    string_escape_is_owner_thread,
-)
+from .completeness_witness import CompletenessWitnessMode
 from .escape_detection import (
     EscapeDetectorMode,
     expected_original_call,
     mark_expected_original_accounted,
     reset_detector_tables,
-)
-from .ops import (
-    _is_inplace_augmented_assignment_dunder,
-    _record_label_version_snapshot,
-    _stamp_same_object_mutation,
-    _walk_output_tensors_with_paths,
-    apply_live_hooks_to_outputs,
-    log_function_output_tensors,
-    register_call_input_container_snapshots,
 )
 from .param_mutation import (
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
@@ -970,7 +969,7 @@ def _untyped_storage_key(t: torch.Tensor) -> tuple[int, int, str] | None:
     unreadable; callers must fail closed.
     """
 
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     try:
         with _state.pause_logging(), internal_scalar_read():
@@ -1204,8 +1203,8 @@ def _propagate_mutation_label_to_storage_aliases(
         The mutating op's freshly issued raw label.
     """
 
+    from ._ops_capture_records import _record_label_version_snapshot
     from ._tl import session_storage_alias_candidates, storage_alias_index_key
-    from .ops import _record_label_version_snapshot
 
     # SCOPE (r26 reconcile): descriptor/grad-bound captures keep the HISTORICAL
     # topology. The runnable recipe + numeric attestation key payloads PER
@@ -2161,7 +2160,7 @@ def torch_func_decorator(
                         # barrier so layout/witness rooting fails closed
                         # exactly like the pre-M6 unattributed break.
                         if is_storage_rebinding_setter and rebind_setter_swaps_storage:
-                            from .completeness_witness import record_storage_rebind_barrier
+                            from ._completeness_metadata import record_storage_rebind_barrier
 
                             record_storage_rebind_barrier(trace, out_label)
                         # W3 F1: the write may have gone through a VIEW; every

@@ -8680,7 +8680,6 @@ test-docstrings	tests/test_snoop_real_model.py	18
 test-docstrings	tests/test_snoop_refusals.py	101
 test-docstrings	tests/test_snoop_stats.py	13
 test-docstrings	tests/test_spec_identity_content.py	2.36.0.
-test-docstrings	tests/test_split_rebind_patchability.py	023
 test-docstrings	tests/test_state_adapter.py	11
 test-docstrings	tests/test_state_hygiene_oracles.py	16
 test-docstrings	tests/test_state_hygiene_oracles.py	2004

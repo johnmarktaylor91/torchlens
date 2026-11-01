@@ -74,53 +74,67 @@ from ._runnable import (
     TensorSlotRole,
     mark_trace_path_status,
 )
-from ._runnable_execution import (
-    _HOST_RNG_SOURCE_KIND,
-    _INPUT_CHECK_UNAVAILABLE,
-    _ambient_execution_context_restored,
-    _call_witness_checks,
-    _container_spec_reconstruction_lossy,
-    _contract_check,
+from ._runnable_attestation import (
     _control_witness_source_slot_ids,
     _declared_nondeterministic_sources,
     _descriptor_has_seeded_rng,
-    _finalize_provider_run,
-    _first_failed_live_input_check,
-    _host_rng_unreproduced,
-    _input_alias_topology_checks,
-    _input_derived_layout_stale,
-    _input_literal_contract_checks,
-    _input_metadata_contract_checks,
-    _input_nontensor_tree_contract_checks,
-    _input_site_value,
-    _input_tree_contract_checks,
-    _live_runtime_input_leaves,
     _mode_sensitive_op_unwitnessed,
-    _model_input_arity_positions,
     _nondeterministic_value_sources,
+    _uninit_taint_reaches,
+)
+from ._runnable_call_outputs import (
+    _container_spec_reconstruction_lossy,
     _out_argument_slot_id,
     _output_container_spec,
     _output_not_reproduced,
-    _path_faithfulness,
-    _post_execution_contract_checks,
-    _raise_failed_contract_as_divergence,
-    _raise_first_divergence,
-    _require_loaded_sparse_provider,
+)
+from ._runnable_execution import _HOST_RNG_SOURCE_KIND, run_loaded_sparse_trace
+from ._runnable_input_aliases import (
+    _input_alias_topology_checks,
+    _input_nontensor_tree_contract_checks,
+    _input_site_value,
+    _input_tree_contract_checks,
+    _split_mixed_inputs,
+)
+from ._runnable_input_metadata import (
+    _input_layout_ok,
+    _input_literal_contract_checks,
     _runtime_mirror_clone,
+    _top_level_input_site_contract_checks,
+)
+from ._runnable_input_sites import (
+    _INPUT_CHECK_UNAVAILABLE,
+    _first_failed_live_input_check,
+    _input_derived_layout_stale,
+    _input_metadata_contract_checks,
+    _model_input_arity_positions,
+    _require_loaded_sparse_provider,
+)
+from ._runnable_output_contracts import _call_witness_checks, _post_execution_contract_checks
+from ._runnable_path_faithfulness import _path_faithfulness
+from ._runnable_providers import (
+    _finalize_provider_run,
+    _host_rng_unreproduced,
     _seed_run_generators,
     _seeded_fork_devices,
-    _split_mixed_inputs,
+)
+from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
+from ._runnable_state_context import (
+    _ambient_execution_context_restored,
+)
+from ._runnable_transaction import _live_runtime_input_leaves
+from ._runnable_verification import (
+    _contract_check,
+    _raise_failed_contract_as_divergence,
+    _raise_first_divergence,
+    _value_at_path,
+)
+from ._runnable_witness_contracts import (
     _tensor_derived_scalar_stale,
     _tensor_derived_scalar_witness_slot_ids,
     _tensor_leaf_paths,
-    _top_level_input_site_contract_checks,
     _unbound_state_escape_stale,
-    _uninit_taint_reaches,
-    _value_at_path,
-    run_loaded_sparse_trace,
 )
-from ._runnable_input_metadata import _input_layout_ok
-from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
 from ._utils._module_call_dispatch import forward_entered_through_module_call
 from ._utils.arg_handling import normalize_input_args
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng

@@ -89,7 +89,7 @@
   `trace._raw_transform_escape_detected` (which licenses the unattributable-output tolerance,
   exactly like the functorch guard beside it) plus `trace._raw_dynamo_region_detected`, which is
   the top-precedence `capture_verification_reason` -- `"dynamo_region_not_logged"` -- at BOTH
-  verdict sites (`completeness_witness._finalize_census` and the `escape_detection` capture-scope
+  verdict sites (`_completeness_finalize._finalize_census` and the `escape_detection` capture-scope
   `finally`, the last writer). Without the dedicated flag the Trace blamed
   `owner_thread_tripwire_changed`, since compiling spawns threads. Plain compiled-callable
   attributes are also inventoried before forward and invoked with logging paused, conservatively
@@ -119,9 +119,14 @@
   state record a different graph, so validation's re-trace called it non-reproducible.
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`
   failures.
-- `backends/torch/ops.py` rebinds the split `_ops_*` functions onto its own globals
-  (`_rebind_function`), so any new module-level name used inside a rebound function must also be
-  bound in `ops.py` (and a test patches such a name on `ops`, not on the split module).
+- Split modules import one another and their hub's constants at their bottoms (they form import
+  cycles, so the imports run once every definition exists): `backends/torch/_ops_*` with `ops.py`,
+  `backends/torch/_completeness_*` with `completeness_witness.py`, `validation/_invariants_*` with
+  `invariants.py`, and `_runnable_*` with `_runnable_execution.py`. A new module-level name used in a
+  split module is imported there. A test patches a helper on the module that defines it and on every
+  module that binds it by import, never on the hub alone: a from-import copy does not follow a patch.
+  Module state reassigned after import (`completeness_witness._ACTIVE_WITNESS_STATE`) lives in one
+  module, and every other reader and writer uses `owner_module.NAME`, never a from-import copy.
 - Fast-path module decoration skips `_record_module_entry_metadata`; alignment state must be
   replicated manually.
 - `get_memory_amount()` deliberately avoids `pause_logging()`: it resolves the

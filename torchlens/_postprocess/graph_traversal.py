@@ -813,7 +813,7 @@ def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> No
     """
 
     from .._utils.rng import aten_qualname_is_seeded_rng
-    from ..backends.torch.completeness_witness import (
+    from ..backends.torch._completeness_escape_state import (
         host_escape_source_labels,
         record_pruned_rng_control_source,
     )
@@ -848,7 +848,7 @@ def _record_pruned_source_less_witness(self: "Trace", orphan_nodes: set[str]) ->
     ``keep_orphans`` leaves the ops, and their per-op witness, in the trace.
     """
 
-    from ..backends.torch.completeness_witness import host_escape_source_labels
+    from ..backends.torch._completeness_escape_state import host_escape_source_labels
 
     escape_sources: frozenset[str] | None = None
     witness: list[str] = []
@@ -885,7 +885,7 @@ def _record_pruned_alias_mutation(self: "Trace", orphan_nodes: set[str]) -> None
     visible graph.
     """
 
-    from ..backends.torch.completeness_witness import (
+    from ..backends.torch._completeness_escape_state import (
         alias_mutation_candidate_labels,
         record_pruned_alias_mutation_source,
     )

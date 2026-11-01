@@ -232,7 +232,7 @@ def _add_tensor_backward_hook(
     # r65: TorchLens's OWN hook-bookkeeping ``grad_fn``/``requires_grad`` reads, hoisted
     # under the explicit internal-read marker so the r65 state-metadata property observer
     # never mistakes them for user autograd reads on a registered buffer/param receiver.
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         _grad_fn = t.grad_fn
@@ -293,7 +293,7 @@ def _escrow_live_gradient_reference(
     """
 
     from ..._capture.session import LiveGradientReference, capture_session_for
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     session = capture_session_for(trace)
     if session is None:
@@ -332,7 +332,7 @@ def _add_live_gradient_reference_hook(
         Raw label of the in-place op.
     """
 
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         current_grad_fn = reference.tensor.grad_fn
@@ -564,7 +564,7 @@ def _install_tensor_grad_hook(
     # in-place op output), so the read is marked internal (r65 unread-bit).
     # Paused like every TorchLens-internal torch call (Critical Invariant 2):
     # the user's forward never makes this call, so it must not count as one.
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with pause_logging(), internal_scalar_read():
         if isinstance(site, torch.Tensor):

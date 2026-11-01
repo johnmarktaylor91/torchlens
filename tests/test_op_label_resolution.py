@@ -25,7 +25,7 @@ from torchlens._data_classes._trace_accessors import _TRACE_OP_ACCESSOR_ATTR, Tr
 from torchlens._data_classes.op import Op
 from torchlens._errors import AmbiguousOpLookupError
 from torchlens.errors import MetadataInvariantError
-from torchlens.validation.invariants import _check_op_label_resolution
+from torchlens.validation._invariants_topology import _check_op_label_resolution
 
 
 class _LoopThenSites(nn.Module):

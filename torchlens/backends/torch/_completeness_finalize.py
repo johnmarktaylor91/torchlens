@@ -6,7 +6,7 @@ import threading
 import warnings
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
@@ -17,22 +17,6 @@ from ..._utils._torch_symbols import torch_attr
 from .escape_detection import (
     ExpectedOriginalToken,
 )
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _ACTIVE_WITNESS_STATE,
-        _HOST_ESCAPE_MUTABLE_WRITEBACK,
-        CompletenessWitnessMode,
-        _CompletenessDispatchMode,
-        _DispatchCallsite,
-        _event_is_capture_accounted,
-        _finalize_runnable_ledger,
-        _is_expected_opaque_dispatch,
-        _observe_invisible_host_escapes,
-        _register_authorized_caller_namespace,
-        _whole_storage_uint8,
-        _WitnessState,
-    )
 
 __all__ = (
     "_STORAGE_RAW_POINTER_TARGETS",
@@ -281,8 +265,7 @@ def _finalize_census(state: _WitnessState) -> None:
                 stacklevel=3,
             )
             # Gap path only: name a TorchScript or DLPack call behind the gap (no verdict moves).
-            # Imported here because completeness_witness rebinds this function into its own
-            # globals, and a capture without a gap never pays for the import.
+            # Imported here so a capture without a gap never pays for the import.
             from ._opaque_call_advisory import advise_opaque_calls
 
             advise_opaque_calls(diagnostics)
@@ -523,9 +506,10 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
             # r43: publish the witness state so wrappers.py string-hook interception can
             # classify owner vs non-owner (the ONE place a non-owner thread must not flip
             # the global ``pause_logging`` toggle). Cleared FIRST on exit.
-            global _ACTIVE_WITNESS_STATE
-            prior_active_state = _ACTIVE_WITNESS_STATE
-            _ACTIVE_WITNESS_STATE = state
+            # The slot is owned by the completeness_witness module (its readers,
+            # including wrappers and the function boundary, look it up there).
+            prior_active_state = _hub._ACTIVE_WITNESS_STATE
+            _hub._ACTIVE_WITNESS_STATE = state
             try:
                 with _observe_invisible_host_escapes(state), mode_context:
                     try:
@@ -538,7 +522,7 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
                         _finalize_runnable_ledger(state)
                         _finalize_plane_p(state)
             finally:
-                _ACTIVE_WITNESS_STATE = prior_active_state
+                _hub._ACTIVE_WITNESS_STATE = prior_active_state
                 _state._runnable_ledger_armed = prior_ledger_armed
             return
         with mode_context:
@@ -556,7 +540,7 @@ def _collect_authorized_internal_caller_modules() -> None:
     """Register the witness-family and buffer-write modules' own code objects.
 
     The witness was one module until the r3 split; every ``_completeness_*``
-    sibling (plus the ``completeness_witness`` facade) holds internal callers
+    sibling (plus the ``completeness_witness`` module) holds internal callers
     that must stay on the authorized roster, or the detector self-trips on the
     witness's own no-observe storage reads (the r3 cluster regression).
     """
@@ -564,7 +548,11 @@ def _collect_authorized_internal_caller_modules() -> None:
     import importlib
     import pkgutil
 
+    # Imported here, not from this module's bottom block: the completeness_witness
+    # module runs this at its own import, which can happen while a split module
+    # (this one included) is still executing its bottom imports.
     from . import buffer_writes as _buffer_writes_module
+    from ._completeness_escape_state import _register_authorized_caller_namespace
 
     _register_authorized_caller_namespace(globals(), __file__)
     buffer_writes_file = _buffer_writes_module.__file__
@@ -580,3 +568,26 @@ def _collect_authorized_internal_caller_modules() -> None:
         module_file = module.__file__
         assert module_file is not None, "a real source module always has a file"
         _register_authorized_caller_namespace(vars(module), module_file)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from . import completeness_witness as _hub  # noqa: E402  (owner of _ACTIVE_WITNESS_STATE)
+from ._completeness_boundaries import (  # noqa: E402
+    _is_expected_opaque_dispatch,
+)
+from ._completeness_dispatch import (  # noqa: E402
+    _event_is_capture_accounted,
+    _finalize_runnable_ledger,
+    _whole_storage_uint8,
+)
+from ._completeness_patches import (  # noqa: E402
+    _observe_invisible_host_escapes,
+)
+from .completeness_witness import (  # noqa: E402
+    _HOST_ESCAPE_MUTABLE_WRITEBACK,
+    CompletenessWitnessMode,
+    _CompletenessDispatchMode,
+    _DispatchCallsite,
+    _WitnessState,
+)
