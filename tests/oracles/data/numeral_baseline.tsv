@@ -1085,13 +1085,14 @@ docs-md	docs/maintainers/where.md	1114
 docs-md	docs/maintainers/where.md	1121
 docs-md	docs/maintainers/where.md	1129
 docs-md	docs/maintainers/where.md	113
-docs-md	docs/maintainers/where.md	11335
+docs-md	docs/maintainers/where.md	11395
 docs-md	docs/maintainers/where.md	114
 docs-md	docs/maintainers/where.md	1144
 docs-md	docs/maintainers/where.md	1145
 docs-md	docs/maintainers/where.md	1146
 docs-md	docs/maintainers/where.md	1149
 docs-md	docs/maintainers/where.md	115
+docs-md	docs/maintainers/where.md	116
 docs-md	docs/maintainers/where.md	117
 docs-md	docs/maintainers/where.md	1177
 docs-md	docs/maintainers/where.md	1178
@@ -1123,6 +1124,7 @@ docs-md	docs/maintainers/where.md	13,
 docs-md	docs/maintainers/where.md	130
 docs-md	docs/maintainers/where.md	1304
 docs-md	docs/maintainers/where.md	1306
+docs-md	docs/maintainers/where.md	1312
 docs-md	docs/maintainers/where.md	132
 docs-md	docs/maintainers/where.md	1324
 docs-md	docs/maintainers/where.md	1329
@@ -1131,11 +1133,11 @@ docs-md	docs/maintainers/where.md	134
 docs-md	docs/maintainers/where.md	1340
 docs-md	docs/maintainers/where.md	1342
 docs-md	docs/maintainers/where.md	135
-docs-md	docs/maintainers/where.md	13533
 docs-md	docs/maintainers/where.md	136
 docs-md	docs/maintainers/where.md	1361
 docs-md	docs/maintainers/where.md	137
 docs-md	docs/maintainers/where.md	1372
+docs-md	docs/maintainers/where.md	13741
 docs-md	docs/maintainers/where.md	1379
 docs-md	docs/maintainers/where.md	138
 docs-md	docs/maintainers/where.md	1380
@@ -1215,7 +1217,6 @@ docs-md	docs/maintainers/where.md	174
 docs-md	docs/maintainers/where.md	176
 docs-md	docs/maintainers/where.md	1768
 docs-md	docs/maintainers/where.md	177
-docs-md	docs/maintainers/where.md	1771
 docs-md	docs/maintainers/where.md	178
 docs-md	docs/maintainers/where.md	1784
 docs-md	docs/maintainers/where.md	179
@@ -1493,7 +1494,7 @@ docs-md	docs/maintainers/where.md	3841
 docs-md	docs/maintainers/where.md	385
 docs-md	docs/maintainers/where.md	386
 docs-md	docs/maintainers/where.md	387
-docs-md	docs/maintainers/where.md	38760
+docs-md	docs/maintainers/where.md	38897
 docs-md	docs/maintainers/where.md	3892
 docs-md	docs/maintainers/where.md	39
 docs-md	docs/maintainers/where.md	390
@@ -1534,8 +1535,8 @@ docs-md	docs/maintainers/where.md	42
 docs-md	docs/maintainers/where.md	420
 docs-md	docs/maintainers/where.md	421
 docs-md	docs/maintainers/where.md	422
-docs-md	docs/maintainers/where.md	42247
 docs-md	docs/maintainers/where.md	423
+docs-md	docs/maintainers/where.md	42344
 docs-md	docs/maintainers/where.md	424
 docs-md	docs/maintainers/where.md	425
 docs-md	docs/maintainers/where.md	426
@@ -1707,7 +1708,7 @@ docs-md	docs/maintainers/where.md	62
 docs-md	docs/maintainers/where.md	620
 docs-md	docs/maintainers/where.md	621
 docs-md	docs/maintainers/where.md	624
-docs-md	docs/maintainers/where.md	624388
+docs-md	docs/maintainers/where.md	624890
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
@@ -3653,7 +3654,6 @@ error-strings	torchlens/_capture/_episode_ledger.py	5.4
 error-strings	torchlens/_capture/_episode_ledger.py	657
 error-strings	torchlens/_capture/prepare/cache.py	600
 error-strings	torchlens/_capture/prepare/resolve.py	1024
-error-strings	torchlens/_data_classes/_trace_stats.py	1.0
 error-strings	torchlens/_data_substrate/digests.py	256
 error-strings	torchlens/_extraction/dtype_policy.py	16
 error-strings	torchlens/_extraction/engine.py	25.6
@@ -3699,6 +3699,7 @@ error-strings	torchlens/_snoop/_normalize.py	554
 error-strings	torchlens/_visualization/_draw_validation.py	1.0
 error-strings	torchlens/_visualization/_encoding.py	4096
 error-strings	torchlens/_visualization/_encoding.py	512
+error-strings	torchlens/_visualization/_trace_collapse.py	1.0
 error-strings	torchlens/_visualization/auto_collapse.py	1.0
 error-strings	torchlens/_visualization/collapse_optimizer.py	1.0
 error-strings	torchlens/_visualization/collapse_plan.py	1.0
