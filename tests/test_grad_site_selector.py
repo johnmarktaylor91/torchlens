@@ -21,7 +21,11 @@ from torchlens.intervention.resolver import (
     resolve_site_plan,
     split_site_branches,
 )
-from torchlens.intervention.selectors import GradSelector, classify_selector_universe
+from torchlens.intervention.selectors import (
+    GradSelector,
+    classify_selector_universe,
+    grad_fn_label,
+)
 from torchlens.intervention.types import TargetSpec
 
 
@@ -140,7 +144,7 @@ def test_grad_unmatched_inner_refuses_like_the_activation_door() -> None:
         (lambda: tl.grad(tl.grad("x") | "y"), "grad_selector_nested"),
         (lambda: tl.grad(tl.grad_fn("ReluBackward0")), "grad_selector_inner_not_forward"),
         (lambda: tl.grad(tl.grad_output()), "grad_selector_inner_not_forward"),
-        (lambda: tl.grad(tl.grad_fn_label("x")), "grad_selector_inner_not_forward"),
+        (lambda: tl.grad(grad_fn_label("x")), "grad_selector_inner_not_forward"),
         (lambda: tl.grad(tl.without_op()), "grad_selector_inner_not_forward"),
         (lambda: tl.grad(tl.in_backward_pass(2)), "grad_selector_inner_not_forward"),
         (lambda: tl.grad(tl.head(0)), "grad_facet_unsupported"),
@@ -323,10 +327,10 @@ def test_bare_label_never_resolves_in_the_backward_universe() -> None:
     table = trace.resolve_sites(tl.label(first_relu))
     assert [site.label for site in table] == [trace[first_relu].label]
 
-    grad_fns = trace.find_sites(tl.grad_fn(label="relu"))
+    grad_fns = trace.find_sites(tl.grad_fn(label="relu"), max_fanout=100)
     assert len(grad_fns) >= 1
     assert all(type(site).__name__ == "GradFn" for site in grad_fns)
-    pass_one = trace.find_sites(tl.in_backward_pass(1))
+    pass_one = trace.find_sites(tl.in_backward_pass(1), max_fanout=100)
     assert len(pass_one) >= 1
     assert all(type(site).__name__ == "GradFn" for site in pass_one)
     assert len(trace.find_sites(tl.in_backward_pass(2))) == 0
