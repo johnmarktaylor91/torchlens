@@ -5768,6 +5768,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/mlx/_capture_records.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/backends/mlx/_grad_oracle.py",
@@ -5795,6 +5803,14 @@
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/backends/mlx/_grad_oracle.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/mlx/_replay_args.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -5889,14 +5905,6 @@
  },
  {
   "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/backends/mlx/validation.py",
-  "has_default": false,
-  "sites": 4,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "output",
   "file": "torchlens/backends/mlx/validation.py",
   "has_default": false,
@@ -5904,12 +5912,28 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/backends/mlx/validation.py",
-  "has_default": true,
+  "ambiguous": false,
+  "field": "intervention_replaced",
+  "file": "torchlens/backends/paddle/_capture_helpers.py",
+  "has_default": false,
   "sites": 1,
-  "via_getattr": true
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/paddle/_capture_helpers.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "seq",
+  "file": "torchlens/backends/paddle/_capture_helpers.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -5926,14 +5950,6 @@
   "has_default": true,
   "sites": 2,
   "via_getattr": true
- },
- {
-  "ambiguous": false,
-  "field": "intervention_replaced",
-  "file": "torchlens/backends/paddle/backend.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -5956,7 +5972,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/paddle/backend.py",
   "has_default": false,
-  "sites": 15,
+  "sites": 14,
   "via_getattr": false
  },
  {
@@ -6005,14 +6021,6 @@
   "file": "torchlens/backends/paddle/backend.py",
   "has_default": false,
   "sites": 4,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "seq",
-  "file": "torchlens/backends/paddle/backend.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {

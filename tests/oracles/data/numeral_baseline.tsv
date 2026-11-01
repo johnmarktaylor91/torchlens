@@ -5467,7 +5467,8 @@ package-docstrings	torchlens/attribution/onebackward/_table.py	10
 package-docstrings	torchlens/attribution/onebackward/_table.py	11
 package-docstrings	torchlens/backends/_backend_protocol.py	1.1
 package-docstrings	torchlens/backends/_backend_protocol.py	37
-package-docstrings	torchlens/backends/_constants.py	17
+package-docstrings	torchlens/backends/_default_specs_tf.py	2.16
+package-docstrings	torchlens/backends/_default_specs_tf.py	26
 package-docstrings	torchlens/backends/_finalize.py	16.5
 package-docstrings	torchlens/backends/_finalize.py	17
 package-docstrings	torchlens/backends/_finalize.py	63
@@ -5482,8 +5483,6 @@ package-docstrings	torchlens/backends/_validation_shared.py	32
 package-docstrings	torchlens/backends/_validation_shared.py	4.5
 package-docstrings	torchlens/backends/_validation_shared.py	46
 package-docstrings	torchlens/backends/_validation_shared.py	64
-package-docstrings	torchlens/backends/default_specs.py	2.16
-package-docstrings	torchlens/backends/default_specs.py	26
 package-docstrings	torchlens/backends/default_specs.py	27
 package-docstrings	torchlens/backends/default_specs.py	350
 package-docstrings	torchlens/backends/jax/_site_dialect.py	63
@@ -5918,7 +5917,6 @@ package-docstrings	torchlens/conformance/_protocol_cases.py	4.2
 package-docstrings	torchlens/conformance/_refusal_cases.py	1.3
 package-docstrings	torchlens/conformance/_refusal_cases.py	4.2
 package-docstrings	torchlens/conformance/_rosters/mlx.py	4.4
-package-docstrings	torchlens/conformance/_rosters/tinygrad.py	11
 package-docstrings	torchlens/conformance/_rosters/tinygrad.py	4.4
 package-docstrings	torchlens/conformance/_rosters/torch.py	18_
 package-docstrings	torchlens/conformance/_scorecard.py	256
