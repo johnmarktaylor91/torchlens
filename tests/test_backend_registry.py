@@ -1161,7 +1161,7 @@ def test_backend_none_ambiguity_is_deterministic() -> None:
     [
         ("backward_capture", "backward_capture_unsupported"),
         ("fastlog", "fastlog_unsupported"),
-        ("interventions", "interventions_unsupported"),
+        ("can_intervene", "interventions_unsupported"),
         ("rng_replay", "rng_replay_unsupported"),
         ("has_streaming", "streaming_unsupported"),
         ("structure_only_capture", "structure_only_capture_unsupported"),

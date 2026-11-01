@@ -1164,7 +1164,7 @@ def test_jax_records_closed_over_array_params_as_constants() -> None:
         return x @ hidden
 
     trace = tl.trace(cast(Any, uses_hidden), ({}, jnp.ones((2, 3))), backend="jax")
-    constants = [op for op in trace.layer_list if op.func_name == "constant"]
+    constants = [op for op in trace._layer_list if op.func_name == "constant"]
     assert [tuple(op.out.shape) for op in constants] == [(3, 2)]
     assert trace.validate_forward_pass([]) is True
 

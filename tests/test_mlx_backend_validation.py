@@ -417,7 +417,7 @@ def test_mlx_validation_failure_names_op_and_reason() -> None:
     from torchlens.backends._backend_protocol import VALIDATION_REASONS
 
     trace = _healthy_trace()
-    victim = next(op for op in trace.layer_list if op.out is not None and op.has_params)
+    victim = next(op for op in trace._layer_list if op.out is not None and op.has_params)
     with pytest.warns(UserWarning):
         victim.out = victim.out + 1.0
     status = MLXBackend().validate_trace(trace)

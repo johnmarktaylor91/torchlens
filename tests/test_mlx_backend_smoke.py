@@ -61,14 +61,14 @@ def test_mlx_unwrapped_output_marks_capture_unverified() -> None:
 
     with pytest.warns(UserWarning, match="not produced by a wrapped operation"):
         trace = tl.trace(lambda v: mx.linalg.norm(v), mx.array([1.0, 2.0]), backend="mlx")
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "unwrapped_op_in_capture"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "unwrapped_op_in_capture"
     assert not list(trace.output_ops)
 
     wrapped = tl.trace(lambda v: v + 1.0, mx.array([1.0, 2.0]), backend="mlx")
     # A clean capture leaves the field unset (the missing-attribute guard raises).
-    assert getattr(wrapped, "capture_verified", True) is True
-    assert getattr(wrapped, "capture_verification_reason", None) is None
+    assert getattr(wrapped, "_provenance_verified", True) is True
+    assert getattr(wrapped, "_provenance_verification_reason", None) is None
     assert len(list(wrapped.output_ops)) == 1
 
 
@@ -153,5 +153,5 @@ def test_realize_once_count(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mx, "eval", counting_eval)
     trace = tl.trace(model, x, backend="mlx")
     assert len(calls) == 1, f"expected one evaluation, saw {len(calls)}"
-    assert calls[0] >= trace.num_ops
-    assert all(op.out is not None for op in trace.layer_list)
+    assert calls[0] >= trace._num_ops
+    assert all(op.out is not None for op in trace._layer_list)

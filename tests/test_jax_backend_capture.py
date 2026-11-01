@@ -1824,11 +1824,11 @@ def test_jax_trace_records_hidden_consts_as_constant_ops() -> None:
         return x @ hidden
 
     trace = _trace_jax(uses_hidden, ({}, jnp.ones((2, 3))))
-    constants = [op for op in trace.layer_list if op.func_name == "constant"]
+    constants = [op for op in trace._layer_list if op.func_name == "constant"]
     assert len(constants) == 1
     assert constants[0].out is not None
     assert tuple(constants[0].parents or ()) == ()
-    dot = next(op for op in trace.layer_list if op.func_name == "dot_general")
+    dot = next(op for op in trace._layer_list if op.func_name == "dot_general")
     assert constants[0].layer_label in dot.parents or constants[0].label in dot.parents
     assert trace.validate_forward_pass([]) is True
 

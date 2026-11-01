@@ -41,7 +41,7 @@ def _trace() -> Any:
 def _first_op(trace: Any, layer_type: str) -> Any:
     """The first op of ``layer_type`` in ``trace``."""
 
-    return next(op for op in trace.layer_list if op.layer_type == layer_type)
+    return next(op for op in trace._layer_list if op.type == layer_type)
 
 
 def test_protocol_object_satisfies_the_contract() -> None:
@@ -183,7 +183,7 @@ def test_constant_kinds_are_annotated() -> None:
 
     assert "closure" in kinds.values()
     assert "literal" in kinds.values()
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         kind = (op.annotations or {}).get(CONSTANT_KIND_ANNOTATION)
         if kind is not None:
             assert op.parents == ()

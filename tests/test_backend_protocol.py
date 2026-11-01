@@ -188,7 +188,7 @@ def _make_spec(name: str, *, protocol: Any = None, maturity: str = "preview") ->
             backward_capture=False,
             has_validation_replay=False,
             fastlog=False,
-            interventions=False,
+            can_intervene=False,
             rng_replay=False,
             payload_materialization=False,
             has_streaming=False,
