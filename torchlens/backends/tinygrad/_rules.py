@@ -51,31 +51,6 @@ RNG_UOP_NAMES: frozenset[str] = frozenset({"THREEFRY"})
 PER_UOP_PAYLOAD_POLICY = "dev_python_realized_copy"
 
 
-def refusal_code(error: BaseException) -> str | None:
-    """The per-site refusal code of a backend error.
-
-    A raise site passes ``code=`` into the structured payload, so the code
-    lives in ``error.fields["code"]``; the class attribute ``error.code`` is
-    the class default. This reads the per-site code first.
-
-    Parameters
-    ----------
-    error
-        The raised error.
-
-    Returns
-    -------
-    str or None
-        The code, or ``None`` for an error without one.
-    """
-
-    fields = getattr(error, "fields", None)
-    if isinstance(fields, Mapping) and isinstance(fields.get("code"), str):
-        return str(fields["code"])
-    code = getattr(error, "code", None)
-    return str(code) if isinstance(code, str) else None
-
-
 def describe_uop(uop: Any) -> str:
     """One-line human description of a tinygrad UOp for refusal messages.
 
