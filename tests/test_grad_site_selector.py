@@ -136,7 +136,7 @@ def test_grad_unmatched_inner_refuses_like_the_activation_door() -> None:
     assert "find_sites" in str(bare.value) and "find_sites" in str(grad.value)
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_grad_construction_refusals[nested]")
 @pytest.mark.parametrize(
     ("build", "code"),
     [
@@ -154,6 +154,22 @@ def test_grad_unmatched_inner_refuses_like_the_activation_door() -> None:
         (lambda: tl.grad(3), "grad_selector_inner_invalid"),
         (lambda: tl.grad(tl.label("a").__selection__()), "grad_selection_unsupported"),
         (lambda: tl.grad("a").__selection__(), "grad_selection_unsupported"),
+    ],
+    ids=[
+        "nested",
+        "nested_in_union",
+        "grad_fn",
+        "grad_output",
+        "grad_fn_label",
+        "without_op",
+        "pass_qualifier",
+        "head",
+        "facet",
+        "list",
+        "mapping",
+        "int",
+        "selection",
+        "lift",
     ],
 )
 def test_grad_construction_refusals(build: Any, code: str) -> None:
@@ -214,7 +230,7 @@ def test_find_sites_signal_column() -> None:
     assert len(grad_frame) == len(act_frame) == 2
 
 
-@pytest.mark.smoke
+@pytest.mark.smoke_cells("test_cross_universe_composition_refusals[grad_and_activation]")
 @pytest.mark.parametrize(
     ("build", "code"),
     [
@@ -230,6 +246,17 @@ def test_find_sites_signal_column() -> None:
         ),
         (lambda: (tl.grad("a") | "a") & tl.in_backward_pass(2), "selector_cross_universe_and"),
         (lambda: ~(tl.grad("a") | "a"), "selector_cross_universe_not"),
+    ],
+    ids=[
+        "string_and_pass",
+        "func_and_pass",
+        "grad_and_activation",
+        "grad_and_label",
+        "string_and_node",
+        "label_and_grad_fn",
+        "grad_and_grad_fn",
+        "mixed_and_pass",
+        "invert_mixed",
     ],
 )
 def test_cross_universe_composition_refusals(build: Any, code: str) -> None:
