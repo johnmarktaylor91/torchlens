@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import PayloadUnavailableError
 
 DOT_AVAILABLE = shutil.which("dot") is not None
 needs_dot = pytest.mark.skipif(not DOT_AVAILABLE, reason="Graphviz dot binary not installed")
@@ -276,3 +277,19 @@ def test_cluster_mode_draws_the_gpt2_split_box_with_sibling_ordering(tmp_path: P
     assert declared, "the cluster-mode DOT should declare the split tuple's container cluster"
     assert drawn == declared
     assert "tl:sibling-order" in source
+
+
+@pytest.mark.heavy
+def test_trace_output_on_an_opaque_cache_names_the_real_cause() -> None:
+    """With container structure captured, the refusal names the opaque member, not the option."""
+
+    trace = tl.trace(_tiny_gpt2(), torch.randint(0, 50, (1, 5)), capture=STRUCTURE)
+
+    with pytest.raises(PayloadUnavailableError) as excinfo:
+        trace.output
+
+    message = str(excinfo.value)
+    assert excinfo.value.fields["code"] == "container_not_reconstructable"
+    assert "opaque" in message
+    assert "capture_container_structure=True" not in message
+    assert "use_cache=False" in message
