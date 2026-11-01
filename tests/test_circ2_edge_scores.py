@@ -33,7 +33,7 @@ from support.eap_fixture import CLEAN, CORRUPT, Fixture, fixture_metric
 import torchlens as tl
 import torchlens.mechinterp
 
-pytestmark = pytest.mark.heavy
+# ``heavy`` is applied per test: one test below is ``slow`` (a tier never combined with heavy).
 
 #: Closed-form values from the pinned fixture script (``eapig-fixture-values.json``).
 METRIC_CLEAN = 2.2684758023857734
@@ -111,6 +111,7 @@ def _fixture_scores(**kwargs) -> dict[str, float]:
     return out
 
 
+@pytest.mark.heavy
 def test_fixture_eap_equals_the_one_point_closed_form() -> None:
     """EAP (gradient at the clean input) matches ``eap_one_point_clean`` within 1e-12."""
 
@@ -120,6 +121,7 @@ def test_fixture_eap_equals_the_one_point_closed_form() -> None:
 
 
 @pytest.mark.parametrize("steps", sorted(LEFT_RIEMANN))
+@pytest.mark.heavy
 def test_fixture_eap_ig_equals_the_left_riemann_sum(steps: int) -> None:
     """EAP-IG at ``m`` points equals the closed-form left Riemann sum within 1e-12."""
 
@@ -157,6 +159,7 @@ def _logit_difference(logits: torch.Tensor) -> torch.Tensor:
     return logits[:, -1, 1] - logits[:, -1, 2]
 
 
+@pytest.mark.heavy
 def test_tiny_gpt2_matches_the_independent_reference(tmp_path) -> None:
     """EAP and EAP-IG (m = 1, 5) equal the plain-PyTorch treeified reference per edge.
 
@@ -189,6 +192,7 @@ def test_tiny_gpt2_matches_the_independent_reference(tmp_path) -> None:
         assert all(got[e] == 0.0 for e in got if e.startswith("b")), "bias edges score zero"
 
 
+@pytest.mark.heavy
 def test_edge_table_is_scalar_saveable_and_documents_its_reduction(tmp_path) -> None:
     """EDGE rows: address ``(edge name,)``, provenance sample count, scalar save and load."""
 
@@ -223,6 +227,7 @@ def test_edge_table_is_scalar_saveable_and_documents_its_reduction(tmp_path) -> 
         ({"corrupted_input": torch.tensor([[1, 1]])}, "mi_edge_scores_inputs_mismatched"),
     ],
 )
+@pytest.mark.heavy
 def test_bad_settings_refuse_typed(kwargs, code) -> None:
     """Unknown method, steps with EAP, bad steps or reduction, a non-scalar metric, shapes."""
 
@@ -232,6 +237,7 @@ def test_bad_settings_refuse_typed(kwargs, code) -> None:
     assert caught.value.fields["code"] == code
 
 
+@pytest.mark.heavy
 def test_shared_norm_and_unshiftable_input_refuse_typed() -> None:
     """A norm feeding two receiver modules, and an embedding write that is no module output."""
 
