@@ -277,7 +277,13 @@ def test_push_replay_hooks_refuse_a_gradient_edit() -> None:
     """SPEC 3.6: a gradient edit passed as push replay hooks refuses; nothing changes."""
 
     model = _BranchMLP()
-    trace = _capture(model, _X)
+    trace = tl.trace(
+        model,
+        _X,
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, save_grads=True, intervention_ready=True
+        ),
+    )
     relu = _label(trace, "relu")
     out_before = trace[relu].out.clone()
     audit_before = list(trace.intervention_audit)
