@@ -8,7 +8,7 @@ from types import MappingProxyType
 
 import torch
 
-from torchlens._utils.tensor_utils import iter_tensors
+from torchlens._utils.tensor_leaves import iter_tensors
 
 _Pair = namedtuple("_Pair", ["left", "right"])
 

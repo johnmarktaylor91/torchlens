@@ -19,7 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._utils.tensor_utils import iter_tensors
+from torchlens._utils.tensor_leaves import iter_tensors
 from torchlens.backends.torch import param_mutation, wrappers
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
