@@ -244,10 +244,11 @@ def test_torch_reference_passes_every_protocol_cell(tmp_path: Path) -> None:
         if flag != "intermediate_derived_grads"
     ), card.capabilities
     assert [item.id for item in card.graduation] == ["G1", "G2", "G3", "G4", "G5", "G6"]
-    # G1 and G2 read the pinned gaps; they flip with the gaps.
-    assert not card.graduation[0].met and "c1_refusal_intermediate_derived_grads" in (
-        card.graduation[0].detail
-    )
+    # G1 and G2 read the pinned gaps; they flip with the gaps. G1 names the first red cell
+    # in suite order (a pinned one) and the flag the refusal pin leaves untested.
+    g1 = card.graduation[0]
+    assert not g1.met and any(gap in g1.detail for gap in TORCH_KNOWN_GAPS), g1
+    assert "capabilities untested: ['intermediate_derived_grads']" in g1.detail, g1
     assert not card.graduation[1].met and "c2_validation_after_load" in card.graduation[1].detail
     assert card.counts["denominator"] == len(card.cells)
     assert scorecard_from_json(card.to_json()) == card
