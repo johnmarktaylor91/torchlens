@@ -124,7 +124,7 @@ There are no gradient-only helpers. The ordinary edits apply to whichever tensor
 
 | Edit | On `tl.grad(site)` |
 | --- | --- |
-| `tl.scale(f)`, `tl.zero_ablate()`, `tl.clamp(lo, hi)`, `tl.add_noise(std, seed=)` | Scale, zero, clamp or add noise to the gradient. |
+| `tl.scale(f)`, `tl.zero_ablate()`, `tl.clamp(low=lo, high=hi)`, `tl.add_noise(std, seed=)` | Scale, zero, clamp or add noise to the gradient. |
 | `tl.clip_norm(max_norm, norm_type=2.0)` | Rescale the gradient so its norm is at most `max_norm`, per tensor. Portable. |
 | A callable `fn(grad, *, ctx)` | Receives the gradient; return a replacement or `None`. Audit-only when saved. |
 

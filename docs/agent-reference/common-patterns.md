@@ -148,7 +148,7 @@ assert r["relu_3"].grad.abs().sum() == 0
 assert r.intervention_audit[-1]["status"] == "fired"
 
 # Two steps: arm now (status "armed"), apply on the next backward.
-r = trace.do(tl.grad("relu_3"), tl.clamp(-1.0, 1.0), model=model, x=x)
+r = trace.do(tl.grad("relu_3"), tl.clamp(low=-1.0, high=1.0), model=model, x=x)
 r.intervention_audit[-1]["status"]                   # "armed"
 r.backward(r["output_1"].out.sum())                  # fires
 

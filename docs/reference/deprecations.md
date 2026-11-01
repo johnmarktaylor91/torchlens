@@ -179,7 +179,7 @@ The site, not a keyword or a gradient-only helper, says which tensor an edit app
 | --- | --- | --- |
 | `tl.zero_grad()` | `tl.zero_ablate()` on `tl.grad(site)` | removed |
 | `tl.scale_grad(f)` | `tl.scale(f)` on `tl.grad(site)` | removed |
-| `tl.clamp_grad(lo, hi)` | `tl.clamp(lo, hi)` on `tl.grad(site)` | removed |
+| `tl.clamp_grad(lo, hi)` | `tl.clamp(low=lo, high=hi)` on `tl.grad(site)` | removed |
 | `tl.add_grad_noise(std, seed=)` | `tl.add_noise(std, seed=)` on `tl.grad(site)` | removed |
 | `tl.clip_grad(max_norm)` | `tl.clip_norm(max_norm)` on `tl.grad(site)` | removed |
 | `tl.hook_grad(fn)` | `fn` on `tl.grad(site)` | removed |
