@@ -200,6 +200,14 @@ class RecordingState:
         tuple[ModuleStackFrame, ...],
         tuple[tuple[ModuleFrame, ...], tuple[tuple[str, int], ...]],
     ] = field(default_factory=dict)
+    # The model's own Parameters at this pass's prep, ``id -> (weak ref, lazy at
+    # prep)``. Predicate capture builds no ``Param`` logs, so this is the only
+    # place a Parameter write can learn it targets prepared model state (see
+    # ``param_mutation.parameter_mutation_output_for_logging``). Weak refs keep
+    # the registry from extending any Parameter's lifetime.
+    prepared_params: dict[int, tuple[weakref.ref[torch.nn.Parameter], bool]] = field(
+        default_factory=dict
+    )
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -352,6 +360,12 @@ def get_active_recording_state() -> RecordingState:
 
     if _active_recording_state is None:
         raise RuntimeError("fastlog predicate state is not active")
+    return _active_recording_state
+
+
+def active_recording_state_or_none() -> RecordingState | None:
+    """Return the active recording state, or ``None`` outside a recording pass."""
+
     return _active_recording_state
 
 
