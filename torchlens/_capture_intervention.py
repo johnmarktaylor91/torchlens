@@ -14,8 +14,9 @@ import warnings
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from .intervention.hooks import normalize_hook_plan, split_site_branches
+from .intervention.hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from .intervention.predicates import InterventionPredicate
+from .intervention.spec import Recipe, Rule, _canonical_repr
 from .intervention.types import InterventionDecision, InterventionSpec, TargetSpec
 
 if TYPE_CHECKING:
@@ -36,9 +37,7 @@ def _intervene_rule_pairs(intervene_predicate: Any) -> list[tuple[Any, Any]]:
         One pair per rule (a bare predicate is one rule).
     """
 
-    from .intervention.spec import Recipe as PublicInterventionSpec
-
-    if isinstance(intervene_predicate, PublicInterventionSpec):
+    if isinstance(intervene_predicate, Recipe):
         # C03 spec door: EVERY rule of a multi-clause spec is read -- a
         # single-selector read would silently drop all but a lone clause.
         return [(rule.target, rule.decision) for rule in intervene_predicate.rules]
@@ -130,8 +129,6 @@ def activation_only_predicate(intervene_predicate: Any) -> Any:
 
     if intervene_predicate is None:
         return None
-    from .intervention.spec import Recipe, Rule
-
     if not isinstance(intervene_predicate, Recipe):
         selector = getattr(intervene_predicate, "selector", None)
         if selector is not None and all(
@@ -200,6 +197,34 @@ def _armed_branch_count(intervene_request: Any) -> int:
     return count
 
 
+def _fired_capture_records(trace: Trace) -> tuple[list[str], int, list[Any]]:
+    """Return the labels, count and records of the capture-time intervention fires.
+
+    Parameters
+    ----------
+    trace:
+        Completed capture.
+
+    Returns
+    -------
+    tuple[list[str], int, list[Any]]
+        Labels of the ops that recorded a fire (in op order), the total fire
+        count, and every fire record.
+    """
+
+    fired_labels: list[str] = []
+    fire_count = 0
+    fired_records: list[Any] = []
+    for label in trace.op_labels:
+        op = trace.ops[label]
+        records = getattr(op, "interventions", None) or ()
+        if records:
+            fired_labels.append(label)
+            fire_count += len(records)
+            fired_records.extend(records)
+    return fired_labels, fire_count, fired_records
+
+
 def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> None:
     """Write the capture-door InterventionEvent envelope (C03 fire evidence).
 
@@ -223,25 +248,13 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         rules_payload,
         site_keys_for_labels,
     )
-    from .intervention.spec import Recipe as PublicInterventionSpec
 
-    fired_labels: list[str] = []
-    fire_count = 0
-    fired_records: list[Any] = []
-    for label in trace.op_labels:
-        op = trace.ops[label]
-        records = getattr(op, "interventions", None) or ()
-        if records:
-            fired_labels.append(label)
-            fire_count += len(records)
-            fired_records.extend(records)
+    fired_labels, fire_count, fired_records = _fired_capture_records(trace)
     zero_fire_rule_ids: tuple[str, ...] = ()
-    if isinstance(intervene_request, PublicInterventionSpec):
+    if isinstance(intervene_request, Recipe):
         rules = rules_payload(intervene_request)
         edit_names = tuple(str(rule["action"]) for rule in rules)
         selection_repr = " | ".join(str(rule["where"]) for rule in rules)
-        from .intervention.spec import _canonical_repr
-
         fired_action_reprs = {
             _canonical_repr(record.helper) for record in fired_records if record.helper is not None
         }
@@ -410,7 +423,6 @@ def intervene_selector_fired_nowhere(trace: Trace, selector: Any) -> bool:
     """
 
     from .intervention.errors import MultiMatchWarning, SiteResolutionError
-    from .intervention.hooks import gradient_inners
 
     branches = split_site_branches(selector)
     if any(universe == "node" for universe, _branch in branches):
