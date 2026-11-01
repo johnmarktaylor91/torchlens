@@ -483,6 +483,11 @@ FEATURES: tuple[Feature, ...] = (
     Feature("export", CHEAP, "Tabular export (to_pandas)", after=_after_export),
 )
 
+# wave-3 fills
+from tests.behaviour import _fill_intervention as _fill_intervention  # noqa: E402
+
+FEATURES = _fill_intervention.extend_features(FEATURES)
+
 FEATURES_BY_NAME: dict[str, Feature] = {feature.name: feature for feature in FEATURES}
 
 
