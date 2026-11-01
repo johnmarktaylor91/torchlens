@@ -697,7 +697,7 @@ def _validate_append_candidate(
     # module (relu_1_4_raw for relu_1_3:1 and relu_1_3:2), so a raw-label map
     # would check pass 1 against the last pass. The sequences were just shown
     # equal, so position identifies the pass.
-    for old_layer, new_layer in zip(old_log.layer_list, new_log.layer_list):
+    for old_layer, new_layer in zip(old_log.layer_list, new_log.layer_list, strict=True):
         if _is_append_buffer_side_effect_layer(
             old_layer, old_by_label
         ) or _is_append_buffer_side_effect_layer(new_layer, new_by_label):

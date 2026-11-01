@@ -3767,7 +3767,7 @@ class Trace(
             for key in (layer._layer_label_raw, layer.layer_label)
         }
         # By position, not raw label: a reused module repeats its raw label across passes.
-        for layer, new_layer in zip(self.layer_list, trace.layer_list):
+        for layer, new_layer in zip(self.layer_list, trace.layer_list, strict=True):
             if not (
                 getattr(layer, "is_buffer", False)
                 or self._is_append_buffer_side_effect_layer(layer, old_by_label)
