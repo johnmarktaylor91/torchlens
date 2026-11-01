@@ -145,7 +145,8 @@ def _warn_stateful_live_run_once(trace: Any, model: nn.Module) -> None:
         "mutate them. Use eval() for immutable feature extraction or clone the model explicitly "
         "when isolated training-mode state is required.",
         UserWarning,
-        stacklevel=3,
+        # 4: this helper, run(), the thin Trace.run shell, then the caller's site.
+        stacklevel=4,
     )
     trace.__dict__["_stateful_run_warning_emitted"] = True
 
@@ -206,7 +207,8 @@ def _warn_pending_value_edits_on_new_input_run(
         "hooks (do(..., engine='rerun', model=..., inputs=...)) or capture the new "
         "input with intervene=.",
         PendingValueEditsWarning,
-        stacklevel=3,
+        # 4: this helper, run(), the thin Trace.run shell, then the caller's site.
+        stacklevel=4,
     )
 
 
