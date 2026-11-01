@@ -631,7 +631,7 @@ def settle_armed_gradient_edits(trace: Any, *, pass_index: int) -> None:
         record
         for record in getattr(spec, "records", ())
         if getattr(record, "signal", None) == "backward"
-        and getattr(record, "backward_pass_index", None) == pass_index
+        and getattr(record, "backward_pass_number", None) == pass_index
     ]
     for hook_specs in groups.values():
         _settle_arming_group(trace, hook_specs, pass_records, pass_index=pass_index)

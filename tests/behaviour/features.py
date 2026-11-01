@@ -123,7 +123,7 @@ def _after_intervene(cell: Cell) -> None:
     trace = cell.require_trace()
     target = cell.facts.common_float_func
     want = {op.label for op in trace.ops if op.func_name == target}
-    got = {op.label for op in trace.ops if op.intervention_replaced}
+    got = {op.label for op in trace.ops if op.is_edited}
     cell.expect(
         got == want,
         f"ops recording a replaced value {sorted(got)[:8]} != selected {sorted(want)[:8]}",

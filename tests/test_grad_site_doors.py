@@ -434,7 +434,7 @@ def test_loss_runs_the_backward_inside_do() -> None:  # A21
     source = _trace(model, backward_ready=True, save_grads="all")
     relu = _relu_label(source)
     result = source.do(tl.grad(_RELU), tl.scale(0), model=model, inputs=_X, loss=_loss)
-    assert result.num_backward_passes == 1
+    assert result._num_backward_passes == 1
     assert _events(result, door="backward", status="fired")
     assert torch.count_nonzero(result[relu].grad) == 0
     assert result.intervention_audit[-1]["status"] == "fired"

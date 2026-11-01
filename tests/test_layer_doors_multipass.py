@@ -107,7 +107,7 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
     want = _oracle(model, x, shared_edit=_zero if door == "set" else _double)
     assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
     for pass_index in (1, 2):
-        assert fork[f"{shared}:{pass_index}"].interventions
+        assert fork[f"{shared}:{pass_index}"].edits
 
 
 def test_layer_door_on_single_pass_layer_edits_only_that_layer(captured) -> None:
@@ -120,4 +120,4 @@ def test_layer_door_on_single_pass_layer_edits_only_that_layer(captured) -> None
     assert torch.allclose(
         fork[fork.output_layers[0]].out, _oracle(model, x, fresh_edit=_double), atol=1e-6
     )
-    assert not any(fork[f"{shared}:{pass_index}"].interventions for pass_index in (1, 2))
+    assert not any(fork[f"{shared}:{pass_index}"].edits for pass_index in (1, 2))

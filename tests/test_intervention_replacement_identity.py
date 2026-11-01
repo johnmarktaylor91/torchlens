@@ -174,8 +174,8 @@ def test_identity_return_site_accepts_replacement() -> None:
         on_zero_fire="error",
     )
     op = log["to_1_1"]
-    assert op.intervention_replaced is True
-    assert op.interventions[-1].replaced is True
+    assert op.is_edited is True
+    assert op.edits[-1].replaced is True
     assert torch.allclose(op.out, original * 0.5)
     assert torch.allclose(log.output_ops[0].out, original)
     assert torch.equal(value, original)

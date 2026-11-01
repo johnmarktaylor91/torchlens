@@ -91,10 +91,10 @@ def _shared_child_trace() -> tuple[Any, str, str, str]:
 
     torch.manual_seed(0)
     trace = tl.trace(_TwoParents(), torch.randn(2, 4))
-    layers = list(trace.layer_logs.values())
+    layers = list(trace._layer_logs.values())
     (linear,) = [layer.layer_label for layer in layers if layer.layer_type == "linear"]
     first_relu, second_relu = [layer.layer_label for layer in layers if layer.layer_type == "relu"]
-    assert trace.layer_logs[linear].num_passes == 2
+    assert trace._layer_logs[linear].num_passes == 2
     return trace, linear, first_relu, second_relu
 
 

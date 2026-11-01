@@ -86,12 +86,12 @@ def test_capture_phase_durations_are_bounded_by_an_outside_clock(timed_trace) ->
 def test_module_and_call_durations_are_bounded(timed_trace) -> None:
     trace, wall = timed_trace
     root, sleeper, fc = (trace.module_calls[label] for label in ("self:1", "s:1", "s.fc:1"))
-    assert SLEEP <= float(sleeper.cost.forward_duration) <= float(root.forward_duration) <= wall
+    assert SLEEP <= float(sleeper.forward_duration) <= float(root.forward_duration) <= wall
     # fc runs after the sleep, inside Sleeper's call.
-    assert 0 < float(fc.forward_duration) <= float(sleeper.cost.forward_duration) - SLEEP
+    assert 0 < float(fc.forward_duration) <= float(sleeper.forward_duration) - SLEEP
     for call in (root, sleeper, fc):
         assert 0 < float(call.func_calls_duration) <= float(call.forward_duration)
-    assert float(sleeper.cost.func_calls_duration) <= float(sleeper.cost.forward_duration) - SLEEP
+    assert float(sleeper.cost.func_calls_duration) <= float(sleeper.forward_duration) - SLEEP
     for address, call in (("self", root), ("s", sleeper), ("s.fc", fc)):
         module = trace.modules[address]
         assert float(module.forward_duration) == pytest.approx(float(call.forward_duration))
