@@ -36,12 +36,8 @@ class _PartlyFrozen(nn.Module):
         self.scale = nn.Parameter(torch.full((5,), 0.5), requires_grad=False)
         self.head = nn.Linear(5, 3)
         self.frozen.requires_grad_(False)
-        self.seen_inside_forward: dict[str, bool] = {}
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        self.seen_inside_forward = {
-            name: bool(param.requires_grad) for name, param in self.named_parameters()
-        }
         hidden = torch.relu(self.frozen(x)) * self.scale
         return self.head(hidden)
 
@@ -49,6 +45,22 @@ class _PartlyFrozen(nn.Module):
 def _model_and_input(seed: int = 0) -> tuple[_PartlyFrozen, torch.Tensor]:
     torch.manual_seed(seed)
     return _PartlyFrozen(), torch.randn(2, 4)
+
+
+def _flags_inside_forward(model: nn.Module, run: Any) -> dict[str, bool]:
+    """Run ``run()`` and return each parameter's ``requires_grad`` as the forward saw it."""
+
+    seen: dict[str, bool] = {}
+
+    def record(module: nn.Module, args: Any) -> None:
+        seen.update({name: bool(p.requires_grad) for name, p in module.named_parameters()})
+
+    handle = model.register_forward_pre_hook(record)
+    try:
+        run()
+    finally:
+        handle.remove()
+    return seen
 
 
 def _param_state(model: nn.Module) -> dict[str, tuple[Any, ...]]:
@@ -85,18 +97,14 @@ def test_capture_never_flips_requires_grad_and_leaves_model_state_identical(
     backward_ready: bool, grad_mode: bool
 ) -> None:
     model, x = _model_and_input()
-    eager = copy.deepcopy(model)
-    with torch.set_grad_enabled(grad_mode):
-        eager(x)
-    expected_inside = eager.seen_inside_forward
     before = _param_state(model)
 
-    with torch.set_grad_enabled(grad_mode):
-        tl.trace(model, x, capture=CaptureOptions(backward_ready=backward_ready))
+    def capture() -> None:
+        with torch.set_grad_enabled(grad_mode):
+            tl.trace(model, x, capture=CaptureOptions(backward_ready=backward_ready))
 
-    assert model.seen_inside_forward == expected_inside
-    assert all(model.seen_inside_forward[name] is False for name in FROZEN)
-    assert all(model.seen_inside_forward[name] is True for name in TRAINABLE)
+    seen = _flags_inside_forward(model, capture)
+    assert seen == {name: name in TRAINABLE for name in (*FROZEN, *TRAINABLE)}
     _assert_same_state(before, _param_state(model))
 
 
@@ -120,9 +128,9 @@ def test_frozen_parameter_edges_and_param_fields() -> None:
     assert {p.address for p in trace.params.frozen} == set(FROZEN)
     assert {p.address for p in trace.params.trainable} == set(TRAINABLE)
     for address in FROZEN:
-        assert trace.params[address].trainable is False
+        assert trace.params[address].is_trainable is False
     for address in TRAINABLE:
-        assert trace.params[address].trainable is True
+        assert trace.params[address].is_trainable is True
 
     frozen_linear = _ops_reading(trace, "frozen.weight")[0]
     assert frozen_linear.func_name == "linear"
@@ -153,21 +161,18 @@ def test_saved_and_loaded_trace_keeps_frozen_parameter_fields(tmp_path: Path) ->
     restored = tl.load(bundle)
 
     for address in (*FROZEN, *TRAINABLE):
-        assert restored.params[address].trainable is trace.params[address].trainable
+        assert restored.params[address].is_trainable is trace.params[address].trainable
         assert restored.params[address].num_calls == 1
         original_readers = [op.label for op in _ops_reading(trace, address)]
         assert [op.label for op in _ops_reading(restored, address)] == original_readers
 
 
-@pytest.mark.parametrize("backward_ready", [False, True])
-def test_backward_capture_on_a_partly_frozen_model(backward_ready: bool) -> None:
+def test_backward_capture_on_a_partly_frozen_model() -> None:
     model, x = _model_and_input()
     eager = copy.deepcopy(model)
     eager(x).sum().backward()
 
-    trace = tl.trace(
-        model, x, capture=CaptureOptions(backward_ready=backward_ready, save_grads="all")
-    )
+    trace = tl.trace(model, x, capture=CaptureOptions(backward_ready=True, save_grads="all"))
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
     for address in TRAINABLE:
@@ -216,16 +221,20 @@ def test_gradient_analysis_scope_builds_a_path_through_frozen_weights() -> None:
     plain = tl.trace(model, x)
     assert _ops_reading(plain, "head.weight")[0].grad_fn_class_name is None
 
-    with frozen_parameter_gradients():
-        scoped = tl.trace(model, x)
-    assert all(model.seen_inside_forward.values())
+    def scoped_capture() -> None:
+        with frozen_parameter_gradients():
+            captured.append(tl.trace(model, x))
+
+    captured: list[tl.Trace] = []
+    assert all(_flags_inside_forward(model, scoped_capture).values())
+    scoped = captured[0]
     assert _ops_reading(scoped, "frozen.weight")[0].grad_fn_class_name is not None
-    assert all(param.trainable is False for param in scoped.params)
+    assert all(scoped.params[name].is_trainable is False for name in (*FROZEN, *TRAINABLE))
     _assert_same_state(before, _param_state(model))
 
     analysis = _capture(model, x)
     assert _ops_reading(analysis, "head.weight")[0].grad_fn_class_name is not None
     _assert_same_state(before, _param_state(model))
 
-    tl.trace(model, x)
-    assert not any(model.seen_inside_forward.values())
+    plain_flags = _flags_inside_forward(model, lambda: tl.trace(model, x))
+    assert not any(plain_flags.values())

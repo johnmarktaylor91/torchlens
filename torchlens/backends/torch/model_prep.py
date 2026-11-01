@@ -641,7 +641,7 @@ def frozen_parameter_gradients() -> Iterator[None]:
     exactly as eager. An analysis that backpropagates through the graph of its
     OWN capture (``tl.mechinterp`` edge scores) needs that graph, so inside this
     scope capture sets ``requires_grad=True`` on frozen floating leaf parameters
-    for the session (``Param.trainable`` still reports the user's flag) and
+    for the session (``Param.is_trainable`` still reports the user's flag) and
     restores the flags at session cleanup. torch may then pick different kernels
     for that forward, as it would for an eager forward with trainable weights.
 
@@ -684,7 +684,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     eager forward (torch picks kernels from it, e.g. the attention paths).
     Parameter provenance does not need ``grad_fn``: a parameter read is resolved
     by identity at the op boundary from the stamped barcode. The user's flag is
-    still recorded on ``_tl.requires_grad_before_capture`` (``Param.trainable``,
+    still recorded on ``_tl.requires_grad_before_capture`` (``Param.is_trainable``,
     and ``_cleanup_model_session`` restores it if the forward itself changed it).
     The one exception is a capture inside ``frozen_parameter_gradients()``: an
     analysis that backpropagates through its own capture (edge attribution
