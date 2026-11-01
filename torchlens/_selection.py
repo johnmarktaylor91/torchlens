@@ -1106,11 +1106,7 @@ def _resolve_combinator(node: _Combinator, trace: Any, kind: str) -> Selection:
 def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> Selection:
     """Resolve a lifted selector to whole-site masks over its matched sites."""
 
-    from .intervention.resolver import (
-        _normalize_query,
-        _resolve_branch_sites,
-        split_site_branches,
-    )
+    from .intervention.resolver import _normalize_query, _resolve_branch_sites, split_site_branches
 
     matched: list[Any] = []
     for branch in split_site_branches(node.selector):
