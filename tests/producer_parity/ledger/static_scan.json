@@ -6857,6 +6857,54 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/torch/_predicate_forward.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/backends/torch/_predicate_forward.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/backends/torch/_predicate_forward.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/backends/torch/_predicate_forward.py",
+  "has_default": false,
+  "sites": 11,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "policy",
+  "file": "torchlens/backends/torch/_predicate_forward.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "seq",
+  "file": "torchlens/backends/torch/_predicate_forward.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/backends/torch/_protocol_redispatch.py",
   "has_default": false,
@@ -7112,19 +7160,11 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/backends/torch/model_prep.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/backends/torch/model_prep.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -7136,27 +7176,11 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "output",
-  "file": "torchlens/backends/torch/model_prep.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "pass_index",
   "file": "torchlens/backends/torch/model_prep.py",
   "has_default": false,
-  "sites": 17,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "policy",
-  "file": "torchlens/backends/torch/model_prep.py",
-  "has_default": false,
-  "sites": 1,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -7180,7 +7204,7 @@
   "field": "seq",
   "file": "torchlens/backends/torch/model_prep.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 2,
   "via_getattr": false
  },
  {

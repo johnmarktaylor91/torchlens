@@ -9,7 +9,8 @@
   "torchlens/backends/tinygrad/backend.py": 1,
   "torchlens/backends/torch/_ops_retention.py": 1,
   "torchlens/backends/torch/_outputs.py": 1,
-  "torchlens/backends/torch/model_prep.py": 3
+  "torchlens/backends/torch/_predicate_forward.py": 1,
+  "torchlens/backends/torch/model_prep.py": 2
  },
  "op_events_inplace_writes": {
   "torchlens/recording/types.py": 1

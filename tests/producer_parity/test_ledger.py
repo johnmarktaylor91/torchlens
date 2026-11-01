@@ -65,7 +65,8 @@ _LEDGER_DIR = Path(__file__).resolve().parent / "ledger"
 EXPECTED_APPEND_AMENDMENT_CALLER_FILES = {
     "torchlens/backends/torch/_ops_retention.py",  # lookback_retention
     "torchlens/_capture/run_entry.py",  # graph_edge_insertion (register_tensor_connection)
-    "torchlens/backends/torch/model_prep.py",  # raw hook / module exit / boundary retention
+    "torchlens/backends/torch/model_prep.py",  # raw hook / module exit
+    "torchlens/backends/torch/_predicate_forward.py",  # boundary retention (predicate forward)
     "torchlens/backends/torch/_outputs.py",  # output_parent_promotion
     "torchlens/_postprocess/graph_traversal.py",  # late_buffer_output_parent (pre-0)
     # preview_output_parent_mark for tf/mlx/paddle was hoisted into the

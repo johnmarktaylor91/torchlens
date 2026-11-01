@@ -98,7 +98,7 @@ _SITE_FAMILIES: dict[tuple[str, str], str] = {
     ("run_entry.py", "_register_live_tensor_connection"): "graph_edge_insertion",
     ("model_prep.py", "_record_module_exit_metadata"): "module_exit_intervention",
     (
-        "model_prep.py",
+        "_predicate_forward.py",
         "_record_predicate_module_boundary_outputs",
     ): "module_boundary_retention",
     ("_outputs.py", "extract_and_mark_outputs"): "output_parent_promotion",
@@ -552,6 +552,7 @@ def test_static_ast_guard_no_expansion_no_conditional_kwargs() -> None:
         "_capture/prepare/resolve.py",
         "_capture/finalize/epilogue.py",
         "backends/torch/model_prep.py",
+        "backends/torch/_predicate_forward.py",
         "backends/torch/backend.py",
         "backends/torch/_outputs.py",
         "backends/torch/_failed_session.py",
