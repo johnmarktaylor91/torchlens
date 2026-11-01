@@ -634,6 +634,7 @@ docs-md	docs/agent-reference/current-2-x-surface.md	16.
 docs-md	docs/agent-reference/current-2-x-surface.md	17
 docs-md	docs/agent-reference/current-2-x-surface.md	17,
 docs-md	docs/agent-reference/current-2-x-surface.md	18
+docs-md	docs/agent-reference/current-2-x-surface.md	1_1
 docs-md	docs/agent-reference/current-2-x-surface.md	2.0
 docs-md	docs/agent-reference/current-2-x-surface.md	2.16
 docs-md	docs/agent-reference/current-2-x-surface.md	2.3.22
@@ -4880,6 +4881,7 @@ package-docstrings	torchlens/_utils/_torch_compat.py	657
 package-docstrings	torchlens/_utils/_torch_compat.py	9.3
 package-docstrings	torchlens/_utils/_torch_compat.py	953
 package-docstrings	torchlens/_utils/_torch_compat_table.py	2.1
+package-docstrings	torchlens/_utils/_torch_symbols.py	32
 package-docstrings	torchlens/_utils/_torch_symbols.py	42
 package-docstrings	torchlens/_utils/_torch_symbols.py	45
 package-docstrings	torchlens/_utils/_torch_symbols.py	45_
@@ -4920,6 +4922,7 @@ package-docstrings	torchlens/_utils/facade.py	562
 package-docstrings	torchlens/_utils/fail_open.py	10
 package-docstrings	torchlens/_utils/hashing.py	256
 package-docstrings	torchlens/_utils/hashing.py	256.
+package-docstrings	torchlens/_utils/hashing.py	256_
 package-docstrings	torchlens/_utils/introspection.py	24
 package-docstrings	torchlens/_utils/introspection.py	3.11
 package-docstrings	torchlens/_utils/lazy_state.py	4.5
@@ -5793,7 +5796,6 @@ package-docstrings	torchlens/bundle/_bytes.py	97.
 package-docstrings	torchlens/bundle/_compare_gate.py	18
 package-docstrings	torchlens/bundle/_compare_gate.py	256
 package-docstrings	torchlens/bundle/_compare_gate.py	43
-package-docstrings	torchlens/bundle/_deltas.py	1.0.
 package-docstrings	torchlens/bundle/_deltas.py	43
 package-docstrings	torchlens/bundle/_lineage.py	12,
 package-docstrings	torchlens/bundle/_lineage.py	256
