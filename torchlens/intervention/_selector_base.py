@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
 from .._errors import ArgumentTypeError
 from . import selectors as _selectors
@@ -58,8 +58,7 @@ class BaseSelector:
 
         if not isinstance(other, BaseSelector) and hasattr(other, "__selection__"):
             return NotImplemented
-        _check_composition(self, other)
-        return CompositeSelector("and", _flatten_same_operator("and", self, other))
+        return _compose("and", self, other)
 
     def __rand__(self, other: str) -> CompositeSelector:
         """Return ``other & self`` for a bare label string on the left.
@@ -78,8 +77,7 @@ class BaseSelector:
 
         if not isinstance(other, str):
             return NotImplemented
-        _check_composition(other, self)
-        return CompositeSelector("and", _flatten_same_operator("and", cast(Any, other), self))
+        return _compose("and", other, self)
 
     def __or__(self, other: SelectorLike) -> CompositeSelector:
         """Return a selector that matches the union of two selectors.
@@ -103,8 +101,7 @@ class BaseSelector:
                 "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
                 "OR-composed followed_by selectors cannot be evaluated safely."
             )
-        _check_composition(self, other, operator="or")
-        return CompositeSelector("or", _flatten_same_operator("or", self, other))
+        return _compose("or", self, other)
 
     def __ror__(self, other: str) -> CompositeSelector:
         """Return ``other | self`` for a bare label string on the left.
@@ -128,8 +125,7 @@ class BaseSelector:
                 "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
                 "OR-composed followed_by selectors cannot be evaluated safely."
             )
-        _check_composition(other, self, operator="or")
-        return CompositeSelector("or", _flatten_same_operator("or", cast(Any, other), self))
+        return _compose("or", other, self)
 
     def __invert__(self) -> BaseSelector:
         """Return a selector that matches the complement of this selector.
@@ -190,8 +186,7 @@ class BaseSelector:
                 code="selector_subtraction_operand_invalid",
                 remedy="subtract a selector, predicate callable, or region producer",
             )
-        _check_composition(self, negated)
-        return CompositeSelector("and", _flatten_same_operator("and", self, negated))
+        return _compose("and", self, negated)
 
     def __selection__(self) -> Any:
         """Lift this selector as a Selection selector-term.
@@ -310,6 +305,13 @@ class CompositeSelector(BaseSelector):
         object.__setattr__(self, "selector_value", selectors)
         object.__setattr__(self, "operator", operator)
         object.__setattr__(self, "selectors", selectors)
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Return picklable state without the transient composition memo."""
+
+        state = dict(self.__dict__)
+        state.pop(_FACTS_KEY, None)
+        return state
 
     def to_target_spec(self) -> TargetSpec:
         """Convert the composite selector to a target spec.
@@ -610,7 +612,7 @@ def _check_composition(
     b: Any,
     *,
     operator: Literal["and", "or"] = "and",
-) -> None:
+) -> tuple[SelectorUniverse | None, bool]:
     """Validate that two selectors can be composed.
 
     ``&`` refuses operands from universes that never share a site
@@ -629,17 +631,21 @@ def _check_composition(
 
     Returns
     -------
-    None
+    tuple[SelectorUniverse | None, bool]
+        The composite's universe and whether it contains ``followed_by``.
         Raises when composition is invalid.
     """
 
     from .._ir.selector_eval import contains_followed_by, flatten_and_conjuncts
 
-    a_universe = classify_selector_universe(a)
-    b_universe = classify_selector_universe(b)
+    a_memo, b_memo = _composition_memo(a), _composition_memo(b)
+    a_universe, a_followed = a_memo or (classify_selector_universe(a), contains_followed_by(a))
+    b_universe, b_followed = b_memo or (classify_selector_universe(b), contains_followed_by(b))
     if operator == "and":
-        _selectors._and_universe(a_universe, b_universe, a, b)
-    if contains_followed_by(a) or contains_followed_by(b):
+        universe = _selectors._and_universe(a_universe, b_universe, a, b)
+    else:
+        universe = _or_universe([a_universe, b_universe])
+    if a_followed or b_followed:
         # `&` nests, so validate the FLAT conjunction: `a & fb & b` must pass
         # exactly like `a & b & fb` and the flat three-child spec.
         conjuncts = flatten_and_conjuncts((a, b))
@@ -654,3 +660,41 @@ def _check_composition(
                 "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
                 "nested or multi-followed_by compositions are unsupported."
             )
+    return universe, a_followed or b_followed
+
+
+#: Instance-dict key holding an operator-built composite's memoised
+#: ``(universe, contains_followed_by)``; never pickled (``__getstate__``).
+_FACTS_KEY = "_tl_composition_facts"
+
+
+def _composition_memo(sel: Any) -> tuple[SelectorUniverse | None, bool] | None:
+    """Return an operand's memoised composition facts, or ``None``."""
+
+    return sel.__dict__.get(_FACTS_KEY) if isinstance(sel, CompositeSelector) else None
+
+
+def _memo_safe(operand: Any) -> bool:
+    """Whether an operand's facts cannot drift after composition (no ``TargetSpec`` inside)."""
+
+    while isinstance(operand, (NotSelector, _selectors.GradSelector)):
+        operand = operand.selector if isinstance(operand, NotSelector) else operand.inner
+    if isinstance(operand, CompositeSelector):
+        return _FACTS_KEY in operand.__dict__
+    return isinstance(operand, (BaseSelector, str))
+
+
+def _compose(operator: Literal["and", "or"], left: Any, right: Any) -> CompositeSelector:
+    """Validate ``left <operator> right`` and build its flat composite.
+
+    The composite memoises the facts ``_check_composition`` derived, so the
+    next chained operator reads them instead of re-walking every accumulated
+    child (an n-step chain was quadratic). They equal a fresh flat
+    classification: the ``&`` fold and the ``|`` join combine per operand.
+    """
+
+    facts = _check_composition(left, right, operator=operator)
+    composite = CompositeSelector(operator, _flatten_same_operator(operator, left, right))
+    if _memo_safe(left) and _memo_safe(right):
+        composite.__dict__[_FACTS_KEY] = facts
+    return composite
