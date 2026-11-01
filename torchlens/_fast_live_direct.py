@@ -33,7 +33,7 @@ from torch import nn
 
 from . import _state
 from ._call_fingerprint import module_fingerprint_address
-from ._fast_live_steer import session_is_active
+from ._fast_live_steer import apply_steer_paused, session_is_active
 from ._utils._module_call_dispatch import forward_entered_through_module_call
 from .backends.torch._session_forwards import _NO_INSTANCE_FORWARD, _SessionForward
 from .backends.torch._tl import get_module_meta
@@ -140,7 +140,7 @@ def _direct_call(
         _state.note_fingerprint_token(route.token)
         output = original(*args, **kwargs)
         for address in route.steer_addresses:
-            replaced = session.steer_plan.apply(address, module, args, output)
+            replaced = apply_steer_paused(session, address, module, args, output)
             if replaced is not None:
                 output = replaced
         if route.collect_address is not None:
