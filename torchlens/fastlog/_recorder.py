@@ -30,6 +30,7 @@ from ..capture.projections import (
 )
 from ..capture.stop import StopDirective, stop_directive_for_trace
 from ..capture.trace import _extract_and_mark_outputs
+from ..intervention.hooks import site_universe
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
@@ -114,10 +115,9 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
                 stacklevel=3,
             )
     intervene_selector = getattr(state.options.intervene, "selector", None)
-    intervene_decision = getattr(state.options.intervene, "decision", None)
     if (
         isinstance(intervene_selector, BaseSelector)
-        and getattr(intervene_decision, "direction", None) == "forward"
+        and site_universe(intervene_selector) == "activation"
         and state.intervene_selector_fire_count == 0
     ):
         warnings.warn(

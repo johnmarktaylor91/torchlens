@@ -1275,14 +1275,13 @@
     "args": "keep",
     "batch_independent": "keep",
     "compatible_with_append": "keep",
-    "direction": "keep",
     "factory": "drop",
     "helper_name": "keep",
-    "kind": "keep",
     "kwargs": "keep",
     "metadata": "keep",
     "portability": "keep",
-    "selection_recipe": "blob_recursive"
+    "selection_recipe": "blob_recursive",
+    "signal": "keep"
    },
    "torchlens.intervention.types.FireRecord": {
     "backward_pass_index": "keep",
@@ -1290,7 +1289,6 @@
     "call_label": "keep",
     "container_path": "keep",
     "determinism_note": "keep",
-    "direction": "keep",
     "edge_address": "keep",
     "engine": "keep",
     "func_call_id": "keep",
@@ -1299,6 +1297,7 @@
     "helper_name": "keep",
     "replaced": "keep",
     "seed": "keep",
+    "signal": "keep",
     "site_label": "keep",
     "target_label": "keep",
     "timestamp": "keep",
@@ -4101,5 +4100,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "ad27e4069d8b1fc942412a7a2362a5aaaf1240d8e027b8c91894e4410c0aad2e"
+ "writer_contract_digest": "dc2434d7bcf9f581507ef7bee9c19ccbf56d98818e012a01608b8809b19b74ad"
 }

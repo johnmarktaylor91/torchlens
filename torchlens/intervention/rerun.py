@@ -1496,10 +1496,13 @@ def _reconcile_rerun_hook_fires(
         corresponding fire, retaining multiplicity for duplicate plans.
     """
 
-    plan_ids = [_hook_plan_identifier(entry) for entry in hook_plan]
+    # Only forward entries can fire during the rerun's forward; a gradient or
+    # node entry is armed for the result's next backward and settles there.
+    forward_plan = [entry for entry in hook_plan if entry.signal == "forward"]
+    plan_ids = [_hook_plan_identifier(entry) for entry in forward_plan]
     base_by_id = {
         plan_id: str(entry.metadata.get("plan_id_base", plan_id))
-        for entry, plan_id in zip(hook_plan, plan_ids)
+        for entry, plan_id in zip(forward_plan, plan_ids)
     }
     planned = Counter(plan_ids)
     fired: Counter[str] = Counter()
@@ -1517,7 +1520,7 @@ def _reconcile_rerun_hook_fires(
         fallback_fired.update(
             str(record.helper_name)
             for record in (getattr(op, "interventions", None) or ())
-            if getattr(record, "direction", None) == "forward"
+            if getattr(record, "signal", None) == "forward"
             and getattr(record, "helper_name", None) is not None
         )
     total_fired = sum(fired.values()) + sum(fallback_fired.values())
@@ -1741,10 +1744,7 @@ def _refuse_gradient_edit_rerun(plan_id: str, matched: int) -> None:
 def _is_gradient_edit(entry: Any) -> bool:
     """Return whether one planned hook entry edits gradients."""
 
-    helper = getattr(entry, "helper_spec", None)
-    if helper is not None and (helper.kind == "backward" or helper.direction == "backward"):
-        return True
-    return entry.metadata.get("direction") == "backward"
+    return entry.metadata.get("signal") == "backward"
 
 
 __all__ = ["run"]

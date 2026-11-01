@@ -649,7 +649,7 @@ def _param_fire_record(
         ),
         site_label=child_op.layer_label,
         timing="post",
-        direction="forward",
+        signal="forward",
         helper_name=helper_name,
         # Parameter substitution replaces no node's OUTPUT: the child's
         # output is derived by re-execution, so the node-level

@@ -163,7 +163,9 @@ class FrozenTargetSpec:
     metadata: tuple[tuple[str, Any], ...] = ()
 
 
-HelperKind: TypeAlias = Literal["forward", "backward"]
+#: The pass a record, edit or event belongs to (SPEC section 0, THE_FIELD).
+Signal: TypeAlias = Literal["forward", "backward"]
+#: ``Signal`` plus ``"both"``, used only by summaries of plans and spans.
 HelperDirection: TypeAlias = Literal["forward", "backward", "both"]
 HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
 
@@ -176,11 +178,10 @@ class Edit:
         "helper_name": FieldPolicy.KEEP,
         "args": FieldPolicy.KEEP,
         "kwargs": FieldPolicy.KEEP,
-        "kind": FieldPolicy.KEEP,
         "portability": FieldPolicy.KEEP,
         "factory": FieldPolicy.DROP,
         "metadata": FieldPolicy.KEEP,
-        "direction": FieldPolicy.KEEP,
+        "signal": FieldPolicy.KEEP,
         "batch_independent": FieldPolicy.KEEP,
         "compatible_with_append": FieldPolicy.KEEP,
         # L6 Query-Selection recipe family: persists as of tlspec v8 as
@@ -193,13 +194,15 @@ class Edit:
     helper_name: str
     args: tuple[Any, ...] = ()
     kwargs: tuple[tuple[str, Any], ...] = ()
-    kind: HelperKind = "forward"
     portability: HelperPortability = "builtin"
     factory: Callable[[], Callable[..., Any]] | None = field(
         default=None, compare=False, repr=False
     )
     metadata: tuple[tuple[str, Any], ...] = ()
-    direction: HelperDirection | None = None
+    #: ``None`` for a neutral edit (a function of one tensor, valid on an
+    #: activation or a gradient site); ``"forward"`` for an edit that reads
+    #: recorded forward state and refuses on a gradient site.
+    signal: Signal | None = None
     batch_independent: bool = False
     compatible_with_append: bool = False
     selection_recipe: Any = field(default=None, compare=False)
@@ -220,7 +223,7 @@ class Edit:
         """Render the public spelling of this edit (``tl.Edit`` is its public name).
 
         A builtin helper prints as the public constructor call that builds it
-        (``tl.scale_grad(2.0)``), which is also the identity a saved spec
+        (``tl.clip_norm(1.0)``), which is also the identity a saved spec
         rebuilds from. Every other edit prints as ``tl.Edit(...)`` with its
         identity fields; the hook factory is session-side and never printed.
 
@@ -336,7 +339,6 @@ class InterventionDecision:
     template_ref: Any | None = None
     keep_grad: bool = False
     isolate: bool = False
-    direction: HelperDirection = "forward"
     #: Provenance of the SPEC rule that produced this decision (leverage B7):
     #: the user's WHERE expression must survive into the persisted spec, so
     #: the spec threads it through the decision to the staging site. It is
@@ -446,7 +448,7 @@ class FireRecord:
         "helper": FieldPolicy.KEEP,
         "site_label": FieldPolicy.KEEP,
         "timing": FieldPolicy.KEEP,
-        "direction": FieldPolicy.KEEP,
+        "signal": FieldPolicy.KEEP,
         "helper_name": FieldPolicy.KEEP,
         "seed": FieldPolicy.KEEP,
         "determinism_note": FieldPolicy.KEEP,
@@ -469,7 +471,7 @@ class FireRecord:
     helper: Edit | None = None
     site_label: str | None = None
     timing: Literal["pre", "post"] | None = None
-    direction: Literal["forward", "backward"] | None = None
+    signal: Signal | None = None
     helper_name: str | None = None
     seed: int | None = None
     determinism_note: str | None = None

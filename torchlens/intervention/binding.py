@@ -329,8 +329,6 @@ def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
         ``(reason, remedy)`` for a refusal, or ``None`` when the rule lowers.
     """
 
-    from .types import Edit
-
     term_problem = _post_capture_term_problem(rule)
     if term_problem is not None:
         return term_problem
@@ -342,17 +340,14 @@ def _rule_plan_problem(rule: Any) -> tuple[str, str] | None:
             "use a value-replacing action (tl.scale, tl.add_noise, tl.replace_with, "
             "or a callable taking (out, *, ctx))",
         )
-    hook = decision.hook
-    edits_gradients = decision.direction in ("backward", "both") or (
-        isinstance(hook, Edit) and (hook.kind == "backward" or hook.direction == "backward")
-    )
-    if edits_gradients:
+    from .audit import rule_signal
+
+    if rule_signal(rule.target) != "forward":
         return (
             "edits gradients; the capture-free lane runs forward value "
             "replacements only, so it would edit the activation instead",
-            "capture with tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "backward_ready=True), intervene=tl.when(site, edit)) and run "
-            "trace.backward(loss)",
+            "capture with backward_ready=True, intervene=tl.when(tl.grad(site), edit), "
+            "and call trace.backward(loss)",
         )
     return None
 
@@ -395,7 +390,7 @@ class _RulePlan:
             )
         self.rule = rule
         self.helper_spec = decision.hook if isinstance(decision.hook, Edit) else None
-        self.hook_callable = normalize_hook(decision.hook, direction="forward")
+        self.hook_callable = normalize_hook(decision.hook)
         self.display_name = (
             self.helper_spec.helper_name
             if self.helper_spec is not None
@@ -485,7 +480,7 @@ class _BindSession:
             helper=plan.helper_spec,
             site_label=site.site_key,
             timing="post",
-            direction="forward",
+            signal="forward",
             helper_name=plan.display_name,
             run_ctx=self.run_ctx,
             previous_notes=previous_notes,
@@ -691,7 +686,7 @@ def _consider_op(
                 "site_key": site_key,
                 "pass_index": max(session.root_passes, 1),
             },
-            ctx=session.rule_scratch[session.rule_ids[id(rule)]],
+            state=session.rule_scratch[session.rule_ids[id(rule)]],
             run_context=session.run_ctx,
         )
         hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
@@ -917,7 +912,7 @@ def _make_boundary_hook(
                     "module_address": address,
                     "pass_index": pass_index,
                 },
-                ctx=session.rule_scratch[session.rule_ids[id(plan.rule)]],
+                state=session.rule_scratch[session.rule_ids[id(plan.rule)]],
                 run_context=session.run_ctx,
             )
             hooked = _execute_hook(plan.hook_callable, out, hook_ctx)

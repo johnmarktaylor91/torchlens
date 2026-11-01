@@ -1553,12 +1553,7 @@ _VETTED_INERT_FIRST_PARTY: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.intervention.helpers", "project_out"),
         ("torchlens.intervention.helpers", "swap_with"),
         ("torchlens.intervention.helpers", "splice_module"),
-        ("torchlens.intervention.helpers", "hook_grad"),
-        ("torchlens.intervention.helpers", "zero_grad"),
-        ("torchlens.intervention.helpers", "scale_grad"),
-        ("torchlens.intervention.helpers", "clip_grad"),
-        ("torchlens.intervention.helpers", "add_grad_noise"),
-        ("torchlens.intervention.helpers", "clamp_grad"),
+        ("torchlens.intervention.helpers", "clip_norm"),
     }
 )
 

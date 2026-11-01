@@ -348,7 +348,7 @@ def _active_forward_op_count_at_trigger() -> int | None:
 def _register_slot_gradient_prehook(
     grad_fn_handle: Any,
     output_nr: int,
-    tensor_hook: Callable[[torch.Tensor | None], None],
+    tensor_hook: Callable[[torch.Tensor | None], torch.Tensor | None],
 ) -> Any:
     """Register a tensor gradient hook as a node pre-hook on one output slot.
 
@@ -363,7 +363,9 @@ def _register_slot_gradient_prehook(
     output_nr:
         Output slot of that node the tensor version occupies.
     tensor_hook:
-        Hook taking the gradient of one tensor (``None`` when none arrived).
+        Hook taking the gradient of one tensor (``None`` when none arrived) and
+        returning the gradient to pass on (an edited tensor replaces the
+        slot's entry, so ``tl.grad(site)`` edits reach the node).
 
     Returns
     -------
@@ -371,10 +373,18 @@ def _register_slot_gradient_prehook(
         Removable handle of the registered pre-hook.
     """
 
-    def prehook(grad_outputs: tuple[torch.Tensor | None, ...]) -> None:
-        """Pass the slot's incoming gradient to the tensor hook, unchanged."""
+    def prehook(
+        grad_outputs: tuple[torch.Tensor | None, ...],
+    ) -> tuple[torch.Tensor | None, ...] | None:
+        """Pass the slot's incoming gradient to the tensor hook; splice back an edit."""
 
-        tensor_hook(grad_outputs[output_nr] if output_nr < len(grad_outputs) else None)
+        incoming = grad_outputs[output_nr] if output_nr < len(grad_outputs) else None
+        result = tensor_hook(incoming)
+        if result is None or result is incoming:
+            return None
+        updated = list(grad_outputs)
+        updated[output_nr] = result
+        return tuple(updated)
 
     return grad_fn_handle.register_prehook(prehook)
 
@@ -3425,6 +3435,7 @@ def _run_backward_with_capture(
         _materialize_backward_projections(trace)
         if status == "ok":
             _warn_zero_match_backward_interventions(trace)
+            _settle_armed_gradient_edits(trace, pass_index)
         if cleanup_error is not None:
             # Pre-fence, the pending-clear failure raised here-abouts anyway
             # (before the later memory raise), so first-cleanup-error keeps
@@ -3433,6 +3444,28 @@ def _run_backward_with_capture(
         if memory_error is not None:
             raise memory_error
     return result
+
+
+def _settle_armed_gradient_edits(trace: Any, pass_index: int) -> None:
+    """Write the settle rows of the gradient edits armed on ``trace`` (SPEC 3.3).
+
+    The settle law lives with the doors that arm (``_trace_intervention``);
+    this is the one call at backward pass end. Until that function exists on
+    the branch this runs on, there is nothing armed to settle.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose backward pass just ended.
+    pass_index:
+        One-based index of that pass.
+    """
+
+    from ..._data_classes import _trace_intervention
+
+    settle = getattr(_trace_intervention, "settle_armed_gradient_edits", None)
+    if settle is not None:
+        settle(trace, pass_index=pass_index)
 
 
 def disarm_triggers(trace: Any) -> None:
