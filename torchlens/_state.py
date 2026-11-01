@@ -814,12 +814,15 @@ def _reentrant_refusal() -> ReentrantTraceError:
     """
 
     active_model = getattr(_active_trace, "model_name", None)
+    # A non-Trace active subject (a Recording, a test sentinel) may carry no instance dict;
+    # only a live Trace's own stores name the model.
+    active_state = getattr(_active_trace, "__dict__", None)
     if (
         active_model is None
-        and _active_trace is not None
-        and not _active_trace.__dict__.get("_tl_cleaned_up", False)
+        and active_state is not None
+        and not active_state.get("_tl_cleaned_up", False)
     ):
-        active_model = _active_trace._source_class_name
+        active_model = active_state.get("_source_class_name")
     active_model_text = f" for active model {active_model!r}" if active_model else ""
     return ReentrantTraceError(
         "torchlens.trace / active_logging is not re-entrant: "
