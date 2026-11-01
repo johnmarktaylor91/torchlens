@@ -47,7 +47,7 @@ def _stamp_actual_buffer_writes(session: object, exc: Exception) -> None:
     # after an output-attribution failure (R16-2 for the failed-primary
     # trigger). Only an exhaustive session arms the tracker, so only there
     # is an empty journal proof of "no writes".
-    if getattr(session, "_options_mode", None) == "exhaustive":
+    if cast("Trace", session)._options_mode == "exhaustive":
         events = getattr(getattr(session, "capture_events", None), "buffer_write_events", None)
         if events is not None:
             with contextlib.suppress(Exception):
@@ -61,7 +61,7 @@ def _stamp_actual_buffer_writes(session: object, exc: Exception) -> None:
 def _snapshot_failed_predicate_events(session: object) -> None:
     """Snapshot the failing predicate-mode pass's capture events onto ``session``."""
 
-    if getattr(session, "_options_mode", None) == "predicate":
+    if cast("Trace", session)._options_mode == "predicate":
         from torchlens._ir.capture_events import CaptureEvents
 
         events = getattr(session, "capture_events", None)

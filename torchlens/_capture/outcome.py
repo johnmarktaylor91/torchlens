@@ -22,7 +22,7 @@ from __future__ import annotations
 import traceback
 import warnings
 from pathlib import Path
-from typing import Any, TypeGuard
+from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from ..errors import CaptureError
 from ._outcome_payload import (
@@ -47,6 +47,9 @@ from ._outcome_types import (
     safe_exception_repr,
     safe_exception_str,
 )
+
+if TYPE_CHECKING:
+    from .._data_classes.trace import Trace
 
 
 def _refusal_message(
@@ -670,7 +673,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
         raise swallowed
     if bool(getattr(trace, "is_stopped", False)):
         reason = getattr(trace, "stop_reason", None)
-        frontier_label = getattr(trace, "_graph_stop_frontier", None)
+        frontier_label = cast("Trace", trace)._graph_stop_frontier
         frontier = _preview_halt_frontier(trace)
         return _stamp(
             trace,
@@ -681,7 +684,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
                 boundary_label=frontier_label if isinstance(frontier_label, str) else None,
                 frontier_labels=frontier,
                 num_committed_ops=count_committed_ops(trace),
-                inference_only=bool(getattr(trace, "_options_inference_only", False)),
+                inference_only=bool(cast("Trace", trace)._options_inference_only),
             ),
         )
     return settle_completed(trace, None)

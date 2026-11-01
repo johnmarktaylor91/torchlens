@@ -41,7 +41,7 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	180
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	126
 torchlens/_capture/prepare/door.py	1455
 torchlens/_capture/prepare/resolve.py::_record_capture_intervention_event	72
-torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	135
+torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	134
 torchlens/_capture/projections.py	1597
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
@@ -253,11 +253,11 @@ torchlens/_io/rehydrate.py::_rehydrate_object	247
 torchlens/_io/rehydrate.py::_rehydrate_small_raw_images	64
 torchlens/_io/rehydrate.py::rehydrate_nested	74
 torchlens/_io/rehydrate.py::rehydrate_trace	152
-torchlens/_io/runnable.py	4986
+torchlens/_io/runnable.py	4985
 torchlens/_io/runnable.py::_add_persistent_buffer_slot_drafts	218
 torchlens/_io/runnable.py::_ambient_execution_context	64
 torchlens/_io/runnable.py::_append_argument_component	196
-torchlens/_io/runnable.py::_build_call_arguments	70
+torchlens/_io/runnable.py::_build_call_arguments	68
 torchlens/_io/runnable.py::_build_control_witnesses	129
 torchlens/_io/runnable.py::_build_input_boundary	104
 torchlens/_io/runnable.py::_build_op_slot_drafts	86
@@ -1031,7 +1031,7 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2943
+torchlens/backends/torch/wrappers.py	2942
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	115
 torchlens/backends/torch/wrappers.py::_propagate_mutation_label_to_storage_aliases	98
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	129
