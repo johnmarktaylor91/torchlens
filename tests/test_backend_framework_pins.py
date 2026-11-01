@@ -202,7 +202,11 @@ def test_pr_leg_installs_the_pinned_framework(backend: str) -> None:
 
 
 def test_pull_request_torch_installs_equal_the_torch_pin() -> None:
-    """Every exact torch install in pr.yml is torch's pin (local ``+cpu`` label aside)."""
+    """Every exact torch install in pr.yml is torch's pin (local ``+cpu`` label aside).
+
+    A CPU torch from the PyTorch index needs the matching CPU torchvision beside
+    it, so every exact torchvision install equals the pinned smoke row's.
+    """
 
     pinned = _framework("torch").pinned
     assert pinned is not None, "torch's per-change environment must be pinned"
@@ -212,6 +216,9 @@ def test_pull_request_torch_installs_equal_the_torch_pin() -> None:
     versions = installs + [str(row["torch"]) for row in smoke_rows]
     assert versions, "pr.yml installs no exact torch"
     assert {Version(version).public for version in versions} == {pinned}, versions
+    torchvision = re.findall(r'"torchvision==([0-9][^"]*)"', text)
+    smoke_torchvision = {str(row["torchvision"]) for row in smoke_rows}
+    assert torchvision and set(torchvision) <= smoke_torchvision, (torchvision, smoke_torchvision)
 
 
 @pytest.mark.parametrize("backend", PREVIEW_BACKENDS)
