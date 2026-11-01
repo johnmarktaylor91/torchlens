@@ -311,8 +311,10 @@ def _after_intervene(cell: Cell) -> None:
             _fire_facts(trace[label]) == _fire_facts(loaded[label]),
             f"{label}: fire records differ after load",
         )
+    live_rules, loaded_rules = _rule_facts(trace.recipe), _rule_facts(loaded.recipe)
     cell.expect(
-        _rule_facts(trace.recipe) == _rule_facts(loaded.recipe), "recipe rules differ after load"
+        live_rules == loaded_rules,
+        f"recipe differs after load: live {live_rules!r:.160} vs loaded {loaded_rules!r:.160}",
     )
     if cell.case.has("stochastic"):
         return
