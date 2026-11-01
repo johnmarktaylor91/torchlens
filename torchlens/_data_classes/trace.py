@@ -3761,14 +3761,21 @@ class Trace(
             have already been validated against this log.
         """
 
-        new_by_raw = {layer._layer_label_raw: layer for layer in trace.layer_list}
+        from ..intervention.errors import AppendMismatchError
+
+        old_raw = [layer._layer_label_raw for layer in self.layer_list]
+        new_raw = [layer._layer_label_raw for layer in trace.layer_list]
+        if old_raw != new_raw:
+            raise AppendMismatchError("topology or site labels changed")
         old_by_label = {
             key: layer
             for layer in self.layer_list
             for key in (layer._layer_label_raw, layer.layer_label)
         }
-        for layer in self.layer_list:
-            new_layer = new_by_raw[layer._layer_label_raw]
+        # Pair passes by position, not by raw label: a reused module repeats its
+        # raw label across passes, and a raw-label map would concatenate pass 1
+        # with the last pass of the new chunk.
+        for layer, new_layer in zip(self.layer_list, trace.layer_list):
             if not (
                 getattr(layer, "is_buffer", False)
                 or self._is_append_buffer_side_effect_layer(layer, old_by_label)

@@ -682,8 +682,6 @@ def _validate_append_candidate(
     if old_labels != new_labels:
         raise AppendMismatchError("topology or site labels changed")
 
-    old_by_raw = {layer._layer_label_raw: layer for layer in old_log.layer_list}
-    new_by_raw = {layer._layer_label_raw: layer for layer in new_log.layer_list}
     old_by_label = {
         key: layer
         for layer in old_log.layer_list
@@ -695,9 +693,11 @@ def _validate_append_candidate(
         for key in (layer._layer_label_raw, layer.layer_label)
     }
     grads_supported = _hook_plan_supports_append_grads(hook_plan)
-    for raw_label in old_labels:
-        old_layer = old_by_raw[raw_label]
-        new_layer = new_by_raw[raw_label]
+    # Pair passes by position: a raw label repeats for every pass of a reused
+    # module (relu_1_4_raw for relu_1_3:1 and relu_1_3:2), so a raw-label map
+    # would check pass 1 against the last pass. The sequences were just shown
+    # equal, so position identifies the pass.
+    for old_layer, new_layer in zip(old_log.layer_list, new_log.layer_list):
         if _is_append_buffer_side_effect_layer(
             old_layer, old_by_label
         ) or _is_append_buffer_side_effect_layer(new_layer, new_by_label):
