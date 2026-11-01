@@ -101,7 +101,7 @@ _SITE_FAMILIES: dict[tuple[str, str], str] = {
         "model_prep.py",
         "_record_predicate_module_boundary_outputs",
     ): "module_boundary_retention",
-    ("backend.py", "extract_and_mark_outputs"): "output_parent_promotion",
+    ("_outputs.py", "extract_and_mark_outputs"): "output_parent_promotion",
     ("graph_traversal.py", "_resolve_output_parent_labels"): "late_buffer_output_parent",
 }
 
