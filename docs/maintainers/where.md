@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1311 modules, 623963 lines, 0 modules without a docstring.
+84 packages, 1311 modules, 624031 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -15,14 +15,14 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 43 | 24710 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 43 | 24743 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1482 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4546 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 67 | 38514 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 67 | 38498 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 50 | 34762 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 50 | 34773 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10952 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
@@ -32,7 +32,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17123 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 2188 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 2 | 473 |
-| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14684 |
+| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14709 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 15 | 9432 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 10 | 6695 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
@@ -52,7 +52,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 14650 |
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2398 |
 | `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3772 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 16 | 6437 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 16 | 6452 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 915 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 9 | 8628 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 16 | 6718 |
@@ -201,7 +201,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (43 modules, 24710 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (43 modules, 24743 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -233,7 +233,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `compute_record` | The two-term compute record (A5/A6): true MACs, never flops // 2. | 525 |
 | `config` | Internal grouped capture configuration for spine orchestration. | 9 |
 | `flops` | FLOPs (Floating Point Operations) computation module for TorchLens. | 1942 |
-| `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 718 |
+| `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 751 |
 | `peak_memory` | Host peak-memory instrumentation helpers (brainpipe ). | 399 |
 | `plan` | Compiled, backend-neutral capture intent for the unification spine. | 270 |
 | `predicates` | Predicate evaluation helpers for capture-time fastlog projections. | 555 |
@@ -277,7 +277,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (67 modules, 38514 lines)
+Core data structures for representing a logged forward pass. (67 modules, 38498 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -325,7 +325,7 @@ Core data structures for representing a logged forward pass. (67 modules, 38514 
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 169 |
 | `_trace_stats` | Trace computed stats mixin. | 1771 |
 | `_trace_stats_grad_fn_site` | Pure helpers behind the Trace grad-fn site and fire-timing rollups. | 95 |
-| `_trace_validation` | Trace validation and replay mixin. | 1441 |
+| `_trace_validation` | Trace validation and replay mixin. | 1425 |
 | `_trace_viz` | Trace visualization mixin. | 989 |
 | `_transform_repr` | Persistence-safe repr of an activation-transform callable. | 52 |
 | `_value_repr` | Value-record line/card renderers (lovely memo item 6). | 524 |
@@ -397,7 +397,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10552 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (50 modules, 34762 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (50 modules, 34773 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -429,7 +429,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `field_registry` | Persisted-field registry: the one queryable index of the tlspec envelope. | 275 |
 | `forgery_validation` | Load-boundary validation for persisted cross-record claim families. | 1996 |
 | `format_contract` | The tlspec FORMAT CONTRACT: L1 product vocabulary + record-adjacent helpers. | 539 |
-| `format_errors` | Portable-I/O error vocabulary (logical L0; physically homed with _io). | 117 |
+| `format_errors` | Portable-I/O error vocabulary (logical L0; physically homed with _io). | 128 |
 | `injection_codec` | Injected-op persistence codec (''log_injections'' stage 2). | 798 |
 | `lazy` | Lazy out reference placeholders for portable TorchLens bundles. | 256 |
 | `manifest` | Portable bundle manifest schema and compatibility policy. | 1112 |
@@ -628,7 +628,7 @@ Private registry kernel package (architecture ; never public API). (2 modules, 4
 
 ### `torchlens._runnable`
 
-Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14684 lines)
+Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14709 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -636,7 +636,7 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14
 | `attestation` | Numeric attestation and nondeterminism checks. | 599 |
 | `call_arguments` | Sparse-call argument decoding and binding. | 630 |
 | `call_outputs` | Sparse-call output binding and mutation checks. | 613 |
-| `execution` | Transactional execution providers for the unified :meth:'Trace.run' surface. | 379 |
+| `execution` | Transactional execution providers for the unified :meth:'Trace.run' surface. | 404 |
 | `input_aliases` | Input alias topology and non-tensor tree contracts. | 508 |
 | `input_metadata` | Input structure, literal, and metadata witness helpers. | 677 |
 | `input_sites` | Live input sites and metadata contract checks. | 628 |
@@ -1045,13 +1045,13 @@ One-backward attribution reads (M(reads) memo). (11 modules, 3772 lines)
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (16 modules, 6437 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (16 modules, 6452 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Backend Protocol and public registry exports for TorchLens adapters. | 42 |
 | `_backend_names` | The canonical default-backend name, split out of :mod:'torchlens.backends.registry'. | 20 |
-| `_backend_protocol` | The one backend protocol every TorchLens backend fills, torch included. | 490 |
+| `_backend_protocol` | The one backend protocol every TorchLens backend fills, torch included. | 505 |
 | `_constants` | The shared constants rule every preview backend's finalize step applies. | 586 |
 | `_default_specs_tf` | TensorFlow / Keras runtime probes used by the default backend specs. | 102 |
 | `_errors` | Backend registry error hierarchy (leaf module: no registry import). | 157 |

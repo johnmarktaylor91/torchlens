@@ -52,6 +52,7 @@ from . import (
     PayloadLoadHints,
     _json,
     raise_if_manifest_below_floor,
+    refuse_bundle_exists,
     refuse_missing_blobs,
 )
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
@@ -616,17 +617,16 @@ def save(
     tmp_path = _make_tmp_bundle_path(bundle_path)
     try:
         if bundle_path.exists() and not overwrite:
-            raise FileExistsError(f"Bundle path already exists: {bundle_path}")
+            refuse_bundle_exists(bundle_path, overwritable=True)
 
         tmp_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path.mkdir()
         (tmp_path / "blobs").mkdir()
-        # B8-10: safetensors blobs are already 0600, but the bundle directories and
-        # the metadata.pkl / manifest.json sidecars (which carry forward source and
-        # harvested module attributes) inherited the ambient umask -- group/world
-        # readable on the common umask 002. Tighten the directories to 0700 up front
-        # so no second principal can even swap a blob file in a group-writable dir;
-        # the sidecar files are tightened to 0600 after they are written below.
+        # B8-10: safetensors blobs are already 0600, but the bundle directories and the
+        # metadata.pkl / manifest.json sidecars (forward source, harvested module
+        # attributes) inherited the ambient umask: group/world readable on umask 002.
+        # Tighten the directories to 0700 up front so no second principal can swap a
+        # blob file in a group-writable dir; the sidecars are tightened to 0600 below.
         _restrict_mode(tmp_path, 0o700)
         _restrict_mode(tmp_path / "blobs", 0o700)
 
@@ -806,7 +806,7 @@ def save(
         # saw the bundle vanish for the entire save.
         if bundle_path.exists():
             if not overwrite:
-                raise FileExistsError(f"Bundle path already exists: {bundle_path}")
+                refuse_bundle_exists(bundle_path, overwritable=True)
             backup_path = _make_backup_path(bundle_path)
             bundle_path.rename(backup_path)
         tmp_path.rename(bundle_path)

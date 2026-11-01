@@ -1582,10 +1582,10 @@ def to_disk(
     path:
         Destination bundle directory; it must not exist yet (``bundle_save_failed``).
     retain_in_memory:
-        Whether streamed payloads also remain as RAM copies. Two stay in memory
-        either way: the model output the forward returns (the output op's payload
-        may alias it) and every payload after ``trace.run(...)``, which re-captures
-        into RAM while the bundle at ``path`` keeps the first capture; save again.
+        Whether streamed payloads also remain as RAM copies. The model output the forward
+        returns stays in memory either way (the output op's payload may alias it). A streamed
+        trace does not run: ``trace.run(...)`` refuses ``trace_option_unsupported`` (a run would
+        re-capture into RAM while the bundle at ``path`` kept the first capture); capture again.
     include_custom_attributes:
         Whether harvested module attributes are persisted verbatim in the
         streamed bundle (the ``Trace.save`` opt-out, mirrored for streaming).

@@ -72,6 +72,12 @@
   when the disk falls behind, a failed write raises typed `ArtifactError` + PARTIAL, finalize
   drains before publish, and bundles are byte-identical to sync. `async_writes=False` opts out;
   `tl.record` streaming stays synchronous and refuses an explicit `True`.
+- A streamed (`to_disk`) trace does not run: every `trace.run(...)` door refuses
+  `trace_option_unsupported`, because a run would re-capture every payload into RAM while the
+  bundle on disk kept the first capture. Capture again with `to_disk` to a new path, or without
+  `to_disk`, and run that trace; a trace loaded from the bundle runs through its loaded providers.
+  `Trace.save` and `Bundle.save` to an existing path refuse `bundle_save_failed` (typed, no builtin
+  `FileExistsError`) unless `overwrite=True`.
 - On torch >= 2.6 (`HAS_SET_STANCE`), every capture holds
   `torch.compiler.set_stance("force_eager")` scoped to the forward (entered inside
   `prepare_compiled_capture`; skipped when `torch._dynamo` was never imported), so compiled plain

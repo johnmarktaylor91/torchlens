@@ -104,9 +104,9 @@ torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	101
 torchlens/_data_classes/_trace_stack.py::TraceStackMixin.stack	90
 torchlens/_data_classes/_trace_stats.py	1771
 torchlens/_data_classes/_trace_stats.py::TraceStatsMixin.collapse_plan	69
-torchlens/_data_classes/_trace_validation.py	1441
+torchlens/_data_classes/_trace_validation.py	1425
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin._batch_remove_log_entries	67
-torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	529
+torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	525
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.validate_forward_pass	65
 torchlens/_data_classes/_trace_validation.py::_warn_pending_value_edits_on_new_input_run	64
 torchlens/_data_classes/_trace_viz.py	989
@@ -225,7 +225,7 @@ torchlens/_io/bundle.py::_preflight_unified_trace_manifest	90
 torchlens/_io/bundle.py::_scrub_trace_for_bundle	66
 torchlens/_io/bundle.py::cleanup_tmp	120
 torchlens/_io/bundle.py::load	168
-torchlens/_io/bundle.py::save	649
+torchlens/_io/bundle.py::save	648
 torchlens/_io/bundle_container.py::_load_unified_bundle	81
 torchlens/_io/bundle_container.py::_load_unified_bundle_directory	98
 torchlens/_io/bundle_metadata.py::_load_gated_member_relations	88

@@ -97,13 +97,24 @@ for _cls in (
 del _cls
 
 
-def refuse_bundle_exists(path: object) -> NoReturn:
-    """Raise the ``bundle_save_failed`` refusal for a streaming target that already exists."""
+def refuse_bundle_exists(path: object, *, overwritable: bool = False) -> NoReturn:
+    """Raise the ``bundle_save_failed`` refusal for a save or streaming target that exists.
+
+    Shared by the streaming writer (``to_disk``), ``Trace.save`` and ``Bundle.save``
+    (``overwritable=True``: those doors take ``overwrite=``), at the entry check and at
+    the publish-time TOCTOU recheck, so every existing-target refusal carries the same
+    code and message shape (behaviour-net IO-3 follow-up).
+    """
 
     raise ArtifactError(
         f"Bundle path already exists: {path}",
         code="bundle_save_failed",
-        remedy="stream to a path that does not exist yet, or remove the old bundle first",
+        remedy=(
+            "pass overwrite=True to replace the existing bundle, or save to a path that "
+            "does not exist yet"
+            if overwritable
+            else "stream to a path that does not exist yet, or remove the old bundle first"
+        ),
     )
 
 
