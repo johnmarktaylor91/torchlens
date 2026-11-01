@@ -69,22 +69,6 @@ def external_array_ids(model: object, is_tensor: Callable[[object], bool]) -> di
         if depth > 0 and callable(value) and not isinstance(value, type):
             visit_callable(value, depth - 1)
 
-    def visit_code_names(function: types.FunctionType, depth: int) -> None:
-        module_globals = getattr(function, "__globals__", None)
-        if not isinstance(module_globals, dict):
-            return
-        pending = [function.__code__]
-        seen_codes: set[int] = set()
-        while pending:
-            code = pending.pop()
-            if id(code) in seen_codes:
-                continue
-            seen_codes.add(id(code))
-            for name in code.co_names:
-                if name in module_globals:
-                    collect(module_globals[name], depth)
-            pending.extend(const for const in code.co_consts if isinstance(const, types.CodeType))
-
     def visit_callable(value: Any, depth: int) -> None:
         if id(value) in visited_functions:
             return
@@ -104,7 +88,7 @@ def external_array_ids(model: object, is_tensor: Callable[[object], bool]) -> di
                     collect(cell.cell_contents, depth)
                 except ValueError:  # empty cell
                     continue
-            visit_code_names(value, depth)
+            _visit_code_names(value, depth, collect)
             return
         # A callable object: its instance attributes and its class __call__.
         instance_dict = getattr(value, "__dict__", None)
@@ -116,6 +100,37 @@ def external_array_ids(model: object, is_tensor: Callable[[object], bool]) -> di
 
     visit_callable(model, _MAX_FUNCTION_DEPTH)
     return found
+
+
+def _visit_code_names(
+    function: types.FunctionType, depth: int, collect: Callable[[Any, int], None]
+) -> None:
+    """Feed every module global a function's code (and nested code) names to ``collect``.
+
+    Parameters
+    ----------
+    function:
+        The function whose ``co_names`` are resolved against its ``__globals__``.
+    depth:
+        Remaining function-hop budget, passed through to ``collect``.
+    collect:
+        The collector that records arrays and walks containers and callables.
+    """
+
+    module_globals = getattr(function, "__globals__", None)
+    if not isinstance(module_globals, dict):
+        return
+    pending = [function.__code__]
+    seen_codes: set[int] = set()
+    while pending:
+        code = pending.pop()
+        if id(code) in seen_codes:
+            continue
+        seen_codes.add(id(code))
+        for name in code.co_names:
+            if name in module_globals:
+                collect(module_globals[name], depth)
+        pending.extend(const for const in code.co_consts if isinstance(const, types.CodeType))
 
 
 __all__ = ["external_array_ids"]

@@ -298,19 +298,34 @@ class MLXValidationOutcome:
     unverified_reason_counts: dict[str, int]
 
 
+@dataclass(frozen=True)
+class _DecisionSite:
+    """The op a validation decision is about.
+
+    Parameters
+    ----------
+    label
+        Raw op label (``"<trace>"`` for trace-wide decisions).
+    op_name
+        The op's ``func_name``; ``None`` for trace-wide decisions.
+    """
+
+    label: str
+    op_name: str | None
+
+
 def _decision(
-    label: str,
-    op_name: str | None,
+    site: _DecisionSite,
     phase: str,
     decision: str,
     cause: str | None,
     detail: str,
 ) -> dict[str, Any]:
-    """Build one decision record with the reason code for ``cause``."""
+    """Build one decision record for ``site`` with the reason code for ``cause``."""
 
     return {
-        "op_label": label,
-        "func_name": op_name,
+        "op_label": site.label,
+        "func_name": site.op_name,
         "phase": phase,
         "decision": decision,
         "reason": None if cause is None else MLX_VALIDATION_REASONS[cause],
@@ -710,10 +725,11 @@ def _constant_leaf_decision(
     try:
         _saved_payload(trace, ops_by_label, label)
     except ValueError as exc:
-        return _decision(label, "constant", "leaf", "failed", "payload_missing", str(exc))
+        return _decision(
+            _DecisionSite(label, "constant"), "leaf", "failed", "payload_missing", str(exc)
+        )
     return _decision(
-        label,
-        "constant",
+        _DecisionSite(label, "constant"),
         "leaf",
         "exempted",
         "constant_leaf",
@@ -743,8 +759,7 @@ def _replay_one(
     name = capture.op_name
     if not _declared_parents_consistent(trace, ops_by_label, capture):
         return _decision(
-            label,
-            name,
+            _DecisionSite(label, name),
             "replay",
             "failed",
             "parents_inconsistent",
@@ -755,8 +770,7 @@ def _replay_one(
     mx.eval(*replayed)
     if len(replayed) != len(capture.labels_raw) or not replayed:
         return _decision(
-            label,
-            name,
+            _DecisionSite(label, name),
             "replay",
             "failed",
             "arity",
@@ -775,8 +789,7 @@ def _replay_one(
             index < 0 or index >= len(final) for index in declared
         ):
             return _decision(
-                label,
-                name,
+                _DecisionSite(label, name),
                 "replay",
                 "failed",
                 "intervention_applier_missing",
@@ -790,7 +803,9 @@ def _replay_one(
     # Fail CLOSED on an arity mismatch: pairing positionally without this
     # check would compare only the common prefix.
     if len(final) != len(expected):
-        return _decision(label, name, "replay", "failed", "arity", "output count drifted")
+        return _decision(
+            _DecisionSite(label, name), "replay", "failed", "arity", "output count drifted"
+        )
     mismatched = [
         lab
         for lab, f_out, e_out in zip(capture.labels_raw, final, expected, strict=True)
@@ -798,8 +813,7 @@ def _replay_one(
     ]
     if mismatched:
         return _decision(
-            mismatched[0],
-            name,
+            _DecisionSite(mismatched[0], name),
             "replay",
             "failed",
             "value_mismatch",
@@ -820,8 +834,7 @@ def _replay_one(
     )
     if evidence == PERTURBATION_UNPROVED:
         return _decision(
-            label,
-            name,
+            _DecisionSite(label, name),
             "perturbation",
             "failed",
             "perturbation_unproved",
@@ -835,24 +848,21 @@ def _replay_one(
             # its saved literal arguments and compared equal; it has no
             # tensor parent to perturb (FORKS F-L).
             return _decision(
-                label,
-                name,
+                _DecisionSite(label, name),
                 "perturbation",
                 "exempted",
                 "literal_producer",
                 "literal producer replayed equal; no tensor parent to perturb",
             )
         return _decision(
-            label,
-            name,
+            _DecisionSite(label, name),
             "perturbation",
             "unverified",
             "perturbation_gap",
             "no tensor argument to perturb",
         )
     return _decision(
-        label,
-        name,
+        _DecisionSite(label, name),
         "perturbation",
         "passed",
         "constant_parent" if perturbed_constant else None,
@@ -901,8 +911,7 @@ def validate_mlx_captures_detailed(trace: Any) -> MLXValidationOutcome:
     if failed_count:
         decisions.append(
             _decision(
-                "<trace>",
-                None,
+                _DecisionSite("<trace>", None),
                 "coverage",
                 "failed",
                 "coverage",
@@ -921,8 +930,10 @@ def validate_mlx_captures_detailed(trace: Any) -> MLXValidationOutcome:
             except ValueError as exc:
                 cause = "payload_missing" if "no saved payload" in str(exc) else "replay_error"
                 record = _decision(
-                    capture.labels_raw[0] if capture.labels_raw else "<unlabeled>",
-                    capture.op_name,
+                    _DecisionSite(
+                        capture.labels_raw[0] if capture.labels_raw else "<unlabeled>",
+                        capture.op_name,
+                    ),
                     "replay",
                     "failed",
                     cause,
@@ -930,8 +941,10 @@ def validate_mlx_captures_detailed(trace: Any) -> MLXValidationOutcome:
                 )
             except Exception as exc:  # noqa: BLE001 - a raising replay is a failed check
                 record = _decision(
-                    capture.labels_raw[0] if capture.labels_raw else "<unlabeled>",
-                    capture.op_name,
+                    _DecisionSite(
+                        capture.labels_raw[0] if capture.labels_raw else "<unlabeled>",
+                        capture.op_name,
+                    ),
                     "replay",
                     "failed",
                     "replay_error",
