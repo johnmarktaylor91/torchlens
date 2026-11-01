@@ -1120,6 +1120,36 @@ def _tag_untagged_buffers(trace: "Trace", module: nn.Module) -> None:
         promote_label_to_buffer_source_and_clear_label(buffer_tensor)
 
 
+def _record_module_entry_build_data(
+    trace: "Trace", module_call_label_str: str
+) -> tuple[float, Any, list[str]]:
+    """Stamp and return the forward start time, code context and call stack for one entry."""
+    forward_start_time = time.time()
+    trace._module_capture_ws.module_build_data.setdefault("module_forward_start_times", {})[
+        module_call_label_str
+    ] = forward_start_time
+    code_context_cache = getattr(trace, "_code_context_cache", None)
+    if code_context_cache is None:
+        code_context_cache = {}
+        trace._code_context_cache = code_context_cache
+    code_context = _get_code_context(
+        num_context_lines=trace.num_context_lines,
+        source_loading_enabled=trace.save_code_context,
+        context_cache=code_context_cache,
+    )
+    trace._module_capture_ws.module_build_data.setdefault("module_code_contexts", {})[
+        module_call_label_str
+    ] = code_context
+    call_stack = [
+        f"{frame.address}:{frame.pass_index}"
+        for frame in trace._module_capture_ws.exhaustive_module_stack[:-1]
+    ]
+    trace._module_capture_ws.module_build_data.setdefault("module_call_stacks", {})[
+        module_call_label_str
+    ] = call_stack
+    return forward_start_time, code_context, call_stack
+
+
 def _record_module_entry_metadata(
     trace: "Trace",
     module: nn.Module,
@@ -1199,29 +1229,9 @@ def _record_module_entry_metadata(
             forward_args_template,
             forward_kwargs_template,
         )
-    forward_start_time = time.time()
-    trace._module_capture_ws.module_build_data.setdefault("module_forward_start_times", {})[
-        module_call_label_str
-    ] = forward_start_time
-    code_context_cache = getattr(trace, "_code_context_cache", None)
-    if code_context_cache is None:
-        code_context_cache = {}
-        trace._code_context_cache = code_context_cache
-    code_context = _get_code_context(
-        num_context_lines=trace.num_context_lines,
-        source_loading_enabled=trace.save_code_context,
-        context_cache=code_context_cache,
+    forward_start_time, code_context, call_stack = _record_module_entry_build_data(
+        trace, module_call_label_str
     )
-    trace._module_capture_ws.module_build_data.setdefault("module_code_contexts", {})[
-        module_call_label_str
-    ] = code_context
-    call_stack = [
-        f"{frame.address}:{frame.pass_index}"
-        for frame in trace._module_capture_ws.exhaustive_module_stack[:-1]
-    ]
-    trace._module_capture_ws.module_build_data.setdefault("module_call_stacks", {})[
-        module_call_label_str
-    ] = call_stack
 
     # Find all tensor arguments (excluding Parameters, which are source tensors).
     input_tensors = get_arg_tensors_for_resolution(args, kwargs)
@@ -1965,6 +1975,20 @@ def _make_user_forward_hook_wrapper(
     return wrapped_hook
 
 
+def _record_module_forward_duration(trace: "Trace", module_call_label: str) -> float:
+    """Record and return the forward duration for one module call, 0.0 without a start."""
+    start_times = trace._module_capture_ws.module_build_data.setdefault(
+        "module_forward_start_times", {}
+    )
+    forward_duration = 0.0
+    if module_call_label in start_times:
+        forward_duration = time.time() - start_times[module_call_label]
+        trace._module_capture_ws.module_build_data.setdefault("module_forward_durations", {})[
+            module_call_label
+        ] = forward_duration
+    return forward_duration
+
+
 def _record_module_exit_metadata(
     trace: "Trace",
     module: nn.Module,
@@ -2004,15 +2028,7 @@ def _record_module_exit_metadata(
         output_entries = [(tensor, (), None) for tensor in output_tensors]
     role_hints = role_hints_for_module(module)
     module_call_label = f"{address}:{module_call_index}"
-    start_times = trace._module_capture_ws.module_build_data.setdefault(
-        "module_forward_start_times", {}
-    )
-    forward_duration = 0.0
-    if module_call_label in start_times:
-        forward_duration = time.time() - start_times[module_call_label]
-        trace._module_capture_ws.module_build_data.setdefault("module_forward_durations", {})[
-            module_call_label
-        ] = forward_duration
+    forward_duration = _record_module_forward_duration(trace, module_call_label)
     output_structure = None
     if output_entries:
         output_structure = output_entries[0][2]
