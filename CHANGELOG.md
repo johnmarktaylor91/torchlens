@@ -381,6 +381,10 @@
 
 ### Bug Fixes
 
+- **capture**: call-site chains no longer include TorchLens's own frames when the package is
+  imported through a relative `sys.path` entry such as `PYTHONPATH=.`; those frames had merged
+  distinct call sites into false loops. The TorchLens-frame test now compares normalised file
+  names.
 - **replay**: a hook-style edit aimed at a buffer version that nothing threads into (an unwritten
   buffer's initial read, such as `fork.do(tl.label("buffer_1:1"), tl.scale(0.5))`) now fires on
   the captured value and replays its consumers; the engine used to skip the site with the
