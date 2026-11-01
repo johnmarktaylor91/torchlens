@@ -369,6 +369,11 @@ _CAPABILITY_PROBE_STATE = frozenset(
         # first cleanup(); never varies afterwards.
         ("torchlens/_data_classes/cleanup.py", "_MALLOC_TRIM"),
         ("torchlens/_utils/_torch_compat.py", "HAS_C10D_ABORT_PG"),
+        # Module.__call__ dispatch-frame probe (fast-run forward wave): the code
+        # objects of the torch call-dispatch frames that reach forward, filled
+        # once by the import-time probe behind HAS_MODULE_CALL_DISPATCH_FRAME
+        # and cleared only when the probe reruns; never varies afterwards.
+        ("torchlens/_utils/_module_call_dispatch.py", "_DISPATCH_CODES"),
         # F27 Kineto/memory-profile capability flags: probed once at first
         # extraction (a live profiler session is required to observe an
         # event instance), never vary afterwards.
