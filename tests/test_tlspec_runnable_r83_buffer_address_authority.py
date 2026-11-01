@@ -53,19 +53,18 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 from torchlens._runnable import PathFaithfulness
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _buffer_addresses(trace: Any) -> list[tuple[str, str | None]]:
     """Return ``(layer_label, address)`` for every materialized buffer op."""
 
-    return [
-        (op.layer_label, op.address) for op in trace if getattr(op, "layer_type", None) == "buffer"
-    ]
+    return [(op.layer_label, op.address) for op in trace if record_type(op, None) == "buffer"]
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:
@@ -226,7 +225,7 @@ def test_display_address_and_backend_address_are_decoupled(tmp_path: Path) -> No
 
     trace = _capture(_Nested(), torch.randn(2, 4, 8, 8))
     by_address = {
-        op.address: op for op in trace.layer_list if op.is_buffer and op.address is not None
+        op.address: op for op in trace._layer_list if op.is_buffer and op.address is not None
     }
 
     assert by_address["child.q"].backend_address is None, "plain-attr has no backend address"
@@ -238,7 +237,7 @@ def test_display_address_and_backend_address_are_decoupled(tmp_path: Path) -> No
     trace.save(path)
     loaded = tl.load(path)
     loaded_by_address = {
-        op.address: op for op in loaded.layer_list if op.is_buffer and op.address is not None
+        op.address: op for op in loaded._layer_list if op.is_buffer and op.address is not None
     }
     assert loaded_by_address["child.q"].backend_address is None
     assert loaded_by_address["child.cb"].backend_address == "child.cb"

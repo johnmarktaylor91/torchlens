@@ -33,9 +33,7 @@ def _pair() -> tl.Bundle:
     x = torch.randn(2, 3)
 
     def _capture() -> tl.Trace:
-        return tl.trace(
-            _Tiny(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
-        ).fork()
+        return tl.trace(_Tiny(), x, capture=tl.options.CaptureOptions(replayable=True)).fork()
 
     return tl.Bundle({"a": _capture(), "b": _capture()}, baseline="a")
 
@@ -137,11 +135,11 @@ def test_vary_shared_plan_keeps_one_donor_group() -> None:
             "b": (tl.func("relu"), tl.patch_from(plan)),
         }
     )
-    from torchlens.intervention.stochastic import sampling_records
+    from support.sampling import sampling_draws
 
     groups = set()
     for name in ("a", "b"):
-        rows = sampling_records(bundle[name])
+        rows = sampling_draws(bundle[name])
         assert rows, f"member {name} has no sampling records"
-        groups.update(row["donor_group_id"] for row in rows)
+        groups.update(row.donor_group_id for row in rows)
     assert len(groups) == 1, f"one reused plan must keep ONE donor group, got {groups}"

@@ -2,7 +2,7 @@
 
 What this demonstrates
 ----------------------
-Hooks can collect side-channel readouts through ``ctx.run_ctx`` while leaving
+Hooks can collect side-channel readouts through ``ctx.run_state`` while leaving
 the activation unchanged.
 
 How to run
@@ -44,12 +44,12 @@ def main() -> None:
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
     probe = nn.Linear(8, 1, bias=False).eval()
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
     def readout(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Store probe scores and leave the activation unchanged."""
 
-        ctx.run_ctx.setdefault("probe_scores", []).append(probe(out).detach())
+        ctx.run_state.setdefault("probe_scores", []).append(probe(out).detach())
         return out
 
     edited = log.fork("probe")
@@ -59,7 +59,7 @@ def main() -> None:
     scores = edited.last_run["probe_scores"]
     assert len(scores) == 1
     assert scores[0].shape == (2, 1)
-    assert torch.allclose(log.layer_list[-1].out, edited.layer_list[-1].out)
+    assert torch.allclose(log.output_ops[-1].out, edited.output_ops[-1].out)
 
 
 if __name__ == "__main__":

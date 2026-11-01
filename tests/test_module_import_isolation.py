@@ -24,6 +24,7 @@ forgotten, and a fixed module cannot silently regress).
 
 from __future__ import annotations
 
+import ast
 import os
 import sys
 import traceback
@@ -34,6 +35,7 @@ import pytest
 import torchlens as tl
 
 _PACKAGE_ROOT = Path(tl.__file__).resolve().parent
+_TESTS_ROOT = Path(__file__).resolve().parent
 
 # Modules whose standalone import is FIXED and must stay fixed.
 FIXED_IMPORT_CYCLES = (
@@ -66,22 +68,9 @@ OPTIONAL_DEPENDENCY_MODULES: dict[str, str] = {
 # territory (the r3 ops-split and IR packages), so the cycle is DISCLOSED here rather
 # than silently tolerated. Fixing one means deleting its row.
 PENDING_IMPORT_CYCLES = {
-    "torchlens._ir.selector_eval": (
-        "cycle through torchlens._ir.__init__ -> selector_eval -> ir.* back-edge; "
-        "torchlens/_ir/ is outside the artifact-boundary lane's territory"
-    ),
-    "torchlens.backends.torch._ops_autograd": (
-        "the four _ops_* split modules import back into their sibling ops.py facade; "
-        "backends/torch/ops.py is owned by the r3 ops-split lane"
-    ),
-    "torchlens.backends.torch._ops_capture_records": (
-        "same _ops_* split-module back-edge as _ops_autograd"
-    ),
-    "torchlens.backends.torch._ops_emission": (
-        "same _ops_* split-module back-edge as _ops_autograd"
-    ),
     "torchlens.backends.torch._ops_retention": (
-        "same _ops_* split-module back-edge as _ops_autograd"
+        "_ops_retention still imports back into its sibling ops.py facade "
+        "(the other _ops_* splits import standalone since the rebind removal)"
     ),
 }
 
@@ -287,4 +276,64 @@ def test_every_package_module_imports_standalone() -> None:
     assert not failures, (
         "modules that cannot be imported standalone (fix the cycle, or disclose it in "
         f"PENDING_IMPORT_CYCLES with a reason): {failures}"
+    )
+
+
+def _is_sys_modules_target(node: ast.expr) -> bool:
+    """True when ``node`` spells ``sys.modules`` (as a name or as a string)."""
+    if isinstance(node, ast.Constant):
+        return node.value == "sys.modules"
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == "modules"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "sys"
+    )
+
+
+def _patch_dict_sys_modules_sites(tree: ast.Module) -> list[int]:
+    """Line numbers of ``patch.dict(sys.modules, ...)`` calls in ``tree``."""
+    return [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "dict"
+        and isinstance(node.func.value, (ast.Name, ast.Attribute))
+        and getattr(node.func.value, "id", getattr(node.func.value, "attr", None)) == "patch"
+        and node.args
+        and _is_sys_modules_target(node.args[0])
+    ]
+
+
+def test_no_test_snapshot_restores_sys_modules() -> None:
+    """No test may wrap ``sys.modules`` in ``unittest.mock.patch.dict``.
+
+    ``patch.dict`` restores the WHOLE mapping to its entry snapshot on exit, so
+    every module first imported inside the block (a lazily imported torchlens
+    submodule reached through the code under test) is purged from
+    ``sys.modules`` while the package attribute that was bound during the
+    import keeps the old module object. A later test that patches the module
+    through the package attribute then patches a ghost: the code under test
+    re-imports a fresh copy with default constants and the patch never lands.
+    That is an ordering dependence between unrelated test files, visible only
+    when the xdist scheduler puts them on one worker. Hide a single dependency
+    with ``monkeypatch.setitem(sys.modules, name, None)`` (inside
+    ``monkeypatch.context()`` for block scope): it restores only that key.
+    """
+
+    offenders: list[str] = []
+    for path in sorted(_TESTS_ROOT.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "patch.dict" not in source:
+            continue
+        tree = ast.parse(source, filename=str(path))
+        offenders.extend(
+            f"{path.relative_to(_TESTS_ROOT.parent)}:{lineno}"
+            for lineno in _patch_dict_sys_modules_sites(tree)
+        )
+    assert not offenders, (
+        "patch.dict on sys.modules purges modules first imported inside the block and "
+        "desynchronises sys.modules from package attributes; use "
+        "monkeypatch.setitem(sys.modules, name, None) instead: " + ", ".join(offenders)
     )

@@ -24,7 +24,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._utils.rng import _skip_retired_hooks, host_nondeterminism_monitor
+from torchlens._utils.rng import host_nondeterminism_monitor
+from torchlens._utils.rng.monitor_state import _skip_retired_hooks
 
 _HELD_LOCALTIME = time.localtime  # pre-window held alias (module import time)
 
@@ -162,7 +163,7 @@ def test_call_site_time_arg_proof_skips_interposed_call_bookkeeping(
     bookkeeping opcode tomorrow.
     """
 
-    import torchlens._utils.rng as rng_module
+    from torchlens._utils.rng import call_sites as rng_call_sites
 
     class _FakeInstruction:
         def __init__(self, offset: int, opname: str, argval: object = None) -> None:
@@ -187,9 +188,9 @@ def test_call_site_time_arg_proof_skips_interposed_call_bookkeeping(
     ]
 
     monkeypatch.setattr(
-        rng_module._dis_module, "get_instructions", lambda code: iter(fake_instructions)
+        rng_call_sites._dis_module, "get_instructions", lambda code: iter(fake_instructions)
     )
-    proof = rng_module._call_site_time_arg_proof(_FakeFrame(), argcount=1, time_arg_index=0)
+    proof = rng_call_sites._call_site_time_arg_proof(_FakeFrame(), argcount=1, time_arg_index=0)
 
     assert proof == "now_read", (
         f"PRECALL-interposed call site misclassified as {proof!r}; the walk-back "
@@ -306,7 +307,7 @@ def test_auto_seed_freshness_survives_the_restore() -> None:
     random.seed(555)
     first = tl.trace(_TinyNet(), torch.ones(2, 3))
     second = tl.trace(_TinyNet(), torch.ones(2, 3))
-    assert first.random_seed != second.random_seed, (
+    assert first.options.seed != second.options.seed, (
         "restore bracket swallowed the auto-seed draw; captures now reuse one seed"
     )
 

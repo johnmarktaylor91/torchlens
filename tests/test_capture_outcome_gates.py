@@ -16,6 +16,7 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.finalize.arms as finalize_arms
 from torchlens._capture.outcome import (
     CaptureOutcomeError,
     CaptureStatus,
@@ -67,7 +68,7 @@ def test_halted_tlspec_round_trip_adopts_attestation(tmp_path) -> None:
     loaded = tl.load(bundle)
     assert loaded.outcome.status is CaptureStatus.STOPPED
     assert loaded.outcome.is_derived is False
-    assert loaded.outcome.reason == trace.halt_reason
+    assert loaded.outcome.reason == trace.stop_reason
 
 
 def test_pickle_round_trip_adopts_attestation() -> None:
@@ -416,7 +417,6 @@ def test_halted_arm_interrupt_settles_failed_interrupted(
     the fail-closed no-sidecar default instead of a settled record. It must
     settle FAILED/INTERRUPT exactly like the outer interrupt arm."""
 
-    import torchlens._capture.trace as trace_module
     from torchlens._capture.outcome import FailureOrigin, outcome_for
 
     seen: list[object] = []
@@ -425,7 +425,7 @@ def test_halted_arm_interrupt_settles_failed_interrupted(
         seen.append(trace_self)
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(trace_module, "_finalize_halted_trace", _interrupt)
+    monkeypatch.setattr(finalize_arms, "_finalize_halted_trace", _interrupt)
     with pytest.raises(KeyboardInterrupt):
         tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert len(seen) == 1
@@ -527,7 +527,7 @@ def test_f3a_halted_frontier_recovery_precedes_cleanup(monkeypatch) -> None:
         return ctx.kind == "op" and ctx.func_name == "relu"
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=_halt_without_frontier)
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert order  # cleanup ran (after the scan; a broken order crashes above)
 
 

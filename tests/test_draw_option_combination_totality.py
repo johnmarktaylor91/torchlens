@@ -55,7 +55,7 @@ from torchlens._errors import InvalidArgumentError
 # ALIAS        deprecated or legacy alias sentinel for a canonical option;
 #              pairing two spellings of one canonical is incoherent, and the
 #              alias hop itself is asserted by the dedicated deprecation
-#              suites (test_api_renames / test_deprecation_inventory).
+#              suites (test_api_renames / scripts/checks/deprecation_inventory.py).
 # DEFAULT_ONLY declared but exercised at its default: the non-default value
 #              needs an optional runtime this suite must not depend on.
 # ---------------------------------------------------------------------------
@@ -110,7 +110,6 @@ DECLARED: dict[str, tuple[str, Any]] = {
     # -- default-only ---------------------------------------------------------
     "renderer": (DEFAULT_ONLY, 'non-default "dagua" needs the optional dagua runtime'),
     "graph": (DEFAULT_ONLY, "backward and combined graphs need a captured backward pass"),
-    "animate": (DEFAULT_ONLY, "a site label: the picture becomes the HTML animation, not a graph"),
     "bwd": (DEFAULT_ONLY, "backward and combined graphs only"),
     "show_module_paths": (DEFAULT_ONLY, "backward graph only"),
     "show_grad_values": (DEFAULT_ONLY, "backward graph only"),

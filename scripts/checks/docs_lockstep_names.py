@@ -14,7 +14,7 @@ import torchlens as tl
 # DECLARED-surface constant (cited by the reachable-surface gate in
 # tests/oracles/test_oracle_w0_surface.py and the denominator 3-root lint in
 # tests/oracles/test_oracle_w0_lints.py -- one cites the other, never forks).
-PUBLIC_SURFACE_SIZE = 88
+PUBLIC_SURFACE_SIZE = 83
 #: Docs carrying a parseable ``__all__`` count claim. AGENTS.md and torchlens/AGENTS.md
 #: no longer carry this prose directly (2026-10-01 docs move: "docs: move agent
 #: reference material out of startup instructions" / "docs: reserve nested instruction
@@ -149,45 +149,49 @@ def check_dated_test_tier_claim_is_present_and_selector_is_additive() -> None:
 
 
 #: Structured duration-budget claim, required VERBATIM-parseable in both agent
-#: docs. The r3 re-tier shipped a 5s load-scaled budget while CLAUDE.md said
-#: "15s" three lines from its own "<5s" partition table and tests/AGENTS.md
-#: repeated the 15s — no gate parsed either sentence (R41-1/R81-2/R88-3,
-#: cross-filed by all three labs). The numbers are compared against the
-#: shipped conftest constants below, so budget and doc can only move together.
+#: docs. The numbers are compared against the constants ``scripts/tier_durations.py``
+#: ships, so budget and doc can only move together.
 BUDGET_CLAIM_RE = re.compile(
-    r"budget (?P<smoke>\d+(?:\.\d+)?)s and heavy (?P<heavy>\d+(?:\.\d+)?)s "
-    r"\(load-scaled 1x-4x plus a (?P<grace>\d+(?:\.\d+)?)s\s+boundary-noise grace, "
-    r"charged\s+on min\(wall, cpu\)\)"
+    r"budget\s+(?P<smoke>\d+(?:\.\d+)?)s\s+and\s+heavy\s+(?P<heavy>\d+(?:\.\d+)?)s\s+per\s+test\s+"
+    r"\(the\s+slowest\s+measured\s+test\s+per\s+file\s+in\s+`tests/tiers/durations\.csv`,\s+"
+    r"allowed\s+up\s+to\s+(?P<factor>\d+(?:\.\d+)?)x\s+under\s+a\s+parallel\s+or\s+"
+    r"coverage-instrumented\s+measurement,\s+plus\s+a\s+(?P<grace>\d+(?:\.\d+)?)s\s+grace\)"
+)  # the docs wrap this sentence across lines
+
+_BUDGET_CONSTANTS = (
+    ("smoke", r"^SMOKE_DURATION_BUDGET_SECONDS\s*=\s*([\d.]+)"),
+    ("heavy", r"^HEAVY_DURATION_BUDGET_SECONDS\s*=\s*([\d.]+)"),
+    ("grace", r"^DURATION_BUDGET_GRACE_SECONDS\s*=\s*([\d.]+)"),
+    ("factor", r"^MAX_SLOWDOWN_FACTOR\s*=\s*([\d.]+)"),
 )
 
 
 def check_documented_duration_budgets_match_the_shipped_constants() -> None:
-    """AGENTS.md and tests/AGENTS.md budget sentences track conftest reality."""
+    """AGENTS.md and tests/AGENTS.md budget sentences track the durations script."""
 
     root = _repo_root()
-    conftest_text = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
+    script_text = (root / "scripts" / "tier_durations.py").read_text(encoding="utf-8")
     shipped = {
         name: float(match)
-        for name, pattern in (
-            ("smoke", r"^SMOKE_DURATION_BUDGET_SECONDS\s*=\s*([\d.]+)"),
-            ("heavy", r"^HEAVY_DURATION_BUDGET_SECONDS\s*=\s*([\d.]+)"),
-            ("grace", r"^DURATION_BUDGET_GRACE_SECONDS\s*=\s*([\d.]+)"),
-        )
-        for match in re.findall(pattern, conftest_text, flags=re.MULTILINE)
+        for name, pattern in _BUDGET_CONSTANTS
+        for match in re.findall(pattern, script_text, flags=re.MULTILINE)
     }
-    assert set(shipped) == {"smoke", "heavy", "grace"}, "conftest budget constants moved or renamed"
+    assert set(shipped) == {name for name, _ in _BUDGET_CONSTANTS}, (
+        "scripts/tier_durations.py budget constants moved or renamed"
+    )
     for doc in ("AGENTS.md", "tests/AGENTS.md"):
         text = (root / doc).read_text(encoding="utf-8")
         claim = BUDGET_CLAIM_RE.search(text)
         assert claim is not None, (
-            f"{doc} lost its structured duration-budget sentence ('budget Ns and "
-            "heavy Ms (load-scaled 1x-4x, charged on min(wall, cpu))'); the doc "
-            "and the shipped budget must move together (R41-1)"
+            f"{doc} lost its structured duration-budget sentence ('budget Ns and heavy Ms "
+            "per test (the slowest measured test per file in `tests/tiers/durations.csv`, "
+            "allowed up to Fx under a parallel or coverage-instrumented measurement, plus a "
+            "Gs grace)'); the doc and the shipped budget must move together"
         )
-        for tier in ("smoke", "heavy", "grace"):
-            assert float(claim.group(tier)) == shipped[tier], (
-                f"{doc} documents a {tier} budget of {claim.group(tier)}s but "
-                f"tests/conftest.py ships {shipped[tier]}s — update both together"
+        for name in shipped:
+            assert float(claim.group(name)) == shipped[name], (
+                f"{doc} documents a {name} budget of {claim.group(name)} but "
+                f"scripts/tier_durations.py ships {shipped[name]}; update both together"
             )
 
 

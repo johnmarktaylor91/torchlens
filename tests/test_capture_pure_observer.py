@@ -39,6 +39,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 from torchlens.errors import BufferSinkRoutingError
 from torchlens.options import CaptureOptions
 from torchlens.types import AttributeWrite
@@ -363,8 +364,8 @@ def test_d18_still_refuses_unproven_train_mode_evidence():
     model = _train_bn_stack()
     log = tl.trace(model, torch.randn(2, 3, 8, 8))
     for label in log.internal_sink_ops:
-        layer = log.layer_dict_all_keys[label]
-        if layer.layer_type == "buffer":
+        layer = log._layer_dict_all_keys[label]
+        if record_type(layer) == "buffer":
             layer._internal_set("buffer_value_changed", None)
     with pytest.raises(BufferSinkRoutingError, match="unproven"):
         log.run(inputs=torch.randn(2, 3, 8, 8))
@@ -415,10 +416,10 @@ def test_carry_state_does_not_change_the_trace():
     x = torch.randn(2, 3, 8, 8)
     pure = tl.trace(model, x, capture=CaptureOptions(seed=3))
     carried = tl.trace(twin, x, capture=CaptureOptions(seed=3, carry_state=True))
-    assert [op.layer_label for op in pure.layer_list] == [
-        op.layer_label for op in carried.layer_list
+    assert [op.layer_label for op in pure._layer_list] == [
+        op.layer_label for op in carried._layer_list
     ]
-    for left, right in zip(pure.layer_list, carried.layer_list, strict=True):
+    for left, right in zip(pure._layer_list, carried._layer_list, strict=True):
         if isinstance(left.out, torch.Tensor):
             assert torch.equal(left.out, right.out), left.layer_label
 

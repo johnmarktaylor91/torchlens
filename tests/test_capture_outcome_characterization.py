@@ -110,7 +110,7 @@ def test_planted_step1_failure_survives_with_partial_log(monkeypatch) -> None:
     def _boom(*args: object, **kwargs: object) -> None:
         raise ValueError("planted step1")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted step1") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
     assert hasattr(exc_info.value, "partial_log")
@@ -161,7 +161,7 @@ def test_halted_postprocess_failure_propagates_with_halt_context(monkeypatch) ->
     def _boom(*args: object, **kwargs: object) -> None:
         raise ValueError("planted halted-pp")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted halted-pp") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert isinstance(exc_info.value.__context__, StopSignal)
@@ -195,9 +195,9 @@ def test_halted_trace_basic_shape() -> None:
     """A halted capture finishes postprocess: finished truthy, halted truthy."""
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert trace._tracing_finished is True
-    assert trace.halt_frontier == trace.halt_reason
+    assert trace.graph.stop_frontier == trace.stop_reason
 
 
 def test_halted_trace_has_no_transient_attribution_leak() -> None:
@@ -293,8 +293,8 @@ def test_halted_bn_buffer_topology_matches_complete_prefix() -> None:
     trace_halt = tl.trace(model_halt, x, stop_after=_halt_on_linear)
 
     assert list(trace_full.buffer_layers) == list(trace_halt.buffer_layers)
-    full_labels = [entry.layer_label for entry in trace_full.layer_list]
-    halt_labels = [entry.layer_label for entry in trace_halt.layer_list]
+    full_labels = [entry.layer_label for entry in trace_full._layer_list]
+    halt_labels = [entry.layer_label for entry in trace_halt._layer_list]
     # The halted graph is the complete graph's prefix plus its own output node.
     assert halt_labels[:-1] == [
         label for label in full_labels if label not in ("relu_1_4", "output_1")
@@ -348,7 +348,7 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
             return torch.relu(self.linear(x))
 
     def _halt_second_pass(ctx: object) -> bool:
-        return ctx.kind == "op" and ctx.func_name == "relu" and ctx.pass_index >= 2
+        return ctx.kind == "op" and ctx.func_name == "relu" and ctx.pass_number >= 2
 
     x = torch.ones(1, 3)
     with Recorder(

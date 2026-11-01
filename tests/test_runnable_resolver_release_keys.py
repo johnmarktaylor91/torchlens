@@ -23,7 +23,7 @@ from torchlens._runnable import (
 from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens._utils.display import identity
 from torchlens.errors import RunnablePreflightError
-from torchlens.intervention.resolver import function_registry_key_from_callable
+from torchlens.intervention._resolver_registry import function_registry_key_from_callable
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
@@ -97,7 +97,7 @@ def _capture(model: nn.Module, inputs: torch.Tensor) -> Any:
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -310,7 +310,10 @@ def test_identity_model_loaded_run_is_verified(tmp_path: Path) -> None:
     "key",
     (
         FunctionRegistryKey(
-            "custom", "identity", "function", import_path="torchlens._utils:identity"
+            "custom",
+            "identity",
+            "function",
+            import_path="torchlens._postprocess.graph_traversal:identity",
         ),
         FunctionRegistryKey(
             "custom",

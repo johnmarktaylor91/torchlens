@@ -44,7 +44,7 @@ from __future__ import annotations
 from array import array
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from ..errors.episode import BundleRelationError
 from ._fed_by import (
@@ -507,8 +507,8 @@ def _bundle_token_pairs(self: Bundle, reader: str | Trace, source: str | Trace) 
 
     Arguments follow ``relate("fed_by", later, earlier)``: the READER (the
     later call, whose prompt holds the text) first, then the SOURCE (the
-    earlier call that produced it). Exposed as the dynamic method
-    ``Bundle.token_pairs`` (spelling documented-unstable).
+    earlier call that produced it). The body of ``Bundle.token_pairs``
+    (spelling documented-unstable).
 
     Only spans of ``verified``/``matched`` rows from ``reader`` to ``source``
     that re-verify now are paired, and only on tokens no other row between
@@ -562,9 +562,3 @@ def _bundle_token_pairs(self: Bundle, reader: str | Trace, source: str | Trace) 
         excluded=tuple(claims.excluded),
         coverage=coverage,
     )
-
-
-def register_token_pairs(table: dict[str, Callable[..., Any]]) -> None:
-    """Install ``token_pairs`` on the Bundle dynamic-method table."""
-
-    table["token_pairs"] = cast("Callable[..., Any]", _bundle_token_pairs)

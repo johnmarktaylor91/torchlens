@@ -17,15 +17,14 @@ from torch import nn
 import torchlens as tl
 from torchlens._ir.container import TupleIndex
 from torchlens._ir.selector_eval import selector_from_spec
+from torchlens._selection.selectors import output_at
 from torchlens.intervention import check_spec_compat
+from torchlens.intervention._resolver_registry import function_registry_key_from_callable
 from torchlens.intervention.errors import (
     MultiMatchWarning,
     OpaqueCallableError,
     ReplayPreconditionError,
     UntrustedCallableError,
-)
-from torchlens.intervention.resolver import (
-    function_registry_key_from_callable,
 )
 from torchlens.intervention.save import (
     _sync_spec_records_from_log,
@@ -33,7 +32,6 @@ from torchlens.intervention.save import (
     resolve_function_registry_key,
     save_intervention,
 )
-from torchlens.intervention.selectors import output_at
 from torchlens.intervention.types import (
     Edit,
     FireRecord,
@@ -42,7 +40,7 @@ from torchlens.intervention.types import (
 )
 from torchlens.io import load_intervention_spec
 
-_INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention.resolver")
+_INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention._resolver_registry")
 
 
 class _TanhModel(nn.Module):
@@ -126,7 +124,7 @@ def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Tr
 
     model = model or _ReluModel()
     x = x if x is not None else torch.randn(2, 3)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 @pytest.mark.smoke
@@ -159,7 +157,7 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
         _ReluModel(),
         torch.randn(2, 3),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("relu"): tl.zero_ablate()},
         ),
     )
@@ -172,7 +170,7 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
 
     assert spec.records
     assert all(isinstance(record, FireRecord) for record in spec.records)
-    assert any(record.direction == "forward" for record in spec.records)
+    assert any(record.signal == "forward" for record in spec.records)
     assert any(record.replaced is True for record in spec.records)
 
 
@@ -184,7 +182,7 @@ def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     log = tl.trace(
         _ReluModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
     )
     path = tmp_path / "predicate_intervention.tlspec"
@@ -207,7 +205,7 @@ def test_container_path_fire_records_save_at_default_level(tmp_path: Path) -> No
         _ChunkModel(),
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("chunk"): tl.zero_ablate()},
         ),
     )
@@ -255,7 +253,7 @@ def test_target_spec_selector_rehydration_covers_path_and_pattern_selectors() ->
     log = tl.trace(
         _ChunkModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
     output_spec = output_at(0).to_target_spec()
@@ -333,7 +331,7 @@ def test_stored_helper_keyword_outside_the_constructor_refuses_typed(tmp_path: P
         _ReluModel(),
         torch.randn(2, 3),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("relu"): tl.zero_ablate()},
         ),
     )
@@ -433,7 +431,7 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
         import side_effect_helper_mod
 
         helper = Edit(
-            helper_name="side_effect_helper",
+            name="side_effect_helper",
             portability="import_ref",
             factory=side_effect_helper_mod.make_hook,
         )
@@ -483,16 +481,16 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp_grad(0, 0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
     log.save_intervention(path, level="portable")
     spec = load_intervention_spec(path, trust_custom_callables=True)
 
-    backward_records = [record for record in spec.records if record.direction == "backward"]
+    backward_records = [record for record in spec.records if record.signal == "backward"]
     assert backward_records
-    assert backward_records[0].backward_pass_index == 1
+    assert backward_records[0].backward_pass_number == 1
     assert backward_records[0].call_index == 1
 
 
@@ -505,7 +503,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale_grad(2.0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_execute.tlspec"
 
@@ -536,7 +534,7 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale_grad(2.0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
     path = tmp_path / "backward_before_pass.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -562,7 +560,7 @@ def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> Non
         _ReluModel(),
         torch.randn(2, 3),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.func("relu"): tl.zero_ablate()},
         ),
     )
@@ -604,13 +602,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp_grad(0, 0),
+        edit=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
-        direction="backward",
-        helper_name="clamp_grad",
+        signal="backward",
+        edit_name="clamp",
         timestamp=1.0,
-        backward_pass_index=1,
+        backward_pass_number=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=0,
@@ -620,13 +618,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp_grad(0, 0),
+        edit=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
-        direction="backward",
-        helper_name="clamp_grad",
+        signal="backward",
+        edit_name="clamp",
         timestamp=2.0,
-        backward_pass_index=1,
+        backward_pass_number=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=0,
@@ -636,13 +634,13 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp_grad(0, 0),
+        edit=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
-        direction="backward",
-        helper_name="clamp_grad",
+        signal="backward",
+        edit_name="clamp",
         timestamp=1.0,
-        backward_pass_index=1,
+        backward_pass_number=1,
         call_index=1,
         grad_kind="grad_input",
         tuple_index=1,
@@ -650,7 +648,7 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
     )
     spec = InterventionSpec(records=[first, duplicate, distinct_tuple])
 
-    _sync_spec_records_from_log(spec, SimpleNamespace(layer_list=[], grad_fn_logs={}))
+    _sync_spec_records_from_log(spec, SimpleNamespace(_layer_list=[], _grad_fn_logs={}))
 
     assert spec.records == [first, distinct_tuple]
 
@@ -915,9 +913,9 @@ def test_red_team_custom_module_side_effect_is_not_imported(
 
 _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE = [
     ("torchlens._io.tlspec:os.system", "system"),
-    ("torchlens._utils:importlib.import_module", "import_module"),
-    ("torchlens.intervention.selectors:builtins.eval", "eval"),
-    ("torchlens._utils:subprocess.getoutput", "getoutput"),
+    ("torchlens.report._environment:importlib.import_module", "import_module"),
+    ("torchlens._selection.selectors:builtins.eval", "eval"),
+    ("torchlens.report._environment:subprocess.getoutput", "getoutput"),
 ]
 
 

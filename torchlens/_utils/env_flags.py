@@ -112,7 +112,7 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
         EnvFlagSpec(
             name="TORCHLENS_AUTO",
             kind="bool",
-            reader="torchlens._user_funcs / torchlens.experimental",
+            reader="torchlens._capture.prepare.dispatch / torchlens.experimental",
             description=(
                 "Requests the unsupported implicit capture mode; TRUE refuses "
                 "capture entry with auto_environment_unsupported."
@@ -138,6 +138,17 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
                 "Collapse quality-planner wall-clock watchdog master switch "
                 "(default TRUE; FALSE disables the watchdog everywhere)."
             ),
+        ),
+        EnvFlagSpec(
+            name="TORCHLENS_CONFORMANCE_ECOSYSTEM",
+            kind="enum",
+            reader="torchlens.conformance._rosters",
+            description=(
+                "Enables the pretrained ecosystem rows of the conformance "
+                "rosters, which download weights; '1' runs them, unset (the "
+                "default) leaves them out of the scorecard."
+            ),
+            values=("", "1"),
         ),
         EnvFlagSpec(
             name="TORCHLENS_DETERMINISTIC",

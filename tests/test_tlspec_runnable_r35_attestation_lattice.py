@@ -39,9 +39,7 @@ def _save(model: nn.Module, args: Any, path: Path) -> Path:
     trace = tl.trace(
         model,
         args,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
     return path
@@ -94,7 +92,7 @@ def test_r35_report_constructor_rejects_attested_nonverified() -> None:
         StateSource,
         WitnessCompleteness,
     )
-    from torchlens._runnable_execution import _run_report
+    from torchlens._runnable.path_faithfulness import _run_report
     from torchlens.types import ReadinessReport
 
     readiness = ReadinessReport(

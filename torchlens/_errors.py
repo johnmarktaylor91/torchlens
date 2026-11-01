@@ -600,3 +600,13 @@ class AmbiguousOpLookupError(_ActionableErrorMixin, ConfigurationError, ValueErr
 
 class ShapeInferenceError(ConfigurationError, RuntimeError):
     """Raised when debug input-shape inference cannot produce a valid input."""
+
+
+class SelectionError(ConfigurationError, ValueError):
+    """Carrier class for the closed ``selection_*`` refusal codes.
+
+    Branch on ``exc.fields["code"]`` (``selection_trace_mismatch`` /
+    ``selection_bool_ambiguous`` / ``selection_kind_incompatible`` /
+    ``selection_unresolvable`` / ``selection_apply_invalid`` /
+    ``selection_alignment_invalid``), never on message text.
+    """

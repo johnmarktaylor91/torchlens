@@ -2,7 +2,7 @@
 
 The 2026-08 shim-removal pass (RULINGS Batch-8: FULL deletion, clean v2)
 deleted every runtime deprecation shim, warned alias, alias property, and
-moved-name redirect. ``tests/test_deprecation_inventory.py`` pins the PACKAGE
+moved-name redirect. ``scripts/checks/deprecation_inventory.py`` pins the PACKAGE
 deprecation-free (AST scanners over shipped code); THIS module pins the REPO
 free of the deleted spellings themselves -- code, docs, notebooks, examples,
 benchmarks, scripts -- so a stale example or a resurrected alias cannot creep
@@ -62,7 +62,7 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
         r"|unwrap_torch|wrapped|get_model_metadata|check_spec_compat"
         r"|check_metadata_invariants|resolve_sites|preview_fastlog"
         r"|ModuleInputSnapshot|PreHookEffect|TensorInputObservation|TraceState"
-        r"|SaveLevel)\b"
+        r"|SaveLevel|zero_grad|scale_grad|clamp_grad|add_grad_noise|clip_grad|hook_grad)\b"
     ),
     # Removed Trace/Bundle method spellings (canonical: push/push_from/run/
     # span/conditional_arm_entry_edges). ``validate_saved_outs`` is absent on
@@ -82,7 +82,7 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     # out of reach for a line lint and are covered by the runtime TypeError.
     "trace_flat": re.compile(
         r"(?:tl|torchlens)\.trace\s*\([^)\n]*\b(?:layers_to_save|vis_mode|vis_opt"
-        r"|intervention_ready|backward_ready|output_style|output_head|random_seed"
+        r"|replayable|backward_ready|output_style|output_head|random_seed"
         r"|save_grads|structure_only|save_outs_to|out_sink|keep_outs_in_memory"
         r"|activation_transform|save_arg_values|capture_container_structure)\s*="
     ),
@@ -134,6 +134,12 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
         r"|(?<![\w.])(?:(?:tl|torchlens)\.)?(?:attribution|attr)\.AttributionError\b"
         r"|\bfor_target\b"
     ),
+    # The runnable package move (remove-and-rename, no shim): the root runnable
+    # modules live in the private ``torchlens._runnable`` package as bare
+    # submodules (``torchlens._runnable.state``); the dotted and path spellings
+    # of the old root modules name nothing. ``torchlens._runnable`` itself is
+    # unchanged, so the pattern needs the underscore after the package name.
+    "runnable_package": re.compile(r"\btorchlens[./]_runnable_[a-z]"),
 }
 
 #: Lines spelling a grouped-option bundle are exempt from ``trace_flat``.
@@ -171,6 +177,13 @@ _TL_MOVED_NEEDLE_NAMES = (
     "TensorInputObservation",
     "TraceState",
     "SaveLevel",
+    # Gradient-only edit helpers, removed for edits on tl.grad(site) (gradient sites).
+    "zero_grad",
+    "scale_grad",
+    "clamp_grad",
+    "add_grad_noise",
+    "clip_grad",
+    "hook_grad",
 )
 
 #: Plain-substring prefilter needles per group: a group's regex can only
@@ -230,6 +243,7 @@ _NEEDLES: dict[str, tuple[str, ...]] = {
         "AttributionError",
         "for_target",
     ),
+    "runnable_package": ("torchlens._runnable_", "torchlens/_runnable_"),
 }
 
 #: The audited-legitimate ledger: path -> (groups | {"ALL"}, reason).
@@ -478,6 +492,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         "inert_opts": "opts = SaveOptions(output_dir='out')\n",
         "batch2_report": 'payload = trace.explain(format="json")\n',
         "r1_renames": "from torchlens import Bytes, Duration, Flops, Macs, Quantity\n",
+        "runnable_package": "from torchlens._runnable_state import prepare_runnable_state\n",
     }
     assert set(planted) == set(_FORBIDDEN)
     assert set(_NEEDLES) == set(_FORBIDDEN), "every group needs a needle row"
@@ -512,6 +527,20 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         "sub = table.target(target_id)\n",
     ):
         assert not _scan_file(tmp_path / "canonical_r1_renames.py", canonical), canonical
+
+    for resurrected in (
+        "monkeypatch.setattr(torchlens._runnable_execution, 'x', 1)\n",
+        "SOURCE = 'torchlens/_runnable_seam.py'\n",
+    ):
+        hits = _scan_file(tmp_path / "planted_runnable_package.py", resurrected)
+        assert any(group == "runnable_package" for group, _, _ in hits), resurrected
+    for canonical in (
+        "from torchlens._runnable.state import prepare_runnable_state\n",
+        "from torchlens._runnable import ReadinessReport\n",
+        "SOURCE = 'torchlens/_runnable/seam.py'\n",
+        "trace._runnable_path_faithfulness\n",
+    ):
+        assert not _scan_file(tmp_path / "canonical_runnable_package.py", canonical), canonical
 
     clean = 'log = tl.trace(model, x, save="all")\n'
     assert not _scan_file(tmp_path / "clean.py", clean), (

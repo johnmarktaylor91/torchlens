@@ -50,7 +50,7 @@ def test_witness_side_one_constructions_are_zero_by_rule() -> None:
     )
     try:
         by_func: dict[str, list] = {}
-        for op in log.layer_list:
+        for op in log._layer_list:
             by_func.setdefault(op.func_name, []).append(op)
         for name in ("arange", "tensor", "zeros", "ones_like"):
             assert name in by_func, f"construction {name} not captured"
@@ -122,7 +122,7 @@ def test_four_way_classification_is_total() -> None:
         log = tl.trace(model, x, save=None)
         try:
             coverage = log.compute_coverage
-            assert sum(coverage.values()) == len(log.layer_list)
+            assert sum(coverage.values()) == len(log._layer_list)
             assert coverage["unknown"] == len(log.unknown_flop_ops) or coverage["unknown"] == sum(
                 group.count for group in log.unknown_flop_ops
             )
@@ -147,7 +147,7 @@ def test_gpt2_reaches_full_coverage_sentence() -> None:
         assert log.unknown_flop_ops == ()
         # The 25 former "unknowns" (tensor x24, arange x1) are zero-by-rule.
         assert coverage["zero_by_rule"] >= 25
-        assert coverage["known"] + coverage["zero_by_rule"] == log.num_ops
+        assert coverage["known"] + coverage["zero_by_rule"] == log._num_ops
         # Reclassification adds ZERO FLOPs: the partition pin is unchanged.
         assert int(log.cost.total_flops_forward) == 3_974_725_648
     finally:

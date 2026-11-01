@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 from torchlens.recording import RecordContext
 
 
@@ -88,7 +89,14 @@ def test_sparse_shell_ops_skip_exhaustive_enrichment_work(
 ) -> None:
     """Unselected sparse operations never enter metadata or payload machinery."""
 
-    from torchlens.backends.torch import _ops_retention, ops, wrappers
+    from torchlens.backends.torch import (
+        _ops_arguments,
+        _ops_exhaustive,
+        _ops_predicate_events,
+        _ops_predicates,
+        ops,
+        wrappers,
+    )
 
     def forbidden(*args: object, **kwargs: object) -> None:
         """Fail if shell-only capture enters an exhaustive enrichment helper."""
@@ -98,9 +106,15 @@ def test_sparse_shell_ops_skip_exhaustive_enrichment_work(
 
     monkeypatch.setattr(ops, "detect_torch_alias_contract", forbidden)
     monkeypatch.setattr(ops, "detect_torch_output_alias_contract", forbidden)
-    monkeypatch.setattr(ops, "_record_predicate_output", forbidden)
+    monkeypatch.setattr(_ops_predicates, "_record_predicate_output", forbidden)
+    # The real callers hold their own bound copies of these helpers.
+    monkeypatch.setattr(_ops_exhaustive, "detect_torch_alias_contract", forbidden)
+    monkeypatch.setattr(_ops_exhaustive, "detect_torch_output_alias_contract", forbidden)
+    monkeypatch.setattr(_ops_predicates, "detect_torch_alias_contract", forbidden)
+    monkeypatch.setattr(_ops_predicates, "detect_torch_output_alias_contract", forbidden)
+    monkeypatch.setattr(_ops_predicate_events, "_record_predicate_output", forbidden)
     # The saved-argument copy wrappers.py calls (imported at call time).
-    monkeypatch.setattr(_ops_retention, "_copy_saved_arg_tree", forbidden)
+    monkeypatch.setattr(_ops_arguments, "_copy_saved_arg_tree", forbidden)
     monkeypatch.setattr(wrappers, "log_current_rng_states", forbidden)
 
     with pytest.warns(UserWarning, match="matched zero sites"):
@@ -134,15 +148,15 @@ def _assert_saved_ops_match_full_trace(
     )
     saved_ops = [
         op
-        for op in selective.layer_list
-        if op.has_saved_activation and op.layer_type not in {"input", "output"}
+        for op in selective._layer_list
+        if op.has_saved_activation and op.type not in {"input", "output"}
     ]
     assert saved_ops
     for saved_op in saved_ops:
-        expected = full.layer_dict_all_keys[saved_op._label_raw].out
+        expected = full._layer_dict_all_keys[saved_op._label_raw].out
         assert torch.equal(saved_op.out, expected), saved_op.label
-    for unsaved_op in selective.layer_list:
-        if unsaved_op.layer_type in {"input", "output"} or unsaved_op.has_saved_activation:
+    for unsaved_op in selective._layer_list:
+        if unsaved_op.type in {"input", "output"} or unsaved_op.has_saved_activation:
             continue
         with pytest.raises(ValueError, match="not saved"):
             _ = unsaved_op.out
@@ -156,14 +170,14 @@ def test_trace_save_func_selector_keeps_only_matching_payloads() -> None:
     log = tl.trace(model, x, save=tl.func("relu"), capture=tl.options.CaptureOptions(seed=11))
     saved_ops = [
         op
-        for op in log.layer_list
-        if op.has_saved_activation and op.layer_type not in {"input", "output"}
+        for op in log._layer_list
+        if op.has_saved_activation and op.type not in {"input", "output"}
     ]
     assert saved_ops
     assert {op.func_name for op in saved_ops} == {"relu"}
     relu_op = saved_ops[0]
     assert torch.equal(log[relu_op.label].out, relu_op.out)
-    unsaved = next(op for op in log.layer_list if op.layer_type == "add")
+    unsaved = next(op for op in log._layer_list if op.type == "add")
     with pytest.raises(ValueError, match="not saved"):
         _ = unsaved.out
 
@@ -175,7 +189,7 @@ def test_trace_save_func_selector_preserves_predicate_event_fields() -> None:
     x = torch.randn(2, 4)
     log = tl.trace(model, x, save=tl.func("relu"), capture=tl.options.CaptureOptions(seed=17))
 
-    relu_op = next(op for op in log.layer_list if op.func_name == "relu")
+    relu_op = next(op for op in log._layer_list if op.func_name == "relu")
     event = log.event_stream.op_event_by_label_raw[relu_op._label_raw]
 
     assert event.function.func_name == "relu"
@@ -194,12 +208,10 @@ def test_selective_save_keeps_unsaved_non_orphan_op_metadata() -> None:
     x = torch.randn(2, 4)
     log = tl.trace(model, x, save=tl.func("relu"), capture=tl.options.CaptureOptions(seed=13))
 
-    unsaved = next(
-        op for op in log.layer_list if op.layer_type == "add" and not op.has_saved_activation
-    )
-    assert unsaved in log.layer_list
-    assert log.layer_dict_main_keys[unsaved.label] is unsaved
-    assert log.layer_dict_all_keys[unsaved.label] is unsaved
+    unsaved = next(op for op in log._layer_list if op.type == "add" and not op.has_saved_activation)
+    assert unsaved in log._layer_list
+    assert log._layer_dict_main_keys[unsaved.label] is unsaved
+    assert log._layer_dict_all_keys[unsaved.label] is unsaved
     assert log[unsaved.label] is unsaved
     assert unsaved.label in log.op_labels
     assert unsaved.layer_label in log.layer_labels
@@ -248,9 +260,9 @@ def test_layers_to_save_retains_output_parent_when_selector_misses_parent() -> N
     assert output.has_saved_activation is True
     assert isinstance(output.out, torch.Tensor)
     assert any(
-        op.layer_type == "add" and op.has_saved_activation
-        for op in log.layer_list
-        if op.layer_type not in {"input", "output"}
+        record_type(op) == "add" and op.has_saved_activation
+        for op in log._layer_list
+        if op.type not in {"input", "output"}
     )
 
 
@@ -281,9 +293,7 @@ def test_layers_to_save_matches_legacy_label_spellings(
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=19), save=[selector])
 
     saved_relu_labels = {
-        op.layer_label
-        for op in log.layer_list
-        if op.layer_type == "relu" and op.has_saved_activation
+        op.layer_label for op in log._layer_list if op.type == "relu" and op.has_saved_activation
     }
     assert saved_relu_labels == expected_relu_labels
 
@@ -297,8 +307,8 @@ def test_integer_layers_to_save_uses_single_legacy_layer_index() -> None:
 
     saved_compute_labels = [
         op.layer_label
-        for op in log.layer_list
-        if op.has_saved_activation and op.layer_type not in {"input", "output"}
+        for op in log._layer_list
+        if op.has_saved_activation and op.type not in {"input", "output"}
     ]
     assert saved_compute_labels == ["relu_1_2", "linear_3_5"]
 

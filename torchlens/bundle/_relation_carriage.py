@@ -1,6 +1,6 @@
-"""Relation-carriage dynamic methods for ``Bundle`` (C07X, foldB S6).
+"""Relation-carriage method bodies for ``Bundle`` (C07X, foldB S6).
 
-The budget-preserving dynamic methods that carry the S6 member-relation
+The method bodies that carry the S6 member-relation
 table: ``Bundle.relate`` appends validated rows (R4 new-table install) and
 ``Bundle.episode_status`` folds ``episode_member`` rows into the
 derived episode status (a DERIVATION, never Bundle-level settlement).
@@ -11,7 +11,7 @@ both names and installs them on the accessor table.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from ..errors.episode import BundleRelationError
@@ -219,7 +219,7 @@ def _bundle_upstream(self: Bundle, name: str | Trace) -> tuple[str, ...]:
     Walks the ordering relation kinds (``fed_by``, ``selected_by``,
     ``successor_of``, ``forked_from``, ``escalates``) from the later member to the earlier one:
     for "critique fed_by draft", ``upstream("critique")`` is ``("draft",)``.
-    Exposed as the dynamic method ``Bundle.upstream``.
+    The body of ``Bundle.upstream``.
     """
 
     return _ordering_walk(self, name, upstream=True)
@@ -229,26 +229,11 @@ def _bundle_downstream(self: Bundle, name: str | Trace) -> tuple[str, ...]:
     """Return every member that transitively came after ``name``, nearest first.
 
     The reverse of :func:`_bundle_upstream` over the same ordering rows:
-    ``downstream("draft")`` is ``("critique", ...)``. Exposed as the dynamic
-    method ``Bundle.downstream``.
+    ``downstream("draft")`` is ``("critique", ...)``. The body of
+    ``Bundle.downstream``.
     """
 
     return _ordering_walk(self, name, upstream=False)
-
-
-def register_relation_walks(table: dict[str, Callable[..., Any]]) -> None:
-    """Install the walk helpers on the Bundle dynamic-method table."""
-
-    from ._alternatives import _bundle_add_alternative
-    from ._token_divergence import _bundle_token_divergence
-    from ._token_spans import register_token_pairs
-
-    table["upstream"] = _bundle_upstream
-    table["downstream"] = _bundle_downstream
-    register_token_pairs(table)
-    # Steer one call and re-run the harness (harness.2).
-    table["token_divergence"] = _bundle_token_divergence
-    table["add_alternative"] = _bundle_add_alternative
 
 
 def _bundle_derive_episode_status(

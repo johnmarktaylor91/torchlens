@@ -53,9 +53,9 @@ def test_string_input_hf_model_matches_trace_text() -> None:
     auto_log = tl.trace(model, "Hello world!", save="none")
     direct_log = tl.bridge.transformers.trace_text(model, "Hello world!", save="none")
 
-    assert auto_log.num_ops == direct_log.num_ops
-    assert len(auto_log.layer_logs) == len(direct_log.layer_logs)
-    assert auto_log.num_modules == direct_log.num_modules
+    assert auto_log._num_ops == direct_log._num_ops
+    assert len(auto_log._layer_logs) == len(direct_log._layer_logs)
+    assert len(auto_log.modules) == len(direct_log.modules)
 
 
 @pytest.mark.slow
@@ -67,8 +67,8 @@ def test_list_of_strings_input_hf_model_batches() -> None:
 
     log = tl.trace(model, ["a", "b", "c"], save="none")
 
-    assert log.num_ops > 0
-    assert log.num_modules > 0
+    assert log._num_ops > 0
+    assert len(log.modules) > 0
 
 
 def test_chat_message_input_enables_chat_template(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -108,7 +108,7 @@ def test_explicit_transform_overrides_autoroute(monkeypatch: pytest.MonkeyPatch)
         save="none",
     )
 
-    assert log.num_ops > 0
+    assert log._num_ops > 0
 
 
 def test_tensor_input_passes_through_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -122,7 +122,7 @@ def test_tensor_input_passes_through_unchanged(monkeypatch: pytest.MonkeyPatch) 
         save="none",
     )
 
-    assert log.num_ops > 0
+    assert log._num_ops > 0
 
 
 def test_non_hf_model_text_input_keeps_existing_error(monkeypatch: pytest.MonkeyPatch) -> None:

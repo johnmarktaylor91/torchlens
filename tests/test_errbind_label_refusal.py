@@ -53,7 +53,7 @@ def cnn() -> tuple[_Counted, torch.Tensor]:
 
 REFUSED = {
     "label_final": lambda: tl.label("relu_1_2"),
-    "label_short": lambda: tl.label("relu_1"),
+    "short_label": lambda: tl.label("relu_1"),
     "label_pass": lambda: tl.label("conv2d_2_3:1"),
     "label_short_pass": lambda: tl.label("relu_1:1"),
     "label_unknown": lambda: tl.label("nonexistent"),
@@ -113,7 +113,7 @@ def test_printed_remedy_runs_and_edits_the_labelled_op(cnn, label: str) -> None:
     op_type = printed.group(0)[len("tl.func('") : -2]
     trace = tl.trace(model, x)
     assert trace[label.split(":")[0]].func_name == op_type
-    same_type = [layer for layer in trace.layer_list if layer.func_name == op_type]
+    same_type = [layer for layer in trace._layer_list if layer.func_name == op_type]
     assert bound.last_report.num_fires == len(same_type) >= 1
 
 

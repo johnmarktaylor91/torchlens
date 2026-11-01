@@ -100,7 +100,7 @@ class PartialTrace:
     # partial products instead of being structurally blind to them. Failed
     # partials never persist (`to_trace`/`Trace.save` refuse), so both fields
     # are session-time DROP.
-    FIELD_POLICY: ClassVar[Mapping[str, Any]] = MappingProxyType(
+    _FIELD_POLICY: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
             "trace": FieldPolicy.DROP,
             "original_exception": FieldPolicy.DROP,
@@ -161,7 +161,7 @@ class PartialTrace:
             return tuple(getattr(raw_graph_ws, "raw_layer_dict", {}).values())
         if self.trace.__dict__.get("_nonfinite_prefix_finalized", False):
             try:
-                return tuple(self.trace.layer_list)
+                return tuple(self.trace._layer_list)
             except Exception:  # noqa: BLE001 - a partial never raises from inspection.
                 return ()
         return ()

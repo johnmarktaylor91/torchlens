@@ -66,10 +66,8 @@ def _capture_pair(seed: int, offset: float) -> tl.Bundle:
     x = torch.randn(2, 3)
     baseline_model = _TinyRelu()
     changed_model = _TinyRelu(offset=offset)
-    baseline = tl.trace(
-        baseline_model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
-    changed = tl.trace(changed_model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(baseline_model, x, capture=tl.options.CaptureOptions(replayable=True))
+    changed = tl.trace(changed_model, x, capture=tl.options.CaptureOptions(replayable=True))
     return tl.Bundle({"baseline": baseline, "changed": changed}, baseline="baseline")
 
 
@@ -79,7 +77,7 @@ def test_bundle_call_accessors_resolve_listed_labels() -> None:
     torch.manual_seed(0)
     model = _TinyRelu()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
     bundle = tl.Bundle({"first": trace, "second": trace}, baseline="first")
@@ -105,13 +103,13 @@ def _three_model_pairs() -> Iterator[tl.Bundle]:
     yield _capture_pair(seed=3, offset=-0.5)
 
 
-def test_delta_map_norm_delta_output_delta_on_three_model_pairs() -> None:
-    """Bundle delta helpers return stable per-node and per-output payloads."""
+def test_private_delta_reads_on_three_model_pairs() -> None:
+    """The private per-node reads behind compare and the diff picture stay stable."""
 
     for bundle in _three_model_pairs():
-        delta = bundle.delta_map("relative_l2")
-        norm_delta = bundle.norm_delta()
-        output_delta = bundle.output_delta("baseline")
+        delta = bundle._delta_map("relative_l2")
+        norm_delta = bundle._norm_delta()
+        output_delta = bundle._output_delta("baseline")
         rows = bundle.compare("baseline", "changed", metric="relative_l2")
 
         assert delta
@@ -138,7 +136,10 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
     # to real methods (item 0), the lineage read surface (bundle_id,
     # operations, member_construction; items 0b/3), the provenance join
     # (why, provenance; item 4), vary (item 5), and the effect-table reads
-    # (effects, measure_members; item 8).
+    # (effects; item 8). The former helper-table methods (stored comparisons,
+    # upstream/downstream, token_pairs, token_divergence, add_alternative)
+    # and draw are real methods now (max-push walk surface.7, late.26) and
+    # count here; measure_members stays pending the glossary round-2 ruling.
     assert len(members) <= 44
     assert "relate" in members
     for removed in ("joint_metric", "set_capacity", "help", "cluster", "node", "compare_at"):
@@ -157,7 +158,7 @@ def test_bundle_add_remove_accept_single_and_list_forms() -> None:
     log_c = tl.trace(
         _TinyRelu(offset=0.2),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     bundle = tl.Bundle({"a": log_a})
 
@@ -186,7 +187,7 @@ def test_store_comparison_stamps_named_field_and_matches_delta_map() -> None:
 
     assert name == "relative_l2:out@baseline"
     stored = bundle.stored_comparison(name)
-    assert stored == bundle.delta_map("relative_l2")
+    assert stored == bundle._delta_map("relative_l2")
     assert bundle.stored_comparison_names() == (name,)
     # Queryable per node, without recomputation.
     node_label = next(iter(stored))
@@ -272,6 +273,11 @@ def test_stored_comparison_unknown_name_refuses_typed() -> None:
         "attach_hooks",
         "node",
         "compare_at",
+        "show_diff",
+        "delta_map",
+        "norm_delta",
+        "output_delta",
+        "aligned_pairs",
     ],
 )
 def test_removed_bundle_member_redirects_typed(name: str) -> None:

@@ -493,7 +493,7 @@ def public_option_fields(options_class: type, declared_private: frozenset[str]) 
 
 
 def capture_option_fields() -> tuple[str, ...]:
-    """The 47 public ``CaptureOptions`` fields (declared private filter applied)."""
+    """The 49 public ``CaptureOptions`` fields (declared private filter applied)."""
 
     from torchlens.options import CaptureOptions
 

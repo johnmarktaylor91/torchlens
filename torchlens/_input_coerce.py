@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ._errors import ArgumentTypeError
+
 
 def _coerce_input(model: Any, x: Any) -> Any:
     """Convert common ergonomic inputs to model-ready tensors.
@@ -74,7 +76,6 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
 
     if not forward_kwargs:
         return
-    from ._errors import ArgumentTypeError
 
     unknown = ", ".join(sorted(forward_kwargs))
     raise ArgumentTypeError(
@@ -111,7 +112,6 @@ def _reject_extra_positional_input(extra_positional: tuple[Any, ...]) -> None:
 
     if not extra_positional:
         return
-    from ._errors import ArgumentTypeError
 
     kinds = ", ".join(type(value).__name__ for value in extra_positional)
     raise ArgumentTypeError(
@@ -148,7 +148,6 @@ def _reject_non_mapping_input_kwargs(input_kwargs: Any) -> None:
 
     if input_kwargs is None or isinstance(input_kwargs, collections.abc.Mapping):
         return
-    from ._errors import ArgumentTypeError
 
     raise ArgumentTypeError(
         "input_kwargs must be a Mapping of keyword arguments for "

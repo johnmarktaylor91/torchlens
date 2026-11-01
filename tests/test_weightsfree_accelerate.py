@@ -49,4 +49,4 @@ def test_init_empty_weights_onramp() -> None:
     )
     assert tl.fingerprint.trace(real_trace) == tl.fingerprint.trace(meta_trace)
     assert meta_trace.discharge_against(real_trace).verdict.value == "corroborated"
-    assert meta_trace.structure_evidence["substrate"] == "meta"
+    assert meta_trace.graph.structure_evidence["substrate"] == "meta"

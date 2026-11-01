@@ -125,7 +125,7 @@ def _validate_select(select: Any) -> None:
             code="echo_argument_invalid",
             remedy="use True, 'modules', or a live selector",
         )
-    from ..intervention.selectors import BaseSelector
+    from .._selection.selectors import BaseSelector
 
     if isinstance(select, BaseSelector):
         _refuse_finalized_selector(select)

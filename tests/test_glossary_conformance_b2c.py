@@ -13,7 +13,7 @@ from torchlens.options import CaptureOptions
 
 
 class _B2cModel(nn.Module):
-    """Model docstring captured on Trace.class_docstring."""
+    """Model docstring captured on Trace.source.class_docstring."""
 
     def __init__(self) -> None:
         """Initialize B2c model modules."""
@@ -55,11 +55,14 @@ def test_trace_source_introspection_fields_are_captured() -> None:
 
     trace = _make_trace(CaptureOptions())
 
-    assert trace.class_docstring == _B2cModel.__doc__
-    assert trace.init_signature == "(self) -> None"
-    assert trace.init_docstring == _B2cModel.__init__.__doc__
-    assert trace.forward_signature == "(self, x: torch.Tensor, scale: float = 1.0) -> torch.Tensor"
-    assert trace.forward_docstring == _B2cModel.forward.__doc__
+    assert trace.source.class_docstring == _B2cModel.__doc__
+    assert trace.source.init_signature == "(self) -> None"
+    assert trace.source.init_docstring == _B2cModel.__init__.__doc__
+    assert (
+        trace.source.forward_signature
+        == "(self, x: torch.Tensor, scale: float = 1.0) -> torch.Tensor"
+    )
+    assert trace.source.forward_docstring == _B2cModel.forward.__doc__
 
 
 def test_grad_fn_calls_accessor_and_call_savedness() -> None:
@@ -71,7 +74,7 @@ def test_grad_fn_calls_accessor_and_call_savedness() -> None:
     grad_fn_call = grad_fn.calls[0]
 
     assert not hasattr(grad_fn, "ops")
-    assert trace.autograd.grad_fn_calls[grad_fn_call.call_label] is grad_fn_call
+    assert trace.autograd.grad_fn_calls[grad_fn_call.label] is grad_fn_call
     assert grad_fn_call.is_saved is (
         grad_fn_call.grad_inputs is not None or grad_fn_call.grad_outputs is not None
     )
@@ -92,16 +95,16 @@ def test_module_boundary_fields_are_populated_from_calls() -> None:
 
 
 def test_trace_layers_to_save_public_view() -> None:
-    """Trace.layers_to_save exposes saved Op labels instead of raw indexes."""
+    """Trace.options.save exposes saved Op labels instead of raw indexes."""
 
     all_trace = _make_trace(CaptureOptions())
     selected_label = all_trace.output_layers[0]
     selected_trace = _make_trace(save=[selected_label])
 
-    assert all_trace.layers_to_save == "all"
-    assert selected_trace.layers_to_save
-    assert all(isinstance(label, str) for label in selected_trace.layers_to_save)
-    assert all(label in selected_trace.op_labels for label in selected_trace.layers_to_save)
+    assert all_trace.options.save == "all"
+    assert selected_trace.options.save
+    assert all(isinstance(label, str) for label in selected_trace.options.save)
+    assert all(label in selected_trace.op_labels for label in selected_trace.options.save)
 
 
 def test_receptive_field_docs_conform_to_public_surface() -> None:

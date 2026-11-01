@@ -80,10 +80,10 @@ def test_direction_pin_and_params(model: _TinyLM) -> None:
 
 def test_selected_and_decider_are_ordered_for_the_comparison_gate(model: _TinyLM) -> None:
     bundle = _routed(model)
-    assert bundle.delta_map("relative_l2"), "same model, same input: comparable"
+    assert bundle._delta_map("relative_l2"), "same model, same input: comparable"
     bundle.relate("selected_by", "writer", "router")
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.delta_map("relative_l2")
+        bundle._delta_map("relative_l2")
     assert _code(excinfo) == "bundle_gate_ordering_topology"
 
 
@@ -93,7 +93,7 @@ def test_round_trip_keeps_the_row(tmp_path: Path, model: _TinyLM) -> None:
     )
     bundle.save(tmp_path / "routed.tlspec")
     manifest = json.loads((tmp_path / "routed.tlspec" / "manifest.json").read_text())
-    assert manifest["tlspec_version"] == 10
+    assert manifest["tlspec_version"] == 11
     loaded = tl.load(tmp_path / "routed.tlspec")
     assert loaded.relations == bundle.relations
     assert loaded.upstream("writer") == ("router",)

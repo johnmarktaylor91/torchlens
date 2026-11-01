@@ -31,7 +31,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness, RunnableErrorCode
-from torchlens._runnable_state import (
+from torchlens._runnable.state import (
     TORCH_MANUAL_SEED_MAX,
     TORCH_MANUAL_SEED_MIN,
     validate_run_seed,
@@ -39,7 +39,7 @@ from torchlens._runnable_state import (
 from torchlens.errors import RunPreconditionError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 class _Small(nn.Module):

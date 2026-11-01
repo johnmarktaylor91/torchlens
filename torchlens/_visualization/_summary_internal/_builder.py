@@ -2,7 +2,7 @@
 
 The historical text-summary builder that once lived here was removed with the
 legacy ``summary()`` spellings; ``trace.summary()`` renders through
-``torchlens.report`` and ``trace.provenance()`` through ``_discoverability``.
+``torchlens.report`` and ``trace.provenance._summary()`` through ``_discoverability``.
 """
 
 from __future__ import annotations
@@ -27,27 +27,29 @@ def format_model_repr(trace: Trace) -> str:
         Short two-line representation.
     """
     state = getattr(getattr(trace, "state", None), "name", "UNKNOWN")
-    model_class_name = getattr(trace, "model_class_name", None)
+    # cleanup() deletes the logged stores; a husked trace still has a repr.
+    husked = bool(trace.__dict__.get("_tl_cleaned_up", False))
+    model_class_name = None if husked else trace._source_class_name
     tracing_finished = getattr(trace, "_tracing_finished", True)
     if not tracing_finished:
         return (
-            f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
+            f"Trace(name={getattr(trace, 'name', None)!r}, "
             f"model_class_qualname={model_class_name!r}, layers={_live_op_count(trace)}, "
             f"state={state})"
         )
 
-    layer_logs = getattr(trace, "layer_logs", {}) or {}
+    layer_logs = {} if husked else (trace._layer_logs or {})
     # Weightsfree memo L7: the repr was an unmarked channel — a slice of a
     # hypothesis is a hypothesis, and so is the identity card. The claim
     # ladder rides the session discharge state (HYPOTHESIS / CORROBORATED /
     # REFUTED), never a bare flag.
     structure_note = ""
-    if bool(getattr(trace, "structure_only", False)):
+    if not husked and bool(trace._options_structure_only):
         from ..._capture.structure_only import claim_status_for
 
         structure_note = f", structure_only={claim_status_for(trace).value.upper()}"
     return (
-        f"Trace(name={getattr(trace, 'trace_label', None)!r}, "
+        f"Trace(name={getattr(trace, 'name', None)!r}, "
         f"model_class_qualname={model_class_name!r}, layers={len(layer_logs)}, "
         f"state={state}{structure_note})"
     )

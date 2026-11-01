@@ -1,6 +1,6 @@
 """C07X identity-fact load validators (tlspec v9 entry-dark slots).
 
-The Trace-level root entry-point fact (``Trace.root_entry_point``, written
+The Trace-level root entry-point fact (``Trace.provenance.root_entry_point``, written
 unconditionally at capture; foldA D10) and the two entry-dark Op facts the
 C07X amendment declares (``Op.episode_step``, F-EPISODE writes;
 ``Op.tl_authored_root``, F41 writes), each with fail-closed load
@@ -12,6 +12,14 @@ validation. Split from ``_io/forgery_validation.py`` at the C07X amendment
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+
+#: Stored attribute of each pass's peak-memory reason (the forward reason is a v11 group key;
+#: the backward reason keeps its stored name).
+_PEAK_REASON_ATTR = {
+    "forward": "_cost_forward_peak_memory_reason",
+    "backward": "backward_peak_memory_reason",
+}
+
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -45,7 +53,7 @@ def _ops_of(trace: Trace) -> tuple[Any, ...]:
 _ROOT_ENTRY_POINT_KINDS = frozenset({"module_call", "bound_method", "function_call"})
 
 
-#: First tlspec stamp on which an ABSENT ``Trace.root_entry_point`` refuses.
+#: First tlspec stamp on which an ABSENT ``Trace.provenance.root_entry_point`` refuses.
 #: The C07X writers stamp the fact unconditionally, but they ride the SAME v9
 #: window as pre-C07X v9 writers whose artifacts are checked in (e.g.
 #: ``tests/fixtures/tlspec_v9/clean.tlspec``: tlspec 9, torchlens 2.34.1,
@@ -71,12 +79,12 @@ def _refuse_absent_root_entry_point_on_current_schema(trace: Trace) -> None:
     if stamp < _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC:
         return
     _refuse_identity(
-        f"Trace.root_entry_point is absent on a tlspec_version={stamp} artifact; every "
+        f"Trace.provenance.root_entry_point is absent on a tlspec_version={stamp} artifact; every "
         f"writer since tlspec {_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC} stamps the root "
         "invocation descriptor unconditionally (C07X), so absence is a deleted or "
         "forged identity fact rather than the legacy reading.",
         code="artifact_root_entry_point_invalid",
-        field="Trace.root_entry_point",
+        field="Trace.provenance.root_entry_point",
         reason="absent_on_current_schema",
         remedy=(
             "re-save the artifact with one current TorchLens version; do not delete "
@@ -95,7 +103,7 @@ def _validate_root_entry_point(trace: Trace) -> None:
     FAIL-CLOSED (F41).
     """
 
-    value = getattr(trace, "root_entry_point", None)
+    value = trace._provenance_root_entry_point
     if value is None:
         _refuse_absent_root_entry_point_on_current_schema(trace)
         return
@@ -108,11 +116,11 @@ def _validate_root_entry_point(trace: Trace) -> None:
             reason = "descriptor_grammar"
     if reason is not None:
         _refuse_identity(
-            f"Trace.root_entry_point {value!r} violates the closed root "
+            f"Trace.provenance.root_entry_point {value!r} violates the closed root "
             "invocation descriptor grammar "
             "('module_call|bound_method|function_call' + ':' + identity).",
             code="artifact_root_entry_point_invalid",
-            field="Trace.root_entry_point",
+            field="Trace.provenance.root_entry_point",
             reason=reason,
             remedy=(
                 "re-save the artifact with one current TorchLens version; do "
@@ -194,7 +202,7 @@ def _validate_tl_authored_root(trace: Trace) -> None:
         if value:
             marked_labels.append(label)
     if marked_labels:
-        root_fact = getattr(trace, "root_entry_point", None)
+        root_fact = trace._provenance_root_entry_point
         if not (isinstance(root_fact, str) and root_fact.startswith("bound_method:")):
             _refuse_identity(
                 f"ops {marked_labels[:3]!r} carry tl_authored_root=True but the "
@@ -220,13 +228,13 @@ def _validate_peak_memory_reason(trace: Trace, which: str, *, code: str) -> None
     refusal code for the forward or the backward peak.
     """
 
-    reason_value = getattr(trace, f"{which}_peak_memory_reason", None)
+    reason_value = getattr(trace, _PEAK_REASON_ATTR[which], None)
     if reason_value is None:
         return
     reason = None
     if not isinstance(reason_value, str) or not reason_value:
         reason = "not_a_string"
-    elif getattr(trace, f"{which}_peak_memory", None) is not None:
+    elif getattr(trace, f"_cost_{which}_peak_memory", None) is not None:
         reason = "reason_beside_a_value"
     if reason is not None:
         _refuse_identity(

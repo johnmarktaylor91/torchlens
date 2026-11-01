@@ -166,62 +166,44 @@ def test_halt_imports_resolvable() -> None:
         assert "import StopSignal" in text, path.relative_to(repo_root)
 
 
-def test_halt_from_inside_module_enter_predicate() -> None:
-    """A module-enter predicate can halt recording cleanly."""
+@pytest.mark.parametrize(
+    ("halt_kind", "reason", "halted_label"),
+    [
+        ("module_enter", "module enter", "linear:enter:1"),
+        ("module_exit", "module exit", "linear:exit:1"),
+    ],
+    ids=[
+        "halt_from_inside_module_enter_predicate",
+        "halt_from_inside_module_exit_predicate",
+    ],
+)
+def test_halt_from_inside_module_predicate(halt_kind: str, reason: str, halted_label: str) -> None:
+    """A module-enter or module-exit predicate can halt recording cleanly."""
 
-    def halt_on_enter(ctx: RecordContext) -> bool:
-        """Halt on the child module entry."""
+    def halt_on_module_event(ctx: RecordContext) -> bool:
+        """Halt on the child module entry or exit."""
 
-        if ctx.kind == "module_enter" and ctx.address == "linear":
-            tl.recording.stop("module enter")
+        if ctx.kind == halt_kind and ctx.address == "linear":
+            tl.recording.stop(reason)
         return False
 
     recording = _as_recording(
         tl.record(
             ChildModuleModel(),
             torch.ones(1, 3),
-            stop_after=halt_on_enter,
+            stop_after=halt_on_module_event,
             recording=tl.options.RecordingOptions(default_module=True, default_op=False),
         )
     )
 
     assert recording.is_stopped is True
-    assert recording.stop_reason == "module enter"
+    assert recording.stop_reason == reason
     assert any(record.ctx.kind == "module_enter" for record in recording.records)
     assert [
         event.label_raw
         for event in recording._capture_events.op_events
-        if event.label_raw == "linear:enter:1"
-    ] == ["linear:enter:1"]
-
-
-def test_halt_from_inside_module_exit_predicate() -> None:
-    """A module-exit predicate can halt recording cleanly."""
-
-    def halt_on_exit(ctx: RecordContext) -> bool:
-        """Halt on the child module exit."""
-
-        if ctx.kind == "module_exit" and ctx.address == "linear":
-            tl.recording.stop("module exit")
-        return False
-
-    recording = _as_recording(
-        tl.record(
-            ChildModuleModel(),
-            torch.ones(1, 3),
-            stop_after=halt_on_exit,
-            recording=tl.options.RecordingOptions(default_module=True, default_op=False),
-        )
-    )
-
-    assert recording.is_stopped is True
-    assert recording.stop_reason == "module exit"
-    assert any(record.ctx.kind == "module_enter" for record in recording.records)
-    assert [
-        event.label_raw
-        for event in recording._capture_events.op_events
-        if event.label_raw == "linear:exit:1"
-    ] == ["linear:exit:1"]
+        if event.label_raw == halted_label
+    ] == [halted_label]
 
 
 def test_halt_source_predicate() -> None:

@@ -138,7 +138,7 @@ class EchoSession:
         """Resolve the sink, the scope, and the per-pass counters."""
 
         from .._ir.selector_eval import split_followed_by_conjunction
-        from ..intervention.selectors import BaseSelector
+        from .._selection.selectors import BaseSelector
 
         self.options = options
         self.tier = tier
@@ -321,7 +321,7 @@ class EchoSession:
             kind=kind,
             ordinal=ordinal,
             label=ctx.label,
-            pass_index=ctx.pass_index if ctx.pass_index else self.pass_index,
+            pass_index=ctx.pass_number if ctx.pass_number else self.pass_index,
             step_index=ctx.step_index,
             layer_type=ctx.layer_type,
             func_name=ctx.func_name,

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._record_type import record_type
 from ._event import NarrationEvent
 from ._format import compact_device, compact_dtype, render_line
 
@@ -36,8 +37,8 @@ def _op_row(op: Any, ordinal: int, depth: int) -> NarrationEvent:
         kind="op",
         ordinal=ordinal,
         label=str(label),
-        pass_index=int(getattr(op, "pass_index", 1) or 1),
-        layer_type=getattr(op, "layer_type", None),
+        pass_index=int(getattr(op, "pass_number", 1) or 1),
+        layer_type=record_type(op, None),
         func_name=getattr(op, "func_name", None),
         address=getattr(op, "address", None) or None,
         module_depth=depth,
@@ -125,7 +126,7 @@ def narrate_trace(
 
     rows = [
         _op_row(op, ordinal, _module_depth(op))
-        for ordinal, op in enumerate(getattr(trace, "layer_list", ()) or (), start=1)
+        for ordinal, op in enumerate(trace._layer_list or (), start=1)
     ]
     footer: list[str] = []
     nonfinite = getattr(trace, "nonfinite_ops", None)
@@ -190,7 +191,7 @@ def narrate_recording(
                 kind=kind,
                 ordinal=ordinal,
                 label=str(ctx.label),
-                pass_index=int(getattr(ctx, "pass_index", 1) or 1),
+                pass_index=int(getattr(ctx, "pass_number", 1) or 1),
                 step_index=getattr(ctx, "step_index", None),
                 layer_type=getattr(ctx, "layer_type", None),
                 func_name=getattr(ctx, "func_name", None),

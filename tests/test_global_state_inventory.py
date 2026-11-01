@@ -572,7 +572,7 @@ _HOT_STATE_SUBSET_PREFIXES = (
     "torchlens/backends/torch/",
     "torchlens/_capture/",
     "torchlens/recording/",
-    "torchlens/_utils/rng.py",
+    "torchlens/_utils/rng/",
     "torchlens/_utils/_torch_compat.py",
 )
 
@@ -752,9 +752,9 @@ def test_refused_concurrent_capture_leaves_winner_verified() -> None:
     assert owner_errors == []
     assert len(owner_traces) == 1
     winner = owner_traces[0]
-    assert winner.capture_verified is not False, (
+    assert winner.provenance.verified is not False, (
         "the refused loser's pre-admission side effects degraded the winner: "
-        f"capture_verified={winner.capture_verified!r}, "
+        f"capture_verified={winner.provenance.verified!r}, "
         f"reason={getattr(winner, 'capture_verification_reason', None)!r}"
     )
     assert any(op.func_name == "relu" for op in winner.compute_ops)
@@ -946,7 +946,7 @@ def test_log_backward_refuses_foreign_live_window_instead_of_wedging() -> None:
     assert _state._active_trace is None
     assert _state._active_owner_thread_id is None
     trace.log_backward(loss)
-    assert int(trace.num_backward_passes) == 1
+    assert int(len(trace.autograd.backward_passes)) == 1
     recovered = tl.trace(nn.ReLU(), torch.ones(2))
     assert any(op.func_name == "relu" for op in recovered.compute_ops)
 

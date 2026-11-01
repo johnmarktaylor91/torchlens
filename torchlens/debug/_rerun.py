@@ -38,7 +38,7 @@ def _initialized_cuda_devices() -> list[int]:
         Device ordinals with a live CUDA context, or an empty list.
     """
 
-    from .._utils.tensor_utils import _is_cuda_initialized
+    from .._utils._cuda_probe import _is_cuda_initialized
 
     if _is_cuda_initialized() and torch.cuda.is_available():
         return list(range(torch.cuda.device_count()))

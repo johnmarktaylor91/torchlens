@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 
 from .._capture.projections import LiveOpView
 from .._errors import AmbiguousOpLookupError, InvalidArgumentError
-from ..intervention.errors import AmbiguousSiteError
-from ..intervention.selectors import BaseSelector
-from ..intervention.types import FrozenTargetSpec, TargetSpec
+from .._selection.errors import AmbiguousSiteError
+from .._selection.selectors import BaseSelector
+from .._selection.target import FrozenTargetSpec, TargetSpec
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op import Op
 
@@ -53,7 +53,7 @@ def _ambiguous_lookup_match_labels(self: "Trace", key: str) -> list[str]:
     ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
     raw_indices = ambiguous_lookup_keys.get(key, [])
     matches: list[str] = []
-    for op in self.layer_list:
+    for op in self._layer_list:
         if op.raw_index in raw_indices:
             matches.append(op.label)
     return matches
@@ -111,7 +111,7 @@ def _names_one_thing(selector: Any) -> bool:
     selector each name one thing; every other selector names a set.
     """
 
-    from ..intervention.selectors import FacetSelector
+    from .._selection.selectors import FacetSelector
 
     if isinstance(selector, TargetSpec | FrozenTargetSpec | FacetSelector):
         return True
@@ -135,10 +135,10 @@ def _getitem_selector(self: "Trace", ix: Any) -> Any:
         several sites.
     """
 
-    from .._selection import _selection_from_selector
-    from ..intervention._module_alias_guard import refuse_trace_alias_spellings
+    from .._selection.module_alias_guard import refuse_trace_alias_spellings
+    from .._selection.resolver import _guard_episode_step_query, _normalize_query, _resolve_sites
+    from .._selection.selection import _selection_from_selector
     from ..intervention.errors import MultiMatchWarning
-    from ..intervention.resolver import _guard_episode_step_query, _normalize_query, _resolve_sites
 
     if not _names_one_thing(ix):
         normalized = _normalize_query(ix)
@@ -148,7 +148,7 @@ def _getitem_selector(self: "Trace", ix: Any) -> Any:
     with warnings.catch_warnings():
         # The count is reported by the typed refusal below, not by a fan-out warning.
         warnings.simplefilter("ignore", MultiMatchWarning)
-        table = _resolve_sites(self, ix, max_fanout=max(1, len(self.layer_list)))
+        table = _resolve_sites(self, ix, max_fanout=max(1, len(self._layer_list)))
     if len(table) != 1:
         raise AmbiguousSiteError(
             f"{ix!r} names one site but matched {len(table)} on this trace.",
@@ -185,7 +185,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         KeyError: No match found.
         ValueError: Ambiguous substring match or invalid index.
     """
-    from .._selection import Selector
+    from .._selection.selection import Selector
 
     if isinstance(ix, Selector):
         return ix._resolve(self)
@@ -194,11 +194,11 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         return _getitem_selector(self, ix)
 
     if isinstance(ix, slice):
-        return self.layer_list[ix]  # #78: slice indexing support
+        return self._layer_list[ix]  # #78: slice indexing support
 
     if isinstance(ix, int):
         try:
-            return self.layer_list[ix]  # every row, like the slice form above
+            return self._layer_list[ix]  # every row, like the slice form above
         except IndexError:
             _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
             raise
@@ -207,15 +207,15 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         from .._trace_selector_helpers import canonical_module_site_key
 
         ix = canonical_module_site_key(self, ix) or ix
-        if ix in self.layer_logs:
-            return self.layer_logs[ix]
+        if ix in self._layer_logs:
+            return self._layer_logs[ix]
 
         ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
         if ix in ambiguous_lookup_keys:
             _raise_ambiguous_lookup_key(self, ix, ix)
 
-        if ix in self.layer_dict_all_keys:
-            return self.layer_dict_all_keys[ix]
+        if ix in self._layer_dict_all_keys:
+            return self._layer_dict_all_keys[ix]
 
         for accessor in (
             self.ops,
@@ -245,7 +245,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
                 # ``ops.keys()`` lists the counted ops only; a
                 # case-insensitive label still reaches every row.
                 keys = (
-                    [op.label for op in self.layer_list]
+                    [op.label for op in self._layer_list]
                     if accessor is self.ops
                     else accessor.keys()
                 )
@@ -255,17 +255,17 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
             except (AttributeError, KeyError, ValueError, TypeError):
                 pass
 
-        for key in self.layer_dict_all_keys:
+        for key in self._layer_dict_all_keys:
             if str(key).lower() == lower_ix:
                 if key in ambiguous_lookup_keys:
                     _raise_ambiguous_lookup_key(self, ix, key)
-                return self.layer_dict_all_keys[key]
+                return self._layer_dict_all_keys[key]
 
         keys_with_substr = [
-            key for key in self.layer_dict_all_keys if str(ix).lower() in str(key).lower()
+            key for key in self._layer_dict_all_keys if str(ix).lower() in str(key).lower()
         ]
         entries_with_substr = {
-            self.layer_dict_all_keys[key].raw_index: self.layer_dict_all_keys[key]
+            self._layer_dict_all_keys[key].raw_index: self._layer_dict_all_keys[key]
             for key in keys_with_substr
         }
         if len(entries_with_substr) == 1:
@@ -325,8 +325,12 @@ def _honesty_header_lines(self: "Trace") -> list[str]:
             else "; capture with CaptureOptions(on_nonfinite='track') to check every op"
         )
         lines.append(f"\tHealth: NOT-CHECKED (payloads unexamined{hint})")
-    if getattr(self, "capture_verified", True) is False:
-        reason = getattr(self, "capture_verification_reason", None)
+    if (True if self.__dict__.get("_tl_cleaned_up", False) else self._provenance_verified) is False:
+        reason = (
+            None
+            if self.__dict__.get("_tl_cleaned_up", False)
+            else self._provenance_verification_reason
+        )
         lines.append(f"\tCapture verified: NO ({reason})")
     return lines
 
@@ -355,41 +359,35 @@ def _str_after_pass(self: "Trace") -> str:
     Returns:
         String summarizing the model.
     """
-    s = f"Log of {self.model_class_name} forward pass:"
+    s = f"Log of {self._source_class_name} forward pass:"
 
     for header_line in _honesty_header_lines(self):
         s += f"\n{header_line}"
 
     # General info
 
-    s += f"\n\tRandom seed: {self.random_seed}"
-    s += f"\n\tTime elapsed: {self.capture_duration} ({self.cost.overhead_duration} spent logging)"
+    s += f"\n\tRandom seed: {self._options_seed}"
+    s += f"\n\tTime elapsed: {self._provenance_duration} ({self.cost.overhead_duration} spent logging)"
 
     # Overall model structure. An unverified capture (severed
     # provenance) may have missed ops, so it never claims "purely
     # feedforward" and its op and parameter counts read as lower bounds.
-    unverified = getattr(self, "capture_verified", True) is False
+    unverified = (
+        True if self.__dict__.get("_tl_cleaned_up", False) else self._provenance_verified
+    ) is False
     bound = "at least " if unverified else ""
 
     s += _structure_section(self, unverified)
 
     # Model tensors:
 
-    s += "\n\tTensor info:"
-    s += (
-        f"\n\t\t- {bound}{len(self)} total tensors ({self.total_activation_memory}) "
-        f"computed in forward pass{' (lower bound: capture unverified)' if unverified else ''}."
-    )
-    s += f"\n\t\t- {self.num_saved_ops} tensors ({self.saved_activation_memory}) with saved outs."
-    nonfinite = self.first_nonfinite()
-    if not nonfinite.startswith("No non-finite"):
-        s += f"\n\t\t- NaN/Inf: {nonfinite}"
+    s += _tensor_info_section(self, bound, unverified)
 
     # Model parameters:
 
     s += (
-        f"\n\tParameters: {bound}{self.num_layers_with_params} parameter operations "
-        f"({bound}{self.num_params} params total; {self.total_param_memory})"
+        f"\n\tParameters: {bound}{self._num_layers_with_params} parameter operations "
+        f"({bound}{self.num_params} params total; {self._cost_total_param_memory})"
     )
     if unverified:
         s += " (lower bounds: capture unverified)"
@@ -404,7 +402,7 @@ def _str_after_pass(self: "Trace") -> str:
     s += "\n\tLayers"
     if self._layers_saved:
         s += " (all have saved outs):"
-    elif self.num_saved_ops == 0:
+    elif len(self.saved_ops) == 0:
         s += " (no layer outs are saved):"
     else:
         s += " (* means layer has saved outs):"
@@ -412,6 +410,21 @@ def _str_after_pass(self: "Trace") -> str:
     for row in _bounded_layer_roster(self):
         s += f"\n{row}"
 
+    return s
+
+
+def _tensor_info_section(self: "Trace", bound: str, unverified: bool) -> str:
+    """The summary's Tensor info block (lower-bound wording for an unverified capture)."""
+
+    s = "\n\tTensor info:"
+    s += (
+        f"\n\t\t- {bound}{len(self)} total tensors ({self._cost_total_activation_memory}) "
+        f"computed in forward pass{' (lower bound: capture unverified)' if unverified else ''}."
+    )
+    s += f"\n\t\t- {len(self.saved_ops)} tensors ({self._cost_saved_activation_memory}) with saved outs."
+    nonfinite = self.first_nonfinite()
+    if not nonfinite.startswith("No non-finite"):
+        s += f"\n\t\t- NaN/Inf: {nonfinite}"
     return s
 
 
@@ -447,17 +460,17 @@ def _bounded_layer_roster(self: "Trace") -> list[str]:
 
     roster: list[str] = []
     num_buffer_rows = 0
-    for layer_ind, layer_entry in enumerate(self.layer_list):
+    for layer_ind, layer_entry in enumerate(self._layer_list):
         if getattr(layer_entry, "is_buffer", False):
             num_buffer_rows += 1
             continue
         layer_barcode = layer_entry.layer_label
-        pass_index = layer_entry.pass_index
+        pass_index = layer_entry.pass_number
         num_passes = layer_entry.num_passes
         if num_passes > 1:
             # One pass/op vocabulary (A10): a multi-pass row is "pass k/N",
             # never "k/N ops" -- "op" is reserved for the executed-op
-            # denominator (Trace.num_ops).
+            # denominator (the counted op total, len(trace.ops)).
             pass_str = f" (pass {pass_index}/{num_passes})"
         else:
             pass_str = ""
@@ -473,7 +486,7 @@ def _bounded_layer_roster(self: "Trace") -> list[str]:
         elided = len(roster) - _STR_ROSTER_HEAD - _STR_ROSTER_TAIL
         roster = (
             roster[:_STR_ROSTER_HEAD]
-            + [f"\t\t  ... {elided} more layers (see .layer_list)"]
+            + [f"\t\t  ... {elided} more layers (see .ops)"]
             + roster[-_STR_ROSTER_TAIL:]
         )
     return roster
@@ -485,8 +498,8 @@ def _str_during_pass(self: "Trace") -> str:
     Returns:
         String summarizing the model.
     """
-    s = f"Log of {self.model_class_name} forward pass (pass still ongoing):"
-    s += f"\n\tRandom seed: {self.random_seed}"
+    s = f"Log of {self._source_class_name} forward pass (pass still ongoing):"
+    s += f"\n\tRandom seed: {self._options_seed}"
     s += f"\n\tInput tensors: {self.input_layers}"
     s += f"\n\tOutput tensors: {self.output_layers}"
     s += f"\n\tInternally initialized tensors: {self.internal_source_ops}"

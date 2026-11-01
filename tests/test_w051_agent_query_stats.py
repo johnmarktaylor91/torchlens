@@ -35,7 +35,7 @@ def test_closure_handoff_agrees_with_the_tool_on_multipass(loop: Path) -> None:
     """followed_by/preceded_by handoffs reproduce the served rows on a recurrent trace."""
 
     log = tl.load(str(loop))
-    assert any(op.num_passes > 1 for op in log.layer_list)
+    assert any(op.num_passes > 1 for op in log._layer_list)
     for query in [
         {"op": "followed_by", "item": {"op": "func", "value": "tanh"}},
         {"op": "preceded_by", "item": {"op": "func", "value": "tanh"}},

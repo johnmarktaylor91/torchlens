@@ -107,7 +107,7 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
     ),
     RefusalRow(
         "RF-halted-runnable-save",
-        "halted_capture_not_runnable",
+        "stopped_capture_unsupported",
         "HALTED",
         lambda: (
             _tl()
@@ -118,7 +118,7 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
     RefusalRow(
         "RF-edges-without-arming",
         "edge_provenance_unavailable",
-        "intervention_ready",
+        "replayable",
         lambda: _tl().trace(_model(), _x()).graph.edges,
     ),
     RefusalRow(

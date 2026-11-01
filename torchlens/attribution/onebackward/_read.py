@@ -146,8 +146,8 @@ class _SitePayloads:
     def __init__(self, trace: Any) -> None:
         """Index ops by pass-qualified label for payload reads."""
 
-        self._ops = {op.label: op for op in trace.layer_list}
-        self._save_mode = getattr(trace, "save_mode", "copy")
+        self._ops = {op.label: op for op in trace._layer_list}
+        self._save_mode = trace._options_save_mode
         self._cache: dict[str, torch.Tensor | None] = {}
 
     @property
@@ -218,8 +218,8 @@ def _resolve_within_impl(
 
     if within is None:
         return (dict.fromkeys(index.edges), False)
-    from ..._selection import Selection, Selector
-    from ..._selection_values import _lift_within
+    from ..._selection.selection import Selection, Selector
+    from ..._selection.values import _lift_within
 
     population: dict[str, torch.Tensor | None] = {}
     if isinstance(within, Selection):

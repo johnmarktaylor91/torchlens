@@ -1,6 +1,6 @@
 """Retained-bytes accounting oracle (F20, brainpipe memo D-17).
 
-``Trace.saved_activation_memory`` must equal the summed REAL physical bytes
+``Trace.cost.saved_activation_memory`` must equal the summed REAL physical bytes
 of the activations capture actually retained, in all four transform/raw
 cells. The pre-fix aggregate summed the raw ``activation_memory`` field for
 every saved op, over-reporting by the full reduction factor whenever a
@@ -33,7 +33,7 @@ def _real_retained_bytes(log: object) -> int:
 
     seen: set[tuple[int, int]] = set()
     total = 0
-    for op in log.layer_list:  # type: ignore[attr-defined]  # every row (sumfam F1)
+    for op in log._layer_list:  # type: ignore[attr-defined]  # every row (sumfam F1)
         for payload in (op.out, getattr(op, "transformed_out", None)):
             if not isinstance(payload, torch.Tensor):
                 continue
@@ -63,7 +63,7 @@ def test_saved_activation_memory_equals_real_retained_bytes(transform, keep_raw)
         save_raw_activations=keep_raw,
     )
     log = tl.trace(_model(), torch.randn(64, 256), capture=capture)
-    reported = int(log.saved_activation_memory)
+    reported = int(log.cost.saved_activation_memory)
     real = _real_retained_bytes(log)
     assert reported == real, (
         f"saved_activation_memory reports {reported} bytes but capture "
@@ -85,7 +85,9 @@ def test_reduced_configuration_reports_reduced_bytes() -> None:
         torch.randn(64, 256),
         capture=tl.options.CaptureOptions(activation_transform=_pool, save_raw_activations=False),
     )
-    assert int(reduced_log.saved_activation_memory) * 16 < int(raw_log.saved_activation_memory)
+    assert int(reduced_log.cost.saved_activation_memory) * 16 < int(
+        raw_log.cost.saved_activation_memory
+    )
 
 
 def test_dedup_shared_payloads_charge_once() -> None:
@@ -100,6 +102,6 @@ def test_dedup_shared_payloads_charge_once() -> None:
             return y
 
     log = tl.trace(Repeat(), torch.randn(128, 128))
-    reported = int(log.saved_activation_memory)
+    reported = int(log.cost.saved_activation_memory)
     real = _real_retained_bytes(log)
     assert reported == real

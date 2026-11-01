@@ -34,6 +34,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
+
 __tl_layer__ = "L2"
 
 #: Attribute name carrying the declared transform role. Duck-typed on
@@ -216,8 +218,10 @@ def retained_activation_bytes(trace_like: Any, op_like: Any) -> int:
         Retained bytes for this op under the capture's retention decision.
     """
 
-    transform = getattr(trace_like, "activation_transform", None)
-    store_raw = transform is None or getattr(trace_like, "save_raw_activations", True)
+    transform = trace_like._options_activation_transform if is_live_trace(trace_like) else None
+    store_raw = transform is None or (
+        trace_like._options_save_raw_activations if is_live_trace(trace_like) else True
+    )
     if store_raw:
         return int(getattr(op_like, "activation_memory", 0) or 0)
     return int(getattr(op_like, "transformed_activation_memory", 0) or 0)

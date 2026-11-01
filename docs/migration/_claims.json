@@ -21,7 +21,6 @@
       "fix_lane": "A05 (FIX-A: replay output-contract fix)",
       "closed_by": "A05 (FIX-A replay output-contract fix); in the D05 release commit lineage (base 0537becb799d)",
       "closure_evidence": [
-        "tests/test_fixa_escrow_replay_output_contract.py (5 arms)",
         "tests/real_model/r0/test_realism_randinit_axes.py::test_container_output_do_lands_through_model_output_container (real distilgpt2 nested cache)"
       ],
       "verified_at": "2026-09-02 (D05 release gate: P tier on the release commit and on the venv-installed wheel)"
@@ -233,7 +232,6 @@
           "claim": "run(until=...) skips everything downstream of the cut; kept values equal the full run and gradients equal a hand-truncated eager model.",
           "evidence": [
             "tests/test_fast_until.py::test_resnet18_until_fast_gradients_equal_hand_truncated_eager",
-            "tests/test_run_until_backbone_grad.py::test_until_backward_without_carry_state_matches_hand_truncated_eager",
             "tests/test_run_until_projection_cost.py::test_until_values_match_the_full_run"
           ]
         },
@@ -410,7 +408,7 @@
     {
       "id": "halt-selector-shape",
       "competitor": "none (self-claim)",
-      "neutral_fact": "halt= exists as a shipped tl.trace kwarg, but inclusive save-then-halt semantics work only for op-shaped selectors on the fastlog engine. Module-shaped selectors are broken: halt=tl.module matches zero sites (silent full forward); tl.in_module halts EXCLUSIVE of the requested site; pluck's stop_after and experimental.stop_after are silently discarded no-ops. The inclusive primitive exists internally, unexposed (_runnable_transaction.py:819-1023).",
+      "neutral_fact": "halt= exists as a shipped tl.trace kwarg, but inclusive save-then-halt semantics work only for op-shaped selectors on the fastlog engine. Module-shaped selectors are broken: halt=tl.module matches zero sites (silent full forward); tl.in_module halts EXCLUSIVE of the requested site; pluck's stop_after and experimental.stop_after are silently discarded no-ops. The inclusive primitive exists internally, unexposed (_runnable/transaction.py:819-1023).",
       "allowed_public_wording": "(current) halt= claims split by selector shape: 'op-shaped halt works on fastlog (0.83-0.84x plain forward, CPU); module-shaped halt is broken.'",
       "narrowed_scope_wording": "Claim only the working half: op-shaped halt on fastlog, with perf-fastlog-attribution's rules on any number.",
       "limitation_wording": "No early-halt capability claims.",
@@ -418,7 +416,7 @@
       "evidence_refs": [
         "maintainer review record (private)",
         "s2a bug 6",
-        "_runnable_transaction.py:819-1023"
+        "_runnable/transaction.py:819-1023"
       ],
       "tl_side_gates": [
         "s2a bug 6 fix (halt/stop_after cleanup) -- while open, module-shaped copy renders only as the limitation wording"

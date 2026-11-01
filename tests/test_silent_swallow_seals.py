@@ -70,8 +70,8 @@ def test_raising_config_getter_never_collides_in_cache_key() -> None:
     of silently dropping the config axis (false cache HIT vector)."""
 
     model = _RaisingConfigModel()
-    first = semantic_output_cache_key(model, output_style=None, output_head=None)
-    second = semantic_output_cache_key(model, output_style=None, output_head=None)
+    first = semantic_output_cache_key(model)
+    second = semantic_output_cache_key(model)
     assert first != second, (
         "two cache keys for a raising-config model compared equal -- the "
         "config axis was silently dropped"
@@ -82,8 +82,8 @@ def test_readable_config_cache_key_is_stable() -> None:
     """The never-match token fires only on raising getters."""
 
     model = nn.Linear(2, 2)
-    first = semantic_output_cache_key(model, output_style=None, output_head=None)
-    second = semantic_output_cache_key(model, output_style=None, output_head=None)
+    first = semantic_output_cache_key(model)
+    second = semantic_output_cache_key(model)
     assert first == second
 
 
@@ -92,20 +92,16 @@ def test_failed_decode_leaves_a_durable_annotation(monkeypatch) -> None:
     """A tripped decode belt must leave trace.annotations['decode_skipped'],
     not just a losable warning, and must roll back partial writes."""
 
-    def _raising_decode(trace, outputs, *, output_style, output_head):
-        trace.decoded_output = {"kind": "partial"}  # simulate the partial-write window
+    def _raising_decode(trace, outputs):
+        trace._decoded_output = {"kind": "partial"}  # simulate the partial-write window
         raise RuntimeError("synthetic decoder fault")
 
     monkeypatch.setattr(_builtin_output, "_decode_outputs_for_trace_unguarded", _raising_decode)
     with pytest.warns(match="decode_skipped"):
-        trace = tl.trace(
-            nn.Linear(4, 2),
-            torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(output_style="imagenet"),
-        )
+        trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
 
-    assert trace.decoded_output is None, "partial decode write survived the belt"
-    assert trace.output_postprocessor is None
+    assert trace._decoded_output is None, "partial decode write survived the belt"
+    assert trace.provenance.output_postprocessor is None
     rows = trace.annotations.get("decode_skipped")
     assert rows and rows[0]["error"].startswith("RuntimeError"), (
         f"no durable decode-skip record: {trace.annotations!r}"
@@ -116,10 +112,8 @@ def test_unreadable_projected_allocation_refuses_instead_of_charging_zero() -> N
     """grind-r5 b7 R22 (sol HIGH): a tensor whose size reads raise must raise
     the typed sentinel, never contribute an empty charge."""
 
-    from torchlens._runnable_execution import (
-        _new_allocation_bytes,
-        _UnreadableProjectedOutput,
-    )
+    from torchlens._runnable.call_arguments import _new_allocation_bytes
+    from torchlens._runnable.execution import _UnreadableProjectedOutput
 
     class _UnreadableTensor(torch.Tensor):
         @staticmethod

@@ -8,8 +8,7 @@ at once ("dot: can't open .../modelgraph"). About 21 test files call
 ``draw()`` this way.
 
 The fix is the autouse ``_draw_default_outpath_in_tmp_path`` fixture in
-``tests/conftest.py``, which redirects ``draw``'s (and ``draw_backward`` /
-``draw_combined`` / ``render_dagua_graph``'s) default output path into the
+``tests/conftest.py``, which redirects ``draw``'s default output path into the
 test's own ``tmp_path``. This test exercises the real default codepath --
 the same call shape the exposed files use -- and fails if that fixture ever
 regresses (is removed, narrowed, or stops covering ``draw``) and lets a

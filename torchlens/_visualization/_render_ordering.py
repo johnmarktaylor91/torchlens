@@ -96,6 +96,14 @@ _SPECULATIVE_RENDER: ContextVar[SpeculativeRender | None] = ContextVar(
 )
 
 
+#: DOT names of opt-in container clusters (``_container_clusters_for_graphviz``):
+#: ``cluster_container_<root>_<kind>``. Module clusters end in ``_pass<N>`` instead.
+_CONTAINER_CLUSTER_NAME = re.compile(
+    r"cluster_container_(?:final_output_0|call_\d+|path_\w*)_"
+    r"(?:tuple|list|dict|namedtuple|dataclass|hf_model_output|registered|literal|opaque|container)"
+)
+
+
 def _should_order_siblings(
     *,
     order_siblings: bool,
@@ -298,6 +306,13 @@ def _place_sibling_chain(
     shared = _shared_cluster_prefix(member_paths)
     if not shared:
         return chain if chain.lca_key == -1 and not any(member_paths) else None
+    if _CONTAINER_CLUSTER_NAME.fullmatch(shared[-1]) and (
+        chain.lca_key == -1 or _cluster_name(cast(str, chain.lca_key)) != shared[-1]
+    ):
+        # A rank set processed before a nested cluster takes its members out of
+        # that cluster (dot 2.43 node_induce), which emptied the container box.
+        # Inside the container cluster the set orders the same nodes and the box stays.
+        return replace(chain, lca_key=shared[-1].removeprefix("cluster_"))
     if chain.lca_key != -1 and _cluster_name(cast(str, chain.lca_key)) in shared:
         return chain
     module_key = shared[-1].removeprefix("cluster_")

@@ -17,6 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import site
+from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._errors import ArgumentTypeError
 from torchlens.intervention.errors import SelectorCapabilityError
 from torchlens.intervention.site_keys import mint_keys_in_execution_order
@@ -63,7 +64,7 @@ def _ready(model: nn.Module) -> tl.Trace:
     return tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -100,7 +101,7 @@ def test_post_hoc_resolution_by_components_and_key() -> None:
     log = _ready(_TinyModel())
     by_type = log[site(func="relu")]
     assert by_type.labels == ("relu_1_2:1",)
-    key = log["relu_1_2"].site_key
+    key = layer_site_key(log["relu_1_2"])
     assert log[site(key)].labels == ("relu_1_2:1",)
     by_module = log[site(module_path="fc1")]
     assert "linear_1_1:1" in by_module.labels
@@ -145,7 +146,7 @@ def test_live_site_intervention_fires_at_the_right_site() -> None:
         for row in log.state_history
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
-    assert events[-1]["site_keys"] == [log["relu_1_2"].site_key]
+    assert events[-1]["site_keys"] == [layer_site_key(log["relu_1_2"])]
 
 
 @pytest.mark.smoke
@@ -163,7 +164,7 @@ def test_live_minted_keys_match_posthoc_keys() -> None:
         for row in log.state_history
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
-    assert events[-1]["site_keys"] == [log["relu_1_2"].site_key]
+    assert events[-1]["site_keys"] == [layer_site_key(log["relu_1_2"])]
 
 
 @pytest.mark.parametrize("model_cls", [_TinyModel, _ReusedModule, _Recurrent])
@@ -186,7 +187,7 @@ def test_recurrent_pass_qualified_ordinals_stay_distinct() -> None:
     (root instance) count 1..3, and each key resolves exactly one op."""
 
     log = _ready(_Recurrent())
-    relu_labels = [label for label in log.op_labels if log.ops[label].layer_type == "relu"]
+    relu_labels = [label for label in log.op_labels if log.ops[label].type == "relu"]
     keys = [log.ops[label].site_key for label in relu_labels]
     assert len(set(keys)) == len(keys) == 3
 

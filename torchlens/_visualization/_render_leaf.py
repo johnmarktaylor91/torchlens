@@ -10,6 +10,8 @@ from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from ._backward_inventory import (
     BackwardStyleInventory,
+    _backward_dot_call_node_name,
+    _backward_dot_node_name,
     _backward_pass_row,
     compute_backward_style_inventory,
 )
@@ -25,50 +27,11 @@ _BRANCH_KIND_SEARCH_LIMIT = 256
 _BACKWARD_ROWS: ContextVar[Any] = ContextVar("torchlens_backward_rows", default=None)
 
 
-def _backward_dot_node_name(grad_fn_handle: "GradFn") -> str:
-    """Return a DOT-safe node name for a grad_fn_handle log.
-
-    Parameters
-    ----------
-    grad_fn_handle:
-        GradFn to name.
-
-    Returns
-    -------
-    str
-        DOT-safe node identifier.
-    """
-
-    return f"grad_fn_{grad_fn_handle.grad_fn_object_id}"
-
-
 if TYPE_CHECKING:
     from .._data_classes.grad_fn import GradFn
     from .._data_classes.module import Module
     from .._data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
-
-
-def _backward_dot_call_node_name(grad_fn_handle: "GradFn", call: Any) -> str:
-    """Return a DOT-safe node name for one GradFnCall.
-
-    Parameters
-    ----------
-    grad_fn_handle:
-        GradFn owning the call.
-    call:
-        GradFnCall-like record.
-
-    Returns
-    -------
-    str
-        DOT-safe node identifier.
-    """
-
-    return (
-        f"grad_fn_{grad_fn_handle.grad_fn_object_id}_"
-        f"bwd{getattr(call, 'backward_pass_index', 0)}_call{getattr(call, 'call_index', 0)}"
-    )
 
 
 def _grad_fn_call_matches_backward_filter(call: Any, pass_filter: BackwardPassFilter) -> bool:
@@ -337,12 +300,12 @@ def _add_combined_backward_edges(
         for next_grad_fn_id in grad_fn_handle.next_grad_fn_ids:
             if next_grad_fn_id not in visible_ids:
                 continue
-            head_name = _backward_dot_node_name(trace.grad_fn_logs[next_grad_fn_id])
+            head_name = _backward_dot_node_name(trace._grad_fn_logs[next_grad_fn_id])
             graphviz_graph.edge(
                 tail_name,
                 head_name,
                 **_backward_edge_attrs(
-                    grad_fn_handle, trace.grad_fn_logs[next_grad_fn_id], trace=trace
+                    grad_fn_handle, trace._grad_fn_logs[next_grad_fn_id], trace=trace
                 ),
             )
 
@@ -383,9 +346,7 @@ def _add_combined_correspondence_edges(
         forward_node_name = _forward_correspondence_node_name(grad_fn_handle.op)
         if forward_node_name is not None:
             graphviz_graph.edge(
-                forward_node_name,
-                _backward_dot_node_name(grad_fn_handle),
-                **edge_attrs,
+                forward_node_name, _backward_dot_node_name(grad_fn_handle), **edge_attrs
             )
 
 
@@ -650,10 +611,10 @@ def _infer_intervening_module_bfs(
         reverse_edges = {}
     while queue:
         grad_fn_object_id = queue.popleft()
-        if grad_fn_object_id in seen or grad_fn_object_id not in trace.grad_fn_logs:
+        if grad_fn_object_id in seen or grad_fn_object_id not in trace._grad_fn_logs:
             continue
         seen.add(grad_fn_object_id)
-        candidate = trace.grad_fn_logs[grad_fn_object_id]
+        candidate = trace._grad_fn_logs[grad_fn_object_id]
         candidate_op = candidate.op
         if candidate_op is not None:
             module_key = _module_key_for_forward_op(candidate_op)
@@ -695,7 +656,7 @@ def _compute_backward_node_lines(
     title = grad_fn_handle.label
     if call is not None and len(getattr(grad_fn_handle, "calls", {})) > 1:
         call_index = getattr(call, "call_index", getattr(call, "ordinal", 0))
-        title = getattr(call, "call_label", f"{grad_fn_handle.label}:{call_index}")
+        title = getattr(call, "label", f"{grad_fn_handle.label}:{call_index}")
     if not grad_fn_handle.has_op:
         title = f"[i] {title}"
     if grad_fn_handle.is_custom:
@@ -839,18 +800,26 @@ def _add_collapsed_container_node(
     leaves: Sequence[GraphNode],
     *,
     vis_mode: str,
+    label_lines_sink: dict[str, list[str]] | None = None,
 ) -> None:
-    """Record a collapsed container summary node for later emission."""
+    """Record a collapsed container summary node for later emission.
+
+    ``label_lines_sink``, when given, receives the summary's label lines by
+    node name (nodes mode adds the container role to them).
+    """
 
     first = leaves[0]
     group_id = cast(str, _container_group_id(cast(BaseGraphNode, first)))
     kind = _container_kind(cast(BaseGraphNode, first)) or "container"
     shape = "x".join(str(dim) for dim in (getattr(first, "shape", ()) or ())) or "scalar"
     node_name = _collapsed_container_node_name(group_id)
+    label_lines = [f"{kind} x{len(leaves)}", shape]
+    if label_lines_sink is not None:
+        label_lines_sink[node_name] = label_lines
     pending_nodes.append(
         {
             "name": node_name,
-            "label": render_lines_to_html([f"{kind} x{len(leaves)}", shape]),
+            "label": render_lines_to_html(label_lines),
             "shape": "box",
             "style": "filled,dashed",
             "fillcolor": "white",
@@ -1202,7 +1171,7 @@ def _node_for_label(trace: "Trace", label: str) -> GraphNode | None:
     """
 
     try:
-        return cast(GraphNode, trace.layer_dict_all_keys[label])
+        return cast(GraphNode, trace._layer_dict_all_keys[label])
     except KeyError:
         try:
             return cast(GraphNode, trace.ops[label])
@@ -1557,7 +1526,7 @@ def _collapsed_module_rolling_suffix_map(trace: "Trace") -> dict[str, str]:
     """
 
     best_groups: dict[str, tuple[tuple[int, ...], ...]] = {}
-    for layer_log in trace.layer_logs.values():
+    for layer_log in trace._layer_logs.values():
         if not isinstance(layer_log, Layer) or layer_log.num_passes <= 1:
             continue
         groups = _call_groups_for_layer(layer_log)
@@ -1664,9 +1633,9 @@ def _compute_edge_label(
 
     Precedence matches the Phase 7 conditional rendering spec:
 
-    1. Arm-entry labels from ``Trace.conditional_arm_entry_edges`` /
-       ``Trace.conditional_edge_call_indices``.
-    2. ``IF`` labels from ``Trace.conditional_branch_edges``.
+    1. Arm-entry labels from ``Trace.graph.conditional_arm_entry_edges`` /
+       ``Trace.graph.conditional_edge_call_indices``.
+    2. ``IF`` labels from ``Trace.graph.conditional_branch_edges``.
     3. ``None`` when the edge has no branch semantics.
 
     Args:
@@ -1768,7 +1737,8 @@ def _get_arm_edge_entries(
     arm_entries: List[Tuple[int, str, Optional[Tuple[int, ...]]]] = []
     if vis_mode == "unrolled":
         edge_key = (parent_node.layer_label, child_node.layer_label)
-        for (conditional_id, branch_kind), edge_list in trace.conditional_arm_entry_edges.items():
+        arm_entry_edges = trace._graph_conditional_arm_entry_edges
+        for (conditional_id, branch_kind), edge_list in arm_entry_edges.items():
             if edge_key in edge_list:
                 arm_entries.append((conditional_id, branch_kind, None))
     elif vis_mode == "rolled":
@@ -1779,7 +1749,7 @@ def _get_arm_edge_entries(
             edge_child,
             conditional_id,
             branch_kind,
-        ), call_indexs in trace.conditional_edge_call_indices.items():
+        ), call_indexs in trace._graph_conditional_edge_call_indices.items():
             if (edge_parent, edge_child) == (parent_no_pass, child_no_pass):
                 arm_entries.append((conditional_id, branch_kind, tuple(call_indexs)))
     else:
@@ -1971,7 +1941,7 @@ def _get_conditional_reference_text(conditional_id: int, trace: "Trace") -> str:
     str
         Line-based conditional reference when available, otherwise ``"C{id}"``.
     """
-    for conditional_event in trace.conditional_records:
+    for conditional_event in trace._graph_conditional_records:
         if conditional_event.id == conditional_id:
             return f"L{conditional_event.if_stmt_span[0]}"
     return f"C{conditional_id}"
@@ -1998,7 +1968,7 @@ def _arm_entry_sort_key(
         Sort key ordered by source line, branch rank, then conditional id.
     """
     source_line = 10**9
-    for conditional_event in trace.conditional_records:
+    for conditional_event in trace._graph_conditional_records:
         if conditional_event.id == conditional_id:
             source_line = conditional_event.if_stmt_span[0]
             break
@@ -2049,7 +2019,7 @@ def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trac
         ``"IF"`` or ``"ELIF"`` (falls back to ``"IF"`` if no bool is reachable).
     """
     bool_kind: dict[str, str] = {}
-    for event in getattr(trace, "conditional_records", ()) or ():
+    for event in trace._graph_conditional_records or ():
         for bool_label in getattr(event, "bool_layers", ()) or ():
             bool_layer = trace[bool_label]
             bool_ops = tuple(getattr(bool_layer, "ops", {}).values())
@@ -2113,12 +2083,12 @@ def _edge_is_conditional_branch(
         return (
             parent_node.layer_label,
             child_node.layer_label,
-        ) in trace.conditional_branch_edges
+        ) in trace._graph_conditional_branch_edges
     if vis_mode == "rolled":
         edge_key = (parent_node.layer_label, child_node.layer_label)
         return any(
             (branch_parent.split(":")[0], branch_child.split(":")[0]) == edge_key
-            for branch_parent, branch_child in trace.conditional_branch_edges
+            for branch_parent, branch_child in trace._graph_conditional_branch_edges
         )
     raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
 
@@ -2157,9 +2127,9 @@ def _container_component_role(component: OutputPathComponent) -> str:
     if isinstance(component, TupleIndex):
         return str(component.index)
     if isinstance(component, (DictKey, HFKey)):
-        return str(component.key)
+        return str(component._key)
     if isinstance(component, (NamedField, DataclassField)):
-        return component.name
+        return component._name
     return str(component)
 
 
@@ -2235,8 +2205,8 @@ def _add_grad_edge(
         }
         if (
             grad_passes
-            and self.num_backward_passes > 1
-            and grad_passes != set(range(1, self.num_backward_passes + 1))
+            and self._num_backward_passes > 1
+            and grad_passes != set(range(1, self._num_backward_passes + 1))
         ):
             edge_dict["label"] = f"bwd {int_list_to_compact_str(sorted(grad_passes))}"
         for arg_name, arg_val in overrides.grad_edge.items():  # type: ignore[union-attr]

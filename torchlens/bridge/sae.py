@@ -336,7 +336,7 @@ def _tensor_outputs(log: Any) -> tuple[torch.Tensor, ...]:
             "SAE splice needs saved tensor model outputs to compare runs; "
             "this capture retained none. Capture with the default exhaustive "
             "save (tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "intervention_ready=True)))."
+            "replayable=True)))."
         )
     return outputs
 
@@ -482,7 +482,7 @@ def _clean_trace(model_or_log: Any, inputs: Any) -> Any:
         return tl.trace(
             model_or_log,
             inputs,
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     if inputs is not None:
         raise TypeError(
@@ -512,8 +512,8 @@ def _replayed(clean: Any, site: str, name: str, module: nn.Module) -> Any:
         Replayed fork.
     """
 
+    from torchlens._selection.selectors import label as label_selector
     from torchlens.intervention.helpers import splice_module
-    from torchlens.intervention.selectors import label as label_selector
 
     fork = clean.fork(name)
     fork.attach_hooks(label_selector(site), splice_module(module, input_route="out"))
@@ -682,7 +682,7 @@ def splice(  # noqa: PLR0913 -- the public experiment door: each keyword is one 
     Parameters
     ----------
     model_or_log:
-        Live ``nn.Module`` (captured here with ``intervention_ready=True``)
+        Live ``nn.Module`` (captured here with ``replayable=True``)
         or an already-captured intervention-ready ``Trace``.
     inputs:
         Model inputs, required when ``model_or_log`` is a module and refused

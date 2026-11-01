@@ -403,7 +403,6 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "size_by": visualization.size_by,
         "size_scale": visualization.size_scale,
         "stack_by": visualization.stack_by,
-        "animate": visualization.animate,
         "show_redundant_args": visualization.show_redundant_args,
         "font_size": visualization.font_size,
         "dpi": visualization.dpi,

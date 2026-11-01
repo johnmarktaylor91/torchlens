@@ -37,7 +37,7 @@ class _LpiLike(nn.Module):
 
 
 def _conv_input_payload(trace: tl.Trace) -> torch.Tensor:
-    conv = next(op for op in trace.layer_list if op.func_name == "conv2d")
+    conv = next(op for op in trace._layer_list if op.func_name == "conv2d")
     return conv.saved_args[0]
 
 

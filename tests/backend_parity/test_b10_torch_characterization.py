@@ -188,7 +188,7 @@ def _dropout_out(trace: Trace) -> torch.Tensor:
         Saved dropout output.
     """
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         if layer.func_name == "dropout" and layer.has_saved_activation:
             return cast(torch.Tensor, layer.out)
     raise AssertionError("dropout output was not saved")
@@ -229,7 +229,7 @@ def test_forward_exception_restores_capture_state() -> None:
         torch.ones(2, 2),
         save="all",
     )
-    assert followup.num_ops == 4
+    assert followup._num_ops == 4
 
 
 def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:
@@ -242,15 +242,15 @@ def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:
         stop_after=lambda ctx: ctx.label.startswith("relu"),
     )
 
-    assert trace.halted is True
-    # halt_reason/halt_frontier are now remapped from raw to FINAL labels in
+    assert trace.is_stopped is True
+    # stop_reason/halt_frontier are now remapped from raw to FINAL labels in
     # postprocess Step 10 (_rename_model_history_layer_names), consistently for
     # both the exhaustive tl.trace(halt=...) and cooked Recording.to_trace()
     # paths, so halt provenance is a stable public label that matches across
     # capture modes (was raw "relu_1_3_raw", capture-mode-local).
-    assert trace.halt_reason == "relu_1_2"
-    assert trace.halt_frontier == "relu_1_2"
-    assert [layer.func_name for layer in trace.layer_list] == ["none", "__add__", "relu", "none"]
+    assert trace.stop_reason == "relu_1_2"
+    assert trace.graph.stop_frontier == "relu_1_2"
+    assert [layer.func_name for layer in trace._layer_list] == ["none", "__add__", "relu", "none"]
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None
 
@@ -266,9 +266,9 @@ def test_selective_layers_to_save_uses_fast_pass_save_new_outs() -> None:
         save=["relu"],
     )
 
-    saved = [(layer.func_name, layer.has_saved_activation) for layer in trace.layer_list]
-    assert trace.capture_mode == "exhaustive"
-    assert trace.num_saved_ops == 3
+    saved = [(layer.func_name, layer.has_saved_activation) for layer in trace._layer_list]
+    assert trace.options.mode == "exhaustive"
+    assert len(trace.saved_ops) == 3
     assert saved == [
         ("none", False),
         ("linear", False),
@@ -286,7 +286,7 @@ def test_intervention_ready_walks_nested_output_containers() -> None:
         trace = tl.trace(
             _ContainerOutputModel(),
             torch.ones(2, 2),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
     output_paths = [trace[label].container_path for label in trace.output_layers]
@@ -311,7 +311,7 @@ def test_dataparallel_unwrap_preserves_structured_input_addresses() -> None:
     }
     trace = tl.trace(nn.DataParallel(_DataParallelStructuredInputModel()), payload)
 
-    assert trace.model_class_name == "_DataParallelStructuredInputModel"
+    assert trace.source.class_name == "_DataParallelStructuredInputModel"
     assert _input_io_roles(trace) == {"input.payload.left.0", "input.payload.right.x"}
     assert torch.allclose(
         cast(torch.Tensor, trace[trace.output_layers[0]].out), torch.full((2, 2), 3.0)
@@ -323,13 +323,13 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
 
     model = _BufferMutationModel()
     trace = tl.trace(model, torch.ones(2, 2), save="all")
-    buffer_versions = [layer for layer in trace.layer_list if layer.is_buffer]
+    buffer_versions = [layer for layer in trace._layer_list if layer.is_buffer]
 
     assert len(buffer_versions) == 2
     # grouping rule row 74 (tests/test_grouping_call_sites.py; docs/guides/grouping.md):
     # buffer versions group by the line that wrote them, and a buffer written once
     # keeps its starting value and its new value as two single-pass layers.
-    assert [layer.pass_index for layer in buffer_versions] == [1, 1]
+    assert [layer.pass_number for layer in buffer_versions] == [1, 1]
     assert len({layer.layer_label for layer in buffer_versions}) == 2
     assert buffer_versions[0].buffer_write_kind is None
     assert buffer_versions[0].buffer_source is None
@@ -357,7 +357,7 @@ def test_dropout_two_pass_rng_alignment_matches_full_trace() -> None:
         save=["dropout"],
     )
 
-    assert selective.capture_mode == "exhaustive"
+    assert selective.options.mode == "exhaustive"
     assert torch.equal(_dropout_out(selective), _dropout_out(full))
 
 
@@ -405,7 +405,7 @@ def test_model_device_selection_params_buffers_and_paramless_fallback(
     and computed the whole forward there (H200 finding, 2026-08-18).
     """
 
-    capture_trace = importlib.import_module("torchlens._capture.trace")
+    capture_trace = importlib.import_module("torchlens._capture.run")
     original = capture_trace._fetch_label_move_input_tensors
     seen_devices: list[Any] = []
 

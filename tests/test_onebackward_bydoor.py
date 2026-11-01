@@ -218,7 +218,7 @@ class TestCompositionRows:
     def test_closed_loop_read_select_intervene_reread(self) -> None:
         """read -> top-k -> zero_ablate -> re-score: the R16 flagship loop."""
 
-        trace = _trace(capture=tl.options.CaptureOptions(intervention_ready=True))
+        trace = _trace(capture=tl.options.CaptureOptions(replayable=True))
         table = _site_table(trace)
         # The table binds to the BASE trace, so the circuit resolves there;
         # align_to is the one explicit door onto the fork (L6 stage 4a).

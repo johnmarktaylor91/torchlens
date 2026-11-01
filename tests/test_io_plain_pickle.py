@@ -96,7 +96,7 @@ def _first_saved_layer(trace: Trace) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    return next(layer for layer in trace._layer_list if layer.has_saved_activation)
 
 
 def test_plain_pickle_dump_and_load_still_work(tmp_path: Path) -> None:
@@ -111,10 +111,10 @@ def test_plain_pickle_dump_and_load_still_work(tmp_path: Path) -> None:
         restored = pickle.load(handle)
 
     assert isinstance(restored, Trace)
-    assert restored.model_class_name == trace.model_class_name
-    assert len(restored.layer_list) == len(trace.layer_list)
+    assert restored.source.class_name == trace.source.class_name
+    assert len(restored._layer_list) == len(trace._layer_list)
     assert restored[restored.output_layers[0]].layer_label == restored.output_layers[0]
-    assert restored.layer_list[0].source_trace is restored
+    assert restored._layer_list[0].source_trace is restored
     assert isinstance(_first_saved_layer(restored).out, torch.Tensor)
 
 
@@ -255,7 +255,7 @@ def test_plain_pickle_trainable_bare_linear_round_trips() -> None:
     # dumps(loads(dumps(...))) must also succeed (full round trip).
     assert pickle.dumps(restored)
     assert isinstance(restored, Trace)
-    assert len(restored.layer_list) == len(trace.layer_list)
+    assert len(restored._layer_list) == len(trace._layer_list)
     assert restored.summary()
 
 
@@ -266,8 +266,8 @@ def test_plain_pickle_multilayer_trainable_round_trips() -> None:
     trace = trace_fn(_TrainableModel(), torch.randn(3, 4))
     restored = pickle.loads(pickle.dumps(trace))
     assert pickle.dumps(restored)
-    assert len(restored.layer_list) == len(trace.layer_list)
-    assert restored.layer_list[0].source_trace is restored
+    assert len(restored._layer_list) == len(trace._layer_list)
+    assert restored._layer_list[0].source_trace is restored
 
 
 def test_plain_pickle_buffer_model_round_trips() -> None:
@@ -312,8 +312,8 @@ def test_trace_setstate_absent_container_fields_restore_typed() -> None:
     trace = trace_fn(_TrainableModel(), torch.randn(3, 4))
     state = trace.__getstate__()
     stripped = [
-        "layer_list",
-        "layer_logs",
+        "_layer_list",
+        "_layer_logs",
         "op_labels",
         "layer_labels",
         "by_pass",
@@ -330,14 +330,14 @@ def test_trace_setstate_absent_container_fields_restore_typed() -> None:
     restored = Trace.__new__(Trace)
     restored.__setstate__(state)
 
-    assert isinstance(restored.layer_list, list)
-    assert hasattr(restored.layer_logs, "values")
+    assert isinstance(restored._layer_list, list)
+    assert hasattr(restored._layer_logs, "values")
     assert isinstance(restored.op_labels, list)
-    assert isinstance(restored.by_pass, dict)
-    assert isinstance(restored.conditional_records, list)
+    assert isinstance(restored._by_pass, dict)
+    assert isinstance(restored.graph.conditional_records, list)
     # The exact crash sites from __setstate__ must be iterable now.
-    assert list(restored.layer_logs.values()) == []
-    assert list(restored.layer_list) == []
+    assert list(restored._layer_logs.values()) == []
+    assert list(restored._layer_list) == []
 
 
 def test_op_setstate_absent_container_fields_restore_typed() -> None:
@@ -347,7 +347,7 @@ def test_op_setstate_absent_container_fields_restore_typed() -> None:
 
     torch.manual_seed(0)
     trace = trace_fn(_TrainableModel(), torch.randn(3, 4))
-    op = trace.layer_list[1]
+    op = trace._layer_list[1]
     state = op.__getstate__()
     for field_name in (
         "input_to_module_calls",
@@ -394,7 +394,7 @@ def test_backend_address_none_is_preserved_and_pre_floor_refuses() -> None:
 
     trace = _build_trace()
     op_state = trace.ops[0].__getstate__()
-    layer_state = trace.layer_list[0].__getstate__()
+    layer_state = trace._layer_list[0].__getstate__()
     for state, factory in (
         (op_state, lambda: Op.__new__(Op)),
         (layer_state, lambda: Layer.__new__(Layer)),
@@ -421,7 +421,7 @@ def test_setstate_present_but_wrong_typed_container_is_coerced() -> None:
     trace = trace_fn(_TrainableModel(), torch.randn(3, 4))
 
     # Op: `_param_barcodes` declared as list but legacy state holds a set.
-    op = trace.layer_list[1]
+    op = trace._layer_list[1]
     op_state = op.__getstate__()
     op_state["_param_barcodes"] = {"legacy_barcode_as_set"}
     restored_op = Op.__new__(Op)
@@ -479,7 +479,7 @@ def test_all_field_order_container_defaults_are_typed() -> None:
 
     _assert_container_defaults(trace, list(MODEL_LOG_FIELD_ORDER), lambda: Trace.__new__(Trace))
     _assert_container_defaults(
-        trace.layer_list[1], list(LAYER_PASS_LOG_FIELD_ORDER), lambda: Op.__new__(Op)
+        trace._layer_list[1], list(LAYER_PASS_LOG_FIELD_ORDER), lambda: Op.__new__(Op)
     )
 
 
@@ -520,8 +520,8 @@ def test_plain_pickle_survives_a_lambda_activation_transform() -> None:
         capture=tl.options.CaptureOptions(activation_transform=lambda t: t * 2),
     )
     restored = pickle.loads(pickle.dumps(log))
-    assert restored.activation_transform is None
-    assert restored.layer_list[0].activation_transform is None
+    assert restored.options.activation_transform is None
+    assert restored._layer_list[0].activation_transform is None
 
 
 def test_plain_pickle_survives_a_lambda_input_transform() -> None:

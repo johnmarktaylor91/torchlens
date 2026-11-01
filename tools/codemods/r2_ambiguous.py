@@ -1414,7 +1414,7 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         "input_size",
         0,
     ): "apply",
-    ("torchlens/_runnable_execution.py", "torch.layout,", "layout", -1): "skip",
+    ("torchlens/_runnable/execution.py", "torch.layout,", "layout", -1): "skip",
     (
         "torchlens/_user_public_impls.py",
         '"""Render the caller\'s ``input_size=`` spelling compactly for disclosure."""',

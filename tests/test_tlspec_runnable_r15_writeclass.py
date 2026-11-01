@@ -29,7 +29,7 @@ import torchlens as tl
 from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _save_load(model: nn.Module, cap_x: torch.Tensor, tmp: Path) -> tl.Trace:

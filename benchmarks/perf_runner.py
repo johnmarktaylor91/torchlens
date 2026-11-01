@@ -379,10 +379,10 @@ def _record_no_save_invariant(trace: Any, state: dict[str, Any]) -> None:
     saved_activation_count = _saved_activation_count(trace)
     state["no_save_layers_to_save"] = "[]"
     state["no_save_num_ops"] = getattr(trace, "num_ops", None)
-    state["no_save_num_saved_ops"] = getattr(trace, "num_saved_ops", None)
+    state["no_save_num_saved_ops"] = len(trace.saved_ops) if hasattr(trace, "saved_ops") else None
     state["no_save_saved_activation_count"] = saved_activation_count
     state["no_save_invariant_passed"] = (
-        getattr(trace, "num_saved_ops", None) == 0 and saved_activation_count == 0
+        len(getattr(trace, "saved_ops", ())) == 0 and saved_activation_count == 0
     )
 
 
@@ -464,13 +464,11 @@ def _operation(
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.trace(
-            model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-        )
+        return lambda: tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     if operation == "tl_rerun":
         import torchlens as tl
 
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
         state["rerun_policy"] = "steady_state"
         return lambda: trace.run(model, x)
     if operation in {"rerun_metadata_only", "rerun_no_save"}:

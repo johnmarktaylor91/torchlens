@@ -96,7 +96,7 @@ def test_rg09_pass_qualified_patch_on_real_cross_layer_sharing(rg_loader: Any) -
     model, tokenizer = loaded["model"], loaded["tokenizer"]
     encoded = dict(tokenizer(prompt("encoder-sentence-1")["text"], return_tensors="pt"))
     trace = tl.trace(
-        model, (), input_kwargs=encoded, capture=tl.options.CaptureOptions(intervention_ready=True)
+        model, (), input_kwargs=encoded, capture=tl.options.CaptureOptions(replayable=True)
     )
     try:
         multi_pass = [label for label in trace.layer_labels if len(trace[label].ops) >= 12]

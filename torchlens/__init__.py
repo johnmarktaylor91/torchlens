@@ -21,7 +21,7 @@ if _TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
-__version__ = "2.36.2"
+__version__ = "2.36.3"
 
 if _TYPE_CHECKING:
     from ._data_classes.trace import Trace
@@ -54,10 +54,9 @@ _LAZY_ATTRS = {
     "bridge": ("torchlens.bridge", None),
     "callbacks": ("torchlens.callbacks", None),
     "neuro": ("torchlens.neuro", None),
-    "hook_grad": ("torchlens.intervention.helpers", "hook_grad"),
     "clamp": ("torchlens.intervention.helpers", "clamp"),
     "compat": ("torchlens.compat", None),
-    "label_contains": ("torchlens.intervention.selectors", "label_contains"),
+    "label_contains": ("torchlens._selection.selectors", "label_contains"),
     # Dataset extraction (D7/V5): the implementation module is lazy so the
     # manifest/resume machinery costs nothing until first use.
     "dataset_extraction": ("torchlens.dataset_extraction", None),
@@ -68,42 +67,39 @@ _LAZY_ATTRS = {
     "export": ("torchlens.export", None),
     "facets": ("torchlens._semantic", "facets"),
     "recording": ("torchlens.recording", None),
-    "facet": ("torchlens.intervention.selectors", "facet"),
-    "followed_by": ("torchlens.intervention.selectors", "followed_by"),
-    "func": ("torchlens.intervention.selectors", "func"),
-    "func_transform": ("torchlens.intervention.selectors", "func_transform"),
-    "clamp_grad": ("torchlens.intervention.helpers", "clamp_grad"),
-    "clip_grad": ("torchlens.intervention.helpers", "clip_grad"),
-    "grad_fn": ("torchlens.intervention.selectors", "grad_fn"),
-    "grad_input": ("torchlens.intervention.selectors", "grad_input"),
-    "add_grad_noise": ("torchlens.intervention.helpers", "add_grad_noise"),
-    "grad_output": ("torchlens.intervention.selectors", "grad_output"),
-    "scale_grad": ("torchlens.intervention.helpers", "scale_grad"),
-    "zero_grad": ("torchlens.intervention.helpers", "zero_grad"),
+    "facet": ("torchlens._selection.selectors", "facet"),
+    "followed_by": ("torchlens._selection.selectors", "followed_by"),
+    "func": ("torchlens._selection.selectors", "func"),
+    "func_transform": ("torchlens._selection.selectors", "func_transform"),
+    "grad": ("torchlens._selection.selectors", "grad"),
+    "clip_norm": ("torchlens.intervention.helpers", "clip_norm"),
+    "grad_fn": ("torchlens._selection.selectors", "grad_fn"),
+    "grad_input": ("torchlens._selection.selectors", "grad_input"),
+    "grad_output": ("torchlens._selection.selectors", "grad_output"),
     "fingerprint": ("torchlens.fingerprint", None),
-    "head": ("torchlens.intervention.selectors", "head"),
-    "in_backward_pass": ("torchlens.intervention.selectors", "in_backward_pass"),
-    "in_module": ("torchlens.intervention.selectors", "in_module"),
-    "model_input": ("torchlens.intervention.selectors", "model_input"),
+    "head": ("torchlens._selection.selectors", "head"),
+    "in_backward_pass": ("torchlens._selection.selectors", "in_backward_pass"),
+    "in_module": ("torchlens._selection.selectors", "in_module"),
+    "model_input": ("torchlens._selection.selectors", "model_input"),
     "intervention": ("torchlens.intervention", None),
     "io": ("torchlens.io", None),
     "load": ("torchlens._io.bundle", "load"),
-    "label": ("torchlens.intervention.selectors", "label"),
+    "label": ("torchlens._selection.selectors", "label"),
     "mean_ablate": ("torchlens.intervention.helpers", "mean_ablate"),
     "merge_ranks": ("torchlens._merged", "merge_ranks"),
     "merge_report": ("torchlens._merged", "merge_report"),
-    "module": ("torchlens.intervention.selectors", "module"),
+    "module": ("torchlens._selection.selectors", "module"),
     "add_noise": ("torchlens.intervention.helpers", "add_noise"),
-    "model_output": ("torchlens.intervention.selectors", "model_output"),
+    "model_output": ("torchlens._selection.selectors", "model_output"),
     "debug": ("torchlens.debug", None),
     "report": ("torchlens.report", None),
     "repgeom": ("torchlens.repgeom", None),
-    "preceded_by": ("torchlens.intervention.selectors", "preceded_by"),
+    "preceded_by": ("torchlens._selection.selectors", "preceded_by"),
     "project_out": ("torchlens.intervention.helpers", "project_out"),
     "project_onto": ("torchlens.intervention.helpers", "project_onto"),
     "record": ("torchlens.recording._record_one_shot", "record"),
     "receptive_field": ("torchlens.receptive_field", None),
-    "label_matches": ("torchlens.intervention.selectors", "label_matches"),
+    "label_matches": ("torchlens._selection.selectors", "label_matches"),
     "clear_cache": ("torchlens._user_funcs", "clear_cache"),
     "release_model": ("torchlens._user_funcs", "release_model"),
     "replace_with": ("torchlens.intervention.predicates", "replace_with"),
@@ -125,11 +121,11 @@ _LAZY_ATTRS = {
     "appliances": ("torchlens.appliances", None),
     "backends": ("torchlens.backends", None),
     "viz": ("torchlens.viz", None),
-    "site": ("torchlens.intervention.selectors", "site"),
-    "at_step": ("torchlens.intervention.selectors", "at_step"),
+    "site": ("torchlens._selection.selectors", "site"),
+    "at_step": ("torchlens._selection.selectors", "at_step"),
     "when": ("torchlens.intervention.spec", "when"),
-    "where": ("torchlens.intervention.selectors", "where"),
-    "without_op": ("torchlens.intervention.selectors", "without_op"),
+    "where": ("torchlens._selection.selectors", "where"),
+    "without_op": ("torchlens._selection.selectors", "without_op"),
     "zero_ablate": ("torchlens.intervention.helpers", "zero_ablate"),
     "Edit": ("torchlens.intervention.types", "Edit"),
     "patch_from": ("torchlens.intervention.helpers", "patch_from"),
@@ -137,33 +133,33 @@ _LAZY_ATTRS = {
     "positions": ("torchlens.intervention._position_edits", "positions"),
     # L6 selection algebra (DOCUMENTED-UNSTABLE pending naming-session
     # ratification; provisional-name protocol).
-    "Selector": ("torchlens._selection", "Selector"),
-    "Selection": ("torchlens._selection", "Selection"),
-    "units": ("torchlens._selection", "units"),
-    "param": ("torchlens._selection", "param"),
-    "random_like": ("torchlens._selection", "random_like"),
+    "Selector": ("torchlens._selection.selection", "Selector"),
+    "Selection": ("torchlens._selection.selection", "Selection"),
+    "units": ("torchlens._selection.selection", "units"),
+    "param": ("torchlens._selection.selection", "param"),
+    "random_like": ("torchlens._selection.selection", "random_like"),
     # L6 value-based + statistical producers (DOCUMENTED-UNSTABLE pending
     # naming-session ratification; provisional-name protocol).
-    "top_k": ("torchlens._selection_values", "top_k"),
-    "top_fraction": ("torchlens._selection_values", "top_fraction"),
-    "threshold": ("torchlens._selection_values", "threshold"),
-    "sign": ("torchlens._selection_values", "sign"),
-    "dead": ("torchlens._selection_values", "dead"),
-    "saturated": ("torchlens._selection_values", "saturated"),
-    "low_variance": ("torchlens._selection_values", "low_variance"),
+    "top_k": ("torchlens._selection.values", "top_k"),
+    "top_fraction": ("torchlens._selection.values", "top_fraction"),
+    "threshold": ("torchlens._selection.values", "threshold"),
+    "sign": ("torchlens._selection.values", "sign"),
+    "dead": ("torchlens._selection.values", "dead"),
+    "saturated": ("torchlens._selection.values", "saturated"),
+    "low_variance": ("torchlens._selection.values", "low_variance"),
     # L6 graph-structural producers (DOCUMENTED-UNSTABLE pending
     # naming-session ratification; provisional-name protocol).
-    "neighborhood": ("torchlens._selection_graph", "neighborhood"),
-    "between": ("torchlens._selection_graph", "between"),
+    "neighborhood": ("torchlens._selection.graph", "neighborhood"),
+    "between": ("torchlens._selection.graph", "between"),
     # L6 comparative producers: differential + cross-pass (DOCUMENTED-UNSTABLE
     # pending naming-session ratification; provisional-name protocol).
-    "changed": ("torchlens._selection_compare", "changed"),
-    "top_changed": ("torchlens._selection_compare", "top_changed"),
-    "stable_across_passes": ("torchlens._selection_compare", "stable_across_passes"),
-    "pass_variance": ("torchlens._selection_compare", "pass_variance"),
+    "changed": ("torchlens._selection.compare", "changed"),
+    "top_changed": ("torchlens._selection.compare", "top_changed"),
+    "stable_across_passes": ("torchlens._selection.compare", "stable_across_passes"),
+    "pass_variance": ("torchlens._selection.compare", "pass_variance"),
     # L6 subspace producer (DOCUMENTED-UNSTABLE pending naming-session
     # ratification; provisional-name protocol).
-    "subspace": ("torchlens._selection_subspace", "subspace"),
+    "subspace": ("torchlens._selection.subspace", "subspace"),
 }
 
 
@@ -389,27 +385,33 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
 
     Raises
     ------
-    ValueError
-        If the layer cannot be resolved or has no saved out.
+    InvalidArgumentError
+        ``op_lookup_not_found`` if the layer cannot be resolved;
+        ``activation_not_saved`` if it resolved but kept no out.
     """
 
-    from ._errors import AmbiguousOpLookupError
+    from ._extract_refusals import (
+        TorchLensError,
+        refuse_activation_not_saved,
+        refuse_lookup_not_found,
+    )
     from ._trace_selector_helpers import canonical_module_site_key
 
     try:
         layer_log = trace[canonical_module_site_key(trace, layer) or layer]
-    except AmbiguousOpLookupError:
-        # An ambiguity names its candidates; a "not found" would hide them.
+    except TorchLensError:
+        # A typed refusal (ambiguity, pass qualifier, index) already names its
+        # condition; a "not found" would hide it.
         raise
     except (KeyError, ValueError) as exc:
         suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
-        raise ValueError(_did_you_mean_message(layer, suggestions)) from exc
+        refuse_lookup_not_found(_did_you_mean_message(layer, suggestions), layer, cause=exc)
 
     import torch
 
     out = getattr(layer_log, "out", None)
     if out is None:
-        raise ValueError(f"Layer {layer!r} resolved but has no saved out.")
+        refuse_activation_not_saved(layer)
     if not isinstance(out, torch.Tensor):
         raise TypeError(f"Layer {layer!r} out is not a torch.Tensor.")
     return out
@@ -453,9 +455,9 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     from ._errors import AmbiguousOpLookupError
     from ._trace_selector_helpers import canonical_module_site_key
 
-    if pattern in trace.layer_dict_all_keys:
+    if pattern in trace._layer_dict_all_keys:
         return [pattern]
-    if pattern in trace.layer_logs:
+    if pattern in trace._layer_logs:
         return [pattern]
     if canonical_module_site_key(trace, pattern) is not None:
         # A wrapper-relative or dot-flattened module name keys by the caller's spelling.
@@ -491,7 +493,7 @@ def pluck(
         Positional input argument or argument container for ``model.forward``.
     layer:
         Layer label, module path, pass-qualified label, or unique substring.
-        Resolves strictly to one result; ambiguous lookups raise ``ValueError``.
+        Resolves strictly to one result; ambiguous lookups refuse typed.
     stop_after:
         Stop-early site or predicate, passed to the capture as
         ``trace(stop_after=...)``: the forward halts inclusively after the
@@ -505,8 +507,9 @@ def pluck(
 
     Raises
     ------
-    ValueError
-        If ``layer`` does not resolve or did not produce a saved tensor.
+    InvalidArgumentError
+        ``op_lookup_not_found`` if ``layer`` does not resolve;
+        ``activation_not_saved`` if it produced no saved tensor.
     """
 
     # an explicit site rides the door's stop_after=, where the trace
@@ -521,7 +524,7 @@ def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
     A list entry keys by the selector's spelling; a mapping entry by the user label.
     """
 
-    from .intervention.selectors import FacetSelector
+    from ._selection.selectors import FacetSelector
 
     items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
     return {
@@ -600,12 +603,12 @@ def _extract_layers_with_trace(
 
     Raises
     ------
-    ValueError
-        If a lookup does not resolve or did not produce a saved tensor.
+    InvalidArgumentError
+        ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
     """
 
+    from ._extract_refusals import CaptureOptions, refuse_lookup_not_found
     from ._trace_selector_helpers import canonical_module_site_key
-    from .options import CaptureOptions as _LazyCaptureOptions
 
     facet_plan = _extract_facet_plan(layers)
     if facet_plan:
@@ -613,14 +616,8 @@ def _extract_layers_with_trace(
             model, x, layers, facet_plan, detach_saved_activations=detach_saved_activations
         )
     layer_plan = _normalize_extract_layers(layers)
-    trace = _resolve_top_level("trace")(
-        model,
-        x,
-        capture=_LazyCaptureOptions(
-            detach_saved_activations=detach_saved_activations,
-        ),
-        save=list(layer_plan.values()),
-    )
+    capture = CaptureOptions(detach_saved_activations=detach_saved_activations)
+    trace = _resolve_top_level("trace")(model, x, capture=capture, save=list(layer_plan.values()))
     outputs: dict[str, _torch.Tensor] = {}
     views: dict[str, _Any] = {}
     if isinstance(layers, _Mapping):
@@ -633,7 +630,7 @@ def _extract_layers_with_trace(
         matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
             suggestions = trace.find_layers(pattern)
-            raise ValueError(_did_you_mean_message(pattern, suggestions))
+            refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
             views[match] = trace[match]
@@ -704,6 +701,7 @@ __all__ = [
     "func",
     "func_transform",
     "followed_by",
+    "grad",
     "grad_fn",
     "grad_input",
     "grad_output",
@@ -720,6 +718,7 @@ __all__ = [
     "in_module",
     "head",
     "clamp",
+    "clip_norm",
     "mean_ablate",
     "merge_ranks",
     "merge_report",
@@ -735,12 +734,6 @@ __all__ = [
     "site",
     "at_step",
     "when",
-    "hook_grad",
-    "clip_grad",
-    "add_grad_noise",
-    "clamp_grad",
-    "scale_grad",
-    "zero_grad",
     "Selector",
     "Selection",
     "units",

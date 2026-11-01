@@ -253,8 +253,8 @@ def test_frozen_importlib_in_both_denylists(module: str) -> None:
 def test_resolve_import_ref_frozen_importlib_denied_under_trust() -> None:
     """``resolve_import_ref('_frozen_importlib:__import__', trust=True)`` is DENIED."""
 
+    from torchlens.intervention._resolver_registry import resolve_import_ref
     from torchlens.intervention.errors import UntrustedCallableError
-    from torchlens.intervention.resolver import resolve_import_ref
 
     with pytest.raises(UntrustedCallableError):
         resolve_import_ref("_frozen_importlib:__import__")

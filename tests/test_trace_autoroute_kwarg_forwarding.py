@@ -61,29 +61,34 @@ def _trace_function_def() -> ast.FunctionDef:
     return candidates[-1]
 
 
+def _autoroute_forwarded_names() -> set[str]:
+    """The ``_AUTOROUTE_FORWARDED_KWARGS`` tuple of the PREPARE dispatch module."""
+
+    tree = package_ast(PACKAGE_ROOT / "_capture" / "prepare" / "dispatch.py")
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            getattr(target, "id", "") == "_AUTOROUTE_FORWARDED_KWARGS" for target in node.targets
+        ):
+            assert isinstance(node.value, ast.Tuple)
+            return {
+                element.value
+                for element in node.value.elts
+                if isinstance(element, ast.Constant) and isinstance(element.value, str)
+            }
+    raise AssertionError("_AUTOROUTE_FORWARDED_KWARGS tuple not found in prepare/dispatch.py")
+
+
 def test_autoroute_bundle_covers_every_unguarded_trace_param() -> None:
     """Every trace() parameter is forwarded to detectors or provably guarded."""
 
     node = _trace_function_def()
     params = {a.arg for a in (*node.args.args, *node.args.kwonlyargs)}
-    bundle_keys: set[str] | None = None
-    for inner in ast.walk(node):
-        if isinstance(inner, ast.Assign) and any(
-            getattr(target, "id", "") == "autoroute_kwargs" for target in inner.targets
-        ):
-            assert isinstance(inner.value, ast.Dict)
-            bundle_keys = {
-                key.value
-                for key in inner.value.keys
-                if isinstance(key, ast.Constant) and isinstance(key.value, str)
-            }
-            break
-    assert bundle_keys is not None, "autoroute_kwargs literal not found in trace()"
+    bundle_keys = _autoroute_forwarded_names()
 
     dropped = params - bundle_keys - AUTOROUTE_EXEMPT_PARAMS
     assert not dropped, (
         f"trace() parameters silently dropped on the autoroute path: "
-        f"{sorted(dropped)}. Forward them in autoroute_kwargs (detectors "
+        f"{sorted(dropped)}. Forward them in _AUTOROUTE_FORWARDED_KWARGS (detectors "
         f"re-enter tl.trace, which honors or refuses them typed) or add a "
         f"guard that provably fires before the autoroute branch and document "
         f"it in AUTOROUTE_EXEMPT_PARAMS."

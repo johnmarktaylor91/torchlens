@@ -154,7 +154,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "OpEvent.is_scalar_bool": "F",
     "OpEvent.bool_value": "F",
     "OpEvent.intervention_fired": "F",
-    "OpEvent.intervention_replaced": "F",
+    "OpEvent.is_edited": "F",
     "OpEvent.fire_results": "F",
     "OpEvent.intervention_template_ref": "F",
     "OpEvent.record_context": R_JOURNAL,
@@ -223,7 +223,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     # ---- ParentEdge --------------------------------------------------------
     "ParentEdge.parent_label_raw": "F",
     "ParentEdge.arg_position": "F",
-    "ParentEdge.edge_use": "F",
+    "ParentEdge._edge_use": "F",
     # ---- ParamRef ----------------------------------------------------------
     "ParamRef.barcode": "F",  # random token: volatile bucket, portable shape
     "ParamRef.address": "F",
@@ -274,7 +274,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "RecordContext.kind": "F",
     "RecordContext.label": "F",
     "RecordContext.raw_label": "F",
-    "RecordContext.pass_index": "F",
+    "RecordContext.pass_number": "F",
     "RecordContext.event_index": "F",
     "RecordContext.step_index": "F",
     "RecordContext.layer_type": "F",
@@ -283,7 +283,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "RecordContext.func_name": "F",
     "RecordContext.address": "F",
     "RecordContext.module_type": "F",
-    "RecordContext.module_pass_index": "F",
+    "RecordContext.module_pass_number": "F",
     "RecordContext.module_stack": "F",
     "RecordContext.recent_events": R_JOURNAL,
     "RecordContext.recent_ops": R_JOURNAL,
@@ -328,10 +328,10 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "ContainerSpec.aux_data": R_JOURNAL,
     "ContainerSpec.lossy_reconstruction": "F",
     # ---- container path keys (reachable via ContainerSpec) ------------------
-    "DataclassField.name": "F",
-    "DictKey.key": "F",
-    "HFKey.key": "F",
-    "NamedField.name": "F",
+    "DataclassField._name": "F",
+    "DictKey._key": "F",
+    "HFKey._key": "F",
+    "NamedField._name": "F",
     "TupleIndex.index": "F",
     # ---- BlobRef -----------------------------------------------------------
     "BlobRef.uri": "F",
@@ -344,7 +344,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "ModuleStackFrame.address": "F",
     "ModuleStackFrame.module_type": "F",
     "ModuleStackFrame.module_id": "F",  # id-derived token
-    "ModuleStackFrame.pass_index": "F",
+    "ModuleStackFrame.pass_number": "F",
     # ---- DeviceRef / DtypeRef ----------------------------------------------
     "DeviceRef.backend": "F",
     "DeviceRef.name": "F",
@@ -399,7 +399,7 @@ TIER_CLASSIFICATION: dict[str, str] = {
     "RecordingFacet.record_context": R_JOURNAL,
     "RecordingFacet.capture_spec": R_JOURNAL,
     "InterventionFacet.intervention_fired": "F",
-    "InterventionFacet.intervention_replaced": "F",
+    "InterventionFacet.is_edited": "F",
     "InterventionFacet.fire_results": "F",
     "OpRecord.core": "F",
     "OpRecord.function": "F",

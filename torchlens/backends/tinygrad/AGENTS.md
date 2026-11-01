@@ -1,8 +1,8 @@
 # backends/tinygrad/ - Implementation Guide
 
-tinygrad preview backend: UOp-snapshot capture of an eager forward. Tier-1
-standalone spec (no `capture_backend`); the `BackendSpec` in
-`../default_specs.py` is the only capability truth. This is the smallest
+tinygrad preview backend: UOp-snapshot capture of an eager forward. It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+`BackendSpec` in `../default_specs.py` and its protocol shell in
+`../_protocols/tinygrad.py` are the capability truth (contract: `../AGENTS.md`). This is the smallest
 preview: `backend.py` plus registry-backed `capabilities.py` only.
 
 ## backend.py

@@ -623,18 +623,16 @@ def check_model_and_input_variants(
             + (f": {offense['reason']}" if offense["reason"] else "")
             for offense in unique
         )
-        # L7a default-path teaching enrichment (memo 1.4-B item 3, ships
-        # regardless of D8): name the USER callsite and point meta-init
-        # holders at the structure-only mode's contract. No new code is
-        # minted and the offense payload shape is unchanged.
+        # L7a default-path teaching enrichment (memo 1.4-B item 3, ships regardless
+        # of D8): name the USER callsite and point meta-init holders at the
+        # structure-only mode's contract. No new code, same offense payload shape.
         caller_file, caller_line = _first_user_frame()
         callsite_note = ""
         if caller_file is not None and caller_line is not None:
-            from ._source_links import file_line_text
+            from ._source_links import file_line_text  # in-function: L3 above this L2 module
 
-            callsite_note = (
-                f"\nCapture was requested at {file_line_text(caller_file, caller_line)}."
-            )
+            at = file_line_text(caller_file, caller_line)
+            callsite_note = f"\nCapture was requested at {at}."
         meta_pointer = ""
         if any("meta tensor" in offense["name"] for offense in unique):
             if _meta_admission_row_open():

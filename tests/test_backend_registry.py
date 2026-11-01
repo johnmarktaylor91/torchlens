@@ -17,6 +17,7 @@ from _source_corpus import package_ast, package_files, package_source
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.prepare.dispatch import _dispatch_trace
 from torchlens._capture.trace import _capture_backend_from_registry
 from torchlens.backends import (
     BackendCapabilities,
@@ -34,7 +35,11 @@ from torchlens.backends.default_specs import (
 from torchlens.backends.jax import capabilities as jax_capabilities
 from torchlens.backends.mlx import capabilities as mlx_capabilities
 from torchlens.backends.paddle import capabilities as paddle_capabilities
-from torchlens.backends.registry import _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES, SerializationPolicy
+from torchlens.backends.registry import (
+    _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES,
+    BackendRegistryError,
+    SerializationPolicy,
+)
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.errors import (
@@ -119,17 +124,17 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
         capture=tl.options.CaptureOptions(seed=1),
         save="all",
     )
-    trace.backend = "fake"
-    trace.module_identity_mode = "function_root"
-    trace.param_source = "none"
-    trace.model_class_name = "_FakeModel"
-    trace.model_label = "_FakeModel"
-    trace.model_class_qualname = "tests.test_backend_registry._FakeModel"
-    trace.trace_label = "fake-backend-trace"
-    for layer in trace.layer_list:
+    trace._provenance_backend = "fake"
+    trace._options_module_identity_mode = "function_root"
+    trace._provenance_param_source = "none"
+    trace._source_class_name = "_FakeModel"
+    trace.model_name = "_FakeModel"
+    trace._source_class_qualname = "tests.test_backend_registry._FakeModel"
+    trace.name = "fake-backend-trace"
+    for layer in trace._layer_list:
         layer.resolver_status = "metadata_only"
         layer.backend_address = f"fake:{layer.layer_label}"
-    for layer in trace.layer_logs.values():
+    for layer in trace._layer_logs.values():
         layer.resolver_status = "metadata_only"
         layer.backend_address = f"fake:{layer.layer_label}"
     return trace
@@ -201,7 +206,7 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                interventions=False,
+                can_intervene=False,
                 rng_replay=False,
                 payload_materialization=False,
                 has_streaming=False,
@@ -232,7 +237,7 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
         capture=tl.options.CaptureOptions(seed=1),
         save="all",
     )
-    assert explicit.backend == legacy.backend == "torch"
+    assert explicit.provenance.backend == legacy.provenance.backend == "torch"
     assert explicit.layer_labels == legacy.layer_labels
 
 
@@ -268,8 +273,8 @@ def test_torch_accepts_default_equivalent_trace_option_values() -> None:
         ),
     )
 
-    assert trace.backend == "torch"
-    assert trace.module_identity_mode == "torch_module"
+    assert trace.provenance.backend == "torch"
+    assert trace.options.module_identity_mode == "torch_module"
 
 
 def test_capture_backend_factory_checked_at_registration() -> None:
@@ -298,7 +303,7 @@ def test_capture_backend_factory_checked_at_registration() -> None:
                     backward_capture=False,
                     has_validation_replay=False,
                     fastlog=False,
-                    interventions=False,
+                    can_intervene=False,
                     rng_replay=False,
                     payload_materialization=False,
                     has_streaming=False,
@@ -328,7 +333,7 @@ def test_capture_backend_factory_import_error_is_not_exempted() -> None:
                     backward_capture=False,
                     has_validation_replay=False,
                     fastlog=False,
-                    interventions=False,
+                    can_intervene=False,
                     rng_replay=False,
                     payload_materialization=False,
                     has_streaming=False,
@@ -354,7 +359,7 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
             backward_capture=False,
             has_validation_replay=False,
             fastlog=False,
-            interventions=False,
+            can_intervene=False,
             rng_replay=False,
             payload_materialization=False,
             has_streaming=False,
@@ -395,7 +400,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         jax_spec.capabilities.has_validation_replay == jax_capabilities.supports_validation_replay
     )
     assert jax_spec.capabilities.fastlog == jax_capabilities.supports_fastlog
-    assert jax_spec.capabilities.interventions == jax_capabilities.supports_intervention
+    assert jax_spec.capabilities.can_intervene == jax_capabilities.supports_intervention
     assert (
         jax_spec.capabilities.intermediate_derived_grads
         == jax_capabilities.supports_intermediate_derived_grads
@@ -425,7 +430,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         mlx_spec.capabilities.has_validation_replay == mlx_capabilities.supports_validation_replay
     )
     assert mlx_spec.capabilities.fastlog == mlx_capabilities.supports_fastlog
-    assert mlx_spec.capabilities.interventions == mlx_capabilities.supports_intervention
+    assert mlx_spec.capabilities.can_intervene == mlx_capabilities.supports_intervention
     assert (
         mlx_spec.capabilities.intermediate_derived_grads
         == mlx_capabilities.supports_intermediate_derived_grads
@@ -456,7 +461,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == tinygrad_capabilities.supports_validation_replay
     )
     assert tinygrad_spec.capabilities.fastlog == tinygrad_capabilities.supports_fastlog
-    assert tinygrad_spec.capabilities.interventions == tinygrad_capabilities.supports_intervention
+    assert tinygrad_spec.capabilities.can_intervene == tinygrad_capabilities.supports_intervention
     assert (
         tinygrad_spec.capabilities.intermediate_derived_grads
         == tinygrad_capabilities.supports_intermediate_derived_grads
@@ -489,7 +494,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == paddle_capabilities.supports_validation_replay
     )
     assert paddle_spec.capabilities.fastlog == paddle_capabilities.supports_fastlog
-    assert paddle_spec.capabilities.interventions == paddle_capabilities.supports_intervention
+    assert paddle_spec.capabilities.can_intervene == paddle_capabilities.supports_intervention
     assert (
         paddle_spec.capabilities.intermediate_derived_grads
         == paddle_capabilities.supports_intermediate_derived_grads
@@ -779,7 +784,7 @@ def test_tf_detector_swallows_non_import_error_from_broken_tf_install(
     # not propagate up through ``resolve_backend_spec``.
     assert tl.backends.resolve(None, _TinyModel(), torch.ones(1)).name == "torch"
     trace = tl.trace(_TinyModel(), torch.ones(1))
-    assert trace.backend == "torch"
+    assert trace.provenance.backend == "torch"
 
 
 def test_tf_detector_reraises_genuine_backend_mismatch(
@@ -902,7 +907,7 @@ def test_paddle_preview_applies_static_label_save_selector() -> None:
         save=tl.label_contains("relu"),
     )
 
-    saved_ops = [op for op in trace.layer_list if op.has_saved_activation]
+    saved_ops = [op for op in trace._layer_list if op.has_saved_activation]
     assert len(saved_ops) == 1
     assert saved_ops[0].func_name == "functional.relu"
 
@@ -966,9 +971,11 @@ def test_dead_correctness_protocol_methods_are_not_required() -> None:
 def test_public_trace_dispatches_through_backend_spec() -> None:
     """Public ``trace`` dispatch stays owned by the backend spec."""
 
-    source = inspect.getsource(tl.trace)
-    assert "capture_trace(**public_trace_kwargs)" in source
-    assert "resolved_spec.name" not in source
+    facade_source = inspect.getsource(tl.trace)
+    dispatch_source = inspect.getsource(_dispatch_trace)
+    assert "_dispatch_trace(" in facade_source
+    assert "capture_trace(**public_trace_kwargs)" in dispatch_source
+    assert "resolved_spec.name" not in facade_source + dispatch_source
 
 
 def test_public_backend_literal_branches_stay_in_registry_or_backends() -> None:
@@ -1030,9 +1037,9 @@ def test_fake_backend_explicit_trace_and_validate() -> None:
     try:
         result = tl.trace(_FakeModel(), object(), backend="fake")
         assert isinstance(result, tl.Trace)
-        assert result.backend == "fake"
-        assert result.module_identity_mode == "function_root"
-        assert result.param_source == "none"
+        assert result.provenance.backend == "fake"
+        assert result.options.module_identity_mode == "function_root"
+        assert result.provenance.param_source == "none"
         assert result.validate_forward_pass([]) is True
         assert tl.validate(_FakeModel(), object(), scope="forward", backend="fake")
     finally:
@@ -1067,9 +1074,9 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
         loaded = tl.load(path)
 
         assert isinstance(loaded, tl.Trace)
-        assert loaded.backend == "fake"
-        assert loaded.module_identity_mode == "function_root"
-        assert loaded.param_source == "none"
+        assert loaded.provenance.backend == "fake"
+        assert loaded.options.module_identity_mode == "function_root"
+        assert loaded.provenance.param_source == "none"
         assert loaded[0].resolver_status == "metadata_only"
         assert loaded[0].backend_address.startswith("fake:")
         assert check_metadata_invariants(loaded) is True
@@ -1080,18 +1087,26 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
 @pytest.mark.parametrize(
     ("mutate", "match"),
     [
-        (lambda trace: setattr(trace, "module_identity_mode", "torch_module"), "module_identity"),
+        (
+            lambda trace: setattr(trace, "_options_module_identity_mode", "torch_module"),
+            "module_identity",
+        ),
         # R74-1 killers for the three previously-unreferenced arms of
         # _check_backend_identity_invariants: out-of-vocabulary param_source,
         # a backend-capability violation matched on the arm's own message, and
-        # an empty Trace.backend.
-        (lambda trace: setattr(trace, "param_source", "not-a-param-source"), "param_source"),
+        # an empty Trace.provenance.backend.
         (
-            lambda trace: setattr(trace, "module_identity_mode", "unsupported_identity_mode"),
+            lambda trace: setattr(trace, "_provenance_param_source", "not-a-param-source"),
+            "param_source",
+        ),
+        (
+            lambda trace: setattr(
+                trace, "_options_module_identity_mode", "unsupported_identity_mode"
+            ),
             "is not supported by backend",
         ),
-        (lambda trace: setattr(trace, "has_backward_pass", True), "has_backward_pass"),
-        (lambda trace: trace.grad_fn_logs.__setitem__(1, object()), "grad_fn_logs"),
+        (lambda trace: setattr(trace, "_autograd_has_backward_pass", True), "has_backward_pass"),
+        (lambda trace: trace._grad_fn_logs.__setitem__(1, object()), "_grad_fn_logs"),
         (lambda trace: setattr(trace[0], "resolver_status", "lost"), "resolver_status"),
         (lambda trace: trace.output_layers.clear(), "output layer"),
     ],
@@ -1123,10 +1138,10 @@ def test_backend_identity_invariant_rejects_non_string_backend(bad_backend: Any)
     Pin the arm itself so a silent disarm (``if False:``) cannot survive.
     """
 
-    from torchlens.validation.invariants import _check_backend_identity_invariants
+    from torchlens.validation._invariants_entry import _check_backend_identity_invariants
 
     class _BadBackendStub:
-        backend = bad_backend
+        _provenance_backend = bad_backend
 
     with pytest.raises(MetadataInvariantError, match="non-empty string"):
         _check_backend_identity_invariants(_BadBackendStub())
@@ -1143,3 +1158,212 @@ def test_backend_none_ambiguity_is_deterministic() -> None:
     finally:
         tl.backends.unregister("fake_a")
         tl.backends.unregister("fake_b")
+
+
+@pytest.mark.parametrize(
+    ("flag", "code"),
+    [
+        ("backward_capture", "backward_capture_unsupported"),
+        ("fastlog", "fastlog_unsupported"),
+        ("can_intervene", "interventions_unsupported"),
+        ("rng_replay", "rng_replay_unsupported"),
+        ("has_streaming", "streaming_unsupported"),
+        ("structure_only_capture", "structure_only_capture_unsupported"),
+        ("has_validation_replay", "validation_replay_unsupported"),
+        ("payload_materialization", "payload_materialization_unsupported"),
+        ("intermediate_derived_grads", "intermediate_derived_grads_unsupported"),
+    ],
+)
+def test_every_refusable_capability_flag_owes_a_registered_code(flag: str, code: str) -> None:
+    """Each ``BackendCapabilities`` flag that can be False maps to a registered refusal code."""
+
+    from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS, REFUSAL_CODES
+
+    assert REFUSABLE_CAPABILITY_FLAGS[flag] == code
+    assert code in REFUSAL_CODES
+    exc = BackendUnsupportedError(f"{flag} is not declared by this backend", code=code)
+    assert exc.code == code
+
+
+def test_refusal_code_passed_at_the_raise_site_is_the_instance_code() -> None:
+    """``exc.code`` is the contract: a raise-site ``code=`` wins; the class code is the default."""
+
+    exc = BackendUnsupportedError(
+        "tf backend refuses backward capture", code="backward_capture_unsupported"
+    )
+    assert exc.code == "backward_capture_unsupported"
+    assert exc.fields["code"] == "backward_capture_unsupported"
+    assert BackendUnsupportedError.code == "backend_unsupported"
+
+    default = BackendUnsupportedError("tf backend refuses something")
+    assert default.code == "backend_unsupported"
+    assert default.fields["code"] == "backend_unsupported"
+
+    registry_default = BackendRegistryError("registry failed")
+    assert registry_default.code == "backend_error"
+    typed = UnknownBackendError("no such backend", code="runtime_missing")
+    assert typed.code == "runtime_missing" and typed.fields["code"] == "runtime_missing"
+    # The instance code survives the pickle recipe the class defines.
+    import pickle
+
+    restored = pickle.loads(pickle.dumps(exc))
+    assert restored.code == "backward_capture_unsupported"
+    assert restored.fields["code"] == "backward_capture_unsupported"
+
+
+_GATED_TRACE_OPTION_FLAGS_AT_RECORDS = {
+    "intervene": "can_intervene",
+    "halt": "can_intervene",
+    "facets": "can_intervene",
+    "storage": "has_streaming",
+    "streaming": "has_streaming",
+    "save_grads": "backward_capture",
+    "backward_ready": "backward_capture",
+    "save_rng": "rng_replay",
+    "seed": "rng_replay",
+    "structure_only": "structure_only_capture",
+}
+_PUBLIC_OPTION_SPINE_AT_RECORDS = (
+    "jax_control_flow",
+    "jax_max_control_flow_unroll",
+    "module_identity_mode",
+    "payload_policy",
+    "capture_container_structure",
+    "inference_only",
+    "chunk_size",
+    "chunk_paths",
+)
+
+
+def test_backend_capability_records_are_consistent() -> None:
+    """Every capability record is well formed and every option has one owner."""
+
+    from dataclasses import fields
+
+    from torchlens.backends import registry
+
+    bool_flags = {
+        field.name for field in fields(BackendCapabilities) if field.type in ("bool", bool)
+    }
+    seen: dict[str, str] = {}
+    for record in registry._BACKEND_CAPABILITIES:
+        assert isinstance(record, registry._BackendCapability)
+        assert not (record.gated and record.public_spine), record.name
+        if record.gated:
+            assert record.name in bool_flags, record.name
+        else:
+            assert record.trace_options, record.name
+        for option in record.trace_options:
+            assert option not in seen, (option, seen.get(option), record.name)
+            seen[option] = record.name
+    assert len({record.name for record in registry._BACKEND_CAPABILITIES}) == len(
+        registry._BACKEND_CAPABILITIES
+    )
+
+
+def test_capability_tables_derive_from_the_records_in_table_order() -> None:
+    """The gate table, the public spine and each backend's options keep their order."""
+
+    from torchlens.backends import registry
+    from torchlens.backends._options import TRACE_OPTION_CAPABILITY_GATES
+
+    expected_flags = frozenset(
+        {
+            "backward_capture",
+            "fastlog",
+            "can_intervene",
+            "rng_replay",
+            "has_streaming",
+            "structure_only_capture",
+        }
+    )
+    assert expected_flags == registry.GATED_CAPABILITY_FLAGS
+    assert list(TRACE_OPTION_CAPABILITY_GATES.items()) == list(
+        _GATED_TRACE_OPTION_FLAGS_AT_RECORDS.items()
+    )
+    assert registry.PUBLIC_OPTION_SPINE_TRACE_OPTIONS == _PUBLIC_OPTION_SPINE_AT_RECORDS
+    assert registry.TORCH_TRACE_OPTIONS == _PUBLIC_OPTION_SPINE_AT_RECORDS
+    assert registry.JAX_TRACE_OPTIONS == (
+        "jax_static_argnums",
+        "grad_options",
+        "jax_control_flow",
+        "jax_max_control_flow_unroll",
+        "module_identity_mode",
+    )
+    for options in (
+        registry.MLX_TRACE_OPTIONS,
+        registry.TINYGRAD_TRACE_OPTIONS,
+        registry.PADDLE_TRACE_OPTIONS,
+        registry.TF_TRACE_OPTIONS,
+    ):
+        assert options == ("module_identity_mode", "grad_options")
+
+
+def test_dispatch_filtered_names_are_the_non_gated_record_options() -> None:
+    """The dispatcher's strip-or-refuse list is derived from the records, not spelled.
+
+    ``_TRACE_OPTION_FILTERED_NAMES`` equals the options of every non-gated
+    capability record in table order (the public spine plus the backend-extra
+    keywords); gated options are refused through ``TRACE_OPTION_CAPABILITY_GATES``
+    instead, so the two tables partition the recorded options.
+    """
+
+    from torchlens._trace_selector_helpers import _TRACE_OPTION_FILTERED_NAMES
+    from torchlens.backends import registry
+    from torchlens.backends._options import TRACE_OPTION_CAPABILITY_GATES
+
+    non_gated = tuple(
+        option
+        for record in registry._BACKEND_CAPABILITIES
+        if not record.gated
+        for option in record.trace_options
+    )
+    assert non_gated == _TRACE_OPTION_FILTERED_NAMES
+    assert (
+        *_PUBLIC_OPTION_SPINE_AT_RECORDS,
+        "jax_static_argnums",
+        "grad_options",
+    ) == _TRACE_OPTION_FILTERED_NAMES
+    assert not set(_TRACE_OPTION_FILTERED_NAMES) & set(TRACE_OPTION_CAPABILITY_GATES)
+    recorded = {
+        option for record in registry._BACKEND_CAPABILITIES for option in record.trace_options
+    }
+    assert set(_TRACE_OPTION_FILTERED_NAMES) | set(TRACE_OPTION_CAPABILITY_GATES) == recorded
+
+
+def test_torch_refuses_every_control_flow_record_option_explicitly() -> None:
+    """The torch value refusal reads the control-flow record, not a spelled pair."""
+
+    from torchlens._capture.prepare.dispatch import (
+        _reject_unsupported_torch_trace_option_values,
+    )
+    from torchlens.backends._trace_options import _CONTROL_FLOW
+    from torchlens.options import CaptureOptions
+
+    assert _CONTROL_FLOW.trace_options == ("jax_control_flow", "jax_max_control_flow_unroll")
+    for option_name, value in (("jax_control_flow", "unroll"), ("jax_max_control_flow_unroll", 2)):
+        with pytest.raises(BackendUnsupportedError, match="does not support explicit"):
+            _reject_unsupported_torch_trace_option_values(CaptureOptions(**{option_name: value}))
+
+
+def test_registered_backends_list_only_recorded_trace_options() -> None:
+    """A backend's ``trace_options`` names only recorded, non-gated options."""
+
+    from torchlens.backends import registry
+
+    recorded = {
+        option
+        for record in registry._BACKEND_CAPABILITIES
+        if not record.gated
+        for option in record.trace_options
+    }
+    gated = {
+        option
+        for record in registry._BACKEND_CAPABILITIES
+        if record.gated
+        for option in record.trace_options
+    }
+    for spec in registry.registered_backend_specs():
+        listed = set(spec.capabilities.trace_options)
+        assert listed <= recorded, (spec.name, listed - recorded)
+        assert not (listed & gated), (spec.name, listed & gated)

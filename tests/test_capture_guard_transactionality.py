@@ -138,7 +138,7 @@ def test_partial_first_time_decoration_completes_on_retry(monkeypatch) -> None:
     # test pins leaves the count STRICTLY ABOVE the baseline, so the direction
     # that matters stays exact.
     assert len(_undecorated_targets()) <= baseline_undecorated
-    assert tl.trace(nn.Linear(4, 4), torch.randn(1, 4)).num_ops >= 1
+    assert tl.trace(nn.Linear(4, 4), torch.randn(1, 4))._num_ops >= 1
 
 
 @pytest.mark.skipif(
@@ -256,7 +256,7 @@ def test_escape_detector_teardown_frees_the_tool_id_and_clears_the_guard(
 def test_call_execution_context_unwind_exits_every_context() -> None:
     """A raising inner `__exit__` must not strand the outer contexts."""
 
-    from torchlens import _runnable_state_context
+    from torchlens._runnable import state_context as _runnable_state_context
 
     exited: list[str] = []
 
@@ -297,5 +297,5 @@ def test_baseline_capture_stays_healthy_after_the_guard_changes() -> None:
     """A plain capture must be unaffected by every guard change in this lane."""
 
     trace = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(1, 4))
-    assert trace.num_ops == 2
+    assert trace._num_ops == 2
     tl.validation.check_metadata_invariants(trace)

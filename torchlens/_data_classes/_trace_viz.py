@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     _TraceMixinBase = Trace
 else:
     _TraceMixinBase = object
-from .._errors import InvalidArgumentError
+from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
@@ -107,7 +107,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
         size_by: str | Callable[[Any], Any] | None = None,
         size_scale: str | None = None,
         stack_by: str | bool | Callable[[Any], Any] | None = None,
-        animate: Any = None,
         node_overlay: str | Mapping[str, Any] | Callable[[Any], Any] | None = None,
         node_label_fields: list[str] | None = None,
         graph_overrides: dict[str, Any] | None = None,
@@ -229,11 +228,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             timestep diagram. ``True`` derives the pass index (unrolled
             multi-pass ops only); rolled graphs refuse
             (``stack_by_requires_unrolled``).
-        animate:
-            A site label, pass-qualified label or record. The picture is the
-            HTML animation of the repeated ops at that site: ``file_format``
-            is ``"html"``, ``.show()`` plays it and ``.save(path)`` writes it.
-            ``None`` (default) draws the graph.
         node_overlay:
             Per-node label row: a stock overlay name (``"flops"``, ``"time"``,
             ``"bytes"``, ``"magnitude"``, ``"nan"``, ``"grad_norm"``,
@@ -318,26 +312,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             "module": module,
             "depth": depth,
         }
-        if animate is not None:
-            from .._visualization._pass_animation import pass_animation_html
-
-            html = pass_animation_html(self, animate)
-            drawing = Drawing(
-                dot="",
-                file_format="html",
-                data=html.encode("utf-8"),
-                num_ops=num_ops,
-                policy={**policy, "animate": str(getattr(animate, "layer_label", animate))},
-            )
-            if path is not None:
-                target = Path(path)
-                if target.suffix.lower() != ".html":
-                    target = target.with_name(target.name + ".html")
-                drawing.path = drawing.save(target)
-            if open_viewer:
-                drawing.show()
-            return drawing
-
         from .._visualization._render_utils import (
             DEFAULT_DRAW_STEM,
             collision_safe_outpath,
@@ -449,6 +423,65 @@ class TraceVisualizationMixin(_TraceMixinBase):
             num_ops=num_ops,
             policy=policy,
         )
+
+    def animate(
+        self: "Trace",
+        site: Any,
+        path: str | None = None,
+        *,
+        open_viewer: bool = False,
+    ) -> "Drawing":
+        """Animate the passes at ``site`` and return the picture as a :class:`~torchlens.viz.Drawing`.
+
+        The animation is its own door: ``draw`` draws graphs, ``animate`` plays
+        the repeated ops at one site.
+
+        Parameters
+        ----------
+        site:
+            A site label, pass-qualified label or record (anything with a
+            ``layer_label``). The picture is the HTML animation of the repeated
+            ops at that site: ``str(drawing)`` is the HTML, ``drawing.show()``
+            plays it and ``drawing.save(path)`` writes it.
+        path:
+            Output path; ``.html`` is appended when the suffix differs.
+            ``None`` (the default) keeps the animation in memory.
+        open_viewer:
+            ``True`` opens the animation in the system viewer.
+
+        Returns
+        -------
+        Drawing
+            The HTML animation (``file_format == "html"``).
+
+        Raises
+        ------
+        KeyError
+            ``site`` names no layer of this trace.
+        """
+
+        from pathlib import Path
+
+        from .._visualization._pass_animation import pass_animation_html
+        from ..viz._drawing import Drawing
+
+        html = pass_animation_html(self, site)
+        num_ops = len(self) if hasattr(self, "__len__") else None
+        drawing = Drawing(
+            dot="",
+            file_format="html",
+            data=html.encode("utf-8"),
+            num_ops=num_ops,
+            policy={"animate": str(getattr(site, "layer_label", site))},
+        )
+        if path is not None:
+            target = Path(path)
+            if target.suffix.lower() != ".html":
+                target = target.with_name(target.name + ".html")
+            drawing.path = drawing.save(target)
+        if open_viewer:
+            drawing.show()
+        return drawing
 
     @property
     def nonfinite_ops(self: "Trace") -> tuple[str, ...]:
@@ -612,17 +645,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
         if not isinstance(timestamp, (int, float)):
             return ()
         records = []
-        for layer in getattr(self, "layer_list", []) or []:
-            for record in getattr(layer, "interventions", []) or []:
+        for layer in ([] if self.__dict__.get("_tl_cleaned_up", False) else self._layer_list) or []:
+            for record in getattr(layer, "edits", []) or []:
                 record_timestamp = getattr(record, "timestamp", None)
                 if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
                     records.append(record)
-        for grad_fn in getattr(self, "grad_fn_logs", {}).values():
+        for grad_fn in (
+            {} if self.__dict__.get("_tl_cleaned_up", False) else self._grad_fn_logs
+        ).values():
             calls = getattr(getattr(grad_fn, "calls", None), "_list", [])
             for call in calls:
-                for record in _flatten_backward_fire_ref(
-                    getattr(call, "intervention_fire_ref", None)
-                ):
+                for record in _flatten_backward_fire_ref(getattr(call, "fire_record", None)):
                     record_timestamp = getattr(record, "timestamp", None)
                     if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
                         records.append(record)
@@ -752,8 +785,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             totals, capture facts, and the
             render/print/to_pandas/to_markdown/to_html result API.
         """
-        from .._errors import InvalidArgumentError
-
         one_call_only = {
             "input_shape": input_shape,
             "execution_mode": execution_mode,
@@ -792,8 +823,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             **unsupported,
         )
         if not self._tracing_finished:  # a cleaned trace raises trace_cleaned_up here
-            from .._errors import CaptureNotActiveError
-
             raise CaptureNotActiveError(
                 "trace.summary() cannot run before the forward pass is complete; "
                 "a partial capture has no summary (repr(trace) shows the live op count).",
@@ -807,26 +836,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             execution_note=_execution_note,
             input_synthesis=_input_synthesis,
         )
-
-    def provenance(self: "Trace") -> str:
-        """The capture-provenance block (the relocated summary preamble).
-
-        Returns the historical discoverability preamble BYTE-FOR-BYTE
-        (summary memo 3.6): agent/MCP consumers that parsed it out of the
-        old summary text keep an exact source after the preamble left the
-        default view.
-
-        Returns
-        -------
-        str
-            Multi-section capture/provenance text.
-        """
-
-        from .._visualization._summary_internal._discoverability import (
-            format_discoverability_summary,
-        )
-
-        return format_discoverability_summary(self)
 
     def to_dagua_graph(
         self: "Trace",

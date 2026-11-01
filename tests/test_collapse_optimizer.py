@@ -489,7 +489,7 @@ def _add_unambiguous_accessor_fallback_collision(trace: tl.Trace) -> str:
         The colliding relationship label.
     """
 
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
     collision_op = next(op for op in trace.ops if not op.is_input and not op.is_output)
     collision_op._label_raw = input_op.layer_label
     return str(input_op.layer_label)

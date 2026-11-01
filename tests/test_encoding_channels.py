@@ -23,6 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes._layer_spec import _LAYER_MIRROR_SPEC, _LAYER_STATE_ORDER
 from torchlens._data_classes.layer import Layer
+from torchlens._record_type import record_type
 from torchlens._visualization._encoding import (
     DARK_RAMP,
     LAYER_SOURCE_ROWS,
@@ -134,7 +135,7 @@ def _varying_layer(log: tl.Trace) -> Layer:
     # multi-pass Layer, but it does no FLOPs; the varying population is fc's linear.
     return next(
         layer
-        for layer in log.layer_logs.values()
+        for layer in log._layer_logs.values()
         if len(layer.ops) > 1 and layer.layer_label.startswith("linear_")
     )
 
@@ -280,7 +281,7 @@ def test_callable_raise_chains_typed(mlp_log: tl.Trace, tmp_path: Path) -> None:
 
 def test_non_finite_degrades_to_unencoded(mlp_log: tl.Trace, tmp_path: Path) -> None:
     def source(node: Any) -> float:
-        return float("nan") if node.layer_type == "relu" else float(node.raw_index)
+        return float("nan") if record_type(node) == "relu" else float(node.raw_index)
 
     _draw(mlp_log, tmp_path, color_by=source)
     state = _state(mlp_log)
@@ -506,7 +507,7 @@ def test_single_pass_layers_unaffected_by_allowlist(varying_log: tl.Trace, tmp_p
     state = _state(varying_log)
     single_pass = [
         layer.layer_label
-        for layer in varying_log.layer_logs.values()
+        for layer in varying_log._layer_logs.values()
         if len(layer.ops) == 1 and layer.activation_memory
     ]
     assert any(label in state.colors for label in single_pass)
@@ -682,13 +683,13 @@ def test_annotation_image_node_excluded_from_channel_and_domain(tmp_path: Path) 
     from PIL import Image
 
     Image.new("RGB", (8, 8), "red").save(image_path)
-    target = next(layer for layer in log.layer_list if layer.layer_type == "relu")
+    target = next(layer for layer in log._layer_list if layer.type == "relu")
     log.annotate(target.layer_label, image=str(image_path))
 
     def source(node: Any) -> float:
         # An extreme value: if the image node leaked into the domain, every
         # other node's normalized color would move.
-        return 1e9 if node.layer_type == "relu" else float(node.raw_index)
+        return 1e9 if record_type(node) == "relu" else float(node.raw_index)
 
     _draw(log, tmp_path, color_by=source)
     state = _state(log)
@@ -704,7 +705,7 @@ def test_visualizer_path_node_excluded(tmp_path: Path) -> None:
     from PIL import Image
 
     Image.new("RGB", (8, 8), "blue").save(image_path)
-    target = next(layer for layer in log.layer_list if layer.layer_type == "relu")
+    target = next(layer for layer in log._layer_list if layer.type == "relu")
     target.visualizer_path = str(image_path)
 
     _draw(log, tmp_path, color_by=lambda node: float(node.raw_index))

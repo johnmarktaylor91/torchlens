@@ -162,7 +162,7 @@
    "status": "asymmetry",
    "asymmetry": "A01",
    "confidence": "high",
-   "note": "Preview backends give derived gradients (grad_options, trace.derived_grads); true backward capture is torch only."
+   "note": "Preview backends give derived gradients (grad_options, trace.autograd.derived_grads); true backward capture is torch only."
   },
   {
    "a": "backend",
@@ -217,7 +217,7 @@
    "status": "asymmetry",
    "asymmetry": "A03",
    "confidence": "medium",
-   "note": "Fast rerun and runnable replay are torch only; preview backends report unsupported_backend_replay."
+   "note": "Fast rerun and runnable replay are torch only; preview backends report backend_replay_unsupported."
   },
   {
    "a": "backend",
@@ -225,7 +225,7 @@
    "status": "asymmetry",
    "asymmetry": "A04",
    "confidence": "medium",
-   "note": "fork().do needs an intervention_ready capture, which previews refuse via capture=."
+   "note": "fork().do needs an replayable capture, which previews refuse via capture=."
   },
   {
    "a": "backend",
@@ -290,7 +290,7 @@
    "status": "asymmetry",
    "asymmetry": "A08",
    "confidence": "medium",
-   "note": "Trace.run and runnable replay are torch only; a loaded non-torch artifact reports unsupported_backend_replay."
+   "note": "Trace.run and runnable replay are torch only; a loaded non-torch artifact reports backend_replay_unsupported."
   },
   {
    "a": "backend",
@@ -401,7 +401,7 @@
    "status": "composes",
    "evidence": "tests/test_tlspec_runnable_forward_intervention.py::test_backward_grad_intervention_still_verifies",
    "confidence": "medium",
-   "note": "Backward-direction rules edit gradients on a live trace; a staged gradient edit refuses on rerun (rerun_gradient_edit_unsupported)."
+   "note": "Gradient rules (tl.grad(site)) edit gradients on a live trace; on a rerun they arm on the result and fire on its next backward."
   },
   {
    "a": "backward",
@@ -437,9 +437,9 @@
    "a": "backward",
    "b": "rerun",
    "status": "composes",
-   "evidence": "tests/test_run_until_backbone_grad.py::test_full_run_backward_without_carry_state_matches_eager",
+   "evidence": "tests/test_capture_pure_observer.py::test_train_mode_run_backward_matches_eager_gradients",
    "confidence": "medium",
-   "note": "A staged gradient edit refuses on rerun (rerun_gradient_edit_unsupported)."
+   "note": "A gradient edit on a rerun arms on the result and fires on its next backward (tl.grad(site))."
   },
   {
    "a": "backward",
@@ -1251,10 +1251,11 @@
   {
    "a": "fast_run",
    "b": "storage",
-   "status": "composes",
-   "evidence": "docs/reference/limitations.md",
-   "confidence": "low",
-   "note": "A loaded runnable artifact needs one verified ordinary run before fast runs are admitted."
+   "status": "refuses",
+   "evidence": "tests/test_storage_refusal_codes.py::test_run_on_streamed_trace_refuses_trace_option_unsupported",
+   "code": "trace_option_unsupported",
+   "confidence": "high",
+   "note": "A to_disk trace does not run, fast runs included (IO-8); a loaded runnable artifact needs one verified ordinary run before fast runs are admitted."
   },
   {
    "a": "fast_run",
@@ -1330,7 +1331,7 @@
    "status": "composes",
    "evidence": "tests/test_intervention_error_catalog.py::test_intervention_ready_composes_with_deferred_selective_grads",
    "confidence": "low",
-   "note": "do() needs an intervention_ready capture, which is heavier than a plain selective save."
+   "note": "do() needs an replayable capture, which is heavier than a plain selective save."
   },
   {
    "a": "fork_do",
@@ -1405,7 +1406,7 @@
    "status": "composes",
    "evidence": "tests/test_trace_halt.py::test_trace_halt_supports_selective_layers_to_save",
    "confidence": "high",
-   "note": "Analysis-level save works on a halted trace; runnable save refuses halted_capture_not_runnable."
+   "note": "Analysis-level save works on a halted trace; runnable save refuses stopped_capture_unsupported."
   },
   {
    "a": "halt",
@@ -1727,9 +1728,11 @@
   {
    "a": "rerun",
    "b": "storage",
-   "status": "composes",
-   "evidence": "tests/test_chunk_size.py::test_rerun_chunk_size_matches_manual_append_loop",
-   "confidence": "medium"
+   "status": "refuses",
+   "evidence": "tests/test_storage_refusal_codes.py::test_run_on_streamed_trace_refuses_trace_option_unsupported",
+   "code": "trace_option_unsupported",
+   "confidence": "high",
+   "note": "A to_disk trace does not run: run() would re-capture every payload into RAM while the bundle kept the first capture (IO-8). chunk_size reruns compose (tests/test_chunk_size.py::test_rerun_chunk_size_matches_manual_append_loop)."
   },
   {
    "a": "rerun",
@@ -1787,7 +1790,7 @@
     "backend",
     "fast_run"
    ],
-   "summary": "run(inputs=, fast=True) and runnable replay work on torch; preview backends and loaded non-torch artifacts report unsupported_backend_replay.",
+   "summary": "run(inputs=, fast=True) and runnable replay work on torch; preview backends and loaded non-torch artifacts report backend_replay_unsupported.",
    "evidence": "docs/reference/runnable_tlspec_contract.md",
    "recommendation": "document",
    "ruling": "pending"
@@ -1798,7 +1801,7 @@
     "backend",
     "fork_do"
    ],
-   "summary": "fork().do needs capture=CaptureOptions(intervention_ready=True), and preview backends refuse the capture= keyword, so post-hoc edits exist on torch only.",
+   "summary": "fork().do needs capture=CaptureOptions(replayable=True), and preview backends refuse the capture= keyword, so post-hoc edits exist on torch only.",
    "evidence": "docs/backends.md",
    "recommendation": "document",
    "ruling": "pending"

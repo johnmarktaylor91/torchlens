@@ -408,17 +408,17 @@ def _load_verified_blob_tensor(blob_path: Path, expected_sha256: str) -> Any:
     """Verify one fastlog blob's digest, then materialize it.
 
     The digest is computed by a CHUNKED streaming hash over the on-disk bytes
-    (``sha256_of_file``), never ``read_bytes()``: the prior code read the ENTIRE
+    (``sha256_file``), never ``read_bytes()``: the prior code read the ENTIRE
     attacker-controlled blob into memory BEFORE the digest check, so a hostile
     bundle whose blob does not even match its claimed hash still forced a full
     allocation (KNOWN HIGH, never closed -- ee29700f bounded only the JSON reads).
     A hash mismatch is now rejected in constant memory, and the tensor is
     materialized through the mmap-backed safetensors file loader (matching the
-    main bundle path's ``sha256_of_file`` + ``load_file`` discipline).
+    main bundle path's ``sha256_file`` + ``load_file`` discipline).
     """
 
     from .._io.lazy import _file_identity
-    from .._io.manifest import sha256_of_file
+    from .._utils.hashing import sha256_file
 
     # R59 TOCTOU (lazy.py discipline): the digest and the mmap-backed load are
     # two opens of the same path, so bracket the hash with the file identity and
@@ -426,7 +426,7 @@ def _load_verified_blob_tensor(blob_path: Path, expected_sha256: str) -> Any:
     # rather than admitting bytes that were never hashed.
     try:
         pre_hash_identity = _file_identity(blob_path.stat())
-        observed_sha256 = sha256_of_file(blob_path)
+        observed_sha256 = sha256_file(blob_path)
     except OSError as exc:
         raise ArtifactError(f"Failed to read fastlog blob at {blob_path}.") from exc
     if observed_sha256 != expected_sha256:
@@ -542,7 +542,7 @@ def _recording_from_records(
         predicate_failures=[],
         num_predicate_failure_overflows=int(metadata.get("predicate_failure_overflow_count", 0)),
         is_stopped=halted,
-        stop_reason=metadata.get("halt_reason"),
+        stop_reason=metadata.get("stop_reason"),
         stops_by_pass={
             int(pass_index): str(reason)
             for pass_index, reason in dict(metadata.get("halts_by_pass", {})).items()

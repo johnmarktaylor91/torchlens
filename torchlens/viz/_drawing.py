@@ -6,7 +6,7 @@ the picture was rendered to memory, the written path when a file was
 written, and for the one-call door the input-provenance record and capture
 receipt. ``save()`` re-renders from the detached source, so it works after
 the trace is gone; ``show()`` displays inline in a notebook and opens the
-system viewer elsewhere.
+system viewer elsewhere; ``close()`` releases a retained trace.
 """
 
 from __future__ import annotations
@@ -51,8 +51,8 @@ class Drawing:
     policy:
         Resolved render policy: theme, collapse, module focus, depth.
     trace:
-        A retained trace when the caller asked to keep one; leaving the
-        ``with`` block releases it.
+        A retained trace when the caller asked to keep one; ``close()`` (and
+        leaving the ``with`` block) releases it.
     """
 
     dot: str
@@ -111,8 +111,13 @@ class Drawing:
             target = self.save(temp_name)
         _open_viewer(Path(target))
 
-    def _close(self) -> None:
-        """Release the retained trace."""
+    def close(self) -> None:
+        """Release the retained trace.
+
+        Idempotent: a second ``close()`` is a no-op. Leaving the ``with`` block
+        calls it, so ``with trace.draw(...) as drawing:`` frees the trace at
+        the block's end whether or not the body raised.
+        """
 
         self.trace = None
 
@@ -122,9 +127,9 @@ class Drawing:
         return self
 
     def __exit__(self, *exc_info: Any) -> None:
-        """Release the retained trace on context exit."""
+        """Release the retained trace on context exit (calls ``close``)."""
 
-        self._close()
+        self.close()
 
     def __str__(self) -> str:
         """Return the detached source: DOT for graphs, HTML for animations."""

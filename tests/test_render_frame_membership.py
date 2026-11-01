@@ -91,10 +91,10 @@ def _shared_child_trace() -> tuple[Any, str, str, str]:
 
     torch.manual_seed(0)
     trace = tl.trace(_TwoParents(), torch.randn(2, 4))
-    layers = list(trace.layer_logs.values())
+    layers = list(trace._layer_logs.values())
     (linear,) = [layer.layer_label for layer in layers if layer.layer_type == "linear"]
     first_relu, second_relu = [layer.layer_label for layer in layers if layer.layer_type == "relu"]
-    assert trace.layer_logs[linear].num_passes == 2
+    assert trace._layer_logs[linear].num_passes == 2
     return trace, linear, first_relu, second_relu
 
 
@@ -176,7 +176,7 @@ def test_rank_layout_edit_marks_keep_module_frames(
     trace = tl.trace(
         _ResStack(),
         torch.randn(1, 8),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     plain = _rank_frame_boxes(trace, tmp_path, monkeypatch)
     fork = trace.fork("edited")

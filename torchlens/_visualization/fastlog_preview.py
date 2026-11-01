@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from .._capture.predicates import _normalize_capture_decision
 from .._capture.projections import _build_record_context
+from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from ..recording.exceptions import RecordContextFieldError
 from ..recording.types import CaptureDecision, CaptureSpec, ModuleStackFrame, RecordContext
@@ -67,7 +68,7 @@ def _module_stack_from_layer(op_log: Any) -> tuple[ModuleStackFrame, ...]:
                 address=str(address),
                 module_type=module_type,
                 module_id=0,
-                pass_index=index,
+                pass_number=index,
             )
         )
     return tuple(frames)
@@ -95,7 +96,7 @@ def _context_from_layer(
     module_stack = _module_stack_from_layer(op_log)
     module_frame = module_stack[-1] if module_stack else None
     raw_label = getattr(op_log, "_label_raw", None)
-    layer_type = getattr(op_log, "layer_type", None)
+    layer_type = record_type(op_log, None)
     if isinstance(layer_type, str):
         op_counts[layer_type] = op_counts.get(layer_type, 0) + 1
     return _build_record_context(
@@ -119,7 +120,7 @@ def _context_from_layer(
             "input_output_address": getattr(op_log, "io_role", None),
             "address": module_frame.address if module_frame else None,
             "module_type": module_frame.module_type if module_frame else None,
-            "module_pass_index": module_frame.pass_index if module_frame else None,
+            "module_pass_number": module_frame.pass_number if module_frame else None,
         },
         module_stack=module_stack,
         history=history,
@@ -127,8 +128,8 @@ def _context_from_layer(
         # H5: derive the 0-based recurrent pass from the op's real 1-based
         # pass_index. The old ``call_index`` field does not exist on Ops, so every
         # recurrent pass defaulted to pass_index 0 -- silently breaking
-        # pass-dependent predicates (e.g. ``ctx.pass_index == 1``).
-        pass_index=max(int(get_multipass_attr(op_log, "pass_index", 1, multipass=1)) - 1, 0),
+        # pass-dependent predicates (e.g. ``ctx.pass_number == 1``).
+        pass_index=max(int(get_multipass_attr(op_log, "pass_number", 1, multipass=1)) - 1, 0),
         event_index=event_index,
         step_index=int(getattr(op_log, "step_index", event_index)),
         time_since_pass_start=0.0,
@@ -176,7 +177,7 @@ def _build_preview_nodes(trace: Any, predicate: Predicate | None) -> dict[str, P
     history: list[RecordContext] = []
     op_counts: dict[str, int] = {}
     preview_nodes: dict[str, PreviewNode] = {}
-    for event_index, op_log in enumerate(trace.layer_list, start=1):
+    for event_index, op_log in enumerate(trace._layer_list, start=1):
         ctx = _context_from_layer(
             op_log,
             history=tuple(history),
@@ -185,7 +186,7 @@ def _build_preview_nodes(trace: Any, predicate: Predicate | None) -> dict[str, P
         )
         preview_node = _evaluate_preview_node(op_log, ctx, predicate)
         # H5: key by the pass-qualified label (op.label, e.g. relu_1_1:2). The old
-        # aggregate layer_label / layer_label_short keys are shared by every
+        # aggregate layer_label / short_layer_label keys are shared by every
         # recurrent pass, so each later pass OVERWROTE the previous pass's decision
         # and the render painted all passes with the last pass's result. Store the
         # aggregate keys too, but only for single-pass ops where they cannot collide.
@@ -194,12 +195,12 @@ def _build_preview_nodes(trace: Any, predicate: Predicate | None) -> dict[str, P
             preview_nodes[pass_label] = preview_node
         # An Op proxies its parent Layer's ``num_passes``; gate the aggregate-label
         # fallback keys on the op's own pass count so recurrent ops (which share one
-        # layer_label / layer_label_short across passes) never collide here.
+        # layer_label / short_layer_label across passes) never collide here.
         if int(getattr(op_log, "num_passes", 1) or 1) <= 1:
             layer_label = getattr(op_log, "layer_label", None)
             if isinstance(layer_label, str):
                 preview_nodes.setdefault(layer_label, preview_node)
-            short_label = getattr(op_log, "layer_label_short", None)
+            short_label = getattr(op_log, "short_layer_label", None)
             if isinstance(short_label, str):
                 preview_nodes.setdefault(short_label, preview_node)
         history.append(ctx)
@@ -258,7 +259,7 @@ def _lookup_preview_node(
         return None
     for key in (
         getattr(layer_log, "layer_label", None),
-        getattr(layer_log, "layer_label_short", None),
+        getattr(layer_log, "short_layer_label", None),
     ):
         if isinstance(key, str) and key in preview_nodes:
             return preview_nodes[key]

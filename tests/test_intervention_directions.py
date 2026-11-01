@@ -23,7 +23,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens._selection_subspace import BasisProvenance
+from torchlens._selection.subspace import BasisProvenance
 from torchlens.intervention import Direction, _directions, fit_direction
 
 _HIDDEN = 8

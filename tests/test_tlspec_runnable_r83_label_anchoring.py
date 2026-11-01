@@ -75,7 +75,7 @@ from torchlens.backends.torch._tl import (
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _nchw() -> torch.Tensor:

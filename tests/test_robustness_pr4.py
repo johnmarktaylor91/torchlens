@@ -22,10 +22,10 @@ from torch import nn
 import torchlens as tl
 from torchlens import _visualization
 from torchlens._capture_state_helpers import (
+    _reject_opaque_wrappers,
     reset_compiled_model_unwrap_warning_state,
     unwrap_compiled_submodules,
 )
-from torchlens._user_funcs import _reject_opaque_wrappers
 from torchlens._utils._torch_compat import get_dynamo_optimized_module_type
 
 
@@ -128,8 +128,8 @@ def test_torch_compile_top_level_unwrap_matches_eager_trace() -> None:
         compiled_trace = tl.trace(compiled, input_tensor, save="none")
     eager_trace = tl.trace(eager_twin, input_tensor, save="none")
 
-    assert [op.layer_label for op in compiled_trace.layer_list] == [
-        op.layer_label for op in eager_trace.layer_list
+    assert [op.layer_label for op in compiled_trace._layer_list] == [
+        op.layer_label for op in eager_trace._layer_list
     ]
     assert len(compiled_trace.modules) == len(eager_trace.modules)
 
@@ -205,8 +205,8 @@ def test_torch_compile_nested_submodule_traces_and_restores_parent() -> None:
     assert parent.child is child
     assert isinstance(parent.child, optimized_module_type)
     assert parent(input_tensor).shape == (2, 4)
-    assert [op.layer_label for op in nested_trace.layer_list] == [
-        op.layer_label for op in eager_trace.layer_list
+    assert [op.layer_label for op in nested_trace._layer_list] == [
+        op.layer_label for op in eager_trace._layer_list
     ]
     assert len(nested_trace.modules) == len(eager_trace.modules)
 
@@ -387,7 +387,7 @@ def test_torch_jit_unwrap_suggestion_matches_reality() -> None:
     model = _Tiny()
     _ = torch.jit.script(model)  # must not poison the original
     log = tl.trace(model, torch.randn(2, 4), save="none")
-    assert len(log.layer_logs) > 0
+    assert len(log._layer_logs) > 0
 
 
 # ---------------------------------------------------------------------------

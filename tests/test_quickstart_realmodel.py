@@ -96,7 +96,7 @@ class TestGpt2Rungs:
 
         pytest.importorskip("transformers")
         log = tl.trace(gpt2, "The quick brown fox")
-        record = log.input_preprocessor
+        record = log.provenance.input_preprocessor
         assert record is not None
         assert record.source != "torchlens._quickstart.input_resolver"
         assert trace_input_provenance(log) is None  # reads as gold

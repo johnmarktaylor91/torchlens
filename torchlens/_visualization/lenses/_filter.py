@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
+from ..._record_type import record_type
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -141,7 +142,7 @@ def _token_predicate(token: str) -> Callable[[Any], bool]:
     """Return the membership predicate for one closed token."""
 
     if token == "reshapes":
-        return lambda layer: str(getattr(layer, "layer_type", "")) in _RESHAPE_FAMILY
+        return lambda layer: str(record_type(layer, "")) in _RESHAPE_FAMILY
     if token == "constants":
         return lambda layer: (
             bool(getattr(layer, "is_internally_initialized", False))
@@ -165,7 +166,7 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
     (``align_to``) is the one explicit door for cross-trace reuse.
     """
 
-    from torchlens._selection import Selection, Selector
+    from torchlens._selection.selection import Selection, Selector
 
     if isinstance(selection, Selection):
         resolved: Any = selection
@@ -192,7 +193,7 @@ def _resolve_selection_operand(trace: Trace, selection: Any) -> tuple[Any, ...]:
 def _structural_join(trace: Trace, structural: set[str], labels: set[str]) -> None:
     """Add labels for ops whose L1 site key matches a cross-run aligned entry."""
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if str(getattr(op, "site_key", "")) in structural:
             labels.add(op.layer_label)
             label = getattr(op, "label", None)
@@ -278,7 +279,7 @@ def compile_display_filter(trace: Trace, display_filter: DisplayFilter) -> Compi
 
     eligible = 0
     filtered_labels: set[str] = set()
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if _is_boundary(op):
             continue
         eligible += 1

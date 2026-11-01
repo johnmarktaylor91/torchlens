@@ -20,14 +20,14 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._ir.selector_eval import ensure_supported, selector_from_spec
-from torchlens.intervention.errors import (
-    SelectorCapabilityError,
-    SiteResolutionError,
-)
-from torchlens.intervention.selectors import (
+from torchlens._selection.selectors import (
     BaseSelector,
     CompositeSelector,
     SelectorKind,
+)
+from torchlens.intervention.errors import (
+    SelectorCapabilityError,
+    SiteResolutionError,
 )
 from torchlens.intervention.types import TargetSpec
 
@@ -130,8 +130,11 @@ def test_nary_live_backward_matcher_does_not_crash() -> None:
         )
         armed.log_backward(armed[armed.output_layers[0]].out.sum(), retain_graph=True)
     grad_fns = {g.label: g for g in armed.autograd.grad_fns}
+    # Three node-universe children: a bare forward kind joined to a node
+    # selector refuses since the gradient-sites change, so the n-ary shape is
+    # exercised with node selectors only.
     selector = CompositeSelector(
-        "and", (tl.grad_input(), tl.func("relu"), tl.label_contains("relu"))
+        "and", (tl.grad_input(), tl.grad_fn("ReluBackward0"), tl.grad_fn(label="relu"))
     )
     grads = (torch.ones(1),)
     matches = {
@@ -174,7 +177,7 @@ def test_flat_nary_followed_by_conjunction_capture() -> None:
     def _saved(log: Any) -> list[str]:
         return sorted(
             str(op.layer_label)
-            for op in log.layer_list
+            for op in log._layer_list
             if getattr(op, "has_saved_activation", False)
         )
 
@@ -397,6 +400,9 @@ _KIND_PAYLOADS: dict[str, Any] = {
     # F42 step qualifier: post-hoc site evaluation reads Op.episode_step
     # stamps (bool result, no capability refusal), matching upfront.
     "episode_step": (0,),
+    # Gradient address: evaluates its forward-site inner (no capability
+    # refusal); the universe split happens in the site plan, not here.
+    "grad": "x",
 }
 
 
@@ -499,11 +505,16 @@ def test_strict_rejects_nested_where(conv_trace: Any) -> None:
 def test_capture_module_fallback_for_nontorch_backend() -> None:
     """Non-torch capture subjects fall back to the single ``module`` candidate."""
 
+    from torchlens._data_classes.trace import Trace
     from torchlens._ir.selector_eval import evaluate
 
+    # A Trace instance (built without a capture) owning a non-torch backend
+    # store; the fallback reads the backend from live Traces only.
+    mlx_session = object.__new__(Trace)
+    mlx_session.__dict__["_provenance_backend"] = "mlx"
     subject = SimpleNamespace(
         output_of_module_calls=(),
-        source_trace=SimpleNamespace(backend="mlx"),
+        source_trace=mlx_session,
         module="encoder.block",
         func_name=None,
         layer_type=None,
@@ -550,7 +561,7 @@ def test_followed_by_conjunction_is_association_insensitive() -> None:
             )
         return sorted(
             str(op.layer_label)
-            for op in log.layer_list
+            for op in log._layer_list
             if getattr(op, "has_saved_activation", False)
         )
 
@@ -598,11 +609,8 @@ def test_followed_by_target_spec_serializes_structurally() -> None:
 
     import json
 
-    from torchlens.intervention.save import (
-        SaveLevel,
-        _target_spec_from_json,
-        _target_spec_to_json,
-    )
+    from torchlens.intervention._spec_codec import _target_spec_from_json, _target_spec_to_json
+    from torchlens.intervention.save import SaveLevel
 
     for selector in (
         tl.followed_by(tl.func("relu")),
@@ -625,12 +633,9 @@ def test_followed_by_opaque_inner_refuses_typed_never_mangles() -> None:
     """FIX: an opaque-callable temporal inner must refuse typed, never rebuild
     as a ``contains`` selector over its repr string."""
 
+    from torchlens.intervention._spec_codec import _target_spec_from_json, _target_spec_to_json
     from torchlens.intervention.errors import OpaqueCallableError
-    from torchlens.intervention.save import (
-        SaveLevel,
-        _target_spec_from_json,
-        _target_spec_to_json,
-    )
+    from torchlens.intervention.save import SaveLevel
 
     spec = tl.followed_by(lambda ctx: True).to_target_spec()
     with pytest.raises(OpaqueCallableError):

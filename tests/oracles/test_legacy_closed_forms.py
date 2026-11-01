@@ -193,10 +193,10 @@ def outer_case():
 
 
 def _by_label(trace):
-    ops = {op.label: op for op in trace.layer_list}
+    ops = {op.label: op for op in trace._layer_list}
     layers = {layer.layer_label: layer for layer in trace.layers}
     modules = {module.address: module for module in trace.modules}
-    calls = {call.call_label: call for call in trace.module_calls}
+    calls = {call.label: call for call in trace.module_calls}
     return ops, layers, modules, calls
 
 
@@ -259,14 +259,20 @@ def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
     trace = graph_trace
     # The linear Layer runs twice; every other Layer once.
     assert int(trace.graph.max_ops_per_layer) == 2
-    params = {param.address: param for param in trace.param_logs}
+    params = {param.address: param for param in trace.params}
     for address in ("fc.weight", "fc.bias"):
-        assert (int(params[address].num_uses_by_ops), int(params[address].num_uses_by_layers)) == (
+        assert (
+            int(len(params[address].used_by_ops)),
+            int(len(params[address].used_by_layers)),
+        ) == (
             2,
             1,
         )
     for address in ("idle.weight", "idle.bias"):  # registered, never called
-        assert (int(params[address].num_uses_by_ops), int(params[address].num_uses_by_layers)) == (
+        assert (
+            int(len(params[address].used_by_ops)),
+            int(len(params[address].used_by_layers)),
+        ) == (
             0,
             0,
         )
@@ -274,10 +280,10 @@ def test_layer_op_count_and_parameter_uses(graph_trace) -> None:
     loop = tl.trace(Loop().eval(), torch.randn(2, 4))
     try:
         assert int(loop.graph.max_ops_per_layer) == 3  # fc three times, one Layer
-        params = {param.address: param for param in loop.param_logs}
+        params = {param.address: param for param in loop.params}
         assert (
-            int(params["fc.weight"].num_uses_by_ops),
-            int(params["fc.weight"].num_uses_by_layers),
+            int(len(params["fc.weight"].used_by_ops)),
+            int(len(params["fc.weight"].used_by_layers)),
         ) == (3, 1)
     finally:
         loop.cleanup()
@@ -318,7 +324,7 @@ def test_op_and_layer_argument_counts(graph_trace, outer_case) -> None:
 
 def test_module_call_forward_argument_counts(outer_case) -> None:
     _, trace, _, _ = outer_case
-    calls = {call.call_label: call for call in trace.module_calls}
+    calls = {call.label: call for call in trace.module_calls}
     # block(x, scale=2.0); block(h); fc(x) twice; head(h).
     expected = {
         "block:1": (1, 1),
@@ -340,13 +346,13 @@ def test_module_call_forward_argument_counts(outer_case) -> None:
 def test_root_call_forward_argument_counts(graph_trace, outer_case) -> None:
     # Outer.forward(x): one positional; Graph.forward(x, y): two.
     _, trace, _, _ = outer_case
-    root = {call.call_label: call for call in trace.module_calls}["self:1"]
+    root = {call.label: call for call in trace.module_calls}["self:1"]
     assert (
         int(root.num_forward_pos_args),
         int(root.num_forward_kwargs),
         int(root.num_forward_args_total),
     ) == (1, 0, 1)
-    root = {call.call_label: call for call in graph_trace.module_calls}["self:1"]
+    root = {call.label: call for call in graph_trace.module_calls}["self:1"]
     assert (int(root.num_forward_pos_args), int(root.num_forward_args_total)) == (2, 2)
 
 
@@ -420,14 +426,14 @@ def _assert_grad_case_bytes(model, trace, passes: int) -> None:
         assert int(ops[label].gradient_memory) == nbytes, label
     # save_grads keeps one gradient record per Op per backward pass
     # (``Op.grads``), so the trace holds every pass's gradients.
-    assert int(trace.saved_gradient_memory) == passes * (96 + 96 + 24)
-    assert int(trace.total_gradient_memory) == passes * (96 + 96 + 24)
+    assert int(trace.cost.saved_grad_memory) == passes * (96 + 96 + 24)
+    assert int(trace.cost.total_grad_memory) == passes * (96 + 96 + 24)
     raw = _param_grad_bytes(model)  # recounted from Tensor.grad
     assert raw == {"a.weight": 128, "a.bias": 32, "b.weight": 64, "b.bias": 8}
-    params = {param.address: param for param in trace.param_logs}
+    params = {param.address: param for param in trace.params}
     for address, nbytes in raw.items():
-        assert int(params[address].gradient_memory) == nbytes, address
-    assert int(trace.total_param_gradient_memory) == sum(raw.values())
+        assert int(params[address].grad_memory) == nbytes, address
+    assert int(trace.cost.total_param_grad_memory) == sum(raw.values())
     for label, pair in (("a:1", (96, 0)), ("b:1", (24, 0)), ("self:1", (24, 96 + 96 + 24))):
         call = calls[label]
         assert (int(call.output_gradient_memory), int(call.internal_gradient_memory)) == pair
@@ -461,7 +467,7 @@ def test_gradient_bytes_on_layers_modules_and_buffers(outer_case) -> None:
     # grouping rule rows 26-27: the two block calls' muls are one Layer (mul_1_3, 2 passes).
     assert int(layers["mul_1_3"].total_gradient_memory) == 2 * 48
     assert int(layers["sum_1_5"].total_gradient_memory) == 12
-    assert int(trace.total_gradient_memory) == 6 * 48 + 24 + 12
+    assert int(trace.cost.total_grad_memory) == 6 * 48 + 24 + 12
     block = modules["block"]
     assert (int(block.total_output_gradient_memory), int(block.total_internal_gradient_memory)) == (
         2 * 48,
@@ -474,8 +480,8 @@ def test_gradient_bytes_on_layers_modules_and_buffers(outer_case) -> None:
     try:
         buffered.backward(buffered[buffered.output_layers[0]].out.sum())
         by_address = {buffer.address: buffer for buffer in buffered.buffers}
-        assert int(by_address["w"].gradient_memory) == 4 * FP32  # d/dw of x * w: (4,)
-        assert int(by_address["c"].gradient_memory) == 0  # c needs no gradient
+        assert int(by_address["w"].grad_memory) == 4 * FP32  # d/dw of x * w: (4,)
+        assert int(by_address["c"].grad_memory) == 0  # c needs no gradient
     finally:
         buffered.cleanup()
 

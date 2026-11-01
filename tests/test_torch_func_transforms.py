@@ -747,7 +747,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
         log = tl.trace(
             ImportableVmapMaskModel().eval(),
             x,
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     log.attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "func_transform_hook.tlspec"
@@ -758,7 +758,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
         fresh = tl.trace(
             ImportableVmapMaskModel().eval(),
             x,
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     fresh._intervention_spec = spec
     with pytest.warns(UserWarning, match="captured a vmap transform"):
@@ -855,7 +855,11 @@ def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
 
 
 def test_foreign_operand_warns_with_its_arg_position() -> None:
-    """A genuinely un-provenanced operand is flagged at its own arg position."""
+    """A genuinely un-provenanced operand is flagged at its own arg position.
+
+    A pre-forward closure tensor is a recorded ``constant`` source, so the
+    operand is copied with logging paused: a tensor the capture never sees.
+    """
 
     foreign = torch.rand(4) + 0.5
 
@@ -876,7 +880,9 @@ def test_foreign_operand_warns_with_its_arg_position() -> None:
                 Scalar reduction of the polygamma output.
             """
 
-            return torch.polygamma(2, (x * 3.0) + foreign).sum()
+            with _state.pause_logging():
+                unseen = foreign.clone()
+            return torch.polygamma(2, (x * 3.0) + unseen).sum()
 
     with pytest.warns(UserWarning, match=r"no graph/source provenance.*arg1"):
         trace = tl.trace(_ForeignOperandModel().eval(), torch.rand(4) + 0.5)
@@ -1007,7 +1013,7 @@ def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
         save="all",
         intervene=tl.when(tl.func_transform("vmap"), tl.zero_ablate()),
     )
-    assert intervened.transforms[0].intervention_replaced is True
+    assert intervened.transforms[0].is_edited is True
 
 
 class _OneOperandVmapModel(nn.Module):
@@ -1097,10 +1103,10 @@ def test_variadic_vmap_arity_does_not_leak_stale_arg_spec() -> None:
     tl.trace(_OneOperandVmapModel().eval(), x, save="all")
 
     log = tl.trace(_TwoOperandVmapModel().eval(), x, save="all")
-    arange_ops = [op for op in log.layer_list if getattr(op, "func_name", None) == "arange"]
+    arange_ops = [op for op in log._layer_list if getattr(op, "func_name", None) == "arange"]
     # BOTH arange operands must be captured -- neither dropped by a stale spec.
     assert len(arange_ops) == 2
-    vmap_ops = [op for op in log.layer_list if getattr(op, "transform_kind", None) == "vmap"]
+    vmap_ops = [op for op in log._layer_list if getattr(op, "transform_kind", None) == "vmap"]
     assert len(vmap_ops) == 1
     # The outer vmap boundary node must list BOTH arange outputs as parents.
     vmap_parents = set(vmap_ops[0].parents)
@@ -1126,8 +1132,8 @@ def test_variadic_tensor_builtin_arity_does_not_drop_late_operands(func_name: st
             x,
             save="all",
         )
-        builtin = next(op for op in trace.layer_list if op.func_name == func_name)
-        add_ops = [op for op in trace.layer_list if op.func_name in {"__add__", "add"}]
+        builtin = next(op for op in trace._layer_list if op.func_name == func_name)
+        add_ops = [op for op in trace._layer_list if op.func_name in {"__add__", "add"}]
 
         assert len(add_ops) == arity
         # grouping rule row 32: the operand comprehension is one ``add`` layer

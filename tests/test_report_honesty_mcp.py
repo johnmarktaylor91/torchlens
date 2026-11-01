@@ -142,7 +142,7 @@ def test_changed_content_at_same_path_is_not_served_stale(artifact: Path, tmp_pa
     shutil.move(str(other_path), str(artifact))
     trace_b, _, _ = _artifacts.load_trace(str(artifact))
     assert trace_b is not trace_a
-    assert trace_b.model_class_name == "Sequential"
+    assert trace_b.source.class_name == "Sequential"
     assert int(trace_b.num_params) == int(other.num_params)
 
 
@@ -195,7 +195,7 @@ def test_memory_shaped_stats_reads_do_not_attach(artifact: Path) -> None:
         for _ in range(200):
             mcp.call_tool("torchlens_payload_stats", {"path": str(artifact), "metrics": ["mean"]})
         resident = sum(
-            1 for op in trace.layer_list if callable(op._slot) and op._slot("out") is not None
+            1 for op in trace._layer_list if callable(op._slot) and op._slot("out") is not None
         )
         assert resident == 0, (
             f"{resident} payloads attached to the cached trace -- the stats "

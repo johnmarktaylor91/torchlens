@@ -121,7 +121,7 @@ def _parent_reference_order(trace: Any) -> dict[str, int]:
 
     return {
         (layer.layer_label if layer.num_passes == 1 else layer.label): index
-        for index, layer in enumerate(trace.layer_list)
+        for index, layer in enumerate(trace._layer_list)
     }
 
 
@@ -171,7 +171,7 @@ def test_every_parent_edge_contributes_to_hash_input() -> None:
     order_by_reference = _parent_reference_order(trace)
     edges = [
         (layer, position, parent)
-        for layer in trace.layer_list
+        for layer in trace._layer_list
         for position, parent in enumerate(layer.parents)
     ]
     assert edges, "expected a non-trivial recurrent graph"
@@ -243,7 +243,7 @@ def test_rf_table_matches_at_after_geometry_mutation() -> None:
     torch.manual_seed(0)
     x = torch.randn(1, 1, 16, 16)
     log = tl.trace(DilatedConvModel(dilation=1, padding=1), x)
-    conv_op = next(op for op in log.layer_list if op.label.startswith("conv2d"))
+    conv_op = next(op for op in log._layer_list if op.label.startswith("conv2d"))
     assert tuple(conv_op.shape) == (1, 1, 16, 16)
 
     # Prime the trace-level solution cache through the public table path.
@@ -262,7 +262,7 @@ def test_rf_table_matches_at_after_geometry_mutation() -> None:
 
     # Ground truth: a fresh capture with the mutated geometry.
     fresh = tl.trace(DilatedConvModel(dilation=2, padding=2), x)
-    fresh_op = next(op for op in fresh.layer_list if op.label.startswith("conv2d"))
+    fresh_op = next(op for op in fresh._layer_list if op.label.startswith("conv2d"))
 
     table_sizes = _conv_table_sizes(log, conv_op.label)
     assert table_sizes == _conv_table_sizes(fresh, fresh_op.label) == [(5, 5)]

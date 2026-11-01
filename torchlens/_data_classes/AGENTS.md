@@ -28,6 +28,16 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 |------|---------|
 | `__init__.py` | Public exports for core data classes and accessors |
 | `_accessor_base.py` | Shared ordered dict-like accessor base |
+| `_doors.py` | FACADE-role deferred doors from the records to the packages above them (Rule F); the only record-side module holding upward imports |
+| `_labels.py` | The one label vocabulary: raw, pass-qualified op and pass-free layer label conversions |
+| `_trace_views.py` | Trace group-view and field-derived accessor functions (record rebuild destination) |
+| `_trace_state_io.py` | Trace pickle state helpers off `__getstate__`/`__setstate__` (record rebuild destination) |
+| `_trace_rerun_state.py` | Trace rerun-state family (record rebuild destination) |
+| `_trace_annotations.py` | Trace annotation family (record rebuild destination) |
+| `_op_save.py` | Op tensor-save and payload functions (record rebuild destination) |
+| `_op_relations.py` | Op relation functions: parents, children, siblings, containment (record rebuild destination) |
+| `_op_cost.py` | Op cost functions: FLOPs, bytes, timing (record rebuild destination) |
+| `_layer_views.py` | Layer view functions: pass delegation and graph unions (record rebuild destination) |
 | `trace.py` | `Trace`, conditional event records, save/load/intervention/summary helpers |
 | `_trace_accessors.py` | Trace-level typed accessor construction |
 | `_trace_export.py` | Trace tabular export, decoded-output helpers, and the `to_agent_json()` agent dump entry point |
@@ -37,7 +47,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_layer_spec.py` | `_LAYER_MIRROR_SPEC` and the Layer mirror-field spec (split out of `layer.py`) |
 | `_layer_accessors.py` | `OpAccessor`/`LayerAccessor` dict-like lookup (split out of `layer.py`; re-exported there) |
 | `_schema_bindings.py` | GENERATED per-field `StorageBinding` axes — DO NOT EDIT; regenerate with `tools/generate_record_schema.py` |
-| `_trace_components.py` | Declared `TRACE_FIELD_OWNERSHIP` component map — 329 entries, pinned equal to the `FIELD_POLICY` key set (the 229-name `MODEL_LOG_FIELD_ORDER` is a strict subset) |
+| `_trace_components.py` | Declared `TRACE_FIELD_OWNERSHIP` component map — 329 entries, pinned equal to the `_FIELD_POLICY` key set (the 229-name `MODEL_LOG_FIELD_ORDER` is a strict subset) |
 | `_trace_stack.py` | Order-aligned activation stacking for completed traces |
 | `_trace_rehydrate.py` | Load-side Trace rehydration |
 | `_backend_capability_guards.py` | Backend capability guard helpers |

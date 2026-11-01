@@ -590,7 +590,7 @@ def _build_call_tree(trace: Trace) -> str:
     calls = sorted(trace.module_calls.values(), key=lambda call: int(call.ordinal_index))
     if not calls:
         return ""
-    calls_by_label = {str(call.call_label): call for call in calls}
+    calls_by_label = {str(call.label): call for call in calls}
     children: dict[str, list[Any]] = {label: [] for label in calls_by_label}
     roots: list[Any] = []
     for call in calls:
@@ -608,7 +608,7 @@ def _build_call_tree(trace: Trace) -> str:
     def visit(call: Any, prefix: str, is_last: bool, is_root: bool) -> None:
         """Append one call and its recorded descendants."""
 
-        label = str(call.call_label)
+        label = str(call.label)
         # ASCII rails: returned report strings are ASCII-canonical (lovely
         # bug 10 / summary-memo string contract).
         connector = "" if is_root else ("`-- " if is_last else "|-- ")
@@ -624,7 +624,7 @@ def _build_call_tree(trace: Trace) -> str:
     for root_index, root in enumerate(roots):
         visit(root, "", root_index == len(roots) - 1, True)
     for call in calls:
-        if str(call.call_label) not in visited:
+        if str(call.label) not in visited:
             visit(call, "", True, True)
     return "\n".join(lines)
 
@@ -638,7 +638,7 @@ def _op_level_rows(trace: Trace) -> list[dict[str, Any]]:
     """
 
     rows: list[dict[str, Any]] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         is_boundary = bool(getattr(op, "is_input", False)) or bool(getattr(op, "is_output", False))
         row = _row(
             str(getattr(op, "label", None) or getattr(op, "layer_label", "")),
@@ -710,7 +710,7 @@ def _flops_values_by_label(aggregation: Any) -> dict[str, int | None]:
 def _innermost_call_by_label(trace: Trace) -> dict[str, str | None]:
     """Map each op label to its innermost recorded module call (or None)."""
 
-    ops = list(trace.layer_list)
+    ops = list(trace._layer_list)
     bare_counts: dict[str, int] = {}
     for op in ops:
         layer_label = str(getattr(op, "layer_label", ""))
@@ -827,7 +827,7 @@ def _assemble_level_rows(
     row_evidence: list[str | None] = []
     if level == "op":
         rows.extend(_op_level_rows(trace))
-        for row, op in zip(rows, trace.layer_list, strict=True):
+        for row, op in zip(rows, trace._layer_list, strict=True):
             row["role"] = "OWNER" if row["kind"] == "op" else None
             row["flops_pct"] = (
                 100.0 * row["flops"] / partition_total
@@ -844,9 +844,9 @@ def _assemble_level_rows(
         for call in trace.module_calls.values():
             ops = _ops_for_labels(trace, list(getattr(call, "ops", ())))
             row, one_evidence = _rollup_row(
-                (str(getattr(call, "call_label", "")), "call", getattr(call, "num_params", None)),
+                (str(getattr(call, "label", "")), "call", getattr(call, "num_params", None)),
                 ops,
-                {str(call.call_label)},
+                {str(call.label)},
                 context,
             )
             rows.append(row)
@@ -864,7 +864,7 @@ def _assemble_level_rows(
                     getattr(module, "num_params", None),
                 ),
                 ops,
-                {str(call.call_label) for call in module.calls.values()},
+                {str(call.label) for call in module.calls.values()},
                 context,
             )
             rows.append(row)
@@ -931,7 +931,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     flops_evidence = _flops_evidence_by_label(aggregation)
     flops_by_label = _flops_values_by_label(aggregation)
     owners = _innermost_call_by_label(trace)
-    structure_only = bool(getattr(trace, "structure_only", False))
+    structure_only = bool(trace._options_structure_only)
 
     rows, row_evidence = _assemble_level_rows(
         trace,
@@ -947,7 +947,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
         from ._profile_source_line import group_rows_by_source_line
 
         rows, row_evidence = group_rows_by_source_line(
-            rows, list(trace.layer_list), row_evidence, _weakest_evidence
+            rows, list(trace._layer_list), row_evidence, _weakest_evidence
         )
 
     columns = [
@@ -994,9 +994,9 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     outcome = getattr(trace, "outcome", None)
     status_value = getattr(getattr(outcome, "status", None), "value", None)
     capture_status = str(status_value) if status_value is not None else "unknown"
-    capture_verified = getattr(trace, "capture_verified", None)
-    capture_verification_reason = getattr(trace, "capture_verification_reason", None)
-    rescue_rerun = bool(getattr(trace, "rescue_rerun", None) or False)
+    capture_verified = trace._provenance_verified
+    capture_verification_reason = trace._provenance_verification_reason
+    rescue_rerun = bool(trace.__dict__.get("_rescue_rerun") or False)
     verification = {
         "capture_status": capture_status,
         "capture_verified": capture_verified,

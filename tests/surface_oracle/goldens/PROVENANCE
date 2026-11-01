@@ -1463,96 +1463,114 @@ recorded: 2026-10-31T09:22:49.314756+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: Add runtime-only Trace._output_slot for the exact live forward return; no persisted field or schema version change.
+reason: gradient-site integration (P5): Trace.armed_edits (SPEC ARMED_PROP) joins the public surface; producer sites for the gradient settle rows
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 4cb21a9fed4384a31ea64ade1d17c33bc0327deb (dirty)
-recorded: 2026-11-01T00:58:44.054638+00:00
+source: 6e1129926b3a8c4e2c100dc5fb0bfa29f08eb527 (dirty)
+recorded: 2026-11-01T04:17:26.254942+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: Add runtime-only Trace._output_slot for the exact live forward return; no persisted field or schema version change.
+reason: gradient-site integration (P5): Trace.armed_edits (SPEC ARMED_PROP) joins the public surface; producer sites for the gradient settle rows
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 4cb21a9fed4384a31ea64ade1d17c33bc0327deb (dirty)
-recorded: 2026-11-01T00:58:44.079862+00:00
+source: 6e1129926b3a8c4e2c100dc5fb0bfa29f08eb527 (dirty)
+recorded: 2026-11-01T04:17:26.283701+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: Add runtime-only Trace._output_slot for the exact live forward return; no persisted field or schema version change.
+reason: gradient-site integration (P5): Trace.armed_edits (SPEC ARMED_PROP) joins the public surface; producer sites for the gradient settle rows
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 4cb21a9fed4384a31ea64ade1d17c33bc0327deb (dirty)
-recorded: 2026-11-01T00:58:44.104018+00:00
+source: 6e1129926b3a8c4e2c100dc5fb0bfa29f08eb527 (dirty)
+recorded: 2026-11-01T04:17:26.317436+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: Add runtime-only Trace._output_slot for the exact live forward return; no persisted field or schema version change.
+reason: gradient-site integration (P5): Trace.armed_edits (SPEC ARMED_PROP) joins the public surface; producer sites for the gradient settle rows
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 4cb21a9fed4384a31ea64ade1d17c33bc0327deb (dirty)
-recorded: 2026-11-01T00:58:44.128148+00:00
+source: 6e1129926b3a8c4e2c100dc5fb0bfa29f08eb527 (dirty)
+recorded: 2026-11-01T04:17:26.349402+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: Add runtime-only Trace._output_slot for the exact live forward return; no persisted field or schema version change.
+reason: gradient-site integration (P5): Trace.armed_edits (SPEC ARMED_PROP) joins the public surface; producer sites for the gradient settle rows
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 4cb21a9fed4384a31ea64ade1d17c33bc0327deb (dirty)
-recorded: 2026-11-01T00:58:44.153789+00:00
+source: 6e1129926b3a8c4e2c100dc5fb0bfa29f08eb527 (dirty)
+recorded: 2026-11-01T04:17:26.379772+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: Add runtime-only Trace._output_slot for the exact live forward return; no persisted field or schema version change.
+reason: gradient-site integration (P5): Trace.armed_edits (SPEC ARMED_PROP) joins the public surface; producer sites for the gradient settle rows
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 4cb21a9fed4384a31ea64ade1d17c33bc0327deb (dirty)
-recorded: 2026-11-01T00:58:44.182806+00:00
+source: 6e1129926b3a8c4e2c100dc5fb0bfa29f08eb527 (dirty)
+recorded: 2026-11-01T04:17:26.416121+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: OutputSlot moved into the recording vocabulary module (torchlens.recording.types); its class path in the runtime-only Trace._output_slot repr follows. No persisted field or schema change.
+reason: runnable package move: module path of RunnableTraceState
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 2b7ad5fb1cb589c153efbed305c8ccaa3cc036fb (clean)
-recorded: 2026-11-01T02:32:05.560474+00:00
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.531533+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: OutputSlot moved into the recording vocabulary module (torchlens.recording.types); its class path in the runtime-only Trace._output_slot repr follows. No persisted field or schema change.
+reason: runnable package move: module path of RunnableTraceState
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 2b7ad5fb1cb589c153efbed305c8ccaa3cc036fb (clean)
-recorded: 2026-11-01T02:32:05.591247+00:00
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.582542+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: OutputSlot moved into the recording vocabulary module (torchlens.recording.types); its class path in the runtime-only Trace._output_slot repr follows. No persisted field or schema change.
+reason: runnable package move: module path of RunnableTraceState
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 2b7ad5fb1cb589c153efbed305c8ccaa3cc036fb (clean)
-recorded: 2026-11-01T02:32:05.618576+00:00
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.641870+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: OutputSlot moved into the recording vocabulary module (torchlens.recording.types); its class path in the runtime-only Trace._output_slot repr follows. No persisted field or schema change.
+reason: runnable package move: module path of RunnableTraceState
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 2b7ad5fb1cb589c153efbed305c8ccaa3cc036fb (clean)
-recorded: 2026-11-01T02:32:05.644359+00:00
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.702493+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: OutputSlot moved into the recording vocabulary module (torchlens.recording.types); its class path in the runtime-only Trace._output_slot repr follows. No persisted field or schema change.
+reason: runnable package move: module path of RunnableTraceState
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 2b7ad5fb1cb589c153efbed305c8ccaa3cc036fb (clean)
-recorded: 2026-11-01T02:32:05.666403+00:00
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.758575+00:00
 ---
 generator: tests/surface_oracle
 flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
-reason: OutputSlot moved into the recording vocabulary module (torchlens.recording.types); its class path in the runtime-only Trace._output_slot repr follows. No persisted field or schema change.
+reason: runnable package move: module path of RunnableTraceState
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
-source: 2b7ad5fb1cb589c153efbed305c8ccaa3cc036fb (clean)
-recorded: 2026-11-01T02:32:05.691782+00:00
+source: 6b118317bf9aa539c6ef8d381d2958c65e356cc2 (dirty)
+recorded: 2026-11-01T12:28:19.831904+00:00
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:18.317755+00:00
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:18.352915+00:00
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:18.386859+00:00
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:18.421882+00:00
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:18.457132+00:00
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:30:18.495655+00:00

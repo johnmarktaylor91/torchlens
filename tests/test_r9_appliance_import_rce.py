@@ -7,7 +7,7 @@ inert first-party code safe to import + inspect without a trust opt-in:
   the ``torchlens`` branch called ``super().find_class(module, name)``, and
   ``pickle.Unpickler.find_class`` IMPORTS ``module`` before the global is
   (ultimately) rejected.
-* ``resolve_function_registry_key`` (``torchlens/intervention/resolver.py``) --
+* ``resolve_function_registry_key`` (``torchlens/_selection/resolver.py``) --
   the ``path_claims_torchlens`` branch called
   ``importlib.import_module(module_name)`` unconditionally.
 
@@ -45,16 +45,16 @@ from torchlens._io._safe_unpickle import (
     _DeferredForeignCallable,
     _is_torchlens_appliance_module,
 )
-from torchlens.intervention.errors import ReplayPreconditionError, UntrustedCallableError
-from torchlens.intervention.resolver import (
+from torchlens.intervention._resolver_registry import (
     _is_torchlens_appliance_module as _resolver_is_appliance_module,
     resolve_function_registry_key,
 )
+from torchlens.intervention.errors import ReplayPreconditionError, UntrustedCallableError
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection_subspace import BasisProvenance
+from torchlens._selection.subspace import BasisProvenance
 from torchlens.errors import SelectionError
 
 _RELU = "relu_1_2"
@@ -218,7 +218,7 @@ def test_do_audit_record_carries_the_basis_origin(model):
     trace = tl.trace(
         model,
         torch.randn(2, 8),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = tl.subspace(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gc
 import os
 import random
 import warnings
@@ -14,11 +13,13 @@ from typing import Any
 import torch
 from torch import nn
 
-from .._errors import ArgumentTypeError
+from .._errors import ArgumentTypeError, InvalidArgumentError
 from ..intervention.errors import MultiMatchWarning
+from ..intervention.spec import is_gradient_site
 
 __tl_layer__ = "L5"
 
+from .._record_type import record_type
 from ._streaming import (
     StreamingStat,
 )
@@ -169,7 +170,7 @@ def _matching_layers(log: Any, metric_name: str, *, require_grad: bool) -> list[
     attribute = "has_grad" if require_grad else "has_saved_activation"
     return [
         layer
-        for layer in log.layer_list
+        for layer in log._layer_list
         if metric_name in str(layer.layer_label) and bool(getattr(layer, attribute, False))
     ]
 
@@ -232,7 +233,7 @@ _StreamEntry = tuple[str, tuple[tuple[str, Any], ...]]
 
 @dataclass(frozen=True)
 class _CompiledAggregatePlan:
-    """Discovery-batch measurement plan for ``aggregate(target='out')``."""
+    """Discovery-batch measurement plan for an activation-only ``aggregate``."""
 
     fingerprint: tuple[_StreamEntry, ...]
     sites: dict[str, int]
@@ -249,7 +250,7 @@ def _trace_reference_stream(log: Any) -> tuple[tuple[_StreamEntry, ...], dict[st
         ops = []
         input_labels: set[str] = set()
         buffer_labels: set[str] = set()
-        for layer in log.layer_list:
+        for layer in log._layer_list:
             if layer.is_input:
                 input_labels.add(layer.layer_label)
             elif layer.is_buffer:
@@ -275,7 +276,7 @@ def _trace_reference_stream(log: Any) -> tuple[tuple[_StreamEntry, ...], dict[st
                     )
                 else:
                     return None
-            layer_type = op.layer_type
+            layer_type = record_type(op)
             if not isinstance(layer_type, str) or not layer_type:
                 return None
             entries.append((layer_type, tuple(parents)))
@@ -496,17 +497,16 @@ def _model_state_allows_compiled_plan(model: nn.Module) -> bool:
         return False
 
 
-def aggregate(  # noqa: PLR0913 -- the ruled cache pair joins target= and loss_fn=
+def aggregate(  # noqa: PLR0913 -- the ruled cache pair joins loss_fn= (base suppression kept)
     model: nn.Module,
     dataloader: Iterable[Any],
-    metrics: Mapping[str, StreamingStat],
+    metrics: Mapping[Any, StreamingStat],
     *,
-    target: str = "out",
     loss_fn: Callable[..., torch.Tensor] | None = None,
     cache: bool = False,
     cache_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Stream outs through metric accumulators.
+    """Stream activations and gradients through metric accumulators.
 
     Parameters
     ----------
@@ -515,17 +515,18 @@ def aggregate(  # noqa: PLR0913 -- the ruled cache pair joins target= and loss_f
     dataloader:
         Iterable of model inputs.
     metrics:
-        Mapping from layer selector to streaming statistic.
-    target:
-        ``"out"`` for activation statistics or ``"grad"`` for gradient
-        statistics.
+        Mapping from site to streaming statistic. A key names the tensor it
+        reads: a plain string (a layer label, a label substring, or
+        ``"output"``) or a selector is an activation; ``tl.grad(site)`` is the
+        gradient of that site's output, so
+        ``{"relu_3": Mean(), tl.grad("relu_3"): Mean()}`` measures both.
     loss_fn:
-        Callable used to build a loss from ``(output, *batch_tail)`` when
-        ``target="grad"``.
+        Callable building a loss from ``(output, *batch_tail)``; required
+        when any key is a gradient site (``aggregate_loss_fn_required``).
     cache:
         ``True`` keys the run (model contents and code, every batch by
-        value, each accumulator's starting state and encoder, ``target=``,
-        ``loss_fn=``, the torchlens and torch versions) and, when the same
+        value, each accumulator's starting state and encoder, the metric
+        keys, ``loss_fn=``, the torchlens and torch versions) and, when the same
         run was cached before, restores each accumulator's saved final
         state in place and returns its results without running the model.
         A run that cannot be keyed by value refuses
@@ -539,13 +540,24 @@ def aggregate(  # noqa: PLR0913 -- the ruled cache pair joins target= and loss_f
     Returns
     -------
     dict[str, Any]
-        Finalized metric results.
+        Finalized metric results keyed by each metric key's canonical
+        spelling: a string key as given, a selector key by its ``repr``
+        (``"tl.grad('relu_3')"``), so an activation and a gradient metric of
+        one site never collide.
     """
 
-    if target not in {"out", "grad"}:
-        raise ValueError("target must be 'out' or 'grad'")
-    if target == "grad" and loss_fn is None:
-        raise TypeError("aggregate(target='grad') requires loss_fn=")
+    keyed, sites = _canonical_metric_keys(metrics)
+    has_gradient = any(_is_gradient_key(site) for site in sites.values())
+    if has_gradient and loss_fn is None:
+        raise InvalidArgumentError(
+            "tl.stats.aggregate has a gradient metric key "
+            f"({', '.join(name for name, site in sites.items() if _is_gradient_key(site))}) "
+            "but no loss_fn= to run the backward pass that produces gradients",
+            code="aggregate_loss_fn_required",
+            remedy="pass loss_fn=lambda output, y: loss(output, y), or key the metric "
+            "by the bare site to measure the activation",
+            argument="loss_fn",
+        )
     if not isinstance(cache, bool) or not (
         cache_dir is None or isinstance(cache_dir, (str, os.PathLike))
     ):
@@ -556,122 +568,78 @@ def aggregate(  # noqa: PLR0913 -- the ruled cache pair joins target= and loss_f
             remedy="spell it tl.stats.aggregate(model, data, metrics, cache=True, cache_dir='stats-cache')",
             argument="cache",
         )
+    return _run_aggregate(model, dataloader, (keyed, sites, loss_fn), cache, cache_dir)
+
+
+def _run_aggregate(
+    model: nn.Module,
+    dataloader: Iterable[Any],
+    plan: tuple[dict[str, StreamingStat], dict[str, Any], Callable[..., torch.Tensor] | None],
+    cache: bool,
+    cache_dir: str | Path | None,
+) -> dict[str, Any]:
+    """Run the validated :func:`aggregate` loop, through the cache when ``cache=True``.
+
+    Parameters
+    ----------
+    model:
+        Model to capture.
+    dataloader:
+        Iterable of model inputs.
+    plan:
+        ``(metrics by canonical name, site by name, loss_fn)``.
+    cache:
+        Whether to key the run and restore or save it in the cache.
+    cache_dir:
+        Cache directory for ``cache=True``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Finalized metric results keyed by canonical name.
+    """
+
+    from ._aggregate_loop import _aggregate_loop
+
+    keyed, sites, loss_fn = plan
     if not cache:
-        return _aggregate_loop(model, dataloader, metrics, target=target, loss_fn=loss_fn)
+        return _aggregate_loop(model, dataloader, keyed, sites=sites, loss_fn=loss_fn)
     from ._aggregate_cache import run_cached
 
+    target = "grad" if any(_is_gradient_key(site) for site in sites.values()) else "out"
     return run_cached(
         model,
         dataloader,
-        metrics,
+        keyed,
         target=target,
         loss_fn=loss_fn,
         cache_dir=cache_dir,
-        loop=lambda data: _aggregate_loop(model, data, metrics, target=target, loss_fn=loss_fn),
+        loop=lambda data: _aggregate_loop(model, data, keyed, sites=sites, loss_fn=loss_fn),
     )
 
 
-def _aggregate_loop(
-    model: nn.Module,
-    dataloader: Iterable[Any],
-    metrics: Mapping[str, StreamingStat],
-    *,
-    target: str,
-    loss_fn: Callable[..., torch.Tensor] | None,
-) -> dict[str, Any]:
-    """Run the dataset loop of :func:`aggregate` (arguments already validated)."""
+def _is_gradient_key(site: Any) -> bool:
+    """Whether a metric key addresses a gradient (``tl.grad(site)``)."""
 
-    # Real-home import (not the lazy root facade) for the same SCC/implicit-
-    # Any reason as the fastlog.record import above.
-    from .._user_funcs import trace
-    from ..options import CaptureOptions
+    return is_gradient_site(site)
 
-    grad_loss_fn = loss_fn
 
-    layers = [name for name in metrics if name != "output"]
-    capture_layers: str | list[str] = layers if layers else "all"
+def _canonical_metric_keys(
+    metrics: Mapping[Any, StreamingStat],
+) -> tuple[dict[str, StreamingStat], dict[str, Any]]:
+    """Key metrics by canonical spelling and remember each key's site.
 
-    if target == "grad":
-        for batch in dataloader:
-            model_input, loss_args = _split_batch_for_loss(batch)
-            log = trace(
-                model,
-                model_input,
-                capture=CaptureOptions(
-                    save_grads=capture_layers,
-                ),
-                save=capture_layers,
-            )
-            try:
-                if grad_loss_fn is None:
-                    raise TypeError("aggregate(target='grad') requires loss_fn=")
-                loss = grad_loss_fn(_metric_value_from_log(log, "output"), *loss_args)
-                log.log_backward(loss)
-                for metric_name, stat in metrics.items():
-                    stat.update(_metric_grad_from_log(log, metric_name))
-            finally:
-                log.cleanup()
-        return {name: stat.compute() for name, stat in metrics.items()}
+    Returns
+    -------
+    tuple[dict[str, StreamingStat], dict[str, Any]]
+        ``(stats by name, site by name)``; a string key is its own name and
+        site, a selector key is named by its ``repr``.
+    """
 
-    # target == "out": trace the structure once, then execute a compiled sparse
-    # measurement per batch. Any surprise -- unstable structure, non-eval
-    # modules, unmappable sites -- keeps or restores the exact per-batch
-    # full-trace path. Trace and sparse record share the per-capture seed draw,
-    # so the global RNG streams the model and the stats see stay identical; a
-    # fingerprint mismatch rewinds the RNG engines before re-tracing so the
-    # fallback consumes the exact stream the full path would have.
-    plan: _CompiledAggregatePlan | None = None
-    compile_allowed = _model_state_allows_compiled_plan(model)
-    saved_gc_thresholds: tuple[int, int, int] | None = None
-    try:
-        for batch in dataloader:
-            model_input, _loss_args = _split_batch_for_loss(batch)
-            if plan is not None:
-                snapshot = _rng_snapshot()
-                payloads = (
-                    _run_compiled_aggregate_batch(model, model_input, plan)
-                    if snapshot is not None
-                    else None
-                )
-                if payloads is not None:
-                    for metric_name, stat in metrics.items():
-                        stat.update(payloads[plan.sites[metric_name]])
-                    gc.collect(1)
-                    continue
-                # Structure drifted from the discovery batch (or the RNG
-                # engines could not be protected): re-trace this batch exactly
-                # and stay on the full path for the rest of the loop.
-                plan = None
-                compile_allowed = False
-                if saved_gc_thresholds is not None:
-                    gc.set_threshold(*saved_gc_thresholds)
-                    saved_gc_thresholds = None
-                if snapshot is not None:
-                    _rng_restore(snapshot)
-            log = trace(
-                model,
-                model_input,
-                save=capture_layers,
-            )
-            try:
-                resolved_sites: dict[str, Any] = {}
-                for metric_name, stat in metrics.items():
-                    value, site = _resolve_metric_out(log, metric_name)
-                    resolved_sites[metric_name] = site
-                    stat.update(value)
-                if compile_allowed:
-                    plan = _compile_aggregate_plan(log, resolved_sites)
-                    compile_allowed = False
-                    if plan is not None:
-                        saved_gc_thresholds = gc.get_threshold()
-                        gc.set_threshold(
-                            max(saved_gc_thresholds[0], _FAST_LOOP_GEN0_THRESHOLD),
-                            *saved_gc_thresholds[1:],
-                        )
-            finally:
-                log.cleanup()
-    finally:
-        if saved_gc_thresholds is not None:
-            gc.collect(1)
-            gc.set_threshold(*saved_gc_thresholds)
-    return {name: stat.compute() for name, stat in metrics.items()}
+    keyed: dict[str, StreamingStat] = {}
+    sites: dict[str, Any] = {}
+    for key, stat in metrics.items():
+        name = key if isinstance(key, str) else repr(key)
+        keyed[name] = stat
+        sites[name] = key
+    return keyed, sites

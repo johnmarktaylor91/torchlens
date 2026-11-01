@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.finalize.settle as capture_settle
 import torchlens._partial as tl_partial
 from torchlens._utils._exception_notes import annotate_guarded
 from torchlens.errors import ScalarEscapeWarning
@@ -175,12 +176,10 @@ def test_scalar_escape_advisory_note_appears() -> None:
 def test_nonfinite_prefix_failure_note_appears(monkeypatch: pytest.MonkeyPatch) -> None:
     """Site _capture/_nonfinite_prefix: a failed prefix finalization leaves a note."""
 
-    import torchlens._capture.trace as capture_trace
-
     def _broken(*_args: Any, **_kwargs: Any) -> Any:
         raise ValueError("planted prefix failure")
 
-    monkeypatch.setattr(capture_trace, "_extract_and_mark_outputs", _broken)
+    monkeypatch.setattr(capture_settle, "_extract_and_mark_outputs", _broken)
     _, texts = _crash_texts(
         lambda: tl.trace(
             _NaNModel(),

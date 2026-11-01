@@ -135,7 +135,7 @@ def test_two_bare_draws_write_two_files_and_print_both(
     """Two bare ``draw()`` calls in one directory write two files and print both paths."""
     monkeypatch.chdir(tmp_path)
     trace = _trace()
-    assert not trace.verbose
+    assert not trace.options.verbose
     try:
         with _shipped_draw_default():
             trace.draw(file_format="svg")

@@ -19,7 +19,7 @@ def test_stats_table_rows_carry_kernel_numbers() -> None:
     trace = tl.trace(_model(), torch.randn(2, 4))
     table = trace.summary(view="stats")
     assert isinstance(table, SummaryReport)
-    assert len(table.rows) == len(trace.layer_list)
+    assert len(table.rows) == len(trace._layer_list)
     ok_rows = [row for row in table.rows if row.state == "ok"]
     assert ok_rows
     for row in ok_rows:
@@ -116,7 +116,7 @@ def test_batched_and_sequential_scans_agree() -> None:
     scan_hits = set(trace.nonfinite_ops)
     sequential_hits = {
         str(op.label)
-        for op in trace.layer_list
+        for op in trace._layer_list
         if isinstance(getattr(op, "out", None), torch.Tensor)
         and op.out.numel() > 0
         and _has_nonfinite(op.out)

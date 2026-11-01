@@ -11,6 +11,7 @@ failing plainly, and ``getattr`` with a default still degrades.
 from __future__ import annotations
 
 import ast
+import functools
 from pathlib import Path
 from typing import Any
 
@@ -57,9 +58,9 @@ REMOVED_MEMBERS: list[tuple[str, str, str]] = [
     ("Trace", "replay_from", "push_from"),
     ("Trace", "rerun", "run"),
     ("Trace", "validate_saved_outs", "validate_forward_pass"),
-    ("Trace", "conditional_then_entry_edges", "conditional_arm_entry_edges"),
-    ("Trace", "conditional_elif_entry_edges", "conditional_arm_entry_edges"),
-    ("Trace", "conditional_else_entry_edges", "conditional_arm_entry_edges"),
+    ("Trace", "conditional_then_entry_edges", "graph.conditional_arm_entry_edges"),
+    ("Trace", "conditional_elif_entry_edges", "graph.conditional_arm_entry_edges"),
+    ("Trace", "conditional_else_entry_edges", "graph.conditional_arm_entry_edges"),
     ("Bundle", "replay", "do"),
     ("Bundle", "rerun", "run"),
     ("VisualizationOptions", "mode", "rolled"),
@@ -83,7 +84,7 @@ def test_removed_member_raises_typed_redirect(
     assert removed in str(excinfo.value)
     assert replacement in str(excinfo.value)
     assert getattr(instance, removed, "absent") == "absent"
-    getattr(instance, replacement)  # the named replacement is live
+    functools.reduce(getattr, replacement.split("."), instance)  # the named replacement is live
 
 
 #: (public module, removed module-level name, the live replacement's public spelling)

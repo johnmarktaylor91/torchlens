@@ -302,9 +302,7 @@ def test_capture_options_private_filter_both_directions() -> None:
     # (F01-AMENDED landed) both parents carry log_injections; pins agree.
     # 49 -> 50: U40.1 CaptureOptions.carry_state.
     # 50 -> 51: measure.2 CaptureOptions.measure_host_peak_memory.
-    # 51 -> 61: the options restructure folded SaveOptions into CaptureOptions.
-    # 61 -> 59: layers_to_save and save_preview removed (the selection is save=).
-    assert len(_censuses.capture_option_fields()) == 59
+    assert len(_censuses.capture_option_fields()) == 49
 
 
 def test_env_var_census_shapes() -> None:

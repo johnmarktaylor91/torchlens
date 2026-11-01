@@ -15,6 +15,8 @@ import torch
 from ._capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
 from ._captured_run import TraceLike
 from ._data_classes._accessor_base import Accessor
+from ._data_classes._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceProvenance
+from ._data_classes._trace_groups_capture import TraceHealth, TraceSettings, TraceSource
 from ._data_classes.aten_op import AtenOp, OpRef
 from ._data_classes.attribute_write import AttributeWrite
 from ._data_classes.backward_pass import BackwardPass
@@ -27,8 +29,8 @@ from ._data_classes.param import Param
 from ._data_classes.prehook import ModuleInputSnapshot, PreHookEffect, TensorInputObservation
 from ._quantities import Bytes, Duration, Flops, Macs, Quantity
 from ._runnable import NumericAttestationStatus, PathFaithfulness, ReadinessStatus, RunProvider
-from ._selection import Site
-from ._selection_subspace import BasisProvenance
+from ._selection.selection import Site
+from ._selection.subspace import BasisProvenance
 from .intervention import SpecCompat, TargetManifestDiff
 from .intervention.types import Relationship
 
@@ -50,6 +52,13 @@ _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 __all__ = [
     "Accessor",
     "TraceLike",
+    "TraceCost",
+    "TraceGraph",
+    "TraceAutograd",
+    "TraceSource",
+    "TraceProvenance",
+    "TraceSettings",
+    "TraceHealth",
     "NarrationEvent",
     "RunnableDiagnostic",
     "RunnableCompatibility",

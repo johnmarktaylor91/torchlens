@@ -171,7 +171,7 @@ def test_mlx_nested_modules_preserve_object_module_attribution() -> None:
 
     trace = tl.trace(MLXNested(), _input(), backend="mlx")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert {module.address for module in trace.modules} == {"self", "encoder", "head"}
     assert set(trace.modules["self"].call_children) == {"encoder", "head"}
     assert {"encoder:1", "head:1"} <= set(trace.module_calls.keys())
@@ -229,7 +229,7 @@ def test_mlx_summary_rows_follow_execution_order() -> None:
 
     trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx")
     report = trace.summary()
-    executed = [f"op:{op.layer_label}" for op in trace.layer_list]
+    executed = [f"op:{op.layer_label}" for op in trace._layer_list]
     row_ids = [row.row_id for row in report.rows if row.row_id in executed]
     assert len(row_ids) == len(executed) >= 4
     assert row_ids == executed
@@ -243,11 +243,11 @@ def test_mlx_object_module_public_surface_matrix(tmp_path: Path) -> None:
 
     trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert trace.modules["l1"].params
     assert trace.module_calls["l1:1"].forward_kwargs == {}
     assert isinstance(trace.summary(), str)
-    assert len(trace.to_pandas()) == len(trace.layer_list)
+    assert len(trace.to_pandas()) == len(trace._layer_list)
     assert len(trace.modules.to_pandas()) == len(trace.modules)
     assert len(trace.module_calls["l1:1"].to_pandas()) == 1
     dot = trace.draw(
@@ -261,8 +261,8 @@ def test_mlx_object_module_public_surface_matrix(tmp_path: Path) -> None:
     trace.save(bundle_path)
     loaded = tl.load(bundle_path)
     loaded_out = loaded[loaded.output_layers[0]].out
-    assert loaded.backend == "mlx"
-    assert loaded.module_identity_mode == "object_module"
+    assert loaded.provenance.backend == "mlx"
+    assert loaded.options.module_identity_mode == "object_module"
     assert isinstance(loaded_out, mx.array)
     np.testing.assert_allclose(np.asarray(loaded_out), expected)
 
@@ -290,9 +290,9 @@ def test_mlx_function_root_mode_remains_available() -> None:
         capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
     )
 
-    assert trace.module_identity_mode == "function_root"
+    assert trace.options.module_identity_mode == "function_root"
     assert [module.address for module in trace.modules] == ["self"]
-    assert trace.param_source == "none"
+    assert trace.provenance.param_source == "none"
     assert check_metadata_invariants(trace) is True
 
 
@@ -301,7 +301,7 @@ def test_mlx_object_module_corruption_invariant_fails() -> None:
     """Dropping MLX object-module attribution should fail metadata invariants."""
 
     trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx")
-    victim = next(layer for layer in trace.layer_list if layer.module and not layer.is_input)
+    victim = next(layer for layer in trace._layer_list if layer.module and not layer.is_input)
     victim.module = None
     victim.modules = []
     victim.module_call_stack = []

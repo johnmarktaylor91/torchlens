@@ -136,13 +136,18 @@ def test_classics_entry_end_to_end(entry: CorpusEntry, tmp_path: Path) -> None:
 
 
 def _check_entry(entry: CorpusEntry, tmp_path: Path) -> None:
-    """Run the four corpus checks for one entry."""
+    """Run the four corpus checks and the recurrence-tag check for one entry."""
 
     model, inputs = build_entry(entry)
 
     trace = tl.trace(model, inputs)
     labels = [op.label for op in trace.ops]
     assert labels, f"{entry.id}: empty trace"
+    recorded_recurrent = "trace:is_recurrent" in entry.features
+    assert trace.graph.is_recurrent == recorded_recurrent, (
+        f"{entry.id}: capture says is_recurrent={trace.graph.is_recurrent}, the manifest records "
+        f"{recorded_recurrent}; re-derive the recurrence tags (classics_corpus/README.md)"
+    )
     spec = tmp_path / "entry.tlspec"
     trace.save(spec, level="portable")
     loaded = tl.load(spec)
@@ -164,9 +169,7 @@ def _check_entry(entry: CorpusEntry, tmp_path: Path) -> None:
     readiness_trace = tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     report, _attachments = preflight_sparse_run_descriptor(
         build_sparse_run_descriptor(readiness_trace)

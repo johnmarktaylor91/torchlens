@@ -273,7 +273,7 @@ UNIVERSES: tuple[UniverseDescriptor, ...] = (
     _open(
         "U-DEPRECATED-ALIASES",
         "compo",
-        "deprecation inventory (tests/test_deprecation_inventory.py pins the package deprecation-free)",
+        "deprecation inventory (scripts/checks/deprecation_inventory.py pins the package deprecation-free)",
         "deprecated aliases/shims (currently pinned empty)",
         "any new alias/shim landing",
     ),

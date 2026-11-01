@@ -38,16 +38,34 @@ from typing import Any, Literal
 import torch
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
+from .._selection.selectors import BaseSelector, CompositeSelector
 from ._content_identity import (
     collect_tensors,
     render_helper,
     render_value,
     tensor_version,
 )
+from ._site_signal import (
+    _selector_children,
+    addresses_autograd_nodes as addresses_autograd_nodes,
+    is_gradient_site as is_gradient_site,
+    site_signal,
+)
 from .predicates import as_intervention_decision
 from .types import Edit, HelperDirection, InterventionDecision
 
 AddressClass = Literal["structural", "recorded", "value_dependent"]
+
+#: The pass a site addresses: an activation site is ``"forward"``, a gradient
+#: (``tl.grad``) or autograd-node site is ``"backward"``, a union of both is
+#: ``"both"``. Derived from the site, never passed as a keyword.
+SiteSignal = Literal["forward", "backward", "both"]
+
+
+#: Decision renderings print a constant where the removed decision
+#: ``direction=`` keyword used to print (always ``None`` for site-addressed
+#: rules), so renderings minted before the keyword was removed keep their value.
+_RULE_ID_TAIL = "None"
 
 #: Selector kinds addressable on a FIRST capture of a model (no recorded
 #: numbering required): structural positions only.
@@ -98,8 +116,6 @@ def classify_where(target: Any) -> AddressClass:
         may assume it reads structure only.
     """
 
-    from .selectors import BaseSelector
-
     if isinstance(target, BaseSelector):
         from .._ir.selector_eval import selector_contains_kind
 
@@ -112,6 +128,95 @@ def classify_where(target: Any) -> AddressClass:
                 break
         return worst
     return "value_dependent"
+
+
+def refuse_invalid_loss(loss: Any, *, has_gradient_site: bool, door: str) -> None:
+    """Refuse a ``loss=`` argument that cannot run the backward it asks for.
+
+    ``loss=`` is a callable of the returned trace (or each swept member),
+    never a tensor: under rerun semantics a tensor from the source graph
+    would differentiate the wrong execution.
+
+    Parameters
+    ----------
+    loss:
+        The caller's ``loss=`` value (``None`` means not given).
+    has_gradient_site:
+        Whether any site of the call addresses the backward pass.
+    door:
+        Door name for the message (``"do"`` / ``"sweep"``).
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``do_loss_not_callable`` for a tensor or any other non-callable;
+        ``do_loss_without_gradient_site`` when no site is a gradient site.
+    """
+
+    if loss is None:
+        return
+    if not callable(loss):
+        raise InvalidArgumentError(
+            f"{door}(loss=...) takes a callable of the returned trace; a tensor from "
+            "the source trace would differentiate the wrong execution "
+            f"(received {type(loss).__name__})",
+            code="do_loss_not_callable",
+            remedy="pass loss=lambda result: result['output_1'].out.sum(), or call "
+            "result.backward(loss) yourself on the returned trace",
+            argument="loss",
+        )
+    if not has_gradient_site:
+        raise InvalidArgumentError(
+            f"{door}(loss=...) runs a backward pass for a gradient edit, but no site "
+            "in this call is a gradient site",
+            code="do_loss_without_gradient_site",
+            remedy="address the gradient with tl.grad(site), or drop loss= for an activation edit",
+            argument="loss",
+        )
+
+
+def split_site_by_signal(site: Any) -> tuple[Any | None, Any | None]:
+    """Split a site into its activation half and its backward half.
+
+    A union mixing ``tl.grad(s)`` (or node selectors) with activation operands
+    is split at its top-level ``|``; each operand belongs to one pass.
+
+    Parameters
+    ----------
+    site:
+        Site the caller passed to a door.
+
+    Returns
+    -------
+    tuple[Any | None, Any | None]
+        ``(forward_site, backward_site)``; a half is ``None`` when the site
+        has no operand in that pass.
+    """
+
+    signal = site_signal(site)
+    if signal == "forward":
+        return site, None
+    if signal == "backward":
+        return None, site
+    forward: list[Any] = []
+    backward: list[Any] = []
+    for child in _selector_children(site):
+        child_forward, child_backward = split_site_by_signal(child)
+        if child_forward is not None:
+            forward.append(child_forward)
+        if child_backward is not None:
+            backward.append(child_backward)
+    return _join_union(forward), _join_union(backward)
+
+
+def _join_union(operands: list[Any]) -> Any | None:
+    """Rejoin union operands (``None`` for none, the operand itself for one)."""
+
+    if not operands:
+        return None
+    if len(operands) == 1:
+        return operands[0]
+    return CompositeSelector("or", tuple(operands))
 
 
 def _canonical_repr(value: Any, *, exact: bool = False) -> str:
@@ -144,9 +249,7 @@ def _canonical_repr(value: Any, *, exact: bool = False) -> str:
         return render_helper(value, exact=exact)
     if isinstance(value, InterventionDecision):
         hook_repr = _canonical_repr(value.hook, exact=exact)
-        return f"decision:{value.action}:{hook_repr}:direction={value.direction}"
-    from .selectors import BaseSelector
-
+        return f"decision:{value.action}:{hook_repr}:direction={_RULE_ID_TAIL}"
     if isinstance(value, BaseSelector):
         return f"selector:{value!r}"
     if callable(value):
@@ -167,7 +270,10 @@ class Rule:
         Helper spec, callable transform, or intervention decision (the raw
         user spelling, preserved for audit).
     direction:
-        Optional signal-direction override for the action.
+        Optional declared signal for the action, kept in the rule identity.
+
+    The pass the rule edits is :attr:`signal`, derived from the target:
+    ``tl.grad(site)`` edits the gradient, a bare site the activation.
     """
 
     target: Any
@@ -182,6 +288,9 @@ class Rule:
     _identity_memo: tuple[tuple[int | None, ...], tuple[str, str]] | None = field(
         default=None, init=False, compare=False, repr=False
     )
+    #: The activation half of the target (``None`` for a gradient-only or
+    #: node-only target): the only part a forward predicate may match.
+    _forward_target: Any = field(default=None, init=False, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         """Validate the clause and derive its identity facts.
@@ -203,13 +312,14 @@ class Rule:
                 remedy="pass a selector or predicate callable as the WHERE term",
                 argument="where",
             )
-        decision = as_intervention_decision(self.edit, direction=self.direction)
+        decision = as_intervention_decision(self.edit)
         action_tensors: list[torch.Tensor] = []
         collect_tensors(self.edit, action_tensors)
         object.__setattr__(self, "decision", decision)
         object.__setattr__(self, "where_repr", _canonical_repr(self.target))
         object.__setattr__(self, "_action_tensors", tuple(action_tensors))
         object.__setattr__(self, "address_class", classify_where(self.target))
+        object.__setattr__(self, "_forward_target", split_site_by_signal(self.target)[0])
 
     def _identity(self, *, exact: bool = False) -> tuple[str, str]:
         """Return ``(action_repr, rule_id)`` for the action's CURRENT content.
@@ -246,9 +356,15 @@ class Rule:
 
     @property
     def rule_id(self) -> str:
-        """Content-derived rule identity over WHERE, current action, direction."""
+        """Content-derived rule identity over WHERE and the current action."""
 
         return self._identity()[1]
+
+    @property
+    def signal(self) -> SiteSignal:
+        """The pass this rule edits, derived from its target (not persisted)."""
+
+        return site_signal(self.target)
 
     @property
     def action_repr(self) -> str:
@@ -261,7 +377,7 @@ class Rule:
 
         return (
             f"Rule(target={self.target!r}, edit={self.edit!r}, "
-            f"direction={self.direction!r}, rule_id={self.rule_id!r}, "
+            f"direction={self.direction!r}, signal={self.signal!r}, rule_id={self.rule_id!r}, "
             f"address_class={self.address_class!r})"
         )
 
@@ -293,7 +409,7 @@ class Recipe:
         ------
         InvalidArgumentError
             ``spec_rules_duplicate`` when two clauses carry the same rule
-            identity (same WHERE, action, and direction).
+            identity (same WHERE and action).
         """
 
         seen: dict[str, int] = {}
@@ -309,8 +425,8 @@ class Recipe:
             if rule.rule_id in seen:
                 raise InvalidArgumentError(
                     f"duplicate intervention rule {rule.rule_id} (clauses "
-                    f"{seen[rule.rule_id]} and {index} carry the same WHERE, "
-                    "action, and direction); a spec is a SET of distinct "
+                    f"{seen[rule.rule_id]} and {index} carry the same WHERE "
+                    "and action); a spec is a SET of distinct "
                     "experiments -- repeat-application is not expressible by "
                     "duplication",
                     code="spec_rules_duplicate",
@@ -381,7 +497,11 @@ class Recipe:
 
         matched: list[Rule] = []
         for rule in self.rules:
-            if rule.target(ctx):
+            # A forward predicate sees only each rule's activation half: a
+            # tl.grad(...) or autograd-node half edits the backward pass and is
+            # mounted there by the capture and bind doors.
+            forward_target = rule._forward_target
+            if forward_target is not None and forward_target(ctx):
                 matched.append(rule)
         if not matched:
             return None
@@ -505,12 +625,7 @@ class Recipe:
         return bind_spec_to_model(self, model, on_zero_fire=on_zero_fire)
 
 
-def when(
-    condition: Callable[[Any], bool],
-    action: Any,
-    *,
-    direction: HelperDirection | None = None,
-) -> Recipe:
+def when(condition: Callable[[Any], bool], action: Any) -> Recipe:
     """Build a one-clause immutable :class:`InterventionSpec`.
 
     The promoted public constructor (surgery memo 3.1): the returned spec is
@@ -525,9 +640,8 @@ def when(
         term; see the address law in the module docstring).
     action:
         Helper spec (``tl.scale``, ``tl.add_noise``, ...), callable transform, or
-        ``InterventionDecision``.
-    direction:
-        Optional signal direction override.
+        ``InterventionDecision``. The condition decides which tensor it edits:
+        ``tl.when(tl.grad("relu_3"), tl.scale(0))`` edits the gradient.
 
     Returns
     -------
@@ -535,7 +649,7 @@ def when(
         Immutable one-clause spec.
     """
 
-    return Recipe(rules=(Rule(condition, action, direction),))
+    return Recipe(rules=(Rule(condition, action),))
 
 
 def refuse_unreplayable_rules(spec: Recipe, *, door: str) -> None:
@@ -609,7 +723,6 @@ def entries_from_spec(spec: Recipe, *, door: str) -> list[Any]:
         rule_entries = normalize_hook_plan(
             rule.target,
             rule.edit,
-            direction=rule.direction,
             allow_replay_only_site_targets=True,
         )
         for entry in rule_entries:

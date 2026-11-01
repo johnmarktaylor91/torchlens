@@ -146,7 +146,7 @@ def test_intervention_node_spec_cone_matches_short_label(
         graph_overrides=None,
         user_node_spec_fn=None,
     )
-    layer = SimpleNamespace(layer_label="relu_1_2", layer_label_short="relu")
+    layer = SimpleNamespace(layer_label="relu_1_2", short_layer_label="relu")
     default = NodeSpec(lines=["relu"], color="black", penwidth=1.0)
 
     assert node_spec_fn is not None
@@ -175,7 +175,7 @@ def test_intervention_node_spec_cone_matches_call_labels(
     )
     layer = SimpleNamespace(
         layer_label="relu_1",
-        layer_label_short="relu",
+        short_layer_label="relu",
         call_labels=["relu_1_1", "relu_1_2"],
     )
     default = NodeSpec(lines=["relu"], color="black", penwidth=1.0)
@@ -188,7 +188,7 @@ def test_intervention_node_spec_cone_matches_call_labels(
 
     unrelated = SimpleNamespace(
         layer_label="linear_1",
-        layer_label_short="linear",
+        short_layer_label="linear",
         call_labels=["linear_1_1"],
     )
     assert node_spec_fn(unrelated, default).color == "black"
@@ -197,7 +197,7 @@ def test_intervention_node_spec_cone_matches_call_labels(
 def test_external_overlay_value_matches_short_label() -> None:
     """External overlay scores can be keyed by short label."""
 
-    node = SimpleNamespace(layer_label="relu_1_2", layer_label_short="relu")
+    node = SimpleNamespace(layer_label="relu_1_2", short_layer_label="relu")
 
     assert external_overlay_value(node, {"relu": 7}) == 7
 

@@ -16,6 +16,8 @@ from typing import Any, cast
 
 import torch
 
+from torchlens.errors import TorchLensError, TorchLensWarning
+
 
 def _lightning_callback_base() -> type[Any]:
     """Return Lightning's callback base when the optional extra is installed.
@@ -265,10 +267,8 @@ class _LayerProfilerCallbackMixin:
                 "batch_idx": batch_idx,
                 "global_step": getattr(trainer, "global_step", None),
                 "disclosure": PROFILE_DISCLOSURE,
-                "num_layers": len(getattr(log, "layer_list", [])),
-                "layer_labels": [
-                    str(layer.layer_label) for layer in getattr(log, "layer_list", [])
-                ],
+                "num_layers": len(log._layer_list),
+                "layer_labels": [str(layer.layer_label) for layer in log._layer_list],
             }
             self.records.append(record)
             self.container_path.parent.mkdir(parents=True, exist_ok=True)
@@ -474,7 +474,6 @@ class _SummaryCallbackMixin:
         """
 
         import torchlens as tl
-        from torchlens.errors import TorchLensError, TorchLensWarning
 
         self._summarized = True
         if not getattr(trainer, "is_global_zero", True):

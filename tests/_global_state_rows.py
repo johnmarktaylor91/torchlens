@@ -90,7 +90,7 @@ _SCOPED_CAPTURE_STATE = frozenset(
         ("torchlens/backends/mlx/wrappers.py", "_ACTIVE_TAP_OBSERVER"),
         ("torchlens/backends/paddle/wrappers.py", "_ACTIVE_TAP_OBSERVER"),
         ("torchlens/backends/tinygrad/backend.py", "_ACTIVE_TINYGRAD_MODULE_STACK"),
-        ("torchlens/backends/torch/_completeness_finalize.py", "_ACTIVE_WITNESS_STATE"),
+        ("torchlens/backends/torch/completeness_witness.py", "_ACTIVE_WITNESS_STATE"),
         # Plane-W funcol completion session: published by the capture-scoped
         # distributed_recording_session context (armed captures only) and
         # cleared in its finally -- a survivor past the capture is exactly the
@@ -112,7 +112,7 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # catches (captures are single-threaded by design).
         ("torchlens/_capture/_episode_join.py", "_ACTIVE_JOIN_SESSION"),
         ("torchlens/_capture/_episode_coupling.py", "_ACTIVE_COUPLING"),
-        ("torchlens/_capture/trace.py", "_ACTIVE_CAPTURE_BACKEND"),
+        ("torchlens/_capture/run.py", "_ACTIVE_CAPTURE_BACKEND"),
         ("torchlens/experimental/__init__.py", "_STOP_AFTER_SITE"),
         # Live active_intervention_context publication stack (fixwave-5):
         # entries are pushed at context entry and spliced out on unwind, so a
@@ -120,17 +120,17 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # ledger catches.
         ("torchlens/intervention/runtime.py", "_CONTEXT_ENTRIES"),
         ("torchlens/_utils/introspection.py", "_FUNC_CALL_LOCATION"),
-        ("torchlens/_utils/rng.py", "_ACTIVE_MONITOR"),
+        ("torchlens/_utils/rng/monitor_state.py", "_ACTIVE_MONITOR"),
         # Live monitor patches per (id(holder), name), spliced back on window
         # unwind -- a survivor past monitor exit is exactly the leak class this
         # row exists to catch (d327e3aa's non-LIFO restore bug).
-        ("torchlens/_utils/rng.py", "_PATCH_STACKS"),
+        ("torchlens/_utils/rng/monitor_state.py", "_PATCH_STACKS"),
         # CUDA RNG snapshot retry latch: set by a failed generator read, RE-ARMED
         # at every capture entry by set_random_seed (grind p5, B2P3-16). It was
         # misfiled as an immutable capability memo, which contractually forbade
         # ever recovering from a TRANSIENT read failure (busy device, momentary
         # OOM) -- a capture-fidelity latch, not a fact of the torch build.
-        ("torchlens/_utils/rng.py", "_cuda_rng_unusable"),
+        ("torchlens/_utils/rng/streams.py", "_cuda_rng_unusable"),
         # Accumulate/drain fence for in-flight cpu_async D2H copies (R36-1):
         # armed per copy on the wrapper hot path, drained at the capture
         # finalize seam and on the failure-scrub arms.
@@ -150,6 +150,9 @@ pins the high-risk members against exception and interruption paths.
 
 _INSTALL_STATE_AND_CACHES = frozenset(
     {
+        # Backend protocol shells resolve their spec through one lookup hook that
+        # the registry installs once at import (install-time fact, never rebound).
+        ("torchlens/backends/_backend_protocol.py", "_spec_lookup"),
         # Call-site grouping: the module forward wrapper code object, registered
         # idempotently when submodule forwards are decorated (one constant).
         ("torchlens/_utils/_call_site.py", "_BOUNDARY_CODES"),
@@ -170,7 +173,7 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_io/prerelease.py", "_ANNOTATIONS_KEY_REGISTRY"),
         ("torchlens/_io/prerelease.py", "_REGISTRY"),
         # Selection-AST term dispatch: import-time table, sibling producers register at import.
-        ("torchlens/_selection.py", "_TERM_RESOLVERS"),
+        ("torchlens/_selection/selection.py", "_TERM_RESOLVERS"),
         # F40a annotations travel policy: DECLARATION table populated at import
         # by register_travel_policy (closed drop_mode vocabulary; sub-key owners
         # register at import of their owning modules, the _ANNOTATIONS_KEY_REGISTRY
@@ -329,7 +332,7 @@ _WARN_ONCE_STATE = frozenset(
         ("torchlens/backends/torch/ops.py", "_UNSUPPORTED_OUTPUT_CONTAINER_WARNED"),
         # BatchNorm train-mode running-stats disclosure fires once per process
         # (user_funcs warn-once flag, C02 lovely tranche).
-        ("torchlens/_user_funcs.py", "_BATCHNORM_TRAIN_STATS_WARNED"),
+        ("torchlens/_capture/prepare/door.py", "_BATCHNORM_TRAIN_STATS_WARNED"),
         ("torchlens/_data_classes/op.py", "_WARNED_REFERENCE_SAVE_MODE"),
         ("torchlens/distributed/_lifecycle.py", "_AUTO_ARM_DEGRADATION"),
         ("torchlens/recording/_storage_resolver.py", "_WARNED_REFERENCE_SAVE_MODE"),
@@ -369,6 +372,11 @@ _CAPABILITY_PROBE_STATE = frozenset(
         # first cleanup(); never varies afterwards.
         ("torchlens/_data_classes/cleanup.py", "_MALLOC_TRIM"),
         ("torchlens/_utils/_torch_compat.py", "HAS_C10D_ABORT_PG"),
+        # Module.__call__ dispatch-frame probe (fast-run forward wave): the code
+        # objects of the torch call-dispatch frames that reach forward, filled
+        # once by the import-time probe behind HAS_MODULE_CALL_DISPATCH_FRAME
+        # and cleared only when the probe reruns; never varies afterwards.
+        ("torchlens/_utils/_module_call_dispatch.py", "_DISPATCH_CODES"),
         # F27 Kineto/memory-profile capability flags: probed once at first
         # extraction (a live profiler session is required to observe an
         # event instance), never vary afterwards.
@@ -464,7 +472,7 @@ _CAPABILITY_PROBE_STATE = frozenset(
         # One-shot warm of torch's lazy torch._compile/torch._dynamo cascade,
         # fired by the RNG monitor BEFORE its window arms (hunt-b8 F1).
         ("torchlens/_utils/_torch_compat.py", "_LAZY_TORCH_IMPORTS_WARMED"),
-        ("torchlens/_utils/tensor_utils.py", "_cuda_available"),
+        ("torchlens/_utils/_cuda_probe.py", "_cuda_available"),
         # floor2 fix (2026-10-01): torch 2.1.2-floor capability probes --
         # GradientEdge (one-backward tuple-output signature), the
         # tuple-dim overload of reduce ops, CPU half-precision kernel
@@ -503,6 +511,10 @@ _DIAGNOSTIC_AUDIT_STATE = frozenset(
         # detector/witness install surfaces; assigned solely through the
         # module object (visible since the cross-module rebind detector).
         ("torchlens/_state.py", "_completeness_witness_mode"),
+        # MLX unwrapped-op policy ("flag"/"refuse", closed vocabulary): set only
+        # through set_unwrapped_policy, which returns the previous value so a
+        # caller restores it; read at capture settle time.
+        ("torchlens/backends/mlx/settings.py", "_unwrapped_policy"),
         ("torchlens/_state.py", "_escape_detector_mode"),
         ("torchlens/_trace_core/op_store.py", "_AUDIT_CLONE_READS"),
         ("torchlens/_trace_core/op_store.py", "_AUDIT_COLLECTORS"),
@@ -539,6 +551,9 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # timing/token/finalization bookkeeping. They must disappear with
         # that Trace and never become process-lifetime caches.
         ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
+        # Backward-ready rerun results -> the rerun capture whose tensor grad
+        # hooks route to them; weak on the result, dies with it.
+        ("torchlens/intervention/rerun.py", "_RERUN_GRAPH_SOURCES"),
         ("torchlens/backends/torch/backward.py", "_CHECKPOINT_TOKEN_STATE"),
         ("torchlens/backends/torch/_fire_timing.py", "_FIRE_TIMING_STAMPS"),
         # F27 FLIP-2 open-marker LIFO + session-time Kineto join results:
@@ -703,6 +718,11 @@ _PROCESS_CACHES = frozenset(
         # WeakKeyDictionary keyed by the code object, bounded by live code.
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),
+        # Per-filename memo of the "is this frame TorchLens's own code" verdict
+        # (normalised-path prefix test). Keyed by the filename string, so it is
+        # bounded by the distinct source files a process loads; a verdict never
+        # changes for a filename, so it needs no epoch.
+        ("torchlens/_utils/_package_frames.py", "_VERDICTS"),
         # Post-T80 census sweep (F42 reconcile): bounded LRU stores merged
         # lanes added without heavy-census classification -- the projection
         # basis byte-budgeted digest store (+ its size counter) and the SRP
@@ -736,6 +756,10 @@ _PROCESS_CACHES = frozenset(
         ("torchlens/stats/_tensor_stats.py", "_STATS_CACHE"),
         ("torchlens/_io/bundle.py", "_NESTED_BLOB_KINDS"),
         ("torchlens/_io/payload_codec.py", "_CODECS"),
+        # Frame-ownership verdict per code filename (is the file inside the
+        # package?): a pure derivation from the filename string, bounded by the
+        # distinct filenames loaded in the process, re-derivable at any time.
+        ("torchlens/_utils/_package_frames.py", "_VERDICTS"),
         ("torchlens/_io/rehydrate.py", "_REHYDRATE_KINDS"),
         ("torchlens/_io/runnable.py", "_DATACLASS_FIELD_NAMES"),
         ("torchlens/_io/runnable.py", "_SPARSE_CORE_NODE_KINDS"),
@@ -874,6 +898,7 @@ _WEAKLY_HELD = frozenset(
         # release registration must never pin the released model itself.
         ("torchlens/backends/torch/_held_refs.py", "_RELEASED_MODELS"),
         ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
+        ("torchlens/intervention/rerun.py", "_RERUN_GRAPH_SOURCES"),
         ("torchlens/backends/torch/backward.py", "_CHECKPOINT_TOKEN_STATE"),
         ("torchlens/backends/torch/_fire_timing.py", "_FIRE_TIMING_STAMPS"),
         # Executed-backward dispatch census: per-trace recorded ops by pass,
@@ -975,6 +1000,11 @@ _STATIC_EXPORT_LISTS = frozenset(
     {
         ("torchlens/__init__.py", "__all__"),
         ("torchlens/_capture_honesty.py", "__all__"),
+        ("torchlens/backends/_protocols/mlx_wrapped_state.py", "__all__"),
+        ("torchlens/backends/mlx/external_arrays.py", "__all__"),
+        ("torchlens/backends/mlx/settings.py", "__all__"),
+        ("torchlens/backends/torch/_session_cleanup.py", "__all__"),
+        ("torchlens/conformance/_rosters/mlx.py", "__all__"),
         ("torchlens/_data_substrate/__init__.py", "__all__"),
         ("torchlens/_data_substrate/artifact.py", "__all__"),
         ("torchlens/_data_substrate/digests.py", "__all__"),
@@ -982,6 +1012,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_deploy_env.py", "__all__"),
         ("torchlens/_distributed.py", "__all__"),
         ("torchlens/_episode_spec.py", "__all__"),
+        ("torchlens/_extract_refusals.py", "__all__"),
         ("torchlens/_extraction/__init__.py", "__all__"),
         ("torchlens/_extraction/callable_identity.py", "__all__"),
         ("torchlens/_extraction/context.py", "__all__"),
@@ -1006,6 +1037,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_io/_artifact_anchors.py", "__all__"),
         ("torchlens/_io/_canonical_pickle.py", "__all__"),
         ("torchlens/_io/_durability.py", "__all__"),
+        ("torchlens/_io/_inline_tensor.py", "__all__"),
         ("torchlens/_io/_portability_preflight.py", "__all__"),
         ("torchlens/_io/_safe_unpickle.py", "__all__"),
         ("torchlens/_io/_torch_symbols.py", "__all__"),
@@ -1016,11 +1048,11 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_io/tlspec.py", "__all__"),
         ("torchlens/_model_wrappers.py", "__all__"),
         ("torchlens/_registry/__init__.py", "__all__"),
-        ("torchlens/_runnable_execution.py", "__all__"),
-        ("torchlens/_runnable_seam.py", "__all__"),
-        ("torchlens/_runnable_state.py", "__all__"),
+        ("torchlens/_runnable/execution.py", "__all__"),
+        ("torchlens/_runnable/seam.py", "__all__"),
+        ("torchlens/_runnable/state.py", "__all__"),
         ("torchlens/_save_budget.py", "__all__"),
-        ("torchlens/_selection_align.py", "__all__"),
+        ("torchlens/_selection/align.py", "__all__"),
         ("torchlens/_source_links.py", "__all__"),
         ("torchlens/_trace_core/__init__.py", "__all__"),
         ("torchlens/_trace_state.py", "__all__"),
@@ -1135,6 +1167,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/bundle/__init__.py", "__all__"),
         ("torchlens/bundle/_bytes.py", "__all__"),
         ("torchlens/bundle/_lineage.py", "__all__"),
+        ("torchlens/bundle/_measure.py", "__all__"),
         ("torchlens/bundle/_provenance.py", "__all__"),
         ("torchlens/bundle/_relations.py", "__all__"),
         ("torchlens/bundle/_vary.py", "__all__"),
@@ -1143,8 +1176,8 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_capture/_annotations_travel.py", "__all__"),
         ("torchlens/_capture/_episode_coupling.py", "__all__"),
         ("torchlens/_capture/_episode_derivation.py", "__all__"),
-        ("torchlens/_capture/_episode_failed.py", "__all__"),
         ("torchlens/_capture/_episode_fold.py", "__all__"),
+        ("torchlens/_capture/finalize/arms.py", "__all__"),
         ("torchlens/_capture/_episode_join.py", "__all__"),
         ("torchlens/_capture/_episode_ledger.py", "__all__"),
         ("torchlens/_capture/_episode_ledger_anchors.py", "__all__"),
@@ -1222,6 +1255,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/intervention/__init__.py", "__all__"),
         ("torchlens/intervention/_affine_source.py", "__all__"),
         ("torchlens/intervention/_directions.py", "__all__"),
+        ("torchlens/intervention/_grad_site_plan.py", "__all__"),
         ("torchlens/intervention/_gradient_contract.py", "__all__"),
         ("torchlens/intervention/_subspace_projection.py", "__all__"),
         ("torchlens/intervention/_subspace_spec.py", "__all__"),
@@ -1247,10 +1281,10 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/intervention/regions.py", "__all__"),
         ("torchlens/intervention/replay.py", "__all__"),
         ("torchlens/intervention/rerun.py", "__all__"),
-        ("torchlens/intervention/resolver.py", "__all__"),
+        ("torchlens/_selection/resolver.py", "__all__"),
         ("torchlens/intervention/runtime.py", "__all__"),
         ("torchlens/intervention/save.py", "__all__"),
-        ("torchlens/intervention/selectors.py", "__all__"),
+        ("torchlens/_selection/selectors.py", "__all__"),
         ("torchlens/intervention/site_keys.py", "__all__"),
         ("torchlens/intervention/sites.py", "__all__"),
         ("torchlens/intervention/spec.py", "__all__"),
@@ -1366,12 +1400,14 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/repgeom/__init__.py", "__all__"),
         ("torchlens/report/__init__.py", "__all__"),
         ("torchlens/report/_stats_view.py", "__all__"),
-        ("torchlens/_runnable.py", "__all__"),
-        ("torchlens/_selection.py", "__all__"),
-        ("torchlens/_selection_compare.py", "__all__"),
-        ("torchlens/_selection_graph.py", "__all__"),
-        ("torchlens/_selection_subspace.py", "__all__"),
-        ("torchlens/_selection_values.py", "__all__"),
+        ("torchlens/_runnable/__init__.py", "__all__"),
+        ("torchlens/_selection/selection.py", "__all__"),
+        ("torchlens/_selection/compare.py", "__all__"),
+        ("torchlens/_selection/errors.py", "__all__"),
+        ("torchlens/_selection/graph.py", "__all__"),
+        ("torchlens/_selection/subspace.py", "__all__"),
+        ("torchlens/_selection/target.py", "__all__"),
+        ("torchlens/_selection/values.py", "__all__"),
         ("torchlens/_semantic/__init__.py", "__all__"),
         ("torchlens/_semantic/_hops.py", "__all__"),
         ("torchlens/_semantic/_norm_reconstruction.py", "__all__"),
@@ -1438,6 +1474,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/transformer/_wording.py", "__all__"),
         ("torchlens/types.py", "__all__"),
         ("torchlens/_utils/__init__.py", "__all__"),
+        ("torchlens/_utils/rng/__init__.py", "__all__"),
         ("torchlens/_utils/_multipass_access.py", "__all__"),
         ("torchlens/_utils/_torch_compat.py", "__all__"),
         ("torchlens/_utils/env_flags.py", "__all__"),
@@ -1500,6 +1537,35 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_diagnostics.py", "__all__"),
         ("torchlens/_captured_run.py", "__all__"),
         ("torchlens/viz/nodes.py", "__all__"),
+        ("torchlens/_data_classes/_doors.py", "__all__"),
+        ("torchlens/_data_classes/_labels.py", "__all__"),
+        ("torchlens/_data_classes/_layer_views.py", "__all__"),
+        ("torchlens/_data_classes/_op_cost.py", "__all__"),
+        ("torchlens/_data_classes/_op_relations.py", "__all__"),
+        ("torchlens/_data_classes/_op_save.py", "__all__"),
+        ("torchlens/_data_classes/_trace_annotations.py", "__all__"),
+        ("torchlens/_data_classes/_trace_rerun_state.py", "__all__"),
+        ("torchlens/_data_classes/_trace_state_io.py", "__all__"),
+        ("torchlens/_data_classes/_trace_views.py", "__all__"),
+        ("torchlens/_visualization/_trace_collapse.py", "__all__"),
+        ("torchlens/_visualization/_trace_draw.py", "__all__"),
+        ("torchlens/backends/torch/_trace_backward.py", "__all__"),
+        ("torchlens/bundle/_lookup.py", "__all__"),
+        ("torchlens/bundle/_operations.py", "__all__"),
+        ("torchlens/bundle/_save.py", "__all__"),
+        ("torchlens/export/_trace_tables.py", "__all__"),
+        ("torchlens/intervention/_op_edits.py", "__all__"),
+        ("torchlens/intervention/_trace_edits.py", "__all__"),
+        ("torchlens/intervention/_trace_hooks.py", "__all__"),
+        ("torchlens/intervention/_trace_run.py", "__all__"),
+        ("torchlens/receptive_field/_layer_fields.py", "__all__"),
+        ("torchlens/receptive_field/_op_fields.py", "__all__"),
+        ("torchlens/receptive_field/_trace_tables.py", "__all__"),
+        ("torchlens/recording/_trace_preview.py", "__all__"),
+        ("torchlens/report/_narrate.py", "__all__"),
+        ("torchlens/report/_trace_facts.py", "__all__"),
+        ("torchlens/report/_trace_summary.py", "__all__"),
+        ("torchlens/validation/_trace_checks.py", "__all__"),
     }
 )
 

@@ -104,14 +104,14 @@ def _intervened_trace(model_key: str):
     """Intervention-ready trace with a PLANNED zero intervention at every relu.
 
     The renderer marks planned intervention sites (trace.set on an
-    intervention_ready trace); live `intervene=` fire records are not what
+    replayable trace); live `intervene=` fire records are not what
     the site/cone styling visualizes.
     """
 
     def _build():
         m, x = MODELS[model_key]()
-        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-        relu = next(layer for layer in trace.layer_list if layer.func_name == "relu")
+        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
+        relu = next(layer for layer in trace.ops if layer.func_name == "relu")
         trace.set(tl.func("relu"), torch.zeros(relu.shape))
         return trace
 
@@ -151,7 +151,7 @@ def _raw_input_first_trace(model_key: str):
 def _decoded_output_trace(model_key: str):
     """Trace with a decoded-output record (label-score rows on the output node).
 
-    In the wild trace.decoded_output is populated by output autorouting
+    In the wild trace._decoded_output is populated by output autorouting
     (classification labels / HF text decoding); injected here to demonstrate
     the output-node label grammar.
     """
@@ -159,7 +159,7 @@ def _decoded_output_trace(model_key: str):
     def _build():
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x)
-        trace.decoded_output = [("tabby cat", 0.87), ("tiger cat", 0.08), ("lynx", 0.03)]
+        trace._decoded_output = [("tabby cat", 0.87), ("tiger cat", 0.08), ("lynx", 0.03)]
         return trace
 
     return _build
@@ -172,7 +172,7 @@ def _ablation_bundle(model_key: str):
         import warnings
 
         m, x = MODELS[model_key]()
-        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
         fork = trace.fork("ablated")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -207,7 +207,7 @@ def _preprocessed_trace(model_key: str):
 
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x)
-        trace.input_preprocessor = ResolvedPreprocessing(
+        trace._provenance_input_preprocessor = ResolvedPreprocessing(
             source="visual-audit demo",
             identifier="demo-normalize",
             verified=False,
@@ -233,11 +233,11 @@ def _raw_input_trace(model_key: str):
 
 
 def _container_trace(model_key: str):
-    """Trace with final-output container structure enabled (intervention_ready)."""
+    """Trace with final-output container structure enabled (replayable)."""
 
     def _build():
         m, x = MODELS[model_key]()
-        return tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        return tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
 
     return _build
 
@@ -323,7 +323,7 @@ def _skip_relus(layer_log):
 
 def _custom_overlay_kwargs(trace) -> dict:
     """Custom node_overlay mapping: score = op position in the graph."""
-    labels = [layer.layer_label for layer in trace.layer_list]
+    labels = [layer.layer_label for layer in trace.ops]
     return {"node_overlay": {lab: float(i) for i, lab in enumerate(labels)}}
 
 
@@ -744,7 +744,7 @@ NA_AXES: dict[str, str] = {
     "html_repr": "Trace._repr_html_() is a bespoke HTML identity card (layers/ops/"
     "save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz "
     "render, so it cannot appear in this PDF.",
-    "animate_ops": "trace.draw(animate=site) returns an HTML play/pause Drawing for "
+    "animate_ops": "trace.animate(site) returns an HTML play/pause Drawing for "
     "repeated-pass ops; interactive HTML, out of scope for a static PDF.",
     "code_panel:callable": "code_panel=<callable> reuses the same panel box styling "
     "as the string modes; only the text source differs.",
@@ -1000,7 +1000,7 @@ SECTIONS: list[Section] = [
                 title="show_containers: labels / collapsed / nodes (and the cluster fallback)",
                 caption=(
                     "Container structure (dict/tuple inputs and outputs) is captured when the trace enables "
-                    "it (intervention_ready=True for final-output structure, capture_container_structure="
+                    "it (replayable=True for final-output structure, capture_container_structure="
                     "True for the full registry). 'labels' annotates edges into container leaves with their "
                     "key/index. 'collapsed' merges a HOMOGENEOUS container bigger than container_max_inline "
                     "into one dashed summary node ('tuple x4'). 'nodes' (renderer-internal mode, not yet in "
@@ -1846,7 +1846,7 @@ SECTIONS: list[Section] = [
                     "practice). MIDDLE: batch_render='first' renders only the first batch item -- the other "
                     "policies ('auto' shows up to 4 with a '+N more' note, 'all' up to 16, 'first_n:<N>', "
                     "and 'shape_only' which disables thumbnails entirely) tune the same montage. RIGHT: the "
-                    "OUTPUT side -- when trace.decoded_output carries decoded predictions (populated by "
+                    "OUTPUT side -- when trace._decoded_output carries decoded predictions (populated by "
                     "output autorouting for classifiers/HF text; injected here), the output node renders "
                     "label-score rows instead of a bare shape.\n"
                     "CHECK: montage items are individually visible; the 'first' panel shows exactly one "
@@ -2399,13 +2399,13 @@ SECTIONS: list[Section] = [
                 label="m3_stack_by",
                 title="stack_by: rank columns from an annotation (the classic timestep diagram)",
                 caption=(
-                    "stack_by=True derives pass_index on multi-pass ops under the LOCKSTEP LICENSE "
+                    "stack_by=True derives pass_number on multi-pass ops under the LOCKSTEP LICENSE "
                     "(globally monotone execution windows -- non-monotone traces refuse "
                     "stack_by_auto_underivable and an explicit field/callable bypasses). Nodes sharing "
                     "an annotation value pin to one rank; with direction='leftright' the ranks read as "
                     "timestep columns. The graph caption and legend disclose the annotation used.\n"
                     "CHECK: each recurrent pass forms one column; the stem/head ops hang free (not "
-                    "pinned to column 1); the caption line 'stacked by: pass_index (auto)' is present."
+                    "pinned to column 1); the caption line 'stacked by: pass_number (auto)' is present."
                 ),
                 panels=[
                     Panel(

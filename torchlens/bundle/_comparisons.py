@@ -1,6 +1,6 @@
 """Named per-node comparison fields stored on a bundle's supergraph.
 
-``Bundle.delta_map`` recomputes tensor distances on every call; these helpers
+``Bundle.compare`` recomputes tensor distances on every call; these helpers
 compute once and stamp the values on each ``SupergraphNode.comparisons`` under
 a queryable name, so later reads (queries, renders) hit the stored field.
 Session-level state on the built supergraph — never serialized. Spellings are
@@ -10,7 +10,7 @@ DOCUMENTED-UNSTABLE pending the naming session.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 
@@ -31,7 +31,7 @@ def _bundle_store_comparison(
 ) -> str:
     """Compute one per-node comparison and stamp it on the supergraph.
 
-    Runs the same computation as :meth:`Bundle.delta_map` once, then stores
+    Runs the per-node baseline comparison once, then stores
     the per-member values on every contributing ``SupergraphNode`` under the
     returned name, so later queries read instead of recomputing.
 
@@ -46,7 +46,7 @@ def _bundle_store_comparison(
         ``"{metric}:{on}@{baseline}"`` for string metrics; a callable metric
         has no derivable stable name and requires an explicit one.
     baseline:
-        Baseline member name or log, resolved like :meth:`Bundle.delta_map`.
+        Baseline member name or log; defaults to the bundle baseline.
     on:
         Tensor field to compare.
 
@@ -97,7 +97,7 @@ def _bundle_stored_comparison(self: Bundle, name: str) -> dict[str, dict[str, fl
     -------
     dict[str, dict[str, float]]
         Mapping of supergraph node name to member-name distance values, in
-        supergraph topological order — the same shape ``delta_map`` returns.
+        supergraph topological order.
 
     Raises
     ------
@@ -138,17 +138,3 @@ def _bundle_stored_comparison_names(self: Bundle) -> tuple[str, ...]:
     for node in self.supergraph.nodes.values():
         names.update(node.comparisons)
     return tuple(sorted(names))
-
-
-def _register_comparison_helpers(registry: dict[str, Callable[..., Any]]) -> None:
-    """Register the stored-comparison helpers on the dynamic Bundle registry.
-
-    Parameters
-    ----------
-    registry:
-        Mutable name-to-callable mapping used by ``Bundle.__getattr__``.
-    """
-
-    registry["store_comparison"] = _bundle_store_comparison
-    registry["stored_comparison"] = _bundle_stored_comparison
-    registry["stored_comparison_names"] = _bundle_stored_comparison_names

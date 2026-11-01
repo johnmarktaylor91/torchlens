@@ -37,7 +37,7 @@ def test_jax_interventions_flip_with_binding_refuses_at_trace() -> None:
     import torchlens as tl
     from torchlens.errors import BackendCapabilityConformanceError
 
-    original, opened = _spec_flipped_true("jax", "interventions")
+    original, opened = _spec_flipped_true("jax", "can_intervene")
     tl.backends.register(opened, replace=True)
     try:
 

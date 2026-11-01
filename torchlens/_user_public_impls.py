@@ -28,6 +28,7 @@ from ._capture_state_helpers import (
 from ._data_classes.trace import Trace
 from ._deploy_env import restore_state_dict_resilient
 from ._deprecations import MISSING, MissingType
+from ._errors import CaptureNotActiveError, InvalidArgumentError
 from ._input_coerce import _coerce_input_args
 from ._literals import (
     CollapseLiteral,
@@ -39,6 +40,7 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from ._record_type import record_type
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption
 from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
@@ -390,8 +392,6 @@ def _validate_summary_grammar(summary_kwargs: dict[str, Any]) -> None:
 def _validate_summary_modes(execution_mode: str, grad_mode: str) -> None:
     """Refuse unknown one-call summary execution/grad mode tokens typed."""
 
-    from ._errors import InvalidArgumentError
-
     if execution_mode not in ("eval", "train", "same"):
         raise InvalidArgumentError(
             f"execution_mode must be 'eval', 'train', or 'same'; got {execution_mode!r}.",
@@ -434,8 +434,6 @@ def _maybe_weightsfree_summary(
     if not _all_meta_model(model):
         return None
     if input_args is None and not input_kwargs and input_size is None:
-        from ._errors import InvalidArgumentError
-
         raise InvalidArgumentError(
             "summary() on a meta-built model needs input evidence: the "
             "zero-argument inference rung runs real probing forwards, which "
@@ -506,7 +504,7 @@ def _weightsfree_summary_facade(
         capture=_CaptureOptions(structure_only=True),
     )
     try:
-        envelope = trace.structure_evidence
+        envelope = trace._graph_structure_evidence
         if isinstance(envelope, dict) and isinstance(envelope.get("input_plan"), dict):
             envelope["input_plan"]["selection_source"] = "summary_facade_auto"
             if input_size is not None:
@@ -660,7 +658,7 @@ def show_bundle_graph(
     bundle: Any,
     path: str = "bundle_modelgraph",
     vis_mode: VisModeLiteral = "unrolled",
-    direction: str = "forward",
+    signal: str = "forward",
     vis_direction: VisDirectionLiteral = "bottomup",
     vis_graph_overrides: dict[str, Any] | None = None,
     vis_node_overrides: dict[str, Any] | None = None,
@@ -681,8 +679,8 @@ def show_bundle_graph(
         Output path for Graphviz rendering.
     vis_mode:
         ``"rolled"``, ``"unrolled"``, or ``"none"``.
-    direction:
-        Graph content direction: ``"forward"``, ``"backward"``, ``"both"``, or
+    signal:
+        Which pass's graph to draw: ``"forward"``, ``"backward"``, ``"both"``, or
         ``"overlay"``.
     vis_direction:
         Graphviz layout direction.
@@ -704,7 +702,7 @@ def show_bundle_graph(
         ``label`` and, on ``fed_by``, its basis and coverage; solid edges
         carry token spans TorchLens checked, every other row is dashed.
         Node overrides key by member name, edge overrides by
-        ``(earlier, later)``; ``direction`` must stay ``"forward"``.
+        ``(earlier, later)``; ``signal`` must stay ``"forward"``.
     theme:
         Skin preset, the names ``Trace.draw`` takes: ``"torchlens"`` (default),
         ``"paper"``, ``"dark"``, ``"colorblind"`` or ``"high_contrast"``.
@@ -721,14 +719,14 @@ def show_bundle_graph(
 
     if nodes not in {"ops", "members"}:
         raise ValueError("nodes must be 'ops' or 'members'.")
-    if nodes == "members" and direction != "forward":
-        raise ValueError("nodes='members' draws the relation graph; leave direction='forward'.")
+    if nodes == "members" and signal != "forward":
+        raise ValueError("nodes='members' draws the relation graph; leave signal='forward'.")
     if vis_mode == "none":
         return None
     if vis_mode not in {"rolled", "unrolled"}:
         raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
-    if direction not in {"forward", "backward", "both", "overlay"}:
-        raise ValueError("direction must be 'forward', 'backward', 'both', or 'overlay'.")
+    if signal not in {"forward", "backward", "both", "overlay"}:
+        raise ValueError("signal must be 'forward', 'backward', 'both', or 'overlay'.")
 
     from ._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
     from ._visualization._render_utils import direction_to_rankdir
@@ -736,7 +734,7 @@ def show_bundle_graph(
     options = BundlePictureOptions(
         outpath=path,
         vis_mode=vis_mode,
-        direction=direction,
+        direction=signal,
         rankdir=direction_to_rankdir(vis_direction),
         graph_overrides=vis_graph_overrides,
         node_overrides=vis_node_overrides,
@@ -866,6 +864,18 @@ def _restore_validation_replay_state(
         )
 
 
+def _layer_signature(layer: Any) -> tuple[Any, ...]:
+    """Cheap structural signature of one layer record for divergence hints."""
+
+    return (
+        record_type(layer, None),
+        getattr(layer, "func_name", None),
+        len(getattr(layer, "parents", ()) or ()),
+        bool(getattr(layer, "is_output", False)),
+        bool(getattr(layer, "is_buffer", False)),
+    )
+
+
 def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
     """Return a concise first-difference hint for two validation traces.
 
@@ -883,29 +893,15 @@ def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
         available.
     """
 
-    for index, (left_layer, right_layer) in enumerate(zip(left.layer_list, right.layer_list)):
-        left_sig = (
-            getattr(left_layer, "layer_type", None),
-            getattr(left_layer, "func_name", None),
-            len(getattr(left_layer, "parents", ()) or ()),
-            bool(getattr(left_layer, "is_output", False)),
-            bool(getattr(left_layer, "is_buffer", False)),
-        )
-        right_sig = (
-            getattr(right_layer, "layer_type", None),
-            getattr(right_layer, "func_name", None),
-            len(getattr(right_layer, "parents", ()) or ()),
-            bool(getattr(right_layer, "is_output", False)),
-            bool(getattr(right_layer, "is_buffer", False)),
-        )
-        if left_sig != right_sig:
+    for index, (left_layer, right_layer) in enumerate(zip(left._layer_list, right._layer_list)):
+        if _layer_signature(left_layer) != _layer_signature(right_layer):
             return (
                 f"first divergence at op index {index}: "
                 f"{getattr(left_layer, 'func_name', None)!r} vs "
                 f"{getattr(right_layer, 'func_name', None)!r}"
             )
-    if len(left.layer_list) != len(right.layer_list):
-        return f"op count changed: {len(left.layer_list)} vs {len(right.layer_list)}"
+    if len(left._layer_list) != len(right._layer_list):
+        return f"op count changed: {len(left._layer_list)} vs {len(right._layer_list)}"
     return None
 
 
@@ -947,7 +943,7 @@ def _warn_if_validation_trace_not_reproducible(
 
     # Read outside the guard below: a trace without its save options must fail
     # loudly, never read as an "unavailable" re-trace.
-    retrace_output_device = cast(OutputDeviceLiteral, first_trace.output_device)
+    retrace_output_device = cast(OutputDeviceLiteral, first_trace._options_output_device)
     retrace_save_budget = first_trace.save_budget
     second_trace: Trace | None = None
     try:
@@ -1004,8 +1000,8 @@ def _warn_if_validation_trace_not_reproducible(
                 extra={
                     "first_graph_hash": first_hash,
                     "retrace_graph_hash": second_hash,
-                    "first_op_count": len(first_trace.layer_list),
-                    "retrace_op_count": len(second_trace.layer_list),
+                    "first_op_count": len(first_trace._layer_list),
+                    "retrace_op_count": len(second_trace._layer_list),
                     "first_divergence": hint,
                 },
             ),
@@ -1015,8 +1011,8 @@ def _warn_if_validation_trace_not_reproducible(
                 message,
                 first_graph_hash=first_hash,
                 retrace_graph_hash=second_hash,
-                first_op_count=len(first_trace.layer_list),
-                retrace_op_count=len(second_trace.layer_list),
+                first_op_count=len(first_trace._layer_list),
+                retrace_op_count=len(second_trace._layer_list),
                 first_divergence=hint,
             ),
             stacklevel=2,
@@ -1239,7 +1235,6 @@ def _validate_forward_pass_torch(
     # contract as tl.trace -- a bound method of an nn.Module wraps into the
     # TL-authored synthetic root before the module-shaped preflights run;
     # other callables refuse typed (previously a bare AttributeError leak).
-    from ._errors import InvalidArgumentError
     from .backends.torch.bound_root import TLBoundMethodRoot, is_bound_method_of_module
 
     if not isinstance(model, nn.Module):
@@ -1380,8 +1375,7 @@ def _validate_forward_pass_torch(
                 _trace_observer,
                 {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
-        from ._errors import CaptureNotActiveError
-        from .backends.torch.ops import _walk_output_tensors_with_paths
+        from .backends.torch._ops_containers import _walk_output_tensors_with_paths
         from .validation._pristine import pristine_torch_oracle
 
         # R75-1: the phase-0 ground truth must observe through PRISTINE

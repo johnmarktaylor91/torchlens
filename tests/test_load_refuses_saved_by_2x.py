@@ -141,7 +141,7 @@ def test_live_intervention_spec_restamped_to_format_1_refuses_as_2x(tmp_path: Pa
         TinyReluAdd(),
         torch.randn(2, 3),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True, hooks={tl.func("relu"): tl.zero_ablate()}
+            replayable=True, hooks={tl.func("relu"): tl.zero_ablate()}
         ),
     )
     path = tmp_path / "restamped.tlspec"

@@ -8,11 +8,11 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._selection.selectors import output_at
 from torchlens.intervention.errors import (
     AmbiguousSiteError,
     SiteResolutionError,
 )
-from torchlens.intervention.selectors import output_at
 
 
 class _Phase2Block(torch.nn.Module):

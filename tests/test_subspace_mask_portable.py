@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens._selection_subspace import _basis_digest
+from torchlens._selection.subspace import _basis_digest
 from torchlens.intervention._subspace_projection import _mask_digest
 from torchlens.intervention.helpers import rebuild_builtin_helper
 
@@ -51,7 +51,7 @@ _B = torch.randn(4, generator=torch.Generator().manual_seed(5), dtype=torch.floa
 
 
 def _ready() -> Any:
-    return tl.trace(_MODEL, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(_MODEL, _X, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _mask(position: int = 3) -> torch.Tensor:
@@ -93,7 +93,7 @@ def test_one_position_subspace_edit_saves_portable_and_reapplies_bit_identically
     staged = session.push()
     loaded = _save_load(session, tmp_path / "one_position.tlspec")
     helper = loaded.hook_specs[0].helper
-    assert helper.helper_name == "subspace_edit" and helper.portability == "builtin"
+    assert helper.name == "subspace_edit" and helper.portability == "builtin"
     kwargs = dict(helper.kwargs)
     assert torch.equal(kwargs["mask"], _mask())
     assert kwargs["mask_sha256"] == _mask_digest(_mask())

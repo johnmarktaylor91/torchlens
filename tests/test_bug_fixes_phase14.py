@@ -391,10 +391,10 @@ def test_conditional_then_children_merge_across_multipass_layerlog() -> None:
         capture=tl.options.CaptureOptions(save_source_context=True),
         save="all",
     )
-    conditional_id = trace.conditional_records[0].id
+    conditional_id = trace.graph.conditional_records[0].id
     parent_layer = next(
         layer
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if conditional_id in layer.conditional_arm_children
         and "then" in layer.conditional_arm_children[conditional_id]
         and "else" in layer.conditional_arm_children[conditional_id]
@@ -415,7 +415,7 @@ def test_conditional_then_invariant_catches_derived_view_corruption() -> None:
         save="all",
     )
     parent_layer = next(
-        layer for layer in trace.layer_logs.values() if layer.conditional_then_children
+        layer for layer in trace._layer_logs.values() if layer.conditional_then_children
     )
     parent_layer.conditional_then_children = []
 

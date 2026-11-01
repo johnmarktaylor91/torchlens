@@ -32,7 +32,7 @@ def test_a_gpt2_small_circuit_runs_as_one_call_and_matches_plain_hooks(r1_loader
     model = copy.deepcopy(loaded["model"]).to(torch.float64).eval()
     model.set_attn_implementation("eager")
     clean_ids, corrupt_ids, *_ = _ioi_batch(loaded["tokenizer"], 2)
-    capture = tl.options.CaptureOptions(intervention_ready=True)
+    capture = tl.options.CaptureOptions(replayable=True)
     clean = tl.trace(model, clean_ids, capture=capture, save="all")
     corrupt_trace = tl.trace(model, corrupt_ids, capture=capture, save="all")
     try:

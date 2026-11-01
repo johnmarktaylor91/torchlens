@@ -1,4 +1,4 @@
-"""Graphviz construction helpers for ``tl._visualization.show_bundle_graph``.
+"""Graphviz construction helpers for ``torchlens._visualization.show_bundle_graph``.
 
 These walk a bundle's forward supergraph (and, when present, its backward
 graph) and add nodes, module clusters and edges to a Graphviz digraph. The
@@ -376,7 +376,7 @@ def _add_bundle_member_graph(
     node_ids = {name: f"member_{index}" for index, name in enumerate(bundle.names)}
     for name in bundle.names:
         member = bundle[name]
-        lines = [name, str(getattr(member, "model_class_name", "") or "")]
+        lines = [name, str(member._source_class_name or "")]
         lines.extend(notes.get(name, []))
         attrs = merge_node_style(base_node, node_styles, name, member)
         dot.node(node_ids[name], label="\n".join(line for line in lines if line), **attrs)
@@ -440,7 +440,7 @@ def bundle_header_label(
 
 @dataclass(frozen=True)
 class BundlePictureOptions:
-    """The checked ``tl._visualization.show_bundle_graph`` arguments the bundle picture needs."""
+    """The checked ``torchlens._visualization.show_bundle_graph`` arguments the bundle picture needs."""
 
     outpath: str
     vis_mode: str
@@ -457,7 +457,7 @@ class BundlePictureOptions:
 
 
 def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str | None:
-    """Build and render the bundle picture behind ``tl._visualization.show_bundle_graph``.
+    """Build and render the bundle picture behind ``torchlens._visualization.show_bundle_graph``.
 
     Arguments are documented on :func:`torchlens._visualization.show_bundle_graph`, which
     checks them first.

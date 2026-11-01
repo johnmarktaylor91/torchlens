@@ -1,6 +1,6 @@
 # bundle/ - Implementation Guide
 
-Single-module package (`__init__.py`) exporting `Bundle` and `AmbiguousLabelError`
+Package whose `__init__.py` holds the `Bundle` record and thin methods that delegate to the functional sibling modules (`_labels`, `_members`, `_deltas`, `_comparisons`, `_relation_carriage`, `_token_spans`, `_draw`, ...), exporting `Bundle` and `AmbiguousLabelError`
 (`__all__` at the bottom of the file).
 
 - `Bundle` is a named collection of aligned Traces for cross-run comparison,

@@ -70,8 +70,6 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "save_raw_input",
     "batch_render",
     "output_transform",
-    "output_style",
-    "output_head",
     "save_transformed_output",
     "layer_visualizers",
     "save_visualizations",
@@ -88,7 +86,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "compute_input_output_distances",
     "detach_saved_activations",
     "recurrence_detection",
-    "intervention_ready",
+    "replayable",
     "capture_container_structure",
     "hooks",
     "unwrap_when_done",
@@ -164,7 +162,6 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "size_by",
     "size_scale",
     "stack_by",
-    "animate",
     "show_redundant_args",
     "font_size",
     "dpi",
@@ -198,8 +195,6 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "save_raw_input": "save_raw_input",
     "batch_render": "batch_render",
     "output_transform": "output_transform",
-    "output_style": "output_style",
-    "output_head": "output_head",
     "save_transformed_output": "save_transformed_output",
     "layer_visualizers": "layer_visualizers",
     "save_visualizations": "save_visualizations",
@@ -216,7 +211,7 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "compute_input_output_distances": "compute_input_output_distances",
     "detach_saved_activations": "detach_saved_activations",
     "recurrence_detection": "recurrence_detection",
-    "intervention_ready": "intervention_ready",
+    "replayable": "replayable",
     "capture_container_structure": "capture_container_structure",
     "hooks": "hooks",
     "unwrap_when_done": "unwrap_when_done",
@@ -392,10 +387,6 @@ class CaptureOptions:
             ``"shape_only"``.
         output_transform:
             Optional callable applied once to the model output after ``model.forward``.
-        output_style:
-            Optional semantic output decode style.
-        output_head:
-            Optional live-output head to decode.
         save_raw_output:
             Raw model-output save policy for portable bundles. ``"small"`` stores a
             bounded representation, ``True`` stores the full object, and ``False``
@@ -452,7 +443,7 @@ class CaptureOptions:
             multiplier matters (R33).
         recurrence_detection:
             Whether repeated graph patterns are detected during postprocess.
-        intervention_ready:
+        replayable:
             Whether replay-template metadata is captured for intervention APIs.
         capture_container_structure:
             Whether to persist input and output container structure without
@@ -469,7 +460,7 @@ class CaptureOptions:
             Whether capture wraps the user forward in ``torch.no_grad()``. When
             omitted, a capture entered under ``torch.no_grad()`` or
             ``torch.inference_mode()`` implies ``True`` unless ``backward_ready``,
-            ``save_grads`` or ``intervention_ready`` asks for a backward; the
+            ``save_grads`` or ``replayable`` asks for a backward; the
             Trace reports the effective value. The implied value is cleared when
             the forward re-enables grad (``torch.enable_grad()`` inside it) and an
             output carries autograd history.
@@ -535,13 +526,13 @@ class CaptureOptions:
             it actually logs.
         measure_python_peak_memory:
             Whether the host-side forward-pass peak recorded in
-            ``Trace.forward_peak_memory`` additionally includes a ``tracemalloc``
+            ``Trace.cost.forward_peak_memory`` additionally includes a ``tracemalloc``
             Python-allocation peak. On CPU it adds to the peak measured under
             ``measure_host_peak_memory=True``; without that opt-in the CPU peak is
             ``None`` and this probe fills only the peak pair's ``live`` value. A
             measured CPU peak of 0 (a model too small to move the coarse-grained
             resident counters) is recorded as ``None`` with
-            ``Trace.forward_peak_memory_reason`` naming this option. Enabling it installs CPython's allocator hook
+            ``Trace.cost.forward_peak_memory_reason`` naming this option. Enabling it installs CPython's allocator hook
             for the duration of the forward pass, which is precise for small models
             but taxes every traced operation (measured at 1.7x-2.5x total capture
             time on torchvision CNNs and ViTs), so it is opt-in. CUDA captures
@@ -606,8 +597,8 @@ class CaptureOptions:
             injected-op records served by ``Trace.injected_ops`` / ``Trace.model_ops``
             (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
         measure_host_peak_memory:
-            Whether CPU captures measure ``Trace.forward_peak_memory`` and
-            ``Trace.backward_peak_memory`` (a session-time knob).
+            Whether CPU captures measure ``Trace.cost.forward_peak_memory`` and
+            ``Trace.cost.backward_peak_memory`` (a session-time knob).
             Measuring needs a per-bracket reset of the process-wide resident high-water
             mark (Linux ``VmHWM``), which also resets the caller's own ``VmHWM`` and
             ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
@@ -660,8 +651,6 @@ class CaptureOptions:
     save_raw_input: str | bool = "small"
     batch_render: str = "auto"
     output_transform: Callable[[Any], Any] | None = None
-    output_style: str | None = None
-    output_head: str | None = None
     save_transformed_output: str | bool = "small"
     layer_visualizers: Mapping[Any, Callable[..., Any]] | None = None
     save_visualizations: bool = False
@@ -678,7 +667,7 @@ class CaptureOptions:
     compute_input_output_distances: bool = True
     detach_saved_activations: bool = False
     recurrence_detection: bool = True
-    intervention_ready: bool = False
+    replayable: bool = False
     capture_container_structure: bool = False
     hooks: Any | None = None
     unwrap_when_done: bool = False
@@ -723,8 +712,6 @@ class CaptureOptions:
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
-        output_style: str | None | MissingType = MISSING,
-        output_head: str | None | MissingType = MISSING,
         save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: Mapping[Any, Callable[..., Any]] | None | MissingType = MISSING,
         save_visualizations: bool | MissingType = MISSING,
@@ -741,7 +728,7 @@ class CaptureOptions:
         compute_input_output_distances: bool | MissingType = MISSING,
         detach_saved_activations: bool | MissingType = MISSING,
         recurrence_detection: bool | MissingType = MISSING,
-        intervention_ready: bool | MissingType = MISSING,
+        replayable: bool | MissingType = MISSING,
         capture_container_structure: bool | MissingType = MISSING,
         hooks: Any | MissingType = MISSING,
         unwrap_when_done: bool | MissingType = MISSING,
@@ -796,12 +783,6 @@ class CaptureOptions:
             "output_transform": _resolve_option_value(
                 "output_transform", output_transform, None, specified_fields
             ),
-            "output_style": _resolve_option_value(
-                "output_style", output_style, None, specified_fields
-            ),
-            "output_head": _resolve_option_value(
-                "output_head", output_head, None, specified_fields
-            ),
             "save_transformed_output": _resolve_option_value(
                 "save_transformed_output", save_transformed_output, "small", specified_fields
             ),
@@ -846,9 +827,7 @@ class CaptureOptions:
             "recurrence_detection": _resolve_option_value(
                 "recurrence_detection", recurrence_detection, True, specified_fields
             ),
-            "intervention_ready": _resolve_option_value(
-                "intervention_ready", intervention_ready, False, specified_fields
-            ),
+            "replayable": _resolve_option_value("replayable", replayable, False, specified_fields),
             "capture_container_structure": _resolve_option_value(
                 "capture_container_structure",
                 capture_container_structure,
@@ -1086,6 +1065,7 @@ _REMOVED_VISUALIZATION_OPTION_MEMBERS: dict[str, str] = {
     "max_module_depth": "use VisualizationOptions.depth -- the max_module_depth alias was removed",
     "layout_engine": "use VisualizationOptions.layout -- the layout_engine alias was removed",
     "node_mode": "use VisualizationOptions.node_style -- the node_mode alias was removed",
+    "animate": "use trace.animate(site) -- the animation is its own door, not a draw keyword",
 }
 
 
@@ -1175,9 +1155,6 @@ class VisualizationOptions:
         Optional Graphviz font size.
     dpi:
         Optional Graphviz output DPI.
-    animate:
-        A site label, pass-qualified label or record: the picture is the HTML
-        animation of the repeated ops at that site (default ``None``).
     order_siblings:
         Whether Graphviz ``dot`` renders should verify and apply execution-order
         placement for true parallel siblings.
@@ -1220,7 +1197,6 @@ class VisualizationOptions:
     size_by: str | Callable[[Any], Any] | None = None
     size_scale: str | None = None
     stack_by: str | bool | Callable[[Any], Any] | None = None
-    animate: Any = None
     show_redundant_args: bool = False
     font_size: int | None = None
     dpi: int | None = None
@@ -1262,7 +1238,6 @@ class VisualizationOptions:
         size_by: str | Callable[[Any], Any] | None | MissingType = MISSING,
         size_scale: str | None | MissingType = MISSING,
         stack_by: str | bool | Callable[[Any], Any] | None | MissingType = MISSING,
-        animate: Any | MissingType = MISSING,
         show_redundant_args: bool | MissingType = MISSING,
         font_size: int | None | MissingType = MISSING,
         dpi: int | None | MissingType = MISSING,
@@ -1346,7 +1321,6 @@ class VisualizationOptions:
             ),
             "font_size": _resolve_option_value("font_size", font_size, None, specified_fields),
             "dpi": _resolve_option_value("dpi", dpi, None, specified_fields),
-            "animate": _resolve_option_value("animate", animate, None, specified_fields),
             "order_siblings": _resolve_option_value(
                 "order_siblings", order_siblings, True, specified_fields
             ),
@@ -1703,9 +1677,12 @@ def to_disk(
     Parameters
     ----------
     path:
-        Destination bundle directory. The path must not already exist.
+        Destination bundle directory; it must not exist yet (``bundle_save_failed``).
     retain_in_memory:
-        Whether streamed payloads should also remain as RAM copies.
+        Whether streamed payloads also remain as RAM copies. The model output the forward
+        returns stays in memory either way (the output op's payload may alias it). A streamed
+        trace does not run: ``trace.run(...)`` refuses ``trace_option_unsupported`` (a run would
+        re-capture into RAM while the bundle at ``path`` kept the first capture); capture again.
     include_custom_attributes:
         Whether harvested module attributes are persisted verbatim in the
         streamed bundle (the ``Trace.save`` opt-out, mirrored for streaming).
@@ -1713,27 +1690,24 @@ def to_disk(
         Whether captured pre-forward buffer values are persisted in the
         streamed bundle (the ``Trace.save`` opt-out, mirrored for streaming).
     async_writes:
-        Whether ``trace(..., storage=...)`` blob writes overlap capture on a
-        bounded single-worker pipeline instead of pausing the forward for
-        each write (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI
-        sprint). Tri-state: ``None`` (default) means async for ``trace``
-        captures and synchronous for ``tl.record`` streaming; ``False``
-        forces synchronous writes; ``True`` requires the async pipeline and
-        refuses typed where it cannot be honored (``tl.record``). Writes
-        land in submission order, a failed write raises
-        ``ArtifactError`` and marks the bundle PARTIAL, and finalization
-        waits for every pending write before the bundle publishes.
+        Whether ``trace(..., storage=...)`` blob writes overlap capture on a bounded
+        single-worker pipeline instead of pausing the forward for each write
+        (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI sprint). Tri-state:
+        ``None`` (default) means async for ``trace`` captures and synchronous for
+        ``tl.record`` streaming; ``False`` forces synchronous writes; ``True`` requires the
+        async pipeline and refuses typed where it cannot be honored (``tl.record``). Writes
+        land in submission order, a failed write raises ``ArtifactError`` and marks the
+        bundle PARTIAL, and finalization waits for every pending write before the bundle
+        publishes.
     max_pending_bytes:
-        Pending snapshot byte budget for the async pipeline (``None`` uses
-        the 256 MiB default). Once pending writes hold this many bytes,
-        capture blocks until the disk catches up, bounding the RAM the
-        deferred writes may occupy.
+        Pending snapshot byte budget for the async pipeline (``None`` uses the
+        256 MiB default); once pending writes hold this many bytes, capture blocks
+        until the disk catches up, bounding the RAM the deferred writes may occupy.
 
     Returns
     -------
     StorageOptions
-        Storage options suitable for ``trace(..., storage=...)`` and
-        ``record(..., streaming=...)``.
+        Storage options for ``trace(..., storage=...)`` and ``record(..., streaming=...)``.
     """
 
     return StorageOptions(

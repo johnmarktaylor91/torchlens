@@ -46,7 +46,7 @@ def test_set_selector_returns_every_match_as_a_selection(trace: tl.Trace) -> Non
 
 def test_set_selector_is_never_capped(trace: tl.Trace) -> None:
     everything = trace[tl.where(lambda op: True)]
-    assert len(everything) == len(trace.layer_list)
+    assert len(everything) == len(trace._layer_list)
 
 
 def test_set_selector_with_no_match_is_an_empty_selection(trace: tl.Trace) -> None:
@@ -61,7 +61,7 @@ def test_selection_labels_slice_and_rows(trace: tl.Trace) -> None:
     assert len(selection.labels) == 2
     for label, row in zip(selection.labels, selection, strict=True):
         record = trace[label]
-        assert (record.layer_label, record.pass_index) == row.key
+        assert (record.layer_label, record.pass_number) == row.key
     head = selection[:1]
     assert isinstance(head, tl.Selection)
     assert len(head) == 1

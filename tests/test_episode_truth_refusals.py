@@ -166,7 +166,7 @@ def _assert_settlement_refusal_keeps_product(excinfo: pytest.ExceptionInfo) -> N
     partial = getattr(excinfo.value, "partial_log", None)
     assert isinstance(partial, PartialTrace)
     assert partial.trace is not None
-    assert len(partial.trace.layer_list) > 0
+    assert len(partial.trace._layer_list) > 0
     recovered = from_failed_capture(excinfo.value)
     assert recovered is partial
 
@@ -243,7 +243,7 @@ def test_prompt_plus_completion_matches_emitted_only_column():
 
 
 def test_capture_kind_and_public_step_access():
-    """Discoverability seam: Trace.capture_kind and Trace.episode."""
+    """Discoverability seam: Trace.provenance.kind and Trace.episode."""
 
     model = _Greedy()
     episode_trace = tl.trace(
@@ -251,7 +251,7 @@ def test_capture_kind_and_public_step_access():
         torch.tensor([[1]]),
         episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
     )
-    assert episode_trace.capture_kind == "episode"
+    assert episode_trace.provenance.kind == "episode"
     ledger = episode_trace.episode
     assert ledger is not None
     assert ledger.steps_completed == N_STEPS
@@ -260,9 +260,9 @@ def test_capture_kind_and_public_step_access():
     assert ledger.header.stepped_module == "step"
 
     plain_trace = tl.trace(model, torch.tensor([[1]]))
-    assert plain_trace.capture_kind == "plain"
+    assert plain_trace.provenance.kind == "plain"
     assert plain_trace.episode is None
 
     product = episode_trace.run(inputs=torch.tensor([[9]]))
-    assert product.trace.capture_kind == "plain"
+    assert product.trace.provenance.kind == "plain"
     assert product.trace.episode is None

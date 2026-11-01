@@ -11,11 +11,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._postprocess as postprocess_module
+import torchlens._postprocess.graph_traversal as graph_traversal_module
 from torchlens import trace as trace_fn
 from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError, streaming as streaming_module
 from torchlens._io.manifest import Manifest
+from torchlens._record_type import record_type
 from torchlens.errors import ArgumentConflictError, UserTransformError
 from torchlens.io import cleanup_tmp, detect_tlspec_format
 from torchlens.validation import validate_tlspec
@@ -78,7 +79,7 @@ def _saved_layers(trace: Trace) -> list[Any]:
         Saved layer-pass entries.
     """
 
-    return [layer for layer in trace.layer_list if layer.has_saved_activation]
+    return [layer for layer in trace._layer_list if layer.has_saved_activation]
 
 
 def _tmp_dirs_for(bundle_path: Path) -> list[Path]:
@@ -110,7 +111,7 @@ def test_streaming_writes_blobs_before_postprocess(
 
     bundle_path = tmp_path / "stream_bundle.tl"
     observed: dict[str, object] = {}
-    original_add_output_layers = postprocess_module._add_output_layers
+    original_add_output_layers = graph_traversal_module._add_output_layers
 
     def _capturing_add_output_layers(
         self: Trace,
@@ -126,7 +127,7 @@ def test_streaming_writes_blobs_before_postprocess(
             self, output_tensors, output_tensor_addresses, output_parent_labels
         )
 
-    monkeypatch.setattr(postprocess_module, "_add_output_layers", _capturing_add_output_layers)
+    monkeypatch.setattr(graph_traversal_module, "_add_output_layers", _capturing_add_output_layers)
 
     model, inputs = _make_streaming_model()
     trace_fn(
@@ -452,7 +453,7 @@ def test_selective_streaming_save_writes_selected_payloads(tmp_path: Path) -> No
     )
 
     saved = _saved_layers(trace)
-    saved_types = {layer.layer_type for layer in saved}
+    saved_types = {record_type(layer) for layer in saved}
     assert bundle_path.exists()
     assert "linear" in saved_types
     assert saved_types <= {"linear", "output"}
@@ -543,7 +544,7 @@ def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -
 
     loaded = tl.load(bundle_path)
     assert isinstance(loaded, Trace)
-    assert loaded.num_ops == trace.num_ops
+    assert loaded._num_ops == trace._num_ops
 
 
 class _AttrStreamingModel(nn.Module):
@@ -610,3 +611,37 @@ def test_streaming_bundle_discloses_custom_attributes_channel(tmp_path: Path) ->
     assert disclosure["included"] is True
     assert disclosure["module_count"] >= 1
     assert "api_token" in disclosure["top_level_keys"]
+
+
+class _OrphanThenOutputModel(nn.Module):
+    """Stream a disconnected op chain that postprocess prunes as an orphan."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the model under test."""
+
+        torch.ones(2) * 3  # computed and streamed, connected to neither input nor output
+        return x * 2
+
+
+def test_streamed_bundle_blob_ids_never_alias_an_orphan_shifted_stream(tmp_path: Path) -> None:
+    """Save-time blob ids start past the capture-time stream ids.
+
+    An op streamed during capture and then pruned as an orphan leaves the save-time
+    blob numbering behind the stream's, so an output row (never streamed during
+    capture) used to take an id the stream had already written. Staging skips an
+    existing id, so the output silently pointed at the orphan's payload.
+    """
+
+    model = _OrphanThenOutputModel()
+    x = torch.rand(2, 3)
+    expected = model(x)
+    bundle_path = tmp_path / "orphan_stream.tlspec"
+    trace = tl.trace(model, x, storage=tl.to_disk(bundle_path))
+
+    output_op = trace.output_ops[0]
+    assert tuple(output_op.materialize_out().shape) == (2, 3)
+    assert torch.equal(output_op.materialize_out(), expected)
+    refs = [op.out_ref.blob_id for op in trace.ops if op.out_ref is not None]
+    assert len(refs) == len(set(refs))
+    loaded = tl.load(bundle_path)
+    assert torch.equal(loaded.output_ops[0].materialize_out(), expected)

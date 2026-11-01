@@ -60,6 +60,8 @@ here but exported from `tl.report`.
   `GraphBreak` records correlated back to trace op locations.
 - Snapshots and restores model state around its probe run; typed failures are
   `GraphBreaksUnavailableError` / `GraphBreaksNormalizationError`.
+- `_dynamo_explain_shapes.py` normalizes the version-dependent shapes of
+  `torch._dynamo.explain` results (pure, no torch access).
 
 ## _audit.py
 - `audit_trace(trace)` returns a `HealthReport` of `AuditFinding`s; accepts a

@@ -59,7 +59,7 @@ def cache_config_keys(user_funcs_path: Path | None = None) -> frozenset[str]:
     Parameters
     ----------
     user_funcs_path:
-        Source file holding the dict (default: shipped ``user_funcs.py``).
+        Source file holding the dict (default: shipped ``_capture/prepare/cache.py``).
 
     Returns
     -------
@@ -74,7 +74,9 @@ def cache_config_keys(user_funcs_path: Path | None = None) -> frozenset[str]:
     """
 
     path = (
-        user_funcs_path if user_funcs_path is not None else REPO_ROOT / "torchlens/_user_funcs.py"
+        user_funcs_path
+        if user_funcs_path is not None
+        else REPO_ROOT / "torchlens/_capture/prepare/cache.py"
     )
     tree = ast.parse(path.read_text())
     for node in ast.walk(tree):

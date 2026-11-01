@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import inspect
-import time
-import warnings
 from collections.abc import Iterator
-from contextlib import contextmanager, nullcontext, suppress
+from contextlib import contextmanager, suppress
 from types import SimpleNamespace
 from typing import Any
 
@@ -15,10 +13,14 @@ import torch
 from .. import _state
 from .._capture.arg_positions import _normalize_func_name
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
+from .._data_classes._trace_missing_attrs import is_live_trace
+from .._errors import InvalidArgumentError
 from .._ir.intervention import FireResult
+from .._record_type import record_type
 from .._state import pause_logging
 from .._utils.arg_handling import copy_arg_tree
 from ..backends.torch._tl import copy_replacement_meta
+from ._hooks_support import gradient_inner
 from ._module_boundary import (
     _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
     _peek_module_intervention_parent_labels as _peek_module_intervention_parent_labels,
@@ -27,13 +29,49 @@ from ._module_boundary import (
     _record_tensor_live_fire_results as _record_tensor_live_fire_results,
     _replace_tensor_outputs as _replace_tensor_outputs,
 )
+from ._runtime_gradient import (
+    _active_backward_pass_index,
+    _current_injection_rule,
+    _first_replaced_tuple_index,
+    _hook_display_name,
+    _hook_state,
+    _HookReentrancyGuard,
+    _live_run_ctx,
+    _next_gradient_call_index,
+    _record_backward_selector_fire,
+    _trace_backward_pass_index,
+)
+from ._runtime_probes import (
+    _apply_inplace_replacement_to_mutated_storage,
+    _content_probe_mutated,
+    _is_inplace_style_func_name,
+    _tensor_content_probe,
+    _tensor_version,
+    _tuple_content_probes,
+    _tuple_probes_mutated,
+    _tuple_versions,
+)
+from ._runtime_sites import (
+    _forward_site_label,
+    _helper_routes_inputs,
+    _hook_call_inputs_for_site,
+    _input_splice_module_scope,
+    _is_plain_module_selector,
+    _op_output_slot,
+    _selector_uses_only_provisional_fields,
+    _site_name,
+    _whole_call_site_view,
+)
+from .audit import build_fire_record
 from .errors import HookSignatureError, HookValueError
 from .hooks import (
     HookContext,
     NormalizedHookEntry,
+    _target_operands,
     live_backward_selector_matches,
     live_selector_matches_site,
     make_hook_context,
+    split_site_branches,
 )
 from .types import FireRecord
 
@@ -112,59 +150,6 @@ class _InterventionContextEntry:
 _CONTEXT_ENTRIES: list[_InterventionContextEntry] = []
 
 
-class _HookReentrancyGuard:
-    """Track recursive TorchLens hook execution depth in global state."""
-
-    def __init__(self) -> None:
-        """Initialise an inactive re-entrancy guard."""
-
-        self.depth = 0
-        self.active_log_id: int | None = None
-
-    @property
-    def active(self) -> bool:
-        """Return whether hook execution is currently active.
-
-        Returns
-        -------
-        bool
-            Whether at least one hook is on the call stack.
-        """
-
-        return self.depth > 0
-
-    def __enter__(self) -> _HookReentrancyGuard:
-        """Enter hook execution.
-
-        Returns
-        -------
-        _HookReentrancyGuard
-            This guard.
-        """
-
-        self.depth += 1
-        _state._hook_reentrancy_depth = self.depth
-        return self
-
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
-        """Leave hook execution.
-
-        Parameters
-        ----------
-        exc_type:
-            Exception type, if any.
-        exc:
-            Exception value, if any.
-        traceback:
-            Exception traceback, if any.
-        """
-
-        self.depth = max(0, self.depth - 1)
-        _state._hook_reentrancy_depth = self.depth
-        if self.depth == 0:
-            self.active_log_id = None
-
-
 HOOK_REENTRANCY_GUARD = _HookReentrancyGuard()
 
 
@@ -198,7 +183,7 @@ def _execute_hook(
     HookSignatureError
         If the callable cannot be invoked with the hook signature.
     HookValueError
-        If the callable returns ``None`` or an incompatible value.
+        If the callable returns an incompatible value (``None`` keeps ``out``).
     """
 
     try:
@@ -232,7 +217,7 @@ def _execute_hook(
             InjectionAnchor(
                 host_label=str(site_get("label") or site_get("raw_label") or "unknown"),
                 host_site_key=site_get("site_key"),
-                host_pass=int(site_get("pass_index") or 1),
+                host_pass=int(site_get("pass_number") or 1),
                 spec_rule_id=rule_id,
                 firing_index=next_firing_index(injection_trace, rule_id),
             ),
@@ -261,11 +246,11 @@ _GRADIENT_CALLBACK_PARAMETERS = frozenset(
 def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookContext) -> None:
     """Refuse a gradient edit reached by a forward-only engine (replay, push).
 
-    A backward edit (``tl.zero_grad()``, ``tl.hook_grad(fn)``, ...) is normalized
-    to the gradient-tuple callback, whose ``grad_output``, ``grad_fn_handle``,
-    ``call_index`` and ``run_ctx`` arguments a forward value can never supply
-    (this runs only after the forward bind failed). The replay engine recomputes forward values only, so
-    such an edit has no gradient to edit there.
+    An autograd-node edit is normalized to the gradient-tuple callback, whose
+    ``grad_output``, ``grad_fn_handle``, ``call_index`` and ``run_ctx``
+    arguments a forward value can never supply (this runs only after the
+    forward bind failed). The replay engine recomputes forward values only,
+    so such an edit has no gradient to edit there.
 
     Raises
     ------
@@ -282,25 +267,24 @@ def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookConte
         return
     if not _GRADIENT_CALLBACK_PARAMETERS.issubset(parameters):
         return
-    from .._errors import InvalidArgumentError
-
     site = _site_name(hook_context)
     address = hook_context.op.get("address")
     module = str(address) if isinstance(address, str) and address else "<module>"
     verb = hook_context.name
-    engine = hook_context.run_ctx.get("engine") or "forward"
+    engine = hook_context.run_state.get("engine") or "forward"
     raise InvalidArgumentError(
         f"The gradient edit {verb!r} at site {site!r} reached the {engine} engine, "
         "which recomputes forward values only and never runs a backward pass, so "
         "the edit has no gradient to edit there. Nothing was changed. Remedy: "
         "capture the backward pass live and edit the gradient there: "
         f"trace = tl.trace(model, x, capture=tl.options.CaptureOptions("
-        f"backward_ready=True), intervene=tl.when(tl.module({module!r}), edit)); "
+        f"backward_ready=True), intervene=tl.when(tl.grad(tl.module({module!r})), edit)); "
         "trace.backward(loss)",
         code="replay_gradient_edit_unsupported",
         remedy=(
             "tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True), "
-            f"intervene=tl.when(tl.module({module!r}), edit)) then trace.backward(loss)"
+            f"intervene=tl.when(tl.grad(tl.module({module!r})), edit)) then "
+            "trace.backward(loss)"
         ),
         argument="value_or_hook",
         verb=verb,
@@ -337,7 +321,7 @@ def validate_hook_output(
     Raises
     ------
     HookValueError
-        If the return value is invalid.
+        If the return value is not ``None`` and not a compatible tensor.
     """
 
     # R67: these are user-payload refusals. Say "intervention replacement" (the
@@ -364,19 +348,18 @@ def validate_hook_output(
         )
 
     if result is None:
-        raise _payload_refusal("returned None", "torch.Tensor", None)
+        # A hook is ``fn(tensor, *, ctx) -> Tensor | None``: None leaves the
+        # value unchanged (an observer, or one callable on a mixed site).
+        return out
     if not isinstance(result, torch.Tensor):
         raise _payload_refusal("returned a non-tensor", "torch.Tensor", type(result).__name__)
-    if allow_shape_change:
-        result = _copy_reused_live_hook_result(out, result)
-        _copy_tl_replacement_attrs(out, result)
-        return result
-    if result.dtype != out.dtype:
-        raise _payload_refusal("has the wrong dtype", out.dtype, result.dtype)
-    if result.device != out.device:
-        raise _payload_refusal("is on the wrong device", out.device, result.device)
-    if tuple(result.shape) != tuple(out.shape):
-        raise _payload_refusal("has the wrong shape", tuple(out.shape), tuple(result.shape))
+    if not allow_shape_change:
+        if result.dtype != out.dtype:
+            raise _payload_refusal("has the wrong dtype", out.dtype, result.dtype)
+        if result.device != out.device:
+            raise _payload_refusal("is on the wrong device", out.device, result.device)
+        if tuple(result.shape) != tuple(out.shape):
+            raise _payload_refusal("has the wrong shape", tuple(out.shape), tuple(result.shape))
     result = _copy_reused_live_hook_result(out, result)
     _copy_tl_replacement_attrs(out, result)
     return result
@@ -479,7 +462,7 @@ def _apply_live_hooks(
     fire_results: list[FireResult] = []
     for entry in hook_plan:
         normalized_entry = _coerce_hook_entry(entry)
-        if normalized_entry.metadata.get("direction", "forward") != "forward":
+        if normalized_entry.signal != "forward":
             continue
         if normalized_entry.metadata.get("timing", "post") != "post":
             continue
@@ -505,16 +488,18 @@ def _apply_live_hooks(
             call_kwargs=call_kwargs,
             call_input_snapshots=call_input_snapshots,
         )
+        run_state = _live_run_ctx()
         hook_context = make_hook_context(
             name=_hook_display_name(normalized_entry),
             timing="post",
             signal="forward",
             op=site,
-            run_context=_live_run_ctx(),
+            state=_hook_state(run_state, getattr(site, "_layer_label_raw", None), normalized_entry),
+            run_context=run_state,
             args=hook_args or (current_out,),
             kwargs=hook_kwargs,
         )
-        previous_notes = tuple(hook_context.run_ctx.get("ledger_notes", ()))
+        previous_notes = tuple(hook_context.run_state.get("ledger_notes", ()))
         pre_hook_shape = tuple(current_out.shape)
         pre_hook_dtype = str(current_out.dtype)
         version_before = _tensor_version(current_out)
@@ -562,18 +547,16 @@ def _apply_live_hooks(
             site=site,
             container_path=container_path,
             previous_notes=previous_notes,
-            run_ctx=hook_context.run_ctx,
+            run_ctx=hook_context.run_state,
             replaced=replaced,
         )
         _append_active_spec_records([record])
+        metadata = normalized_entry.metadata
         fire_results.append(
             FireResult(
                 plan_id=str(
-                    normalized_entry.metadata.get(
-                        "plan_id",
-                        normalized_entry.metadata.get(
-                            "hook_id", _hook_display_name(normalized_entry)
-                        ),
+                    metadata.get(
+                        "plan_id", metadata.get("hook_id", _hook_display_name(normalized_entry))
                     )
                 ),
                 site_label=site._layer_label_raw,
@@ -596,175 +579,6 @@ def _apply_live_hooks(
     return current_out, tuple(fire_results)
 
 
-def _tensor_version(value: Any) -> int | None:
-    """Return a tensor's in-place mutation counter, or ``None`` when unreadable.
-
-    ``Tensor._version`` is the cheap autograd version counter; inference-mode
-    tensors (no counter) and exotic subclasses read as ``None``, which callers
-    treat as "no in-place evidence" rather than a refusal.
-    """
-
-    if not isinstance(value, torch.Tensor):
-        return None
-    try:
-        return int(value._version)
-    except Exception:
-        return None
-
-
-def _tuple_versions(values: tuple[torch.Tensor | None, ...]) -> tuple[int | None, ...]:
-    """Version counters for one grad tuple, ``None`` per non-tensor slot."""
-
-    return tuple(_tensor_version(value) for value in values)
-
-
-_CONTENT_PROBE_SAMPLES = 8
-"""Bounded per-fire sample width for the storage-alias mutation probe."""
-
-
-def _tensor_content_probe(value: Any) -> tuple[Any, ...] | None:
-    """Bounded strided content sample witnessing storage-alias mutations.
-
-    ``Tensor._version`` misses mutations routed through a DIFFERENT impl over
-    the same storage: ``.data`` mints a storage-sharing alias with a FRESH
-    version counter, so ``out.data.mul_(0); return out`` changed execution
-    with the counter witness reading "no mutation" (the incomplete half of
-    2289e56c). Identity returns therefore pair the counter with this O(1)
-    sample -- numel plus up to :data:`_CONTENT_PROBE_SAMPLES` evenly strided
-    elements. Wholesale in-place edits (zeroing, scaling) are caught; a
-    mutation confined to unsampled elements remains a documented residual,
-    with replay validation the fail-closed authority. ``None`` (non-tensor /
-    unreadable / exotic subclass) reads as "no evidence", never a refusal.
-    """
-
-    if not isinstance(value, torch.Tensor):
-        return None
-    from .._state import pause_logging
-
-    try:
-        with pause_logging():
-            numel = int(value.numel())
-            if numel == 0:
-                return (0, ())
-            flat = value.detach().reshape(-1)
-            count = min(_CONTENT_PROBE_SAMPLES, numel)
-            step = max(1, numel // count)
-            sample = flat[::step][:count].tolist()
-        return (numel, tuple(sample))
-    except Exception:
-        return None
-
-
-def _content_probe_mutated(before: tuple[Any, ...] | None, after: tuple[Any, ...] | None) -> bool:
-    """NaN-aware inequality between two content probes (missing = no evidence)."""
-
-    if before is None or after is None:
-        return False
-    numel_before, sample_before = before
-    numel_after, sample_after = after
-    if numel_before != numel_after or len(sample_before) != len(sample_after):
-        return True
-    for left, right in zip(sample_before, sample_after, strict=True):
-        if left != right and not (left != left and right != right):  # NaN == NaN here
-            return True
-    return False
-
-
-def _tuple_content_probes(
-    values: tuple[torch.Tensor | None, ...],
-) -> tuple[tuple[Any, ...] | None, ...]:
-    """Content probes for one grad tuple, ``None`` per non-tensor slot."""
-
-    return tuple(_tensor_content_probe(value) for value in values)
-
-
-def _tuple_probes_mutated(
-    before: tuple[tuple[Any, ...] | None, ...],
-    after: tuple[tuple[Any, ...] | None, ...],
-) -> bool:
-    """Whether any grad-tuple slot's content probe changed (NaN-aware)."""
-
-    if len(before) != len(after):
-        return True
-    return any(
-        _content_probe_mutated(left, right) for left, right in zip(before, after, strict=True)
-    )
-
-
-def _apply_inplace_replacement_to_mutated_storage(
-    result: torch.Tensor,
-    *,
-    current_out: torch.Tensor,
-    site: Any,
-    call_args: tuple[Any, ...],
-    call_kwargs: dict[str, Any] | None,
-) -> tuple[torch.Tensor, bool]:
-    """Make a live output replacement effective for discarded in-place returns.
-
-    Parameters
-    ----------
-    result:
-        Validated hook result.
-    current_out:
-        Output tensor supplied to the hook.
-    site:
-        Capture-time site metadata.
-    call_args:
-        Live positional inputs after the operation executed.
-    call_kwargs:
-        Live keyword inputs after the operation executed.
-
-    Returns
-    -------
-    tuple[torch.Tensor, bool]
-        Effective output and whether execution accepted the replacement.
-    """
-
-    if result is current_out:
-        return result, False
-    if not bool(getattr(site, "is_inplace", False)):
-        return result, True
-
-    func_name = str(getattr(site, "func_name", ""))
-    destination: torch.Tensor | None = None
-    if _is_inplace_style_func_name(func_name) and call_args:
-        candidate = call_args[0]
-        if isinstance(candidate, torch.Tensor):
-            destination = candidate
-    elif call_kwargs is not None:
-        candidate = call_kwargs.get("out")
-        if isinstance(candidate, torch.Tensor):
-            destination = candidate
-
-    safe_to_copy = destination is not None and (
-        tuple(destination.shape) == tuple(result.shape)
-        and destination.dtype == result.dtype
-        and destination.device == result.device
-    )
-    if safe_to_copy:
-        assert destination is not None
-        # A Parameter receiver is only legally written untracked (eager runs
-        # its in-place op under ``no_grad`` or on a frozen Parameter), so the
-        # replacement write is untracked too.
-        grad_ctx = torch.no_grad() if isinstance(destination, torch.nn.Parameter) else nullcontext()
-        try:
-            with pause_logging(), grad_ctx:
-                destination.copy_(result)
-        except Exception:
-            safe_to_copy = False
-    if safe_to_copy:
-        return result, True
-
-    warnings.warn(
-        f"Refused an output replacement for in-place operation {func_name!r} because "
-        "TorchLens could not safely copy it into the mutated tensor storage; execution "
-        "continues with the original output and the fire record is marked replaced=False.",
-        UserWarning,
-        stacklevel=3,
-    )
-    return current_out, False
-
-
 def _armed_injection_state(trace: Any) -> dict[str, Any] | None:
     """The trace's consolidated injection state when ``log_injections`` is armed."""
 
@@ -774,72 +588,6 @@ def _armed_injection_state(trace: Any) -> dict[str, Any] | None:
     if isinstance(state, dict) and state.get("armed", False):
         return state
     return None
-
-
-@contextmanager
-def _current_injection_rule(state: dict[str, Any] | None, rule_id: Any) -> Iterator[None]:
-    """Stamp ``rule_id`` as the armed injection state's ``current_rule`` for the body.
-
-    ``state`` is ``None`` when ``log_injections`` is not armed (or when the
-    caller has nothing to stamp); the body then runs with the recorder's own
-    ``current_rule`` untouched. Otherwise the stamp is cleared on exit, even
-    when the hook raises, so no later firing inherits a stale rule id.
-    """
-
-    if state is None:
-        yield
-        return
-    state["current_rule"] = rule_id
-    try:
-        yield
-    finally:
-        state["current_rule"] = None
-
-
-def _hook_call_inputs_for_site(
-    entry: NormalizedHookEntry,
-    *,
-    site: Any,
-    call_args: tuple[Any, ...],
-    call_kwargs: dict[str, Any] | None,
-    call_input_snapshots: tuple[tuple[Any, ...], dict[str, Any]] | None = None,
-) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Return the positional and keyword inputs for one hook fire.
-
-    Parameters
-    ----------
-    entry:
-        Normalized hook entry being executed.
-    site:
-        Live site proxy.
-    call_args:
-        Captured positional inputs.
-    call_kwargs:
-        Captured keyword inputs.
-    call_input_snapshots:
-        Optional pre-execution input snapshots captured for in-place ops.
-
-    Returns
-    -------
-    tuple[tuple[Any, ...], dict[str, Any]]
-        Hook positional and keyword inputs.
-    """
-
-    if not _helper_routes_inputs(entry.helper_spec):
-        return call_args, dict(call_kwargs or {})
-    if not getattr(site, "_tl_module_boundary", False):
-        if bool(getattr(site, "_tl_input_snapshot", False)) and call_input_snapshots is not None:
-            return call_input_snapshots
-        if bool(getattr(site, "is_inplace", False)):
-            warnings.warn(
-                "An input-routed intervention fired on an in-place operation without a "
-                "pre-mutation input snapshot; the intervention may be seeing post-mutation "
-                "inputs. This can occur with out= aliasing or a conservative pre-gate miss.",
-                UserWarning,
-                stacklevel=3,
-            )
-        return call_args, dict(call_kwargs or {})
-    return call_args, dict(call_kwargs or {})
 
 
 def snapshot_call_inputs_for_inplace_intervention_site(
@@ -886,27 +634,6 @@ def snapshot_call_inputs_for_inplace_intervention_site(
         }
 
 
-def _is_inplace_style_func_name(func_name: str) -> bool:
-    """Return whether ``func_name`` follows TorchLens' in-place op naming rules.
-
-    Parameters
-    ----------
-    func_name:
-        Decorated torch function name.
-
-    Returns
-    -------
-    bool
-        Whether the function is a candidate in-place op before execution.
-    """
-
-    return (
-        (func_name.endswith("_") and not func_name.startswith("__"))
-        or func_name.startswith("__i")
-        or func_name in {"__setitem__", "__delitem__"}
-    )
-
-
 def _has_matching_input_routed_intervention(
     *,
     func_name: str,
@@ -950,9 +677,12 @@ def _has_matching_input_routed_intervention(
         return False
     if not _helper_routes_inputs(hook):
         return False
-    if getattr(decision, "direction", "forward") not in {"forward", "both"}:
+    activation = [
+        target for universe, target in split_site_branches(selector) if universe == "activation"
+    ]
+    if not activation:
         return False
-    return _selector_may_match_provisional_site(selector, site)
+    return _selector_may_match_provisional_site(activation[0], site)
 
 
 def _entry_needs_input_snapshot(entry: NormalizedHookEntry, site: Any) -> bool:
@@ -971,7 +701,7 @@ def _entry_needs_input_snapshot(entry: NormalizedHookEntry, site: Any) -> bool:
         Whether the entry is a matching post-forward input-routed hook.
     """
 
-    if entry.metadata.get("direction", "forward") != "forward":
+    if entry.signal != "forward":
         return False
     if entry.metadata.get("timing", "post") != "post":
         return False
@@ -1010,58 +740,6 @@ def _selector_may_match_provisional_site(selector: Any, site: Any) -> bool:
     return not _selector_uses_only_provisional_fields(selector)
 
 
-def _selector_uses_only_provisional_fields(selector: Any) -> bool:
-    """Return whether a selector can be faithfully evaluated before execution.
-
-    Parameters
-    ----------
-    selector:
-        Selector-like target to inspect.
-
-    Returns
-    -------
-    bool
-        Whether a false pre-execution match result is definitive.
-    """
-
-    try:
-        normalized = getattr(selector, "selector_kind", None)
-        # A provisional op explicitly carries ``_tl_module_boundary=False`` and
-        # ``output_of_module_calls=()``. Therefore ``tl.module`` is definitively
-        # false here; its eventual true match is evaluated by the module-exit hook.
-        if normalized in {"func", "module", "in_module"}:
-            return True
-        if normalized in {"and", "or"}:
-            return all(
-                _selector_uses_only_provisional_fields(child) for child in selector.selectors
-            )
-        if normalized == "not":
-            return _selector_uses_only_provisional_fields(selector.selector)
-    except Exception:
-        return False
-    return False
-
-
-def _helper_routes_inputs(helper: Any | None) -> bool:
-    """Return whether a helper consumes call inputs from ``ctx.args``.
-
-    Parameters
-    ----------
-    helper:
-        Helper spec-like object.
-
-    Returns
-    -------
-    bool
-        Whether the helper is ``splice_module(input_route='in')``.
-    """
-
-    if helper is None or getattr(helper, "name", None) != "splice_module":
-        return False
-    metadata = dict(getattr(helper, "metadata", ()))
-    return metadata.get("input_route") == "in"
-
-
 def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> Any:
     """Build a selector-matchable site for a not-yet-executed in-place op.
 
@@ -1080,7 +758,7 @@ def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> 
         Minimal live-site proxy for pre-execution selector matching.
     """
 
-    from ..backends.torch.ops import _snapshot_exhaustive_module_stack
+    from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
 
     layer_type = _normalize_func_name(func_name)
     modules = tuple(_snapshot_exhaustive_module_stack(trace))
@@ -1110,102 +788,6 @@ def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> 
         call_index=1,
         lookup_keys=[],
     )
-
-
-def _input_splice_module_scope(site_target: Any, entry: NormalizedHookEntry) -> str | None:
-    """Return the module address for input-spliced module-scoped selectors.
-
-    Parameters
-    ----------
-    site_target:
-        Selector-like hook target.
-    entry:
-        Normalized hook entry.
-
-    Returns
-    -------
-    str | None
-        Module address when the entry is an input-spliced module scope.
-    """
-
-    helper = entry.helper_spec
-    if helper is None or helper.name != "splice_module":
-        return None
-    helper_metadata = dict(helper.metadata)
-    if helper_metadata.get("input_route") != "in":
-        return None
-    return _module_scope_address(site_target)
-
-
-def _module_scope_address(site_target: Any) -> str | None:
-    """Return a module address when a selector tree contains module scope.
-
-    Parameters
-    ----------
-    site_target:
-        Selector-like hook target.
-
-    Returns
-    -------
-    str | None
-        First module address found in the selector tree.
-    """
-
-    kind = getattr(site_target, "selector_kind", None)
-    if kind in {"module", "in_module"}:
-        value = getattr(site_target, "selector_value", None)
-        return None if value is None else str(value)
-    selectors = getattr(site_target, "selectors", None)
-    if selectors is not None:
-        for selector in selectors:
-            address = _module_scope_address(selector)
-            if address is not None:
-                return address
-    selector = getattr(site_target, "selector", None)
-    if selector is not None:
-        return _module_scope_address(selector)
-    return None
-
-
-def _whole_call_site_view(site: Any) -> Any:
-    """Return ``site`` as a whole-module-call site for input-splice matching.
-
-    ``splice_module(input_route="in")`` replaces a module call as a whole, so its
-    ``tl.in_module`` target fires at the boundary even when an op inside the
-    call produced the output; drop the boundary's inner-alias mark (which
-    otherwise keeps ``tl.in_module`` from re-firing there) for that match.
-
-    Parameters
-    ----------
-    site:
-        Live site proxy.
-
-    Returns
-    -------
-    Any
-        ``site`` itself, or a shallow copy without the inner-alias mark.
-    """
-
-    if not getattr(site, "_tl_boundary_inner_alias", False):
-        return site
-    return SimpleNamespace(**{**vars(site), "_tl_boundary_inner_alias": False})
-
-
-def _is_plain_module_selector(site_target: Any) -> bool:
-    """Return whether a selector is exactly a module boundary or containment selector.
-
-    Parameters
-    ----------
-    site_target:
-        Selector-like hook target.
-
-    Returns
-    -------
-    bool
-        Whether the selector is exactly ``tl.module`` or ``tl.in_module``.
-    """
-
-    return getattr(site_target, "selector_kind", None) in {"module", "in_module"}
 
 
 def _apply_live_backward_hooks(
@@ -1243,7 +825,7 @@ def _apply_live_backward_hooks(
     fire_records: list[FireRecord] = []
     for entry in hook_plan:
         normalized_entry = _coerce_hook_entry(entry)
-        if normalized_entry.metadata.get("direction", "forward") != "backward":
+        if normalized_entry.universe != "node":
             continue
         if not live_backward_selector_matches(
             normalized_entry.site_target,
@@ -1317,7 +899,7 @@ def _apply_live_backward_prehooks(
     fire_records: list[FireRecord] = []
     for entry in hook_plan:
         normalized_entry = _coerce_hook_entry(entry)
-        if normalized_entry.metadata.get("direction", "forward") != "backward":
+        if normalized_entry.universe != "node":
             continue
         if not live_backward_selector_matches(
             normalized_entry.site_target,
@@ -1359,23 +941,339 @@ def _apply_live_backward_prehooks(
     return (current if mutated else None), tuple(fire_records)
 
 
-def _record_backward_selector_fire(entry: NormalizedHookEntry) -> None:
-    """Increment the deferred zero-match ledger for one backward selector fire.
+def apply_live_gradient_hooks(
+    grad: torch.Tensor,
+    *,
+    trace: Any,
+    op: Any,
+) -> tuple[torch.Tensor, tuple[FireRecord, ...]]:
+    """Apply the gradient-universe edits addressed to one op's output gradient.
+
+    Called from the one TorchLens boundary that observes the gradient of a
+    forward op's output (the tensor hook or output-slot pre-hook that saves
+    ``Op.grad``), BEFORE the save, so the saved ``.grad`` is the edit chain's
+    final value (SPEC 3.7). The returned tensor is what autograd passes into
+    the op's backward function, so an edit here changes every gradient
+    upstream of the op (SPEC 1.1: output-gradient semantics, never the
+    node's ``grad_input``).
+
+    Parameters
+    ----------
+    grad:
+        Gradient of the op's output arriving at the boundary.
+    trace:
+        Trace whose published backward hook plan applies.
+    op:
+        Final forward op record whose output this gradient belongs to.
+
+    Returns
+    -------
+    tuple[torch.Tensor, tuple[FireRecord, ...]]
+        Edited gradient (``grad`` itself when nothing fired or changed it)
+        plus one fire record per matching entry, in declared order.
+    """
+
+    hook_plan = _state._active_hook_plan
+    if not hook_plan or _state.active_capture()[0] is not trace:
+        return grad, ()
+    pass_index = _trace_backward_pass_index(trace)
+    current = grad
+    fire_records: list[FireRecord] = []
+    candidates = _gradient_site_ops(trace, op)
+    for entry in hook_plan:
+        normalized_entry = _coerce_hook_entry(entry)
+        if normalized_entry.universe != "gradient":
+            continue
+        matched = next(
+            (
+                candidate
+                for candidate in candidates
+                if _gradient_entry_matches(trace, normalized_entry, candidate, pass_index)
+            ),
+            None,
+        )
+        if matched is None:
+            continue
+        current, record = _fire_gradient_entry(
+            normalized_entry, current, trace=trace, op=matched, pass_index=pass_index
+        )
+        fire_records.append(record)
+        _record_backward_selector_fire(normalized_entry)
+    _append_active_spec_records(fire_records)
+    return current, tuple(fire_records)
+
+
+def _fire_gradient_entry(
+    entry: NormalizedHookEntry,
+    grad: torch.Tensor,
+    *,
+    trace: Any,
+    op: Any,
+    pass_index: int | None,
+) -> tuple[torch.Tensor, FireRecord]:
+    """Run one gradient-universe hook on one output gradient and record it.
 
     Parameters
     ----------
     entry:
-        Normalized backward hook entry that matched the live GradFn site.
+        Matching gradient-universe hook entry.
+    grad:
+        Current gradient (after the earlier entries of the chain).
+    trace:
+        Trace being backwarded.
+    op:
+        Forward op whose output gradient this is.
+    pass_index:
+        Active one-based backward pass index.
+
+    Returns
+    -------
+    tuple[torch.Tensor, FireRecord]
+        Gradient after this hook and its fire record.
     """
 
-    if entry.metadata.get("created_by") != "intervene_backward_selector":
-        return
-    trace = _state._active_trace
-    if trace is None:
-        return
-    trace._tl_intervene_selector_fire_count = (
-        int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) + 1
+    site_label = _forward_site_label(op)
+    tuple_index = _op_output_slot(op)
+    run_state = _live_run_ctx()
+    call_index = _next_gradient_call_index(run_state, entry, site_label)
+    context = make_hook_context(
+        name=_hook_display_name(entry),
+        timing="post",
+        signal="backward",
+        op=op,
+        state=_hook_state(run_state, site_label, entry),
+        run_context=run_state,
+        args=(grad,),
+        kwargs={
+            "grad_kind": "grad_output",
+            "backward_pass_index": pass_index,
+            "tuple_index": tuple_index,
+            "call_index": call_index,
+        },
     )
+    result, replaced = _run_gradient_hook(entry, grad, context)
+    return result, _gradient_fire_record(entry, site_label, context, replaced=replaced)
+
+
+def _run_gradient_hook(
+    entry: NormalizedHookEntry, grad: torch.Tensor, context: HookContext
+) -> tuple[torch.Tensor, bool]:
+    """Call one gradient-universe hook and report whether it changed the gradient.
+
+    Parameters
+    ----------
+    entry:
+        Matching gradient-universe hook entry.
+    grad:
+        Current gradient (after the earlier entries of the chain).
+    context:
+        Hook context of this fire.
+
+    Returns
+    -------
+    tuple[torch.Tensor, bool]
+        Gradient after the hook, and whether the hook replaced the gradient or
+        mutated it in place.
+    """
+
+    version_before = _tensor_version(grad)
+    probe_before = _tensor_content_probe(grad)
+    with HOOK_REENTRANCY_GUARD, pause_logging():
+        result = entry.normalized_callable(grad, ctx=context)
+    if result is None:
+        result = grad
+    else:
+        result = validate_hook_output(
+            result,
+            grad,
+            hook_context=context,
+            allow_shape_change=False,
+        )
+    replaced = (
+        result is not grad
+        or (version_before is not None and _tensor_version(grad) != version_before)
+        or _content_probe_mutated(probe_before, _tensor_content_probe(grad))
+    )
+    return result, replaced
+
+
+def _gradient_fire_record(
+    entry: NormalizedHookEntry, site_label: str, context: HookContext, *, replaced: bool
+) -> FireRecord:
+    """Return the fire record of one gradient-universe hook fire.
+
+    Parameters
+    ----------
+    entry:
+        Gradient-universe hook entry that fired.
+    site_label:
+        Forward site label of the op whose output gradient fired.
+    context:
+        Hook context of the fire; its kwargs carry the pass, call and slot.
+    replaced:
+        Whether the hook replaced or mutated the gradient.
+
+    Returns
+    -------
+    FireRecord
+        Live backward fire record.
+    """
+
+    return build_fire_record(
+        target_label=site_label,
+        call_label=site_label,
+        func_call_id=None,
+        container_path=(),
+        engine="live",
+        edit=entry.helper_spec,
+        site_label=site_label,
+        timing="post",
+        signal="backward",
+        edit_name=_hook_display_name(entry),
+        backward_pass_number=context.kwargs["backward_pass_index"],
+        call_index=context.kwargs["call_index"],
+        grad_kind="grad_output",
+        tuple_index=context.kwargs["tuple_index"],
+        replaced=replaced,
+    )
+
+
+def _gradient_site_ops(trace: Any, op: Any) -> list[Any]:
+    """Return the forward records whose output gradient is this op's output gradient.
+
+    An output layer is an identity wrapper of its parent: its gradient is the
+    parent's output gradient (the read side stores it on both), so
+    ``tl.grad("output_1")`` addresses the same boundary.
+
+    Parameters
+    ----------
+    trace:
+        Trace being backwarded.
+    op:
+        Final forward op whose output gradient arrived.
+
+    Returns
+    -------
+    list[Any]
+        ``op`` followed by its output-layer children.
+    """
+
+    ops = [op]
+    if not getattr(op, "is_output_parent", False):
+        return ops
+    layer_dict = trace._layer_dict_all_keys if is_live_trace(trace) else {}
+    for child_label in getattr(op, "children", ()) or ():
+        child = layer_dict.get(child_label)
+        if child is not None and getattr(child, "is_output", False):
+            ops.append(child)
+    return ops
+
+
+def _gradient_entry_matches(
+    trace: Any,
+    entry: NormalizedHookEntry,
+    op: Any,
+    pass_index: int | None,
+) -> bool:
+    """Return whether a gradient-universe entry addresses this op in this pass.
+
+    The inner selector of ``tl.grad(inner)`` resolves in the activation
+    universe against the finished forward op (the same lifecycle a post-hoc
+    activation door uses); ``tl.in_backward_pass(n)`` joined to it filters the
+    pass. Per-op answers of the selector part are cached per trace.
+
+    Parameters
+    ----------
+    trace:
+        Trace being backwarded.
+    entry:
+        Gradient-universe hook entry.
+    op:
+        Final forward op record.
+    pass_index:
+        Active one-based backward pass index.
+
+    Returns
+    -------
+    bool
+        Whether the entry fires on this op's output gradient.
+    """
+
+    return bool(_gradient_target_matches(trace, entry.site_target, op, pass_index))
+
+
+def _gradient_target_matches(trace: Any, target: Any, op: Any, pass_index: int | None) -> bool:
+    """Evaluate one gradient-branch target tree against an op and a pass.
+
+    Parameters
+    ----------
+    trace:
+        Trace being backwarded (owns the per-op cache).
+    target:
+        ``tl.grad(inner)``, a pass qualifier, or an ``&``/``|`` of these.
+    op:
+        Final forward op record.
+    pass_index:
+        Active one-based backward pass index.
+
+    Returns
+    -------
+    bool
+        Whether the target matches.
+    """
+
+    inner = gradient_inner(target)
+    if inner is not None:
+        return _inner_selector_matches_op(inner, op)
+    # Live selectors and the stored TargetSpec a sticky rule is re-normalised
+    # from read the same way (a recipe stores ``tl.in_backward_pass(2)`` as
+    # kind ``"backward_pass"`` with the pass index as its value).
+    if getattr(target, "selector_kind", None) == "backward_pass":
+        return pass_index == getattr(target, "pass_index", target.selector_value)
+    operator, operands = _target_operands(target)
+    if operator == "not":
+        return not _gradient_target_matches(trace, operands[0], op, pass_index)
+    if operator is not None:
+        results = (_gradient_target_matches(trace, child, op, pass_index) for child in operands)
+        return all(results) if operator == "and" else any(results)
+    return False
+
+
+def _inner_selector_matches_op(inner: Any, op: Any) -> bool:
+    """Return whether a forward selector matches one finished op (cached per run).
+
+    Parameters
+    ----------
+    inner:
+        Forward-universe selector-like (a label string resolves as an exact
+        label, like every live hook target).
+    op:
+        Final forward op record.
+
+    Returns
+    -------
+    bool
+        Whether the selector matches the op.
+    """
+
+    from .._ir.selector_eval import normalize_selector_like
+    from .._selection.resolver import _resolve_unchecked
+
+    # Session-only cache in the run state (last_run is never persisted).
+    cache: dict[tuple[str, str], bool] = _live_run_ctx().setdefault(
+        "_tl_gradient_site_match_cache", {}
+    )
+    op_label = str(getattr(op, "label", ""))
+    # Keyed by the canonical selector repr, never id(): a recycled id of a
+    # dead selector must not inherit another selector's answers.
+    key = (repr(inner), op_label)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    selector = normalize_selector_like(inner, lifecycle="live")
+    matched = bool(_resolve_unchecked((op,), selector, strict=False))
+    cache[key] = matched
+    return matched
 
 
 def _validate_grad_tuple(
@@ -1526,10 +1424,9 @@ class _LiveSiteMinter:
             events = [records[label] for label in list(records)]
         journal = list(events)
         for record in journal[self._consumed :]:
+            modules = getattr(record, "modules", None) or ()
             cohort = self._cohort(
-                getattr(record, "modules", None) or (),
-                getattr(record, "layer_type", ""),
-                self._journal_output_slot(record),
+                modules, record_type(record, ""), self._journal_output_slot(record)
             )
             self._seen[cohort] = self._seen.get(cohort, 0) + 1
         self._consumed = len(journal)
@@ -1572,7 +1469,7 @@ def _stamp_live_site_identity(site: Any) -> None:
     if getattr(site, "site_key", None) or getattr(site, "_tl_module_boundary", False):
         return
     trace = _state._active_trace
-    if trace is None or getattr(trace, "capture_mode", None) != "exhaustive":
+    if trace is None or trace._options_mode != "exhaustive":
         return
     # The minter rides the session-only run context (last_run, FieldPolicy
     # DROP) rather than its own Trace attr: no schema/ownership row, and the
@@ -1588,59 +1485,11 @@ def _stamp_live_site_identity(site: Any) -> None:
         from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
 
         modules = _snapshot_exhaustive_module_stack(trace)
-    layer_type = getattr(site, "layer_type", "") or ""
-    site.site_key = minter.peek(modules, layer_type, minter.output_slot(site))
-    if getattr(site, "pass_index", None) is None:
+    site.site_key = minter.peek(modules, record_type(site, "") or "", minter.output_slot(site))
+    if getattr(site, "pass_number", None) is None:
         innermost = modules[-1] if modules else None
-        pass_index = innermost[1] if isinstance(innermost, tuple) and len(innermost) == 2 else 1
-        site.pass_index = int(pass_index) if isinstance(pass_index, int) else 1
-
-
-def _live_run_ctx() -> dict[str, Any]:
-    """Return the shared run context for the active model log.
-
-    Returns
-    -------
-    dict[str, Any]
-        Mutable context shared by hooks in this live run.
-    """
-
-    trace = _state._active_trace
-    if trace is None:
-        return {}
-    run_ctx = getattr(trace, "last_run", None)
-    if run_ctx is None:
-        run_ctx = {"engine": "live", "timestamp": time.monotonic()}
-        trace.last_run = run_ctx
-    else:
-        run_ctx.setdefault("engine", "live")
-        run_ctx.setdefault("timestamp", time.monotonic())
-    # Seed law D5 (F02): the capture's recorded seed rides the run context so
-    # seed='auto' stochastic edits can canonicalize their base seed without
-    # ever touching ambient RNG.
-    trace_seed = getattr(trace, "random_seed", None)
-    if trace_seed is not None:
-        run_ctx.setdefault("trace_random_seed", trace_seed)
-    return run_ctx
-
-
-def _hook_display_name(entry: NormalizedHookEntry) -> str:
-    """Return a stable display name for a hook entry.
-
-    Parameters
-    ----------
-    entry:
-        Normalized hook entry.
-
-    Returns
-    -------
-    str
-        Helper name or callable qualname.
-    """
-
-    if entry.helper_spec is not None:
-        return entry.helper_spec.name
-    return getattr(entry.normalized_callable, "__qualname__", "user_hook")
+        pass_number = innermost[1] if isinstance(innermost, tuple) and len(innermost) == 2 else 1
+        site.pass_number = int(pass_number) if isinstance(pass_number, int) else 1
 
 
 def _build_live_fire_record(
@@ -1675,19 +1524,17 @@ def _build_live_fire_record(
         Immutable fire record appended to the eventual layer pass.
     """
 
-    from .audit import build_fire_record
-
     return build_fire_record(
         target_label=site._layer_label_raw,
         call_label=site._layer_label_raw,
         func_call_id=site.func_call_id,
         container_path=container_path,
         engine="live",
-        helper=entry.helper_spec,
+        edit=entry.helper_spec,
         site_label=site._layer_label_raw,
         timing="post",
-        direction="forward",
-        helper_name=_hook_display_name(entry),
+        signal="forward",
+        edit_name=_hook_display_name(entry),
         run_ctx=run_ctx,
         previous_notes=previous_notes,
         replaced=replaced,
@@ -1734,8 +1581,6 @@ def _build_live_backward_fire_record(
         Immutable backward fire record.
     """
 
-    from .audit import build_fire_record
-
     tuple_index = _first_replaced_tuple_index(previous, current)
     label = str(getattr(grad_fn_handle, "label", ""))
     pass_index = _active_backward_pass_index(grad_fn_handle)
@@ -1745,63 +1590,17 @@ def _build_live_backward_fire_record(
         func_call_id=None,
         container_path=(),
         engine="live",
-        helper=entry.helper_spec,
+        edit=entry.helper_spec,
         site_label=label,
         timing=timing,  # type: ignore[arg-type]
-        direction="backward",
-        helper_name=_hook_display_name(entry),
-        backward_pass_index=pass_index,
+        signal="backward",
+        edit_name=_hook_display_name(entry),
+        backward_pass_number=pass_index,
         call_index=call_index,
         grad_kind=grad_kind,  # type: ignore[arg-type]
         tuple_index=tuple_index,
         replaced=tuple_index is not None or current is not previous or inplace_mutated,
     )
-
-
-def _first_replaced_tuple_index(
-    previous: tuple[torch.Tensor | None, ...],
-    current: tuple[torch.Tensor | None, ...],
-) -> int | None:
-    """Return the first tuple slot whose object identity changed.
-
-    Parameters
-    ----------
-    previous:
-        Tuple before helper execution.
-    current:
-        Tuple after helper execution.
-
-    Returns
-    -------
-    int | None
-        First changed slot index, or ``None`` when object identities match.
-    """
-
-    for index, (before, after) in enumerate(zip(previous, current, strict=False)):
-        if before is not after:
-            return index
-    return None
-
-
-def _active_backward_pass_index(grad_fn_handle: Any) -> int | None:
-    """Return the active trace backward pass index for a grad_fn handle.
-
-    Parameters
-    ----------
-    grad_fn_handle:
-        Runtime GradFn record or compatible test stub.
-
-    Returns
-    -------
-    int | None
-        Active one-based backward pass index, when available.
-    """
-
-    trace = getattr(grad_fn_handle, "trace", None)
-    if trace is None:
-        return None
-    value = getattr(trace, "_active_backward_pass_index", None)
-    return int(value) if isinstance(value, int) else None
 
 
 def _append_active_spec_records(records: list[FireRecord]) -> None:
@@ -1834,28 +1633,6 @@ def _append_active_spec_records(records: list[FireRecord]) -> None:
         spec.records.extend(records)
 
 
-def _site_name(hook_context: HookContext | None) -> str:
-    """Return a readable site name for hook diagnostics.
-
-    Parameters
-    ----------
-    hook_context:
-        Optional hook context.
-
-    Returns
-    -------
-    str
-        Layer label or ``"<unknown site>"``.
-    """
-
-    if hook_context is None:
-        return "<unknown site>"
-    layer_label = hook_context.op.get("layer_label")
-    if layer_label is None:
-        return "<unknown site>"
-    return str(layer_label)
-
-
 def do(trace: Any, *args: Any, **kwargs: Any) -> Any:
     """Apply a one-shot intervention operation to a model log.
 
@@ -1884,6 +1661,7 @@ __all__ = [
     "_apply_live_backward_hooks",
     "_apply_live_backward_prehooks",
     "_execute_hook",
+    "apply_live_gradient_hooks",
     "active_intervention_context",
     "do",
     "validate_hook_output",

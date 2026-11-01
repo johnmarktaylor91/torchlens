@@ -59,7 +59,7 @@ def _conv_endpoints(trace: object) -> tuple[object, object]:
         Source and target operations in execution order.
     """
 
-    convolutions = [op for op in trace.layer_list if op.func_name == "conv2d"]  # type: ignore[attr-defined]
+    convolutions = [op for op in trace._layer_list if op.func_name == "conv2d"]  # type: ignore[attr-defined]
     assert len(convolutions) == 2
     return convolutions[0], convolutions[1]
 
@@ -86,7 +86,7 @@ def test_unretained_layer_source_names_both_real_label_selectors() -> None:
     expected_recipe = (
         "tl.trace(model, x.requires_grad_(True), "
         'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"), '
-        f"save=tl.label({source.layer_label_short!r}) | tl.label({target.layer_label_short!r}))"
+        f"save=tl.label({source.short_layer_label!r}) | tl.label({target.short_layer_label!r}))"
     )
 
     with pytest.raises(
@@ -132,8 +132,8 @@ def test_reachable_but_none_layer_source_gradient_raises_typed_error() -> None:
         inputs,
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
-    source = next(op for op in trace.layer_list if op.is_input)
-    target = next(op for op in reversed(trace.layer_list) if not op.is_output)
+    source = next(op for op in trace._layer_list if op.is_input)
+    target = next(op for op in reversed(trace._layer_list) if not op.is_output)
 
     with pytest.raises(ReceptiveFieldUnavailableError, match="reachable.*autograd returned no"):
         gradient_for_unit(target, (0, 0), source=source)
@@ -144,7 +144,7 @@ def test_input_source_matches_existing_input_gradient() -> None:
 
     trace = _trace_chain()
     _, target = _conv_endpoints(trace)
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
 
     existing = gradient_for_unit(target, (0, 0, 2, 2), input_op=input_op, retain_graph=True)
     source_result = gradient_for_unit(target, (0, 0, 2, 2), source=input_op, retain_graph=True)

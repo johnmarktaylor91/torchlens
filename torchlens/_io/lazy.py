@@ -19,8 +19,8 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load, load_file
 
+from .._utils.hashing import sha256_file
 from . import ArtifactError, PayloadLoadHints
-from .manifest import sha256_of_file
 from .paths import resolve_bundle_blob_path
 from .payload_codec import materialize_transport_tensor
 
@@ -215,7 +215,7 @@ class LazyActivationRef:
             except OSError as exc:
                 raise ArtifactError(f"Failed to access blob at {blob_path}.") from exc
 
-            observed_sha256 = sha256_of_file(blob_path)
+            observed_sha256 = sha256_file(blob_path)
             if observed_sha256 != self.expected_sha256:
                 raise ArtifactError(
                     f"blob at {blob_path} sha256 mismatch; expected {self.expected_sha256} "

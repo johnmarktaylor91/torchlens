@@ -183,9 +183,9 @@ class SyntheticTrace:
             ``(address, call_index)``; omitted calls have no exit event.
         """
 
-        self.modules = SimpleNamespace(_pass_dict={call.call_label: call for call in call_logs})
+        self.modules = SimpleNamespace(_pass_dict={call.label: call for call in call_logs})
         self._layers = layers
-        self.layer_list = list(layers.values())
+        self._layer_list = list(layers.values())
         self._capture_events = SimpleNamespace(
             module_exit_events=[
                 SimpleNamespace(
@@ -300,7 +300,7 @@ def _synthetic_call(address: str, call_index: int, output_layers: list[str]) -> 
     return SimpleNamespace(
         address=address,
         call_index=call_index,
-        call_label=f"{address}:{call_index}",
+        label=f"{address}:{call_index}",
         output_layers=output_layers,
     )
 
@@ -967,6 +967,7 @@ def test_path_e_module_exports_expected_surface() -> None:
         skipped_no_grad_count=0,
         skipped_identity_output_count=0,
         skipped_root_module_count=0,
+        compared_no_grad_count=0,
         mismatched_count=0,
         unexpected_count=0,
         candidate_grad_count=1,

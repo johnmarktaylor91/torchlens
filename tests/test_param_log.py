@@ -145,8 +145,8 @@ class TestParamLogFields:
         assert isinstance(pl.num_calls, int)
         assert isinstance(pl.used_by_ops, list)
         assert isinstance(pl.used_by_layers, list)
-        assert isinstance(pl.num_uses_by_ops, int)
-        assert isinstance(pl.num_uses_by_layers, int)
+        assert isinstance(len(pl.used_by_ops), int)
+        assert isinstance(len(pl.used_by_layers), int)
         assert isinstance(pl.co_parent_params, list)
 
     def test_repr_contains_key_info(self):
@@ -221,7 +221,7 @@ class TestParamAccessorMH:
 
     def test_params_property_same_as_param_logs(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
-        assert mh.params is mh.param_logs
+        assert mh.params is mh._param_logs
 
 
 # ---------------------------------------------------------------------------
@@ -490,8 +490,8 @@ class TestGradientTracking:
             assert pl.has_grad is True
             assert pl.grad_shape == pl.shape
             assert pl.grad_dtype == pl.dtype
-            assert pl.gradient_memory > 0
-            assert len(str(pl.gradient_memory)) > 0
+            assert pl.grad_memory > 0
+            assert len(str(pl.grad_memory)) > 0
 
     def test_grad_frozen_params_no_grad(self):
         model = _make_frozen_first_layer()
@@ -714,7 +714,7 @@ class TestIntegration:
         # Verify all entries point to real layers
         for pl in mh.params:
             for label in pl.used_by_ops:
-                assert label in mh.layer_dict_all_keys
+                assert label in mh._layer_dict_all_keys
 
     def test_grad_tracking_recurrent(self, input_2d):
         model = example_models.RecurrentParamsSimple()
@@ -823,7 +823,7 @@ class TestParamContains:
     def test_int_contains(self):
         model = _SimpleLinear()
         mh = trace_fn(model, torch.randn(2, 10))
-        if mh.param_logs:
+        if mh._param_logs:
             assert 0 in mh.params
 
 
@@ -833,10 +833,10 @@ class TestParamRefCleared:
     def test_param_ref_cleared_after_cleanup(self):
         model = _SimpleLinear()
         mh = trace_fn(model, torch.randn(2, 10))
-        # Capture the ParamLog objects BEFORE cleanup: iterating ``mh.param_logs``
+        # Capture the ParamLog objects BEFORE cleanup: iterating ``mh._param_logs``
         # rehydrates ``_param_ref`` on access, so we must assert against the same
         # captured objects, not a fresh re-iteration (which would repopulate it).
-        param_logs = list(mh.param_logs)
+        param_logs = list(mh._param_logs)
         for pl in param_logs:
             assert pl._param_ref is not None
         mh.cleanup()

@@ -301,8 +301,7 @@ def _bundle_add_alternative(
 ) -> AlternativeReport:
     """Merge a re-run of the user's harness with some calls steered; report what changed.
 
-    Exposed as the dynamic method ``Bundle.add_alternative`` (spelling
-    documented-unstable).
+    The body of ``Bundle.add_alternative`` (spelling documented-unstable).
 
     Parameters
     ----------

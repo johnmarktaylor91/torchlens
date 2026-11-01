@@ -14,9 +14,17 @@ if TYPE_CHECKING:
 else:
     _TraceMixinBase = object
 from .._deprecations import MISSING, MissingType
-from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
+from .._errors import (
+    InvalidArgumentError,
+    KeywordConflictError,
+    PayloadUnavailableError,
+    RecordBindingError,
+)
 from .._runnable import DivergencePolicy, RunProvider, RunResult
+from ..errors import RunCapabilityUnavailableError, StateBindingError
 from ..options import ReplayOptions, merge_replay_options
+from ._staged_spec import _staged_user_entries
+from ._trace_pristine import derive_pristine
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
     _clear_entry_attributes,
@@ -48,7 +56,6 @@ def _refuse_loaded_backward_capture(trace: "Trace", entry_point: str) -> None:
     if not loaded_from_bundle:
         return
     from .._runnable import RunnableErrorCode
-    from ..errors import RunCapabilityUnavailableError
 
     raise RunCapabilityUnavailableError(
         f"{entry_point}() is unavailable on a bundle-loaded Trace: the loaded "
@@ -76,7 +83,7 @@ def _materialize_layer_mirrors_for_removed(
     mirroring — their reads are unaffected by the removal.
     """
 
-    layer_logs = trace.__dict__.get("layer_logs")
+    layer_logs = trace.__dict__.get("_layer_logs")
     if not layer_logs:
         return
     from .layer import _layer_rep_op, materialize_layer_mirrors
@@ -108,8 +115,8 @@ def _apply_run_save_selection(result: Any, selected: Any) -> Any:
         return result
     from .._capture.projectors import RefreshProjector
 
-    for layer in result.trace.layer_list:
-        if layer.layer_type in ("input", "output"):
+    for layer in result.trace._layer_list:
+        if layer.type in ("input", "output"):
             continue
         if layer.layer_label in selected:
             continue
@@ -131,7 +138,6 @@ def _refuse_state_compromised_live_run(trace: Any) -> None:
     compromised = getattr(runnable_state, "state_compromised", None)
     if compromised is None:
         return
-    from ..errors import StateBindingError
 
     raise StateBindingError(
         "A prior run() failed while RESTORING this trace's live model state "
@@ -272,7 +278,7 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
 
     if not bool(getattr(trace, "_loaded_from_bundle", False)):
         return False
-    backend = str(getattr(trace, "backend", "torch"))
+    backend = str(trace._provenance_backend)
     if backend == _MLX_VALIDATION_REPLAY_BACKEND:
         return True
     if backend == _JAX_VALIDATION_REPLAY_BACKEND:
@@ -294,7 +300,6 @@ def _refuse_stats_capture(trace: Any, purpose: str) -> None:
 
     if not is_stats_capture(trace):
         return
-    from .._errors import PayloadUnavailableError
 
     action = "validation" if purpose == "validation_entry" else "replay"
     raise PayloadUnavailableError(
@@ -329,8 +334,8 @@ class TraceValidationMixin(_TraceMixinBase):
             Forwarded unchanged to
             :func:`torchlens._capture.trace.save_new_outs`.
         """
+        from .._capture.finalize.settle import save_new_outs as _impl
         from .._capture.outcome import require_capture_capability
-        from .._capture.trace import save_new_outs as _impl
         from .._capture_state_helpers import unwrap_compiled_model
 
         # N3/N5: a live refresh re-drives the FULL native forward against the
@@ -404,7 +409,7 @@ class TraceValidationMixin(_TraceMixinBase):
         if bool(getattr(self, "_loaded_from_bundle", False)) and not status.is_available:
             setattr(self, "_validation_replay_status", status)
             return status
-        spec = get_backend_spec(getattr(self, "backend", "torch"))
+        spec = get_backend_spec(self._provenance_backend)
         validation_result = spec.validate_trace(
             self,
             ground_truth_output_tensors=ground_truth_output_tensors,
@@ -437,7 +442,7 @@ class TraceValidationMixin(_TraceMixinBase):
         cached_status = getattr(self, "_validation_replay_status", None)
         if isinstance(cached_status, ValidationStatus):
             return cached_status
-        backend = str(getattr(self, "backend", "torch"))
+        backend = str(self._provenance_backend)
         if _loaded_non_torch_validation_replay_unavailable(self):
             return ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=backend,
@@ -469,8 +474,6 @@ class TraceValidationMixin(_TraceMixinBase):
             or a non-torch backend), which means no evidence and is never a
             pristine reading; otherwise ``True``.
         """
-
-        from ._trace_pristine import derive_pristine
 
         return derive_pristine(self)
 
@@ -572,6 +575,11 @@ class TraceValidationMixin(_TraceMixinBase):
         inputs:
             Unified provider input tree. Supplying this keyword returns a
             transactional :class:`RunResult` and leaves this Trace unchanged.
+            A tuple or list spreads as positional arguments, as ``tl.trace``
+            binds ``input_args``, on every provider and with ``fast=True``
+            (on a live trace a one-parameter forward takes a multi-element
+            sequence whole); any other value is the single argument, and
+            ``{"args": [...], "kwargs": {...}}`` binds both.
         seed:
             Optional deterministic live refresh, random-state, and runtime RNG seed.
         fast:
@@ -627,6 +635,9 @@ class TraceValidationMixin(_TraceMixinBase):
             When no provider is available: an analysis-only loaded Trace, or a
             live Trace whose source model has been garbage-collected (see
             Notes).
+        InvalidArgumentError
+            ``trace_option_unsupported`` for a Trace captured with ``storage=tl.to_disk(...)``: a
+            run would re-capture every payload into RAM; capture again to a new path and run that.
 
         Notes
         -----
@@ -659,7 +670,7 @@ class TraceValidationMixin(_TraceMixinBase):
             # ``Generator.manual_seed`` rejects) and an int outside torch's
             # accepted long range (pybind overflow). The failed call is
             # transactional either way (global torch RNG untouched).
-            from .._runnable_state import validate_run_seed
+            from .._runnable.state import validate_run_seed
 
             validate_run_seed(seed)
         # R06: the settled-outcome gate is the FIRST authority on run(). The
@@ -671,7 +682,13 @@ class TraceValidationMixin(_TraceMixinBase):
         # classes. Pre-refuse only the statuses EVERY provider row refuses
         # (FAILED / ABORTED_NONFINITE / UNKNOWN); HALTED stays with the
         # provider-specific gates because the loaded-sparse row allows it.
-        from .._capture.outcome import CaptureStatus, outcome_for, require_capture_capability
+        from .._capture.outcome import (
+            CaptureStatus,
+            outcome_for,
+            refuse_streamed_trace_run,
+            require_capture_capability,
+        )
+        from .._runnable.execution import refuse_truncated_rerun, run_live_trace
 
         settled_outcome = outcome_for(self)
         if settled_outcome is None:
@@ -705,22 +722,8 @@ class TraceValidationMixin(_TraceMixinBase):
         from .._capture._episode_coupling import refuse_coupled_replay
 
         refuse_coupled_replay(self)
-        if self.__dict__.get("_run_truncation_skipped_raw_labels") is not None:
-            # L4 3.3.2: a truncated result cannot be re-run (any provider). The
-            # poison bit alone does NOT refuse a re-run -- the transaction's
-            # inherited-status leg would silently settle UNVERIFIABLE instead,
-            # which is exactly the silence the capability table forbids.
-            from .._runnable import RunnableErrorCode
-            from ..errors import RunCapabilityUnavailableError
-
-            raise RunCapabilityUnavailableError(
-                "This Trace is a TRUNCATED run product (until=): it covers only "
-                "the executed prefix, so re-running it would replay a cut "
-                "forward. Run the ORIGINAL source trace instead (with or "
-                "without until=).",
-                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                detection_stage="truncated_result_rerun",
-            )
+        refuse_streamed_trace_run(self)  # IO-8: a to_disk trace's payloads are its bundle
+        refuse_truncated_rerun(self)
         readiness = self._runnable.readiness
         loaded_provider = getattr(readiness, "provider", None)
         use_unified_provider = inputs is not MISSING or (
@@ -744,13 +747,7 @@ class TraceValidationMixin(_TraceMixinBase):
             # this trace's saved values (audit-recorded and propagated); their
             # inertness on a new-input run is the PendingValueEditsWarning
             # DISCLOSURE at the run door below, never a refusal.
-            staged_spec = getattr(self, "_intervention_spec", None)
-            staged_user_hooks = [
-                hook_spec
-                for hook_spec in getattr(staged_spec, "hook_specs", ())
-                if not (getattr(hook_spec, "metadata", None) or {}).get("selection_do_engine_owned")
-            ]
-            staged_value_specs = getattr(staged_spec, "target_value_specs", ())
+            staged_user_hooks, staged_value_specs = _staged_user_entries(self)
             # The guarded fast LIVE engine applies the staged spec at real
             # module boundaries (``_fast_live_steer``), so the gate's reason
             # does not hold there; loaded providers and the ordinary live
@@ -834,7 +831,6 @@ class TraceValidationMixin(_TraceMixinBase):
                 )
             if fast and save is not None:
                 from .._runnable import RunnableErrorCode
-                from ..errors import RunCapabilityUnavailableError
 
                 raise RunCapabilityUnavailableError(
                     "run-time save= does not compose with fast=True yet: the fast "
@@ -848,32 +844,9 @@ class TraceValidationMixin(_TraceMixinBase):
                 )
             run_save_labels: Any = None
             if save is not None:
-                from .._runnable_execution import _resolve_run_until_plan
+                from .._runnable.transaction import _resolve_run_save_labels
 
-                # Reuse the static-form resolver: same accepted family (labels,
-                # module addresses, 'saved'), same typed refusals (pre-S4
-                # predicate gate, junk forms, unknown-site lookup feedback).
-                save_plan = _resolve_run_until_plan(self, save)
-                run_save_labels = frozenset(save_plan.requested_layer_labels)
-                if until is not None:
-                    until_preview = _resolve_run_until_plan(self, until)
-                    executed_raw = frozenset(until_preview.executed_raw_labels)
-                    executed_final = {
-                        layer.layer_label
-                        for layer in self.layer_list
-                        if layer._layer_label_raw in executed_raw
-                    }
-                    outside = sorted(run_save_labels - executed_final)
-                    if outside:
-                        raise InvalidArgumentError(
-                            "run-time save= selection must lie inside the "
-                            "until= executed window; out-of-window site(s): "
-                            f"{', '.join(outside)}",
-                            code="run_until_form_invalid",
-                            remedy="widen until= to cover the save= sites, or "
-                            "drop the out-of-window save= sites",
-                            argument="save",
-                        )
+                run_save_labels = _resolve_run_save_labels(self, save, until)
             if carry_state and loaded_provider in {
                 RunProvider.LOADED_SPARSE,
                 RunProvider.LOADED_ANALYSIS,
@@ -903,7 +876,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     from .._fast_run import run_fast_loaded_trace
 
                     return run_fast_loaded_trace(self, run_inputs, seed=seed)
-                from .._runnable_execution import run_loaded_sparse_trace
+                from .._runnable.execution import run_loaded_sparse_trace
 
                 return _apply_run_save_selection(
                     run_loaded_sparse_trace(
@@ -924,7 +897,7 @@ class TraceValidationMixin(_TraceMixinBase):
 
                 require_structure_only_capability(self, "live_replay")
                 _refuse_stats_capture(self, "live_replay")
-                from .._runnable_execution import raise_analysis_run_unavailable
+                from .._runnable.execution import raise_analysis_run_unavailable
 
                 raise_analysis_run_unavailable(self)
             # N3/N5 (live provider): the live run -- fast=True included --
@@ -935,7 +908,8 @@ class TraceValidationMixin(_TraceMixinBase):
 
             require_structure_only_capability(self, "live_replay")
             _refuse_stats_capture(self, "live_replay")
-            from .._runnable_execution import _LiveRunOptions, run_live_trace
+            from .._runnable.execution import run_live_trace
+            from .._runnable.transaction import _LiveRunOptions
 
             _refuse_state_compromised_live_run(self)
             staged_spec = getattr(self, "_intervention_spec", None)
@@ -954,7 +928,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     or (getattr(self, "last_run", None) or {}).get("engine") == "guarded_fast"
                 ),
             )
-            source_ref = getattr(self, "_source_model_ref", None)
+            source_ref = self._source_model_ref
             live_model = source_ref() if source_ref is not None else None
             if live_model is not None:
                 _warn_stateful_live_run_once(self, live_model)
@@ -1009,7 +983,7 @@ class TraceValidationMixin(_TraceMixinBase):
                 argument="save",
             )
         _refuse_state_compromised_live_run(self)
-        from ..intervention._staged_spec_persistence import (
+        from ..intervention._intervened_rerun_guard import (
             refuse_unpersisted_intervention_rerun,
         )
 
@@ -1029,7 +1003,7 @@ class TraceValidationMixin(_TraceMixinBase):
             run_model = model
             user_input = x
         else:
-            source_ref = getattr(self, "_source_model_ref", None)
+            source_ref = self._source_model_ref
             user_input = model
             if x is not None:
                 raise KeywordConflictError(
@@ -1076,7 +1050,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     self, run_model, transformed_input, output_transform=resolved_output_transform
                 )
                 if fast_done:
-                    self.raw_input = user_input
+                    self.input = user_input
                     refuse_unfired_fast_run(self)
                     return self
             result = _impl(
@@ -1091,7 +1065,7 @@ class TraceValidationMixin(_TraceMixinBase):
         # Atomic swap rebuilds Trace state; restore raw_input to the new
         # user-supplied value so visualization / save-load report the
         # current input rather than the prior trace's.
-        result.raw_input = user_input
+        result.input = user_input
         return result
 
     def _apply_rerun_transform(
@@ -1199,12 +1173,12 @@ class TraceValidationMixin(_TraceMixinBase):
         None
             This method mutates ParamLogs in place.
         """
-        if hasattr(self.param_logs, "_rehydrate_on_iter"):
-            self.param_logs._rehydrate_on_iter = False
-        for param_log in self.param_logs.values():
+        if hasattr(self._param_logs, "_rehydrate_on_iter"):
+            self._param_logs._rehydrate_on_iter = False
+        for param_log in self._param_logs.values():
             param_log._release_param_ref()
-        if hasattr(self.param_logs, "_rehydrate_on_iter"):
-            self.param_logs._rehydrate_on_iter = allow_iter_rehydrate
+        if hasattr(self._param_logs, "_rehydrate_on_iter"):
+            self._param_logs._rehydrate_on_iter = allow_iter_rehydrate
 
     def _postprocess(
         self: "Trace",
@@ -1254,7 +1228,7 @@ class TraceValidationMixin(_TraceMixinBase):
             Continuation token from the caller's own live ``capture_reservation``
             claim (the recorder pass); a bare nested entry without it refuses.
         """
-        from .._capture.trace import run_and_log_inputs_through_model as _impl
+        from .._capture.run import run_and_log_inputs_through_model as _impl
 
         return _impl(
             self,
@@ -1283,9 +1257,8 @@ class TraceValidationMixin(_TraceMixinBase):
         Trace
             This model log, for chaining.
         """
-        from torchlens.backends.registry import BackendUnsupportedError
-
         from .._capture.outcome import require_capture_capability
+        from ..backends._backend_protocol import refuse_backward_capture_unsupported
         from ..backends.registry import get_backend_spec
 
         # N3: the backward projection assumes a structurally complete captured
@@ -1297,13 +1270,8 @@ class TraceValidationMixin(_TraceMixinBase):
         require_structure_only_capability(self, "backward_grads")
         _refuse_stats_capture(self, "backward_grads")
         _refuse_loaded_backward_capture(self, "log_backward")
-        spec = get_backend_spec(getattr(self, "backend", "torch"))
-        if not spec.capabilities.backward_capture:
-            raise BackendUnsupportedError(
-                f"Backend {spec.name!r} does not support backward capture. "
-                "Use trace.derived_grads when this backend exposes leaf-level "
-                "derived gradients."
-            )
+        spec = get_backend_spec(self._provenance_backend)
+        refuse_backward_capture_unsupported(spec)
         from ..backends.torch.backward import log_backward as _impl
 
         return cast("Trace", _impl(self, loss, **backward_kwargs))
@@ -1334,9 +1302,8 @@ class TraceValidationMixin(_TraceMixinBase):
         Any
             Backward recording context manager.
         """
-        from torchlens.backends.registry import BackendUnsupportedError
-
         from .._capture.outcome import require_capture_capability
+        from ..backends._backend_protocol import refuse_backward_capture_unsupported
         from ..backends.registry import get_backend_spec
 
         require_capture_capability(self, "backward")
@@ -1345,13 +1312,8 @@ class TraceValidationMixin(_TraceMixinBase):
         require_structure_only_capability(self, "backward_grads")
         _refuse_stats_capture(self, "backward_grads")
         _refuse_loaded_backward_capture(self, "recording_backward")
-        spec = get_backend_spec(getattr(self, "backend", "torch"))
-        if not spec.capabilities.backward_capture:
-            raise BackendUnsupportedError(
-                f"Backend {spec.name!r} does not support backward capture. "
-                "Use trace.derived_grads when this backend exposes leaf-level "
-                "derived gradients."
-            )
+        spec = get_backend_spec(self._provenance_backend)
+        refuse_backward_capture_unsupported(spec)
         from ..backends.torch.backward import recording_backward as _impl
 
         return _impl(self)
@@ -1435,8 +1397,8 @@ class TraceValidationMixin(_TraceMixinBase):
             collection = getattr(self, field_name)
             collection[:] = [label for label in collection if label not in labels_to_remove]
 
-        self.conditional_branch_edges = _substitute_conditional_branch_edges(
-            self.conditional_branch_edges, labels_to_remove, replacement_labels
+        self._graph_conditional_branch_edges = _substitute_conditional_branch_edges(
+            self._graph_conditional_branch_edges, labels_to_remove, replacement_labels
         )
 
         for param_group, tensor_labels in list(self.layers_with_params.items()):
@@ -1449,11 +1411,11 @@ class TraceValidationMixin(_TraceMixinBase):
             if len(tensor_labels) > 0
         }
 
-        for _equiv_group, equivalent_label_set in list(self.op_equivalence_classes.items()):
+        for _equiv_group, equivalent_label_set in list(self._graph_op_equivalence_classes.items()):
             equivalent_label_set -= labels_to_remove
-        self.op_equivalence_classes = {
+        self._graph_op_equivalence_classes = {
             equiv_group: equivalent_label_set
-            for equiv_group, equivalent_label_set in self.op_equivalence_classes.items()
+            for equiv_group, equivalent_label_set in self._graph_op_equivalence_classes.items()
             if len(equivalent_label_set) > 0
         }
 

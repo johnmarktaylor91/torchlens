@@ -98,7 +98,7 @@ with `tl._partial.from_failed_capture(exc)`.
 | Source text | `capture=CaptureOptions(save_source_context=False)` | File/line identity remains, but source text is not loaded. |
 | Window payloads | `lookback_payload_policy="metadata_only"` | `tl.followed_by(...)` can select metadata without retaining raw tensors. |
 | Retroactive payloads | `lookback_payload_policy="detached_raw"` | Enables payload recovery for recent matched ops at bounded memory cost. |
-| Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure. Blob writes overlap capture on a bounded async pipeline by default; `max_pending_bytes` (256 MiB default) caps the RAM pending writes may hold, and a disk slower than capture blocks the forward instead of accumulating memory. `async_writes=False` restores synchronous per-blob writes. |
+| Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure. The model output the forward returns stays in memory (the output op may alias it), and a later `trace.run(...)` re-captures every payload into RAM while the bundle keeps the original capture. Blob writes overlap capture on a bounded async pipeline by default; `max_pending_bytes` (256 MiB default) caps the RAM pending writes may hold, and a disk slower than capture blocks the forward instead of accumulating memory. `async_writes=False` restores synchronous per-blob writes. |
 | Gradients | `capture=CaptureOptions(save_grads=False)` (the default) unless needed | Backward-ready captures preserve more state and hooks. |
 | Forward-only autograd | `inference_only=True`, or capture inside `torch.no_grad()` | Runs forward capture under `torch.no_grad()`; incompatible with backward capture. A capture entered under `torch.no_grad()` or `torch.inference_mode()` implies it unless a backward option is given. |
 | Recording gradient hooks | omit `backward_ready` / `save_grads` on `tl.record` | `tl.record` installs gradient hooks (1 to 5% of a record on CPU transformers, measured 2026-10-11) only when a backward is requested; `Recording.backward()` refuses otherwise. |
@@ -123,7 +123,7 @@ model = nn.ReLU()
 x = torch.randn(4)
 wrap_torch(escape_detector="shadow")
 trace = tl.trace(model, x)
-print(trace.escape_detector_event_count, trace.escape_detector_callback_ns)
+print(trace.health.num_escape_detector_events, trace.health.escape_detector_callback_ns)
 unwrap_torch()
 ```
 
@@ -158,8 +158,8 @@ wrap_torch(
     completeness_witness=True,
 )
 trace = tl.trace(model, x)
-print(trace.completeness_witness_verified)
-print(trace.completeness_witness_unaccounted_count)
+print(trace.health.completeness_verified)
+print(trace.health.num_unaccounted_witness_events)
 unwrap_torch()
 ```
 
@@ -169,9 +169,9 @@ census result.
 
 The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
 it does not correlate by clock time. A captured Python call may own several ordered aten operations,
-recorded in `trace.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose
+recorded in `trace.health.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose
 `func_call_id` emits no logged op, produce a `CaptureGapWarning`, set
-`trace.completeness_witness_verified=False`, and append structured rows to
+`trace._health_completeness_verified=False`, and append structured rows to
 `trace.completeness_diagnostics`. Work under `pause_logging()` is outside the census. The documented
 torch.func/functorch transform boundary runs its interior under that paused scope, and fused or opaque
 kernel interiors below the dispatcher are not observable; the dispatched boundary operator itself is

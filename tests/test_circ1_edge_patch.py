@@ -24,7 +24,7 @@ from torchlens.mechinterp._errors import MechInterpError
 
 pytest.importorskip("transformers")
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True)
 
 
 def _tiny_gpt2():

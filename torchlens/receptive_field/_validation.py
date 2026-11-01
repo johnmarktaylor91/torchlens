@@ -543,7 +543,7 @@ def _exact_box_adjoint_violations(
     if not windowed_bounds or len(windowed_bounds) > 3:
         return ()
     trace = owner.source_trace
-    far = next((op for op in trace.layer_list if op.label == descriptor.input_op_label), None)
+    far = next((op for op in trace._layer_list if op.label == descriptor.input_op_label), None)
     if far is None:
         return ()
 
@@ -1024,7 +1024,7 @@ def _resolve_ops(
             if not isinstance(selected, str):
                 resolved.append(selected)
                 continue
-            matches = [op for op in trace.layer_list if selected in {op.label, op.layer_label}]
+            matches = [op for op in trace._layer_list if selected in {op.label, op.layer_label}]
             if len(matches) != 1:
                 raise ReceptiveFieldError(
                     f"Operation selector {selected!r} resolved to {len(matches)} operations."
@@ -1034,7 +1034,7 @@ def _resolve_ops(
     solution = _engine.solve(trace)
     return tuple(
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if (direction is ReceptiveFieldDirection.PROJECTIVE or not op.is_input)
         and not op.is_output
         and (op.is_input or op.has_saved_activation)
@@ -1135,7 +1135,7 @@ def _check_solution_metadata(
 ) -> None:
     """Check cheap descriptor and box invariants for one directional solution."""
 
-    ops_by_label = {op.label: op for op in trace.layer_list}
+    ops_by_label = {op.label: op for op in trace._layer_list}
     with _shared_query_scope():
         _check_descriptors(solution, ops_by_label, direction)
 

@@ -249,7 +249,7 @@ def test_rg07_replay_edit_through_cache_graph_matches_manual_ablation(
         model,
         (),
         input_kwargs=dict(encoded),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         target = None
@@ -311,7 +311,7 @@ def test_rg08_episode_captured_generation_matches_direct_generate(
     )
     try:
         assert trace.outcome.status.name == "COMPLETE"
-        assert str(trace.root_entry_point).startswith("bound_method:")
+        assert str(trace.provenance.root_entry_point).startswith("bound_method:")
         ledger = trace.annotations["episode"]
         rows = ledger["rows"]
         assert [row["status"] for row in rows] == ["complete"] * 4
@@ -411,7 +411,7 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
         model,
         (),
         input_kwargs=dict(encoded),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         target = None

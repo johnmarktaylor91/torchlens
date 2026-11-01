@@ -197,8 +197,8 @@ def _snapshot_probe_state(trace: Trace) -> _ProbeSnapshot:
 
     trace_dict = trace.__dict__
     return _ProbeSnapshot(
-        num_backward_passes=int(getattr(trace, "num_backward_passes", 0)),
-        has_gradients=bool(getattr(trace, "has_gradients", False)),
+        num_backward_passes=int(trace._num_backward_passes),
+        has_gradients=bool(trace._autograd_has_grads),
         backward_event_count=_backward_event_count(trace),
         active_index_present="_active_backward_pass_index" in trace_dict,
         active_index=trace_dict.get("_active_backward_pass_index"),
@@ -242,7 +242,7 @@ def _probe_suppressed(trace: Trace) -> Iterator[None]:
     deliberately not registered from here: mutating the class-level
     ``_PORTABLE_STATE_SPEC`` per probe is a process-global side effect of a
     per-instance operation, and it desynchronizes that spec from the
-    ``FIELD_POLICY`` table it is generated from.
+    ``_FIELD_POLICY`` table it is generated from.
 
     Parameters
     ----------
@@ -349,7 +349,7 @@ def _input_ops_by_role(trace: Trace) -> dict[str, Op]:
 
     return {
         str(op.io_role or op.label): op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if bool(getattr(op, "is_input", False))
     }
 
@@ -482,7 +482,7 @@ def _source_recapture_recipe(source: Op, target: Op) -> str:
     return (
         "tl.trace(model, x.requires_grad_(True), "
         'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"), '
-        f"save=tl.label({source.layer_label_short!r}) | tl.label({target.layer_label_short!r}))"
+        f"save=tl.label({source.short_layer_label!r}) | tl.label({target.short_layer_label!r}))"
     )
 
 
@@ -783,12 +783,12 @@ def gradient_for_unit(
             # route it through the input path so the result is byte-identical.
             input_op = _source_op
             source = None
-    spec = get_backend_spec(str(getattr(trace, "backend", "torch")))
+    spec = get_backend_spec(str(trace._provenance_backend))
     if not spec.capabilities.backward_capture:
         raise BackendUnsupportedError(
             f"Backend {spec.name!r} does not support gradient receptive-field probes."
         )
-    if not getattr(trace, "backward_ready", False):
+    if not trace._options_backward_ready:
         raise ReceptiveFieldUnavailableError(
             "Gradient receptive fields require backward_ready=True and saved payloads. "
             f"Recapture with {_RECAPTURE_RECIPE}."

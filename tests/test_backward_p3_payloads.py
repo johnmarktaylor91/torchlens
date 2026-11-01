@@ -78,7 +78,7 @@ def test_save_grads_is_the_trace_side_public_surface() -> None:
     x = torch.randn(4, 3, requires_grad=True)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True), save="all")
     try:
-        assert trace.save_grads is True
+        assert trace.options.save_grads is True
         assert not hasattr(trace, "save_gradients")
         assert not hasattr(trace, "gradients_to_save")
     finally:
@@ -227,8 +227,8 @@ def test_save_raw_gradients_false_keeps_transformed_per_pass_payload() -> None:
             for record in saved_op.grads
             if record.is_saved
         )
-        assert trace.total_backward_memory == expected_backward_memory
-        assert trace.total_gradient_memory == expected_gradient_memory
+        assert trace.cost.total_backward_memory == expected_backward_memory
+        assert trace.cost.total_grad_memory == expected_gradient_memory
     finally:
         trace.cleanup()
 
@@ -257,7 +257,7 @@ def test_backward_accessors_to_pandas_do_not_raise_on_multiple_calls() -> None:
         assert not backward_passes_frame.empty
         assert "backward_duration" in grad_fns_frame.columns
         assert "total_backward_duration" in grad_fns_frame.columns
-        assert backward_passes_frame["pass_index"].tolist() == [1, 2]
+        assert backward_passes_frame["pass_number"].tolist() == [1, 2]
     finally:
         trace.cleanup()
 
@@ -287,7 +287,7 @@ def test_tlspec_round_trip_preserves_per_pass_op_grads(tmp_path: Path) -> None:
 
 
 def test_total_backward_memory_counts_unique_saved_payload_refs() -> None:
-    """Trace.total_backward_memory is derived from saved OpGradObserved payload refs."""
+    """Trace.cost.total_backward_memory is derived from saved OpGradObserved payload refs."""
 
     trace = _trace_with_two_backward_passes()
     try:
@@ -297,8 +297,8 @@ def test_total_backward_memory_counts_unique_saved_payload_refs() -> None:
             for record in op.grads
             if record.grad is not None
         )
-        assert trace.total_backward_memory == expected
-        assert trace.total_gradient_memory == expected
+        assert trace.cost.total_backward_memory == expected
+        assert trace.cost.total_grad_memory == expected
     finally:
         trace.cleanup()
 

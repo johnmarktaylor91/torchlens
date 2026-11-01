@@ -30,7 +30,7 @@ from torchlens.mechinterp._edge_patch import _head_spec, _input_edge_record
 pytest.importorskip("transformers")
 pytestmark = pytest.mark.heavy
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True)
 
 
 @pytest.fixture(scope="module")

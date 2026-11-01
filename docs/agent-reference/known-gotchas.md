@@ -1,12 +1,18 @@
 ## Known Gotchas
 
+- Frame filters identify TorchLens's own frames through `torchlens._utils._package_frames.is_torchlens_code`
+  (a memoised normalised-filename comparison), never a raw `co_filename` prefix test. The import
+  system spells a filename the way it joined it: a `sys.path` entry of `.` (for example
+  `PYTHONPATH=.`) leaves `/./` in every TorchLens filename, and a raw prefix test then kept hundreds
+  to thousands of TorchLens frames in the ops' code context. Captured metadata must not depend on how
+  the host process imported TorchLens; `tests/test_grouping_host_independence.py` pins it.
 - Intervention-spec loads tolerate foreign `custom` callable keys for safe analysis without importing
   their modules. Resolving one for execution denies by default because imports execute top-level code;
   trusted execution may use `trust_custom_callables=True`, while
   `allowed_custom_callable_modules={"my_trusted_module"}` is narrower and remains restrictive even if
   the boolean is also true. TorchLens-owned `torchlens.*` custom callables and the fixed trusted
   namespaces resolve without an opt-in.
-- CPU peaks are opt-in: a default capture reads CPU `Trace.forward_peak_memory` and
+- CPU peaks are opt-in: a default capture reads CPU `Trace.cost.forward_peak_memory` and
   `backward_peak_memory` as `None`, with `forward_peak_memory_reason` / `backward_peak_memory_reason`
   naming `CaptureOptions(measure_host_peak_memory=True)`, and never writes the process high-water
   mark. Under the opt-in the CPU forward peak is the host resident high-water growth (`VmHWM` after
@@ -38,7 +44,7 @@
   byte-exact contribution/destination digests. Async completions record
   `completion_binding="unobserved"`; wildcard recv refuses typed; collective-crossing traces
   refuse runnable save and forward-replay validation
-  (`collective_boundary_runnable_unsupported`) while metadata invariants run in full. Arming
+  (`collective_boundary_unsupported`) while metadata invariants run in full. Arming
   relaxes no tier-(a) refusal (DTensor/TP/FSDP2/PP still refuse). Distributed rank processes
   (initialized process group, non-daemonic) are the sanctioned exception to the
   main-process-only capture guard.
@@ -66,6 +72,12 @@
   when the disk falls behind, a failed write raises typed `ArtifactError` + PARTIAL, finalize
   drains before publish, and bundles are byte-identical to sync. `async_writes=False` opts out;
   `tl.record` streaming stays synchronous and refuses an explicit `True`.
+- A streamed (`to_disk`) trace does not run: every `trace.run(...)` door refuses
+  `trace_option_unsupported`, because a run would re-capture every payload into RAM while the
+  bundle on disk kept the first capture. Capture again with `to_disk` to a new path, or without
+  `to_disk`, and run that trace; a trace loaded from the bundle runs through its loaded providers.
+  `Trace.save` and `Bundle.save` to an existing path refuse `bundle_save_failed` (typed, no builtin
+  `FileExistsError`) unless `overwrite=True`.
 - On torch >= 2.6 (`HAS_SET_STANCE`), every capture holds
   `torch.compiler.set_stance("force_eager")` scoped to the forward (entered inside
   `prepare_compiled_capture`; skipped when `torch._dynamo` was never imported), so compiled plain
@@ -83,7 +95,7 @@
   `trace._raw_transform_escape_detected` (which licenses the unattributable-output tolerance,
   exactly like the functorch guard beside it) plus `trace._raw_dynamo_region_detected`, which is
   the top-precedence `capture_verification_reason` -- `"dynamo_region_not_logged"` -- at BOTH
-  verdict sites (`completeness_witness._finalize_census` and the `escape_detection` capture-scope
+  verdict sites (`_completeness_finalize._finalize_census` and the `escape_detection` capture-scope
   `finally`, the last writer). Without the dedicated flag the Trace blamed
   `owner_thread_tripwire_changed`, since compiling spawns threads. Plain compiled-callable
   attributes are also inventoried before forward and invoked with logging paused, conservatively
@@ -113,9 +125,14 @@
   state record a different graph, so validation's re-trace called it non-reproducible.
 - `__wrapped__` is removed from built-in function wrappers to avoid `inspect.unwrap`
   failures.
-- `backends/torch/ops.py` rebinds the split `_ops_*` functions onto its own globals
-  (`_rebind_function`), so any new module-level name used inside a rebound function must also be
-  bound in `ops.py` (and a test patches such a name on `ops`, not on the split module).
+- Split modules import one another and their hub's constants at their bottoms (they form import
+  cycles, so the imports run once every definition exists): `backends/torch/_ops_*` with `ops.py`,
+  `backends/torch/_completeness_*` with `completeness_witness.py`, `validation/_invariants_*` with
+  `invariants.py`, and `_runnable_*` with `_runnable/execution.py`. A new module-level name used in a
+  split module is imported there. A test patches a helper on the module that defines it and on every
+  module that binds it by import, never on the hub alone: a from-import copy does not follow a patch.
+  Module state reassigned after import (`completeness_witness._ACTIVE_WITNESS_STATE`) lives in one
+  module, and every other reader and writer uses `owner_module.NAME`, never a from-import copy.
 - Fast-path module decoration skips `_record_module_entry_metadata`; alignment state must be
   replicated manually.
 - `get_memory_amount()` deliberately avoids `pause_logging()`: it resolves the
@@ -158,7 +175,7 @@
   removed, the next wrap re-patches the class from the recorded C constructor.
 - A trace's staged intervention spec (`Trace._intervention_spec`) is read-only to every engine:
   reruns, append and chunked reruns, failed or interrupted reruns, and `fork()` leave it exactly
-  as staged (`tests/test_state_hygiene_oracles.py`, `tests/test_rerun_hook_staging.py`). Validation
+  as staged (`tests/test_state_hygiene_oracles.py`, `tests/test_helper_tensor_fingerprint.py`). Validation
   cannot see a violation (each rerun is self-consistent with the plan it ran), so the oracles
   compare reruns against an independent expectation. A capture-time `intervene=` predicate that is
   not lowered to module hooks stages per-op entries on FINAL labels, which the live matcher refuses;
@@ -225,7 +242,31 @@
   value: an in-place write through `param.data` (its own version counter on the same storage) or
   through a numpy or raw-storage alias. A replaced parameter object is never read by replay (the
   template keeps the captured one). Pinned in `tests/test_replay_param_changed.py`.
+- Replay at source records and random sources: a model-input leaf and a buffer record have no
+  callable, so a hook aimed at one fires on the captured (or threaded) value and the edit
+  propagates from there; a random-source op (`randn_like`, `dropout`, ...) with no recorded RNG
+  state (`save_rng_states` off) keeps its captured draw when none of its arguments changed in the
+  replay, so an edit at it edits the value the trace holds, not a fresh draw (a random site that
+  was itself edited at capture holds a post-edit value, so its replay re-executes the draw, seeded
+  only when RNG states were saved). A trace loaded from a
+  saved file carries no callables at any level, so every replay edit on it refuses
+  `ReplayPreconditionError` naming that condition (remedy: re-capture in-process with
+  `replayable=True`, or `trace.run(model, inputs)`). A torch failure inside a replayed
+  callable (an edit that drives an index lookup past its table) is re-raised as
+  `ReplayPreconditionError` naming the op that raised and the edit origins, the torch error
+  chained as `__cause__`, with nothing committed. Pinned in
+  `tests/test_replay_source_and_stochastic_origins.py`.
 - A model that builds a thread pool lazily in `forward` loses one pool per capture to the capture's
   attribute restore; a later garbage collection that frees it inside another capture ends its idle
   workers there, and the thread check then marks that capture unverified. This errs only one way: a
   false "unverified", never a false "verified".
+- Direct `module.forward(x)` calls and the fast run: such a call skips `Module.__call__` and so
+  every torch hook, which the fast live run uses to collect sites, apply staged steering and fold
+  the call fingerprint. Capture's session `forward` wrapper marks each module it entered that
+  way (`ModuleMeta.direct_forward_called` on the live module, kept across captures; the call is
+  told apart by its caller frame through `_utils/_module_call_dispatch.py`, gated by
+  `HAS_MODULE_CALL_DISPATCH_FRAME`), and the fast run
+  routes exactly those through a per-run instance `forward` (`_fast_run.py`), restored by
+  identity after each run; every other module stays on hooks. A direct call no capture
+  marked (no capture of the model made one, or the flag is False) is still refused as
+  `run_capability_unavailable` at stage `fast_live_module_hook_unobserved`.

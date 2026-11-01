@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -12,6 +13,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _user_funcs as user_funcs, _visualization
+from torchlens._capture import run_entry
+from torchlens._capture.prepare import door
 from torchlens.options import CaptureOptions, StorageOptions
 
 _STREAMING_CASES = [
@@ -42,10 +45,14 @@ class _DummyLog:
     def __init__(self) -> None:
         """Initialize captured state for a fake log object."""
 
-        self.verbose = False
-        self.layer_logs: dict[str, Any] = {}
-        self.num_saved_ops = 0
-        self.total_activation_memory = "0 B"
+        self._options_verbose = False
+        self._layer_logs: dict[str, Any] = {}
+        self._num_saved_ops = 0
+        self.saved_ops: list[Any] = []
+        self._cost_total_activation_memory = "0 B"
+        self._provenance_verified: Any = None
+        self._options_structure_only = False
+        self._options_output_device = "same"
         self.render_calls: list[dict[str, Any]] = []
         self.cleaned_up = False
 
@@ -80,6 +87,22 @@ def stubbed_runner(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], _Du
         "_run_model_and_save_specified_outs",
         fake_run_model_and_save_specified_outs,
     )
+    monkeypatch.setattr(
+        run_entry,
+        "_run_model_and_save_specified_outs",
+        fake_run_model_and_save_specified_outs,
+    )
+
+    def fake_run_capture(request: Any) -> Any:
+        """Stand in for the RUN stage: record the request's run keywords."""
+
+        plan = run_entry._with_plan_defaults(request).plan
+        trace = fake_run_model_and_save_specified_outs(
+            request.model, request.input_args, request.input_kwargs, **plan
+        )
+        return SimpleNamespace(trace=trace)
+
+    monkeypatch.setattr(door, "run_capture", fake_run_capture)
     return captured, dummy_log
 
 

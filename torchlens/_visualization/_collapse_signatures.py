@@ -24,6 +24,8 @@ import re
 import weakref
 from typing import TYPE_CHECKING, Any, cast
 
+from .._record_type import record_type
+
 if TYPE_CHECKING:
     from .._data_classes.module import Module
     from .._data_classes.trace import Trace
@@ -83,7 +85,7 @@ def _module_structural_signature(module: Module) -> StructuralSignature:
 
     ops_signature = tuple(
         (
-            str(getattr(layer, "func_name", None) or getattr(layer, "layer_type", "")),
+            str(getattr(layer, "func_name", None) or record_type(layer, "")),
             _func_config_digest(getattr(layer, "func_config", None)),
             _non_tensor_args_digest(layer),
         )
@@ -308,7 +310,7 @@ class MemberFingerprintCache:
         digest, bindings = _walk_or_degrade(module)
         ops_signature = tuple(
             (
-                str(getattr(layer, "func_name", None) or getattr(layer, "layer_type", "")),
+                str(getattr(layer, "func_name", None) or record_type(layer, "")),
                 _func_config_digest(getattr(layer, "func_config", None)),
                 _non_tensor_args_digest(layer),
             )

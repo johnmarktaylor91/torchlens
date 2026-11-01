@@ -60,10 +60,18 @@ from torchlens._runnable import (
 )
 from torchlens._utils.rng import (
     HOST_NONDETERMINISM_REGISTRY,
-    TORCH_RNG_SURFACE,
-    _call_site_explicit_time_value,
-    _torch_rng_holder_module,
     host_nondeterminism_monitor,
+    inventory_types as rng_inventory_types,
+)
+from torchlens._utils.rng.call_sites import _call_site_explicit_time_value
+from torchlens._utils.rng.registry import TORCH_RNG_SURFACE, _torch_rng_holder_module
+from torchlens.backends.torch._completeness_escape_state import (
+    host_escape_has_cross_thread_captured_tensor,
+    host_escape_has_raw_pointer,
+    host_escape_has_unattributable_bool,
+    host_escape_has_unattributable_opaque,
+    host_escape_source_labels,
+    host_escape_state_source_names,
 )
 from torchlens.backends.torch.completeness_witness import (
     HOST_VALUE_ESCAPE_METHODS,
@@ -71,12 +79,6 @@ from torchlens.backends.torch.completeness_witness import (
     INVISIBLE_HOST_ESCAPE_FUNCS,
     INVISIBLE_HOST_ESCAPE_PROPERTIES,
     STORAGE_BRIDGE_ESCAPE_FUNCS,
-    host_escape_has_cross_thread_captured_tensor,
-    host_escape_has_raw_pointer,
-    host_escape_has_unattributable_bool,
-    host_escape_has_unattributable_opaque,
-    host_escape_source_labels,
-    host_escape_state_source_names,
 )
 from torchlens.errors.runnable import (
     PathDivergenceError,
@@ -89,7 +91,7 @@ try:  # POSIX-only; the getrusage recipe skips on platforms without it.
 except ImportError:  # pragma: no cover - non-POSIX platforms
     _resource = None  # type: ignore[assignment]
 
-_CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
+_CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
 # Pre-window held references (module import time == before any monitor window).
 _HELD_TIME = _time.time
@@ -447,7 +449,7 @@ def _check_held_ref_registry_channel_marks(target: str) -> None:
         pytest.skip("resource module unavailable on this platform")
     if (
         target in {"numpy.random.get_state", "numpy.random.set_state", "numpy.random.seed"}
-        and rng_mod._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST
+        and rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST
     ):
         pytest.skip(
             "numpy>=2 binds the legacy singleton's state methods as profile-silent Cython "
@@ -718,7 +720,7 @@ class _AttrHolder:
 def test_sweep_cap_exhaustion_flags_uncertain(monkeypatch: Any) -> None:
     """Cap invariant: ANY cap exhaustion flags ``inventory_budget_exhausted``, never silent."""
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 40)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 40)
     holder = _AttrHolder(**{f"a{i}": i for i in range(100)})
     with host_nondeterminism_monitor(holder) as result:
         pass

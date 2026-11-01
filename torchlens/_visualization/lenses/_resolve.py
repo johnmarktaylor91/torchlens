@@ -30,6 +30,7 @@ from dataclasses import dataclass, field as dataclass_field
 from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
+from ..._record_type import record_type
 from ...errors._base import TorchLensWarning
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
 from ._budget import BudgetResolution, resolve_budget
@@ -173,8 +174,8 @@ def _has_attention_subject(trace: Trace) -> bool:
 
     if _module_facets_say_attention(trace):
         return True
-    for op in trace.layer_list:
-        if str(getattr(op, "layer_type", "")) in _ATTENTION_OP_TYPES:
+    for op in trace._layer_list:
+        if str(record_type(op, "")) in _ATTENTION_OP_TYPES:
             return True
         for address in getattr(op, "modules", ()) or ():
             tail = str(address).split(":", 1)[0].rsplit(".", 1)[-1].lower()
@@ -186,7 +187,7 @@ def _has_attention_subject(trace: Trace) -> bool:
 def _has_multipass_subject(trace: Trace) -> bool:
     """Return whether any layer runs more than one pass."""
 
-    return any(getattr(op, "num_passes", 1) > 1 for op in trace.layer_list)
+    return any(getattr(op, "num_passes", 1) > 1 for op in trace._layer_list)
 
 
 def _check_subject(trace: Trace, lens: LensPreset) -> None:
@@ -339,7 +340,7 @@ def _attention_role_spec_fn() -> Any:
     def _apply(layer: Any, spec: Any) -> Any:
         """Append the observed attention-role row for recognized layers."""
 
-        layer_type = str(getattr(layer, "layer_type", ""))
+        layer_type = str(record_type(layer, ""))
         if layer_type in _ATTENTION_OP_TYPES:
             spec.lines.append("attention: scaled dot-product (observed)")
             return spec
@@ -410,10 +411,10 @@ def _stack_license_holds(trace: Trace) -> bool:
     """Cheap pre-check of the stack_by='auto' lockstep license."""
 
     last = 0
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if getattr(op, "num_passes", 1) <= 1:
             continue
-        pass_index = getattr(op, "pass_index", None)
+        pass_index = getattr(op, "pass_number", None)
         if pass_index is None:
             return False
         if pass_index < last:
@@ -487,10 +488,10 @@ def _entry_gates(trace: Trace, lens: LensPreset, user_kwargs: dict[str, Any]) ->
         )
 
     # -- Detail ceiling for the collapse='none' rows (debug, dims). --------
-    if lens.name in ("debug", "dims") and len(trace.layer_list) > LENS_DETAIL_CEILING:
+    if lens.name in ("debug", "dims") and len(trace._layer_list) > LENS_DETAIL_CEILING:
         raise InvalidArgumentError(
             f"the {lens.name!r} lens renders uncollapsed and this "
-            f"trace has {len(trace.layer_list)} ops (ceiling {LENS_DETAIL_CEILING})",
+            f"trace has {len(trace._layer_list)} ops (ceiling {LENS_DETAIL_CEILING})",
             code="lens_above_detail_budget",
             remedy=(
                 "focus the render (module= or a Selection region), or pass an "
@@ -601,7 +602,7 @@ def _secondary_stages(trace: Trace, lens: LensPreset, build: _LensBuild) -> None
     if lens.name == "memory" and build.effective.get("show_saved_for_backward"):
         has_autograd_evidence = any(
             scalar_or_none(getattr(op, "autograd_memory", None)) is not None
-            for op in trace.layer_list
+            for op in trace._layer_list
         )
         if not has_autograd_evidence:
             build.effective["show_saved_for_backward"] = False

@@ -340,8 +340,8 @@ def _interpolation_points(
     ``(1 - k/m) * difference`` rides the output of ``site_module`` (the first embedding
     write)."""
 
+    from .._selection.selectors import module as module_selector
     from ..intervention.predicates import add
-    from ..intervention.selectors import module as module_selector
     from ..intervention.spec import when
 
     site = module_selector(site_module)

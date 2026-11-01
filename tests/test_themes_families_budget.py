@@ -85,33 +85,32 @@ def test_speed_resolves_summed_member_on_rolled(mlp_log: Any) -> None:
     assert any("total across passes" in line for line in resolution.disclosure)
 
 
-def test_zero_coverage_refuses_typed(mlp_log: Any, monkeypatch: Any) -> None:
-    """ROW GATE: zero resolved coverage refuses; never a populated legend
-    over an unencoded graph."""
-
-    from torchlens._visualization.lenses import _families
-
-    broken = dict(_families.SOURCE_FAMILIES)
-    broken["time"] = _families.SourceFamily(
-        name="time",
-        per_pass_member="nonexistent_member_zzz",
-        summed_member="nonexistent_member_total_zzz",
-        unit_wording="",
-        capture_remedy="re-capture with a plain tl.trace forward",
-    )
-    monkeypatch.setattr(_families, "SOURCE_FAMILIES", broken)
-    with pytest.raises(Exception) as excinfo:
-        lenses.resolve_lens(mlp_log, "speed")
-    assert excinfo.value.fields["code"] == "lens_headline_evidence_missing"
-    assert "re-capture" in str(excinfo.value)
-
-
-@pytest.mark.smoke
-def test_one_view_zero_coverage_names_the_zero_coverage_code(
-    mlp_log: Any, monkeypatch: Any
+@pytest.mark.parametrize(
+    ("summed_member", "expected_code"),
+    [
+        pytest.param(
+            "nonexistent_member_total_zzz",
+            "lens_headline_evidence_missing",
+            id="zero_coverage_refuses_typed",
+        ),
+        pytest.param(
+            "total_func_duration",
+            "lens_source_zero_coverage",
+            id="one_view_zero_coverage_names_the_zero_coverage_code",
+            marks=pytest.mark.smoke,
+        ),
+    ],
+)
+def test_zero_coverage_refuses_typed(
+    mlp_log: Any, monkeypatch: Any, summed_member: str, expected_code: str
 ) -> None:
-    """When only the view-resolved member is unencoded (the other view has
-    evidence), the refusal is the ADVERTISED-SCALE code, not the headline gap."""
+    """ROW GATE: zero resolved coverage refuses; never a populated legend
+    over an unencoded graph.
+
+    When both view members are unencoded the refusal is the headline gap.
+    When only the view-resolved member is unencoded (the other view has
+    evidence), the refusal is the ADVERTISED-SCALE code, not the headline gap.
+    """
 
     from torchlens._visualization.lenses import _families
 
@@ -119,14 +118,14 @@ def test_one_view_zero_coverage_names_the_zero_coverage_code(
     broken["time"] = _families.SourceFamily(
         name="time",
         per_pass_member="nonexistent_member_zzz",
-        summed_member="total_func_duration",
+        summed_member=summed_member,
         unit_wording="",
         capture_remedy="re-capture with a plain tl.trace forward",
     )
     monkeypatch.setattr(_families, "SOURCE_FAMILIES", broken)
     with pytest.raises(Exception) as excinfo:
         lenses.resolve_lens(mlp_log, "speed")
-    assert excinfo.value.fields["code"] == "lens_source_zero_coverage"
+    assert excinfo.value.fields["code"] == expected_code
     assert "re-capture" in str(excinfo.value)
 
 
@@ -141,7 +140,7 @@ def test_source_coverage_counts_op_population(mlp_log: Any) -> None:
     """Coverage counts the op population, encoded and total."""
 
     coverage = lenses.source_coverage(mlp_log, "func_duration")
-    assert coverage.total == len(mlp_log.layer_list)
+    assert coverage.total == len(mlp_log._layer_list)
     assert coverage.encoded == coverage.total
     assert coverage.fraction == 1.0
 

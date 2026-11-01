@@ -107,16 +107,16 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     assert restored.modules["bn"]._source_trace is restored
     assert restored.buffers["bn.running_mean"].address == "bn.running_mean"
 
-    first_saved_layer = next(layer for layer in restored.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in restored._layer_list if layer.has_saved_activation)
     assert isinstance(first_saved_layer.out, torch.Tensor)
     assert (
-        restored.layer_logs[first_saved_layer.layer_label].ops[first_saved_layer.pass_index - 1]
+        restored._layer_logs[first_saved_layer.layer_label].ops[first_saved_layer.pass_number - 1]
         is first_saved_layer
     )
 
     first_arg_layer = next(
         layer
-        for layer in restored.layer_list
+        for layer in restored._layer_list
         if layer.saved_args is not None and len(layer.saved_args) > 0
     )
     assert isinstance(first_arg_layer.saved_args[0], torch.Tensor)
@@ -209,9 +209,9 @@ def test_plain_pickle_roundtrip_still_works() -> None:
     restored = pickle.loads(pickle.dumps(live_log))
 
     assert isinstance(restored, Trace)
-    assert restored.model_class_name == live_log.model_class_name
-    assert len(restored.layer_list) == len(live_log.layer_list)
-    assert restored.layer_list[0].source_trace is restored
+    assert restored.source.class_name == live_log.source.class_name
+    assert len(restored._layer_list) == len(live_log._layer_list)
+    assert restored._layer_list[0].source_trace is restored
 
 
 def test_trace_setstate_coerces_legacy_backward_gradfn_refs_dict() -> None:
@@ -284,16 +284,16 @@ def test_trace_setstate_coerces_wrong_typed_total_backward_memory() -> None:
 
     live_log = _build_live_log()
     state = live_log.__getstate__()
-    state.pop("total_backward_memory")
+    state.pop("_cost_total_backward_memory")
 
     restored = Trace.__new__(Trace)
     restored.__setstate__(state)
 
-    assert isinstance(restored.total_backward_memory, Bytes)
+    assert isinstance(restored.cost.total_backward_memory, Bytes)
     # Must format cleanly like every sibling memory field, not just compare
     # equal-by-value (Bytes subclasses int, so a bare `int` would pass a
     # naive `== 0` check while still failing `isinstance`/format checks).
-    f"{restored.total_backward_memory:.2f MB}"
+    f"{restored.cost.total_backward_memory:.2f MB}"
 
 
 def test_trace_setstate_coerces_present_but_wrong_typed_total_backward_memory() -> None:
@@ -301,13 +301,13 @@ def test_trace_setstate_coerces_present_but_wrong_typed_total_backward_memory() 
 
     live_log = _build_live_log()
     state = live_log.__getstate__()
-    state["total_backward_memory"] = 12345  # legacy plain int, not Bytes
+    state["_cost_total_backward_memory"] = 12345  # legacy plain int, not Bytes
 
     restored = Trace.__new__(Trace)
     restored.__setstate__(state)
 
-    assert isinstance(restored.total_backward_memory, Bytes)
-    assert int(restored.total_backward_memory) == 12345
+    assert isinstance(restored.cost.total_backward_memory, Bytes)
+    assert int(restored.cost.total_backward_memory) == 12345
 
 
 def test_trace_setstate_coerces_present_but_wrong_typed_container_fields() -> None:

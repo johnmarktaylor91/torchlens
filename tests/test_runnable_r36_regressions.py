@@ -14,7 +14,7 @@ Each test pins the AGREED post-r37 contract (round-37 cross-lab plan):
   staging + readiness, scoped default-device restore, requires_grad-preserving
   clones, phase-0 subclass admission, inference-mode capture.
 * secB_1/corr1_1 -- INV-3 output capability table + zero-tensor-slot save refusal
-  (``missing_output_container_contract``).
+  (``output_container_contract_missing``).
 * INV-4 -- closed-vocabulary context parsing (``context_field_invalid``).
 
 Fail-closed pins land red on b1a18687 and green after the staged fixes; the
@@ -59,7 +59,7 @@ from torchlens.errors import (
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
     seed=0,
@@ -371,7 +371,7 @@ class TestCorr21EventLedgerExhaustive:
     def test_raw_mutating_aten_is_incomplete_never_verified(self, tmp_path: Path) -> None:
         x = torch.tensor([-2.0, -0.5, 0.5, 2.0])
         loaded = _save_load(_RawMutation(), x.clone(), tmp_path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.witness_completeness is not WitnessCompleteness.COMPLETE
         verdict, attest = _verdict(loaded, x.clone())
@@ -384,13 +384,13 @@ class TestCorr21EventLedgerExhaustive:
         """Pre-closed adjacent: the non-mutating twin bakes an unlabelled constant.
 
         Fail-closed either way: the unattributed product feeding a traced call may be
-        refused at SAVE (``unsupported_tensor_constant``), and when an artifact does
+        refused at SAVE (``tensor_constant_unsupported``), and when an artifact does
         save, the ``unmodeled_tensor_return`` ledger fact must ceiling it INCOMPLETE
         and never VERIFIED.
         """
         monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
-        from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
+        from torchlens.backends.torch._completeness_dispatch import runnable_ledger_facts
 
         x = torch.tensor([-2.0, -0.5, 0.5, 2.0])
         trace = tl.trace(_RawNonMutating(), x.clone(), capture=_CAPTURE)
@@ -400,10 +400,10 @@ class TestCorr21EventLedgerExhaustive:
         try:
             trace.save(path, level="runnable", include_weights=True)
         except RunnablePreflightError as exc:
-            assert "unsupported_tensor_constant" in str(exc.fields.get("diagnostics", ""))
+            assert "tensor_constant_unsupported" in str(exc.fields.get("diagnostics", ""))
             return
         loaded = tl.load(path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.witness_completeness is not WitnessCompleteness.COMPLETE
         verdict, _ = _verdict(loaded, x.clone())
@@ -412,7 +412,7 @@ class TestCorr21EventLedgerExhaustive:
     def test_plain_model_has_no_ledger_facts_and_verifies(self, tmp_path: Path) -> None:
         """Over-trigger pin: an ordinary capture stays COMPLETE and VERIFIED."""
 
-        from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
+        from torchlens.backends.torch._completeness_dispatch import runnable_ledger_facts
 
         torch.manual_seed(0)
         model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
@@ -422,7 +422,7 @@ class TestCorr21EventLedgerExhaustive:
         path = tmp_path / "plain.tlspec"
         trace.save(path, level="runnable", include_weights=True)
         loaded = tl.load(path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.witness_completeness is WitnessCompleteness.COMPLETE
         verdict, _ = _verdict(loaded, x)
@@ -435,7 +435,7 @@ class TestCorr21EventLedgerExhaustive:
         model = nn.Sequential(nn.Linear(4, 4), nn.BatchNorm1d(4)).eval()
         x = torch.randn(3, 4)
         loaded = _save_load(model, x, tmp_path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.witness_completeness is WitnessCompleteness.COMPLETE
         verdict, _ = _verdict(loaded, x)
@@ -610,7 +610,7 @@ class TestHon12HostRngChannels:
         self, label: str, draw: Any, tmp_path: Path
     ) -> None:
         loaded = _save_load(_branch_model(draw), torch.ones(4), tmp_path, acts=True)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.rng_profile.host_rng_consumed is True, label
         verdict, attest = _verdict(loaded, torch.ones(4), seed=0)
@@ -619,7 +619,7 @@ class TestHon12HostRngChannels:
 
     def test_model_attribute_generator_ceilings(self, tmp_path: Path) -> None:
         loaded = _save_load(_ModelAttrGenerator(), torch.ones(4), tmp_path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.rng_profile.host_rng_consumed is True
         verdict, _ = _verdict(loaded, torch.ones(4), seed=0)
@@ -632,7 +632,7 @@ class TestHon12HostRngChannels:
         loaded = _save_load(
             nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval(), torch.randn(2, 4), tmp_path
         )
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.rng_profile.host_rng_consumed is False
         verdict, _ = _verdict(loaded, torch.randn(2, 4))
@@ -648,7 +648,7 @@ class TestHon12HostRngChannels:
                 return x * 2
 
         loaded = _save_load(_Holder(), torch.ones(4), tmp_path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.rng_profile.host_rng_consumed is False
 
@@ -661,7 +661,7 @@ class TestHon12HostRngChannels:
 
         random.seed(0)
         loaded = _save_load(_GlobalBranch(), torch.ones(4), tmp_path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert descriptor.rng_profile.host_rng_consumed is True
         assert descriptor.rng_profile.capture_seed == 0
@@ -785,7 +785,7 @@ class AddOne(nn.Module):
 x = torch.tensor([1.0, 2.0], device="cpu")
 torch.set_default_device("meta")
 trace = tl.trace(AddOne(), x, capture=CaptureOptions(
-    intervention_ready=True, capture_container_structure=True, cache=False))
+    replayable=True, capture_container_structure=True, cache=False))
 trace.save(sys.argv[1], level="runnable")
 """
 
@@ -958,7 +958,7 @@ class TestCudaStagingAndReadiness:
             model = nn.ConvTranspose2d(2, 2, 3).cuda().eval()
             x = torch.randn(1, 2, 5, 5, device="cuda")
             loaded = _save_load(model, x, tmp_path, acts=True)
-            descriptor = loaded.runnable_descriptor
+            descriptor = loaded._sparse_run_descriptor
             assert descriptor is not None
             assert descriptor.ambient_context.attestation_ineligible_context is True
             result = loaded.run(inputs=x, on_divergence="return")
@@ -1018,7 +1018,7 @@ class TestHon14InferenceModeCapture:
         path = tmp_path / "inference.tlspec"
         trace.save(path, level="runnable", include_weights=True)
         loaded = tl.load(path)
-        descriptor = loaded.runnable_descriptor
+        descriptor = loaded._sparse_run_descriptor
         assert descriptor is not None
         assert all(call.execution_context.inference_mode for call in descriptor.calls)
         before_inference = torch.is_inference_mode_enabled()
@@ -1094,13 +1094,13 @@ class TestOutputCapabilityTable:
         trace = tl.trace(model_cls(), torch.tensor([1.0]), capture=_CAPTURE)
         with pytest.raises(RunnablePreflightError) as excinfo:
             trace.save(tmp_path / "literal.tlspec", level="runnable")
-        assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+        assert "output_container_contract_missing" in str(excinfo.value.fields.get("diagnostics"))
 
     def test_stateful_namedtuple_subclass_refuses_at_save(self, tmp_path: Path) -> None:
         trace = tl.trace(_nt_model(_StatefulNT), torch.tensor([1.0, 2.0]), capture=_CAPTURE)
         with pytest.raises(RunnablePreflightError) as excinfo:
             trace.save(tmp_path / "stateful_nt.tlspec", level="runnable")
-        assert "missing_output_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+        assert "output_container_contract_missing" in str(excinfo.value.fields.get("diagnostics"))
         assert "namedtuple_instance_state" in str(excinfo.value.fields.get("diagnostics"))
 
     @pytest.mark.parametrize(
@@ -1215,26 +1215,28 @@ class TestContextFieldValidation:
 
 
 _COUPLED_WITNESS_EXEC_FILES = (
-    "torchlens/_runnable_execution.py",
-    "torchlens/_runnable_attestation.py",
-    "torchlens/_runnable_call_arguments.py",
-    "torchlens/_runnable_call_outputs.py",
-    "torchlens/_runnable_input_aliases.py",
-    "torchlens/_runnable_input_metadata.py",
-    "torchlens/_runnable_input_sites.py",
-    "torchlens/_runnable_output_contracts.py",
-    "torchlens/_runnable_path_faithfulness.py",
-    "torchlens/_runnable_providers.py",
-    "torchlens/_runnable_retention.py",
-    "torchlens/_runnable_state_context.py",
-    "torchlens/_runnable_transaction.py",
-    "torchlens/_runnable_verification.py",
-    "torchlens/_runnable_witness_contracts.py",
-    "torchlens/_runnable_state.py",
-    "torchlens/_runnable_state_live.py",
+    "torchlens/_runnable/execution.py",
+    "torchlens/_runnable/attestation.py",
+    "torchlens/_runnable/call_arguments.py",
+    "torchlens/_runnable/call_outputs.py",
+    "torchlens/_runnable/input_aliases.py",
+    "torchlens/_runnable/input_metadata.py",
+    "torchlens/_runnable/input_sites.py",
+    "torchlens/_runnable/output_contracts.py",
+    "torchlens/_runnable/path_faithfulness.py",
+    "torchlens/_runnable/providers.py",
+    "torchlens/_runnable/retention.py",
+    "torchlens/_runnable/state_context.py",
+    "torchlens/_runnable/transaction.py",
+    "torchlens/_runnable/verification.py",
+    "torchlens/_runnable/witness_contracts.py",
+    "torchlens/_runnable/state.py",
+    "torchlens/_runnable/state_live.py",
     "torchlens/_io/runnable.py",
     "torchlens/backends/torch/completeness_witness.py",
     "torchlens/backends/torch/backend.py",
+    "torchlens/backends/torch/_outputs.py",
+    "torchlens/backends/torch/_failed_session.py",
     "torchlens/backends/torch/ops.py",
 )
 
@@ -1256,9 +1258,8 @@ class TestClassClosureMetaGates:
                 stripped = line.strip()
                 if "RunReport(" not in stripped or stripped.startswith("#"):
                     continue
-                if (
-                    "return RunReport(" in stripped
-                    and path.name == "_runnable_path_faithfulness.py"
+                if "return RunReport(" in stripped and path.as_posix().endswith(
+                    "torchlens/_runnable/path_faithfulness.py"
                 ):
                     continue  # the _run_report finalizer itself
                 if "class RunReport" in stripped or "RunReport(`" in stripped:
@@ -1358,7 +1359,7 @@ class TestOutputCapabilityMetaGates:
         """secB_1 adversarial pin: a hand-edited lossy_reconstruction=False is impotent."""
 
         from torchlens._ir.container import ContainerSpec
-        from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+        from torchlens._runnable.call_outputs import _spec_node_reconstruction_lossy
 
         forged = ContainerSpec(
             kind="namedtuple",
@@ -1372,7 +1373,7 @@ class TestOutputCapabilityMetaGates:
 
     def test_plain_namedtuple_spec_recompute_stays_lossless(self) -> None:
         from torchlens._ir.container import ContainerSpec
-        from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+        from torchlens._runnable.call_outputs import _spec_node_reconstruction_lossy
 
         plain = ContainerSpec(
             kind="namedtuple",

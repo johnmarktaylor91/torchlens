@@ -311,7 +311,7 @@ def test_capability_dump_moved_to_detail_accessor() -> None:
     # absence count instead of a magic number -- it still catches a
     # regression to the legacy verbose per-flag dump, which does not share
     # this structure.
-    from torchlens._utils import _probe_torch_capabilities
+    from torchlens.report._environment import _probe_torch_capabilities
 
     assert row.details == _probe_torch_capabilities().detail
     # Absent flags stay NAMED in the cell (absences-first doctrine).

@@ -62,7 +62,7 @@ def module_output_ops(trace: Any) -> list[Any]:
         Ops (one per pass) in execution order carrying ``output_of_modules``.
     """
 
-    return [op for op in trace.layer_list if getattr(op, "output_of_modules", ())]
+    return [op for op in trace._layer_list if getattr(op, "output_of_modules", ())]
 
 
 def _ops_for_address(trace: Any, address: str) -> list[Any]:
@@ -228,7 +228,7 @@ def pin_blocks(trace: Any) -> list[SiteSpec]:
                 field_name=f"tl_block_{index}",
                 module_address=address,
                 site_key=str(last.site_key),
-                pass_index=int(last.pass_index),
+                pass_index=int(last.pass_number),
             )
         )
     return specs
@@ -273,7 +273,7 @@ def pin_explicit(trace: Any, sites: tuple[str, ...]) -> list[SiteSpec]:
                 field_name="tl_" + address.replace(".", "_") + suffix,
                 module_address=address,
                 site_key=str(chosen.site_key),
-                pass_index=int(chosen.pass_index),
+                pass_index=int(chosen.pass_number),
             )
         )
     return specs
@@ -319,13 +319,13 @@ def _select_pass(raw: str, address: str, ops: list[Any], wanted: int | None) -> 
         The selected op record.
     """
 
-    passes = tuple(int(op.pass_index) for op in ops)
+    passes = tuple(int(op.pass_number) for op in ops)
     if wanted is None:
         if len(ops) > 1:
             _refusals.refuse_site_ambiguous(raw, passes)
         return ops[0]
     for op in ops:
-        if int(op.pass_index) == wanted:
+        if int(op.pass_number) == wanted:
             return op
     _refusals.refuse_site_unresolvable(raw, tuple(f"{address}:{p}" for p in passes))
 
@@ -358,8 +358,8 @@ def resolve_pinned(trace: Any, specs: list[SiteSpec]) -> dict[str, Any]:
     """
 
     index: dict[tuple[str, int], list[Any]] = {}
-    for op in trace.layer_list:
-        key = (str(op.site_key), int(op.pass_index))
+    for op in trace._layer_list:
+        key = (str(op.site_key), int(op.pass_number))
         index.setdefault(key, []).append(op)
 
     resolved: dict[str, Any] = {}

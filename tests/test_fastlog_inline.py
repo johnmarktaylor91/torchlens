@@ -6,6 +6,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 
 
 class _SelectiveSaveModel(nn.Module):
@@ -47,7 +48,7 @@ def test_fast_pass_selective_save_matches_fresh_trace_outputs() -> None:
     fast_trace = tl.trace(model, initial_input, capture=tl.options.CaptureOptions(seed=11))
     fresh_trace = None
     try:
-        relu_label = next(layer.layer_label for layer in fast_trace if layer.layer_type == "relu")
+        relu_label = next(layer.layer_label for layer in fast_trace if record_type(layer) == "relu")
         selected_labels = [relu_label, fast_trace.output_layers[0]]
 
         fast_trace.save_new_outs(

@@ -19,7 +19,6 @@ CaptureOptions.grouping
 CaptureOptions.hooks
 CaptureOptions.inference_only
 CaptureOptions.input_transform
-CaptureOptions.intervention_ready
 CaptureOptions.jax_control_flow
 CaptureOptions.jax_max_control_flow_unroll
 CaptureOptions.jax_static_argnums
@@ -36,12 +35,11 @@ CaptureOptions.name
 CaptureOptions.on_nonfinite
 CaptureOptions.optimizer
 CaptureOptions.output_device
-CaptureOptions.output_head
-CaptureOptions.output_style
 CaptureOptions.output_transform
 CaptureOptions.payload_policy
 CaptureOptions.reconstruction_ready
 CaptureOptions.recurrence_detection
+CaptureOptions.replayable
 CaptureOptions.save_args
 CaptureOptions.save_budget
 CaptureOptions.save_grads

@@ -4,24 +4,28 @@ from __future__ import annotations
 
 import time
 import warnings
+import weakref
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 from torch import nn
 
-from .._chunking import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
+from .._capture.prepare.chunked import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
 from .._data_classes._trace_accessors import boundary_label_rows
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from .._utils._torch_compat import tensor_has_named_dims
 from .._utils.hashing import compute_graph_shape_hash
+from ..backends.torch.backward import _register_forward_grad_fn
 from ..options import ReplayOptions, merge_replay_options
 from ._helper_fingerprint import refuse_changed_staged_helpers
+from ._rerun_ledger import _build_ledger_record
 from ._rerun_predicate import (
     plan_rerun_spec,
     refuse_unmatchable_staged_labels,
@@ -124,7 +128,7 @@ def run(
     refuse_unmatchable_staged_labels(spec_plan.capture_spec)
     hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
     started_at = time.monotonic()
-    old_hash = getattr(trace, "graph_shape_hash", None)
+    old_hash = trace._provenance_fingerprint
     old_raw_hash = getattr(trace, "_raw_event_shape_hash", None)
 
     with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
@@ -139,11 +143,10 @@ def run(
         )
     _refuse_shifted_raw_index_resave(trace, new_log)
     settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_registry_snapshot = getattr(trace, "facet_registry_snapshot", None)
+    new_log.facet_functions = getattr(trace, "facet_functions", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(
         new_log, hook_plan, source_log=trace
     )
-
     divergence_count = _validate_rerun_result(new_log, trace, strict=replay_options.strict)
     fast_refresh = False
     if divergence_count == 0:
@@ -153,15 +156,16 @@ def run(
         _release_discarded_capture(new_log)
     else:
         trace.replace_state_from(new_log)
-    trace.is_appended = False
+    _adopt_rerun_backward_graph(trace, new_log)
+    trace._provenance_is_appended = False
     trace._append_sequence_id = 0
-    trace.append_history = []
+    trace._append_history = []
 
     history_record = _build_ledger_record(
         trace,
         started_at=started_at,
         old_hash=old_hash,
-        new_hash=getattr(new_log, "graph_shape_hash", None),
+        new_hash=new_log._provenance_fingerprint,
         old_raw_hash=old_raw_hash,
         new_raw_hash=getattr(new_log, "_raw_event_shape_hash", None),
         hook_plan=hook_plan,
@@ -188,7 +192,7 @@ def run(
         "fast_refused": fast_refused,
         "shape_varied": False,
         "old_graph_shape_hash": old_hash,
-        "new_graph_shape_hash": getattr(trace, "graph_shape_hash", None),
+        "new_graph_shape_hash": trace._provenance_fingerprint,
         "old_raw_event_shape_hash": old_raw_hash,
         "new_raw_event_shape_hash": getattr(trace, "_raw_event_shape_hash", None),
     }
@@ -196,6 +200,47 @@ def run(
     trace._has_direct_writes = False
     trace._out_recipe_revision = getattr(trace, "_spec_revision", 0)
     return trace
+
+
+#: Rerun captures whose autograd graph a backward-ready rerun result adopted,
+#: kept alive exactly as long as that result (their tensor hooks route there).
+_RERUN_GRAPH_SOURCES: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
+
+
+def _adopt_rerun_backward_graph(trace: Trace, new_log: Trace) -> None:
+    """Make a backward-ready rerun result own the rerun capture's autograd graph.
+
+    The rerun's forward ran under ``new_log``, so its tensor grad hooks and
+    grad_fn registrations name ``new_log``, which the state swap discards. A
+    later ``trace.backward(loss)`` on the result would then record nothing on
+    the result (and an implicit pass on the discarded capture). Route the
+    capture's tensor hooks to ``trace`` and register its grad_fns there, the
+    same rebind the refresh projector performs, so a gradient edit armed on a
+    rerun result fires and ``.grad`` lands on the result. Traces that are not
+    backward-ready keep no graph and are left as they are.
+
+    Parameters
+    ----------
+    trace:
+        The rerun result (updated in place).
+    new_log:
+        The rerun's own capture.
+    """
+
+    if not (is_live_trace(trace) and trace._options_backward_ready):
+        return
+    new_log._refresh_projection_target_ref = weakref.ref(trace)
+    _RERUN_GRAPH_SOURCES[trace] = new_log
+    # The redirected hooks pass the one-owner-per-label check against the
+    # result's map, so the result adopts the rerun capture's hook ownership
+    # (the map the state swap left names the previous capture's tensors).
+    for key in ("_tl_grad_hook_owner_by_label", "_tl_backward_hooked_tensor_keys"):
+        if key in new_log.__dict__:
+            trace.__dict__[key] = new_log.__dict__[key]
+    for layer in trace._layer_list:
+        _register_forward_grad_fn(
+            trace, getattr(layer, "grad_fn_handle", None), layer._layer_label_raw
+        )
 
 
 def _release_discarded_capture(new_log: Trace) -> None:
@@ -316,8 +361,8 @@ def _chunked_rerun(
             replay=ReplayOptions(append=True, strict=strict),
             output_transform=output_transform,
         )
-    result.append_history = [initial_record, *result.append_history]
-    result.chunked_forward = True
+    result._append_history = [initial_record, *result._append_history]
+    result._options_chunk_size = True
     result.last_run = dict(result.last_run or {})
     result.last_run["chunk_size"] = chunk_size
     result.last_run["chunk_paths"] = normalize_chunk_paths(chunk_paths)
@@ -387,7 +432,7 @@ def _append_rerun(
     refuse_unmatchable_staged_labels(spec_plan.capture_spec)
     hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
     started_at = time.monotonic()
-    old_hash = getattr(log, "graph_shape_hash", None)
+    old_hash = log._provenance_fingerprint
 
     with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
@@ -400,12 +445,12 @@ def _append_rerun(
             intervene_predicate=spec_plan.intervene_predicate,
         )
     settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_registry_snapshot = getattr(log, "facet_registry_snapshot", None)
+    new_log.facet_functions = getattr(log, "facet_functions", None)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
     log._append_state_from(new_log)
-    log.is_appended = True
+    log._provenance_is_appended = True
     log._append_sequence_id = int(getattr(log, "_append_sequence_id", 0)) + 1
     log.state = TraceState.APPENDED
     log._has_direct_writes = False
@@ -429,9 +474,9 @@ def _append_rerun(
         "total_batch_size": total_batch_size,
         "append_sequence_id": log._append_sequence_id,
         "old_graph_shape_hash": old_hash,
-        "new_graph_shape_hash": getattr(new_log, "graph_shape_hash", None),
+        "new_graph_shape_hash": new_log._provenance_fingerprint,
     }
-    log.append_history.append(dict(log.last_run))
+    log._append_history.append(dict(log.last_run))
     log._record_operation(
         "append",
         engine="append",
@@ -444,7 +489,7 @@ def _append_rerun(
         total_batch_size=total_batch_size,
         append_sequence_id=log._append_sequence_id,
         old_graph_shape_hash=old_hash,
-        new_graph_shape_hash=getattr(new_log, "graph_shape_hash", None),
+        new_graph_shape_hash=new_log._provenance_fingerprint,
     )
     return log
 
@@ -489,7 +534,7 @@ def _streaming_append_error_message(log: Trace) -> str:
         details.append("on_save streaming")
     details_text = ", ".join(details) if details else "streaming"
     return (
-        f"Trace {getattr(log, 'model_class_name', None)!r} has active {details_text}; "
+        f"Trace {log._source_class_name!r} has active {details_text}; "
         "rerun(append=True) cannot update streamed activation storage. Save and reload "
         "the trace before appending, or disable streaming for this capture."
     )
@@ -564,23 +609,23 @@ def _validate_append_hook_plan(
         if helper is None:
             _warn_unknown_append_helper_once(log, helper_name)
             raise AppendBatchDependenceError(
-                f"helper {helper_name!r} does not declare batch_independent=True"
+                f"helper {helper_name!r} does not declare is_batch_independent=True"
             )
-        if not hasattr(helper, "batch_independent"):
+        if not hasattr(helper, "is_batch_independent"):
             _warn_unknown_append_helper_once(log, helper_name)
             raise AppendBatchDependenceError(
-                f"helper {helper_name!r} does not declare batch_independent=True"
+                f"helper {helper_name!r} does not declare is_batch_independent=True"
             )
-        if not bool(getattr(helper, "batch_independent", False)):
+        if not bool(getattr(helper, "is_batch_independent", False)):
             raise AppendBatchDependenceError(
                 f"helper {helper_name!r} is not batch-independent; append is unsafe"
             )
         force_shape_change = bool(entry.metadata.get("allow_shape_change", False)) or bool(
             dict(helper.kwargs).get("allow_shape_change", False)
         )
-        if force_shape_change and not bool(getattr(helper, "compatible_with_append", False)):
+        if force_shape_change and not bool(getattr(helper, "is_compatible_with_append", False)):
             raise AppendMismatchError(
-                f"helper {helper_name!r} may change out shape and its compatible_with_append is False"
+                f"helper {helper_name!r} may change out shape and its is_compatible_with_append is False"
             )
 
 
@@ -599,7 +644,7 @@ def _warn_unknown_append_helper_once(log: Trace, helper_name: str) -> None:
     if helper_name in warned:
         return
     warnings.warn(
-        f"helper {helper_name!r} has no batch_independent flag; add it to enable append",
+        f"helper {helper_name!r} has no is_batch_independent flag; add it to enable append",
         UserWarning,
         stacklevel=3,
     )
@@ -626,32 +671,32 @@ def _validate_append_candidate(
         Active hook entries used to decide grad support.
     """
 
-    old_hash = getattr(old_log, "graph_shape_hash", None)
-    new_hash = getattr(new_log, "graph_shape_hash", None)
+    old_hash = old_log._provenance_fingerprint
+    new_hash = new_log._provenance_fingerprint
     if old_hash != new_hash:
         raise AppendMismatchError("graph shape changed")
 
-    old_labels = tuple(layer._layer_label_raw for layer in old_log.layer_list)
-    new_labels = tuple(layer._layer_label_raw for layer in new_log.layer_list)
+    old_labels = tuple(layer._layer_label_raw for layer in old_log._layer_list)
+    new_labels = tuple(layer._layer_label_raw for layer in new_log._layer_list)
     if old_labels != new_labels:
         raise AppendMismatchError("topology or site labels changed")
 
-    old_by_raw = {layer._layer_label_raw: layer for layer in old_log.layer_list}
-    new_by_raw = {layer._layer_label_raw: layer for layer in new_log.layer_list}
     old_by_label = {
         key: layer
-        for layer in old_log.layer_list
+        for layer in old_log._layer_list
         for key in (layer._layer_label_raw, layer.layer_label)
     }
     new_by_label = {
         key: layer
-        for layer in new_log.layer_list
+        for layer in new_log._layer_list
         for key in (layer._layer_label_raw, layer.layer_label)
     }
     grads_supported = _hook_plan_supports_append_grads(hook_plan)
-    for raw_label in old_labels:
-        old_layer = old_by_raw[raw_label]
-        new_layer = new_by_raw[raw_label]
+    # Pair passes by position: a raw label repeats for every pass of a reused
+    # module (relu_1_4_raw for relu_1_3:1 and relu_1_3:2), so a raw-label map
+    # would check pass 1 against the last pass. The sequences were just shown
+    # equal, so position identifies the pass.
+    for old_layer, new_layer in zip(old_log._layer_list, new_log._layer_list, strict=True):
         if _is_append_buffer_side_effect_layer(
             old_layer, old_by_label
         ) or _is_append_buffer_side_effect_layer(new_layer, new_by_label):
@@ -842,7 +887,7 @@ def _first_saved_batch_size(log: Trace) -> int | None:
         Leading dimension from the first tensor out, if any.
     """
 
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         out = getattr(layer, "out", None)
         if isinstance(out, torch.Tensor) and out.ndim > 0:
             return int(out.shape[0])
@@ -896,7 +941,7 @@ def _preflight(log: Trace, model: nn.Module, x: Any) -> None:
             remedy="pass the forward input explicitly as log.run(model, x)",
             argument="inputs",
         )
-    from .._user_funcs import _reject_opaque_wrappers
+    from .._capture_state_helpers import _reject_opaque_wrappers
 
     _reject_opaque_wrappers(model)
 
@@ -958,49 +1003,47 @@ def _capture_with_active_spec(
         Fresh log built off to the side.
     """
 
-    from .._user_funcs import (
-        _run_model_and_save_specified_outs,
-        _unwrap_data_parallel,
-        check_model_and_input_variants,
-    )
+    from .._capture.run_entry import _run_model_and_save_specified_outs
+    from .._capture_state_helpers import _unwrap_data_parallel
+    from .._robustness import check_model_and_input_variants
 
     model = _unwrap_data_parallel(model)
     x = _coerce_input_args(model, x)
     check_model_and_input_variants(model, x, {})
-    save_grads_policy = getattr(log, "save_grads", None)
+    save_grads_policy = log._options_save_grads
     grads_to_save = "all" if save_grads_policy is True else save_grads_policy
     with _share_source_state_clones(log):
         return _run_model_and_save_specified_outs(
             model=model,
             input_args=x,
             input_kwargs={},
-            output_device=getattr(log, "output_device", "same"),
-            activation_transform=getattr(log, "activation_transform", None),
-            grad_transform=getattr(log, "grad_transform", None),
-            save_raw_activations=getattr(log, "save_raw_activations", True),
-            save_raw_grads=getattr(log, "save_raw_gradients", True),
-            save_mode=getattr(log, "save_mode", "copy"),
+            output_device=cast('Literal["same", "cpu", "cuda"]', log._options_output_device),
+            activation_transform=log._options_activation_transform,
+            grad_transform=log._options_grad_transform,
+            save_raw_activations=log._options_save_raw_activations,
+            save_raw_grads=log._options_save_raw_grads,
+            save_mode=log._options_save_mode,
             capture_tensor_grad_hooks=getattr(log, "capture_tensor_grad_hooks", True),
-            mark_layer_depths=getattr(log, "mark_layer_depths", False),
-            detach_saved_activations=getattr(log, "detach_saved_activations", False),
-            save_args=getattr(log, "save_arg_values", False),
+            mark_layer_depths=log._options_mark_layer_depths,
+            detach_saved_activations=log._options_detach_saved_activations,
+            save_args=log._options_save_args,
             save_grads=save_grads_policy not in (None, False),
             grads_to_save=grads_to_save,
-            seed=getattr(log, "random_seed", None),
+            seed=log._options_seed,
             num_context_lines=getattr(log, "num_context_lines", 7),
             optimizer=getattr(log, "_optimizer", None),
-            save_source_context=getattr(log, "save_code_context", False),
-            save_rng=getattr(log, "save_rng_states", False),
-            recurrence_detection=getattr(log, "recurrence_detection", True),
+            save_source_context=log._options_save_source_context,
+            save_rng=log._options_save_rng,
+            recurrence_detection=log._options_recurrence_detection,
             # Inherit the source trace's readiness: forcing ``True`` armed the host
             # RNG monitor (most of a rerun's cost) and minted replay templates the
             # source never had. The rerun divergence detector
             # (``_raw_event_shape_hash``) is computed for every capture regardless.
-            intervention_ready=bool(getattr(log, "intervention_ready", False)),
+            replayable=bool(getattr(log, "is_replayable", False)),
             intervention_spec=intervention_spec,
             normalized_hook_plan=hook_plan,
-            verbose=getattr(log, "verbose", False),
-            backward_ready=getattr(log, "backward_ready", False),
+            verbose=log._options_verbose,
+            backward_ready=log._options_backward_ready,
             # An intervention rerun retains payloads like any capture; inherit the
             # source log's configured budget rather than silently rebudgeting at
             # the default.
@@ -1008,7 +1051,7 @@ def _capture_with_active_spec(
             # A rerun measures CPU peaks only if the source opted in.
             measure_host_peak_memory=bool(getattr(log, "measure_host_peak_memory", False)),
             output_transform=output_transform,
-            save_transformed_output=getattr(log, "save_raw_output", "small"),
+            save_transformed_output=log._options_save_transformed_output,
             intervene_predicate=intervene_predicate,
             **_rerun_save_kwargs(log),
         )
@@ -1078,7 +1121,7 @@ def _share_source_state_clones(log: Trace) -> Iterator[None]:
         Source trace of the rerun.
     """
 
-    from .._runnable_state import CAPTURE_STATE_CLONE
+    from .._runnable.state import CAPTURE_STATE_CLONE
 
     source_state = getattr(log._runnable, "capture_state", None)
     if not isinstance(source_state, Mapping):
@@ -1252,7 +1295,7 @@ def _rerun_save_scope(log: Trace) -> tuple[str | list[int | str] | None, Any | N
                 # fall back to "metadata_only".
                 str(options.lookback_payload_policy),
             )
-    if getattr(log, "num_saved_ops", 0) == 0:
+    if len(getattr(log, "saved_ops", ())) == 0:
         return None, None, 0, "metadata_only"
     layer_nums = getattr(log, "_layer_nums_to_save", "all")
     if layer_nums == "all":
@@ -1288,12 +1331,12 @@ def _refuse_shifted_raw_index_resave(old_log: Trace, new_log: Trace) -> None:
     if (
         request.get("replayable", False)
         or getattr(options, "keep_op", None) is not None
-        or getattr(old_log, "num_saved_ops", 0) == 0
+        or len(getattr(old_log, "saved_ops", ())) == 0
         or getattr(old_log, "_layer_nums_to_save", "all") == "all"
     ):
         return
-    old_labels = [layer._layer_label_raw for layer in old_log.layer_list]
-    new_labels = [layer._layer_label_raw for layer in new_log.layer_list]
+    old_labels = [layer._layer_label_raw for layer in old_log._layer_list]
+    new_labels = [layer._layer_label_raw for layer in new_log._layer_list]
     if old_labels == new_labels:
         return
     first = next(
@@ -1339,74 +1382,6 @@ def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any]
         return raw_index in selected_indices
 
     return keep_selected_raw_index
-
-
-def _build_ledger_record(
-    log: Trace,
-    *,
-    started_at: float,
-    old_hash: str | None,
-    new_hash: str | None,
-    old_raw_hash: str | None,
-    new_raw_hash: str | None,
-    hook_plan: list[NormalizedHookEntry],
-    strict: bool,
-    divergence_count: int,
-    fast_refresh: bool,
-    hook_fire_count: int,
-    unfired_hook_count: int,
-) -> dict[str, Any]:
-    """Create the append-only operation history record for a rerun.
-
-    Parameters
-    ----------
-    log:
-        Trace after state replacement.
-    started_at:
-        Monotonic start time for the rerun.
-    old_hash:
-        Graph-shape hash before rerun.
-    new_hash:
-        Candidate graph-shape hash from the fresh capture.
-    old_raw_hash:
-        Raw-event shape hash before rerun.
-    new_raw_hash:
-        Candidate raw-event shape hash from the fresh capture.
-    hook_plan:
-        Normalized hook entries active during rerun.
-    strict:
-        Whether strict divergence handling was requested.
-    divergence_count:
-        Number of divergence events detected.
-    fast_refresh:
-        Whether the rerun refreshed existing graph containers in place.
-    hook_fire_count:
-        Number of live hook firings observed on the candidate capture.
-    unfired_hook_count:
-        Number of planned hook entries that fired nowhere.
-
-    Returns
-    -------
-    dict[str, Any]
-        Operation-history entry.
-    """
-
-    return {
-        "op": "rerun",
-        "engine": "rerun",
-        "started_at": started_at,
-        "strict": strict,
-        "append": False,
-        "hook_count": len(hook_plan),
-        "hook_fire_count": hook_fire_count,
-        "unfired_hook_count": unfired_hook_count,
-        "divergence_count": divergence_count,
-        "fast_refresh": fast_refresh,
-        "old_graph_shape_hash": old_hash,
-        "new_graph_shape_hash": new_hash,
-        "old_raw_event_shape_hash": old_raw_hash,
-        "new_raw_event_shape_hash": new_raw_hash,
-    }
 
 
 def _assign_unique_plan_ids(hook_plan: list[NormalizedHookEntry]) -> list[NormalizedHookEntry]:
@@ -1496,10 +1471,13 @@ def _reconcile_rerun_hook_fires(
         corresponding fire, retaining multiplicity for duplicate plans.
     """
 
-    plan_ids = [_hook_plan_identifier(entry) for entry in hook_plan]
+    # Only forward entries can fire during the rerun's forward; a gradient or
+    # node entry is armed for the result's next backward and settles there.
+    forward_plan = [entry for entry in hook_plan if entry.signal == "forward"]
+    plan_ids = [_hook_plan_identifier(entry) for entry in forward_plan]
     base_by_id = {
         plan_id: str(entry.metadata.get("plan_id_base", plan_id))
-        for entry, plan_id in zip(hook_plan, plan_ids)
+        for entry, plan_id in zip(forward_plan, plan_ids)
     }
     planned = Counter(plan_ids)
     fired: Counter[str] = Counter()
@@ -1509,16 +1487,16 @@ def _reconcile_rerun_hook_fires(
     # channel keeps its multiplicity semantics without letting one entry's
     # FireResult-channel fires hide another entry's miss.
     fallback_fired: Counter[str] = Counter()
-    for op in getattr(new_log, "layer_list", ()):
+    for op in new_log._layer_list:
         fire_results = tuple(getattr(op, "fire_results", None) or ())
         if fire_results:
             fired.update(str(result.plan_id) for result in fire_results)
             continue
         fallback_fired.update(
-            str(record.helper_name)
-            for record in (getattr(op, "interventions", None) or ())
-            if getattr(record, "direction", None) == "forward"
-            and getattr(record, "helper_name", None) is not None
+            str(record.edit_name)
+            for record in (getattr(op, "edits", None) or ())
+            if getattr(record, "signal", None) == "forward"
+            and getattr(record, "edit_name", None) is not None
         )
     total_fired = sum(fired.values()) + sum(fallback_fired.values())
     unfired: list[str] = []
@@ -1530,15 +1508,12 @@ def _reconcile_rerun_hook_fires(
         unfired.extend([plan_id] * (shortfall - consumed))
     if unfired:
         _refuse_source_matched_zero_fire(source_log, new_log, hook_plan, unfired)
-    if unfired:
-        # First CONTRACTED S-18 row (compo wave 0): the disclosure standing
-        # between a user and a silently un-applied intervention carries a
-        # stable machine-readable code and a structured remedy -- consumers
-        # branch on ``fields["code"]``, never on message text. The typed
-        # refusals above fire first, whatever the on_zero_fire policy says;
-        # the policy settles the rest (default: this coded warning). Under
-        # "error" the refusal raises here, before the swap, so the trace is
-        # unchanged.
+        # First CONTRACTED S-18 row (compo wave 0): the disclosure standing between a user and a
+        # silently un-applied intervention carries a stable machine-readable code and a structured
+        # remedy -- consumers branch on ``fields["code"]``, never on message text. The typed
+        # refusals above fire first, whatever the on_zero_fire policy says; the policy settles the
+        # rest (default: this coded warning). Under "error" the refusal raises here, before the
+        # swap, so the trace is unchanged.
         message = (
             "Rerun hook plan entries fired at zero sites on the new inputs: "
             f"{unfired!r}. The rerun completed, but those interventions were "
@@ -1584,8 +1559,8 @@ def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:
         pass) compares pass by pass through the shared per-listing rule.
     """
 
-    source_hash = getattr(source_log, "graph_shape_hash", None)
-    if source_hash is None or source_hash != getattr(new_log, "graph_shape_hash", None):
+    source_hash = source_log._provenance_fingerprint
+    if source_hash is None or source_hash != new_log._provenance_fingerprint:
         return False
     labels = list(getattr(source_log, "input_layers", None) or ())
     if not labels or labels != list(getattr(new_log, "input_layers", None) or ()):
@@ -1633,7 +1608,7 @@ def _is_where_predicate_entry(entry: Any) -> bool:
 def _matched_site_count(log: Trace, entry: Any) -> int:
     """Count the sites an entry's selector resolves to on a finished trace (0 if it cannot)."""
 
-    fanout = len(getattr(log, "layer_list", ()) or ()) + 1
+    fanout = len(log._layer_list or ()) + 1
     try:
         return len(log._resolve_sites(entry.site_target, max_fanout=fanout))
     except Exception:  # noqa: BLE001 - an unresolvable target keeps the warning path
@@ -1698,8 +1673,6 @@ def _refuse_source_matched_zero_fire(
             continue
         if not matched:
             continue
-        if _is_gradient_edit(entry):
-            _refuse_gradient_edit_rerun(plan_id, matched)
         raise LiveModeLabelError(
             f"A staged edit ({plan_id}) matched {matched} site(s) {where} but fired at none "
             f"during the rerun's forward, and {why}, so the rerun would return an un-edited "
@@ -1714,37 +1687,6 @@ def _refuse_source_matched_zero_fire(
             unfired_plan_id=plan_id,
             source_site_count=matched,
         )
-
-
-def _refuse_gradient_edit_rerun(plan_id: str, matched: int) -> None:
-    """Refuse a rerun whose unfired staged edit is a gradient edit (its real cause).
-
-    Raises
-    ------
-    LiveModeLabelError
-        ``rerun_gradient_edit_unsupported``: a rerun replays the forward only.
-    """
-
-    raise LiveModeLabelError(
-        f"A staged gradient edit ({plan_id}) matched {matched} site(s) on this trace, "
-        "but a rerun replays the forward only, so a gradient edit can never fire "
-        "there. The rerun is refused and the trace is unchanged. Remedy: capture "
-        "with tl.options.CaptureOptions(backward_ready=True), attach the edit with "
-        "trace.attach_hooks(site, edit) or intervene=tl.when(site, edit), and run "
-        "trace.backward(loss)",
-        code="rerun_gradient_edit_unsupported",
-        unfired_plan_id=plan_id,
-        source_site_count=matched,
-    )
-
-
-def _is_gradient_edit(entry: Any) -> bool:
-    """Return whether one planned hook entry edits gradients."""
-
-    helper = getattr(entry, "helper_spec", None)
-    if helper is not None and (helper.kind == "backward" or helper.direction == "backward"):
-        return True
-    return entry.metadata.get("direction") == "backward"
 
 
 __all__ = ["run"]

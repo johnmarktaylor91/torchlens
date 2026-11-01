@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from typing import TypeAlias
 
@@ -79,8 +80,7 @@ def resolve_bundle_blobs_dir(bundle_root: Path) -> Path:
     """
 
     blobs_dir = bundle_root / "blobs"
-    if blobs_dir.is_symlink():
-        raise ArtifactError(f"Refusing symlinked blobs directory: {blobs_dir}.")
+    reject_symlink_path(blobs_dir, context="blobs directory")
     return blobs_dir.resolve()
 
 
@@ -122,10 +122,10 @@ def resolve_bundle_blob_path(
         raise ArtifactError(f"Bundle rejected parent traversal in relative_path {relative_path!r}.")
 
     blobs_dir = bundle_root / "blobs"
-    if resolved_blobs_dir is not None and blobs_dir.is_symlink():
+    if resolved_blobs_dir is not None:
         # Keep the per-candidate guard when a caller reuses its canonical root:
         # replacing blobs/ with a symlink during an operation must still fail.
-        raise ArtifactError(f"Refusing symlinked blobs directory: {blobs_dir}.")
+        reject_symlink_path(blobs_dir, context="blobs directory")
     try:
         candidate = (bundle_root / candidate_path).resolve()
     except (ValueError, OSError) as exc:
@@ -145,3 +145,20 @@ def resolve_bundle_blob_path(
             f"Bundle rejected path traversal outside blobs/: {relative_path!r}."
         ) from exc
     return candidate
+
+
+def _make_tmp_bundle_path(bundle_path: Path) -> Path:
+    """Create the deterministic sibling temp path for one bundle target.
+
+    Parameters
+    ----------
+    bundle_path:
+        Final bundle directory path.
+
+    Returns
+    -------
+    Path
+        Temporary working directory path.
+    """
+
+    return bundle_path.parent / f"{bundle_path.name}.tmp.{uuid.uuid4().hex}"

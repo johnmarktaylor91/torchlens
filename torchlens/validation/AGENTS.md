@@ -24,6 +24,8 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 | `_script_metadata_proof.py` | TorchScript-graph proof (nested scripted calls inlined) that a `jitscript` boundary call reads a perturbed tensor argument only through `aten::size`, `aten::dim`, `aten::numel`, `prim::dtype` or `prim::device`; recorded as exemption reason `torchscript_metadata_only_argument` with its proof; any other use, or an argument type that can hold a tensor below the recorded slot map, keeps the perturbation check |
 | `_integer_mod_proof.py` | Saved-call proof that an integer `% +-1` is identically zero (used by the `integer_mod_unit_divisor` posthoc decision) |
 | `_replay_device.py` | Replay device alignment when an `output_device` capture keeps saved payloads off the op's device: parent payloads move to the slot's saved-argument device, recomputed outputs to the saved output's device |
+| `_grad_flags.py` | Captured `requires_grad` flags of replay arguments (`_mirror_captured_requires_grad`, `_snapshot_grad_flags`): torch-only helpers shared by `_replay_grad_fidelity.py` and `_replay_storage_context.py` |
+| `_replay_storage_context.py` | Replay of `as_strided_` / `resize_` / `resize_as_` on a clone of the receiver's saved storage context (whole storage, offset, strides), with the swapped-in parent values written into the view; no effect on any other op or slot |
 | `_shift_probe.py` | `VALUE_STEP_STRATEGIES` (the value-step retry rungs, in order) and `lift_min_entry_values`: the non-uniform `lift_min_entry` perturbation retry (lifts one entry above the max), the probe uniform steps cannot give a shift-invariant child such as a saturated softmax |
 | `_completeness_backstop.py` | `completeness_backstop_counts`: dispatcher-witness census vs captured ops, including the module-forward-owned drop rule |
 | `status.py` | Replay-validation status objects |
@@ -138,8 +140,11 @@ inf/NaN tensors, and special-value args.
 - `MetadataInvariantError` is the public invariant failure type.
 - `check_metadata_invariants()` should fail loudly on broken graph/log structure.
   It is IMPLEMENTED in `_invariants_entry.py` (with the per-domain checks in
-  the sibling `_invariants_*.py` modules); `invariants.py` only REBINDS the
-  entry function — editing `invariants.py` to change check behavior is a no-op.
+  the sibling `_invariants_*.py` modules); `invariants.py` holds the error type,
+  the contract records and the `METADATA_INVARIANT_CONTRACTS` tuple, and imports
+  the check functions from their home modules after those definitions (the
+  split modules import the hub's classes back). Editing `invariants.py` to
+  change check behavior is a no-op; patch or edit a check in its home module.
 - Keep invariants aligned with primary conditional fields, not only legacy THEN views.
 
 ## __init__.py Schema Checks

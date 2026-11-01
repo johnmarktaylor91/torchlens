@@ -15,9 +15,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 from ..._capture.outcome import stamp_backend_finalized
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
-    DerivedGradRecord,
     IntermediateDerivedGradAccessor,
-    IntermediateDerivedGradRecord,
 )
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
@@ -73,58 +71,30 @@ from .._options import (
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from .._validation_shared import float_replay_tolerances_for_dtype_name, scalar_replay_close
+from ._captures import TinygradIntermediateCandidate, TinygradUOpCapture
+from ._derived_grads import (
+    _differentiated_input_leaves,
+    _normalize_tinygrad_input_grad_argnums,
+    _records_for_tinygrad_intermediate_grads,
+    _records_for_tinygrad_leaf_grads,
+    _restore_tinygrad_grads,
+    _snapshot_tinygrad_grads,
+    _tree_leaves_with_paths,
+)
+from ._rules import (
+    CONSTANT_KIND_ANNOTATION,
+    CONSTANT_UNREALIZABLE_CODE,
+    PER_UOP_PAYLOAD_POLICY,
+    RNG_STATE_IN_GRAPH_CODE,
+    ReplayVerdict,
+    constant_func_name,
+    constant_kind_for_uop,
+    refuse_constant_unrealizable,
+    refuse_rng_state_in_graph,
+    rng_state_uops,
+)
 
 _ACTIVE_TINYGRAD_MODULE_STACK: list[TinygradModuleFrame] = []
-
-
-@dataclass(frozen=True)
-class TinygradUOpCapture:
-    """Captured tinygrad UOp metadata for validation.
-
-    Parameters
-    ----------
-    label_raw
-        Raw TorchLens label for the materialized op.
-    uop
-        Source tinygrad UOp snapshot.
-    op_name
-        UOp operation name.
-    parent_labels
-        Raw parent labels captured from UOp source edges.
-    parent_arg_positions
-        UOp source positions for each raw parent label.
-    payload_snapshot
-        Realized tinygrad tensor copy saved during capture.
-    """
-
-    label_raw: str
-    uop: Any
-    op_name: str
-    parent_labels: tuple[str, ...]
-    parent_arg_positions: tuple[tuple[int, str], ...]
-    payload_snapshot: Any
-
-
-@dataclass(frozen=True)
-class TinygradIntermediateCandidate:
-    """Live retained tinygrad tensor candidate for one op-level gradient.
-
-    Parameters
-    ----------
-    signature
-        Conservative structural signature used for trace-op matching.
-    tensor
-        Live tinygrad Tensor retained from the no-realize forward pass.
-    aval
-        Human-readable abstract-value description.
-    dtype_ref
-        Backend-neutral dtype reference for the tensor.
-    """
-
-    signature: tuple[Any, ...]
-    tensor: Any
-    aval: str
-    dtype_ref: DtypeRef | None
 
 
 @dataclass(frozen=True)
@@ -227,6 +197,60 @@ class TinygradModuleTree:
     param_address_by_uop_id: dict[int, str]
     call_counts: dict[str, int]
     forward_args_by_call: dict[tuple[str, int], tuple[tuple[Any, ...], dict[str, Any]]]
+
+
+def _uop_annotations(
+    uop: Any, op_name: str, tensor: Any, observed: tuple[str, ...], constant_kind: str | None
+) -> dict[str, object]:
+    """The per-UOp op annotations, with the constant kind when one was classified."""
+
+    annotations: dict[str, object] = {
+        "tinygrad_uop": op_name,
+        "tinygrad_uop_signature": _uop_signature(uop),
+        "tinygrad_observed_tensor_ops": observed,
+        "tinygrad_identity": _identity(tensor),
+    }
+    if constant_kind is not None:
+        annotations[CONSTANT_KIND_ANNOTATION] = constant_kind
+    return annotations
+
+
+def _uop_capture(
+    label_raw: str, uop: Any, op_name: str, parents: tuple[ParentEdge, ...], payload: Any
+) -> TinygradUOpCapture:
+    """The live-validation capture record for one emitted UOp event."""
+
+    return TinygradUOpCapture(
+        label_raw=label_raw,
+        uop=uop,
+        op_name=op_name,
+        parent_labels=tuple(edge.parent_label_raw for edge in parents),
+        parent_arg_positions=tuple(
+            (cast(int, edge.arg_position), edge.parent_label_raw) for edge in parents
+        ),
+        payload_snapshot=payload,
+    )
+
+
+def _stamp_param_logs(trace: Trace, module_tree: TinygradModuleTree | None) -> None:
+    """Record the parameter accessor and counts; empty when no object module was traced."""
+
+    if module_tree is not None:
+        trace._param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
+        trace._num_param_tensors = len(trace._param_logs)
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
+        trace.num_params_trainable = sum(
+            param.num_params for param in trace._param_logs if param.is_trainable
+        )
+        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+        trace._provenance_param_source = "native-module"
+    else:
+        trace._param_logs = ParamAccessor({})
+        trace._num_param_tensors = 0
+        trace.num_params = 0
+        trace.num_params_trainable = 0
+        trace.num_params_frozen = 0
+        trace._provenance_param_source = "none"
 
 
 class TinygradBackend:
@@ -437,7 +461,8 @@ class TinygradBackend:
         if random_seed is not None:
             raise BackendUnsupportedError(
                 "tinygrad backend preview does not support random_seed; pass explicit RNG "
-                "state through the model/input surface instead."
+                "state through the model/input surface instead.",
+                code="explicit_seed_unsupported",
             )
         args = self._normalize_input_args(input_args)
         module_tree = discover_tinygrad_module_tree(model)
@@ -481,7 +506,7 @@ class TinygradBackend:
             save_transformed_output=cast(str | bool, save_raw_output),
         )
         trace.capture_events = CaptureEvents()
-        trace.capture_start_time = time.time()
+        trace._provenance_start_time = time.time()
         observed_ops: dict[int, list[str]] = {}
         observed_module_stacks: dict[int, tuple[TinygradModuleFrame, ...]] = {}
         input_identities = self._input_identities(args)
@@ -507,11 +532,11 @@ class TinygradBackend:
             raise BackendUnsupportedError(
                 "tinygrad backend preview requires at least one tinygrad Tensor output."
             )
-        trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+        trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
         from ...recording.types import returned
 
         trace._output_slot = returned(output)
-        trace.raw_output = output_transform(output) if callable(output_transform) else None
+        trace.transformed_output = output_transform(output) if callable(output_transform) else None
         uop_labels = self._emit_input_sources(trace, args)
         captures = self._emit_uop_graph(
             trace,
@@ -522,28 +547,13 @@ class TinygradBackend:
             module_tree if use_object_module else None,
         )
         self._mark_output_events(trace, outputs, uop_labels, captures)
-        if use_object_module and module_tree is not None:
-            trace.param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
-            trace.num_param_tensors = len(trace.param_logs)
-            trace.num_params = sum(param.num_params for param in trace.param_logs)
-            trace.num_params_trainable = sum(
-                param.num_params for param in trace.param_logs if param.is_trainable
-            )
-            trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-            trace.param_source = "native-module"
-        else:
-            trace.param_logs = ParamAccessor({})
-            trace.num_param_tensors = 0
-            trace.num_params = 0
-            trace.num_params_trainable = 0
-            trace.num_params_frozen = 0
-            trace.param_source = "none"
+        _stamp_param_logs(trace, module_tree if use_object_module else None)
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
-        trace.num_layers_with_params = 0
+        trace._num_layers_with_params = 0
         self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_uop_captures = captures
-        trace.tinygrad_payload_policy = "dev_python_realized_copy"
+        trace.tinygrad_payload_policy = PER_UOP_PAYLOAD_POLICY
         apply_static_label_save_policy(trace, save_predicate, backend_name="tinygrad")
         if grad_options is not None:
             self._attach_derived_grads(
@@ -592,63 +602,68 @@ class TinygradBackend:
                 from ...validation.invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
-            passed = self._validate_uops(trace)
-            status_result = self._validation_status_from_counts(trace, passed=passed)
+            verdict = self._validate_uops(trace)
+            status_result = self._validation_status_from_counts(trace, verdict=verdict)
         except BackendUnsupportedError:
             raise
-        except Exception:
-            passed = False
-            status_result = ValidationStatus.result(
-                passed=False,
-                backend="tinygrad",
-                source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
-                payload_load_status=getattr(trace, "payload_load_status", None),
-                num_failed_ops=1,
+        except Exception as error:
+            verdict = ReplayVerdict.fail(
+                label="<metadata>",
+                reason="replay_mismatch",
+                detail=f"{type(error).__name__}: {error}",
+                num_replayed=0,
             )
+            status_result = self._validation_status_from_counts(trace, verdict=verdict)
         setattr(
             trace,
             "_validation_replay_status",
             status_result,
         )
-        return status_result if status_result.state == "unverified" else passed
+        return status_result if status_result.state == "unverified" else verdict.passed
 
     def _validation_status_from_counts(
         self,
         trace: Trace,
         *,
-        passed: bool,
+        verdict: ReplayVerdict,
     ) -> ValidationStatus:
-        """Build aggregate replay status from tinygrad replay and region counts.
+        """Build aggregate replay status from the tinygrad replay verdict.
 
         Parameters
         ----------
         trace
             Trace produced by this backend.
-        passed
-            Whether UOp replay validation passed.
+        verdict
+            Outcome of UOp replay validation; a failure names the first
+            offending op and its reason.
 
         Returns
         -------
         ValidationStatus
-            Failed status when replay failed, unverified status when all
-            replayed ops passed but importer-owned regions are present, and
-            passed status otherwise.
+            Failed status naming the op when replay failed, unverified status
+            when all replayed ops passed but importer-owned regions are
+            present, and passed status otherwise.
         """
 
         source: ValidationReplaySource = (
             "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
         )
         payload_load_status = getattr(trace, "payload_load_status", None)
+        passed = verdict.passed
         replayed_node_count = len(getattr(trace, "tinygrad_uop_captures", ())) if passed else 0
         unverified_node_count = count_importer_region_annotations(trace) if passed else 0
-        return ValidationStatus.from_replay_counts(
+        status = ValidationStatus.from_replay_counts(
             backend="tinygrad",
             source=source,
             num_replayed_ops=replayed_node_count,
             num_unverified_ops=unverified_node_count,
             num_failed_ops=0 if passed else 1,
             payload_load_status=payload_load_status,
+            decisions=verdict.decisions(),
         )
+        if status.state == "unverified":
+            return status
+        return replace(status, message=verdict.message())
 
     def validate_entry(self, *args: Any, **kwargs: Any) -> bool:
         """Capture then validate a tinygrad forward pass.
@@ -802,12 +817,17 @@ class TinygradBackend:
 
         captures: list[TinygradUOpCapture] = []
         uops = _unique_uops(outputs)
+        # Refuse before any payload realization could re-evaluate lazy RNG
+        # state (FORKS F-K interim; realize-once capture lifts this).
+        rng_uops = rng_state_uops(uops)
+        if rng_uops:
+            raise refuse_rng_state_in_graph(rng_uops[0], code=RNG_STATE_IN_GRAPH_CODE)
         for uop in uops:
             if id(uop) in uop_labels or not _is_materializable_uop(uop):
                 continue
             op_name = _uop_name(uop)
             parents = tuple(
-                ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
+                ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
                 for index, src in enumerate(getattr(uop, "src", ()) or ())
                 if (label := uop_labels.get(id(src))) is not None
             )
@@ -817,39 +837,34 @@ class TinygradBackend:
             }
             module_stack = _module_stack_for_uop(uop, observed_module_stacks, module_tree)
             param_refs = _param_refs_for_uop(uop, module_tree)
+            constant_kind = constant_kind_for_uop(
+                uop,
+                parent_labels=tuple(edge.parent_label_raw for edge in parents),
+                is_input=False,
+                is_parameter=bool(param_refs),
+            )
             tensor = self._tensor_from_uop(uop)
-            payload = self._realized_copy(tensor)
+            payload = self._realized_copy(tensor, uop=uop)
+            annotations = _uop_annotations(
+                uop, op_name, tensor, tuple(observed_ops.get(id(uop), ())), constant_kind
+            )
             event = self._append_event(
                 trace=trace,
                 kind="op",
-                layer_type=op_name.lower(),
-                func_name=(observed_ops.get(id(uop)) or [op_name.lower()])[-1],
+                layer_type=constant_func_name(constant_kind, op_name.lower()),
+                func_name=constant_func_name(
+                    constant_kind, (observed_ops.get(id(uop)) or [op_name.lower()])[-1]
+                ),
                 output=payload,
                 parents=parents,
                 parent_arg_positions=parent_positions,
                 module_stack=module_stack,
                 params=param_refs,
                 container_path=(),
-                annotations={
-                    "tinygrad_uop": op_name,
-                    "tinygrad_uop_signature": _uop_signature(uop),
-                    "tinygrad_observed_tensor_ops": tuple(observed_ops.get(id(uop), ())),
-                    "tinygrad_identity": _identity(tensor),
-                },
+                annotations=annotations,
             )
             uop_labels[id(uop)] = event.label_raw
-            captures.append(
-                TinygradUOpCapture(
-                    label_raw=event.label_raw,
-                    uop=uop,
-                    op_name=op_name,
-                    parent_labels=tuple(edge.parent_label_raw for edge in parents),
-                    parent_arg_positions=tuple(
-                        (cast(int, edge.arg_position), edge.parent_label_raw) for edge in parents
-                    ),
-                    payload_snapshot=payload,
-                )
-            )
+            captures.append(_uop_capture(event.label_raw, uop, op_name, parents, payload))
         return tuple(captures)
 
     def _append_event(
@@ -980,7 +995,7 @@ class TinygradBackend:
             parents=parents,
             parent_arg_positions=parent_arg_positions,
             _edge_uses=tuple(
-                (edge.parent_label_raw, edge.arg_position, edge.edge_use) for edge in parents
+                (edge.parent_label_raw, edge.arg_position, edge._edge_use) for edge in parents
             ),
             params=params,
             parent_params=(),
@@ -1020,7 +1035,7 @@ class TinygradBackend:
             is_scalar_bool=None,
             bool_value=None,
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
             record_context=self._record_context(reserved, output, func_name),
@@ -1084,7 +1099,7 @@ class TinygradBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,
@@ -1093,7 +1108,7 @@ class TinygradBackend:
             func_name=func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=(),
             recent_events=(),
             recent_ops=(),
@@ -1211,7 +1226,7 @@ class TinygradBackend:
             enrich_layer=_enrich_tinygrad_layer,
             update_param_totals_from_layers=True,
             finish_before_module_logs=False,
-            recurrence_detection=bool(getattr(trace, "recurrence_detection", False)),
+            recurrence_detection=bool(trace._options_recurrence_detection),
         )
 
     def _attach_object_module_logs(self, trace: Trace, tree: TinygradModuleTree) -> None:
@@ -1266,13 +1281,13 @@ class TinygradBackend:
         Returns
         -------
         None
-            ``trace.derived_grads`` is populated with input leaf gradient records.
+            ``trace.autograd.derived_grads`` is populated with input leaf gradient records.
         """
 
         if getattr(trace, "tinygrad_payload_policy", None) != "dev_python_realized_copy":
             raise BackendUnsupportedError(
                 "tinygrad derived gradients require live DEV=PYTHON realized-copy payloads; "
-                "audit-only traces cannot expose trace.derived_grads."
+                "audit-only traces cannot expose trace.autograd.derived_grads."
             )
         input_argnums = _normalize_tinygrad_input_grad_argnums(
             grad_options.input_grad_argnums,
@@ -1311,7 +1326,7 @@ class TinygradBackend:
             if not _tinygrad_outputs_close(self, derived_output, captured_output):
                 raise ValueError(
                     "tinygrad derived gradient run raw output diverged from captured raw output; "
-                    "refusing to expose trace.derived_grads."
+                    "refusing to expose trace.autograd.derived_grads."
                 )
             cast(Any, loss).backward()
             records = _records_for_tinygrad_leaf_grads(
@@ -1327,7 +1342,7 @@ class TinygradBackend:
             )
         finally:
             _restore_tinygrad_grads(snapshots)
-        trace.derived_grads = DerivedGradAccessor(records)
+        trace._autograd_derived_grads = DerivedGradAccessor(records)
         mirror_param_derived_grads(trace, records)
 
     def _derive_intermediate_grads_no_realize(
@@ -1375,7 +1390,7 @@ class TinygradBackend:
                 "scalar unless the traced output is already scalar."
             )
         selected_ops = tuple(
-            op for op in trace.layer_list if op.has_saved_activation and not op.is_input
+            op for op in trace._layer_list if op.has_saved_activation and not op.is_input
         )
         trace_signatures = _tinygrad_trace_op_signatures(
             selected_ops,
@@ -1408,7 +1423,7 @@ class TinygradBackend:
         )
         return IntermediateDerivedGradAccessor(records)
 
-    def _validate_uops(self, trace: Trace) -> bool:
+    def _validate_uops(self, trace: Trace) -> ReplayVerdict:
         """Validate saved tinygrad payloads against replayed UOps.
 
         Parameters
@@ -1418,8 +1433,10 @@ class TinygradBackend:
 
         Returns
         -------
-        bool
-            True when every captured UOp replays to its saved payload.
+        ReplayVerdict
+            Passed when every captured UOp replays to its saved payload and
+            reacts to parent perturbation; otherwise the first offending op
+            with its ``VALIDATION_REASONS`` reason.
         """
 
         captures_raw = getattr(trace, "tinygrad_uop_captures", None)
@@ -1429,33 +1446,66 @@ class TinygradBackend:
                 "tinygrad validation requires live DEV=PYTHON realized-copy payloads; "
                 "audit-only traces cannot be replay validated."
             )
-        ops_by_raw_label = {
-            getattr(op, "_label_raw", ""): op for op in getattr(trace, "layer_list", ())
-        }
+        ops_by_raw_label = {getattr(op, "_label_raw", ""): op for op in trace._layer_list}
         hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
-        for capture in captures:
-            op = ops_by_raw_label.get(capture.label_raw)
-            if op is None:
-                return False
+        for index, capture in enumerate(captures):
+            failure = self._uop_capture_failure(
+                index, capture, ops_by_raw_label, hidden_outputs_by_label
+            )
+            if failure is not None:
+                return failure
+        return ReplayVerdict.ok(len(captures))
+
+    def _uop_capture_failure(
+        self,
+        index: int,
+        capture: TinygradUOpCapture,
+        ops_by_raw_label: dict[str, Any],
+        hidden_outputs_by_label: dict[str, Any],
+    ) -> ReplayVerdict | None:
+        """The failed verdict for one capture, or ``None`` when it replays and perturbs."""
+
+        label = capture.label_raw
+        op = ops_by_raw_label.get(label)
+        if op is None:
+            return ReplayVerdict.fail(
+                label, "parent_payload_missing", "the op record is gone", index
+            )
+        try:
             saved_output = _saved_single_output(op, hidden_outputs_by_label)
+        except ValueError as error:
+            return ReplayVerdict.fail(label, "parent_payload_missing", str(error), index)
+        try:
             replayed = self._replay_uop_from_trace_graph(
                 capture,
                 op,
                 ops_by_raw_label,
                 hidden_outputs_by_label=hidden_outputs_by_label,
             )
-            if not _payloads_close(replayed, saved_output):
-                return False
-            if not _parent_perturbations_change_output(
-                backend=self,
-                capture=capture,
-                op=op,
-                ops_by_raw_label=ops_by_raw_label,
-                hidden_outputs_by_label=hidden_outputs_by_label,
-                saved_output=saved_output,
-            ):
-                return False
-        return True
+        except (KeyError, ValueError) as error:
+            return ReplayVerdict.fail(label, "replay_mismatch", str(error), index)
+        if not _payloads_close(replayed, saved_output):
+            return ReplayVerdict.fail(
+                label,
+                "replay_mismatch",
+                "the replayed UOp output differs from the saved payload",
+                index,
+            )
+        if not _parent_perturbations_change_output(
+            backend=self,
+            capture=capture,
+            op=op,
+            ops_by_raw_label=ops_by_raw_label,
+            hidden_outputs_by_label=hidden_outputs_by_label,
+            saved_output=saved_output,
+        ):
+            return ReplayVerdict.fail(
+                label,
+                "perturbation_insensitive",
+                "perturbing the saved parents left the replayed output unchanged",
+                index,
+            )
+        return None
 
     def _replay_uop_from_trace_graph(
         self,
@@ -1612,13 +1662,17 @@ class TinygradBackend:
 
         return Tensor(uop)
 
-    def _realized_copy(self, value: Any) -> Any:
+    def _realized_copy(self, value: Any, *, uop: Any | None = None) -> Any:
         """Return a sanctioned live payload copy for ``DEV=PYTHON`` tinygrad.
 
         Parameters
         ----------
         value
             tinygrad Tensor to copy.
+        uop
+            The forward-graph UOp the payload belongs to, when the copy is a
+            capture payload; names the op in the ``constant_unrealizable``
+            refusal when the value has no readable buffer.
 
         Returns
         -------
@@ -1628,7 +1682,14 @@ class TinygradBackend:
 
         from tinygrad import Tensor
 
-        return Tensor(value.tolist(), dtype=value.dtype, device=value.device).realize()
+        try:
+            return Tensor(value.tolist(), dtype=value.dtype, device=value.device).realize()
+        except NotImplementedError as error:
+            # ``need copyin``: a host-side source buffer (closure constant) that
+            # the forward never realized; refuse typed instead of crashing.
+            raise refuse_constant_unrealizable(
+                uop if uop is not None else value.uop, error, code=CONSTANT_UNREALIZABLE_CODE
+            ) from error
 
     def _assert_runtime_supported(self) -> None:
         """Reject tinygrad runtimes outside the S0.G-proven live-payload envelope.
@@ -1644,7 +1705,8 @@ class TinygradBackend:
         version = getattr(tinygrad, "__version__", None)
         if version not in {"0.13.0", None}:
             raise BackendUnsupportedError(
-                f"tinygrad backend preview is pinned to tinygrad==0.13.0; found {version!r}."
+                f"tinygrad backend preview is pinned to tinygrad==0.13.0; found {version!r}.",
+                code="runtime_version_unsupported",
             )
 
     def _assert_tinygrad_inputs(self, args: Sequence[Any]) -> None:
@@ -2391,13 +2453,15 @@ def _resolve_tinygrad_module_identity_mode(
 
     if value not in {None, "function_root", "object_module"}:
         raise BackendUnsupportedError(
-            "tinygrad module_identity_mode must be None, 'function_root', or 'object_module'."
+            "tinygrad module_identity_mode must be None, 'function_root', or 'object_module'.",
+            code="module_identity_mode_unsupported",
         )
     if value == "object_module" and module_tree is None:
         raise BackendUnsupportedError(
             "tinygrad module_identity_mode='object_module' requires a callable object with "
             "discoverable tinygrad module attributes. Raw callables use "
-            "module_identity_mode='function_root'."
+            "module_identity_mode='function_root'.",
+            code="module_identity_mode_unsupported",
         )
     if value == "function_root":
         return False
@@ -2548,39 +2612,6 @@ class _reject_mid_capture_execution:
 
         tensor_module.run_linear = self.original_tensor_run_linear
         jit_module.run_linear = self.original_jit_run_linear
-
-
-def _tree_leaves_with_paths(value: object, prefix: str = "") -> list[tuple[str, Any]]:
-    """Return leaves from a simple Python container with dotted paths.
-
-    Parameters
-    ----------
-    value
-        Container or leaf.
-    prefix
-        Current dotted path prefix.
-
-    Returns
-    -------
-    list[tuple[str, Any]]
-        Flat ``(path, leaf)`` pairs.
-    """
-
-    if isinstance(value, dict):
-        return [
-            item
-            for key, child in value.items()
-            for item in _tree_leaves_with_paths(child, f"{prefix}.{key}" if prefix else str(key))
-        ]
-    if isinstance(value, tuple | list):
-        return [
-            item
-            for index, child in enumerate(value)
-            for item in _tree_leaves_with_paths(
-                child, f"{prefix}.{index}" if prefix else str(index)
-            )
-        ]
-    return [(prefix, value)]
 
 
 def _unique_uops(outputs: Sequence[Any]) -> tuple[Any, ...]:
@@ -3084,220 +3115,6 @@ def _payloads_close(left: Any, right: Any) -> bool:
     if tuple(left.shape) != tuple(right.shape) or str(left.dtype) != str(right.dtype):
         return False
     return _payload_values_close(_payload_list(left), _payload_list(right), str(left.dtype))
-
-
-def _normalize_tinygrad_input_grad_argnums(
-    value: Sequence[int] | None, num_inputs: int
-) -> tuple[int, ...]:
-    """Normalize tinygrad input gradient argnums.
-
-    Parameters
-    ----------
-    value
-        User-supplied positional input argnums, or ``None`` for all inputs.
-    num_inputs
-        Number of positional inputs passed to the tinygrad callable.
-
-    Returns
-    -------
-    tuple[int, ...]
-        Unique non-negative positional input indexes.
-    """
-
-    if value is None:
-        return tuple(range(num_inputs))
-    normalized = tuple(sorted({index if index >= 0 else num_inputs + index for index in value}))
-    invalid = [index for index in normalized if index < 0 or index >= num_inputs]
-    if invalid:
-        raise ValueError(
-            f"input_grad_argnums indexes out of range for {num_inputs} inputs: {invalid}."
-        )
-    return normalized
-
-
-def _differentiated_input_leaves(
-    backend: TinygradBackend,
-    args: Sequence[Any],
-    input_argnums: Sequence[int],
-) -> tuple[tuple[str, int, Any], ...]:
-    """Return differentiated tinygrad input tensor leaves.
-
-    Parameters
-    ----------
-    backend
-        tinygrad backend instance used for tensor checks.
-    args
-        Positional callable arguments.
-    input_argnums
-        Positional input indexes to differentiate.
-
-    Returns
-    -------
-    tuple[tuple[str, int, Any], ...]
-        ``(path, argnum, tensor)`` records for tensor leaves.
-    """
-
-    leaves: list[tuple[str, int, Any]] = []
-    for argnum in input_argnums:
-        for local_path, leaf in _tree_leaves_with_paths(args[argnum]):
-            if not backend.is_tensor(leaf):
-                continue
-            suffix = f".{local_path}" if local_path else ""
-            leaves.append((f"inputs.{argnum}{suffix}", argnum, leaf))
-    return tuple(leaves)
-
-
-def _snapshot_tinygrad_grads(
-    backend: TinygradBackend,
-    leaves: Sequence[tuple[str, int, Any]],
-) -> dict[str, tuple[Any, Any | None, Any | None]]:
-    """Snapshot pre-existing tinygrad leaf grads before backward.
-
-    Parameters
-    ----------
-    backend
-        tinygrad backend instance used for realized copies.
-    leaves
-        Differentiated input leaves.
-
-    Returns
-    -------
-    dict[str, tuple[Any, Any | None, Any | None]]
-        Mapping from derived-grad path to ``(leaf, original_grad_object, value_snapshot)``.
-    """
-
-    snapshots: dict[str, tuple[Any, Any | None, Any | None]] = {}
-    for path, _argnum, tensor in leaves:
-        original_grad = getattr(tensor, "grad", None)
-        grad_snapshot = None if original_grad is None else backend._realized_copy(original_grad)
-        snapshots[path] = (tensor, original_grad, grad_snapshot)
-    return snapshots
-
-
-def _records_for_tinygrad_leaf_grads(
-    *,
-    backend: TinygradBackend,
-    leaves: Sequence[tuple[str, int, Any]],
-    snapshots: Mapping[str, tuple[Any, Any | None, Any | None]],
-    provenance: Mapping[str, Any],
-) -> dict[str, DerivedGradRecord]:
-    """Build derived-gradient records from bracketed tinygrad leaf grads.
-
-    Parameters
-    ----------
-    backend
-        tinygrad backend instance used for realized copies.
-    leaves
-        Differentiated input leaves.
-    snapshots
-        Pre-backward gradient snapshots.
-    provenance
-        Shared provenance metadata.
-
-    Returns
-    -------
-    dict[str, DerivedGradRecord]
-        Records keyed by stable input leaf path.
-    """
-
-    records: dict[str, DerivedGradRecord] = {}
-    for path, argnum, tensor in leaves:
-        post_grad = getattr(tensor, "grad", None)
-        if post_grad is None:
-            raise ValueError(f"tinygrad backward did not populate .grad for leaf {path!r}.")
-        _tensor, _original_grad, grad_snapshot = snapshots[path]
-        increment = post_grad if grad_snapshot is None else post_grad - grad_snapshot
-        grad = backend._realized_copy(increment)
-        records[path] = DerivedGradRecord(
-            path=path,
-            source="inputs",
-            argnum=argnum,
-            input_argnum=argnum,
-            aval=f"Tensor(shape={tuple(getattr(grad, 'shape', ()))}, dtype={getattr(grad, 'dtype', None)})",
-            dtype_ref=DtypeRef(backend="tinygrad", name=str(getattr(grad, "dtype", ""))),
-            grad=grad,
-            provenance=provenance,
-        )
-    return records
-
-
-def _records_for_tinygrad_intermediate_grads(
-    *,
-    backend: TinygradBackend,
-    trace_signatures: Mapping[tuple[Any, ...], list[Any]],
-    live_candidates: Mapping[tuple[Any, ...], list[TinygradIntermediateCandidate]],
-    snapshots: Mapping[str, tuple[Any, Any | None, Any | None]],
-    provenance: Mapping[str, Any],
-) -> dict[str, IntermediateDerivedGradRecord]:
-    """Build exact tinygrad intermediate-derived gradient records.
-
-    Parameters
-    ----------
-    backend
-        tinygrad backend instance used for realized grad copies.
-    trace_signatures
-        Saved trace ops grouped by conservative signature.
-    live_candidates
-        Live no-realize tensors grouped by conservative signature.
-    snapshots
-        User input grad snapshots used only to avoid attaching records for the
-        differentiated input leaves themselves.
-    provenance
-        Shared provenance metadata for exact attached records.
-
-    Returns
-    -------
-    dict[str, IntermediateDerivedGradRecord]
-        Records keyed by pass-qualified op label. Ambiguous or missing matches
-        are skipped.
-    """
-
-    records: dict[str, IntermediateDerivedGradRecord] = {}
-    skipped_input_ids = {id(tensor) for tensor, _original, _snapshot in snapshots.values()}
-    for signature, ops in trace_signatures.items():
-        candidates = live_candidates.get(signature, ())
-        if len(ops) != 1 or len(candidates) != 1:
-            continue
-        op = ops[0]
-        candidate = candidates[0]
-        if id(candidate.tensor) in skipped_input_ids:
-            continue
-        grad = getattr(candidate.tensor, "grad", None)
-        if grad is None:
-            continue
-        copied_grad = backend._realized_copy(grad)
-        records[op.label] = IntermediateDerivedGradRecord(
-            op_label=op.label,
-            layer_label=op.layer_label,
-            aval=candidate.aval,
-            dtype_ref=candidate.dtype_ref,
-            grad=copied_grad,
-            provenance=dict(provenance),
-        )
-    return records
-
-
-def _restore_tinygrad_grads(snapshots: Mapping[str, tuple[Any, Any | None, Any | None]]) -> None:
-    """Restore pre-existing tinygrad leaf grad state after bracketed backward.
-
-    Parameters
-    ----------
-    snapshots
-        Mapping from derived-grad path to ``(leaf, original_grad_object, value_snapshot)``.
-
-    Returns
-    -------
-    None
-        Leaf ``.grad`` values are restored in place where possible.
-    """
-
-    for path, (tensor, original_grad, grad_snapshot) in snapshots.items():
-        del path
-        if original_grad is None:
-            tensor.grad = None
-            continue
-        original_grad.assign(grad_snapshot)
-        tensor.grad = original_grad
 
 
 def _tinygrad_outputs_close(backend: TinygradBackend, left: Any, right: Any) -> bool:

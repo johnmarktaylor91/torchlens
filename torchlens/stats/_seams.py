@@ -26,6 +26,8 @@ from typing import Any, Literal
 
 import torch
 
+from .._utils.fail_open import fail_open
+from ..intervention.spec import site_signal
 from ._stats_render import render_core_line, sparkline
 from ._tensor_stats import FamilyEvidence, TensorStats, tensor_stats
 
@@ -121,16 +123,16 @@ class NarrationObserver:
     """Live stats-line echo mounted on the shipped observer surface.
 
     Mounts exactly like a tap
-    (``capture=CaptureOptions(intervention_ready=True, hooks=echo_obs)``,
-    the ``site``/``signal``/``__call__(out, *, ctx)`` protocol) and
-    returns the observed value unchanged. Each firing appends one
+    (``capture=CaptureOptions(replayable=True, hooks=echo_obs)``,
+    the ``site``/``__call__(out, *, ctx)`` protocol) and returns the observed
+    value unchanged. :attr:`signal` is derived from the site: ``tl.grad(site)``
+    narrates the gradient of the site's output on each backward pass. Each firing appends one
     ``address -> core`` line to ``lines`` and forwards it to ``sink`` when
     given. Stats computation and rendering run under ``pause_logging`` so
     the echo can never contaminate the capture with its own torch ops.
     """
 
     site: Any = None
-    signal: Literal["forward", "backward", "both"] = "forward"
     sink: Callable[[str], None] | None = None
     style: Literal["ascii", "unicode"] = "ascii"
     lines: list[str] = field(default_factory=list)
@@ -142,11 +144,16 @@ class NarrationObserver:
             f"EchoObserver(site={self.site!r}, {len(self.lines)} lines echoed, style={self.style})"
         )
 
+    @property
+    def signal(self) -> Literal["forward", "backward", "both"]:
+        """The pass this observer narrates, derived from its site."""
+
+        return site_signal(self.site)
+
     def __call__(self, out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Record one firing; the observed value passes through unchanged."""
 
         from .._state import pause_logging
-        from .._utils.fail_open import fail_open
 
         with pause_logging():
             address = self._address(ctx)
@@ -177,7 +184,6 @@ def narrate(
     site: Any,
     *,
     sink: Callable[[str], None] | None = None,
-    signal: Literal["forward", "backward", "both"] = "forward",
     style: Literal["ascii", "unicode"] = "ascii",
 ) -> NarrationObserver:
     """Create an echo observer (the live line density) for one site.
@@ -187,17 +193,16 @@ def narrate(
         obs = tl.stats.narrate(tl.func("relu"), sink=print)
         tl.trace(model, x,
                  capture=tl.options.CaptureOptions(
-                     intervention_ready=True, hooks=obs))
+                     replayable=True, hooks=obs))
 
     Parameters
     ----------
     site:
-        Selector-like site to observe (any ``tap()``-accepted selector).
+        Selector-like site to observe (any ``tap()``-accepted selector);
+        ``tl.grad(site)`` narrates the gradient of the site's output.
     sink:
         Optional per-line consumer (e.g. ``print`` or a logger method);
         lines always also accumulate on ``observer.lines``.
-    signal:
-        Hook signal, as on ``tl.observers.tap``.
     style:
         Rendering style for the echoed cores.
 
@@ -207,4 +212,4 @@ def narrate(
         Callable observer for the ``hooks=`` surface.
     """
 
-    return NarrationObserver(site=site, signal=signal, sink=sink, style=style)
+    return NarrationObserver(site=site, sink=sink, style=style)

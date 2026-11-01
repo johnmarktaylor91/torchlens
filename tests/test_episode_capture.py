@@ -204,7 +204,7 @@ def test_entry_seed_recorded_and_sampled_episode_reproduces():
     ledger_first = episode_ledger_for(first)
     ledger_second = episode_ledger_for(second)
     assert ledger_first is not None and ledger_second is not None
-    assert ledger_first.header.entry_seed == 1234 == first.random_seed
+    assert ledger_first.header.entry_seed == 1234 == first.options.seed
     tokens_first = [row.step_output for row in ledger_first.rows]
     tokens_second = [row.step_output for row in ledger_second.rows]
     assert tokens_first == tokens_second  # managed recipe: bit-identical episode
@@ -380,28 +380,27 @@ def _pickle_roundtrip(log):
     return pickle.loads(pickle.dumps(log))
 
 
-def test_episode_ledger_without_declaration_refuses_typed():
+@pytest.mark.parametrize(
+    ("header_key", "header_value", "code"),
+    [
+        ("capture_kind", "plain", "episode_ledger_without_declaration"),
+        ("structure_only", True, "episode_ledger_payload_in_structure_only"),
+    ],
+    ids=[
+        "episode_ledger_without_declaration_refuses_typed",
+        "structure_only_token_payload_refuses_typed",
+    ],
+)
+def test_tampered_episode_header_refuses_typed(header_key, header_value, code):
     log = _capture_episode(n_steps=2)
     payload = dict(log.annotations["episode"])
     header = dict(payload["header"])
-    header["capture_kind"] = "plain"
+    header[header_key] = header_value
     payload["header"] = header
     log.annotations["episode"] = payload
     with pytest.raises(EpisodeLedgerError) as excinfo:
         _pickle_roundtrip(log)
-    assert excinfo.value.fields["code"] == "episode_ledger_without_declaration"
-
-
-def test_structure_only_token_payload_refuses_typed():
-    log = _capture_episode(n_steps=2)
-    payload = dict(log.annotations["episode"])
-    header = dict(payload["header"])
-    header["structure_only"] = True
-    payload["header"] = header
-    log.annotations["episode"] = payload
-    with pytest.raises(EpisodeLedgerError) as excinfo:
-        _pickle_roundtrip(log)
-    assert excinfo.value.fields["code"] == "episode_ledger_payload_in_structure_only"
+    assert excinfo.value.fields["code"] == code
 
 
 def test_monotone_prefix_tamper_quarantines_fail_closed():

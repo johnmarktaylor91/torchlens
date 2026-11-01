@@ -42,7 +42,7 @@ def _capture(model: nn.Module, x: torch.Tensor) -> Any:
 
 
 def _bn_op(trace: Any) -> Any:
-    return next(op for op in trace.layer_list if op.func_name == "batch_norm")
+    return next(op for op in trace._layer_list if op.func_name == "batch_norm")
 
 
 def _edge(trace: Any, op: Any, slot: int) -> Any:

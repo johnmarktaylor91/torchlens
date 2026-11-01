@@ -43,9 +43,9 @@ def _function_root(model: nn.Module) -> tl.Trace:
 
     torch.manual_seed(0)
     trace = tl.trace(model, torch.randn(2, 4))
-    trace.backend = "jax"
-    trace.module_identity_mode = "function_root"
-    trace.param_source = "none"
+    trace._provenance_backend = "jax"
+    trace._options_module_identity_mode = "function_root"
+    trace._provenance_param_source = "none"
     return trace
 
 

@@ -5,7 +5,6 @@ type) from arbitrarily nested model inputs/outputs, plus utilities for
 nested attribute traversal and call-stack capture.
 """
 
-import os
 import sys
 import warnings
 from collections.abc import Callable, Iterator
@@ -22,6 +21,7 @@ from .._input_walk import INPUT_TREE_MAX_DEPTH
 # an import-time value binding never sees mark_torch_capability_missing flips.
 from . import _call_site, _torch_compat
 from ._call_site import _BOUNDARY_CODES
+from ._package_frames import _VERDICTS as _PACKAGE_VERDICTS, is_torchlens_code
 
 # Attributes to skip when crawling an object's namespace looking for tensors.
 # Two groups, matched by EXACT name:
@@ -72,12 +72,10 @@ _CodeContextCache: TypeAlias = dict[Any, tuple[Any, ...]]
 # ``f_locals`` and therefore the user's model/input tensors).
 _CODE_CONTEXT_ANCHOR_KEY = "__torchlens_code_context_anchor__"
 
-# Directory-based stack filter for ``_get_code_context``. Resolved ONCE at import
-# rather than per captured op: ``os.path.abspath`` calls ``getcwd`` + ``normpath``,
-# which is not free when it runs thousands of times per forward pass. Using the
-# package directory (instead of hardcoded module suffixes) keeps the filter
-# correct across package-layout refactors.
-_TORCHLENS_PKG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# The stack filter for ``_get_code_context`` is ``_package_frames.is_torchlens_code``:
+# a memoised normalised-filename comparison, so the spelling the
+# import system gave TorchLens's own files (``/repo/./torchlens/...`` under a
+# ``sys.path`` entry of ``"."``) never decides which frames an op's chain keeps.
 
 # ``FuncCallLocation`` lives in ``..data_classes``, which imports this module, so
 # it cannot be imported at module scope. Resolve it on first use and memoize.
@@ -108,7 +106,7 @@ def _build_col_offset_map(code: CodeType) -> dict[int, int | None]:
     unit, cache slots included, each carrying its owning instruction's
     position (the same per-unit stream ``dis`` consumes). It is a C iterator,
     so the build enters no Python frame. That matters because the map is
-    often first built inside an ``intervention_ready`` capture, where the RNG
+    often first built inside an ``replayable`` capture, where the RNG
     monitor's profile hook snapshots every Python frame entry: ``dis``-based
     disassembly entered several helper frames per instruction there and made
     one cold build cost seconds.
@@ -979,8 +977,6 @@ def _get_code_context(
 
         _FUNC_CALL_LOCATION = FuncCallLocation
 
-    pkg_dir = _TORCHLENS_PKG_DIR
-
     anchor: tuple[int, CodeType, int, int] | None = None
     if context_cache is not None:
         anchor = context_cache.get(_CODE_CONTEXT_ANCHOR_KEY)
@@ -994,10 +990,9 @@ def _get_code_context(
     # frame was passed: the call-site chain boundaries.
     inner_boundary_pos = -1
     outer_boundary_pos = -1
-    # Modules whose ``_call_impl`` sits inside the innermost module call: the op
-    # runs in that module's hook (its forward wrapper is not on the stack yet),
-    # recorded as (survivor count, module) so the chain keeps hooks of distinct
-    # modules apart.
+    # Modules whose ``_call_impl`` sits inside the innermost module call (the op
+    # runs in that module's hook; its forward wrapper is not on the stack yet),
+    # as (survivor count, module) so the chain keeps distinct modules' hooks apart.
     hook_scopes: list[tuple[int, Any]] = []
     anchor_frame: FrameType | None = None
     frame: FrameType | None = sys._getframe(0)
@@ -1021,7 +1016,8 @@ def _get_code_context(
         name = code.co_name
         if call_site_out is not None and inner_boundary_pos < 0 and name == "_call_impl":
             hook_scopes.append((len(survivors), frame.f_locals.get("self")))
-        if not code.co_filename.startswith(pkg_dir) and "_call_impl" not in name:
+        v = _PACKAGE_VERDICTS.get(code.co_filename)  # cached verdict; a miss computes it
+        if not (is_torchlens_code(code) if v is None else v) and "_call_impl" not in name:
             if name == "forward":
                 last_forward_pos = len(survivors)
             append_survivor((frame, code, frame.f_lineno, frame.f_lasti))

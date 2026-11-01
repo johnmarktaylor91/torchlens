@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import TorchLensError
 from torchlens.intervention.errors import AppendStreamingUnsupportedError
 from torchlens.options import CaptureOptions, ReplayOptions, StorageOptions
 
@@ -41,7 +42,7 @@ class _StreamingAppendModel(nn.Module):
 
 @pytest.mark.smoke
 def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
-    """Append rejects traces with a live bundle stream writer."""
+    """A streamed (to_disk) trace does not run, append included: the run door refuses typed."""
 
     model = _StreamingAppendModel().eval()
     trace = tl.trace(
@@ -49,15 +50,16 @@ def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
         torch.randn(1, 3),
         capture=CaptureOptions(
             save_grads=True,
-            intervention_ready=True,
+            replayable=True,
         ),
         save="all",
         storage=tl.to_disk(tmp_path / "streaming_bundle.tl"),
     )
 
     try:
-        with pytest.raises(AppendStreamingUnsupportedError, match="path streaming"):
+        with pytest.raises(TorchLensError, match="to_disk") as info:
             trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+        assert info.value.fields.get("code") == "trace_option_unsupported"
     finally:
         # The deferred grad stream keeps its writer thread until backward finalizes it.
         trace.log_backward(trace[trace.output_layers[0]].out.sum())
@@ -85,7 +87,7 @@ def test_append_rerun_on_callback_streaming_trace_raises() -> None:
     trace = tl.trace(
         model,
         torch.randn(1, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
         save="all",
         storage=StorageOptions(on_save=_sink),
     )
@@ -103,7 +105,7 @@ def test_append_rerun_on_loaded_streaming_trace_works(tmp_path: Path) -> None:
     tl.trace(
         model,
         torch.randn(1, 3),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
         save="all",
         storage=tl.to_disk(bundle_path),
     )
@@ -111,5 +113,5 @@ def test_append_rerun_on_loaded_streaming_trace_works(tmp_path: Path) -> None:
 
     loaded.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
 
-    assert loaded.is_appended is True
+    assert loaded.provenance.is_appended is True
     assert loaded._append_sequence_id == 1

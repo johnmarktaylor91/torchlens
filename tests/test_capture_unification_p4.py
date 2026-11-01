@@ -13,8 +13,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._utils.arg_handling import copy_arg_tree
 from torchlens._utils.tensor_utils import _clone_tensor_payload, copy_tensor_payload
+from torchlens.backends.torch._ops_shared_fields import _get_parent_output_version_snapshot
 from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
-from torchlens.backends.torch.ops import _get_parent_output_version_snapshot
 
 
 class PartialConvRelu(nn.Module):
@@ -148,13 +148,13 @@ class CustomTensorBox:
 class VersionSnapshotTraceStub:
     """Minimal trace stub for version-snapshot helper tests."""
 
-    save_arg_values = True
+    _options_save_args = True
 
 
 def _conv_ops(log: tl.Trace) -> list[tl.Op]:
     """Return conv ops in execution order."""
 
-    return [op for op in log.layer_list if op.layer_type == "conv2d"]
+    return [op for op in log._layer_list if op.type == "conv2d"]
 
 
 def _saved_conv_ops(log: tl.Trace) -> list[tl.Op]:
@@ -222,7 +222,7 @@ def test_copy_policies_pause_logging_for_internal_tensor_ops() -> None:
         save="all",
     )
 
-    layer_types = [op.layer_type for op in log.layer_list]
+    layer_types = [op.type for op in log._layer_list]
     assert layer_types == ["input", "add", "mul", "output"]
 
 

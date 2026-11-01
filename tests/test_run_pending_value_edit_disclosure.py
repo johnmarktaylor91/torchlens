@@ -44,7 +44,7 @@ def _traced() -> tuple[Small, torch.Tensor, tl.Trace]:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
         save="all",
     )
     log._tl_test_model_keepalive = model

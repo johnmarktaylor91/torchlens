@@ -81,8 +81,8 @@ def _drop_edge_symmetrically(log, child_label: str, parent_label: str) -> None:
         Label of the edge's producer.
     """
 
-    child = log.layer_dict_all_keys[child_label]
-    parent = log.layer_dict_all_keys[parent_label]
+    child = log._layer_dict_all_keys[child_label]
+    parent = log._layer_dict_all_keys[parent_label]
     base_parent = parent_label.split(":", 1)[0]
     base_child = child_label.split(":", 1)[0]
     child.parents = [p for p in child.parents if p.split(":", 1)[0] != base_parent]
@@ -152,9 +152,9 @@ def _planted_edge_drop_trace():
         save="all",
     )
     log._tl_test_model_keepalive = model
-    outputs = [log.layer_dict_all_keys[label].out for label in log.output_layers]
+    outputs = [log._layer_dict_all_keys[label].out for label in log.output_layers]
     relu_label = next(op.label for op in log.compute_ops if op.func_name == "relu")
-    consumer = next(iter(log.layer_dict_all_keys[relu_label].children))
+    consumer = next(iter(log._layer_dict_all_keys[relu_label].children))
     _drop_edge_symmetrically(log, consumer, relu_label)
     return log, outputs
 
@@ -235,7 +235,7 @@ def test_duplicated_edge_occurrence_is_caught_on_a_live_trace():
     try:
         check_metadata_invariants(log)  # pristine trace is green
         relu_label = next(op.label for op in log.compute_ops if op.func_name == "relu")
-        consumer = next(iter(log.layer_dict_all_keys[relu_label].children)).split(":", 1)[0]
+        consumer = next(iter(log._layer_dict_all_keys[relu_label].children)).split(":", 1)[0]
         _duplicate_edge_occurrence(log, consumer)
         with pytest.raises(Exception, match="multiplicity") as excinfo:
             check_metadata_invariants(log)
@@ -359,13 +359,13 @@ def _loaded_edge_drop_trace(tmp_path):
         capture=tl.options.CaptureOptions(save_args=True),
         save="all",
     )
-    outputs = [log.layer_dict_all_keys[label].out for label in log.output_layers]
+    outputs = [log._layer_dict_all_keys[label].out for label in log.output_layers]
     path = tmp_path / "edge_drop_plant.tlspec"
     log.save(path)
     log.cleanup()
     loaded = tl.load(path)
     relu_label = next(op.label for op in loaded.compute_ops if op.func_name == "relu")
-    consumer = next(iter(loaded.layer_dict_all_keys[relu_label].children))
+    consumer = next(iter(loaded._layer_dict_all_keys[relu_label].children))
     _drop_edge_symmetrically(loaded, consumer, relu_label)
     return loaded, outputs
 
@@ -373,18 +373,19 @@ def _loaded_edge_drop_trace(tmp_path):
 def test_loaded_artifact_replay_validation_refuses_typed(tmp_path) -> None:
     """Loaded torch replay validation refuses TYPED, never silently passes.
 
-    b9-sol R75-2 reality check: ``Op.func`` is ``FieldPolicy.DROP`` at every
-    save level, so a loaded torch artifact cannot run the value-rooted replay
-    sweeps at all. The honest floor pinned here is that the refusal is LOUD —
-    a ``ArtifactError`` naming the unresolved computational functions — so
-    a planted loaded corruption can never validate clean through a path that
+    ``Op.func`` is ``FieldPolicy.DROP`` at every save level; validation resolves
+    loaded callables from recorded function identities, but this portable
+    bundle dropped the saved arguments replay re-executes from. The honest
+    floor pinned here is that the refusal is LOUD — an ``ArtifactError``
+    naming the dropped payloads and the save level that keeps them — so a
+    planted loaded corruption can never validate clean through a path that
     silently skipped the work.
     """
 
     from torchlens._io import ArtifactError
 
     loaded, outputs = _loaded_edge_drop_trace(tmp_path)
-    with pytest.raises(ArtifactError, match="unresolved computational functions"):
+    with pytest.raises(ArtifactError, match="save level dropped"):
         loaded.validate_forward_pass(outputs, validate_metadata=False)
 
 
@@ -427,7 +428,7 @@ def test_duplicated_child_entry_is_caught_on_a_live_trace():
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
     trace = trace_fn(model, torch.randn(2, 4))
     check_metadata_invariants(trace)
-    record = next(r for r in trace.layer_list if r.layer_label == "linear_1_1")
+    record = next(r for r in trace._layer_list if r.layer_label == "linear_1_1")
     record.children = list(record.children) + [record.children[0]]
     with pytest.raises(MetadataInvariantError, match="deduped by construction"):
         check_metadata_invariants(trace)
@@ -448,8 +449,8 @@ def test_genuine_double_consumption_keeps_children_deduped_and_green():
             return h + h
 
     trace = trace_fn(DoubleUse(), torch.randn(2, 4))
-    producer = next(r for r in trace.layer_list if r.layer_label.startswith("linear"))
-    consumer = next(r for r in trace.layer_list if "add" in r.layer_label)
+    producer = next(r for r in trace._layer_list if r.layer_label.startswith("linear"))
+    consumer = next(r for r in trace._layer_list if "add" in r.layer_label)
     assert len(producer.children) == len(set(producer.children))
     assert list(consumer.parents).count("linear_1_1") == 2
     check_metadata_invariants(trace)
@@ -484,9 +485,7 @@ def _save_runnable_tanh(tmp_path) -> tuple:
     trace = trace_fn(
         _TanhRunnable().eval(),
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
     del tl

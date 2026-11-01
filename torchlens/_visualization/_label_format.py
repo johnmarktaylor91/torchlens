@@ -5,9 +5,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final
 
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.op import Op
+
 from .._capture.flops import append_attention_note
 from .._errors import InvalidArgumentError
 from .._quantities import Duration
+from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._utils.display import human_readable_size
 
@@ -400,11 +404,14 @@ def _format_value(value: Any) -> str:
 def _param_items(params: Any) -> list[Any]:
     """Extract parameter-like items from a node or iterable."""
 
+    from torchlens._visualization._render_common import BoundaryNode, FocusNode
+
     barcodes = getattr(params, "_param_barcodes", None)
     if barcodes is not None and len(barcodes) == 0:
         return []
 
-    param_logs = getattr(params, "_param_logs", None)
+    source = params.original if isinstance(params, FocusNode) else params
+    param_logs = source._param_logs if isinstance(source, (Op, Layer, BoundaryNode)) else None
     if param_logs:
         return list(param_logs)
 
@@ -454,7 +461,7 @@ def compute_selected_node_lines(
         if field_name in {"label", "name"}:
             rows.append(str(getattr(layer_log, "layer_label", "")))
         elif field_name in {"type", "op", "operation"}:
-            rows.append(str(getattr(layer_log, "func_name", None) or layer_log.layer_type))
+            rows.append(str(getattr(layer_log, "func_name", None) or record_type(layer_log)))
         elif field_name == "shape":
             rows.append(format_shape(layer_log.shape))
         elif field_name == "shape_summary":
@@ -483,7 +490,7 @@ def compute_selected_node_lines(
                 # (``pass_index``). The old ``call_index`` default read 1 for every
                 # pass because Ops carry no ``call_index`` -- a field literally
                 # named "pass" that always says 1 is silent wrongness.
-                rows.append(str(get_multipass_attr(layer_log, "pass_index", 1, multipass=1)))
+                rows.append(str(get_multipass_attr(layer_log, "pass_number", 1, multipass=1)))
             else:
                 rows.append(str(get_multipass_attr(layer_log, "num_passes", 1)))
         elif field_name == "flops":
