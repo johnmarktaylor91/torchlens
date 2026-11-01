@@ -1782,12 +1782,28 @@ def _build_selection_do_plan(
             }
             for entry in resolved
         ],
-        "edit": getattr(edit, "name", getattr(edit, "__name__", repr(type(edit)))),
+        "edit": _edit_identity(edit, repr(type(edit))),
     }
     source_identity = getattr(edit, "kwargs", None)
     if getattr(edit, "name", None) == "patch_from" and source_identity:
         audit["patch_source"] = dict(source_identity)
     return resolved, plan, audit
+
+
+def _edit_identity(edit: Any, fallback: str) -> str:
+    """Return the string identity of one edit for audit rows and messages.
+
+    An ``Edit`` carries its ``name`` and a hook callable carries ``__name__``.
+    Only string attributes count: a replacement tensor exposes a ``name``
+    attribute that is ``None``, and the persisted audit contract requires a
+    string ``edit`` field, so a value edit falls back to ``fallback``.
+    """
+
+    for attribute in ("name", "__name__"):
+        candidate = getattr(edit, attribute, None)
+        if isinstance(candidate, str):
+            return candidate
+    return fallback
 
 
 def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
