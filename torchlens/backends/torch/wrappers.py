@@ -673,7 +673,7 @@ def _decorate_direct_transforms() -> None:
 funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
 
 # Wrapped calls that never demote the call enclosing them to non-bottom-level
-# (the R16-5 barcode-transparency note inside ``wrapped_func``). ``as_subclass``
+# (see the barcode-transparency note inside ``wrapped_func``). ``as_subclass``
 # is torch's ``__torch_function__`` return conversion. The storage accessors
 # return a storage, never a tensor, so they log no value flow of their own; a
 # Python-level tensor method that reads its storage through them

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-77 packages, 1127 modules, 597705 lines, 0 modules without a docstring.
+77 packages, 1127 modules, 597704 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -53,7 +53,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 9 | 5100 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 10 | 8029 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 3 | 3429 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 81 | 50958 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 81 | 50957 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8008 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 17 | 7731 |
@@ -1001,7 +1001,7 @@ tinygrad backend preview. (3 modules, 3429 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (81 modules, 50958 lines)
+Torch backend implementation package for TorchLens capture. (81 modules, 50957 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1030,7 +1030,7 @@ Torch backend implementation package for TorchLens capture. (81 modules, 50958 l
 | `_gradfn_markers` | grad_fn-fire marker sink helpers (torchnative). | 149 |
 | `_held_refs` | Held torch-function reference normalization for ''release_model''. | 231 |
 | `_held_refs_capture` | Capture-scoped rebinding of module-held pristine torch functions. | 306 |
-| `_held_tensor_scan` | Bounded scan of the plain tensors a module holds outside ''register_buffer''. | 359 |
+| `_held_tensor_scan` | Bounded scan of the plain tensors a module holds outside ''register_buffer''. | 358 |
 | `_identity_cache` | Per-tensor metadata caches that stay correct when a tensor's ''id'' is reused. | 63 |
 | `_modes` | Shared ownership marker and pause bracket for TorchLens dispatch modes. | 109 |
 | `_module_arg_stubs` | Module-arg payload stubbing for release-at-emission ( W1a). | 88 |
