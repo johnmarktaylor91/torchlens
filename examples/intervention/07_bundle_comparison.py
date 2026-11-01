@@ -3,7 +3,7 @@
 What this demonstrates
 ----------------------
 Construct a ``Bundle``, access one node across members, compute per-member
-metrics, and compare outs at a shared site.
+metrics, and compare activations at a shared site.
 
 How to run
 ----------

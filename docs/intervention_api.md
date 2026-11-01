@@ -1,7 +1,7 @@
 # Intervention API Reference
 
-This page documents the public v2 intervention API that shipped in the current
-branch. It avoids proposed naming changes from separate design workstreams.
+This page documents the public intervention API: selectors, edit helpers, hooks,
+replay and bundles.
 
 To apply one intervention to many forwards or a `generate()` loop, use `spec.bind(model)`
 (capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec)` (the
@@ -19,15 +19,15 @@ Selectors resolve against completed `Trace.layers` records.
 | `tl.label` | `label(name: str)` | Exact final, raw, short, or pass-qualified label. |
 | `tl.func` | `func(name: str)` | Match captured function name OR normalized layer type such as `"relu"` or `"add"`. |
 | `tl.module` | `module(address: str)` | Match a module output boundary. |
-| `tl.label_contains` | `contains(substring: str)` | Case-insensitive label substring search. |
-| `tl.label_matches` | `regex(pattern: str)` | Case-sensitive `re.search` over labels. |
+| `tl.label_contains` | `label_contains(substring: str)` | Case-insensitive label substring search. |
+| `tl.label_matches` | `label_matches(pattern: str)` | Case-sensitive `re.search` over labels. |
 | `tl.where` | `where(predicate, *, name_hint=None)` | Predicate over layer pass records; non-portable. |
 | `tl.in_module` | `in_module(address: str)` | Match sites contained in a module address. |
 | `tl.grad_fn` | `grad_fn(name=None, *, label=None, is_custom=None)` | Backward grad_fn by autograd class name, label substring or custom flag (backward sites only). |
 
 One interpreter evaluates every selector in every lifecycle (capture-time
-`save=`, post-hoc `find_sites`, live hooks); `contains` is case-insensitive and
-`regex` case-sensitive everywhere. Post-hoc `contains`/`regex` search the
+`save=`, post-hoc `find_sites`, live hooks); `label_contains` is case-insensitive and
+`label_matches` case-sensitive everywhere. Post-hoc `label_contains`/`label_matches` search the
 final `layer_label` only; exact `tl.label` additionally matches raw, short,
 and pass-qualified spellings. Capture-only selectors (`tl.followed_by`,
 `tl.preceded_by`) and mutator-only selectors (`tl.facet`, `tl.head`) refuse

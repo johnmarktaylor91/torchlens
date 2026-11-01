@@ -203,5 +203,5 @@ from becoming an apparently precise answer.
 ## References
 
 - Araujo, Norris, and Sim, [*Computing Receptive Fields of Convolutional Neural Networks*](https://distill.pub/2019/computing-receptive-fields/), Distill, 2019.
-- Luo, Li, Urtasun, and Zemel, [*Understanding the Effective Receptive Field in Deep Convolutional Neural Networks*](https://papers.nips.cc/paper_files/paper/2016/hash/c8067ad1937f728f51288b3eb986afaa-Paper.pdf), NeurIPS 2016.
+- Luo, Li, Urtasun, and Zemel, [*Understanding the Effective Receptive Field in Deep Convolutional Neural Networks*](https://papers.nips.cc/paper_files/paper/2016/file/c8067ad1937f728f51288b3eb986afaa-Paper.pdf), NeurIPS 2016.
 - Lehky and Sejnowski, [*Network model of shape-from-shading: neural function arises from both receptive and projective fields*](https://www.nature.com/articles/333452a0), Nature, 1988.

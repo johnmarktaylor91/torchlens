@@ -93,7 +93,7 @@ gradient. It is available only for grad-capable op-anchored structural facets an
 only when the home op has a saved gradient.
 
 Default traces do not save gradients. When a gradient is unavailable,
-`facet.grad` returns a `MissingGradient` sentinel with an exact recapture
+`facet.grad` returns a `MissingGrad` sentinel with an exact recapture
 instruction. The sentinel does not raise merely because it was returned; tensor
 use raises:
 
@@ -303,7 +303,7 @@ approx = tl.facets.patching.attribution_patch_attention_heads(
 
 Attribution patching requires gradient capture. By default the helper traces
 with `save_grads=True`. If gradients are not saved, it raises a clear
-error that includes the `MissingGradient` recapture instruction.
+error that includes the `MissingGrad` recapture instruction.
 
 ## Reconstruction
 
@@ -590,7 +590,7 @@ attention head. With `name=None`, targets default `q`, `k`, and `v` facets.
 `scatter_update`: ABI method that writes an edited facet slice back into the
 full home-op output and returns the edited home tensor.
 
-`MissingGradient`: typed sentinel returned by `facet.grad` when the home op has
+`MissingGrad`: typed sentinel returned by `facet.grad` when the home op has
 no saved gradient or the facet is not grad-capable.
 
 `bijective_view`: transform class for exact view operations such as reshape and

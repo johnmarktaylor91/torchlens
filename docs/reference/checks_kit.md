@@ -66,7 +66,7 @@ with session:                               # attach() installs the hooks; detac
         optimizer.step()
 
 report = session.report()
-print(report)                               # house-style summary (matches TraceAudit)
+print(report)                               # house-style summary (matches HealthReport)
 ```
 
 Construction is silent and does no device work: no hooks, no syncs, no stdout.
