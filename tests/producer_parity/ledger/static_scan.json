@@ -2793,14 +2793,6 @@
  },
  {
   "ambiguous": false,
-  "field": "unattributed_tensor_args",
-  "file": "torchlens/_postprocess/__init__.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
   "field": "equivalence_class",
   "file": "torchlens/_postprocess/_buffer_addresses.py",
   "has_default": false,
@@ -2867,14 +2859,6 @@
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/_postprocess/_buffer_addresses.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_postprocess/_executor.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -3518,6 +3502,14 @@
   "has_default": false,
   "sites": 7,
   "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "unattributed_tensor_args",
+  "file": "torchlens/_postprocess/source_provenance.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": true,
