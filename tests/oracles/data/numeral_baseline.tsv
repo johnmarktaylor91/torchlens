@@ -699,7 +699,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	64
 docs-md	docs/agent-reference/current-2-x-surface.md	64,
 docs-md	docs/agent-reference/current-2-x-surface.md	657
 docs-md	docs/agent-reference/current-2-x-surface.md	79
-docs-md	docs/agent-reference/current-2-x-surface.md	87
 docs-md	docs/agent-reference/current-2-x-surface.md	873
 docs-md	docs/agent-reference/current-2-x-surface.md	9.2.2
 docs-md	docs/agent-reference/current-2-x-surface.md	921,
@@ -736,7 +735,6 @@ docs-md	docs/agent-reference/package/public-surface.md	2.16
 docs-md	docs/agent-reference/package/public-surface.md	37
 docs-md	docs/agent-reference/package/public-surface.md	39
 docs-md	docs/agent-reference/package/public-surface.md	42
-docs-md	docs/agent-reference/package/public-surface.md	87
 docs-md	docs/agent-reference/package/subpackages.md	10
 docs-md	docs/agent-reference/package/subpackages.md	11
 docs-md	docs/agent-reference/package/subpackages.md	11,
@@ -814,7 +812,6 @@ docs-md	docs/for-ai-agents.md	2020
 docs-md	docs/for-ai-agents.md	25,000
 docs-md	docs/for-ai-agents.md	4,000
 docs-md	docs/for-ai-agents.md	64
-docs-md	docs/for-ai-agents.md	87
 docs-md	docs/gradient_contract.md	64
 docs-md	docs/guides/fast_paths.md	0.17
 docs-md	docs/guides/fast_paths.md	0.18
@@ -6025,7 +6022,6 @@ package-docstrings	torchlens/intervention/_directions.py	100
 package-docstrings	torchlens/intervention/_directions.py	100.
 package-docstrings	torchlens/intervention/_directions.py	256
 package-docstrings	torchlens/intervention/_directions.py	64
-package-docstrings	torchlens/intervention/_edit_repr.py	2.0
 package-docstrings	torchlens/intervention/_gradient_contract.py	2.0
 package-docstrings	torchlens/intervention/_metrics.py	1.0
 package-docstrings	torchlens/intervention/_metrics.py	32
@@ -6126,7 +6122,6 @@ package-docstrings	torchlens/intervention/stochastic.py	63
 package-docstrings	torchlens/intervention/stochastic.py	64
 package-docstrings	torchlens/intervention/stochastic.py	64.
 package-docstrings	torchlens/intervention/types.py	10
-package-docstrings	torchlens/intervention/types.py	2.0
 package-docstrings	torchlens/intervention/types.py	24
 package-docstrings	torchlens/intervention/types.py	75
 package-docstrings	torchlens/io/__init__.py	2.0_
@@ -7416,7 +7411,6 @@ test-docstrings	tests/test_error_code_coverage.py	25
 test-docstrings	tests/test_error_code_coverage.py	900
 test-docstrings	tests/test_escape_disclosure_persistence.py	16
 test-docstrings	tests/test_escrow_bound_regressions.py	24
-test-docstrings	tests/test_exception_taxonomy.py	2.16
 test-docstrings	tests/test_exception_taxonomy.py	26.3
 test-docstrings	tests/test_exception_taxonomy.py	64
 test-docstrings	tests/test_explorer_watch_gates.py	11
