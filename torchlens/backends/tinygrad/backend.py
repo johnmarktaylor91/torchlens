@@ -248,6 +248,60 @@ class TinygradModuleTree:
     forward_args_by_call: dict[tuple[str, int], tuple[tuple[Any, ...], dict[str, Any]]]
 
 
+def _uop_annotations(
+    uop: Any, op_name: str, tensor: Any, observed: tuple[str, ...], constant_kind: str | None
+) -> dict[str, object]:
+    """The per-UOp op annotations, with the constant kind when one was classified."""
+
+    annotations: dict[str, object] = {
+        "tinygrad_uop": op_name,
+        "tinygrad_uop_signature": _uop_signature(uop),
+        "tinygrad_observed_tensor_ops": observed,
+        "tinygrad_identity": _identity(tensor),
+    }
+    if constant_kind is not None:
+        annotations[CONSTANT_KIND_ANNOTATION] = constant_kind
+    return annotations
+
+
+def _uop_capture(
+    label_raw: str, uop: Any, op_name: str, parents: tuple[ParentEdge, ...], payload: Any
+) -> TinygradUOpCapture:
+    """The live-validation capture record for one emitted UOp event."""
+
+    return TinygradUOpCapture(
+        label_raw=label_raw,
+        uop=uop,
+        op_name=op_name,
+        parent_labels=tuple(edge.parent_label_raw for edge in parents),
+        parent_arg_positions=tuple(
+            (cast(int, edge.arg_position), edge.parent_label_raw) for edge in parents
+        ),
+        payload_snapshot=payload,
+    )
+
+
+def _stamp_param_logs(trace: Trace, module_tree: TinygradModuleTree | None) -> None:
+    """Record the parameter accessor and counts; empty when no object module was traced."""
+
+    if module_tree is not None:
+        trace.param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
+        trace.num_param_tensors = len(trace.param_logs)
+        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace.num_params_trainable = sum(
+            param.num_params for param in trace.param_logs if param.is_trainable
+        )
+        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
+        trace.param_source = "native-module"
+    else:
+        trace.param_logs = ParamAccessor({})
+        trace.num_param_tensors = 0
+        trace.num_params = 0
+        trace.num_params_trainable = 0
+        trace.num_params_frozen = 0
+        trace.param_source = "none"
+
+
 class TinygradBackend:
     """tinygrad adapter that captures forward graphs from pre-realization UOps."""
 
@@ -539,22 +593,7 @@ class TinygradBackend:
             module_tree if use_object_module else None,
         )
         self._mark_output_events(trace, outputs, uop_labels, captures)
-        if use_object_module and module_tree is not None:
-            trace.param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
-            trace.num_param_tensors = len(trace.param_logs)
-            trace.num_params = sum(param.num_params for param in trace.param_logs)
-            trace.num_params_trainable = sum(
-                param.num_params for param in trace.param_logs if param.is_trainable
-            )
-            trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-            trace.param_source = "native-module"
-        else:
-            trace.param_logs = ParamAccessor({})
-            trace.num_param_tensors = 0
-            trace.num_params = 0
-            trace.num_params_trainable = 0
-            trace.num_params_frozen = 0
-            trace.param_source = "none"
+        _stamp_param_logs(trace, module_tree if use_object_module else None)
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
         trace.num_layers_with_params = 0
@@ -852,14 +891,9 @@ class TinygradBackend:
             )
             tensor = self._tensor_from_uop(uop)
             payload = self._realized_copy(tensor, uop=uop)
-            annotations: dict[str, object] = {
-                "tinygrad_uop": op_name,
-                "tinygrad_uop_signature": _uop_signature(uop),
-                "tinygrad_observed_tensor_ops": tuple(observed_ops.get(id(uop), ())),
-                "tinygrad_identity": _identity(tensor),
-            }
-            if constant_kind is not None:
-                annotations[CONSTANT_KIND_ANNOTATION] = constant_kind
+            annotations = _uop_annotations(
+                uop, op_name, tensor, tuple(observed_ops.get(id(uop), ())), constant_kind
+            )
             event = self._append_event(
                 trace=trace,
                 kind="op",
@@ -876,18 +910,7 @@ class TinygradBackend:
                 annotations=annotations,
             )
             uop_labels[id(uop)] = event.label_raw
-            captures.append(
-                TinygradUOpCapture(
-                    label_raw=event.label_raw,
-                    uop=uop,
-                    op_name=op_name,
-                    parent_labels=tuple(edge.parent_label_raw for edge in parents),
-                    parent_arg_positions=tuple(
-                        (cast(int, edge.arg_position), edge.parent_label_raw) for edge in parents
-                    ),
-                    payload_snapshot=payload,
-                )
-            )
+            captures.append(_uop_capture(event.label_raw, uop, op_name, parents, payload))
         return tuple(captures)
 
     def _append_event(
@@ -1474,47 +1497,63 @@ class TinygradBackend:
         }
         hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
         for index, capture in enumerate(captures):
-            label = capture.label_raw
-            op = ops_by_raw_label.get(label)
-            if op is None:
-                return ReplayVerdict.fail(
-                    label, "parent_payload_missing", "the op record is gone", index
-                )
-            try:
-                saved_output = _saved_single_output(op, hidden_outputs_by_label)
-            except ValueError as error:
-                return ReplayVerdict.fail(label, "parent_payload_missing", str(error), index)
-            try:
-                replayed = self._replay_uop_from_trace_graph(
-                    capture,
-                    op,
-                    ops_by_raw_label,
-                    hidden_outputs_by_label=hidden_outputs_by_label,
-                )
-            except (KeyError, ValueError) as error:
-                return ReplayVerdict.fail(label, "replay_mismatch", str(error), index)
-            if not _payloads_close(replayed, saved_output):
-                return ReplayVerdict.fail(
-                    label,
-                    "replay_mismatch",
-                    "the replayed UOp output differs from the saved payload",
-                    index,
-                )
-            if not _parent_perturbations_change_output(
-                backend=self,
-                capture=capture,
-                op=op,
-                ops_by_raw_label=ops_by_raw_label,
-                hidden_outputs_by_label=hidden_outputs_by_label,
-                saved_output=saved_output,
-            ):
-                return ReplayVerdict.fail(
-                    label,
-                    "perturbation_insensitive",
-                    "perturbing the saved parents left the replayed output unchanged",
-                    index,
-                )
+            failure = self._uop_capture_failure(
+                index, capture, ops_by_raw_label, hidden_outputs_by_label
+            )
+            if failure is not None:
+                return failure
         return ReplayVerdict.ok(len(captures))
+
+    def _uop_capture_failure(
+        self,
+        index: int,
+        capture: TinygradUOpCapture,
+        ops_by_raw_label: dict[str, Any],
+        hidden_outputs_by_label: dict[str, Any],
+    ) -> ReplayVerdict | None:
+        """The failed verdict for one capture, or ``None`` when it replays and perturbs."""
+
+        label = capture.label_raw
+        op = ops_by_raw_label.get(label)
+        if op is None:
+            return ReplayVerdict.fail(
+                label, "parent_payload_missing", "the op record is gone", index
+            )
+        try:
+            saved_output = _saved_single_output(op, hidden_outputs_by_label)
+        except ValueError as error:
+            return ReplayVerdict.fail(label, "parent_payload_missing", str(error), index)
+        try:
+            replayed = self._replay_uop_from_trace_graph(
+                capture,
+                op,
+                ops_by_raw_label,
+                hidden_outputs_by_label=hidden_outputs_by_label,
+            )
+        except (KeyError, ValueError) as error:
+            return ReplayVerdict.fail(label, "replay_mismatch", str(error), index)
+        if not _payloads_close(replayed, saved_output):
+            return ReplayVerdict.fail(
+                label,
+                "replay_mismatch",
+                "the replayed UOp output differs from the saved payload",
+                index,
+            )
+        if not _parent_perturbations_change_output(
+            backend=self,
+            capture=capture,
+            op=op,
+            ops_by_raw_label=ops_by_raw_label,
+            hidden_outputs_by_label=hidden_outputs_by_label,
+            saved_output=saved_output,
+        ):
+            return ReplayVerdict.fail(
+                label,
+                "perturbation_insensitive",
+                "perturbing the saved parents left the replayed output unchanged",
+                index,
+            )
+        return None
 
     def _replay_uop_from_trace_graph(
         self,
