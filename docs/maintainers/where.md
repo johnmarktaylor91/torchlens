@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1340 modules, 624890 lines, 0 modules without a docstring.
+84 packages, 1340 modules, 624895 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 43 | 24743 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1482 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4546 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 38897 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 38902 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
@@ -277,7 +277,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (77 modules, 38897 lines)
+Core data structures for representing a logged forward pass. (77 modules, 38902 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -323,7 +323,7 @@ Core data structures for representing a logged forward pass. (77 modules, 38897 
 | `_trace_groups_capture` | Capture-side concern groups of a ''Trace'': ''trace.options'', ''trace.source'', ''trace.health''. | 424 |
 | `_trace_intervention` | Trace intervention mixin. | 1905 |
 | `_trace_intervention_records` | Envelope fields of one ''do'' intervention event. | 127 |
-| `_trace_inventory` | Trace-level inventory builders: structural sites table and bill of materials. | 241 |
+| `_trace_inventory` | Trace-level inventory builders: structural sites table and bill of materials. | 246 |
 | `_trace_missing_attrs` | The canonical refusal for an attribute a ''Trace'' does not have. | 122 |
 | `_trace_narrate` | Post-hoc narration mixin for ''Trace'' (snoop ). | 41 |
 | `_trace_pristine` | The pristine reading of a Trace, derived from the evidence it carries. | 171 |

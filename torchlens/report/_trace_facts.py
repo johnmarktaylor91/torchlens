@@ -164,7 +164,7 @@ def cost_macs_by_kind(trace: Trace) -> _CallableDict:
     return _CallableDict(result)
 
 
-def profile(
+def profile(  # noqa: PLR0913 - forwards the public Trace.profile knob surface one-to-one
     trace: Trace,
     level: Literal["op", "module", "call"] = "op",
     *,

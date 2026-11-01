@@ -134,6 +134,26 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
     )
 
 
+def _capture_section(
+    trace: Trace, poison_facts: Mapping[str, Any], advisories: Any
+) -> dict[str, Any]:
+    """Return the ``capture`` section of the bill of materials."""
+
+    outcome = getattr(trace, "outcome", None)
+    return {
+        "backend": trace._provenance_backend,
+        "model_class_name": trace._source_class_name,
+        "outcome_status": getattr(getattr(outcome, "status", None), "value", None),
+        "capture_verified": trace._provenance_verified,
+        "structure_only": trace._options_structure_only,
+        "grouping": trace._options_grouping,
+        "save_mode": trace._options_save_mode,
+        "capture_duration": trace._provenance_duration,
+        **poison_facts,
+        "advisories": advisories,
+    }
+
+
 def build_bill_of_materials(
     trace: Trace,
     *,
@@ -165,31 +185,16 @@ def build_bill_of_materials(
         ``buffers``, ``activations``, ``backward``, and ``annotations``.
     """
 
-    outcome = getattr(trace, "outcome", None)
-    capture_duration = trace._provenance_duration
-
     # BOM is a THIN PROJECTION of FactCore (sumfam item 14 / D16): its
     # counts and parameter facts read the one numbers substrate; its
     # payload figures keep the D8 retained_now scope. It mints nothing.
-    # The caller (``report._trace_facts.bill_of_materials``) supplies the
-    # FactCore and the capture-honesty facts so this L1 module imports
-    # nothing above itself.
+    # ``core``, ``poison_facts`` and ``advisories`` arrive from the caller
+    # (``report._trace_facts``) so this L1 module imports nothing above itself.
     memory_facts = core.memory
 
     logged_values = (getattr(trace, "annotations", {}) or {}).get("logged_values", {})
     return {
-        "capture": {
-            "backend": trace._provenance_backend,
-            "model_class_name": trace._source_class_name,
-            "outcome_status": getattr(getattr(outcome, "status", None), "value", None),
-            "capture_verified": trace._provenance_verified,
-            "structure_only": trace._options_structure_only,
-            "grouping": trace._options_grouping,
-            "save_mode": trace._options_save_mode,
-            "capture_duration": capture_duration,
-            **poison_facts,
-            "advisories": advisories,
-        },
+        "capture": _capture_section(trace, poison_facts, advisories),
         "graph": {
             # The explicit counts vocabulary (sumfam D3): both grains print
             # under their names, never a bare "operations".

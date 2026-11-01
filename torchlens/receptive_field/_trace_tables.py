@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 __all__: list[str] = []
 
 
-def receptive_fields(
+def receptive_fields(  # noqa: PLR0913 - forwards the public Trace.receptive_fields knob surface one-to-one
     trace: Trace,
     level: Literal["op", "layer", "call", "module"] = "op",
     *,
@@ -44,7 +44,7 @@ def receptive_fields(
     )
 
 
-def projective_fields(
+def projective_fields(  # noqa: PLR0913 - forwards the public Trace.projective_fields knob surface one-to-one
     trace: Trace,
     level: Literal["op", "layer", "call", "module"] = "op",
     *,
