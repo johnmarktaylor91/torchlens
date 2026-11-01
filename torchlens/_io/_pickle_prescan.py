@@ -556,26 +556,6 @@ class _Walker:
 
     # -- the walk ---------------------------------------------------------------------
 
-    def step(self, name: str, arg: Any, pos: int) -> bool:
-        """Apply one opcode; return ``True`` at STOP."""
-
-        if name in _CONST_OPCODES:
-            self.stack.append(arg)
-            return False
-        if name == "MEMOIZE":
-            self.memo[len(self.memo)] = self.top(name)
-            return False
-        if name in _GET_OPCODES:
-            sym = self.memo.get(arg)
-            if sym is None:
-                raise _corrupt(f"missing memo key {arg!r}")
-            self.stack.append(sym)
-            return False
-        handler = _DISPATCH.get(name)
-        if handler is None:  # pragma: no cover - every pickletools opcode is listed
-            raise _corrupt(f"unsupported opcode {name}")
-        return bool(handler(self, arg, pos))
-
     def op_put(self, arg: Any, pos: int) -> None:
         if arg < 0:
             raise _corrupt("negative PUT argument")
@@ -696,16 +676,47 @@ class _Walker:
             target.items.extend(items)
 
     def run(self) -> PrescanPlan:
+        """Walk every opcode; the literal and memo opcodes are handled inline for speed."""
+
         ops = _iter_opcodes(self.data)
+        stack = self.stack
+        memo = self.memo
+        max_opcodes = self.max_opcodes
+        count = 0
         while True:
-            name, arg, pos = _next_opcode(ops)
-            self.opcode_count += 1
-            if self.max_opcodes is not None and self.opcode_count > self.max_opcodes:
+            try:
+                name, arg, pos = next(ops)
+            except StopIteration:
+                raise _corrupt("pickle exhausted before seeing STOP") from None
+            except (ValueError, EOFError, OverflowError, struct.error) as exc:
+                # The reader reports truncation, unknown opcodes and bad operands with
+                # these builtins; the C machine would refuse the same bytes.
+                raise _corrupt(f"{type(exc).__name__}: {exc}") from exc
+            count += 1
+            if max_opcodes is not None and count > max_opcodes:
                 raise OpcodeCeilingExceeded(
                     _CORRUPT + "opcode count exceeds the allocation ceiling"
                 )
-            if self.step(name, arg, pos):
-                break
+            if name in _CONST_OPCODES:
+                stack.append(arg)
+            elif name == "MEMOIZE":
+                if not stack:
+                    raise _corrupt("stack underflow on MEMOIZE")
+                memo[len(memo)] = stack[-1]
+            elif name in _GET_OPCODES:
+                sym = memo.get(arg)
+                if sym is None:
+                    raise _corrupt(f"missing memo key {arg!r}")
+                stack.append(sym)
+            else:
+                self.opcode_count = count
+                handler = _DISPATCH.get(name)
+                if handler is None:  # pragma: no cover - every pickletools opcode is listed
+                    raise _corrupt(f"unsupported opcode {name}")
+                if handler(self, arg, pos):
+                    break
+                stack = self.stack  # MARK and the mark-popping opcodes swap the list
+        self.opcode_count = count
         return self.finish()
 
     def finish(self) -> PrescanPlan:
