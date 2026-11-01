@@ -24,6 +24,13 @@ TORCH_FRAMEWORK = FrameworkRequirement(
 )
 
 
+#: ``CaptureOptions`` fields the protocol's capture sets when the caller passes
+#: no ``capture=``: torch's replay validation re-executes each op from its saved
+#: arguments and RNG state, which a default ``tl.trace`` does not record (the
+#: preview backends record what their replay needs by default).
+REPLAY_READY_CAPTURE: dict[str, bool] = {"save_args": True, "save_rng": True}
+
+
 class TorchProtocol(SpecBackedProtocol):
     """The reference backend's protocol object (delegating adapter)."""
 
@@ -71,7 +78,8 @@ class TorchProtocol(SpecBackedProtocol):
         """Capture through the public ``tl.trace`` entry with ``backend="torch"``.
 
         Forward kwargs travel only in ``kwargs`` (``tl.trace``'s
-        ``input_kwargs``). ``options`` are trace keywords; one that is not a
+        ``input_kwargs``). Without a caller ``capture=``, the capture records
+        what :meth:`validate` replays from (:data:`REPLAY_READY_CAPTURE`). ``options`` are trace keywords; one that is not a
         named ``tl.trace`` parameter would otherwise fall into ``tl.trace``'s
         forward-kwargs catch-all and reach the model silently, so it refuses
         typed (``trace_option_unsupported``) before anything runs.
@@ -97,6 +105,10 @@ class TorchProtocol(SpecBackedProtocol):
                 backend="torch",
                 option=unknown[0],
             )
+        if "capture" not in options:
+            from ...options import CaptureOptions
+
+            options = {**options, "capture": CaptureOptions(**REPLAY_READY_CAPTURE)}
         return tl.trace(model, args, input_kwargs=kwargs, backend="torch", **options)
 
     def validate(self, trace: Any, ground_truth: Any) -> Any:
