@@ -64,11 +64,18 @@ def _rows(report: ConformanceReport, case_id: str) -> list[Any]:
 
 
 #: Torch-side gaps pinned by exact cell id (the same table as
-#: tests/test_conformance_protocol_cells.py; cross-packet requests to P1): the public entry
-#: refuses ``grad_options=`` with the generic code, and a loaded portable bundle has no
+#: tests/test_conformance_protocol_cells.py; cross-packet requests in the lane's RESULT.md):
+#: the public entry refuses ``grad_options=`` with the generic code, a failed replay status
+#: does not name the offending op in its message, and a loaded portable bundle has no
 #: callables for replay validation. A fix flips the pin; the cells stay strict.
-_TORCH_KNOWN_GAPS = frozenset({"c1_refusal_intermediate_derived_grads", "c2_validation_after_load"})
-_FAKE_KNOWN_GAPS = frozenset({"c2_validation_after_load"})
+_TORCH_KNOWN_GAPS = frozenset(
+    {
+        "c1_refusal_intermediate_derived_grads",
+        "c1_validation_names_reason",
+        "c2_validation_after_load",
+    }
+)
+_FAKE_KNOWN_GAPS = frozenset({"c1_validation_names_reason", "c2_validation_after_load"})
 _TORCH_GAP_REASON = "torch refuses grad_options with backend_unsupported (pinned gap; P1)"
 
 
@@ -100,7 +107,7 @@ def test_wellbehaved_fake_passes_before_plants_are_trusted(tmp_path: Path) -> No
         "fake", tiers=("C0", "C1", "C2"), roster=_tiny_roster(), workdir=tmp_path
     )
     assert _failed_ids(report) == set(_FAKE_KNOWN_GAPS)
-    assert report.earned_tier == "C1"  # the bundle gap sits in C2
+    assert report.earned_tier == "C0"  # the naming gap sits in C1
     assert report.is_claim_eligible is False  # the fake provider never claims
     with pytest.raises(ConfigurationError):
         claim_string(report)

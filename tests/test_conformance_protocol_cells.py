@@ -63,6 +63,10 @@ _LEGACY_PLANTS = frozenset(
     }
 )
 
+#: A plant whose intended cell is also a pinned gap must show its own failure there,
+#: or the pin would mask it: the detail the plant's row carries.
+_PLANT_SIGNATURE: dict[str, str] = {"bare_bool_validation": "validate returned bool"}
+
 #: Cells a plant may also redden because validation catches the same defect.
 _PLANT_ALLOWED_COLLATERAL: dict[str, frozenset[str]] = {
     "missing_constant_payload": frozenset({"c1_validation_passes", "c1_validation_names_reason"}),
@@ -181,16 +185,24 @@ def test_plant_tables_partition_the_closed_plant_set() -> None:
 # The reference and the unplanted fake pass every new cell (harness sanity).
 
 #: Torch-side gaps the suite reports today, pinned by exact cell id with the detail each
-#: carries (cross-packet requests to P1 in the lane's RESULT.md): the public entry refuses
+#: carries (cross-packet requests in the lane's RESULT.md): the public entry refuses
 #: ``grad_options=`` with the generic ``backend_unsupported`` code instead of the flag's
-#: code, and a loaded portable bundle carries no callables so replay validation refuses it.
-#: A fix flips the pin, and the entry must then be removed; the cells stay strict.
+#: code; a failed replay status carries the generic message "Replay validation failed."
+#: instead of naming the offending op (and torch's ``arg_logging_mismatch`` reason is not
+#: yet in the closed reason list); a loaded portable bundle carries no callables so replay
+#: validation refuses it. A fix flips the pin, and the entry must then be removed; the
+#: cells stay strict.
 TORCH_KNOWN_GAPS: dict[str, str] = {
     "c1_refusal_intermediate_derived_grads": "backend_unsupported",
+    "c1_validation_names_reason": "message does not name",
     "c2_validation_after_load": "ArtifactError",
 }
-#: The fake refuses its one False flag typed before capture, so only the bundle gap remains.
-FAKE_KNOWN_GAPS: dict[str, str] = {"c2_validation_after_load": "ArtifactError"}
+#: The fake refuses its one False flag typed before capture; it validates through torch, so
+#: it inherits the naming gap and the bundle gap.
+FAKE_KNOWN_GAPS: dict[str, str] = {
+    "c1_validation_names_reason": "message does not name",
+    "c2_validation_after_load": "ArtifactError",
+}
 
 
 def _assert_only_known_gaps(report: ConformanceReport, gaps: dict[str, str]) -> None:
@@ -258,6 +270,9 @@ def test_each_protocol_plant_fails_exactly_its_cell(plant: str, tmp_path: Path) 
     rows = _rows(report, intended)
     assert rows, f"plant {plant} produced no {intended} rows"
     assert any(row.outcome == "failed" for row in rows), [(r.case_id, r.detail) for r in rows]
+    if intended in FAKE_KNOWN_GAPS:
+        signature = _PLANT_SIGNATURE[plant]
+        assert any(signature in (row.detail or "") for row in rows), [r.detail for r in rows]
     allowed = {intended} | _PLANT_ALLOWED_COLLATERAL.get(plant, frozenset()) | set(FAKE_KNOWN_GAPS)
     stray = [
         (row.case_id, row.family, row.detail)
@@ -292,7 +307,7 @@ def _op(
 
     return SimpleNamespace(
         label=label,
-        layer_label=label,
+        layer_label=extra.pop("layer_label", label),
         out=out,
         parents=parents,
         children=children,
@@ -332,6 +347,17 @@ def test_names_reason_oracle_requires_the_op_and_a_registered_reason() -> None:
         decisions=[{"op_label": "add_1", "reason": "replay_mismatch"}],
     )
     assert names_reason_problems(named, target) == ()
+    # A child list names the consumer by one key; the decision may use another
+    # key of the same op, resolved through the trace.
+    consumer = _op("add_1:1", np.ones(2), parents=("mul_1",), layer_label="add_1")
+    trace = SimpleNamespace(layer_list=[target, consumer])
+    by_pass_label = _Status(
+        "failed",
+        "replay of add_1:1 mismatched",
+        decisions=[{"op_label": "add_1:1", "reason": "replay_mismatch"}],
+    )
+    assert any("no decision names" in line for line in names_reason_problems(by_pass_label, target))
+    assert names_reason_problems(by_pass_label, target, trace) == ()
     foreign = _Status(
         "failed", "mul_1 failed", decisions=[{"op_label": "mul_1", "reason": "vibes"}]
     )
