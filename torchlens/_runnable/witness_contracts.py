@@ -8,21 +8,21 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ._ir.container import (
+from .._ir.container import (
     ContainerSpec,
 )
-from ._runnable import (
+from . import (
     ControlWitness,
     ControlWitnessKind,
     RunnableCallDescriptor,
     SparseRunDescriptor,
 )
-from ._runnable_state import (
+from .state import (
     runnable_tensor_byte_digest,
 )
 
 if TYPE_CHECKING:
-    from ._runnable_execution import (
+    from .execution import (
         _STATE_METADATA_FACT_SITE_PREFIX,
         _UNBOUND_STATE_ESCAPE_FACT_KEY,
         _UNBOUND_STATE_ESCAPE_SITE_PREFIX,
@@ -93,7 +93,7 @@ def _tensor_leaf_paths(
         # registration's OWN flatten children exactly as capture did -- generic
         # indexing only matches when flatten happens to preserve order. Local
         # import: this function is rebound into _runnable_execution's globals.
-        from torchlens._runnable_witness_contracts import (
+        from torchlens._runnable.witness_contracts import (
             _hybrid_registered_flatten_children,
         )
 
@@ -265,7 +265,7 @@ def _container_leaf_paths(
     if registered_children is None:
         # T11.6: same hybrid registered-first rule (and same rebind-safe local
         # import) as _tensor_leaf_paths.
-        from torchlens._runnable_witness_contracts import (
+        from torchlens._runnable.witness_contracts import (
             _hybrid_registered_flatten_children,
         )
 
@@ -416,7 +416,7 @@ def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
         a fully named ``torch.return_types`` value.
     """
 
-    from ._utils._torch_compat import torch_structseq_field_names
+    from .._utils._torch_compat import torch_structseq_field_names
 
     return torch_structseq_field_names(value)
 

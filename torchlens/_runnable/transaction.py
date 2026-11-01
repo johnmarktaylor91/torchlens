@@ -11,8 +11,18 @@ import torch
 
 from torchlens._runnable import ContractCheck, ReadinessReport
 
-from . import _state
-from ._runnable import (
+from .. import _state
+from .._utils.rng import (
+    restore_host_rng,
+    snapshot_host_rng,
+)
+from ..errors import (
+    PathDivergenceError,
+    RunCapabilityUnavailableError,
+    RuntimeSignatureDriftError,
+)
+from ..intervention.replay import _CallConeNode, _walk_call_cone
+from . import (
     ActivationPayloadLayerDescriptor,
     DivergencePolicy,
     InputAttestationFingerprint,
@@ -28,24 +38,14 @@ from ._runnable import (
     TensorSlotRole,
     _RunUntilPlan,
 )
-from ._runnable_state import (
+from .state import (
     PreparedRunnableState,
     RunResourceCeiling,
     runnable_tensor_byte_digest,
 )
-from ._utils.rng import (
-    restore_host_rng,
-    snapshot_host_rng,
-)
-from .errors import (
-    PathDivergenceError,
-    RunCapabilityUnavailableError,
-    RuntimeSignatureDriftError,
-)
-from .intervention.replay import _CallConeNode, _walk_call_cone
 
 if TYPE_CHECKING:
-    from ._runnable_execution import (
+    from .execution import (
         _HOST_RNG_SOURCE_KIND,
         _INPUT_CHECK_UNAVAILABLE,
         _ambient_execution_context_restored,
@@ -507,7 +507,7 @@ def _resolve_run_until_plan(trace: Any, until: Any) -> _RunUntilPlan:
 def _validated_until_tokens(until: Any) -> list[Any]:
     """Normalize the until= selection to tokens; refuse empty/non-static forms."""
 
-    from ._errors import InvalidArgumentError
+    from .._errors import InvalidArgumentError
 
     tokens = list(until) if isinstance(until, (list, tuple, set, frozenset)) else [until]
     if not tokens:
@@ -542,10 +542,10 @@ def _validated_until_tokens(until: Any) -> list[Any]:
 def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], list[str]]:
     """Resolve ONE until= token to (layers, requested names, layer labels)."""
 
-    from ._trace_selector_helpers import canonical_module_site_key
+    from .._trace_selector_helpers import canonical_module_site_key
 
     token = canonical_module_site_key(trace, token) or token
-    from ._errors import InvalidArgumentError
+    from .._errors import InvalidArgumentError
 
     if token == "saved":
         saved_layers = [
@@ -591,7 +591,7 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
 def _until_stop_raw_index(resolved: list[Any]) -> int:
     """The stop frontier: the max recorded raw index across resolved sites."""
 
-    from ._errors import InvalidArgumentError
+    from .._errors import InvalidArgumentError
 
     stop_raw_index = -1
     for layer in resolved:
@@ -646,7 +646,7 @@ def _loaded_until_cut(
     ``sequential_prefix`` regime with the ``unprovable_independence`` cause tag.
     """
 
-    from ._errors import InvalidArgumentError
+    from .._errors import InvalidArgumentError
 
     calls = tuple(descriptor.calls)
     requested = set(plan.requested_layer_labels)
@@ -729,7 +729,7 @@ def _run_truncation_record(plan: _RunUntilPlan, regime: str, cause: str | None =
 
     from hashlib import sha256
 
-    from ._runnable import RunTruncation
+    from . import RunTruncation
 
     digest = sha256("\n".join(plan.skipped_raw_labels).encode("utf-8")).hexdigest()[:16]
     return RunTruncation(
@@ -798,7 +798,7 @@ def _attempt_live_forward(
         # input divergence, so the native error re-raises raw -- the old
         # ``None`` behavior, now explicit (R22-2).
         first_failed = None
-    from ._capture.projectors import train_mode_norm_writers_eligible
+    from .._capture.projectors import train_mode_norm_writers_eligible
 
     try:
         with train_mode_norm_writers_eligible():
@@ -1159,7 +1159,7 @@ def run_live_trace(
     # carry_state=True is the sole opt-in that skips the whole bracket.
     state_snapshot = None
     if not carry_state:
-        from ._runnable_state import snapshot_live_declared_state
+        from .state import snapshot_live_declared_state
 
         state_snapshot = snapshot_live_declared_state(model)
     prior_log_ids = frozenset(id(log) for log in _state.list_logs())
@@ -1206,9 +1206,9 @@ def _restore_declared_state_or_mark(trace: Any, fork: Any, snapshot: Any) -> Non
     alias groups restored before the failure, and chains the restore exception.
     """
 
-    from ._runnable import mark_trace_path_status
-    from ._runnable_state_live import LiveStateRestoreFailure, restore_live_declared_state
-    from .errors import StateBindingError
+    from ..errors import StateBindingError
+    from . import mark_trace_path_status
+    from .state_live import LiveStateRestoreFailure, restore_live_declared_state
 
     try:
         restore_live_declared_state(snapshot, trace=fork)
@@ -1245,7 +1245,7 @@ def _live_runtime_input_leaves(input_args: Any, input_kwargs: Any) -> list[torch
     caller then skips classification entirely (never masks the native error).
     """
 
-    from ._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
+    from .._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
 
     try:
         if isinstance(input_args, (list, tuple)):

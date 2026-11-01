@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._runnable_seam import LEGACY_RUNNABLE_TRACE_FIELD_MAP
+from .._runnable.seam import LEGACY_RUNNABLE_TRACE_FIELD_MAP
 
 #: Legacy persisted spellings ``Trace.__setstate__`` still adapts (renames
 #: and folded families). Declared so the known/unknown partition never

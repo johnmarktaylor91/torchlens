@@ -9,7 +9,12 @@ import torch
 
 from torchlens._runnable import ContractCheck, ReadinessReport
 
-from ._runnable import (
+from ..errors import (
+    ReattachError,
+    RunCapabilityUnavailableError,
+    RunPreconditionError,
+)
+from . import (
     ControlWitness,
     ControlWitnessKind,
     ReadinessStatus,
@@ -17,14 +22,9 @@ from ._runnable import (
     SparseRunDescriptor,
     TensorSlotRole,
 )
-from .errors import (
-    ReattachError,
-    RunCapabilityUnavailableError,
-    RunPreconditionError,
-)
 
 if TYPE_CHECKING:
-    from ._runnable_execution import (
+    from .execution import (
         _INPUT_DERIVED_LAYOUT_FACT_NAME,
         _MODEL_INPUT_LITERAL_FACT_KEY,
         _MODEL_INPUT_LITERAL_SITE_PREFIX,

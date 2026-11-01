@@ -58,7 +58,7 @@ from ._runnable import (
     TensorSlotRole,
     mark_trace_path_status,
 )
-from ._runnable_execution import (
+from ._runnable.execution import (
     _HOST_RNG_SOURCE_KIND,
     _INPUT_CHECK_UNAVAILABLE,
     _ambient_execution_context_restored,
@@ -106,7 +106,7 @@ from ._runnable_execution import (
     _write_argument,
     run_loaded_sparse_trace,
 )
-from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
+from ._runnable.state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
 from ._utils._torch_compat import tensor_has_named_dims
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError

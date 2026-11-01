@@ -9,23 +9,23 @@ import torch
 
 from torchlens._runnable import ContractCheck
 
-from . import _state
-from ._runnable import (
+from .. import _state
+from .._utils.alias_footprint import touched_bytes_relation
+from . import (
     InputAttestationFingerprint,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from ._runnable_state import (
+from .state import (
     RunResourceCeiling,
     _guarded_defensive_materialize,
     runnable_tensor_byte_digest,
 )
-from ._utils.alias_footprint import touched_bytes_relation
 
 if TYPE_CHECKING:
-    from ._runnable_execution import (
+    from .execution import (
         _FINGERPRINT_ALIGNMENT_MODULUS,
         _contract_check,
         _model_input_arity_positions,

@@ -82,7 +82,7 @@ _NEW_FILE_LINE_CAP = 2000
 #:   _io/bundle.py 4450 | backends/torch/backward.py 3800
 #:   bundle/__init__.py 2450 | _capture/trace.py 2200
 #:   _data_classes/trace.py 3750 | options.py 2425 | user_funcs.py 3900
-#:   _runnable_state.py 2700 (L4 D18 mode-aware projector + snapshot-restore)
+#:   _runnable/state.py 2700 (L4 D18 mode-aware projector + snapshot-restore)
 #:   _visualization/_render_edges.py 2350 (portable rolled-edge label placement)
 #: 2026-08-16 L6 merge settle (same debt record): three more ceilings
 #: re-stepped for reviewed L6 selection-algebra / edge-substitution mass
@@ -501,7 +501,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # intermediate-grad dual-spelling resolution here as on jax/tinygrad;
     # merged tree measures 2753. Next 50-line step above it.
     "torchlens/backends/paddle/backend.py": 2800,
-    "torchlens/_runnable_state.py": 2850,
+    "torchlens/_runnable/state.py": 2850,
     "torchlens/_capture/arg_positions.py": 2650,
     "torchlens/backends/jax/jaxpr.py": 2550,
     "torchlens/_capture_state_helpers.py": 2350,

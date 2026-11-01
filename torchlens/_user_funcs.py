@@ -4007,7 +4007,7 @@ def _trace_torch_model(
     )
     from ._capture._episode_join import armed_capture
     from ._capture._weightsfree_admission import pending_admission
-    from ._runnable_state_live import capture_observer_bracket
+    from ._runnable.state_live import capture_observer_bracket
 
     # a default capture is a pure observer. Buffers, random
     # state, training modes and plain attributes are restored on every path,

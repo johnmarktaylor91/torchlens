@@ -1124,7 +1124,7 @@ def _share_source_state_clones(log: Trace) -> Iterator[None]:
         Source trace of the rerun.
     """
 
-    from .._runnable_state import CAPTURE_STATE_CLONE
+    from .._runnable.state import CAPTURE_STATE_CLONE
 
     source_state = getattr(log._runnable, "capture_state", None)
     if not isinstance(source_state, Mapping):

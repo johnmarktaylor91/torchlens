@@ -8,7 +8,7 @@ Every walker of the MODEL-INPUT boundary tree routes through
 * W2 -- capture metadata-read-site walker
   (``torchlens._capture.trace._record_runnable_input_tensor_sites``),
 * W3 -- runtime literal-path walker
-  (``torchlens._runnable_execution._runtime_nontensor_leaf_paths``).
+  (``torchlens._runnable.execution._runtime_nontensor_leaf_paths``).
 
 One shared container dispatch is an HONESTY invariant, not a refactor: the walkers
 witness the same physical tree for different fact families (literal values vs

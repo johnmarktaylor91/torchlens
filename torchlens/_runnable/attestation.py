@@ -7,7 +7,15 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ._runnable import (
+from .._utils.rng import (
+    deterministic_fill_governs,
+    qualname_is_uninit_growth_resize,
+    qualname_is_uninit_size_gated_alloc,
+    qualname_is_uninit_total_writer,
+    qualname_is_uninitialized_alloc,
+    uninit_new_call_is_size_form,
+)
+from . import (
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
     ControlWitnessKind,
@@ -16,17 +24,9 @@ from ._runnable import (
     TensorSlotRole,
     is_mode_sensitive_qualname,
 )
-from ._utils.rng import (
-    deterministic_fill_governs,
-    qualname_is_uninit_growth_resize,
-    qualname_is_uninit_size_gated_alloc,
-    qualname_is_uninit_total_writer,
-    qualname_is_uninitialized_alloc,
-    uninit_new_call_is_size_form,
-)
 
 if TYPE_CHECKING:
-    from ._runnable_execution import (
+    from .execution import (
         _HOST_RNG_SOURCE_KIND,
         _MODULE_TRAINING_MODE_SITE_PREFIX,
         _SEEDED_SOURCE_KIND,

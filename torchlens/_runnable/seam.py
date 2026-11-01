@@ -11,7 +11,7 @@ import torch
 if TYPE_CHECKING:
     from torchlens._runnable import ReadinessReport, RunnableDiagnostic
 
-    from ._runnable import (
+    from . import (
         ArchivedActivation,
         DivergencePolicy,
         PathFaithfulness,

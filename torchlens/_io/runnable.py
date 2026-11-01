@@ -80,7 +80,7 @@ from .._runnable import (
     derived_witness_completeness,
     encode_input_site_position,
 )
-from .._runnable_state import runnable_tensor_byte_digest
+from .._runnable.state import runnable_tensor_byte_digest
 from .._utils._callable_safety import _STORAGE_UNSAFE_NAMES
 from ..backends.registry import BackendRegistryError, get_backend_spec
 from ..errors import RunnablePreflightError
@@ -3582,7 +3582,7 @@ def required_witness_family_members(
     typed ``context_field_invalid`` refusal.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable.execution import _decode_literal
 
     members: dict[str, list[str]] = {family: [] for family in WITNESS_FAMILY_REGISTRY}
     for witness in witnesses:
@@ -4134,7 +4134,7 @@ def _preflight_state_metadata(trace: Any) -> list[RunnableDiagnostic]:
     ``producer_state_metadata``; code ``state_metadata_mismatch``.
     """
 
-    from .._runnable_state import state_metadata_read_violations
+    from .._runnable.state import state_metadata_read_violations
     from ..backends.torch.completeness_witness import (
         host_escape_state_metadata_facts,
         host_escape_state_metadata_observations,

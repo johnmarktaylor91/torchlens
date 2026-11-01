@@ -9,7 +9,7 @@ import torch
 
 from torchlens._runnable import ContractCheck
 
-from ._ir.container import (
+from .._ir.container import (
     CONTAINER_KIND_CAPABILITIES,
     ContainerReconstructionError,
     ContainerSpec,
@@ -19,24 +19,24 @@ from ._ir.container import (
     reconstruction_is_lossy_by_type,
     resolve_container_type,
 )
-from ._runnable import (
+from .._utils._torch_compat import tensor_version_or_none
+from ..errors import (
+    RunPreconditionError,
+)
+from . import (
     RunnableCallDescriptor,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from ._runnable_retention import _check_unretained_extent
-from ._runnable_state import (
+from .retention import _check_unretained_extent
+from .state import (
     RunResourceCeiling,
-)
-from ._utils._torch_compat import tensor_version_or_none
-from .errors import (
-    RunPreconditionError,
 )
 
 if TYPE_CHECKING:
-    from ._runnable_execution import (
+    from .execution import (
         _canonicalize_structseq_output_paths,
         _container_from_paths,
         _contract_check,

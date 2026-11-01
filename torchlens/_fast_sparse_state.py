@@ -10,7 +10,7 @@ module finds those calls from the frozen sparse descriptor alone.
 from __future__ import annotations
 
 from ._runnable import RunnableCallDescriptor, SparseRunDescriptor, is_mode_sensitive_qualname
-from ._runnable_execution import _VIEW_OP_QUALNAMES, _decode_literal, _mutation_target_slot_id
+from ._runnable.execution import _VIEW_OP_QUALNAMES, _decode_literal, _mutation_target_slot_id
 
 
 def _state_storage_closure(

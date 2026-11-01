@@ -498,7 +498,7 @@ between input and read can canonicalize it -- so the honest verdict is "cannot v
 the r35 three-state rule). A same-stride runtime input compares equal and stays VERIFIED, so
 honest channels_last-on-channels_last models are untouched (zero collateral). The mirrored
 consumer constants live in ``torchlens._io.runnable._INPUT_METADATA_FACT_NAMES`` and
-``torchlens._runnable_execution._INPUT_DERIVED_LAYOUT_FACT_NAME``.
+``torchlens._runnable.execution._INPUT_DERIVED_LAYOUT_FACT_NAME``.
 
 Scope / documented residuals (future intermediate-metadata escape kinds route HERE):
 
@@ -706,7 +706,7 @@ STATE_METADATA_MIRROR: Mapping[str, tuple[str, str]] = MappingProxyType(
 
 Keys are EXACTLY the input net's accessor union (pinned by the T-X1 parity test). ``detail``
 is the state read KIND for ``read_kind`` rows (the ``_STATE_METADATA_READ_REQUIRED_DIMS``
-vocabulary in ``torchlens._runnable_state``), the persisted fact name for ``declared_fact``
+vocabulary in ``torchlens._runnable.state``), the persisted fact name for ``declared_fact``
 rows (the closed ``_STATE_METADATA_FACT_NAMES`` vocabulary in ``torchlens._io.runnable``),
 and a documentation pointer for ``structural`` rows.
 """
@@ -815,7 +815,7 @@ safetensors re-lays stride). Recording the read KIND per state name lets the run
 refuse the save exactly when a read dim was non-canonical at capture
 (``producer_state_metadata``), while an UNREAD non-canonical slot (a channels-last conv weight)
 stays saveable and ``verified``. Kept weak-keyed off the schema; read kinds are the
-``_STATE_METADATA_READ_REQUIRED_DIMS`` vocabulary in ``torchlens._runnable_state``.
+``_STATE_METADATA_READ_REQUIRED_DIMS`` vocabulary in ``torchlens._runnable.state``.
 """
 
 _HOST_ESCAPE_UNATTRIBUTABLE_BOOL: weakref.WeakSet[Any] = weakref.WeakSet()

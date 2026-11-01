@@ -19,24 +19,9 @@ import torch
 
 from torchlens._runnable import ContractCheck, ReadinessReport, RunnableDiagnostic, RunReport
 
-from . import (
-    _runnable_attestation as _runnable_attestation,
-    _runnable_call_arguments as _runnable_call_arguments,
-    _runnable_call_outputs as _runnable_call_outputs,
-    _runnable_input_aliases as _runnable_input_aliases,
-    _runnable_input_metadata as _runnable_input_metadata,
-    _runnable_input_sites as _runnable_input_sites,
-    _runnable_output_contracts as _runnable_output_contracts,
-    _runnable_path_faithfulness as _runnable_path_faithfulness,
-    _runnable_providers as _runnable_providers,
-    _runnable_state_context as _runnable_state_context,
-    _runnable_transaction as _runnable_transaction,
-    _runnable_verification as _runnable_verification,
-    _runnable_witness_contracts as _runnable_witness_contracts,
-    _state,
-)
-from ._io._torch_symbols import torch_attr
-from ._ir.container import (
+from .. import _state
+from .._io._torch_symbols import torch_attr
+from .._ir.container import (
     CONTAINER_KIND_CAPABILITIES,
     ContainerReconstructionError,
     ContainerSpec,
@@ -46,7 +31,34 @@ from ._ir.container import (
     reconstruction_is_lossy_by_type,
     resolve_container_type,
 )
-from ._runnable import (
+from .._split_rebind import (
+    rebind_contextmanager as _rebind_contextmanager,
+    rebind_function as _rebind_function,
+    rebind_lru_cache as _rebind_lru_cache,
+)
+from .._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
+from .._utils.alias_footprint import touched_bytes_relation
+from .._utils.rng import (
+    aten_qualname_is_seeded_rng,
+    deterministic_fill_governs,
+    qualname_is_uninit_growth_resize,
+    qualname_is_uninit_size_gated_alloc,
+    qualname_is_uninit_total_writer,
+    qualname_is_uninitialized_alloc,
+    restore_host_rng,
+    snapshot_host_rng,
+    uninit_new_call_is_size_form,
+)
+from ..errors import (
+    PathDivergenceError,
+    ReattachError,
+    ReplayValueMismatchError,
+    RunCapabilityUnavailableError,
+    RunPreconditionError,
+    RuntimeSignatureDriftError,
+)
+from ..intervention.replay import _CallConeNode, _walk_call_cone
+from . import (
     NONDETERMINISTIC_SOURCE_VOCABULARY,
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
@@ -78,12 +90,25 @@ from ._runnable import (
     TensorSlotRole,
     WitnessCompleteness,
     WitnessGapKind,
+    attestation as _runnable_attestation,
+    call_arguments as _runnable_call_arguments,
+    call_outputs as _runnable_call_outputs,
     derived_witness_completeness,
+    input_aliases as _runnable_input_aliases,
+    input_metadata as _runnable_input_metadata,
+    input_sites as _runnable_input_sites,
     is_mode_sensitive_qualname,
     mark_trace_path_status,
+    output_contracts as _runnable_output_contracts,
+    path_faithfulness as _runnable_path_faithfulness,
+    providers as _runnable_providers,
+    state_context as _runnable_state_context,
+    transaction as _runnable_transaction,
+    verification as _runnable_verification,
+    witness_contracts as _runnable_witness_contracts,
 )
-from ._runnable_retention import _check_unretained_extent, _fail_open_unless_admitted
-from ._runnable_state import (
+from .retention import _check_unretained_extent, _fail_open_unless_admitted
+from .state import (
     _INPUT_STRUCTURE_SITE_PREFIX,
     _OUTPUT_COUNT_FLOOR,
     _STATE_METADATA_FACT_SITE_PREFIX,
@@ -98,33 +123,6 @@ from ._runnable_state import (
     state_metadata_full_violations,
     validate_run_seed,
 )
-from ._split_rebind import (
-    rebind_contextmanager as _rebind_contextmanager,
-    rebind_function as _rebind_function,
-    rebind_lru_cache as _rebind_lru_cache,
-)
-from ._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
-from ._utils.alias_footprint import touched_bytes_relation
-from ._utils.rng import (
-    aten_qualname_is_seeded_rng,
-    deterministic_fill_governs,
-    qualname_is_uninit_growth_resize,
-    qualname_is_uninit_size_gated_alloc,
-    qualname_is_uninit_total_writer,
-    qualname_is_uninitialized_alloc,
-    restore_host_rng,
-    snapshot_host_rng,
-    uninit_new_call_is_size_form,
-)
-from .errors import (
-    PathDivergenceError,
-    ReattachError,
-    ReplayValueMismatchError,
-    RunCapabilityUnavailableError,
-    RunPreconditionError,
-    RuntimeSignatureDriftError,
-)
-from .intervention.replay import _CallConeNode, _walk_call_cone
 
 _RUN_FORK_COUNTER = count(1)
 
@@ -399,7 +397,7 @@ _restore_declared_state_or_mark = _rebind_function(
 # These names resolve in THIS module's globals at runtime inside rebound
 # functions (same mechanism as _INPUT_CHECK_UNAVAILABLE).
 _RunUntilPlan = _runnable_transaction._RunUntilPlan
-from ._runnable import (  # noqa: E402
+from . import (  # noqa: E402
     RUN_TRUNCATION_CAUSE_VOCABULARY,
     RUN_TRUNCATION_REGIME_VOCABULARY,
     RunTruncation,

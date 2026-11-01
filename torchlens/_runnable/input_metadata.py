@@ -9,26 +9,26 @@ import torch
 
 from torchlens._runnable import ContractCheck, RunnableDiagnostic
 
-from . import _state
-from ._runnable import (
+from .. import _state
+from .._utils._torch_compat import tensor_has_named_dims
+from .._utils.alias_footprint import touched_bytes_relation
+from ..errors import (
+    PathDivergenceError,
+)
+from . import (
     PathFaithfulness,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from ._runnable_state import (
+from .state import (
     RunResourceCeiling,
     _guarded_defensive_materialize,
 )
-from ._utils._torch_compat import tensor_has_named_dims
-from ._utils.alias_footprint import touched_bytes_relation
-from .errors import (
-    PathDivergenceError,
-)
 
 if TYPE_CHECKING:
-    from ._runnable_execution import (
+    from .execution import (
         _VIEW_OP_QUALNAMES,
         _contract_check,
         _fact_path_tuple_or_none,

@@ -10,8 +10,11 @@ import torch
 
 from torchlens._runnable import ContractCheck, ReadinessReport, RunnableDiagnostic
 
-from . import _state
-from ._runnable import (
+from .. import _state
+from ..errors import (
+    RunPreconditionError,
+)
+from . import (
     ActivationPayloadLayerDescriptor,
     DivergencePolicy,
     NumericAttestationStatus,
@@ -23,17 +26,14 @@ from ._runnable import (
     derived_witness_completeness,
     mark_trace_path_status,
 )
-from ._runnable_state import (
+from .state import (
     RunResourceCeiling,
     prepare_runnable_state,
     validate_run_seed,
 )
-from .errors import (
-    RunPreconditionError,
-)
 
 if TYPE_CHECKING:
-    from ._runnable_execution import (
+    from .execution import (
         _bind_runtime_inputs,
         _clone_state_values,
         _execute_loaded_sparse_transaction,
@@ -295,7 +295,7 @@ def _finalize_provider_run(
     # Function-local import: _runnable_execution rebinds this function into
     # its own globals (_rebind_function), so a module-level name is invisible
     # at call time.
-    from ._capture._annotations_travel import scrub_fresh_execution_annotations
+    from .._capture._annotations_travel import scrub_fresh_execution_annotations
 
     scrub_fresh_execution_annotations(fork)
     report = _run_report(

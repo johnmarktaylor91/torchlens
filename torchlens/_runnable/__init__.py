@@ -1,7 +1,7 @@
 """Frozen type contracts for sparse runnable ``.tlspec`` artifacts.
 
 This module contains schema and API shapes only. Runtime state binding lives in
-``torchlens._runnable_state``; this module intentionally performs no capture,
+``torchlens._runnable.state``; this module intentionally performs no capture,
 serialization, callable resolution, state binding, or execution.
 """
 
@@ -14,7 +14,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Final, Literal, Protocol, TypeAlias
 
-from .intervention.types import FunctionRegistryKey
+from ..intervention.types import FunctionRegistryKey
 
 RUNNABLE_TLSPEC_SCHEMA_VERSION: Final = "sparse_recorded_taken_path_v2"
 """Frozen sparse runnable descriptor capability/version string.
@@ -1689,7 +1689,7 @@ def refuse_poisoned_trace(trace: Any, operation: str) -> None:
 
     if not trace._runnable.poisoned:
         return
-    from .errors import PoisonedRunError
+    from ..errors import PoisonedRunError
 
     status = trace._runnable.path_faithfulness
     mismatch = trace._runnable.first_mismatch
@@ -1741,7 +1741,7 @@ def refuse_collective_boundary_trace(trace: Any, operation: str) -> None:
     boundaries = collective_boundaries_of(trace)
     if not boundaries:
         return
-    from .errors import CollectiveBoundaryReplayError
+    from ..errors import CollectiveBoundaryReplayError
 
     kinds = sorted({str(entry.get("kind")) for entry in boundaries})
     raise CollectiveBoundaryReplayError(

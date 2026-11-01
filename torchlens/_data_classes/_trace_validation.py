@@ -659,7 +659,7 @@ class TraceValidationMixin(_TraceMixinBase):
             # ``Generator.manual_seed`` rejects) and an int outside torch's
             # accepted long range (pybind overflow). The failed call is
             # transactional either way (global torch RNG untouched).
-            from .._runnable_state import validate_run_seed
+            from .._runnable.state import validate_run_seed
 
             validate_run_seed(seed)
         # R06: the settled-outcome gate is the FIRST authority on run(). The
@@ -848,7 +848,7 @@ class TraceValidationMixin(_TraceMixinBase):
                 )
             run_save_labels: Any = None
             if save is not None:
-                from .._runnable_execution import _resolve_run_until_plan
+                from .._runnable.execution import _resolve_run_until_plan
 
                 # Reuse the static-form resolver: same accepted family (labels,
                 # module addresses, 'saved'), same typed refusals (pre-S4
@@ -903,7 +903,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     from .._fast_run import run_fast_loaded_trace
 
                     return run_fast_loaded_trace(self, run_inputs, seed=seed)
-                from .._runnable_execution import run_loaded_sparse_trace
+                from .._runnable.execution import run_loaded_sparse_trace
 
                 return _apply_run_save_selection(
                     run_loaded_sparse_trace(
@@ -924,7 +924,7 @@ class TraceValidationMixin(_TraceMixinBase):
 
                 require_structure_only_capability(self, "live_replay")
                 _refuse_stats_capture(self, "live_replay")
-                from .._runnable_execution import raise_analysis_run_unavailable
+                from .._runnable.execution import raise_analysis_run_unavailable
 
                 raise_analysis_run_unavailable(self)
             # N3/N5 (live provider): the live run -- fast=True included --
@@ -935,7 +935,7 @@ class TraceValidationMixin(_TraceMixinBase):
 
             require_structure_only_capability(self, "live_replay")
             _refuse_stats_capture(self, "live_replay")
-            from .._runnable_execution import _LiveRunOptions, run_live_trace
+            from .._runnable.execution import _LiveRunOptions, run_live_trace
 
             _refuse_state_compromised_live_run(self)
             staged_spec = getattr(self, "_intervention_spec", None)

@@ -1197,7 +1197,7 @@ def _compare_lens_identity(trace: Any, record: Mapping[str, Any]) -> tuple[str, 
             code="logit_lens_identity_invalid",
         )
     from .._data_substrate import compare_model_identity, compute_model_identity
-    from .._runnable_transaction import _require_live_source_model
+    from .._runnable.transaction import _require_live_source_model
     from ..errors.runnable import RunCapabilityUnavailableError
 
     try:

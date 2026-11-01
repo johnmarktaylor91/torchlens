@@ -9,7 +9,7 @@ import torch
 
 from torchlens._runnable import ContractCheck, ReadinessReport, RunnableDiagnostic, RunReport
 
-from ._runnable import (
+from . import (
     NONDETERMINISTIC_SOURCE_VOCABULARY,
     RUN_TRUNCATION_CAUSE_VOCABULARY,
     RUN_TRUNCATION_REGIME_VOCABULARY,
@@ -25,13 +25,13 @@ from ._runnable import (
     WitnessCompleteness,
     derived_witness_completeness,
 )
-from ._runnable_state import (
+from .state import (
     PreparedRunnableState,
     runnable_tensor_byte_digest,
 )
 
 if TYPE_CHECKING:
-    from ._runnable_execution import (
+    from .execution import (
         _LAYOUT_SENSITIVE_BLAS_QUALNAMES,
         _attestation_inputs_match,
         _attestation_state_matches,

@@ -18,14 +18,14 @@ from typing import Any, TypeAlias
 
 import torch
 
-from ._runnable import (
+from ..errors import RunCapabilityUnavailableError
+from . import (
     LiteralTorchSymbol,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from .errors import RunCapabilityUnavailableError
 
 _VIEW_LOGICAL_ELEMENT_CEILING = 1 << 32
 """Largest logical extent the admitted pure-view slots of one run may have, summed.
@@ -145,8 +145,8 @@ def _resolved_forms(
 ) -> dict[Any, frozenset[_LiteralPosition]]:
     """Resolve ``(namespace, name)`` keys to unwrapped callables, keeping their forms."""
 
-    from ._io.runnable_load import _unwrap_decorated
-    from ._utils._torch_symbols import torch_attr
+    from .._io.runnable_load import _unwrap_decorated
+    from .._utils._torch_symbols import torch_attr
 
     resolved: dict[Any, frozenset[_LiteralPosition]] = {}
     for (namespace, name), forms in entries.items():
@@ -164,7 +164,7 @@ def _retained_output_slot_ids(trace: Any, descriptor: SparseRunDescriptor) -> fr
     (the reconstruct clone). Every other op output lives only as long as replay needs it.
     """
 
-    from ._runnable_verification import _op_for_label
+    from .verification import _op_for_label
 
     retained = {
         slot.slot_id for slot in descriptor.tensor_slots if slot.role is TensorSlotRole.OUTPUT
@@ -216,7 +216,7 @@ def _view_admission_state(
 ) -> dict[str, Any]:
     """Build the producer/reader maps, the op sets and the projector for view admission."""
 
-    from ._runnable_execution import _pure_view_projector
+    from .execution import _pure_view_projector
 
     producers = {slot_id: call for call in descriptor.calls for slot_id in call.output_slot_ids}
     direct_readers: dict[str, list[Any]] = defaultdict(list)
@@ -395,7 +395,7 @@ def _preflight_retention_floor(
     own no storage, so they are the only op outputs the floor does not charge.
     """
 
-    from ._runnable_state import _allocation_budget_bytes, _slot_device, _torch_dtype
+    from .state import _allocation_budget_bytes, _slot_device, _torch_dtype
 
     slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
     floor: dict[str, int] = defaultdict(int)
@@ -462,7 +462,7 @@ def _check_unretained_extent(
     off_cpu = admitted_view and value.device.type != "cpu"
     if numel <= _VIEW_LOGICAL_ELEMENT_CEILING and not off_cpu:
         return
-    from ._runnable_state import _allocation_budget_bytes
+    from .state import _allocation_budget_bytes
 
     logical_bytes = numel * int(value.element_size())
     available = _allocation_budget_bytes(value.device)

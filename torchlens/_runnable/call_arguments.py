@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ._runnable import (
+from ..errors import (
+    RunCapabilityUnavailableError,
+    RunPreconditionError,
+    RuntimeSignatureDriftError,
+)
+from . import (
     CallableRegistryEntry,
     RunnableCallDescriptor,
     RunnableErrorCode,
@@ -16,22 +21,17 @@ from ._runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from ._runnable_retention import _fail_open_unless_admitted
-from ._runnable_state import (
+from .retention import _fail_open_unless_admitted
+from .state import (
     _OUTPUT_COUNT_FLOOR,
     RunResourceCeiling,
     _allocation_budget_bytes,
     _slot_device,
     _torch_dtype,
 )
-from .errors import (
-    RunCapabilityUnavailableError,
-    RunPreconditionError,
-    RuntimeSignatureDriftError,
-)
 
 if TYPE_CHECKING:
-    from ._runnable_execution import (
+    from .execution import (
         _MAX_DECODE_NESTING_DEPTH,
         _count_bounded_fake_tensor_mode_class,
         _decode_literal,
