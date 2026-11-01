@@ -1132,7 +1132,7 @@ def test_option_group_conflict_doors_split_by_site_history() -> None:
 def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Backward intervention normalization propagates typed selector refusals."""
 
-    def _raise_typed_refusal(selector: object) -> str:
+    def _raise_typed_refusal(selector: object) -> tuple[tuple[str, object], ...]:
         """Raise the typed selector refusal used to probe the former broad catch."""
 
         del selector
@@ -1144,7 +1144,9 @@ def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyP
         del context
 
     predicate.selector = object()  # type: ignore[attr-defined]
-    predicate.decision = InterventionDecision(action="transform")  # type: ignore[attr-defined]
+    predicate.decision = InterventionDecision(  # type: ignore[attr-defined]
+        action="transform", hook=lambda out, *, ctx: out
+    )
     from torchlens import _capture_intervention
 
     monkeypatch.setattr(_capture_intervention, "split_site_branches", _raise_typed_refusal)
