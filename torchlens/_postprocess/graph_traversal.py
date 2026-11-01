@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from .._data_classes.op import Op, _dtype_or_none, _memory_or_none, _shape_or_none
+from .._ir._output_occurrences import output_container_path_meta
 from .._ir.op_record import amend_late_buffer_output_parent
 from .._quantities import Bytes, Duration
 from .._utils.display import identity
@@ -220,42 +221,6 @@ def _event_buffer_address_matches(self: "Trace", label_raw: str, buffer_address:
     return _recorded_buffer_address(event) == buffer_address
 
 
-def _output_container_path_meta(
-    occurrences: "list[tuple[str, tuple[Any, ...], Any]] | None",
-    output_address: str,
-) -> "tuple[tuple[Any, ...], Any] | None":
-    """Return the ``(container_path, container_spec)`` of one output occurrence.
-
-    One tensor object returned at several output paths has one occurrence per
-    path, all under its producing op's raw label. The output op built for the
-    occurrence at ``output_address`` takes THAT occurrence's path, so each
-    aliased slot keeps its own path and the container rebuild finds a leaf for
-    every slot.
-
-    Parameters
-    ----------
-    occurrences:
-        ``(address, path, spec)`` occurrences of the parent op's tensor in
-        output-walk order, or ``None`` when the tensor sits at no container path.
-    output_address:
-        Display address of the output op being built.
-
-    Returns
-    -------
-    tuple[tuple[Any, ...], Any] | None
-        The matching occurrence's path and spec; the first occurrence when no
-        address matches; ``None`` without occurrences.
-    """
-
-    if not occurrences:
-        return None
-    for address, path, spec in occurrences:
-        if address == output_address:
-            return path, spec
-    _address, path, spec = occurrences[0]
-    return path, spec
-
-
 def _add_output_layers(
     self: "Trace",
     output_tensors: list[torch.Tensor],
@@ -328,13 +293,9 @@ def _add_output_layers(
         if output_address_suffix != "":
             output_address += f".{output_address_suffix}"
         new_output_node.io_role = output_address
-        container_path_meta = _output_container_path_meta(
-            getattr(self, "_output_container_specs_by_raw_label", {}).get(output_node._label_raw),
-            output_address_suffix,
-        )
-        if container_path_meta is not None:
-            new_output_node.container_path = container_path_meta[0]
-            new_output_node.container_spec = container_path_meta[1]
+        path_meta = output_container_path_meta(self, output_node._label_raw, output_address_suffix)
+        if path_meta is not None:
+            new_output_node.container_path, new_output_node.container_spec = path_meta
 
         # Tensor metadata must describe the tensor the model actually returned,
         # not the parent op's recorded output: after an in-place mutation
