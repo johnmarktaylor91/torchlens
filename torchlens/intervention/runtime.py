@@ -1460,8 +1460,8 @@ def _fire_gradient_entry(
 
     site_label = _forward_site_label(op)
     tuple_index = _op_output_slot(op)
-    call_index = _next_gradient_call_index(trace, entry, site_label)
     run_state = _live_run_ctx()
+    call_index = _next_gradient_call_index(run_state, entry, site_label)
     context = make_hook_context(
         name=_hook_display_name(entry),
         timing="post",
@@ -1606,7 +1606,7 @@ def _gradient_target_matches(trace: Any, target: Any, op: Any, pass_index: int |
 
     inner = gradient_inner(target)
     if inner is not None:
-        return _inner_selector_matches_op(trace, inner, op)
+        return _inner_selector_matches_op(inner, op)
     if isinstance(target, BackwardPassSelector):
         return pass_index == target.pass_index
     if isinstance(target, CompositeSelector):
@@ -1619,13 +1619,11 @@ def _gradient_target_matches(trace: Any, target: Any, op: Any, pass_index: int |
     return False
 
 
-def _inner_selector_matches_op(trace: Any, inner: Any, op: Any) -> bool:
-    """Return whether a forward selector matches one finished op (cached per trace).
+def _inner_selector_matches_op(inner: Any, op: Any) -> bool:
+    """Return whether a forward selector matches one finished op (cached per run).
 
     Parameters
     ----------
-    trace:
-        Trace owning the cache.
     inner:
         Forward-universe selector-like (a label string resolves as an exact
         label, like every live hook target).
@@ -1641,7 +1639,8 @@ def _inner_selector_matches_op(trace: Any, inner: Any, op: Any) -> bool:
     from .._ir.selector_eval import normalize_selector_like
     from .resolver import _resolve_unchecked
 
-    cache: dict[tuple[str, str], bool] = trace.__dict__.setdefault(
+    # Session-only cache in the run state (last_run is never persisted).
+    cache: dict[tuple[str, str], bool] = _live_run_ctx().setdefault(
         "_tl_gradient_site_match_cache", {}
     )
     op_label = str(getattr(op, "label", ""))
@@ -1698,13 +1697,15 @@ def _op_output_slot(op: Any) -> int | None:
     return slot if isinstance(slot, int) else None
 
 
-def _next_gradient_call_index(trace: Any, entry: NormalizedHookEntry, site_label: str) -> int:
+def _next_gradient_call_index(
+    run_state: dict[str, Any], entry: NormalizedHookEntry, site_label: str
+) -> int:
     """Return the one-based fire count of one gradient hook at one site.
 
     Parameters
     ----------
-    trace:
-        Trace being backwarded.
+    run_state:
+        Run-scoped dictionary of the backwarded trace (session-only).
     entry:
         Gradient-universe hook entry.
     site_label:
@@ -1716,7 +1717,7 @@ def _next_gradient_call_index(trace: Any, entry: NormalizedHookEntry, site_label
         Number of times this hook has now fired at this site on this trace.
     """
 
-    counts: dict[tuple[str, int], int] = trace.__dict__.setdefault("_tl_gradient_fire_counts", {})
+    counts: dict[tuple[str, int], int] = run_state.setdefault("_tl_gradient_fire_counts", {})
     key = (site_label, _hook_identity(entry))
     counts[key] = counts.get(key, 0) + 1
     return counts[key]
