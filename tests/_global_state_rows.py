@@ -1236,6 +1236,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/intervention/__init__.py", "__all__"),
         ("torchlens/intervention/_affine_source.py", "__all__"),
         ("torchlens/intervention/_directions.py", "__all__"),
+        ("torchlens/intervention/_grad_site_plan.py", "__all__"),
         ("torchlens/intervention/_gradient_contract.py", "__all__"),
         ("torchlens/intervention/_subspace_projection.py", "__all__"),
         ("torchlens/intervention/_subspace_spec.py", "__all__"),
