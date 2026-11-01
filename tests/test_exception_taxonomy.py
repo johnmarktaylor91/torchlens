@@ -1306,9 +1306,9 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "projected output's size cannot be read and converted by the caller to "
         "the typed op_allocation_preflight refusal"
     ),
-    "torchlens._user_funcs._CaptureCacheEntryOverCeilingError": (
+    "torchlens._capture.prepare.cache._CaptureCacheEntryOverCeilingError": (
         "private mid-stream byte-ceiling abort signal; raised and caught inside the "
-        "capture-cache writer, never escapes user_funcs"
+        "capture-cache writer, never escapes the capture cache module"
     ),
     "torchlens._utils.rng._NotADigestableRng": (
         "private RNG-classifier signal; caught inside the witness classifier"

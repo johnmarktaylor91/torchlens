@@ -29,7 +29,6 @@ import torch.nn as nn
 import torchlens as tl
 import torchlens._capture.prepare.cache as prepare_cache
 import torchlens._capture.prepare.door as prepare_door
-import torchlens._user_funcs as user_funcs
 from torchlens._user_funcs import (
     CAPTURE_CACHE_KEY_CURATED,
     CAPTURE_CACHE_KEY_NEUTRAL,
@@ -90,7 +89,7 @@ def test_cache_key_curated_fields_have_hand_built_entries() -> None:
     leaves the key. This receipt scans the assembly source for the literal.
     """
 
-    source = inspect.getsource(user_funcs)
+    source = inspect.getsource(prepare_door)
     missing = [name for name in sorted(CAPTURE_CACHE_KEY_CURATED) if f'"{name}"' not in source]
     assert not missing, (
         f"curated fields with no hand-built cache-config entry: {missing}; "
