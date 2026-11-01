@@ -2318,6 +2318,25 @@ def _trace_option_explicit(option_name: str, public_trace_kwargs: dict[str, Any]
     return False
 
 
+#: Filtered trace options that are a capability flag's entry (SPEC 1.3: one code per
+#: cause): refusing one raises that flag's contracted code. Other filtered options
+#: keep the class code.
+_TRACE_OPTION_CAPABILITY_FLAGS: dict[str, str] = {
+    "grad_options": "intermediate_derived_grads",
+}
+
+
+def _trace_option_refusal_code(option_name: str) -> str:
+    """The refusal code for an explicit trace option the resolved backend lacks."""
+
+    flag = _TRACE_OPTION_CAPABILITY_FLAGS.get(option_name)
+    if flag is None:
+        return BackendUnsupportedError.code
+    from .backends._backend_protocol import refusal_code_for_capability
+
+    return refusal_code_for_capability(flag)
+
+
 def _unsupported_trace_option_message(option_name: str, backend_name: str) -> str:
     """Return an actionable unsupported-option message.
 
@@ -2397,7 +2416,10 @@ def _filter_trace_kwargs_for_backend(
             continue
         if _trace_option_explicit(option_name, public_trace_kwargs):
             raise BackendUnsupportedError(
-                _unsupported_trace_option_message(option_name, backend_name)
+                _unsupported_trace_option_message(option_name, backend_name),
+                code=_trace_option_refusal_code(option_name),
+                backend=backend_name,
+                option=option_name,
             )
         public_trace_kwargs.pop(option_name, None)
 

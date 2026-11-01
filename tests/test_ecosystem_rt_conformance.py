@@ -65,18 +65,12 @@ def _rows(report: ConformanceReport, case_id: str) -> list[Any]:
 
 #: Torch-side gaps pinned by exact cell id (the same table as
 #: tests/test_conformance_protocol_cells.py; cross-packet requests in the lane's RESULT.md):
-#: the public entry refuses ``grad_options=`` with the generic code, a failed replay status
-#: does not name the offending op in its message, and a loaded portable bundle has no
-#: callables for replay validation. A fix flips the pin; the cells stay strict.
-_TORCH_KNOWN_GAPS = frozenset(
-    {
-        "c1_refusal_intermediate_derived_grads",
-        "c1_validation_names_reason",
-        "c2_validation_after_load",
-    }
-)
+#: a failed replay status does not name the offending op in its message, and a loaded
+#: portable bundle has no callables for replay validation. A fix flips the pin; the cells
+#: stay strict.
+_TORCH_KNOWN_GAPS = frozenset({"c1_validation_names_reason", "c2_validation_after_load"})
 _FAKE_KNOWN_GAPS = frozenset({"c1_validation_names_reason", "c2_validation_after_load"})
-_TORCH_GAP_REASON = "torch refuses grad_options with backend_unsupported (pinned gap; P1)"
+_TORCH_GAP_REASON = "torch's failed replay status does not name the offending op (pinned gap)"
 
 
 def _failed_ids(report: ConformanceReport) -> set[str]:
@@ -93,7 +87,7 @@ def test_torch_reference_passes_the_full_ladder(tmp_path: Path) -> None:
     )
     assert _failed_ids(report) == set(_TORCH_KNOWN_GAPS)
     assert report.funnel["skipped"] == 0
-    assert report.earned_tier == "C0"  # the refusal gap sits in C1
+    assert report.earned_tier == "C0"  # the naming gap sits in C1
     assert report.is_claim_eligible is False  # toys earn nothing
     with pytest.raises(ConfigurationError) as excinfo:
         claim_string(report)

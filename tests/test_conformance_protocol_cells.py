@@ -185,15 +185,12 @@ def test_plant_tables_partition_the_closed_plant_set() -> None:
 # The reference and the unplanted fake pass every new cell (harness sanity).
 
 #: Torch-side gaps the suite reports today, pinned by exact cell id with the detail each
-#: carries (cross-packet requests in the lane's RESULT.md): the public entry refuses
-#: ``grad_options=`` with the generic ``backend_unsupported`` code instead of the flag's
-#: code; a failed replay status carries the generic message "Replay validation failed."
-#: instead of naming the offending op (and torch's ``arg_logging_mismatch`` reason is not
-#: yet in the closed reason list); a loaded portable bundle carries no callables so replay
-#: validation refuses it. A fix flips the pin, and the entry must then be removed; the
-#: cells stay strict.
+#: carries (cross-packet requests in the lane's RESULT.md): a failed replay status carries
+#: the generic message "Replay validation failed." instead of naming the offending op (and
+#: torch's ``arg_logging_mismatch`` reason is not yet in the closed reason list); a loaded
+#: portable bundle carries no callables so replay validation refuses it. A fix flips the
+#: pin, and the entry must then be removed; the cells stay strict.
 TORCH_KNOWN_GAPS: dict[str, str] = {
-    "c1_refusal_intermediate_derived_grads": "backend_unsupported",
     "c1_validation_names_reason": "message does not name",
     "c2_validation_after_load": "ArtifactError",
 }
@@ -232,7 +229,7 @@ def test_torch_reference_passes_every_protocol_cell(tmp_path: Path) -> None:
     assert card.scorecard_version == SCORECARD_VERSION
     assert card.maturity == "stable"
     assert card.framework_requirement["pinned"]
-    # The refusal gap sits in C1, so the ladder stops at C0 until P1 codes the refusal.
+    # The naming gap sits in C1, so the ladder stops at C0 until the status names the op.
     assert card.highest_tier == "C0"
     assert card.roster_groups == {"config_built": 2}
     assert card.capabilities["intermediate_derived_grads"] == "unsupported"
@@ -243,9 +240,7 @@ def test_torch_reference_passes_every_protocol_cell(tmp_path: Path) -> None:
     ), card.capabilities
     assert [item.id for item in card.graduation] == ["G1", "G2", "G3", "G4", "G5", "G6"]
     # G1 and G2 read the pinned gaps; they flip with the gaps.
-    assert not card.graduation[0].met and "c1_refusal_intermediate_derived_grads" in (
-        card.graduation[0].detail
-    )
+    assert "c1_refusal_intermediate_derived_grads" not in card.graduation[0].detail
     assert not card.graduation[1].met and "c2_validation_after_load" in card.graduation[1].detail
     assert card.counts["denominator"] == len(card.cells)
     assert scorecard_from_json(card.to_json()) == card

@@ -232,3 +232,24 @@ def test_protocol_members_are_the_reference_values() -> None:
     assert protocol.refusal_codes() <= REFUSAL_CODES
     assert protocol.realize_once([torch.ones(1)]) is None
     assert protocol.is_tensor(torch.ones(1)) and not protocol.is_tensor(np.ones(1))
+
+
+def test_grad_options_refuses_with_the_capability_code() -> None:
+    """SPEC 1.3: torch refuses ``grad_options=`` with the flag's code on ``exc.code``.
+
+    The option is the ``intermediate_derived_grads`` capability's entry, so the
+    refusal is that flag's contracted code, raised before the model runs.
+    """
+
+    calls: list[int] = []
+
+    class _Counts(torch.nn.Module):
+        def forward(self, v: torch.Tensor) -> torch.Tensor:
+            calls.append(1)
+            return v * 2.0
+
+    with pytest.raises(BackendUnsupportedError) as excinfo:
+        tl.trace(_Counts(), torch.randn(2, 4), grad_options={"derived": True})
+    assert excinfo.value.code == "intermediate_derived_grads_unsupported"
+    assert excinfo.value.fields["code"] == excinfo.value.code
+    assert not calls
