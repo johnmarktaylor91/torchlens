@@ -1579,10 +1579,17 @@ def to_disk(
 ) -> StorageOptions:
     """Return storage options that stream selected payloads to a bundle.
 
+    Two payloads stay in memory regardless of ``retain_in_memory``: the model
+    output the forward returns (the always-retained output tail, which the
+    output op's payload may alias), and every payload after ``trace.run(...)``,
+    which re-captures the forward into RAM and leaves the bundle at ``path``
+    holding the original capture. Save the trace again to persist a rerun.
+
     Parameters
     ----------
     path:
-        Destination bundle directory. The path must not already exist.
+        Destination bundle directory. The path must not already exist
+        (``bundle_save_failed`` otherwise).
     retain_in_memory:
         Whether streamed payloads should also remain as RAM copies.
     include_custom_attributes:
