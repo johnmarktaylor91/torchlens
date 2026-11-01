@@ -90,8 +90,6 @@ replace_with	declared
 report	submodule
 saturated	declared
 scale	declared
-scale_grad	declared
-semantic	submodule
 sign	declared
 site	declared
 splice_module	declared
