@@ -381,6 +381,9 @@ class Rule:
     _identity_memo: tuple[tuple[int | None, ...], tuple[str, str]] | None = field(
         default=None, init=False, compare=False, repr=False
     )
+    #: The activation half of the target (``None`` for a gradient-only or
+    #: node-only target): the only part a forward predicate may match.
+    _forward_target: Any = field(default=None, init=False, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         """Validate the clause and derive its identity facts.
@@ -409,6 +412,7 @@ class Rule:
         object.__setattr__(self, "where_repr", _canonical_repr(self.target))
         object.__setattr__(self, "_action_tensors", tuple(action_tensors))
         object.__setattr__(self, "address_class", classify_where(self.target))
+        object.__setattr__(self, "_forward_target", split_site_by_signal(self.target)[0])
 
     def _identity(self, *, exact: bool = False) -> tuple[str, str]:
         """Return ``(action_repr, rule_id)`` for the action's CURRENT content.
@@ -586,7 +590,11 @@ class Recipe:
 
         matched: list[Rule] = []
         for rule in self.rules:
-            if rule.target(ctx):
+            # A forward predicate sees only each rule's activation half: a
+            # tl.grad(...) or autograd-node half edits the backward pass and is
+            # mounted there by the capture and bind doors.
+            forward_target = rule._forward_target
+            if forward_target is not None and forward_target(ctx):
                 matched.append(rule)
         if not matched:
             return None
