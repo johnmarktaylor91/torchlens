@@ -199,7 +199,7 @@ def render(out_dir: Path, *, copy_for_review: bool = True) -> None:
 
     recurrence = _trace("rnn_cell_loop")
     try:
-        _draw(recurrence, out_dir / "recurrence.svg", vis_mode="rolled")
+        _draw(recurrence, out_dir / "recurrence.svg", rolled=True)
     finally:
         recurrence.cleanup()
 

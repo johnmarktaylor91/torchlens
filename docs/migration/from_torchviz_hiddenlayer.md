@@ -89,6 +89,6 @@ dot_source = trace.draw(
     fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
     path=outpath,
     file_format="svg",
-    )
+).dot
 RESULT = ("ConvBnRelu" in dot_source, os.path.exists(outpath + ".svg"))
 ```

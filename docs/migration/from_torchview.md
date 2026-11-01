@@ -45,7 +45,7 @@ torch.manual_seed(0)
 model = nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU(), nn.Flatten(), nn.Linear(8 * 14 * 14, 10)).eval()
 trace = tl.trace(model, torch.randn(1, 3, 16, 16))
 outpath = os.path.join(tempfile.mkdtemp(), "model")
-dot_source = trace.draw(depth=2, path=outpath, file_format="svg")
+dot_source = trace.draw(depth=2, path=outpath, file_format="svg").dot
 RESULT = ("conv2d" in dot_source, os.path.exists(outpath + ".svg"))
 ```
 

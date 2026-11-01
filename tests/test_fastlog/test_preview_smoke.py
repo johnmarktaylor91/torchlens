@@ -27,8 +27,8 @@ def test_preview_fastlog_renders_on_mlp(tmp_path: Path) -> None:
         keep_op=lambda ctx: ctx.layer_type == "linear",
         path=str(tmp_path / "preview"),
     )
-    assert "digraph" in dot
-    assert "fastlog" in dot
+    assert "digraph" in dot.dot
+    assert "fastlog" in dot.dot
 
 
 def test_preview_fastlog_catches_record_context_field_error(tmp_path: Path) -> None:
@@ -51,5 +51,5 @@ def test_preview_fastlog_catches_record_context_field_error(tmp_path: Path) -> N
         color_predicate_error="#FF7AB6",
         path=str(tmp_path / "preview_error"),
     )
-    assert "#FF7AB6" in dot
-    assert "RecordContext has no field" in dot
+    assert "#FF7AB6" in dot.dot
+    assert "RecordContext has no field" in dot.dot

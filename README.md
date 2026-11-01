@@ -176,8 +176,8 @@ Visualize the graph as a PDF:
 
 ```python
 log.draw()                        # unrolled by default
-log.draw(vis_mode='rolled')       # rolled (compact for recurrent)
-log.draw(vis_mode='unrolled')     # every pass as a distinct node
+log.draw(rolled=True)             # rolled (compact for recurrent)
+log.draw(rolled=False)            # every pass as a distinct node
 ```
 
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/alexnet.png" width=30% height=30%>
@@ -332,8 +332,8 @@ modules_df = log.modules.to_pandas()
 
 ```python
 log.draw()                           # default: unrolled with sibling ordering
-log.draw(vis_mode='rolled')          # compact rolled layout
-log.draw(vis_mode='unrolled')        # every pass as a distinct node
+log.draw(rolled=True)                # compact rolled layout
+log.draw(rolled=False)               # every pass as a distinct node
 ```
 
 Control nesting depth to zoom in on submodules:
@@ -360,7 +360,7 @@ recurrent_model = SimpleRecurrent()
 seq = torch.randn(6, 5)
 recurrent_log = tl.trace(recurrent_model, seq)
 print(recurrent_log['linear_1:2'].out)     # second pass of the linear layer
-recurrent_log.draw(vis_mode='rolled')
+recurrent_log.draw(rolled=True)
 ```
 
 And the HTML export is already **interactive** -- one self-contained file with
