@@ -668,6 +668,12 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
 
     if not bool(getattr(self, "_loaded_from_bundle", False)):
         return
+    # Replay is an execution boundary: resolve each op's recorded function
+    # identity (``func_id``) through the purity-gated resolver first; whatever
+    # does not resolve stays functionless and is refused by name below.
+    from ._loaded_callables import resolve_loaded_callables
+
+    resolve_loaded_callables(self)
     unresolved = [
         getattr(layer, "layer_label", "<unknown>")
         for layer in getattr(self, "layer_list", [])
