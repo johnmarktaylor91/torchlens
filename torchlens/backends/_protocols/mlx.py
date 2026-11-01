@@ -7,6 +7,18 @@ from typing import Any
 
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
 
+#: Every refusal code the MLX preview raises today (subset of ``REFUSAL_CODES``).
+MLX_REFUSAL_CODES: tuple[str, ...] = (
+    "trace_option_unsupported",
+    "explicit_seed_unsupported",
+    "interventions_unsupported",
+    "runtime_missing",
+    "runtime_version_unsupported",
+    "foreign_tensor_input",
+    "unwrapped_op_in_capture",
+    "constant_unrealizable",
+)
+
 MLX_FRAMEWORK = FrameworkRequirement(
     distributions=("mlx",),
     minimum="0.26",
@@ -30,15 +42,64 @@ class MLXProtocol(SpecBackedProtocol):
             framework=MLX_FRAMEWORK,
             materialization="lazy",
             trace_options=MLX_TRACE_OPTIONS,
-            refusal_codes=(
-                "trace_option_unsupported",
-                "explicit_seed_unsupported",
-                "runtime_missing",
-                "runtime_version_unsupported",
-                "foreign_tensor_input",
-                "unwrapped_op_in_capture",
-            ),
+            refusal_codes=MLX_REFUSAL_CODES,
         )
+
+    def capture(self, model: Any, args: Any, kwargs: dict[str, Any] | None, **options: Any) -> Any:
+        """Capture through the public ``tl.trace`` door with ``backend="mlx"``.
+
+        The spec's ``capture_trace`` callable takes the public keyword bundle
+        only, so the protocol routes through ``tl.trace`` like a caller does.
+        """
+
+        from ...user_funcs import trace
+
+        return trace(model, args, kwargs, backend="mlx", **options)
+
+    def reference_output(self, model: Any, args: Any, kwargs: dict[str, Any] | None) -> Any:
+        """The model's own forward with no TorchLens wrapper installed.
+
+        Raises
+        ------
+        RuntimeError
+            If the process-global MLX wrappers are installed (a capture is in
+            flight), since the result would not be an independent oracle arm.
+        """
+
+        from .mlx_wrapped_state import mlx_wrappers_installed
+
+        if mlx_wrappers_installed():
+            raise RuntimeError(
+                "MLX reference_output called while capture wrappers are installed; "
+                "the oracle's reference arm must run unwrapped."
+            )
+        return super().reference_output(model, args, kwargs)
+
+    def host_copy(self, value: Any) -> Any:
+        """A NumPy copy of a realized ``mx.array``, shape and dtype kept (0-d stays 0-d).
+
+        Raises
+        ------
+        BackendUnsupportedError
+            Code ``constant_unrealizable`` when the value has no readable buffer.
+        """
+
+        import numpy as np
+
+        from ..registry import BackendUnsupportedError
+
+        if not (self.is_tensor(value) or isinstance(value, (np.ndarray, np.generic))):
+            raise BackendUnsupportedError(
+                f"MLX host_copy needs an mx.array, got {type(value).__name__}: no readable buffer",
+                code="constant_unrealizable",
+            )
+        try:
+            return np.array(value, copy=True)
+        except Exception as exc:  # noqa: BLE001 - any read failure is the typed refusal
+            raise BackendUnsupportedError(
+                f"MLX value of type {type(value).__name__} has no readable host buffer: {exc}",
+                code="constant_unrealizable",
+            ) from exc
 
     def runtime_available(self) -> str | None:
         """Range check plus a real import of mlx.core and mlx.nn."""
