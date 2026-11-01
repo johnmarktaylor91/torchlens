@@ -85,6 +85,7 @@ from .._runnable.seam import (
 )
 from .._save_budget import SaveBudget, SaveBudgetOption
 from .._trace_state import TraceState
+from .._utils.fail_open import fail_open
 from .._utils.tensor_utils import SaveMode
 from ..backends import BackendName
 from ..intervention.types import (
@@ -101,8 +102,10 @@ from ._trace_accessors import (
 )
 from ._trace_missing_attrs import _raise_missing_trace_attribute
 from ._trace_narrate import TraceNarrateMixin
+from ._trace_rehydrate import rehydrate_trace_core
 from ._transform_repr import _scrubbed_transform_repr
 from .backward_pass import BackwardPass
+from .container import reconstruct_container, reconstruct_output
 from .derived_grad import DerivedGradAccessor
 from .field_policy import (
     build_record_field_policy_table,
@@ -2724,10 +2727,19 @@ class Trace(
 
         return f"{format_model_repr(self)}{self._repr_honesty_suffix()}"
 
+    def _attach_dataframe_honesty(self, frame: Any) -> Any:
+        """Stamp ``frame.attrs`` with this trace's capture-honesty facts.
+
+        The accessors' tabular exports call this instead of reaching
+        ``_capture_honesty`` themselves (``_accessor_base.attach_source_honesty``).
+        """
+
+        from .._capture_honesty import attach_dataframe_honesty
+
+        return attach_dataframe_honesty(frame, self)
+
     def _repr_honesty_suffix(self) -> str:
         """Outcome + health suffix tokens for the identity repr (F10)."""
-
-        from .._utils.fail_open import fail_open
 
         tokens: list[str] = []
         outcome = fail_open(lambda: self.outcome, lambda _error: None)
@@ -2862,8 +2874,6 @@ class Trace(
             Reconstructed model return value.
         """
 
-        from .container import reconstruct_output
-
         return reconstruct_output(self, values=values)
 
     def reconstruct_container(
@@ -2889,8 +2899,6 @@ class Trace(
         Any
             Reconstructed Python container.
         """
-
-        from .container import reconstruct_container
 
         return reconstruct_container(self, site=site, role=role, values=values)
 
@@ -3350,7 +3358,6 @@ class Trace(
         # loaded traces rejoin the single-truth store (best-effort — an abort
         # preserves the coreless-island behavior; backward records stay
         # detached by design). See _data_classes/_trace_rehydrate.py.
-        from ._trace_rehydrate import rehydrate_trace_core
 
         rehydrate_trace_core(self)
         if pickle_module_accessor_state is not None:
@@ -3704,7 +3711,6 @@ class Trace(
                 self._copy_rerun_value(key): self._copy_rerun_value(item)
                 for key, item in value.items()
             }
-        from .._utils.fail_open import fail_open
         from ..intervention.types import REPLAY_TEMPLATE_TYPES
 
         if type(value) in REPLAY_TEMPLATE_TYPES:

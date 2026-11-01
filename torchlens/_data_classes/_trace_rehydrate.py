@@ -46,6 +46,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._trace_core.core import TraceCore
+from .._trace_core.op_store import DetachedOpStore, OpRowStore
+from .._trace_core.record_rows import (
+    CORE_KEY,
+    BackwardEpoch,
+    adopt_records,
+    adopt_rows,
+    detach_record,
+)
+from .._trace_core.relation_views import freeze_trace_relation_views
+
 if TYPE_CHECKING:
     from .trace import Trace
 
@@ -109,8 +120,6 @@ def _adopt_backward_primitive_rows(trace: Trace, core: Any) -> None:
         row for row in primitive_profile.primitive_ops if row.capture_phase == "backward"
     ]
     if backward_primitive_rows:
-        from .._trace_core.record_rows import BackwardEpoch, adopt_rows
-
         epoch = BackwardEpoch()
         adopt_rows(epoch.stores, "primitive_op", backward_primitive_rows)
         core.backward_epochs = [epoch]
@@ -131,10 +140,6 @@ def rehydrate_trace_core(trace: Trace) -> bool:
         # Partial/failed captures keep their documented staging surface:
         # no relation freeze, no seal, no core.
         return False
-    from .._trace_core.core import TraceCore
-    from .._trace_core.op_store import DetachedOpStore, OpRowStore
-    from .._trace_core.record_rows import CORE_KEY, adopt_records, detach_record
-    from .._trace_core.relation_views import freeze_trace_relation_views
     from ._trace_fork import _iter_parent_ops, _iter_parent_records
     from .op import _OP_STORE_LAYOUT, _object_setattr
 
