@@ -14,8 +14,10 @@ The skeleton's order (it matters for correctness):
    postprocess, settlement), halted (``StopSignal``), failed (``Exception``)
    or interrupted (``BaseException``), each ending in settlement and handing
    the trace to the FINALIZE stage through ``ForwardResult``.
-7. The ``finally``: the one ``_drop_semantic_output_transients`` site
-   (B1-02), the teardown ladder, the RNG restore and the slot release.
+7. The ``finally``: the ``_drop_semantic_output_transients`` backstop every
+   arm passes through (B1-02; the completed arm drops earlier, right after the
+   decode consumer, in ``finalize.arms.finalize_completed``), the teardown
+   ladder, the RNG restore and the slot release.
 """
 
 import contextlib
@@ -23,7 +25,7 @@ import random
 import sys
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 from torch import get_default_dtype, nn
 
@@ -54,7 +56,8 @@ from .stop import StopDirective
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-from .._utils.display import _timed_phase, _vprint
+from .._utils._exception_notes import annotate_guarded
+from .._utils.display import _timed_phase, _vprint, user_stacklevel
 from .._utils.rng import RngStreamsRestore, host_rng_advanced, snapshot_host_rng
 from ._forward_helpers import (
     _backend_name_for_trace,
@@ -75,7 +78,7 @@ from ._input_records import (
     _record_runnable_module_training_modes,
     _register_model_input_container_snapshots,
 )
-from ._run_state import _attach_note, _RunState
+from ._run_state import _RunState
 from .finalize.arms import (
     finalize_completed,
     finalize_failed,
@@ -588,14 +591,14 @@ def _halted_arm(self: "Trace", run: _RunState, halt_exc: StopSignal) -> Any:
     return finalize_halted(_forward_result(self, run, "halted", exc=halt_exc))
 
 
-def _failed_arm(self: "Trace", run: _RunState, e: Exception) -> None:
-    """Settle a forward that raised an ordinary exception; the caller re-raises it."""
+def _failed_arm(self: "Trace", run: _RunState, e: Exception) -> NoReturn:
+    """Settle a forward that raised an ordinary exception and re-raise it."""
 
     finalize_failed(_forward_result(self, run, "failed", exc=e))
 
 
-def _interrupted_arm(self: "Trace", run: _RunState, interrupt_exc: BaseException) -> None:
-    """Tear down and settle after a control-flow interrupt; the caller re-raises it."""
+def _interrupted_arm(self: "Trace", run: _RunState, interrupt_exc: BaseException) -> NoReturn:
+    """Tear down and settle after a control-flow interrupt and re-raise it."""
 
     finalize_interrupted(_forward_result(self, run, "interrupted", exc=interrupt_exc))
 
@@ -644,10 +647,11 @@ def _teardown_ladder(self: "Trace", run: _RunState) -> None:
             and not isinstance(inflight_exc, Exception)
             and isinstance(teardown_exc, Exception)
         ):
-            _attach_note(
+            annotate_guarded(
                 inflight_exc,
                 "TorchLens post-settlement teardown also failed while handling "
                 f"this interrupt: {type(teardown_exc).__name__}: {safe_exception_str(teardown_exc)}",
+                stacklevel=user_stacklevel(1),
             )
             raise inflight_exc
         raise
@@ -656,8 +660,9 @@ def _teardown_ladder(self: "Trace", run: _RunState) -> None:
 def _finish_run(self: "Trace", run: _RunState) -> None:
     """The outermost ``finally``: transient drop, teardown, RNG restore, slot release."""
 
-    # B1-02: the ONE site every settlement path passes through, placed
-    # before the teardown ladder so a teardown double-fault cannot skip it.
+    # B1-02: the backstop every settlement path passes through (the completed
+    # arm already dropped in ``finalize_completed``; the drop is idempotent),
+    # placed before the teardown ladder so a teardown double-fault cannot skip it.
     _drop_semantic_output_transients(self)
     try:
         _teardown_ladder(self, run)
@@ -713,10 +718,14 @@ def run_and_log_inputs_through_model(
     except Exception as e:
         run.exc_info = sys.exc_info()
         _failed_arm(self, run, e)
+        # Unreachable (the arm is ``NoReturn``: ``finalize_failed`` re-raises
+        # ``e`` itself). Kept because the blind-except ratchet (BLE001) reads
+        # a broad handler as legitimate only when the handler re-raises; the
+        # explicit raise is what keeps these two handlers out of its count.
         raise e
     except BaseException as interrupt_exc:
         run.exc_info = sys.exc_info()
         _interrupted_arm(self, run, interrupt_exc)
-        raise
+        raise  # unreachable, kept for the blind-except ratchet (see above)
     finally:
         _finish_run(self, run)

@@ -1085,14 +1085,12 @@ docs-md	docs/maintainers/where.md	142
 docs-md	docs/maintainers/where.md	143
 docs-md	docs/maintainers/where.md	1441
 docs-md	docs/maintainers/where.md	145
-docs-md	docs/maintainers/where.md	1455
 docs-md	docs/maintainers/where.md	1456
 docs-md	docs/maintainers/where.md	146
 docs-md	docs/maintainers/where.md	14650
 docs-md	docs/maintainers/where.md	147
 docs-md	docs/maintainers/where.md	148
 docs-md	docs/maintainers/where.md	1486
-docs-md	docs/maintainers/where.md	1487
 docs-md	docs/maintainers/where.md	149
 docs-md	docs/maintainers/where.md	1493
 docs-md	docs/maintainers/where.md	1498
@@ -1586,7 +1584,6 @@ docs-md	docs/maintainers/where.md	572
 docs-md	docs/maintainers/where.md	573
 docs-md	docs/maintainers/where.md	575
 docs-md	docs/maintainers/where.md	577
-docs-md	docs/maintainers/where.md	578
 docs-md	docs/maintainers/where.md	5785
 docs-md	docs/maintainers/where.md	579
 docs-md	docs/maintainers/where.md	58
@@ -1752,7 +1749,6 @@ docs-md	docs/maintainers/where.md	83
 docs-md	docs/maintainers/where.md	830
 docs-md	docs/maintainers/where.md	832
 docs-md	docs/maintainers/where.md	834
-docs-md	docs/maintainers/where.md	835
 docs-md	docs/maintainers/where.md	837
 docs-md	docs/maintainers/where.md	839
 docs-md	docs/maintainers/where.md	841
@@ -3563,7 +3559,7 @@ error-strings	torchlens/_capture/_episode_ledger.py	124
 error-strings	torchlens/_capture/_episode_ledger.py	5.4
 error-strings	torchlens/_capture/_episode_ledger.py	657
 error-strings	torchlens/_capture/prepare/cache.py	600
-error-strings	torchlens/_capture/prepare/door.py	1024
+error-strings	torchlens/_capture/prepare/resolve.py	1024
 error-strings	torchlens/_data_classes/_trace_stats.py	1.0
 error-strings	torchlens/_data_substrate/digests.py	256
 error-strings	torchlens/_extraction/dtype_policy.py	16
@@ -3761,8 +3757,6 @@ package-docstrings	torchlens/_capture/_plan_check.py	14,
 package-docstrings	torchlens/_capture/_plan_check.py	4.2
 package-docstrings	torchlens/_capture/_plan_check.py	50
 package-docstrings	torchlens/_capture/_run_setup.py	37
-package-docstrings	torchlens/_capture/_run_state.py	3.10
-package-docstrings	torchlens/_capture/_run_state.py	678
 package-docstrings	torchlens/_capture/_structure_evidence.py	17
 package-docstrings	torchlens/_capture/_structure_evidence.py	21
 package-docstrings	torchlens/_capture/_structure_evidence.py	22

@@ -21,7 +21,7 @@ from .._input_walk import INPUT_TREE_MAX_DEPTH
 # an import-time value binding never sees mark_torch_capability_missing flips.
 from . import _call_site, _torch_compat
 from ._call_site import _BOUNDARY_CODES
-from ._package_frames import is_torchlens_code
+from ._package_frames import _VERDICTS as _PACKAGE_VERDICTS, is_torchlens_code
 
 # Attributes to skip when crawling an object's namespace looking for tensors.
 # Two groups, matched by EXACT name:
@@ -990,10 +990,9 @@ def _get_code_context(
     # frame was passed: the call-site chain boundaries.
     inner_boundary_pos = -1
     outer_boundary_pos = -1
-    # Modules whose ``_call_impl`` sits inside the innermost module call: the op
-    # runs in that module's hook (its forward wrapper is not on the stack yet),
-    # recorded as (survivor count, module) so the chain keeps hooks of distinct
-    # modules apart.
+    # Modules whose ``_call_impl`` sits inside the innermost module call (the op
+    # runs in that module's hook; its forward wrapper is not on the stack yet),
+    # as (survivor count, module) so the chain keeps distinct modules' hooks apart.
     hook_scopes: list[tuple[int, Any]] = []
     anchor_frame: FrameType | None = None
     frame: FrameType | None = sys._getframe(0)
@@ -1017,7 +1016,8 @@ def _get_code_context(
         name = code.co_name
         if call_site_out is not None and inner_boundary_pos < 0 and name == "_call_impl":
             hook_scopes.append((len(survivors), frame.f_locals.get("self")))
-        if not is_torchlens_code(code) and "_call_impl" not in name:
+        v = _PACKAGE_VERDICTS.get(code.co_filename)  # cached verdict; a miss computes it
+        if not (is_torchlens_code(code) if v is None else v) and "_call_impl" not in name:
             if name == "forward":
                 last_forward_pos = len(survivors)
             append_survivor((frame, code, frame.f_lineno, frame.f_lasti))

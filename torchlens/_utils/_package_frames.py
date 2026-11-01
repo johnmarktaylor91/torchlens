@@ -28,7 +28,10 @@ TORCHLENS_PACKAGE_PREFIX = (
 # CPython compares code objects structurally and ignores ``co_filename``, so two
 # files with identical code (two empty ``__init__.py``) would share one verdict.
 # Distinct filenames in a process are few, and a string's hash is cached, so the
-# per-frame cost on the capture hot path is one dictionary lookup.
+# per-frame cost on the capture hot path is one dictionary lookup. The code
+# context walk (``introspection._get_code_context``) reads this dictionary
+# inline on its hot loop and falls back to ``is_torchlens_code`` on a miss, so
+# this stays the single verdict store and that function the single rule.
 _VERDICTS: dict[str, bool] = {}
 
 

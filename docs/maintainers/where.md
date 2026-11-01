@@ -5,20 +5,20 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1310 modules, 623938 lines, 0 modules without a docstring.
+84 packages, 1311 modules, 623963 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 65 | 31453 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 65 | 31452 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 43 | 24712 |
-| `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1487 |
-| `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 7 | 4520 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 67 | 38510 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 43 | 24710 |
+| `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1482 |
+| `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4546 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 67 | 38514 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
@@ -38,7 +38,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2114 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 33 | 15661 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 33 | 15664 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6299 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 64 | 42237 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
@@ -100,7 +100,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (65 modules, 31453 lines)
+TorchLens - extract outs and metadata from PyTorch models. (65 modules, 31452 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -150,7 +150,7 @@ TorchLens - extract outs and metadata from PyTorch models. (65 modules, 31453 li
 | `_state` | Global state for torchlens toggle-gated decoration. | 1394 |
 | `_storage_bindings` | Record and restore the storage binding of a parameter or buffer. | 162 |
 | `_surface` | SURFACE-table machinery: the root surface as machine-readable rows ( item 7). | 121 |
-| `_trace_selector_helpers` | Internal predicate and selector helpers for public trace capture. | 835 |
+| `_trace_selector_helpers` | Internal predicate and selector helpers for public trace capture. | 834 |
 | `_trace_slice` | ''TraceSlice'': the sub-DAG view presenter (L6 graph slice, P2). | 400 |
 | `_trace_state` | Re-export shim: ''TraceState'' moved to :mod:'torchlens._vocab.trace_state'. | 11 |
 | `_training_validation` | Shared validation helpers for training-compatible capture modes. | 203 |
@@ -201,7 +201,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (43 modules, 24712 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (43 modules, 24710 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -223,7 +223,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `_record_stores` | Record-store building blocks for fastlog projections. | 82 |
 | `_retention` | Selector classification for deferred capture retention. | 67 |
 | `_run_setup` | Request resolution and Trace setup for the RUN stage entry. | 440 |
-| `_run_state` | Per-pass bookkeeping shared by the RUN stage's skeleton and its exit arms. | 66 |
+| `_run_state` | Per-pass bookkeeping shared by the RUN stage's skeleton and its exit arms. | 55 |
 | `_structure_evidence` | The structure-only evidence envelope writer (weightsfree memo sec 5). | 145 |
 | `_structure_only_bridge` | Structure-only -> runnable bridge: entry-dark L7b wave-1 machinery. | 236 |
 | `_structure_only_entry` | Structure-only Layer-0 entry contract (L7a sec 1.3/2.2). | 225 |
@@ -240,7 +240,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `preflight` | Address preflight: price a selective-save spelling BEFORE the forward (leverage B9). | 296 |
 | `projections` | Fastlog projections over unified capture events. | 1597 |
 | `projectors` | Sibling projections over a sealed capture run core. | 1018 |
-| `run` | Forward-pass control for the RUN stage: ''run_and_log_inputs_through_model''. | 722 |
+| `run` | Forward-pass control for the RUN stage: ''run_and_log_inputs_through_model''. | 731 |
 | `run_entry` | Run entry for the RUN stage: one capture forward from slot claim to ''Trace''. | 635 |
 | `salient_args` | Registry of salient argument extractors for common PyTorch operations. | 523 |
 | `session` | Run-owned capture state and legacy compatibility adapters. | 1283 |
@@ -251,32 +251,33 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 
 ### `torchlens._capture.finalize`
 
-FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. (4 modules, 1487 lines)
+FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. (4 modules, 1482 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 1 |
-| `arms` | Exit arms of the FINALIZE stage. | 481 |
+| `arms` | Exit arms of the FINALIZE stage. | 474 |
 | `epilogue` | Door epilogue of the FINALIZE stage: ''finish_trace'' and the layer visualizers. | 427 |
-| `settle` | Output marking and settlement helpers for the FINALIZE stage. | 578 |
+| `settle` | Output marking and settlement helpers for the FINALIZE stage. | 580 |
 
 ### `torchlens._capture.prepare`
 
-PREPARE stage of torch capture: request resolution, cache and dispatch. (7 modules, 4520 lines)
+PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modules, 4546 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 48 |
-| `cache` | Capture-cache lookup and store for the PREPARE stage. | 613 |
-| `chunked` | Chunked capture fan-out helpers for the PREPARE stage. | 778 |
-| `dispatch` | Backend capability gating and the MLX door for the PREPARE stage. | 700 |
-| `door` | Torch door for the PREPARE stage: admission, refusals and request resolution. | 1455 |
+| `cache` | Capture-cache lookup and store for the PREPARE stage. | 731 |
+| `chunked` | Chunked capture fan-out helpers for the PREPARE stage. | 779 |
+| `dispatch` | Backend capability gating and the MLX door for the PREPARE stage. | 701 |
+| `door` | Torch door for the PREPARE stage: admission, refusals and request resolution. | 1144 |
+| `recursive_options` | The grouped ''CaptureOptions'' each per-chunk recursive capture receives (PREPARE stage). | 85 |
 | `request` | The torch door's request half: its arguments, resolution state and the packed request. | 346 |
-| `resolve` | Intervention spec, hook-plan normalization and selector checks for the PREPARE stage. | 580 |
+| `resolve` | Intervention spec, hook-plan normalization and selector checks for the PREPARE stage. | 712 |
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (67 modules, 38510 lines)
+Core data structures for representing a logged forward pass. (67 modules, 38514 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -307,7 +308,7 @@ Core data structures for representing a logged forward pass. (67 modules, 38510 
 | `_state_adapter` | Class-agnostic live-state enumeration and restoration helpers. | 122 |
 | `_summary` | Summary helpers for compact formatting of captured call arguments. | 72 |
 | `_trace_accessors` | Trace accessor helpers. | 658 |
-| `_trace_components` | Declared Trace field-to-component ownership map ( decomposition). | 609 |
+| `_trace_components` | Declared Trace field-to-component ownership map ( decomposition). | 613 |
 | `_trace_export` | Trace export mixin. | 721 |
 | `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 846 |
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 334 |
@@ -744,7 +745,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (33 modules, 15661 lines)
+Shared helpers used by two or more TorchLens packages. (33 modules, 15664 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -757,7 +758,7 @@ Shared helpers used by two or more TorchLens packages. (33 modules, 15661 lines)
 | `_module_call_dispatch` | Tell ''module(x)'' from a direct ''module.forward(x)'' by the caller frame. | 127 |
 | `_multipass_access` | Multi-pass-safe attribute access for aggregate (recurrent) ''Layer'' objects. | 134 |
 | `_onramp` | Convenience helpers documented at ''torchlens._utils''. | 478 |
-| `_package_frames` | Which Python frames belong to TorchLens itself. | 54 |
+| `_package_frames` | Which Python frames belong to TorchLens itself. | 57 |
 | `_producer_version` | Parse the torch version a saved artifact recorded (never the live runtime). | 31 |
 | `_script_call_slot` | Probe for the TorchScript call boundary: can ''ScriptFunction.__call__'' be replaced. | 35 |
 | `_stochastic_funcs` | Names of torch functions whose outputs depend on random draws. | 39 |

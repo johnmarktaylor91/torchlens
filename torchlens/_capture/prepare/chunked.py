@@ -1,6 +1,7 @@
 """Chunked capture fan-out helpers for the PREPARE stage.
 
-Moved verbatim from ``torchlens._chunked_capture_helpers and torchlens._chunking`` by the capture seam.
+Moved verbatim from ``torchlens._chunked_capture_helpers and torchlens._chunking`` by the capture seam;
+the per-chunk ``CaptureOptions`` rebuild moved verbatim from ``prepare.door``.
 """
 
 from __future__ import annotations
