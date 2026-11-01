@@ -23,6 +23,17 @@ hostile input, and every load path here is fail-closed.
   modules (`os`, `sys`, `subprocess`, `builtins`, `importlib`, ...) are hard-denied.
 - `_pre3_module_paths.refuse_pre_3_module_path()` (called from `find_class`) refuses a pickled
   module path only torchlens 2.x wrote, with `ArtifactTooOldError`.
+- The load runs on the C `pickle.Unpickler` behind a static pre-scan of the opcode stream
+  (`_pickle_prescan.py`): the pre-scan resolves every global through the same `find_class`
+  policy, runs the allocation belt on every statically known construction, classifies every
+  BUILD target and refuses stream corruption; the C phase hands REDUCE callables back wrapped
+  in a `GuardedCallable` that runs the belt on the real arguments. A stream shape the pre-scan
+  cannot classify runs through `_PurePythonBundleUnpickler`, the same policy per opcode on the
+  pure-Python machine. The belt text lives once, in `_construction_refusal` / `_build_refusal`.
+  `tests/test_unpickle_c_path.py` is the equivalence proof between the two machines.
+- The opcode-count ceiling (`bundle._MAX_METADATA_PKL_OPCODES`) is enforced by the pre-scan on
+  every load through `max_opcodes=`; the load sites map `OpcodeCeilingExceeded` to the
+  `metadata_object_count_exceeded` artifact error.
 
 ## manifest.py / tlspec.py
 - `Manifest`, `TensorEntry`, `Provenance`; `enforce_version_policy()` gates artifact versions;

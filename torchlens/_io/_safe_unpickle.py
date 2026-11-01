@@ -1915,8 +1915,9 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
     real arguments at call time. A stream shape the pre-scan cannot classify runs
     through :class:`_PurePythonBundleUnpickler` instead, which enforces the same checks
     per opcode; no TorchLens writer produces such a stream. After ``load()``,
-    ``load_path`` is ``"c"`` or ``"pure_python"`` and ``prescan_opcodes`` the opcode
-    count the pre-scan walked (``0`` when the interpreter ran).
+    ``load_path`` is ``"c"`` or ``"pure_python"``, ``prescan_opcodes`` the opcode count
+    the pre-scan walked (``0`` when the interpreter ran), ``global_lookups`` the C
+    phase's ``find_class`` calls and ``guarded_calls`` the REDUCEs the guards ran.
     """
 
     def __init__(
@@ -1956,6 +1957,8 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
         self._plan: PrescanPlan | None = None
         self.load_path: str | None = None
         self.prescan_opcodes = 0
+        self.global_lookups = 0
+        self.guarded_calls = 0
         self.fallback_reason: str | None = None
 
     def find_class(self, module: str, name: str) -> Any:
@@ -2026,6 +2029,8 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
             return self._boundary(super().load)
         finally:
             self._plan = None
+            self.global_lookups = plan.global_lookups
+            self.guarded_calls = plan.cursor
 
 
 class _PurePythonBundleUnpickler(_BundleAllowlistPolicy, pickle._Unpickler):
