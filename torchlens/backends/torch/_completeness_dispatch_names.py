@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
@@ -19,33 +19,6 @@ from .buffer_writes import session_validated_buffer_address
 from .escape_detection import (
     ExpectedOriginalToken,
 )
-
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _BUFFER_STATE_VIEW_OPERATORS,
-        _DISPATCH_TENSOR_ORIGINS,
-        _FRAMEWORK_FILENAME_VERDICTS,
-        _FRAMEWORK_FILENAME_VERDICTS_MAX_ENTRIES,
-        _HOST_ESCAPE_BOOL_SOURCE_LABELS,
-        _HOST_ESCAPE_SOURCE_LABELS,
-        _HOST_ESCAPE_STATE_SOURCE_LABELS,
-        _HOST_ESCAPE_STATE_SOURCE_NAMES,
-        _HOST_ESCAPE_UNATTRIBUTABLE_BOOL,
-        _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE,
-        _ORIGIN_LABEL_PREFIX,
-        _ORIGIN_RNG,
-        _ORIGIN_STATE_PREFIX,
-        _ORIGIN_UNINIT,
-        _ORIGIN_UNKNOWN,
-        _TORCH_ROOT,
-        _TORCHLENS_ROOT,
-        _DispatchCallsite,
-        _escape_source_is_torchlens_internal,
-        _operand_origins,
-        _param_derived_addresses,
-        _record_escape_label_fallback,
-        internal_scalar_read,
-    )
 
 __all__ = (
     "_resolved_dispatch_origins",
@@ -463,3 +436,36 @@ def _dispatch_callsite() -> _DispatchCallsite:
         fallback.f_lineno,
         fallback.f_code.co_name,
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._completeness_escape_state import (  # noqa: E402
+    _record_escape_label_fallback,
+)
+from ._completeness_origins import (  # noqa: E402
+    _escape_source_is_torchlens_internal,
+    _operand_origins,
+    _param_derived_addresses,
+    internal_scalar_read,
+)
+from .completeness_witness import (  # noqa: E402
+    _BUFFER_STATE_VIEW_OPERATORS,
+    _DISPATCH_TENSOR_ORIGINS,
+    _FRAMEWORK_FILENAME_VERDICTS,
+    _FRAMEWORK_FILENAME_VERDICTS_MAX_ENTRIES,
+    _HOST_ESCAPE_BOOL_SOURCE_LABELS,
+    _HOST_ESCAPE_SOURCE_LABELS,
+    _HOST_ESCAPE_STATE_SOURCE_LABELS,
+    _HOST_ESCAPE_STATE_SOURCE_NAMES,
+    _HOST_ESCAPE_UNATTRIBUTABLE_BOOL,
+    _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE,
+    _ORIGIN_LABEL_PREFIX,
+    _ORIGIN_RNG,
+    _ORIGIN_STATE_PREFIX,
+    _ORIGIN_UNINIT,
+    _ORIGIN_UNKNOWN,
+    _TORCH_ROOT,
+    _TORCHLENS_ROOT,
+    _DispatchCallsite,
+)

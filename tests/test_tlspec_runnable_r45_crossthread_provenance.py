@@ -37,7 +37,7 @@ import torchlens as tl
 import torchlens._state as _state
 import torchlens.backends.torch.wrappers as wrappers_mod
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens.backends.torch.completeness_witness import (
+from torchlens.backends.torch._completeness_escape_state import (
     host_escape_has_cross_thread_captured_tensor,
 )
 from torchlens.options import CaptureOptions

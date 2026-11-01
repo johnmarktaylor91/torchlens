@@ -217,8 +217,8 @@ _S1_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
     "torchlens._runnable_execution": (
         "run_loaded_sparse_trace",
         "run_live_trace",
-        "_finalize_provider_run",
     ),
+    "torchlens._runnable_providers": ("_finalize_provider_run",),
     "torchlens._runnable_state": ("load_trace_state_dict",),
     # Coordinator verbs reached through the RunnableCoordinator boundary keep
     # their transport-side homes (contract E2).

@@ -1,5 +1,7 @@
 """Save budgets, predicate payloads, and lookback retention."""
 
+from __future__ import annotations
+
 import dataclasses
 import time
 import warnings
@@ -48,16 +50,8 @@ from ._tl import (
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from .ops import _RetainedLookbackPayload  # annotations only; runtime binding at the bottom
 
-from .ops import (
-    _RetainedLookbackPayload,
-)
-
-if TYPE_CHECKING:
-    from .ops import (
-        _RetainedLookbackCandidate,
-        _retention_device,
-    )
 
 __all__ = (
     "_admit_save_budget",
@@ -77,7 +71,7 @@ __all__ = (
 
 
 def _admit_save_budget(
-    trace: "Trace",
+    trace: Trace,
     tensor: torch.Tensor,
     fields_dict: dict[str, Any],
     *,
@@ -119,7 +113,7 @@ def _admit_save_budget(
 
 
 def _commit_save_budget(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     reservation: Any,
 ) -> None:
@@ -267,11 +261,11 @@ def _iter_tree_tensors(*roots: Any) -> Iterator[torch.Tensor]:
 
 
 def _admit_saved_args_budget(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     t_args: Any,
     t_kwargs: Any,
-) -> "list[Any] | None":
+) -> list[Any] | None:
     """Admit projected ``save_arg_values`` bytes BEFORE the clones allocate.
 
     r8 R34 (sol 2): both exhaustive paths cloned every tensor argument first
@@ -326,9 +320,9 @@ def _admit_saved_args_budget(
 
 
 def _commit_saved_args_budget(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
-    reservations: "list[Any] | None",
+    reservations: list[Any] | None,
 ) -> None:
     """Reconcile saved-args reservations against the cloned snapshots."""
 
@@ -358,7 +352,7 @@ def _commit_saved_args_budget(
 
 
 def _charge_saved_args_budget(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
 ) -> None:
     """Charge ``save_arg_values`` argument snapshots against the save budget.
@@ -401,7 +395,7 @@ def _charge_saved_args_budget(
 
 
 def _save_predicate_activation_fields(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
     spec: CaptureSpec,
@@ -494,7 +488,7 @@ def _save_predicate_activation_fields(
 
 
 def _stream_predicate_payloads(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     *,
     disk_payload: torch.Tensor | None,
@@ -556,7 +550,7 @@ def _module_stack_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[Modul
     return tuple(frames)
 
 
-def _append_trace_predicate_context(trace: "Trace", ctx: RecordContext) -> None:
+def _append_trace_predicate_context(trace: Trace, ctx: RecordContext) -> None:
     """Append a trace selective-save context to the bounded runtime window.
 
     Parameters
@@ -584,7 +578,7 @@ def _append_trace_predicate_context(trace: "Trace", ctx: RecordContext) -> None:
         history.popleft()
 
 
-def _trace_followed_by_candidate_selector(trace: "Trace") -> BaseSelector | None:
+def _trace_followed_by_candidate_selector(trace: Trace) -> BaseSelector | None:
     """Return the candidate selector for ``candidate & followed_by(successor)``."""
 
     from ..._ir.selector_eval import split_followed_by_conjunction
@@ -598,7 +592,7 @@ def _trace_followed_by_candidate_selector(trace: "Trace") -> BaseSelector | None
 
 
 def _retain_lookback_candidate(
-    trace: "Trace",
+    trace: Trace,
     ctx: RecordContext,
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
@@ -627,7 +621,7 @@ def _retain_lookback_candidate(
 
 
 def _copy_lookback_payload(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
     policy: str,
@@ -707,7 +701,7 @@ def _copy_lookback_payload(
 
 
 def _apply_retroactive_decision(
-    trace: "Trace",
+    trace: Trace,
     decision: RetroactiveCaptureDecision,
 ) -> None:
     """Mark retained candidate events as saved after a successor matches."""
@@ -744,7 +738,7 @@ def _apply_retroactive_decision(
 
 
 def _replace_event_with_retained_payload(
-    trace: "Trace",
+    trace: Trace,
     raw_label: str,
     payload: _RetainedLookbackPayload,
 ) -> None:
@@ -792,7 +786,7 @@ def _replace_event_with_retained_payload(
 
 
 def _build_trace_predicate_context(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
     *,
@@ -871,3 +865,14 @@ def _build_trace_predicate_context(
         is_transform=bool(fields_dict.get("is_transform", False)),
         transform_kind=fields_dict.get("transform_kind"),
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_activations import (  # noqa: E402
+    _retention_device,
+)
+from .ops import (  # noqa: E402
+    _RetainedLookbackCandidate,
+    _RetainedLookbackPayload,
+)

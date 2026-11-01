@@ -247,7 +247,7 @@ def test_r35_cpu_only_seeded_run_never_touches_cuda_lazy_seed(tmp_path: Path) ->
     path = tmp_path / "cpuonly.tlspec"
     trace.save(str(path), level="runnable")
     loaded = tl.load(str(path))
-    from torchlens._runnable_execution import _seeded_fork_devices
+    from torchlens._runnable_providers import _seeded_fork_devices
 
     descriptor = loaded._runnable.descriptor
     if torch.cuda.is_available() and torch.cuda.is_initialized():
@@ -322,12 +322,12 @@ def test_r35_repr_parsers_are_deleted() -> None:
 
     import inspect
 
-    import torchlens._runnable_execution as execution
-    import torchlens.backends.torch.ops as ops
+    import torchlens._runnable_witness_contracts
+    import torchlens.backends.torch._ops_container_base
 
     for source in (
-        inspect.getsource(ops._torch_return_type_fields),
-        inspect.getsource(execution._torch_structseq_field_names),
+        inspect.getsource(torchlens.backends.torch._ops_container_base._torch_return_type_fields),
+        inspect.getsource(torchlens._runnable_witness_contracts._torch_structseq_field_names),
     ):
         assert "re.findall" not in source
         assert "re.finditer" not in source

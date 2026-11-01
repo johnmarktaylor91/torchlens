@@ -10,11 +10,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._captured_run import _ActivationLookup
-from torchlens.validation.invariants import (
+from torchlens.validation._invariants_topology import (
     _check_special_layer_lists,
     _check_trace_self_consistency,
-    check_metadata_invariants,
 )
+from torchlens.validation.invariants import check_metadata_invariants
 
 
 class ConvReluAdd(nn.Module):

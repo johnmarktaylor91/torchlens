@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
@@ -20,18 +20,6 @@ from ._runnable import (
 from ._runnable_state import (
     runnable_tensor_byte_digest,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _STATE_METADATA_FACT_SITE_PREFIX,
-        _UNBOUND_STATE_ESCAPE_FACT_KEY,
-        _UNBOUND_STATE_ESCAPE_SITE_PREFIX,
-        _codec_component,
-        _decode_literal,
-        _op_for_label,
-        _registered_flatten_children,
-        _value_at_path,
-    )
 
 __all__ = (
     "_tensor_leaf_paths",
@@ -606,3 +594,21 @@ def _unbound_state_escape_stale(
         except (RuntimeError, ValueError, TypeError):
             return True
     return False
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_execution import (  # noqa: E402
+    _STATE_METADATA_FACT_SITE_PREFIX,
+    _UNBOUND_STATE_ESCAPE_FACT_KEY,
+    _UNBOUND_STATE_ESCAPE_SITE_PREFIX,
+)
+from ._runnable_output_contracts import (  # noqa: E402
+    _codec_component,
+    _registered_flatten_children,
+)
+from ._runnable_verification import (  # noqa: E402
+    _decode_literal,
+    _op_for_label,
+    _value_at_path,
+)

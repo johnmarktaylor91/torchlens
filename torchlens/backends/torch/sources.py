@@ -27,9 +27,9 @@ from ...recording._halt import StopSignal
 from ...recording.exceptions import PredicateError
 from ...recording.types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
+from ._completeness_origins import internal_scalar_read
 from ._tl import get_tensor_meta, set_tensor_label
 from .buffer_writes import buffer_version_key
-from .completeness_witness import internal_scalar_read
 from .tensor_tracking import _add_tensor_backward_hook, _append_module_suffix_to_equivalence_class
 
 if TYPE_CHECKING:
@@ -494,7 +494,7 @@ def log_source_tensor_exhaustive(
 
     # Reuse the shared entry-creation logic from output_tensors.
     # Imported here (not at module level) to avoid circular imports.
-    from .ops import _make_layer_log_entry
+    from ._ops_finalize import _make_layer_log_entry
 
     # Creates a Buffer if is_buffer=True, else Op.
     _make_layer_log_entry(self, t, fields_dict, (), {}, self.activation_transform)

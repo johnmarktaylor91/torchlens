@@ -425,7 +425,7 @@ def _restore_arg_labels(snapshot: list[tuple[Any, str | None]], interior_labels:
 def _log_boundary_op(trace: Any, call: _BoundaryCall) -> None:
     """Log the returned tensors as the call's one boundary op."""
 
-    from .ops import log_function_output_tensors
+    from ._ops_emission import log_function_output_tensors
 
     def emit() -> None:
         """Record the boundary op through the ordinary output logger."""

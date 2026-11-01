@@ -12,13 +12,6 @@ if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
     from ..backends import BackendSpec
-    from .invariants import (
-        METADATA_INVARIANT_CONTRACTS,
-        MetadataInvariantContract,
-        MetadataInvariantError,
-        _retained_orphan_layer_labels,
-        _retained_orphan_op_labels,
-    )
 
 __all__ = (
     "_check_ancestry_closure",
@@ -861,7 +854,7 @@ def _metadata_invariant_contracts_for_backend(
 
     return tuple(
         contract
-        for contract in METADATA_INVARIANT_CONTRACTS
+        for contract in _invariants_hub.METADATA_INVARIANT_CONTRACTS
         if _metadata_invariant_applies(contract, backend_family, spec)
     )
 
@@ -895,3 +888,17 @@ def _metadata_invariant_applies(
     if spec is None:
         return False
     return bool(getattr(spec.capabilities, contract.requires_capability, False))
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists. The contracts tuple is read
+# through the hub module at call time: it is built after the hub imports this module.
+from . import invariants as _invariants_hub  # noqa: E402
+from ._invariants_topology import (  # noqa: E402
+    _retained_orphan_layer_labels,
+    _retained_orphan_op_labels,
+)
+from .invariants import (  # noqa: E402
+    MetadataInvariantContract,
+    MetadataInvariantError,
+)

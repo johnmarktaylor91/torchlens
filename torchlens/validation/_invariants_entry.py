@@ -11,17 +11,6 @@ from .status import has_importer_region_provenance, is_region_replay_annotation
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from .invariants import (
-        InvariantResult,
-        MetadataInvariantError,
-        _check_module_containment_logic,
-        _check_module_hierarchy,
-        _check_module_layer_containment,
-        _check_param_xrefs,
-        _is_func_call_id_exempt,
-        _metadata_invariant_contracts_for_trace,
-        _plain_func_call_group_signature,
-    )
 
 __all__ = (
     "check_metadata_invariants",
@@ -564,3 +553,26 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
             if container_path:
                 container_paths.append(container_path)
     return InvariantResult(name=name, passed=True)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_backward_flow import (  # noqa: E402
+    _is_func_call_id_exempt,
+    _plain_func_call_group_signature,
+)
+from ._invariants_conditional_modules import (  # noqa: E402
+    _check_module_hierarchy,
+    _check_module_layer_containment,
+)
+from ._invariants_connectivity import (  # noqa: E402
+    _check_module_containment_logic,
+    _metadata_invariant_contracts_for_trace,
+)
+from ._invariants_modules_params import (  # noqa: E402
+    _check_param_xrefs,
+)
+from .invariants import (  # noqa: E402
+    InvariantResult,
+    MetadataInvariantError,
+)

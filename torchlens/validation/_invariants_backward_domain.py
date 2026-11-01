@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from .._data_classes.layer import Layer
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from .invariants import MetadataInvariantError
 
 
 __all__ = (
@@ -531,3 +530,10 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
             f"op_amendments is not contiguous over its retained range: seq {holes[:5]} "
             "missing -- an amendment was deleted from the lane",
         )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from .invariants import (  # noqa: E402
+    MetadataInvariantError,
+)

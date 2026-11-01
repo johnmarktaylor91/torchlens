@@ -8,11 +8,6 @@ from typing import TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from .invariants import (
-        MetadataInvariantError,
-        _module_claim_address,
-        _module_claims,
-    )
 
 __all__ = (
     "_param_log_list_contains_param",
@@ -523,3 +518,14 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
                 f"Buffer '{address}' version '{label}' claims replay validation without "
                 "comparable payloads",
             )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_entry import (  # noqa: E402
+    _module_claim_address,
+    _module_claims,
+)
+from .invariants import (  # noqa: E402
+    MetadataInvariantError,
+)

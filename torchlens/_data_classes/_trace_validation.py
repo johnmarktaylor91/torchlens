@@ -848,7 +848,7 @@ class TraceValidationMixin(_TraceMixinBase):
                 )
             run_save_labels: Any = None
             if save is not None:
-                from .._runnable_execution import _resolve_run_until_plan
+                from .._runnable_transaction import _resolve_run_until_plan
 
                 # Reuse the static-form resolver: same accepted family (labels,
                 # module addresses, 'saved'), same typed refusals (pre-S4
@@ -935,7 +935,8 @@ class TraceValidationMixin(_TraceMixinBase):
 
             require_structure_only_capability(self, "live_replay")
             _refuse_stats_capture(self, "live_replay")
-            from .._runnable_execution import _LiveRunOptions, run_live_trace
+            from .._runnable_execution import run_live_trace
+            from .._runnable_transaction import _LiveRunOptions
 
             _refuse_state_compromised_live_run(self)
             staged_spec = getattr(self, "_intervention_spec", None)

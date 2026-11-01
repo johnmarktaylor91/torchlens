@@ -293,7 +293,7 @@ def _returning_mutated_receiver(call_operator: Callable[..., Any]) -> Callable[.
 def _disclose_unrecorded_mutation(trace: Any, op: Any) -> None:
     """Queue a ``source_provenance`` gap for a mutating operator call left out of the graph.
 
-    The provenance disclosure step (``postprocess._warn_unattributed_tensor_args``) pops the
+    The provenance disclosure step (``source_provenance._warn_unattributed_tensor_args``) pops the
     transient ``_unrecorded_operator_mutations``, persists it as an
     ``unrecorded_operator_mutation`` capture advisory and names it in its one warning.
 

@@ -44,6 +44,22 @@ from torchlens.validation import (
     validate_forward_pass,
 )
 from torchlens.validation._completeness_backstop import completeness_backstop_counts
+from torchlens.validation._invariants_connectivity import (
+    _check_graph_connectivity,
+    _check_lookup_key_consistency,
+)
+from torchlens.validation._invariants_entry import check_func_call_id_invariant
+from torchlens.validation._invariants_equivalence import (
+    _check_equivalence_symmetry,
+    _check_graph_ordering,
+)
+from torchlens.validation._invariants_modules_params import _check_param_xrefs
+from torchlens.validation._invariants_payloads import _check_op_log_fields
+from torchlens.validation._invariants_topology import (
+    _check_capture_edge_survival,
+    _check_graph_topology,
+    _check_special_layer_lists,
+)
 from torchlens.validation.core import (
     DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
     ValidationDecisionRecorder,
@@ -62,18 +78,6 @@ from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     STRUCTURAL_ARG_POSITIONS,
     posthoc_perturb_check,
-)
-from torchlens.validation.invariants import (
-    _check_capture_edge_survival,
-    _check_equivalence_symmetry,
-    _check_graph_connectivity,
-    _check_graph_ordering,
-    _check_graph_topology,
-    _check_lookup_key_consistency,
-    _check_op_log_fields,
-    _check_param_xrefs,
-    _check_special_layer_lists,
-    check_func_call_id_invariant,
 )
 from torchlens.validation.status import (
     REGION_REPLAY_CLASS,
@@ -6955,7 +6959,7 @@ def test_corruption_raw_label_in_elif_children_dict():
     projection, which the cross-check cannot see.
     """
 
-    from torchlens.validation.invariants import _check_graph_ordering
+    from torchlens.validation._invariants_equivalence import _check_graph_ordering
 
     log = _make_clean_log()
     log.layer_list[1].conditional_elif_children = {0: ["relu_1_1_raw"]}
@@ -8349,7 +8353,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     armed against future capture-gap synthesis.
     """
 
-    from torchlens.validation.invariants import _is_func_call_id_exempt
+    from torchlens.validation._invariants_backward_flow import _is_func_call_id_exempt
 
     base = {"is_input": False, "is_output": False, "is_buffer": False, "func": None}
     genuine = SimpleNamespace(

@@ -590,7 +590,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # parent already carried 2354 from the T67f union). Re-step to the next
     # 50-line step; no new growth licensed, debloat target unchanged.
     "torchlens/_capture/trace.py": 2400,
-    "torchlens/backends/torch/completeness_witness.py": 2100,
 }
 
 

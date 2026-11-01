@@ -359,7 +359,7 @@ def mark_detached_saved_activation(
     # scalar reads so the r65 host-escape witness does not record them as host declared-state
     # facts. Import locally: completeness_witness imports from this module, so a top-level
     # import here would create a cycle.
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         source_was_connected = bool(source.requires_grad and source.grad_fn is not None)
@@ -1123,7 +1123,7 @@ def set_tensor_label(t: Any, label: str) -> None:
     # user raw-pointer escape and fail-close EVERY runnable capture to
     # UNVERIFIABLE (r15-H1 ``_HOST_ESCAPE_RAW_POINTER``).
     if meta.label_storage is not None:
-        from .completeness_witness import internal_scalar_read
+        from ._completeness_origins import internal_scalar_read
 
         try:
             with _state.pause_logging(), internal_scalar_read():

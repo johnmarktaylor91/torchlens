@@ -138,8 +138,11 @@ inf/NaN tensors, and special-value args.
 - `MetadataInvariantError` is the public invariant failure type.
 - `check_metadata_invariants()` should fail loudly on broken graph/log structure.
   It is IMPLEMENTED in `_invariants_entry.py` (with the per-domain checks in
-  the sibling `_invariants_*.py` modules); `invariants.py` only REBINDS the
-  entry function — editing `invariants.py` to change check behavior is a no-op.
+  the sibling `_invariants_*.py` modules); `invariants.py` holds the error type,
+  the contract records and the `METADATA_INVARIANT_CONTRACTS` tuple, and imports
+  the check functions from their home modules after those definitions (the
+  split modules import the hub's classes back). Editing `invariants.py` to
+  change check behavior is a no-op; patch or edit a check in its home module.
 - Keep invariants aligned with primary conditional fields, not only legacy THEN views.
 
 ## __init__.py Schema Checks

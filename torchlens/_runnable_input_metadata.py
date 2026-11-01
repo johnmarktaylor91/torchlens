@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import struct
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
@@ -26,23 +26,6 @@ from ._utils.alias_footprint import touched_bytes_relation
 from .errors import (
     PathDivergenceError,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _VIEW_OP_QUALNAMES,
-        _contract_check,
-        _fact_path_tuple_or_none,
-        _input_alias_topology_checks,
-        _input_error,
-        _input_metadata_contract_checks,
-        _input_nontensor_tree_contract_checks,
-        _input_site_value,
-        _input_tree_contract_checks,
-        _model_input_arity_positions,
-        _model_input_literal_facts,
-        _runtime_top_level_positions,
-        _value_at_path,
-    )
 
 __all__ = (
     "_top_level_input_site_contract_checks",
@@ -589,3 +572,28 @@ def _touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> str:
 
     with _state.pause_logging():
         return touched_bytes_relation(left, right)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_execution import (  # noqa: E402
+    _VIEW_OP_QUALNAMES,
+)
+from ._runnable_input_aliases import (  # noqa: E402
+    _input_alias_topology_checks,
+    _input_nontensor_tree_contract_checks,
+    _input_site_value,
+    _input_tree_contract_checks,
+)
+from ._runnable_input_sites import (  # noqa: E402
+    _fact_path_tuple_or_none,
+    _input_metadata_contract_checks,
+    _model_input_arity_positions,
+    _model_input_literal_facts,
+    _runtime_top_level_positions,
+)
+from ._runnable_verification import (  # noqa: E402
+    _contract_check,
+    _input_error,
+    _value_at_path,
+)
