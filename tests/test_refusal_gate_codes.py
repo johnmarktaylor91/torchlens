@@ -32,6 +32,9 @@ from torchlens.backends.registry import BackendCapabilities, BackendUnsupportedE
 from torchlens.conformance import _refusal_cases
 from torchlens.conformance._refusal_cases import (
     CAPABILITY_REQUESTS,
+    TRACE_OPTION_COMPANIONS,
+    TRACE_OPTION_PROBES,
+    CapabilityRequest,
 )
 
 _OPTION_CODE = "trace_option_unsupported"
@@ -246,3 +249,48 @@ def test_streaming_cell_expects_the_registered_code() -> None:
     """The streaming cell reads ``streaming_unsupported``, the code the flag maps to."""
 
     assert refusal_code_for_capability("has_streaming") == "streaming_unsupported"
+
+
+class _RecordingAdapter:
+    """Records the options each refusal request passes to the public entry."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def trace_with(self, net: Any, example: Any, **options: Any) -> None:
+        self.calls.append(options)
+
+
+def test_chunk_paths_cell_passes_chunk_size_too() -> None:
+    """The ``chunk_paths`` probe carries ``chunk_size`` so the precondition holds."""
+
+    assert set(TRACE_OPTION_COMPANIONS["chunk_paths"]) == {"chunk_size"}
+    request = CapabilityRequest(
+        "trace_option",
+        "chunk_paths",
+        TRACE_OPTION_PROBES["chunk_paths"],
+        TRACE_OPTION_COMPANIONS["chunk_paths"],
+    )
+    adapter = _RecordingAdapter()
+    _refusal_cases._issue_request(adapter, None, request, (object(), object(), None))
+    assert adapter.calls == [{"chunk_paths": (0,), "chunk_size": 1}]
+
+
+def test_chunk_paths_and_size_pass_the_shared_precondition() -> None:
+    """Both options together clear ``ChunkedForwardConfigError`` and reach a backend gate.
+
+    The probe pair on a backend lacking chunked capture refuses typed with the
+    option code; alone, ``chunk_paths`` stops at the argument precondition.
+    """
+
+    import torch
+
+    import torchlens as tl
+    from torchlens.intervention.errors import ChunkedForwardConfigError
+    from torchlens.user_funcs import _filter_trace_kwargs_for_backend
+
+    with pytest.raises(ChunkedForwardConfigError):
+        tl.trace(torch.nn.Identity(), torch.ones(2), chunk_paths=(0,))
+    with pytest.raises(BackendUnsupportedError) as excinfo:
+        _filter_trace_kwargs_for_backend({"chunk_paths": (0,), "chunk_size": 1}, _spec(None))
+    _assert_code(excinfo.value, _OPTION_CODE)

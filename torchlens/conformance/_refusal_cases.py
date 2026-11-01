@@ -15,7 +15,7 @@ option outside ``trace_options()`` (a test keeps it registered).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -53,11 +53,16 @@ class CapabilityRequest:
     value:
         Zero-arg factory for the probe value (built lazily so no framework import
         happens at module import).
+    companions:
+        Options the request must also pass so the shared argument preconditions
+        hold and the call reaches the backend's refusal (``chunk_paths`` needs
+        ``chunk_size``); name -> zero-arg value factory.
     """
 
     kind: str
     option: str | None = None
     value: Callable[[], Any] | None = None
+    companions: Mapping[str, Callable[[], Any]] | None = None
 
 
 def _storage_probe() -> Any:
@@ -104,6 +109,13 @@ TRACE_OPTION_PROBES: dict[str, Callable[[], Any]] = {
     "output_head": lambda: "lm_head",
     "chunk_size": lambda: 1,
     "chunk_paths": lambda: (0,),
+}
+
+#: Spine option -> the options its probe also passes. ``chunk_paths`` alone trips the
+#: shared ``ChunkedForwardConfigError`` precondition before any backend gate, which
+#: would measure argument validation instead of the refusal.
+TRACE_OPTION_COMPANIONS: dict[str, dict[str, Callable[[], Any]]] = {
+    "chunk_paths": {"chunk_size": TRACE_OPTION_PROBES["chunk_size"]},
 }
 
 #: Public spine options that are ``CaptureOptions`` fields rather than ``tl.trace`` keywords.
@@ -174,7 +186,7 @@ def run_c1_refusal_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[
             results.append(_failed(case_id, "C1", f"no probe value declared for option {option}"))
             continue
         kind = "capture_option" if option in CAPTURE_OPTION_SPINE_FIELDS else "trace_option"
-        request = CapabilityRequest(kind, option, probe)
+        request = CapabilityRequest(kind, option, probe, TRACE_OPTION_COMPANIONS.get(option))
         results.append(
             _refusal_cell(case_id, adapter, protocol, roster[0], request, _TRACE_OPTION_CODE)
         )
@@ -249,11 +261,14 @@ def _issue_request(
 
     net, example, trace = prepared
     value = request.value() if request.value is not None else None
+    options: dict[str, Any] = {
+        name: factory() for name, factory in (request.companions or {}).items()
+    }
+    options[str(request.option)] = value
     if request.kind == "trace_option":
-        adapter.trace_with(net, example, **{str(request.option): value})
+        adapter.trace_with(net, example, **options)
     elif request.kind == "capture_option":
-        override: dict[str, Any] = {str(request.option): value}
-        capture = replace(CaptureOptions(), **override)
+        capture = replace(CaptureOptions(), **options)
         adapter.trace_with(net, example, capture=capture)
     elif request.kind == "record":
         import torchlens as tl
