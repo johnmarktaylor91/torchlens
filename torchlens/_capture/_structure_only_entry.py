@@ -160,7 +160,7 @@ def _refuse_structure_only_payload_selections(
             "activations are never recorded under the structure-only contract",
             "save",
         )
-    if capture_options._layers_to_save != "all" and facts.layers_to_save not in (
+    if capture_options._layers_to_save_explicit and facts.layers_to_save not in (
         "none",
         None,
         [],

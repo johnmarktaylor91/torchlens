@@ -462,7 +462,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
     hits = _scan_file(tmp_path / "planted_execution_trace.py", resurrected)
     assert any(group == "batch2_report" for group, _, _ in hits)
 
-    clean = 'log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))\n'
+    clean = 'log = tl.trace(model, x, save="all")\n'
     assert not _scan_file(tmp_path / "clean.py", clean), (
         "grouped-option spelling must not false-positive"
     )

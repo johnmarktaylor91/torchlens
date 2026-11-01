@@ -25,6 +25,7 @@ def test_private_selection_survives_option_merges() -> None:
     original = merge_capture_options(capture=CaptureOptions(seed=7), _layers_to_save=selection)
     merged = merge_capture_options(capture=original, save_args=True)
     assert merged._layers_to_save == selection
+    assert merged._layers_to_save_explicit
     assert merged.seed == 7
     assert merged.save_args is True
     assert original.save_args is False
@@ -58,3 +59,8 @@ def test_module_filter_retained_until_where_composes_with_save_forms() -> None:
     for selection in ("all", ["relu"], lambda context: True):
         with pytest.raises(TypeError):
             selection & predicate
+
+
+def test_explicit_all_preserves_structure_only_refusal() -> None:
+    with pytest.raises(ValueError, match="structure_only=True cannot honor"):
+        tl.trace(nn.ReLU(), torch.ones(1), save="all", capture=CaptureOptions(structure_only=True))

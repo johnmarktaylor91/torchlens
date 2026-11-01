@@ -117,9 +117,8 @@ def log_model_metadata(
 ) -> Trace:
     """Return model metadata without saving any outs.
 
-    Equivalent to ``trace(model, input_args, input_kwargs,
-    capture=CaptureOptions(
-    compute_input_output_distances=True))``.
+    Equivalent to ``trace(model, input_args, input_kwargs=input_kwargs,
+    save=None, capture=CaptureOptions(compute_input_output_distances=True))``.
 
     Parameters
     ----------

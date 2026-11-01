@@ -654,6 +654,7 @@ class CaptureOptions:
     """
 
     _layers_to_save: ClassVar[Any] = "all"
+    _layers_to_save_explicit: ClassVar[bool] = False
     input_transform: Callable[[Any], Any] | None = None
     save_raw_input: str | bool = "small"
     batch_render: str = "auto"
@@ -975,6 +976,7 @@ class CaptureOptions:
         specified_fields: frozenset[str],
         *,
         _layers_to_save: Any = "all",
+        _layers_to_save_explicit: bool = False,
     ) -> CaptureOptions:
         """Build an instance from already-resolved field values (private).
 
@@ -988,6 +990,7 @@ class CaptureOptions:
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _CAPTURE_FIELDS, values)
         object.__setattr__(instance, "_layers_to_save", _layers_to_save)
+        object.__setattr__(instance, "_layers_to_save_explicit", _layers_to_save_explicit)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
 
@@ -1762,6 +1765,11 @@ def merge_capture_options(
         else _layers_to_save
     )
     object.__setattr__(merged, "_layers_to_save", selection)
+    object.__setattr__(
+        merged,
+        "_layers_to_save_explicit",
+        _layers_to_save is not MISSING or getattr(capture, "_layers_to_save_explicit", False),
+    )
     return merged
 
 

@@ -2697,7 +2697,7 @@ def trace(
         if save is MISSING:
             save = None
         elif save is None:
-            save = "none"
+            capture = merge_capture_options(capture=capture, _layers_to_save=None)
         if _is_save_label_selection(save):
             save, capture = _route_save_label_selection(
                 save, capture, merge_capture_options(capture=capture), model

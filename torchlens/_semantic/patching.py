@@ -640,20 +640,16 @@ def _trace_kwargs(
             "accepts capture knobs only through the grouped spelling "
             "capture=tl.options.CaptureOptions(...). Move these fields into capture=."
         )
-    if "save" in kwargs and kwargs["save"] != "all":
-        raise ValueError("Patching helpers require save='all' so every candidate facet is readable")
+    kwargs["capture"] = _compose_required_capture(
+        kwargs.get("capture", CaptureOptions()),
+        save_grads=save_grads,
+        _save=kwargs.get("save", "all"),
+    )
     kwargs["save"] = "all"
-    if "capture" in kwargs:
-        kwargs["capture"] = _compose_required_capture(kwargs["capture"], save_grads=save_grads)
-        return kwargs
-    capture_fields: dict[str, Any] = {"save_args": True}
-    if save_grads is not None:
-        capture_fields["save_grads"] = save_grads
-    kwargs["capture"] = CaptureOptions(**capture_fields)
     return kwargs
 
 
-def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
+def _compose_required_capture(capture: Any, *, save_grads: bool | None, _save: Any = "all") -> Any:
     """Merge the patching-required capture fields into user capture options.
 
     Parameters
@@ -684,10 +680,12 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
         for field_name, required_value in required.items()
         if capture._is_field_explicit(field_name) and getattr(capture, field_name) != required_value
     ]
+    if not isinstance(_save, str) or _save != "all":
+        conflicts.append("save")
     if conflicts:
         raise ValueError(
-            f"Patching helpers require capture options {required!r}, but the supplied "
-            f"capture= explicitly sets {conflicts!r} to conflicting values. Facet values "
+            f"Patching helpers require save='all' and capture options {required!r}, but the supplied "
+            f"trace kwargs explicitly set {conflicts!r} to conflicting values. Facet values "
             "must be readable on every candidate module (save='all') and "
             "reconstructed facets read saved op args (save_args=True); a narrower "
             "capture silently shrinks or empties the patch table. Drop these fields from "

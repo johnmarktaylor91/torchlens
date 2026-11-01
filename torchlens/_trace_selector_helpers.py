@@ -174,7 +174,10 @@ def _flatten_stage_names_in_options(capture_options: CaptureOptions, model: Any)
     return cast(
         "CaptureOptions",
         type(capture_options)._from_values(
-            values, _explicit_fields(capture_options), _layers_to_save=selection
+            values,
+            _explicit_fields(capture_options),
+            _layers_to_save=selection,
+            _layers_to_save_explicit=capture_options._layers_to_save_explicit,
         ),
     )
 
