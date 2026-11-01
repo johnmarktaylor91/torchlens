@@ -3,7 +3,7 @@
 # when it drops under the cap, lower a count when it shrinks, never add or raise one
 # without a one-line reason in the commit message. Regenerate with
 # `python scripts/checks/file_cap.py --update` (it never raises a recorded count).
-torchlens/__init__.py::_extract_layers_with_trace	66
+torchlens/__init__.py::_extract_layers_with_trace	62
 torchlens/_capture/_episode_coupling.py::attest_coupling	86
 torchlens/_capture/_episode_derivation.py::_derive_step_column	91
 torchlens/_capture/_episode_derivation.py::_licensed_positions	65
@@ -106,9 +106,9 @@ torchlens/_data_classes/_trace_stats.py	1831
 torchlens/_data_classes/_trace_stats.py::TraceStatsMixin._autograd_grad_fn_fire_timings	64
 torchlens/_data_classes/_trace_stats.py::TraceStatsMixin.collapse_plan	69
 torchlens/_data_classes/_trace_stats.py::TraceStatsMixin.grad_fn_site_summary	62
-torchlens/_data_classes/_trace_validation.py	1441
+torchlens/_data_classes/_trace_validation.py	1425
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin._batch_remove_log_entries	67
-torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	529
+torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	525
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.validate_forward_pass	65
 torchlens/_data_classes/_trace_validation.py::_warn_pending_value_edits_on_new_input_run	64
 torchlens/_data_classes/_trace_viz.py	1009
@@ -140,7 +140,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1107
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3954
+torchlens/_data_classes/trace.py	3953
 torchlens/_data_classes/trace.py::Trace.__getstate__	134
 torchlens/_data_classes/trace.py::Trace.__init__	416
 torchlens/_data_classes/trace.py::Trace.__setstate__	359
@@ -211,7 +211,7 @@ torchlens/_io/_safe_unpickle.py	1983
 torchlens/_io/_safe_unpickle.py::SafeBundleUnpickler.find_class	369
 torchlens/_io/_safe_unpickle.py::_alloc_refusal_reason	91
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
-torchlens/_io/bundle.py	4361
+torchlens/_io/bundle.py	4356
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64
 torchlens/_io/bundle.py::_bind_archived_activation_payload	111
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	87
@@ -223,7 +223,6 @@ torchlens/_io/bundle.py::_contains_nested_blob_refs	69
 torchlens/_io/bundle.py::_fast_copy_tensor_blob	66
 torchlens/_io/bundle.py::_load_trace_payload	177
 torchlens/_io/bundle.py::_load_unified_tlspec	96
-torchlens/_io/bundle.py::_preflight_unified_trace_body_index	64
 torchlens/_io/bundle.py::_preflight_unified_trace_manifest	90
 torchlens/_io/bundle.py::_scrub_trace_for_bundle	66
 torchlens/_io/bundle.py::cleanup_tmp	120
