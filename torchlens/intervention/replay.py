@@ -494,7 +494,7 @@ class _ReplayPass:
     log: Trace
     origins: tuple[Op, ...]
     origin_keys: frozenset[str]
-    label_keys: Mapping[str, tuple[str, ...]]
+    label_keys: dict[str, tuple[str, ...]]
     hook_targets: Mapping[str, Sequence[NormalizedHookEntry]]
     preserve_origins: bool
     strict: bool
