@@ -209,10 +209,14 @@ class _ReachabilityWalk:
             self._visit_many(value, depth)
 
     def _visit_many(self, values: Iterable[Any], depth: int) -> None:
+        """Visit each item of ``values`` one level deeper."""
+
         for item in values:
             self.visit(item, depth + 1)
 
     def _visit_layer(self, layer: Any, depth: int) -> None:
+        """Visit a layer's attributes and registered sub-layers."""
+
         for name, attribute in vars(layer).items():
             if name in _SKIPPED_LAYER_ATTRIBUTES:
                 continue
@@ -226,6 +230,8 @@ class _ReachabilityWalk:
             self._visit_function(forward, depth)
 
     def _visit_function(self, function: Callable[..., Any], depth: int) -> None:
+        """Visit a function's closure cells and default arguments."""
+
         code = getattr(function, "__code__", None)
         for cell in getattr(function, "__closure__", None) or ():
             try:

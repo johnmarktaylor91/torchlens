@@ -397,6 +397,8 @@ class SpecBackedProtocol:
         self._refusal_codes = frozenset(refusal_codes)
 
     def _spec(self) -> Any:
+        """The registered ``BackendSpec`` this protocol is backed by."""
+
         from .registry import get_backend_spec
 
         return get_backend_spec(self.name)

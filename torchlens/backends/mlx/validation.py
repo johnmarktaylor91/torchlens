@@ -371,6 +371,8 @@ def _perturbation_evidence(
     import mlx.core as mx
 
     def _all_constant(labels: tuple[str | None, ...]) -> bool:
+        """Whether every leaf label in ``labels`` names a constant op."""
+
         return bool(labels) and all(label in constant_labels for label in labels)
 
     positions = [index for index, value in enumerate(capture.args) if _is_mlx_array(value)]

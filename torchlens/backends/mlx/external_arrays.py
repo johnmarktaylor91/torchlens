@@ -49,6 +49,8 @@ def external_array_ids(model: object, is_tensor: Callable[[object], bool]) -> di
     visited_containers: set[int] = set()
 
     def collect(value: Any, depth: int) -> None:
+        """Record every MLX array reachable from ``value``, descending into containers."""
+
         if is_tensor(value):
             found[id(value)] = value
             return
@@ -70,6 +72,8 @@ def external_array_ids(model: object, is_tensor: Callable[[object], bool]) -> di
             visit_callable(value, depth - 1)
 
     def visit_callable(value: Any, depth: int) -> None:
+        """Walk a callable's partial arguments, closure cells and defaults for arrays."""
+
         if id(value) in visited_functions:
             return
         visited_functions.add(id(value))
