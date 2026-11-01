@@ -545,6 +545,7 @@ def test_saved_recipe_round_trips_the_grad_target() -> None:  # A31
     assert rule.signal == "backward"
     assert tl.when(tl.label("relu_1_2"), tl.scale(0)).rules[0].signal == "forward"
     assert tl.when(tl.grad("relu_1_2") | "relu_1_2", tl.scale(0)).rules[0].signal == "both"
-    from torchlens._ir.selector_eval import selector_from_spec
+    from torchlens._ir.selector_eval import normalize_selector_like
 
-    assert selector_from_spec(rule.target.to_target_spec()) == rule.target
+    rebuilt = normalize_selector_like(rule.target.to_target_spec(), lifecycle="site")
+    assert rebuilt == rule.target
