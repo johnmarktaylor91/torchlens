@@ -3565,7 +3565,7 @@ error-strings	torchlens/_capture/_episode_ledger.py	124
 error-strings	torchlens/_capture/_episode_ledger.py	5.4
 error-strings	torchlens/_capture/_episode_ledger.py	657
 error-strings	torchlens/_capture/prepare/cache.py	600
-error-strings	torchlens/_capture/prepare/door.py	1024
+error-strings	torchlens/_capture/prepare/resolve.py	1024
 error-strings	torchlens/_data_classes/_trace_stats.py	1.0
 error-strings	torchlens/_data_substrate/digests.py	256
 error-strings	torchlens/_extraction/dtype_policy.py	16

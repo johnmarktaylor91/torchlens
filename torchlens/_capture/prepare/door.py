@@ -3,7 +3,8 @@
 The door body moved here verbatim from ``torchlens._user_funcs`` by the capture
 seam; the PREPARE lane split it into stage functions over a frozen ``_DoorState``
 that end in ``prepare_capture`` (one ``CaptureRequest``), the cache lookup, the
-chunk fan-out, the run bracket and the door epilogue.
+chunk fan-out, the run bracket and the door epilogue. The cache-key, selector and
+chunk-options stages live in the sibling ``cache``, ``resolve`` and ``chunked`` homes.
 """
 
 import collections.abc
@@ -17,12 +18,7 @@ from typing import Any, cast
 import torch
 from torch import nn
 
-from torchlens import _state
-
-from ..._autoroute._builtin_output import semantic_output_cache_key
 from ..._capture_state_helpers import (
-    _capture_cache_key,
-    _facet_recipe_cache_key,
     _reject_opaque_wrappers,
     _unwrap_data_parallel,
     unwrap_compiled_model,
@@ -48,18 +44,8 @@ from ..._options_validation import _validate_output_device
 from ..._robustness import check_model_and_input_variants
 from ..._runnable_state_live import capture_observer_bracket
 from ..._trace_selector_helpers import (
-    _combine_save_predicates,
-    _is_selective_label_save,
-    _layers_to_save_has_negative_index,
-    _layers_to_save_live_subset,
-    _layers_to_save_mentions_identity,
-    _layers_to_save_mentions_output,
-    _layers_to_save_needs_final_resolution,
-    _make_layers_to_save_predicate,
-    _predicate_cache_key,
     _route_save_label_selection,
     _split_save_options_and_predicate,
-    _stable_cache_fragment,
 )
 from ..._training_validation import (
     TrainingModeConfigError,
@@ -108,16 +94,14 @@ from ..run_entry import run_capture
 from ..stages import CaptureRequest, ForwardResult
 from ..structure_only import STRUCTURE_ONLY_EPISODE_UNSUPPORTED
 from .cache import (
-    CAPTURE_CACHE_KEY_CURATED,
-    CAPTURE_CACHE_KEY_NEUTRAL,
     _load_authenticated_capture_cache,
-    _prepare_capture_cache_dir,
+    _resolve_cache_key,
     _store_capture_cache_entry,
-    _sweep_option_fields_into_cache_config,
 )
 from .chunked import (
     _append_chunk_trace_state,
     _ChunkAppend,
+    _recursive_capture_options,
     _should_store_auto_coerced_raw_input,
     _validate_chunked_forward_capture,
     iter_chunked_inputs,
@@ -127,6 +111,11 @@ from .chunked import (
 )
 from .dispatch import _reject_unsupported_torch_trace_option_values
 from .request import _build_request, _DoorArgs, _DoorState
+from .resolve import (
+    _refuse_predicate_shapes,
+    _resolve_selectors,
+    _validate_predicate_capabilities,
+)
 
 # list-A row 30 latch: once-per-process disclosure that train-mode tracing
 # advances norm running statistics. Process-global by design ("warn once");
@@ -557,49 +546,6 @@ def _admit_and_route_save(state: _DoorState) -> _DoorState:
     )
 
 
-def _refuse_predicate_shapes(args: _DoorArgs) -> None:
-    """Refuse non-callable predicates and out-of-range lookback settings."""
-    if args.intervene is not None and not callable(args.intervene):
-        raise ArgumentTypeError(
-            f"intervene received non-callable type {type(args.intervene).__name__}",
-            code="intervention_predicate_type_invalid",
-            remedy="pass a predicate callable such as tl.when(...) or None",
-            argument="intervene",
-            received_type=type(args.intervene).__name__,
-        )
-    if args.halt is not None and not callable(args.halt):
-        raise ArgumentTypeError(
-            f"halt received non-callable type {type(args.halt).__name__}",
-            code="halt_predicate_type_invalid",
-            remedy="pass a predicate callable or None",
-            argument="halt",
-            received_type=type(args.halt).__name__,
-        )
-    if not isinstance(args.lookback, int) or not 0 <= args.lookback <= 1024:
-        raise InvalidArgumentError(
-            f"lookback={args.lookback!r} is not an integer in the supported range [0, 1024]",
-            code="lookback_invalid",
-            remedy="set lookback to an integer from 0 through 1024 inclusive",
-            argument="lookback",
-        )
-    if args.lookback_payload_policy not in {
-        "metadata_only",
-        "detached_raw",
-        "transformed",
-        "grad_connected",
-        "disk_spilled",
-    }:
-        raise InvalidArgumentError(
-            f"lookback_payload_policy={args.lookback_payload_policy!r} is not supported",
-            code="lookback_payload_policy_invalid",
-            remedy=(
-                "set lookback_payload_policy to 'metadata_only', 'detached_raw', "
-                "'transformed', 'grad_connected', or 'disk_spilled'"
-            ),
-            argument="lookback_payload_policy",
-        )
-
-
 def _refuse_episode_combinations(args: _DoorArgs, capture_options: CaptureOptions) -> None:
     """Refuse the episode declarations the marker-combination table rules out."""
     if args.chunk_size not in (MISSING, None) or args.chunk_paths not in (MISSING, None):
@@ -960,192 +906,6 @@ def _resolve_chunk_plan(state: _DoorState) -> _DoorState:
     return replace(state, chunk_plan=chunk_plan)
 
 
-def _resolve_selectors(state: _DoorState) -> _DoorState:
-    """Resolve the save and gradient selectors into live predicates and deferred requests."""
-    layers_to_save = state.layers_to_save
-    grads_to_save_resolved = state.grads_to_save_resolved
-    save_predicate = state.save_predicate
-    if type(layers_to_save) is str:
-        layers_to_save = layers_to_save.lower()
-    if type(grads_to_save_resolved) is str:
-        grads_to_save_resolved = grads_to_save_resolved.lower()
-    requested_layers_to_save = layers_to_save
-    uses_deferred_gradients = grads_to_save_resolved not in ["all", "none", None, []]
-    uses_deferred_activation = _is_selective_label_save(layers_to_save) and (
-        _layers_to_save_mentions_output(layers_to_save)
-        or _layers_to_save_has_negative_index(layers_to_save)
-        or _layers_to_save_mentions_identity(layers_to_save)
-        # Integer ordinals and final-label-shaped strings are defined against
-        # FINAL layer numbering, which orphan removal renumbers after capture;
-        # they must resolve post-postprocess, never against raw indexes.
-        or _layers_to_save_needs_final_resolution(layers_to_save)
-    )
-    live_layers_to_save = (
-        _layers_to_save_live_subset(layers_to_save) if uses_deferred_activation else layers_to_save
-    )
-    needs_live_output_projection = (
-        _is_selective_label_save(layers_to_save)
-        and state.should_save_grads
-        and not uses_deferred_activation
-    )
-    uses_selective_layers_to_save = _is_selective_label_save(layers_to_save)
-    if uses_selective_layers_to_save and not uses_deferred_activation:
-        layers_predicate = _make_layers_to_save_predicate(layers_to_save)
-        save_predicate = _combine_save_predicates(save_predicate, layers_predicate)
-        layers_to_save = "all"
-    elif uses_deferred_activation and live_layers_to_save is not None:
-        layers_predicate = _make_layers_to_save_predicate(live_layers_to_save)
-        save_predicate = _combine_save_predicates(save_predicate, layers_predicate)
-    return replace(
-        state,
-        layers_to_save=layers_to_save,
-        requested_layers_to_save=requested_layers_to_save,
-        save_predicate=save_predicate,
-        grads_to_save_resolved=grads_to_save_resolved,
-        uses_deferred_gradients=uses_deferred_gradients,
-        uses_deferred_activation=uses_deferred_activation,
-        needs_live_output_projection=needs_live_output_projection,
-        uses_selective_layers_to_save=uses_selective_layers_to_save,
-    )
-
-
-def _validate_predicate_capabilities(state: _DoorState) -> None:
-    """Refuse followed_by predicates in slots whose capability cannot honor them."""
-    save_predicate = state.save_predicate
-    intervene = state.args.intervene
-    halt = state.halt
-    if save_predicate is not None or intervene is not None or halt is not None:
-        from ..predicates import validate_followed_by_capability
-
-    if save_predicate is not None:
-        validate_followed_by_capability(
-            save_predicate,
-            api_name="trace(save=...)",
-            supports_retroactive=True,
-        )
-    if intervene is not None:
-        validate_followed_by_capability(
-            intervene,
-            api_name="trace(intervene=...)",
-            supports_retroactive=False,
-        )
-    if halt is not None:
-        validate_followed_by_capability(
-            halt,
-            api_name="trace(halt=...)",
-            supports_retroactive=False,
-        )
-
-
-def _resolve_cache_key(state: _DoorState) -> _DoorState:
-    """Name the trace and, when caching, derive the cache key, path and secret."""
-    capture_options = state.capture_options
-    name = capture_options.name
-    log_name = name if name is not None else _state._auto_name(state.model)
-    state = replace(state, log_name=log_name)
-    if not capture_options.cache:
-        return state
-    config = _curated_cache_config(state)
-    # The inversion sweep: every CaptureOptions field not hand-curated
-    # above and not declared session-neutral enters the key here --
-    # raise_on_nan, track_nonfinite, save_budget, distributed_witness,
-    # measure_python_peak_memory, emit_nvtx, transform, name, and any
-    # future field. Streaming options change what the returned trace
-    # retains (and where), so they sweep in full as well.
-    _sweep_option_fields_into_cache_config(
-        config,
-        capture_options,
-        prefix="capture_option",
-        curated=CAPTURE_CACHE_KEY_CURATED,
-        neutral=CAPTURE_CACHE_KEY_NEUTRAL,
-    )
-    _sweep_option_fields_into_cache_config(
-        config,
-        state.streaming_options,
-        prefix="streaming_option",
-    )
-    cache_key = _capture_cache_key(state.model, state.input_args, state.input_kwargs, config)
-    cache_root, cache_secret = _prepare_capture_cache_dir(capture_options.cache_dir)
-    return replace(
-        state,
-        cache_key=cache_key,
-        cache_path=cache_root / f"{cache_key}.pkl",
-        cache_secret=cache_secret,
-    )
-
-
-# Cache-key curation notes (the rows below, in order):
-# * stop_after compiles INTO the halt slot, but its never-fired policy
-#   differs by provenance, so the two spellings must not share a key:
-#   a completed halt= capture could otherwise satisfy a stop_after=
-#   request whose cold run would have refused stop_after_never_fired.
-# * Capability / payload-policy options that change WHAT is captured or
-#   stored in the returned trace. Omitting any of these let a second
-#   trace() with a different capability silently return an earlier cached
-#   trace built with the wrong capability (e.g. asked intervention_ready=True,
-#   got a cached False). Include them so a capability change misses the cache;
-#   callables are repr-keyed (conservative -- a distinct object misses rather
-#   than risking a false hit), matching how output_transform is keyed.
-# * A cached capture without the measure_host_peak_memory opt-in holds no CPU peak.
-def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
-    """Hand-curated cache-key rows; ``_resolve_cache_key`` sweeps the remaining fields in."""
-    opts = state.capture_options
-    args = state.args
-    cache_config = {
-        "layers_to_save": state.requested_layers_to_save,
-        "keep_orphans": opts.keep_orphans,
-        "output_device": opts.output_device,
-        "save_args": opts.save_args,
-        "capture_tensor_grad_hooks": opts.capture_tensor_grad_hooks,
-        "save_grads": repr(state.save_grads_policy),
-        "save_source_context": opts.save_source_context,
-        "save_rng": opts.save_rng,
-        "source_context_lines": opts.source_context_lines,
-        "compute_input_output_distances": opts.compute_input_output_distances,
-        "detach_saved_activations": opts.detach_saved_activations,
-        "save_mode": state.save_mode_value,
-        "recurrence_detection": opts.recurrence_detection,
-        "backward_ready": state.train_mode_value,
-        "inference_only": state.inference_only_value,
-        "chunk_size": state.normalized_chunk_size,
-        "chunk_paths": normalize_chunk_paths(state.chunk_paths_value),
-        "capture_container_structure": opts.capture_container_structure,
-        "output_transform": _stable_cache_fragment(opts.output_transform),
-        "semantic_output_cache_key": semantic_output_cache_key(state.model),
-        "facets": _facet_recipe_cache_key(state.facet_recipes),
-        "save_predicate": _predicate_cache_key(state.save_predicate),
-        "intervene": _predicate_cache_key(args.intervene),
-        "halt": _predicate_cache_key(state.halt),
-        "stop_after": _stable_cache_fragment(state.stop_after_site),
-        "intervention_ready": opts.intervention_ready,
-        "structure_only": opts.structure_only,
-        "track_device_memory": opts.track_device_memory,
-        "measure_host_peak_memory": opts.measure_host_peak_memory,
-        "log_injections": opts.log_injections,
-        "save_raw_input": repr(state.save_raw_input_policy),
-        "save_transformed_output": repr(state.save_raw_output_policy),
-        "save_raw_activations": state.save_options.save_raw_activations,
-        "save_raw_gradients": state.save_options.save_raw_gradients,
-        "activation_transform": _stable_cache_fragment(state.save_options.activation_transform),
-        "grad_transform": _stable_cache_fragment(state.save_options.grad_transform),
-        "seed": opts.seed,
-        "module_filter": _stable_cache_fragment(opts.module_filter),
-        "layer_visualizers": _stable_cache_fragment(opts.layer_visualizers),
-        "save_visualizations": _stable_cache_fragment(opts.save_visualizations),
-        "optimizer": repr(opts.optimizer),
-        "hooks": _stable_cache_fragment(opts.hooks),
-        "lookback": args.lookback,
-        "lookback_payload_policy": args.lookback_payload_policy,
-        "jax_control_flow": opts.jax_control_flow,
-        "jax_max_control_flow_unroll": opts.jax_max_control_flow_unroll,
-        "module_identity_mode": opts.module_identity_mode,
-        "payload_policy": opts.payload_policy,
-        "save_preview": opts.save_preview,
-        "profile": state.profile_enabled,
-    }
-    return cache_config
-
-
 def _door_options(request: CaptureRequest) -> CaptureOptions:
     """The resolved ``CaptureOptions`` of a torch door request."""
     return cast(CaptureOptions, request.options)
@@ -1203,77 +963,6 @@ def _chunk_fanout_needed(state: _DoorState) -> bool:
     chunk_plan = state.chunk_plan
     chunk_size = state.normalized_chunk_size
     return chunk_plan is not None and chunk_size is not None and chunk_size < chunk_plan.total_size
-
-
-def _explicit_or_missing(capture_options: CaptureOptions, field_name: str) -> Any:
-    """The field's value when the user set it explicitly, else ``MISSING``."""
-    if capture_options.is_field_explicit(field_name):
-        return getattr(capture_options, field_name)
-    return MISSING
-
-
-# Session knobs the chunk path historically DROPPED (list-A row 26,
-# second clause): the recursive options object was rebuilt from a
-# hand-enumerated field list, so a chunked capture silently reset
-# save_budget (and the other session-time knobs) to defaults. The
-# recursive constructor must cover EVERY CaptureOptions field;
-# tests/test_capopts_truth_chunk_options.py pins the full-coverage
-# set difference so a future field cannot silently drop here.
-def _recursive_capture_options(state: _DoorState) -> CaptureOptions:
-    """The grouped options each per-chunk recursive capture receives."""
-    opts = state.capture_options
-    recursive_capture_options = CaptureOptions(
-        layers_to_save=state.layers_to_save,
-        input_transform=None,
-        save_raw_input=state.save_raw_input_policy,
-        batch_render=opts.batch_render,
-        output_transform=opts.output_transform,
-        save_transformed_output=state.save_raw_output_policy,
-        layer_visualizers=opts.layer_visualizers,
-        save_visualizations=opts.save_visualizations,
-        keep_orphans=opts.keep_orphans,
-        output_device=opts.output_device,
-        save_args=opts.save_args,
-        save_grads=state.save_grads_policy,
-        capture_tensor_grad_hooks=opts.capture_tensor_grad_hooks,
-        save_source_context=opts.save_source_context,
-        save_rng=opts.save_rng,
-        seed=opts.seed,
-        source_context_lines=opts.source_context_lines,
-        optimizer=opts.optimizer,
-        compute_input_output_distances=opts.compute_input_output_distances,
-        detach_saved_activations=opts.detach_saved_activations,
-        recurrence_detection=opts.recurrence_detection,
-        intervention_ready=opts.intervention_ready,
-        capture_container_structure=opts.capture_container_structure,
-        hooks=MISSING,
-        unwrap_when_done=False,
-        verbose=opts.verbose,
-        backward_ready=state.train_mode_value,
-        inference_only=state.inference_only_value,
-        name=state.log_name,
-        cache=False,
-        cache_dir=opts.cache_dir,
-        module_filter=opts.module_filter,
-        stop_after=MISSING,
-        jax_control_flow=_explicit_or_missing(opts, "jax_control_flow"),
-        jax_max_control_flow_unroll=_explicit_or_missing(opts, "jax_max_control_flow_unroll"),
-        module_identity_mode=opts.module_identity_mode,
-        payload_policy=opts.payload_policy,
-        save_preview=opts.save_preview,
-        emit_nvtx=opts.emit_nvtx,
-        measure_python_peak_memory=opts.measure_python_peak_memory,
-        distributed_witness=opts.distributed_witness,
-        save_budget=opts.save_budget,
-        raise_on_nan=opts.raise_on_nan,
-        track_nonfinite=opts.track_nonfinite,
-        track_device_memory=opts.track_device_memory,
-        structure_only=opts.structure_only,
-        log_injections=opts.log_injections,
-        carry_state=opts.carry_state,
-        measure_host_peak_memory=opts.measure_host_peak_memory,
-    )
-    return recursive_capture_options
 
 
 def _recursive_door_kwargs(state: _DoorState) -> dict[str, Any]:
