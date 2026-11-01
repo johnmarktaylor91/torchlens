@@ -456,9 +456,9 @@ def render(
                 f"{record['field_policies'].get(name, '')} | "
                 f"{record['field_tiers'].get(name, '')} | {accessor} |"
             )
-        dropped = sorted(k for k, p in record["field_policies"].items() if p == "drop")
-        if dropped:
-            lines += ["", f"Session-only (`drop`): {', '.join(f'`{k}`' for k in dropped)}."]
+        session_only = sorted(k for k, p in record["field_policies"].items() if p == "drop")
+        if session_only:
+            lines += ["", f"Session-only (`drop`): {', '.join(f'`{k}`' for k in session_only)}."]
         lines.append("")
     lines += _findings(records, members, storage_only)
     return "\n".join(lines).rstrip("\n") + "\n"
