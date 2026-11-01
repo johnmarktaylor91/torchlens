@@ -68,16 +68,16 @@ def test_verified_and_unrecorded_captures_print_unchanged() -> None:
 
 
 def test_not_checked_footer_names_track_nonfinite_and_the_default_stays_false() -> None:
-    """forks.7: the default is False and the NOT-CHECKED line teaches the option."""
+    """forks.7: the default is off and the NOT-CHECKED line teaches the option."""
 
-    assert tl.options.CaptureOptions().track_nonfinite is False
+    assert tl.options.CaptureOptions().on_nonfinite == "ignore"
     trace = tl.trace(_Tiny(), torch.randn(2, 4), save=tl.func("relu"))
     assert trace.track_nonfinite is False
     assert trace.nonfinite_verdict == "not_checked"
     health = [line for line in _summary(trace).split("\n") if "Health:" in line]
     assert health == [
         "\tHealth: NOT-CHECKED (payloads unexamined; capture with "
-        "CaptureOptions(track_nonfinite=True) to check every op)"
+        "CaptureOptions(on_nonfinite='track') to check every op)"
     ]
 
 

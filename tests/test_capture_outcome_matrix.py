@@ -24,6 +24,7 @@ from torchlens._capture.outcome import (
     CapturePhase,
     CaptureStatus,
 )
+from torchlens.errors import TorchLensWarning
 
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
@@ -115,13 +116,18 @@ def test_no_frontier_halt_settles_failed_finalize(monkeypatch) -> None:
 
 
 def test_never_fired_halt_predicate_stays_complete() -> None:
-    """A halt predicate that never fires yields an ordinary COMPLETE capture."""
+    """A halt predicate that never fires yields an ordinary COMPLETE capture.
 
-    trace = tl.trace(
-        ThreeStageModel(),
-        torch.ones(1, 3),
-        stop_after=lambda ctx: ctx.kind == "op" and ctx.func_name == "definitely_absent",
-    )
+    The callable never-fired policy warns (the capture ran the full forward)
+    but the product stays COMPLETE.
+    """
+
+    with pytest.warns(TorchLensWarning, match="never fired"):
+        trace = tl.trace(
+            ThreeStageModel(),
+            torch.ones(1, 3),
+            stop_after=lambda ctx: ctx.kind == "op" and ctx.func_name == "definitely_absent",
+        )
     assert trace.halted is False
     assert trace.outcome.status is CaptureStatus.COMPLETE
 

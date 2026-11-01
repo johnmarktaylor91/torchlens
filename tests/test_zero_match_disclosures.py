@@ -20,6 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import InvalidArgumentError
 
 
 def _model() -> nn.Module:
@@ -28,12 +29,12 @@ def _model() -> nn.Module:
     return nn.Sequential(nn.Linear(3, 3), nn.ReLU())
 
 
-def test_halt_zero_match_warns_on_completed_capture() -> None:
-    """A halt selector that never fires discloses instead of staying silent."""
+def test_halt_zero_match_refuses_typed_on_completed_capture() -> None:
+    """A selector-shaped stop_after that never fires refuses typed, never silently."""
 
-    with pytest.warns(UserWarning, match="halt selector .* matched zero sites"):
-        log = tl.trace(_model(), torch.randn(2, 3), stop_after=tl.func("nosuchopzzz"))
-    assert log.outcome.status.name == "COMPLETE"
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.trace(_model(), torch.randn(2, 3), stop_after=tl.func("nosuchopzzz"))
+    assert excinfo.value.fields["code"] == "stop_after_never_fired"
 
 
 def test_halt_that_fires_does_not_warn() -> None:
@@ -161,11 +162,11 @@ def test_zero_match_halt_and_save_record_their_slots() -> None:
             _model(),
             torch.randn(2, 3),
             save=tl.func("nosuchopzzz"),
-            stop_after=tl.func("nosuchopyyy"),
+            stop_after=lambda ctx: ctx.kind == "op" and ctx.func_name == "nosuchopyyy",
         )
     records = log.annotations.get("unmatched_capture_selectors") or ()
     slots = {record["slot"] for record in records}
-    assert slots == {"save", "halt"}
+    assert slots == {"save", "stop_after"}
 
 
 def test_secret_bearing_save_warns_the_saver(tmp_path) -> None:

@@ -45,7 +45,7 @@ def _healthy() -> dict:
 
 
 def test_grouping_kwarg_is_keyword_only_and_structural_proceeds() -> None:
-    log = _tiny_trace(grouping="structural")
+    log = _tiny_trace(capture=tl.options.CaptureOptions(grouping="structural"))
     assert log.grouping == "structural"
     assert log.grouping_policy == _healthy()
 
