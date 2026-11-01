@@ -17,13 +17,8 @@ from torchlens.backends import (
     VALIDATION_REASONS,
     BackendCapabilities,
     BackendProtocol,
-    BackendRegistryError,
     BackendSpec,
     FrameworkRequirement,
-    SerializationPolicy,
-    get_backend_spec,
-    registered_backend_specs,
-    unregister_backend_spec,
 )
 from torchlens.backends._backend_protocol import (
     BACKEND_PROTOCOL_MEMBERS,
@@ -32,6 +27,13 @@ from torchlens.backends._backend_protocol import (
     SpecBackedProtocol,
     protocol_problems,
     refusal_code_for_capability,
+)
+from torchlens.backends.registry import (
+    BackendRegistryError,
+    SerializationPolicy,
+    get_backend_spec,
+    registered_backend_specs,
+    unregister_backend_spec,
 )
 from torchlens.conformance import C0_PROTOCOL_CASES, run_conformance
 from torchlens.conformance._protocol_cases import run_c0_protocol_cases
