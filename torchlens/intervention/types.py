@@ -290,6 +290,29 @@ REPLAY_TEMPLATE_TYPES: frozenset[type] = frozenset(
 
 
 @dataclass(frozen=True)
+class SamplingRecord:
+    """One realized draw of a stochastic edit, saved on the FireRecord that fired it.
+
+    ``draw_indices`` is the FULL realized index vector: donor member ids for a
+    sampled or resampled draw, the row permutation for ``permute_batch``, empty for
+    an averaging verb that draws nothing and records only its population facts.
+    ``FireRecord.determinism_note`` keeps the readable one-line rendering.
+    """
+
+    verb: str
+    base_seed: int | None
+    derived_seed: int | None
+    share_draw: str | None
+    logical_firing_coordinate: tuple[Any, ...] | None
+    eligible_count: int | None
+    population_count: int | None
+    population_identity: str | None
+    donor_group_id: str | None
+    draw_indices: tuple[int, ...]
+    realized_draw_digest: str | None
+
+
+@dataclass(frozen=True)
 class FireRecord:
     """Runtime record for one intervention firing."""
 
@@ -315,6 +338,9 @@ class FireRecord:
         # L6 stage 3: (child_func_call_id, arg_kind, arg_path) occurrence
         # address on edge-substitution FireRecords; persists as of tlspec v8.
         "edge_address": FieldPolicy.KEEP,
+        # Structured realized draws of the stochastic verbs, one SamplingRecord per
+        # draw (walk ruling names.6); persists as of tlspec v11.
+        "sampling": FieldPolicy.KEEP,
     }
 
     target_label: str = ""
@@ -336,6 +362,7 @@ class FireRecord:
     tuple_index: int | None = None
     edge_address: tuple | None = None
     replaced: bool | None = None
+    sampling: tuple[SamplingRecord, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -800,6 +827,7 @@ __all__ = [
     "DictKey",
     "EdgeUseRecord",
     "FireRecord",
+    "SamplingRecord",
     "ForkFieldPolicy",
     "FrozenHookSpec",
     "FrozenInterventionSpec",

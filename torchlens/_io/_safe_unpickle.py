@@ -926,9 +926,8 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.intervention._super.super_op", "SuperOpAccessor"),
         ("torchlens.intervention._super.super_op", "TraceAccessor"),
         # Intervention-spec DATA types (portable recipe descriptors, not runtime
-        # callables). ``Edit`` is instance-callable but INERT: ``__call__``
-        # takes no attacker args and its ``factory`` is scrubbed to ``None`` before
-        # pickling, so it is not a reduce-invocable import sink.
+        # callables). ``Edit`` is instance-callable but INERT: ``__call__`` takes no
+        # attacker args and its ``factory`` is scrubbed to ``None`` before pickling.
         ("torchlens.intervention.types", "CapturedArgTemplate"),
         ("torchlens.intervention.types", "EdgeUseRecord"),
         ("torchlens.intervention.types", "FireRecord"),
@@ -938,6 +937,7 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.intervention.types", "FrozenTargetSpec"),
         ("torchlens.intervention.types", "FrozenTargetValueSpec"),
         ("torchlens.intervention.types", "FunctionRegistryKey"),
+        ("torchlens.intervention.types", "SamplingRecord"),
         ("torchlens.intervention.types", "Edit"),
         ("torchlens.intervention.types", "HookSpec"),
         ("torchlens.intervention.types", "InterventionDecision"),

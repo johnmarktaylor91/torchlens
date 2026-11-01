@@ -36,6 +36,7 @@ from .types import (
     FrozenTargetSpec,
     HookSpec,
     InterventionSpec,
+    SamplingRecord,
     TargetSpec,
     TargetValueSpec,
     TensorSliceSpec,
@@ -213,6 +214,13 @@ def _serialize_fire_record(
     data = {field.name: getattr(record, field.name) for field in dataclass_fields(record)}
     data["edit"] = _serialize_value(record.edit, save_level, state)
     data["container_path"] = _serialize_value(record.container_path, save_level, state)
+    data["sampling"] = [
+        {
+            field.name: _serialize_value(getattr(draw, field.name), save_level, state)
+            for field in dataclass_fields(draw)
+        }
+        for draw in record.sampling
+    ]
     return data
 
 
@@ -424,7 +432,44 @@ def _deserialize_fire_record(
         tuple_index=data.get("tuple_index"),
         replaced=data.get("replaced"),
         edge_address=_edge_address_from_json(data.get("edge_address")),
+        sampling=_sampling_from_json(data.get("sampling")),
     )
+
+
+def _sampling_from_json(value: Any) -> tuple[SamplingRecord, ...]:
+    """Rebuild the persisted ``FireRecord.sampling`` draws from their JSON rows.
+
+    Each row is one :class:`SamplingRecord` written field by field by
+    :func:`_serialize_fire_record`; tuples come back as JSON lists and are
+    re-tupled here. Artifacts older than the field load an empty tuple.
+    """
+
+    if not isinstance(value, list):
+        return ()
+    draws: list[SamplingRecord] = []
+    for row in value:
+        if not isinstance(row, dict):
+            continue
+        coordinate = row.get("logical_firing_coordinate")
+        indices = row.get("draw_indices") or ()
+        draws.append(
+            SamplingRecord(
+                verb=str(row.get("verb", "")),
+                base_seed=row.get("base_seed"),
+                derived_seed=row.get("derived_seed"),
+                share_draw=row.get("share_draw"),
+                logical_firing_coordinate=(
+                    tuple(coordinate) if isinstance(coordinate, list) else coordinate
+                ),
+                eligible_count=row.get("eligible_count"),
+                population_count=row.get("population_count"),
+                population_identity=row.get("population_identity"),
+                donor_group_id=row.get("donor_group_id"),
+                draw_indices=tuple(int(index) for index in indices),
+                realized_draw_digest=row.get("realized_draw_digest"),
+            )
+        )
+    return tuple(draws)
 
 
 def _edge_address_from_json(value: Any) -> tuple | None:
