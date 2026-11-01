@@ -88,7 +88,7 @@ def _state(metrics: dict[str, Any]) -> str:
 
 
 def _run(
-    model: nn.Module, data: Any, metrics: dict[str, Any], cache_dir: Path | None, **kwargs: Any
+    model: nn.Module, data: Any, metrics: dict[Any, Any], cache_dir: Path | None, **kwargs: Any
 ) -> tuple[dict[str, Any], int]:
     """Run ``tl.stats.aggregate`` and return its results and the forward passes it made."""
 
@@ -210,16 +210,12 @@ def test_cache_grad_target_hits(model: nn.Module, tmp_path: Path) -> None:
     def loss_fn(output: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         return nn.functional.cross_entropy(output, labels)
 
-    def metrics() -> dict[str, Any]:
-        return {label: tl.stats.Mean()}
+    def metrics() -> dict[Any, Any]:
+        return {tl.grad(label): tl.stats.Mean()}
 
-    expected, _ = _run(model, batches, metrics(), None, target="grad", loss_fn=loss_fn)
-    first, first_forwards = _run(
-        model, batches, metrics(), tmp_path, target="grad", loss_fn=loss_fn
-    )
-    second, second_forwards = _run(
-        model, batches, metrics(), tmp_path, target="grad", loss_fn=loss_fn
-    )
+    expected, _ = _run(model, batches, metrics(), None, loss_fn=loss_fn)
+    first, first_forwards = _run(model, batches, metrics(), tmp_path, loss_fn=loss_fn)
+    second, second_forwards = _run(model, batches, metrics(), tmp_path, loss_fn=loss_fn)
     assert first_forwards > 0
     assert second_forwards == 0
     _assert_equal_results(first, expected)

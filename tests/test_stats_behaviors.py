@@ -1,6 +1,6 @@
 """Behavioral tests for streaming-stat edge semantics and the aggregate fast path.
 
-The compiled sparse ``aggregate(target="out")`` plan only arms on fully-eval
+The compiled sparse plan for activation-only ``aggregate`` keys only arms on fully-eval
 models, so these tests pin the load-bearing contract: fast-path results are
 identical to the exact per-batch full-trace path, including the fingerprint
 drift fallback on models whose op stream changes between batches.
@@ -125,15 +125,6 @@ def test_aggregator_disambiguates_duplicate_stat_keys() -> None:
     assert result["Mean_1"] == pytest.approx(2.0)
 
 
-def test_aggregate_rejects_unknown_target() -> None:
-    """aggregate() refuses targets other than 'out' and 'grad'."""
-
-    with pytest.raises(ValueError, match="'out' or 'grad'"):
-        tl.stats.aggregate(
-            nn.Linear(2, 1), [torch.ones(1, 2)], {"output": tl.stats.Mean()}, target="w"
-        )
-
-
 @pytest.mark.smoke
 def test_aggregate_unmatched_selector_raises_key_error() -> None:
     """A selector that matches no saved out fails with a clear KeyError."""
@@ -233,11 +224,10 @@ def test_aggregate_grad_accepts_list_batches_and_unmatched_grad_selector_raises(
     result = tl.stats.aggregate(
         model,
         [batch],
-        {"linear": tl.stats.Norm()},
-        target="grad",
+        {tl.grad("linear"): tl.stats.Norm()},
         loss_fn=lambda output, target: torch.nn.functional.mse_loss(output, target),
     )
-    assert math.isfinite(result["linear"])
+    assert math.isfinite(result["tl.grad('linear')"])
 
     # save_grads= validates selectors at capture entry, so an unmatched grad
     # metric fails there with the typed lookup error naming the selector.
@@ -245,7 +235,6 @@ def test_aggregate_grad_accepts_list_batches_and_unmatched_grad_selector_raises(
         tl.stats.aggregate(
             model,
             [batch],
-            {"no_such_layer": tl.stats.Mean()},
-            target="grad",
+            {tl.grad("no_such_layer"): tl.stats.Mean()},
             loss_fn=lambda output, target: torch.nn.functional.mse_loss(output, target),
         )

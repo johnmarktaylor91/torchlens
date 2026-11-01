@@ -152,14 +152,13 @@ def _single_batch_loader() -> Iterable[torch.Tensor]:
 
 
 def test_aggregate_grad_output_metric_raises_clear_key_error() -> None:
-    """`aggregate(..., target="grad")` should fail clearly for unsaved output grads."""
+    """A `tl.grad("output")` metric key fails clearly: the model output has no saved grad."""
 
     with pytest.raises(KeyError, match="No saved grad matched metric 'output'"):
         tl.stats.aggregate(
             _AggregateModel(),
             _single_batch_loader(),
-            {"output": tl.stats.Mean()},
-            target="grad",
+            {tl.grad("output"): tl.stats.Mean()},
             loss_fn=lambda output: output.sum(),
         )
 
