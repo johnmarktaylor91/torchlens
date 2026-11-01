@@ -503,6 +503,10 @@ _DIAGNOSTIC_AUDIT_STATE = frozenset(
         # detector/witness install surfaces; assigned solely through the
         # module object (visible since the cross-module rebind detector).
         ("torchlens/_state.py", "_completeness_witness_mode"),
+        # MLX unwrapped-op policy ("flag"/"refuse", closed vocabulary): set only
+        # through set_unwrapped_policy, which returns the previous value so a
+        # caller restores it; read at capture settle time.
+        ("torchlens/backends/mlx/settings.py", "_unwrapped_policy"),
         ("torchlens/_state.py", "_escape_detector_mode"),
         ("torchlens/_trace_core/op_store.py", "_AUDIT_CLONE_READS"),
         ("torchlens/_trace_core/op_store.py", "_AUDIT_COLLECTORS"),
@@ -975,6 +979,11 @@ _STATIC_EXPORT_LISTS = frozenset(
     {
         ("torchlens/__init__.py", "__all__"),
         ("torchlens/_capture_honesty.py", "__all__"),
+        ("torchlens/backends/_protocols/mlx_wrapped_state.py", "__all__"),
+        ("torchlens/backends/mlx/external_arrays.py", "__all__"),
+        ("torchlens/backends/mlx/settings.py", "__all__"),
+        ("torchlens/backends/torch/_session_cleanup.py", "__all__"),
+        ("torchlens/conformance/_rosters/mlx.py", "__all__"),
         ("torchlens/_data_substrate/__init__.py", "__all__"),
         ("torchlens/_data_substrate/artifact.py", "__all__"),
         ("torchlens/_data_substrate/digests.py", "__all__"),
