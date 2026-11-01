@@ -614,9 +614,7 @@ def settle_armed_gradient_edits(trace: Any, *, pass_index: int) -> None:
     ]
     for hook_specs in groups.values():
         _settle_arming_group(trace, hook_specs, pass_records, pass_index=pass_index)
-    refresh = getattr(trace, "_refresh_armed_annotation", None)
-    if refresh is not None:
-        refresh()
+    refresh_armed_annotation(trace)
 
 
 def _settle_arming_group(
