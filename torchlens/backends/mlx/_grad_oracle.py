@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 import numpy as np
 
@@ -190,15 +190,23 @@ def _mlx_trace_intermediate_signatures(
     return grouped
 
 
+class _MLXReplayCall(NamedTuple):
+    """The derived-gradient replay call: trace, AD value args, model kwargs, loss fn."""
+
+    trace: Trace
+    value_args: tuple[Any, ...]
+    kwargs: Mapping[Any, Any]
+    value_fn: Callable[..., tuple[Any, Any]]
+
+
 def _replacement_loss_fn(
     backend: MLXBackend,
-    trace: Trace,
     signature: _MLXIntermediateSignature,
-    value_args: tuple[Any, ...],
-    kwargs: Mapping[Any, Any],
-    value_fn: Callable[..., tuple[Any, Any]],
+    replay: _MLXReplayCall,
 ) -> Callable[[Any], Any]:
     """Build the scalar-loss function that replays with one boundary value replaced."""
+
+    trace, value_args, kwargs, value_fn = replay
 
     def loss_from_replacement(replacement: Any) -> Any:
         """Return scalar loss with one replay boundary replaced.
@@ -228,13 +236,10 @@ def _replacement_loss_fn(
 def _mlx_intermediate_oracle_passes(
     *,
     backend: MLXBackend,
-    trace: Trace,
     signature: _MLXIntermediateSignature,
     value: Any,
     producer_grad: Any,
-    value_args: tuple[Any, ...],
-    kwargs: Mapping[Any, Any],
-    value_fn: Callable[..., tuple[Any, Any]],
+    replay: _MLXReplayCall,
 ) -> bool:
     """Return whether replacement-gradient and perturbation checks pass.
 
@@ -242,20 +247,15 @@ def _mlx_intermediate_oracle_passes(
     ----------
     backend
         Active MLX backend instance.
-    trace
-        Finalized trace used to align replay labels.
     signature
         Boundary signature being validated.
     value
         Boundary value from the tap replay.
     producer_grad
         Candidate cotangent produced by the custom-VJP tap.
-    value_args
-        Arguments for ``value_fn``.
-    kwargs
-        Original keyword arguments passed to the model.
-    value_fn
-        Scalar-loss function used by the derived-gradient replay.
+    replay
+        The finalized trace (aligns replay labels), the ``value_fn`` args, the
+        model's original keyword arguments and the scalar-loss ``value_fn``.
 
     Returns
     -------
@@ -264,9 +264,7 @@ def _mlx_intermediate_oracle_passes(
     """
 
     mx = cast(Any, backend.mx)
-    loss_from_replacement = _replacement_loss_fn(
-        backend, trace, signature, value_args, kwargs, value_fn
-    )
+    loss_from_replacement = _replacement_loss_fn(backend, signature, replay)
     try:
         reference_grad = mx.grad(loss_from_replacement)(value)
         mx.eval(reference_grad, producer_grad)

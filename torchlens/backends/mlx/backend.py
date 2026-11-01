@@ -73,6 +73,7 @@ from ._grad_oracle import (
     _mlx_intermediate_oracle_passes,
     _mlx_trace_intermediate_signatures,
     _mlx_trees_close,
+    _MLXReplayCall,
     _records_for_mlx_grad_tree,
 )
 from ._param_tree import (
@@ -445,15 +446,8 @@ def _mlx_detailed_counts(
     )
 
 
-def _append_replay_inventory(
-    trace: Trace,
-    op_name: str,
-    labels_raw: Any,
-    arg_leaf_labels: Any,
-    kwarg_leaf_labels: Mapping[str, Any],
-    intervention_slots: Any,
-) -> None:
-    """Append one op's emit-time fingerprint to the trace's replay inventory."""
+def _append_replay_inventory(trace: Trace, capture: MLXOpCapture) -> None:
+    """Append one op's emit-time fingerprint (from its capture) to the trace's replay inventory."""
 
     inventory = getattr(trace, "_mlx_replay_inventory", None)
     if inventory is None:
@@ -464,11 +458,11 @@ def _append_replay_inventory(
     # the immutable fingerprint instead of steering hook re-application.
     inventory.append(
         (
-            op_name,
-            labels_raw,
-            arg_leaf_labels,
-            tuple(sorted((key, labels) for key, labels in kwarg_leaf_labels.items())),
-            intervention_slots,
+            capture.op_name,
+            capture.labels_raw,
+            capture.arg_leaf_labels,
+            tuple(sorted((key, labels) for key, labels in capture.kwarg_leaf_labels.items())),
+            capture.interventions,
         )
     )
 
@@ -1343,11 +1337,8 @@ class MLXBackend:
                     trace,
                     (
                         self._records_for_intermediate_mlx_grads(
-                            trace=trace,
                             candidates=tap_observer.candidates,
-                            value_args=value_args,
-                            kwargs=kwargs,
-                            value_fn=value_fn,
+                            replay=_MLXReplayCall(trace, value_args, kwargs, value_fn),
                             grad_options=grad_options,
                         )
                     ),
@@ -1363,27 +1354,20 @@ class MLXBackend:
     def _records_for_intermediate_mlx_grads(
         self,
         *,
-        trace: Trace,
         candidates: Sequence[_MLXIntermediateCandidate],
-        value_args: tuple[Any, ...],
-        kwargs: Mapping[Any, Any],
-        value_fn: Callable[..., tuple[Any, Any]],
+        replay: _MLXReplayCall,
         grad_options: GradOptions,
     ) -> IntermediateDerivedGradAccessor:
         """Build exact MLX op-level derived gradient records.
 
         Parameters
         ----------
-        trace
-            Finalized trace whose saved ops define the public attachment set.
         candidates
             Tap candidates observed during the auxiliary AD replay.
-        value_args
-            Arguments passed to ``mx.value_and_grad``.
-        kwargs
-            Original keyword arguments passed to the model.
-        value_fn
-            Scalar-loss function used by the leaf-gradient replay.
+        replay
+            The finalized trace (its saved ops define the public attachment
+            set), the ``mx.value_and_grad`` args, the model's original keyword
+            arguments and the scalar-loss function of the leaf-gradient replay.
         grad_options
             MLX derived-gradient options.
 
@@ -1393,6 +1377,7 @@ class MLXBackend:
             Exact, oracle-confirmed records keyed by pass-qualified op label.
         """
 
+        trace = replay.trace
         selected_ops = tuple(
             op
             for op in trace.layer_list
@@ -1430,13 +1415,10 @@ class MLXBackend:
                 continue
             if not _mlx_intermediate_oracle_passes(
                 backend=self,
-                trace=trace,
                 signature=signature,
                 value=candidate.value,
                 producer_grad=candidate.grad,
-                value_args=value_args,
-                kwargs=kwargs,
-                value_fn=value_fn,
+                replay=replay,
             ):
                 continue
             records[op.label] = IntermediateDerivedGradRecord(
@@ -1534,9 +1516,7 @@ class MLXBackend:
             )
             status_result = self._counts_status(
                 trace,
-                replayed_count,
-                unverified_count,
-                failed_count,
+                (replayed_count, unverified_count, failed_count),
                 decisions,
                 unverified_reasons=unverified_reasons,
                 exempted=exempted,
@@ -1562,16 +1542,15 @@ class MLXBackend:
     def _counts_status(
         self,
         trace: Trace,
-        replayed_count: int,
-        unverified_count: int,
-        failed_count: int,
+        counts: tuple[int, int, int],
         decisions: tuple[dict[str, Any], ...],
         *,
         unverified_reasons: dict[str, int],
         exempted: dict[str, int],
     ) -> ValidationStatus:
-        """The status derived from the replay, unverified and failed op counts."""
+        """The status derived from the replay, unverified and failed op ``counts``."""
 
+        replayed_count, unverified_count, failed_count = counts
         return ValidationStatus.from_replay_counts(
             backend=self.name,
             source=_mlx_validation_source(trace),
@@ -1728,28 +1707,27 @@ class MLXBackend:
         # become REPLAY_SLOT sentinels because replay sources them from saved
         # parent payloads; keeping the raw arrays here pinned every
         # intermediate activation for the trace's lifetime.
-        op_captures.append(
-            MLXOpCapture(
-                labels_raw=labels_raw,
-                op_name=op_name,
-                func=func,
-                args=tuple(
-                    build_capture_template(
-                        value,
-                        arg_leaf_labels[index] if index < len(arg_leaf_labels) else (),
-                    )
-                    for index, value in enumerate(args)
-                ),
-                kwargs={
-                    key: build_capture_template(value, kwarg_leaf_labels.get(key, ()))
-                    for key, value in kwargs.items()
-                },
-                arg_leaf_labels=arg_leaf_labels,
-                kwarg_leaf_labels=kwarg_leaf_labels,
-                interventions=intervention_slots,
-                appliers=intervention_appliers,
-            )
+        capture = MLXOpCapture(
+            labels_raw=labels_raw,
+            op_name=op_name,
+            func=func,
+            args=tuple(
+                build_capture_template(
+                    value,
+                    arg_leaf_labels[index] if index < len(arg_leaf_labels) else (),
+                )
+                for index, value in enumerate(args)
+            ),
+            kwargs={
+                key: build_capture_template(value, kwarg_leaf_labels.get(key, ()))
+                for key, value in kwargs.items()
+            },
+            arg_leaf_labels=arg_leaf_labels,
+            kwarg_leaf_labels=kwarg_leaf_labels,
+            interventions=intervention_slots,
+            appliers=intervention_appliers,
         )
+        op_captures.append(capture)
         # Independent replay inventory: the validation oracle's denominator.
         # Losing a subset of _mlx_op_captures can then never shrink the
         # expected-coverage set along with the evidence. Each record also
@@ -1759,9 +1737,7 @@ class MLXBackend:
         # Appended to a list — O(1) per op on the capture hot path; wholesale
         # attribute replacement is coherent reauthoring, outside the threat
         # model, so a tuple rebuild bought no protection.
-        _append_replay_inventory(
-            trace, op_name, labels_raw, arg_leaf_labels, kwarg_leaf_labels, intervention_slots
-        )
+        _append_replay_inventory(trace, capture)
         emitted = self.emit_function_outputs(
             trace,
             func_event_input,

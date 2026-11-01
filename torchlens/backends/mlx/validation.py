@@ -377,10 +377,10 @@ def _saved_payload_mismatch(
     ops_by_label: dict[str, Any],
     capture: MLXOpCapture,
     final: list[Any],
-    label: str,
 ) -> dict[str, Any] | None:
     """The failed decision when ``final`` differs from the saved payloads, else ``None``."""
 
+    label = capture.labels_raw[0] if capture.labels_raw else "<unlabeled>"
     name = capture.op_name
     expected = tuple(_saved_payload(trace, ops_by_label, lab) for lab in capture.labels_raw)
     mx.eval(*expected)
@@ -467,7 +467,7 @@ def _replay_one(
         failure = _apply_declared_interventions(mx, capture, final, _DecisionSite(label, name))
         if failure is not None:
             return failure
-    mismatch = _saved_payload_mismatch(mx, trace, ops_by_label, capture, final, label)
+    mismatch = _saved_payload_mismatch(mx, trace, ops_by_label, capture, final)
     if mismatch is not None:
         return mismatch
     perturb_capture = _perturb_capture(capture, replay_args, replay_kwargs)
