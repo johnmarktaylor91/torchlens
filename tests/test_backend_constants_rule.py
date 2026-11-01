@@ -505,7 +505,6 @@ def test_norm_like_names_are_not_rng_producers() -> None:
     assert is_rng_producer_name("rand_like")
 
 
-@pytest.mark.smoke
 def test_unreadable_constant_refuses_typed_before_the_consumer_is_recorded() -> None:
     """Rule 4: ``constant_unrealizable`` names the constant and its consumer; nothing is recorded."""
 

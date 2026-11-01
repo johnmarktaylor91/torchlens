@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
 from torchlens.backends.registry import get_backend_spec
 from torchlens.conformance import GraduationItem, GraduationReport, graduation_report
@@ -137,7 +135,6 @@ def _repo(tmp_path: Path, backend: str = "stub", *, pinned: str = "9.9") -> Path
     return tmp_path
 
 
-@pytest.mark.smoke
 def test_all_six_items_met_on_a_complete_backend(tmp_path: Path) -> None:
     """A backend with every cell passed, two clean ecosystem families and the files meets G1 to G6."""
 

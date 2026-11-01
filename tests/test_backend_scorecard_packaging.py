@@ -40,7 +40,6 @@ def _package_data_block() -> str:
     return match.group("body")
 
 
-@pytest.mark.smoke
 def test_scorecard_package_data_pattern_covers_every_backend() -> None:
     """One wheel pattern and one sdist line name every backend's scorecard."""
 

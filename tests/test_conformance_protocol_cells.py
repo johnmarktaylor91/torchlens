@@ -319,7 +319,6 @@ def _op(
     )
 
 
-@pytest.mark.smoke
 def test_validation_status_oracle_rejects_bare_values_and_foreign_reasons() -> None:
     """A bare bool, a non-passed state and an unregistered reason each fail."""
 
@@ -331,7 +330,6 @@ def test_validation_status_oracle_rejects_bare_values_and_foreign_reasons() -> N
     assert validation_status_problems(_Status("passed", unverified={"replay_mismatch": 2})) == ()
 
 
-@pytest.mark.smoke
 def test_failed_replay_status_names_the_first_failed_decision() -> None:
     """The torch status message names the failed op and reason (the naming cell's source)."""
 
@@ -367,7 +365,6 @@ def test_failed_replay_status_names_the_first_failed_decision() -> None:
     assert passed.message == "Replay validation passed."
 
 
-@pytest.mark.smoke
 def test_names_reason_oracle_requires_the_op_and_a_registered_reason() -> None:
     """The failed verdict must name the tampered op (or its consumer) with a reason."""
 
@@ -401,7 +398,6 @@ def test_names_reason_oracle_requires_the_op_and_a_registered_reason() -> None:
     assert "not in VALIDATION_REASONS" in names_reason_problems(foreign, target)[0]
 
 
-@pytest.mark.smoke
 def test_payload_and_intermediate_oracles_compare_arrays_bit_for_bit_or_within_band() -> None:
     """Reload equality is exact including shape; intermediates use the dtype band."""
 
@@ -426,7 +422,6 @@ def test_payload_and_intermediate_oracles_compare_arrays_bit_for_bit_or_within_b
     assert "max abs difference" in off[0]
 
 
-@pytest.mark.smoke
 def test_constant_parents_oracle_needs_payload_and_consumer() -> None:
     """A flagged row needs a constant op with a payload and a consuming op."""
 
@@ -445,7 +440,6 @@ def test_constant_parents_oracle_needs_payload_and_consumer() -> None:
     assert "without a payload" in problems[0]
 
 
-@pytest.mark.smoke
 def test_capability_summary_and_shipped_record_comparison() -> None:
     """Summary vocabulary follows the cells; the comparison ignores the TorchLens version."""
 

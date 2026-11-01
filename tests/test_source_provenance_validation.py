@@ -69,7 +69,7 @@ def _constant_ops(trace: Any) -> list[Any]:
 @pytest.mark.parametrize(
     "make_model",
     [
-        pytest.param(_GlobalReader, id="global", marks=pytest.mark.smoke),
+        pytest.param(_GlobalReader, id="global"),
         pytest.param(_closure_model, id="closure"),
     ],
 )
