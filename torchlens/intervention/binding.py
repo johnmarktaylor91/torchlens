@@ -51,6 +51,7 @@ from ._zero_fire import (
     DEFAULT_ZERO_FIRE_POLICY,
     check_zero_fire_policy,
     external_stacklevel,
+    non_tensor_reason_fields,
     settle_zero_fire,
 )
 from .audit import EXECUTION_EFFECTS, build_fire_record, rules_payload
@@ -451,6 +452,9 @@ class _BindSession:
         self.rule_fire_counts: dict[str, int] = dict.fromkeys(self.rule_ids.values(), 0)
         self.helper_tensor_versions = binding._helper_tensor_versions()
         self.start = time.monotonic()
+        # Module addresses whose output was not a tensor the boundary door can
+        # apply to, with the zero-fire reason sentence (capture door parity).
+        self.non_tensor_details: dict[str, str] = {}
 
     def record_fire(
         self,
@@ -898,6 +902,8 @@ def _make_boundary_hook(
             return None
         if not _decode_step_admits(plan):
             return None
+        if _boundary_output_is_not_a_tensor(session, address, output):
+            return None
         replacements: dict[tuple[Any, ...], Any] = {}
         for out, container_path, _spec in _iter_loggable_live_outputs(output, True):
             hook_ctx = make_hook_context(
@@ -935,6 +941,27 @@ def _make_boundary_hook(
         return _replace_output_tensors_by_path(output, replacements)
 
     return _boundary
+
+
+def _boundary_output_is_not_a_tensor(session: _BindSession, address: str, output: Any) -> bool:
+    """Whether a module-output rule has no tensor to apply to (capture door parity).
+
+    The capture door applies a module rule to the tensor leaves of a tensor,
+    tuple, list or dict output only; a ``torch.distributions`` output (whose
+    parameters capture records as their own output ops) is not a tensor there,
+    so the rule fires at zero sites and the reason names the parameter paths.
+    """
+
+    from .._ir.distribution_container import distribution_children, is_distribution
+    from ._zero_fire import non_tensor_module_output_detail
+
+    if not is_distribution(output):
+        return False
+    paths = tuple(f".{name}" for name, _child in distribution_children(output))
+    session.non_tensor_details.setdefault(
+        address, non_tensor_module_output_detail(address, type(output).__qualname__, paths)
+    )
+    return True
 
 
 def _decode_step_admits(plan: _RulePlan) -> bool:
@@ -1146,7 +1173,7 @@ class _ArmedLazyOutput(Generator[Any, Any, Any]):
         finally:
             self._stepping.release()
         if refuse_zero_fire:
-            self._binding._refuse_zero_fire(report)
+            self._binding._refuse_zero_fire(report, self._session)
 
     def _step(self, advance: Callable[[], Any]) -> Any:
         """Run one step of the model's iterator with the runtime armed."""
@@ -1160,7 +1187,7 @@ class _ArmedLazyOutput(Generator[Any, Any, Any]):
                     return advance()
             except StopIteration:
                 report = self._settle(error=None)
-                self._binding._refuse_zero_fire(report)
+                self._binding._refuse_zero_fire(report, self._session)
                 raise
             except BaseException as exc:
                 self._settle(error=exc)
@@ -1437,7 +1464,7 @@ class BoundModel:
         finally:
             if not handed_off:
                 report = self._finish(session, error=error)
-        self._refuse_zero_fire(report)
+        self._refuse_zero_fire(report, session)
         return output
 
     def _finish(self, session: _BindSession, *, error: str | None) -> BindReport:
@@ -1450,7 +1477,7 @@ class BoundModel:
             self._lock.release()
         return report
 
-    def _refuse_zero_fire(self, report: BindReport) -> None:
+    def _refuse_zero_fire(self, report: BindReport, session: _BindSession | None = None) -> None:
         """Apply the zero-fire policy to one settled report (the fact is on the report).
 
         Raises
@@ -1463,6 +1490,14 @@ class BoundModel:
         if not report.zero_fire_rule_ids:
             return
         names = ", ".join(report.zero_fire_rule_ids)
+        reason_fields = non_tensor_reason_fields(
+            list((session.non_tensor_details if session is not None else {}).values())
+        )
+        because = (
+            f" Reason ({reason_fields['reason']}): {reason_fields['reason_detail']}."
+            if reason_fields
+            else ""
+        )
 
         def _raise() -> NoReturn:
             """Refuse the call under ``on_zero_fire='error'``."""
@@ -1471,7 +1506,7 @@ class BoundModel:
                 f"rule(s) [{names}] never fired during this bound {report.door}; "
                 "on_zero_fire='error' refuses after the call (the model's side "
                 "effects may already have occurred; the full report is retained "
-                "on .last_report)",
+                f"on .last_report).{because}",
                 code="bind_zero_fire",
                 remedy="fix the WHERE terms so every rule fires, or settle with the "
                 "default spec.bind(model, on_zero_fire='warn') or 'disclose'",
@@ -1484,10 +1519,12 @@ class BoundModel:
                 TorchLensWarning(
                     f"rule(s) [{names}] never fired during this bound {report.door}; the "
                     "call returned the model's output with those rules unapplied "
-                    "(recorded on .last_report.zero_fire_rule_ids). Remedy: fix the WHERE "
-                    "terms, or pass on_zero_fire='disclose' to record without warning",
+                    f"(recorded on .last_report.zero_fire_rule_ids).{because} Remedy: fix "
+                    "the WHERE terms, or pass on_zero_fire='disclose' to record without "
+                    "warning",
                     code="bind_zero_fire",
                     zero_fire_rule_ids=list(report.zero_fire_rule_ids),
+                    **reason_fields,
                 ),
                 stacklevel=external_stacklevel(),
             )

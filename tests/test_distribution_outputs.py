@@ -497,3 +497,22 @@ def test_forward_validation_passes_on_distribution_outputs(factory: Any) -> None
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert bool(tl.validate(model, _x(), scope="forward", seed=0)) is True
+
+
+def test_bind_door_zero_fire_names_the_distribution_output() -> None:
+    """``spec.bind`` agrees with the capture door: zero fire, the output untouched, the reason."""
+
+    from torchlens.intervention._zero_fire import NON_TENSOR_MODULE_OUTPUT_REASON
+
+    model = PolicyWithInnerDistribution().eval()
+    with torch.no_grad():
+        plain = model(_x())
+    bound = _policy_rule().bind(model)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with torch.no_grad():
+            out = bound(_x())
+    assert torch.equal(out, plain)
+    (warning,) = _zero_fire_warnings(caught, "bind_zero_fire")
+    assert warning.fields["reason"] == NON_TENSOR_MODULE_OUTPUT_REASON
+    assert "(output paths .loc, .scale)" in warning.fields["reason_detail"]
