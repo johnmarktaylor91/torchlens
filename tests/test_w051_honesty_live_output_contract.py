@@ -243,7 +243,7 @@ def test_rebuild_arity_error_names_the_full_dry_slot_path() -> None:
     """A dry leaf stream names the full nested slot path and the leaf/slot counts,
     not just the last path component."""
 
-    from torchlens.ir.container import rebuild_container_from_spec
+    from torchlens._ir.container import rebuild_container_from_spec
 
     spec = ContainerSpec(
         kind="dict",
