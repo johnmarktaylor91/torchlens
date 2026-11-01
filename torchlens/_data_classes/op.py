@@ -113,12 +113,22 @@ from . import _doors, _labels, _op_cost, _op_relations, _op_save
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._layer_accessors import OpAccessor
+from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importers)
+    _dedup_cached_identity_out,
+    _dedup_saved_activation_out,
+)
 from ._op_save import (  # noqa: F401  (re-exported for backends and postprocess importers)
     _dtype_or_none,
     _effective_activation_save_mode,
     _memory_or_none,
     _shape_or_none,
     _stamp_reference_out,
+)
+from ._op_transforms import (  # noqa: F401  (re-exported for backends.torch importers)
+    apply_transform,
+    train_mode_tripwire_armed,
+    validate_streaming_transform_output,
+    validate_train_mode_transform_output,
 )
 from ._state_adapter import state_items, state_restore
 from .container import (
