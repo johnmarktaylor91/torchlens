@@ -136,6 +136,12 @@ def settle_armed_gradient_edits(trace: Any, *, pass_index: int) -> None:
     _plan().settle_armed_gradient_edits(trace, pass_index=pass_index)
 
 
+def gradient_rule_sites(trace: Any) -> list[Any]:
+    """Return the sites a capture-time ``tl.grad(site)`` rule addresses."""
+
+    return list(_plan().gradient_rule_sites(trace))
+
+
 def _arming_group(hook_spec: Any) -> str | None:
     """Return the arming group of one sticky hook, or ``None`` for a forward hook."""
 

@@ -32,8 +32,9 @@ from .._data_classes._trace_intervention_records import _DoTransaction
 from .._ir.selector_eval import looks_like_finalized_label, normalize_selector_like
 from ..options import ReplayOptions
 from .audit import record_intervention_event, site_keys_for_labels
-from .hooks import normalize_hook_plan
+from .hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from .replay import _reset_backward_projection, gradient_edit_replay_text
+from .resolver import _resolve_unchecked
 from .selectors import CompositeSelector, NotSelector, label
 from .spec import (
     Recipe,
@@ -54,6 +55,7 @@ if TYPE_CHECKING:
 __all__ = [
     "armed_edits",
     "do_signal_plan",
+    "gradient_rule_sites",
     "gradient_edit_replay_text",
     "is_gradient_entry",
     "refuse_invalid_do_loss",
@@ -515,6 +517,32 @@ def run_do_loss(
                 event_row=True,
             )
         raise
+
+
+def gradient_rule_sites(trace: Any) -> list[Any]:
+    """Return the sites a capture-time ``tl.grad(site)`` rule addresses.
+
+    Parameters
+    ----------
+    trace:
+        Trace finishing its capture, carrying the capture-time intervention spec.
+
+    Returns
+    -------
+    list[Any]
+        Resolved sites of every op whose output gradient a gradient rule edits.
+    """
+
+    spec = trace._intervention_spec
+    ops = tuple(getattr(trace, "layer_list", ()))
+    sites: list[Any] = []
+    for hook_spec in getattr(spec, "hook_specs", ()) or ():
+        for universe, branch in split_site_branches(hook_spec.site_target):
+            if universe != "gradient":
+                continue
+            for inner in gradient_inners(branch):
+                sites.extend(_resolve_unchecked(ops, inner, strict=False))
+    return sites
 
 
 def armed_edits(trace: Trace) -> tuple[Any, ...]:
