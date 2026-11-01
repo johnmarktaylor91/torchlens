@@ -49,11 +49,11 @@ from ._options_validation import (
     _validate_intervention_mode,
     _validate_node_style,
     _validate_visualization_flag_fields,
+    visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
 from ._utils.tensor_utils import SaveMode
 from ._vocab.node_spec import NodeSpec
-from .viz._render_kwargs import visualization_to_render_kwargs as visualization_to_render_kwargs
 
 if TYPE_CHECKING:
     from ._data_classes.layer import Layer
