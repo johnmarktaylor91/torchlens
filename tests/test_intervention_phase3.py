@@ -239,13 +239,13 @@ def test_normalizer_rejects_missing_site_and_bad_signature() -> None:
 
 @pytest.mark.smoke
 def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
-    """Hook execution validates return values by default."""
+    """Hook execution validates return values by default; None leaves the value unchanged."""
 
     out = torch.ones(2, 3)
     context = _context()
 
     def none_hook(out: torch.Tensor, *, ctx: HookContext) -> None:
-        """Return None, which Phase 3 rejects."""
+        """Return None, which keeps the incoming value (fn -> Tensor | None)."""
 
         return None
 
@@ -269,8 +269,7 @@ def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
 
         return torch.empty(out.shape, dtype=out.dtype, device="meta")
 
-    with pytest.raises(HookValueError, match="None"):
-        _execute_hook(none_hook, out, context)
+    assert torch.equal(_execute_hook(none_hook, out, context), out)
     with pytest.raises(HookValueError, match="list"):
         _execute_hook(list_hook, out, context)
     with pytest.raises(HookValueError, match="shape"):
