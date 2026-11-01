@@ -145,7 +145,7 @@ wandb = ["wandb>=0.16"]
 # nightly preview-backend leg pins 0.26.3 for the same reason): the extra must
 # not admit a version the CI matrix documents as import-broken on Linux.
 mlx = ["mlx>=0.26,<0.27,!=0.26.5"]
-jax = ["jax[cpu]", "equinox", "flax"]
+jax = ["jax[cpu]>=0.4.30", "equinox", "flax"]
 tinygrad = ["tinygrad>=0.13,<0.14; python_version >= '3.11'"]
 paddle = ["paddlepaddle>=3.3,<3.4"]
 # `tensorflow` aliases `tf` (same rollup idiom as all/all-stretch) so the two
