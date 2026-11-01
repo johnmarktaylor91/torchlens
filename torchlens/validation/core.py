@@ -853,7 +853,7 @@ def validate_saved_outs(
 _ORPHAN_CANDIDATE_INDEX_KEY = "_validation_orphan_candidate_index"
 
 
-def _refuse_unreplayable_trace(self: Trace) -> None:
+def _refuse_unreplayable_trace(self: "Trace") -> None:
     """Refuse traces that cannot be replay-validated, then prove the comparator."""
     from .._runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
 
