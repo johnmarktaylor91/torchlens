@@ -114,7 +114,7 @@ def ensure_intervention_spec(trace: Trace) -> InterventionSpec:
 
 
 def injected_ops(trace: Trace) -> tuple[Any, ...]:
-    """Injected-op records from ``log_injections=True`` hooks (F01 stage 1). (the ``Trace.injected_ops`` body)."""
+    """Injected-op records from ``log_injections=True`` hooks (the ``Trace.injected_ops`` body)."""
 
     return _injected_op_records(trace)
 
