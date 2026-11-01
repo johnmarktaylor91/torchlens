@@ -992,7 +992,9 @@ def _call_inside_functorch_transform(
 
     if not _state._functorch_warning_emitted:
         _state._functorch_warning_emitted = True
-        _state._active_trace._raw_transform_escape_detected = True
+        trace = _state._active_trace
+        if trace is not None:
+            trace._raw_transform_escape_detected = True
         _warn_functorch_region_not_logged()
     shadow_witness = _state._completeness_witness_mode == "shadow"
     edge_ctx: Any = nullcontext()
