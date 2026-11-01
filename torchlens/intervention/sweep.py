@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import warnings
 from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any
@@ -313,8 +312,14 @@ def _backward_ready_trace_kwargs(
     capture = trace_kwargs.get("capture")
     if capture is None:
         capture = CaptureOptions(backward_ready=True)
-    elif not getattr(capture, "backward_ready", False):
-        capture = dataclasses.replace(capture, backward_ready=True)
+    elif not capture.backward_ready:
+        # Keep the caller's explicit-field record: a plain dataclass replace
+        # would mark every field explicit, and explicit backend-only fields
+        # refuse on the torch backend.
+        capture = CaptureOptions.from_values(
+            {**capture.as_dict(), "backward_ready": True},
+            capture._specified_fields | {"backward_ready"},
+        )
     return {**trace_kwargs, "capture": capture}
 
 
