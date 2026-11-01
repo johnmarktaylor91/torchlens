@@ -316,9 +316,9 @@ def test_module_calls_accessor_is_cached_with_profiled_rebuild_reduction(
     expected = _fresh_module_calls(trace)
     _invalidate_trace_module_call_accessor_cache(trace)
 
-    from torchlens._data_classes import _trace_stats
+    from torchlens._data_classes import _trace_views
 
-    original_accessor = _trace_stats.TraceModuleCallAccessor
+    original_accessor = _trace_views.TraceModuleCallAccessor
     rebuild_count = 0
 
     def counting_accessor(calls: OrderedDict[str, Any]) -> TraceModuleCallAccessor:
@@ -328,7 +328,7 @@ def test_module_calls_accessor_is_cached_with_profiled_rebuild_reduction(
         rebuild_count += 1
         return original_accessor(calls)
 
-    monkeypatch.setattr(_trace_stats, "TraceModuleCallAccessor", counting_accessor)
+    monkeypatch.setattr(_trace_views, "TraceModuleCallAccessor", counting_accessor)
     cached = trace.module_calls
     for _ in range(128):
         assert trace.module_calls is cached

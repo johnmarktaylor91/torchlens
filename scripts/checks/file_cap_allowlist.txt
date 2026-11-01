@@ -98,12 +98,11 @@ torchlens/_data_classes/_trace_intervention.py::TraceInterventionMixin._validate
 torchlens/_data_classes/_trace_intervention.py::TraceInterventionMixin.attach_hooks	125
 torchlens/_data_classes/_trace_intervention.py::TraceInterventionMixin.clear_edits	63
 torchlens/_data_classes/_trace_intervention.py::TraceInterventionMixin.set	111
-torchlens/_data_classes/_trace_inventory.py::build_bill_of_materials	95
-torchlens/_data_classes/_trace_inventory.py::build_sites_table	94
+torchlens/_data_classes/_trace_inventory.py::build_bill_of_materials	90
+torchlens/_data_classes/_trace_inventory.py::build_sites_table	92
 torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	97
 torchlens/_data_classes/_trace_stack.py::TraceStackMixin.stack	90
-torchlens/_data_classes/_trace_stats.py	1771
-torchlens/_data_classes/_trace_stats.py::TraceStatsMixin.collapse_plan	69
+torchlens/_data_classes/_trace_stats.py	1312
 torchlens/_data_classes/_trace_validation.py	1425
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin._batch_remove_log_entries	67
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	525

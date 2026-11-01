@@ -106,3 +106,11 @@ def receptive_field() -> ModuleType:
     from ..receptive_field import _layer_fields, _op_fields, _trace_tables  # noqa: F401
 
     return _package_of(_trace_tables)
+
+
+def trace_slice() -> ModuleType:
+    """Door to ``torchlens._trace_slice`` (the ``between`` and ``subgraph`` slice builders)."""
+
+    from .. import _trace_slice
+
+    return _trace_slice
