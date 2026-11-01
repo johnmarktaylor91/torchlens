@@ -6942,6 +6942,9 @@ test-docstrings	tests/semantic/test_facets_p4.py	77
 test-docstrings	tests/semantic/test_mlp_recipes.py	4.57
 test-docstrings	tests/semantic/test_patching_input_leaf.py	76
 test-docstrings	tests/semantic/test_patching_input_leaf.py	77
+test-docstrings	tests/stress/axes/dtypes_cpu.py	64
+test-docstrings	tests/stress/generator.py	256
+test-docstrings	tests/stress/generator.py	32
 test-docstrings	tests/support/census_harness.py	1,2,3,4
 test-docstrings	tests/support/census_harness.py	1.1
 test-docstrings	tests/support/census_harness.py	1.2
