@@ -392,7 +392,6 @@ torchlens/_observe/_timeline.py::memory_timeline_v2	65
 torchlens/_options_validation.py::_validate_capture_values	79
 torchlens/_postprocess/__init__.py::_drop_transient_capture_state	72
 torchlens/_postprocess/__init__.py::_postprocess_body	135
-torchlens/_postprocess/__init__.py::_warn_unattributed_tensor_args	72
 torchlens/_postprocess/_buffer_addresses.py::_buffer_addresses_by_label	119
 torchlens/_postprocess/_materialize.py	1768
 torchlens/_postprocess/_materialize.py::_apply_join_cells	219
@@ -475,7 +474,7 @@ torchlens/_runnable_path_faithfulness.py::_numeric_attestation_check	189
 torchlens/_runnable_path_faithfulness.py::_path_faithfulness	98
 torchlens/_runnable_path_faithfulness.py::_run_report	84
 torchlens/_runnable_path_faithfulness.py::_within_layout_reduction_tolerance	62
-torchlens/_runnable_providers.py::_finalize_provider_run	69
+torchlens/_runnable_providers.py::_finalize_provider_run	68
 torchlens/_runnable_providers.py::run_loaded_sparse_trace	106
 torchlens/_runnable_retention.py::_preflight_retention_floor	69
 torchlens/_runnable_state.py	2838
@@ -929,7 +928,7 @@ torchlens/backends/torch/_completeness_dispatch.py::_make_invisible_escape_wrapp
 torchlens/backends/torch/_completeness_dispatch.py::_sample_writeback_at_consumption	70
 torchlens/backends/torch/_completeness_dispatch.py::_split_consumed_state_items	61
 torchlens/backends/torch/_completeness_dispatch_names.py::_record_escape_source_tensor	163
-torchlens/backends/torch/_completeness_finalize.py::_finalize_census	156
+torchlens/backends/torch/_completeness_finalize.py::_finalize_census	155
 torchlens/backends/torch/_completeness_finalize.py::capture_completeness_witness	87
 torchlens/backends/torch/_completeness_metadata.py::_observe_input_derived_layout_read	69
 torchlens/backends/torch/_completeness_origins.py::_register_dispatch_result_origins	110
@@ -943,11 +942,11 @@ torchlens/backends/torch/_completeness_storage.py	912
 torchlens/backends/torch/_completeness_storage.py::_make_plain_scalar_escape_method	67
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper	82
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper.wrapper	75
-torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	158
+torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	151
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	74
 torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	322
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
-torchlens/backends/torch/_ops_activations.py::_save_activation_fields	199
+torchlens/backends/torch/_ops_activations.py::_save_activation_fields	198
 torchlens/backends/torch/_ops_arguments.py::_build_edge_use_records	68
 torchlens/backends/torch/_ops_arguments.py::_tensor_has_known_provenance	107
 torchlens/backends/torch/_ops_autograd.py::_partition_output_entries_with_autograd_stats	98
@@ -984,7 +983,7 @@ torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boun
 torchlens/backends/torch/_tl.py	1789
 torchlens/backends/torch/_tl.py::set_tensor_label	63
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
-torchlens/backends/torch/backend.py	1668
+torchlens/backends/torch/backend.py	1666
 torchlens/backends/torch/backend.py::TorchBackend.cleanup_failed_forward_session	146
 torchlens/backends/torch/backend.py::TorchBackend.extract_and_mark_outputs	158
 torchlens/backends/torch/backend.py::TorchBackend.fetch_label_move_input_tensors	153
@@ -1012,12 +1011,12 @@ torchlens/backends/torch/buffer_writes.py	1802
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_param_index	68
 torchlens/backends/torch/buffer_writes.py::session_validated_buffer_address	61
-torchlens/backends/torch/collectives.py	842
+torchlens/backends/torch/collectives.py	839
 torchlens/backends/torch/collectives.py::_build_payload	102
-torchlens/backends/torch/collectives.py::_emit_boundary_op	114
+torchlens/backends/torch/collectives.py::_emit_boundary_op	111
 torchlens/backends/torch/collectives.py::_make_collective_wrap	174
 torchlens/backends/torch/collectives.py::_make_collective_wrap.wrapped_collective	164
-torchlens/backends/torch/completeness_witness.py	2043
+torchlens/backends/torch/completeness_witness.py	1627
 torchlens/backends/torch/completeness_witness.py::_CompletenessDispatchMode.__torch_dispatch__	168
 torchlens/backends/torch/completeness_witness.py::_storage_disposition_rows	79
 torchlens/backends/torch/escape_detection.py	969
@@ -1048,7 +1047,6 @@ torchlens/backends/torch/model_prep.py::module_forward_decorator.decorated_forwa
 torchlens/backends/torch/model_prep.py::prepare_buffer_tensors	72
 torchlens/backends/torch/model_prep.py::release_model	62
 torchlens/backends/torch/offload_hooks.py::install_offload_hook_shims	66
-torchlens/backends/torch/ops.py	944
 torchlens/backends/torch/prehook_provenance.py	1003
 torchlens/backends/torch/prehook_provenance.py::_ensure_observer	66
 torchlens/backends/torch/prehook_provenance.py::_interpose_registration_apis	66
@@ -1067,7 +1065,7 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	3364
+torchlens/backends/torch/wrappers.py	3363
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	115
 torchlens/backends/torch/wrappers.py::_propagate_mutation_label_to_storage_aliases	98
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	129
@@ -1605,7 +1603,6 @@ torchlens/validation/exemptions.py::_posthoc_structural_output_decision	116
 torchlens/validation/exemptions.py::_posthoc_value_proof_decision	115
 torchlens/validation/exemptions.py::_sdpa_zero_query_decision	61
 torchlens/validation/exemptions.py::_softmax_singleton_dim_decision	65
-torchlens/validation/invariants.py	838
 torchlens/validation/status.py::ValidationStatus.from_replay_counts	131
 torchlens/validation/status.py::ValidationStatus.result	72
 torchlens/validation/status.py::ValidationStatus.unverified	74
