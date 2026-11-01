@@ -51,6 +51,7 @@ from . import (
     PayloadLoadHints,
     _json,
     raise_if_manifest_below_floor,
+    refuse_bundle_exists,
     refuse_missing_blobs,
 )
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
@@ -615,7 +616,7 @@ def save(
     tmp_path = _make_tmp_bundle_path(bundle_path)
     try:
         if bundle_path.exists() and not overwrite:
-            raise FileExistsError(f"Bundle path already exists: {bundle_path}")
+            refuse_bundle_exists(bundle_path, overwritable=True)
 
         tmp_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path.mkdir()
@@ -805,7 +806,7 @@ def save(
         # saw the bundle vanish for the entire save.
         if bundle_path.exists():
             if not overwrite:
-                raise FileExistsError(f"Bundle path already exists: {bundle_path}")
+                refuse_bundle_exists(bundle_path, overwritable=True)
             backup_path = _make_backup_path(bundle_path)
             bundle_path.rename(backup_path)
         tmp_path.rename(bundle_path)
