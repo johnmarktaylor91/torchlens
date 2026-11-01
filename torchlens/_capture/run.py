@@ -647,10 +647,15 @@ def run_and_log_inputs_through_model(
     except Exception as e:
         compiled_unwrap_exception = sys.exc_info()
         finalize_failed(_forward_result("failed", exc=e))
+        # The failed arm never returns a trace: re-raise so a FINALIZE entry
+        # that ever came back would still surface the forward's exception.
+        raise
 
     except BaseException as interrupt_exc:
         compiled_unwrap_exception = sys.exc_info()
         finalize_interrupted(_forward_result("interrupted", exc=interrupt_exc))
+        # Same fail-closed guard for the interrupt arm (Ctrl-C must escape).
+        raise
 
     finally:
         # B1-02: the ONE site every settlement path passes through. The pop
