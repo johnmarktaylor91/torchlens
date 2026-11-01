@@ -840,6 +840,28 @@ def validate_saved_outs(
         Aggregate replay-validation status. Fully validated pass/fail results
         remain bool-compatible through callers that unwrap completed statuses.
     """
+    try:
+        return _validate_saved_outs_run(
+            self, ground_truth_output_tensors, verbose, validate_metadata
+        )
+    finally:
+        # Per-run scratch ends with the run, pass, fail or raise: a cache left in
+        # ``__dict__`` would reach ``save`` as live state with no portability
+        # policy, and a later run on a mutated trace must rebuild it anyway.
+        self.__dict__.pop(_ORPHAN_CANDIDATE_INDEX_KEY, None)
+
+
+#: ``Trace.__dict__`` key of the orphan-arg sweep's per-run candidate index.
+_ORPHAN_CANDIDATE_INDEX_KEY = "_validation_orphan_candidate_index"
+
+
+def _validate_saved_outs_run(
+    self: "Trace",
+    ground_truth_output_tensors: list[torch.Tensor],
+    verbose: bool,
+    validate_metadata: bool,
+) -> ValidationStatus:
+    """One validation run; :func:`validate_saved_outs` clears its scratch after it."""
     from .._runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
 
     refuse_poisoned_trace(self, "validation")
@@ -875,7 +897,7 @@ def validate_saved_outs(
     reset_validation_diagnostics(self)
     # Per-run cache for the orphan-arg sweep; stale entries from a previous
     # validation of a since-mutated trace must never leak into this run.
-    self.__dict__.pop("_validation_orphan_candidate_index", None)
+    self.__dict__.pop(_ORPHAN_CANDIDATE_INDEX_KEY, None)
     decision_recorder = ValidationDecisionRecorder()
 
     dispatch_count_result = _dispatch_op_count_matches_capture(self)
@@ -2196,7 +2218,7 @@ def _orphan_candidate_index(self: "Trace") -> dict[tuple[Any, Any], list[Op]]:
         Mapping from ``(shape, dtype)`` to candidate producer ops.
     """
 
-    cached = self.__dict__.get("_validation_orphan_candidate_index")
+    cached = self.__dict__.get(_ORPHAN_CANDIDATE_INDEX_KEY)
     if cached is not None:
         return cast(dict[tuple[Any, Any], list[Op]], cached)
     index: dict[tuple[Any, Any], list[Op]] = {}
@@ -2209,7 +2231,7 @@ def _orphan_candidate_index(self: "Trace") -> dict[tuple[Any, Any], list[Op]]:
         if payload is None:
             continue
         index.setdefault((tuple(payload.shape), payload.dtype), []).append(candidate)
-    self.__dict__["_validation_orphan_candidate_index"] = index
+    self.__dict__[_ORPHAN_CANDIDATE_INDEX_KEY] = index
     return index
 
 
