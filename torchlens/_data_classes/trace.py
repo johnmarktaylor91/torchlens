@@ -1565,8 +1565,6 @@ class Trace(
         # ``_output_tokenizer`` holds a LIVE user tokenizer and
         # ``_semantic_output_metadata`` a model-derived key, so a surviving
         # copy leaks vocab/merges into a plain pickle of the Trace.
-        "_output_style": FieldPolicy.DROP,
-        "_output_head": FieldPolicy.DROP,
         "_output_tokenizer": FieldPolicy.DROP,
         "_semantic_output_metadata": FieldPolicy.DROP,
     }
@@ -2939,14 +2937,12 @@ class Trace(
         state.pop("_container_ordinals_by_input_func_call_id", None)
         # B1-02: the semantic-output scratch never serializes. Plain pickle
         # legitimately carries most session-time DROP state (in-process
-        # round-trips need `backward_ready`, `save_budget`, ...), but these two
+        # round-trips need `backward_ready`, `save_budget`, ...), but these
         # hold LIVE USER OBJECTS -- an HF tokenizer and a model-derived
         # metadata key. A surviving copy reconstructs the tokenizer on load and
         # bakes its vocab/merges into an artifact the user believes is a graph
         # (measured 47KB -> 238KB). Capture drops them at every settlement
         # path; this is the serialization boundary's own belt.
-        state.pop("_output_style", None)
-        state.pop("_output_head", None)
         state.pop("_output_tokenizer", None)
         state.pop("_semantic_output_metadata", None)
         # Capture-session predicate carriers (FieldPolicy.DROP) hold LIVE USER

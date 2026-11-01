@@ -392,24 +392,49 @@ class TraceExportMixin(_TraceMixinBase):
 
         return attach_dataframe_honesty(model_df, self)
 
-    def decode_output(self: "Trace", k: int | None = None) -> Any:
-        """Return captured decoded output rows when available.
+    def decode_output(
+        self: "Trace",
+        k: int | None = None,
+        *,
+        style: str | None = None,
+        head: str | None = None,
+        tokenizer: Any | None = None,
+    ) -> Any:
+        """Return decoded output rows: the captured rows, or a decode on demand.
+
+        With no keywords this returns the rows the automatic capture-time
+        decode produced. Naming a ``style``, a ``head`` or a ``tokenizer``
+        decodes again from the retained output tensors (the output ops'
+        values), the persisted ``output_id2label`` and the shipped ImageNet
+        bank, without touching ``decoded_output``.
 
         Parameters
         ----------
         k:
             Optional maximum rank to return per batch item.
+        style:
+            Decode style: ``"classification"``, ``"imagenet"``,
+            ``"imagenet1k"``, ``"hf_text"`` or a registered custom style.
+            ``None`` lets the registered detectors pick one.
+        head:
+            Output head to decode, as an output container path such as
+            ``"logits"``, ``"0"`` or ``"0.logits"``.
+        tokenizer:
+            Tokenizer with a ``decode`` method, required by ``"hf_text"``.
 
         Returns
         -------
         Any
-            JSON-primitive decoded output captured during tracing.
+            JSON-primitive decoded output.
 
         Raises
         ------
         ValueError
             If decoded output was not captured or the requested ``k`` exceeds
-            the capture-time bound.
+            the capture-time bound (``decoded_output_unavailable``); a style
+            no detector resolves (``decode_style_unknown``); a head that is
+            not an output head (``decode_head_unknown``) or an ambiguous head
+            (``decode_head_ambiguous``).
         """
 
         # Capability gate (quickstart memo D7, F17): decoded labels on
@@ -419,15 +444,21 @@ class TraceExportMixin(_TraceMixinBase):
         from .._quickstart._gate import require_gold
 
         require_gold(self, "decoded output labels")
+        if style is not None or head is not None or tokenizer is not None:
+            from .._autoroute._builtin_output import _TOP_N_CAPTURED, decode_trace_output
+
+            return decode_trace_output(
+                self, style=style, head=head, tokenizer=tokenizer, top_n=k or _TOP_N_CAPTURED
+            )
         if self.decoded_output is None:
             recomputed = self._recompute_decoded_output(top_n=k)
             if recomputed is None:
                 raise PayloadUnavailableError(
-                    "logits not retained; re-decode unavailable",
+                    "no decoded output was captured and no output tensor is retained",
                     code="decoded_output_unavailable",
                     remedy=(
-                        "capture with semantic output decoding enabled and retained "
-                        "logits to recompute"
+                        "decode on demand with decode_output(style=..., head=...) while the "
+                        "output activations are retained (the default save policy)"
                     ),
                 )
             return recomputed
@@ -442,8 +473,8 @@ class TraceExportMixin(_TraceMixinBase):
                 f"logits not retained; re-decode unavailable above captured top_n={captured_top_n}",
                 code="decoded_output_unavailable",
                 remedy=(
-                    f"request top_n <= {captured_top_n} or capture with retained logits "
-                    "to recompute"
+                    f"request top_n <= {captured_top_n}, or keep the output activations "
+                    "retained to recompute"
                 ),
                 captured_top_n=captured_top_n,
             )
@@ -465,7 +496,12 @@ class TraceExportMixin(_TraceMixinBase):
         ]
 
     def output_table(
-        self: "Trace", k: int = 5, batch_items: int | Sequence[int] | None = None
+        self: "Trace",
+        k: int = 5,
+        batch_items: int | Sequence[int] | None = None,
+        *,
+        style: str | None = None,
+        head: str | None = None,
     ) -> "pd.DataFrame":
         """Return decoded output as a batch top-k dataframe.
 
@@ -477,6 +513,10 @@ class TraceExportMixin(_TraceMixinBase):
             ``None`` returns all captured batch items, an integer returns the
             first ``N`` batch items, and a sequence selects explicit batch item
             indices.
+        style:
+            Optional decode style for a decode on demand (see ``decode_output``).
+        head:
+            Optional output head for a decode on demand (see ``decode_output``).
 
         Returns
         -------
@@ -503,14 +543,15 @@ class TraceExportMixin(_TraceMixinBase):
                 remedy="pass a positive integer top_n",
                 argument="top_n",
             )
-        decoded = self.decode_output(k=k)
+        decoded = self.decode_output(k=k, style=style, head=head)
         rows = _decoded_batch_topk_rows(decoded)
         if rows is None:
             raise PayloadUnavailableError(
                 "decoded output is not a batch top-k classification table",
                 code="decoded_output_not_classification",
                 remedy=(
-                    "capture with output_style='classification' to produce a batch top-k table"
+                    "decode on demand with output_table(style='classification') to produce "
+                    "a batch top-k table"
                 ),
             )
         selected_items = _normalize_batch_items(batch_items, rows)

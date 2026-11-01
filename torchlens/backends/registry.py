@@ -80,7 +80,7 @@ TRACE_OPTION_CAPABILITY_EPOCHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("epoch4_intermediate_derived_grads", ()),
     ("epoch5_container_structure", ("capture_container_structure",)),
     ("epoch6_inference_only", ("inference_only",)),
-    ("epoch7_semantic_output_decode", ("output_style", "output_head")),
+    ("epoch7_semantic_output_decode", ()),
     ("epoch8_forward_chunking", ("chunk_size", "chunk_paths")),
 )
 """Ordered public trace-option capability epochs.

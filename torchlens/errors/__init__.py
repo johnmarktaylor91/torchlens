@@ -353,10 +353,10 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens._visualization._rank_layout_internal.layout",
         "RankRenderEndpointError",
     ),
-    # -- semantic output decode: an output_style= no detector resolves --
-    "OutputStyleUnknownError": (
+    # -- semantic output decode: a read-time decode style no detector resolves --
+    "DecodeStyleUnknownError": (
         "torchlens._autoroute._builtin_output",
-        "OutputStyleUnknownError",
+        "DecodeStyleUnknownError",
     ),
     "AmbiguousLabelError": ("torchlens.bundle", "AmbiguousLabelError"),
     "DatasetExtractionResumeError": (

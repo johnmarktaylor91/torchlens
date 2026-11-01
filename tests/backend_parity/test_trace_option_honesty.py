@@ -31,8 +31,6 @@ _PUBLIC_SPINE_OPTION_VALUES: dict[str, Any] = {
     "save_preview": True,
     "capture_container_structure": True,
     "inference_only": True,
-    "output_style": "label",
-    "output_head": "default",
     "chunk_size": 2,
     "chunk_paths": [("args", 0)],
 }

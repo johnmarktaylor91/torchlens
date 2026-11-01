@@ -279,13 +279,11 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         "_wrapper_runtime_ws",
         "capture_events",
         "_output_container_specs_by_raw_label",
-        # B1-02: session-time semantic-output scratch. Two of the four pin live
+        # B1-02: session-time semantic-output scratch. Both pin live
         # user objects (an HF tokenizer, a model-derived metadata key), so this
         # seam is the postprocess-side belt for the capture-boundary drop in
         # ``_capture/trace.py`` -- including the halted postprocess, which
         # reaches here through ``_finalize_halted_trace``.
-        "_output_style",
-        "_output_head",
         "_output_tokenizer",
         "_semantic_output_metadata",
         # B1-17 companion (INTERVENED axis): capture-time dedup caches for the

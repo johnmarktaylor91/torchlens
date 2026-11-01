@@ -172,7 +172,6 @@ def test_value_free_structured_halt_stays_legal() -> None:
         ("save_args", {}, {"save_args": True}),
         ("save_raw_input", {}, {"save_raw_input": True}),
         ("save_transformed_output", {}, {"save_transformed_output": True}),
-        ("output_style", {}, {"output_style": "classification"}),
         ("lookback payloads", {"lookback": 4, "lookback_payload_policy": "detached_raw"}, {}),
     ],
 )

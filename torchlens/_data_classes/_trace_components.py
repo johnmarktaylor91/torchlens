@@ -61,8 +61,6 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     # fixes now carry owners. Semantic-output scratch + predicate keys are
     # session-lifetime; validation side channels are session; bundle-source
     # provenance rides source_metadata.
-    "_output_head": "session",
-    "_output_style": "session",
     "_output_tokenizer": "session",
     "_semantic_output_metadata": "session",
     "_last_validation_failure": "session",

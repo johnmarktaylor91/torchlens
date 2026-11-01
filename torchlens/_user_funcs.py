@@ -36,11 +36,7 @@ from torch import nn
 from torchlens.backends.registry import BackendUnsupportedError
 
 from . import _state
-from ._autoroute._builtin_output import (
-    check_output_style,
-    refuse_unresolved_output_style,
-    semantic_output_cache_key,
-)
+from ._autoroute._builtin_output import semantic_output_cache_key
 from ._capture._episode_failed import attach_failed_episode_ledger
 from ._capture._episode_ledger import (
     attach_episode_header,
@@ -764,8 +760,6 @@ def _trace_mlx_model(
     save_raw_input: str | bool | MissingType,
     batch_render: str | MissingType,
     output_transform: Callable[[Any], Any] | None | MissingType,
-    output_style: str | None | MissingType,
-    output_head: str | None | MissingType,
     save_transformed_output: str | bool | MissingType,
     layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType,
     save_visualizations: bool | MissingType,
@@ -1031,8 +1025,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         save_raw_input=kwargs.get("save_raw_input", MISSING),
         batch_render=kwargs.get("batch_render", MISSING),
         output_transform=kwargs.get("output_transform", MISSING),
-        output_style=kwargs.get("output_style", MISSING),
-        output_head=kwargs.get("output_head", MISSING),
         save_transformed_output=kwargs.get("save_raw_output", MISSING),
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
@@ -1085,8 +1077,6 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "layers_to_save",
         "save_raw_input",
         "output_transform",
-        "output_style",
-        "output_head",
         "save_transformed_output",
         "layer_visualizers",
         "save_visualizations",
@@ -1579,8 +1569,6 @@ def _run_model_and_save_specified_outs(
     save_raw_input: str | bool = "small",
     batch_render: str = "auto",
     output_transform: Callable[[Any], Any] | None = None,
-    output_style: str | None = None,
-    output_head: str | None = None,
     save_transformed_output: str | bool = "small",
     layer_visualizers: dict[Any, Callable[..., Any]] | None = None,
     save_visualizations: bool = False,
@@ -1728,8 +1716,6 @@ def _run_model_and_save_specified_outs(
         batch_render: Raw-input batch rendering policy for visualization.
         output_transform: Optional callable used to produce human-readable
             output metadata from model output.
-        output_style: Optional semantic output decode style.
-        output_head: Optional live-output head to decode.
         save_transformed_output: Portable save policy for the transformed raw output.
         layer_visualizers: Optional mapping from selectors to thumbnail visualizer callables.
         save_visualizations: Whether rendered thumbnails should persist in portable bundles.
@@ -1763,8 +1749,6 @@ def _run_model_and_save_specified_outs(
     alias_sources = (save_predicate, intervene_predicate, halt_predicate, hooks, intervention_spec)
     deferred = (normalized_hook_plan, _deferred_retention_selector, _deferred_gradient_selector)
     refuse_model_alias_spellings(model, *alias_sources, *deferred)
-    # An output_style no detector can resolve refuses before the forward.
-    check_output_style(output_style)
     # Auto-detect model device from its first parameter and move inputs to match.
     # This prevents silent device-mismatch errors when the model is on CUDA but
     # the user ops CPU tensors (a common mistake). A META first parameter is
@@ -1977,14 +1961,8 @@ def _run_model_and_save_specified_outs(
         if _refresh_projection_capture:
             trace._refresh_projection_capture = True
         _capture_output_metadata_from_model_config(trace, model)
-        trace._output_style = output_style
-        trace._output_head = output_head
         trace._output_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
-        trace._semantic_output_metadata = semantic_output_cache_key(
-            model,
-            output_style=output_style,
-            output_head=output_head,
-        )
+        trace._semantic_output_metadata = semantic_output_cache_key(model)
         if intervention_spec is not None:
             trace._intervention_spec = intervention_spec
         trace.trace_label = name
@@ -2166,7 +2144,6 @@ def _run_model_and_save_specified_outs(
         _release_capture_slot()
         if hasattr(trace, "_capture_container_structure"):
             delattr(trace, "_capture_container_structure")
-    refuse_unresolved_output_style(trace)
     if isinstance(model, TLBoundMethodRoot):
         # F41 TL-authored-root disclosure (tlspec v9 entry-dark slot, C07X
         # item (iv)): the marker lands on the root op record -- the
@@ -2874,8 +2851,6 @@ def _trace_torch_model(
     save_raw_input: str | bool | MissingType = MISSING,
     batch_render: str | MissingType = MISSING,
     output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
-    output_style: str | None | MissingType = MISSING,
-    output_head: str | None | MissingType = MISSING,
     save_transformed_output: str | bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
@@ -3008,8 +2983,6 @@ def _trace_torch_model(
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=output_transform,
-        output_style=output_style,
-        output_head=output_head,
         save_transformed_output=save_transformed_output,
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
@@ -3232,8 +3205,6 @@ def _trace_torch_model(
     save_raw_input_policy = capture_options.save_raw_input
     batch_render_policy = capture_options.batch_render
     output_transform_value = capture_options.output_transform
-    output_style_value = capture_options.output_style
-    output_head_value = capture_options.output_head
     save_raw_output_policy = capture_options.save_transformed_output
     layer_visualizers_value = cast(
         "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
@@ -3525,13 +3496,7 @@ def _trace_torch_model(
             "chunk_paths": normalize_chunk_paths(chunk_paths_value),
             "capture_container_structure": capture_container_structure,
             "output_transform": _stable_cache_fragment(output_transform_value),
-            "output_style": output_style_value,
-            "output_head": output_head_value,
-            "semantic_output_cache_key": semantic_output_cache_key(
-                model,
-                output_style=output_style_value,
-                output_head=output_head_value,
-            ),
+            "semantic_output_cache_key": semantic_output_cache_key(model),
             "facets": _facet_recipe_cache_key(facet_recipes),
             "save_predicate": _predicate_cache_key(save_predicate),
             "intervene": _predicate_cache_key(intervene),
@@ -3645,8 +3610,6 @@ def _trace_torch_model(
             save_raw_input=save_raw_input_policy,
             batch_render=batch_render_policy,
             output_transform=output_transform_value,
-            output_style=output_style_value,
-            output_head=output_head_value,
             save_transformed_output=save_raw_output_policy,
             layer_visualizers=layer_visualizers_value,
             save_visualizations=save_visualizations_value,
@@ -3733,8 +3696,6 @@ def _trace_torch_model(
             save_raw_input=MISSING,
             batch_render=MISSING,
             output_transform=MISSING,
-            output_style=MISSING,
-            output_head=MISSING,
             save_transformed_output=MISSING,
             keep_orphans=MISSING,
             output_device=MISSING,
@@ -3818,8 +3779,6 @@ def _trace_torch_model(
                 save_raw_input=MISSING,
                 batch_render=MISSING,
                 output_transform=MISSING,
-                output_style=MISSING,
-                output_head=MISSING,
                 save_transformed_output=MISSING,
                 keep_orphans=MISSING,
                 output_device=MISSING,
@@ -3987,8 +3946,6 @@ def _trace_torch_model(
         save_raw_input=save_raw_input_policy,
         batch_render=batch_render_policy,
         output_transform=output_transform_value,
-        output_style=output_style_value,
-        output_head=output_head_value,
         save_transformed_output=save_raw_output_policy,
         layer_visualizers=layer_visualizers_value,
         save_visualizations=save_visualizations_value,

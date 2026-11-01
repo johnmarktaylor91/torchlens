@@ -292,22 +292,24 @@ def trace_text(
     transform, transform_state = _make_text_transform(
         tok, chat_template=chat_template, structure_only=structure_only
     )
-    # Structure-only captures hold no output values to decode as text.
-    style = {} if structure_only else {"output_style": "hf_text"}
     capture = tl.options.merge_capture_options(
         capture=kwargs.pop("capture", None),
         input_transform=transform,
-        **style,
     )
+    # The attached tokenizer is what makes the automatic ``hf_text`` output
+    # detector fire for this capture (torchlens/_autoroute/_builtin_output.py).
+    # Structure-only captures hold no output values to decode as text, so the
+    # tokenizer stays off the model and nothing decodes.
     had_tokenizer = hasattr(model, "_torchlens_output_tokenizer")
     previous_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
-    model._torchlens_output_tokenizer = tok
+    if not structure_only:
+        model._torchlens_output_tokenizer = tok
     try:
         log = _trace_text_capture(model, text, capture, structure_only, kwargs)
     finally:
         if had_tokenizer:
             model._torchlens_output_tokenizer = previous_tokenizer
-        else:
+        elif hasattr(model, "_torchlens_output_tokenizer"):
             delattr(model, "_torchlens_output_tokenizer")
     log.input_preprocessor = _tokenizer_preprocessing_record(
         tok,

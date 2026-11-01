@@ -587,7 +587,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "FittedArtifactError": ("RuntimeError",),
     "RenderError": ("RuntimeError",),
     "RankRenderEndpointError": ("RuntimeError",),
-    "OutputStyleUnknownError": ("ValueError",),
+    "DecodeStyleUnknownError": ("ValueError",),
     "PluginLoadWarning": ("Warning",),
     "SynthesizedValueReadWarning": ("Warning",),
     "TensorSubclassUnsupportedError": ("RuntimeError",),

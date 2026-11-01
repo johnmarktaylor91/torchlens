@@ -172,13 +172,15 @@ def test_provenance_surfaces_output_postprocessing_and_output_table() -> None:
     assert "class-1" in trace.output_table().to_string()
 
 
-def test_summary_surfaces_undetected_output_style_hint() -> None:
-    """Undetected output decode suggests the explicit style override."""
+def test_summary_surfaces_undetected_decode_hint() -> None:
+    """Undetected output decode points at the read-time decode door."""
 
     trace = tl.trace(_Classifier(torch.zeros(1, 3)).eval(), torch.ones(1, 2))
 
     assert trace.decoded_output is None
-    assert "undetected; pass output_style= to decode." in trace.provenance()
+    assert (
+        "undetected; call trace.decode_output(style=..., head=...) to decode." in trace.provenance()
+    )
 
 
 def test_redecode_after_load_raises_clearly_when_logits_dropped(tmp_path: Path) -> None:

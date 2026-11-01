@@ -4,24 +4,31 @@ from __future__ import annotations
 
 from dataclasses import replace
 from importlib import resources
-from typing import Any
+from typing import Any, NoReturn
 
 import torch
 
+from torchlens._autoroute._decode_spellings import (
+    HEAD_AMBIGUOUS_CODE,
+    HEAD_KW,
+    HEAD_UNKNOWN_CODE,
+    STYLE_KW,
+    STYLE_UNKNOWN_CODE,
+    TOKENIZER_KW,
+    UNDETECTED_REMEDY,
+)
 from torchlens._autoroute.output import register
 from torchlens._capture_fingerprint import _never_matching_fragment
 from torchlens._data_classes.trace import ResolvedPostprocessing, Trace
-from torchlens._errors import InvalidArgumentError
+from torchlens._errors import InvalidArgumentError, PayloadUnavailableError
 from torchlens._ir.container_registry import _is_hf_model_output
 
 DETECTOR_VERSION = "torchlens-output-a2-v1"
-#: Styles the built-in detectors resolve; a registered custom detector may
-#: resolve others (docs/semantic_io.md, Custom Output Detectors).
+#: Styles ``Trace.decode_output(style=...)`` resolves itself; a registered
+#: custom detector may resolve others (docs/semantic_io.md, Custom Output Detectors).
 BUILTIN_OUTPUT_STYLES: tuple[str, ...] = ("classification", "imagenet", "imagenet1k", "hf_text")
 #: The built-in detector names (everything else in the registry is custom).
-_BUILTIN_DETECTOR_NAMES = frozenset(
-    {"explicit_style", "hf_config_classifier", "imagenet_verified", "hf_text"}
-)
+_BUILTIN_DETECTOR_NAMES = frozenset({"hf_config_classifier", "imagenet_verified", "hf_text"})
 IMAGENET_LABEL_SOURCE = "torchvision ResNet50_Weights.DEFAULT.meta['categories']"
 IMAGENET_LABEL_SOURCE_VERSION = "torchvision-imagenet1k-categories-v1"
 _TOP_N_CAPTURED = 5
@@ -47,14 +54,14 @@ def load_imagenet1k_labels() -> list[str]:
     return [str(label) for label in labels]
 
 
-def decode_outputs_for_trace(
-    trace: Trace,
-    outputs: Any,
-    *,
-    output_style: str | None,
-    output_head: str | None,
-) -> None:
+def decode_outputs_for_trace(trace: Trace, outputs: Any) -> None:
     """Decode live model outputs into ``trace.decoded_output`` when safely resolved.
+
+    This is the automatic, option-free pass that runs once at the end of every
+    capture: the registered output detectors inspect the live output object
+    and the trace's output metadata, and the first match decodes. A user who
+    wants a different style or head decodes again at read time with
+    ``trace.decode_output(style=..., head=...)``.
 
     Parameters
     ----------
@@ -62,16 +69,10 @@ def decode_outputs_for_trace(
         Trace receiving decoded JSON-primitive rows and provenance.
     outputs:
         Live model forward return value, before TorchLens output extraction.
-    output_style:
-        Optional user-requested decode style.
-    output_head:
-        Optional user-requested output head name/path.
     """
 
     try:
-        _decode_outputs_for_trace_unguarded(
-            trace, outputs, output_style=output_style, output_head=output_head
-        )
+        _decode_outputs_for_trace_unguarded(trace, outputs)
     except Exception as exc:
         # The output decode is an opportunistic post-capture nicety; a
         # heuristic sniffer must never abort an otherwise-successful capture
@@ -94,11 +95,7 @@ def decode_outputs_for_trace(
         annotations = getattr(trace, "annotations", None)
         if isinstance(annotations, dict):
             annotations.setdefault("decode_skipped", []).append(
-                {
-                    "output_style": str(output_style),
-                    "output_head": str(output_head),
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
+                {"error": f"{type(exc).__name__}: {exc}"}
             )
         warnings.warn(
             "Semantic output decode skipped: the output detector raised "
@@ -110,56 +107,29 @@ def decode_outputs_for_trace(
         )
 
 
-def _decode_outputs_for_trace_unguarded(
-    trace: Trace,
-    outputs: Any,
-    *,
-    output_style: str | None,
-    output_head: str | None,
-) -> None:
-    """Run the output decode without the capture-protecting belt."""
+def _decode_outputs_for_trace_unguarded(trace: Trace, outputs: Any) -> None:
+    """Run the automatic output decode without the capture-protecting belt."""
 
-    meta = _build_output_meta(trace, output_style=output_style, output_head=output_head)
-    resolved, detector_name = _resolve_postprocessor_named(outputs, meta)
-    if (
-        output_style is not None
-        and output_style not in BUILTIN_OUTPUT_STYLES
-        and (detector_name is None or detector_name in _BUILTIN_DETECTOR_NAMES)
-    ):
-        # No custom detector claimed the style: decode nothing and leave a
-        # durable record; the capture entry raises the typed refusal once
-        # the session has closed (refuse_unresolved_output_style).
-        annotations = getattr(trace, "annotations", None)
-        if isinstance(annotations, dict):
-            annotations[OUTPUT_STYLE_UNRESOLVED_KEY] = {"output_style": str(output_style)}
-        return
+    meta = _build_output_meta(trace, style=None, head=None)
+    resolved, _detector_name = _resolve_postprocessor_named(outputs, meta)
     if resolved is None:
         return
 
     logits_info = _select_logits(outputs, resolved, meta)
     if logits_info is None:
-        if output_style is not None or resolved.verified:
+        if resolved.verified:
             trace.output_postprocessor = replace(
                 resolved,
                 ambiguous=True,
-                description="decode: undetected; pass output_style=/output_head= to decode.",
+                description=f"decode: undetected; {UNDETECTED_REMEDY}.",
             )
         return
 
     logits, selected_head = logits_info
-    labels = _labels_for_resolved(resolved)
-    if labels is None and resolved.style != "hf_text":
-        return
-    if resolved.style == "hf_text":
-        decoded = _decode_hf_text(logits, meta)
-    else:
-        decoded = _decode_classification(logits, labels or [], top_n=_TOP_N_CAPTURED)
+    decoded = _decode_selected(logits, resolved, meta, top_n=_TOP_N_CAPTURED)
     if decoded is None:
         return
-
-    trace.decoded_output = (
-        {"kind": "batch_topk", "rows": decoded} if resolved.style != "hf_text" else decoded
-    )
+    trace.decoded_output = decoded
     trace.output_postprocessor = replace(
         resolved,
         selected_output_head=selected_head,
@@ -167,22 +137,187 @@ def _decode_outputs_for_trace_unguarded(
     )
 
 
-def semantic_output_cache_key(
-    model: Any,
+def _decode_selected(
+    logits: torch.Tensor, resolved: ResolvedPostprocessing, meta: dict[str, Any], *, top_n: int
+) -> Any | None:
+    """Decode one selected tensor under a resolved style into JSON rows."""
+
+    if resolved.style == "hf_text":
+        return _decode_hf_text(logits, meta)
+    labels = _labels_for_resolved(resolved)
+    if labels is None:
+        return None
+    rows = _decode_classification(logits, labels, top_n=top_n)
+    if rows is None:
+        return None
+    return {"kind": "batch_topk", "rows": rows}
+
+
+def decode_trace_output(
+    trace: Trace,
     *,
-    output_style: str | None,
-    output_head: str | None,
-) -> dict[str, Any]:
+    style: str | None,
+    head: str | None,
+    tokenizer: Any | None,
+    top_n: int,
+) -> Any:
+    """Decode a finished trace's retained outputs on demand.
+
+    The read-time door behind ``Trace.decode_output(style=, head=, tokenizer=)``.
+    It works from what the trace kept: the output ops' retained tensors, the
+    persisted ``output_id2label``, the shipped ImageNet bank, and the
+    tokenizer the caller passes. It returns rows and never mutates the trace.
+
+    Parameters
+    ----------
+    trace:
+        Finished trace.
+    style:
+        Decode style, or ``None`` to let the registered detectors pick one.
+    head:
+        Output head to decode (an output container path), or ``None``.
+    tokenizer:
+        Tokenizer for ``hf_text``; ignored by the classification styles.
+    top_n:
+        Maximum rows per batch item for the classification styles.
+
+    Returns
+    -------
+    Any
+        JSON-primitive decoded rows in the same shape as ``trace.decoded_output``.
+
+    Raises
+    ------
+    PayloadUnavailableError
+        ``decoded_output_unavailable`` when no output tensor was retained.
+    InvalidArgumentError
+        ``decode_head_unknown`` for a head that is not an output head of the
+        trace, ``decode_head_ambiguous`` when several heads qualify and none
+        was named, ``decode_style_unknown`` (``DecodeStyleUnknownError``)
+        for a style no detector resolves.
+    """
+
+    view, heads = _retained_output_view(trace)
+    if view is None:
+        raise PayloadUnavailableError(
+            "no output tensor retained; re-decode unavailable",
+            code="decoded_output_unavailable",
+            remedy="keep the output activations retained (the default save policy) to re-decode",
+        )
+    if head is not None and _select_tensor_by_head(view, head) is None:
+        raise InvalidArgumentError(
+            f"{HEAD_KW}={head!r} is not an output head of this trace; available heads: {heads}",
+            code=HEAD_UNKNOWN_CODE,
+            remedy=f"pass one of the available heads as {HEAD_KW}=",
+            argument=HEAD_KW,
+            available_heads=list(heads),
+        )
+    meta = _build_output_meta(trace, style=style, head=head, tokenizer=tokenizer)
+    resolved = _resolve_requested_style(meta)
+    if resolved is None:
+        resolved, _detector_name = _resolve_postprocessor_named(view, meta)
+    if resolved is None:
+        refuse_unknown_decode_style(style)
+    logits_info = _select_logits(view, resolved, meta)
+    if logits_info is None:
+        raise InvalidArgumentError(
+            f"several output heads qualify for {STYLE_KW}={resolved.style!r} and none was "
+            f"named; available heads: {heads}",
+            code=HEAD_AMBIGUOUS_CODE,
+            remedy=f"pass {HEAD_KW}= naming one of the available heads",
+            argument=HEAD_KW,
+            available_heads=list(heads),
+        )
+    logits, _selected_head = logits_info
+    decoded = _decode_selected(logits, resolved, meta, top_n=top_n)
+    if decoded is None:
+        if resolved.style == "hf_text":
+            raise InvalidArgumentError(
+                f"{STYLE_KW}='hf_text' needs a tokenizer with a decode method and rank-2 or "
+                "rank-3 logits",
+                code=STYLE_UNKNOWN_CODE,
+                remedy=f"pass {TOKENIZER_KW}= the model's tokenizer",
+                argument=TOKENIZER_KW,
+            )
+        raise PayloadUnavailableError(
+            f"the retained output does not decode as {resolved.style!r} "
+            "(no labels for its width, or not a rank-1 or rank-2 logits tensor)",
+            code="decoded_output_unavailable",
+            remedy=f"pass {HEAD_KW}= the logits head, or a {STYLE_KW} whose labels match",
+        )
+    return decoded
+
+
+def _retained_output_view(trace: Trace) -> tuple[Any | None, tuple[str, ...]]:
+    """Rebuild a head-addressable view of the retained output tensors.
+
+    Returns the single tensor when the model returned one bare tensor, else a
+    dict keyed by the rendered output container path (``"logits"``, ``"0"``,
+    ``"0.logits"``), plus the tuple of available head names. ``(None, ())``
+    when no output tensor was retained.
+    """
+
+    from torchlens._capture._episode_derivation import _render_container_path
+
+    tensors: dict[str, torch.Tensor] = {}
+    for op in getattr(trace, "output_ops", []) or []:
+        out = getattr(op, "out", None)
+        if not isinstance(out, torch.Tensor):
+            continue
+        path = _render_container_path(getattr(op, "container_path", ()))
+        tensors.setdefault(path, out)
+    if not tensors:
+        return None, ()
+    if len(tensors) == 1 and "" in tensors:
+        return tensors[""], ("",)
+    return tensors, tuple(tensors)
+
+
+def _resolve_requested_style(meta: dict[str, Any]) -> ResolvedPostprocessing | None:
+    """Resolve a user-requested built-in style from the read-time metadata."""
+
+    style = meta.get(STYLE_KW)
+    if style is None:
+        return None
+    if style in {"classification", "imagenet", "imagenet1k"}:
+        id2label = meta.get("id2label")
+        return ResolvedPostprocessing(
+            source="user",
+            identifier=str(style),
+            verified=True,
+            config={"id2label": id2label} if isinstance(id2label, dict) else {},
+            description=f"user-requested output decode: {style}",
+            style="imagenet" if style in {"imagenet", "imagenet1k"} else "classification",
+            selected_output_head=meta.get(HEAD_KW),
+            label_source="config.id2label" if style == "classification" else IMAGENET_LABEL_SOURCE,
+            label_source_version=DETECTOR_VERSION
+            if style == "classification"
+            else IMAGENET_LABEL_SOURCE_VERSION,
+            confidence=1.0,
+        )
+    if style == "hf_text":
+        return ResolvedPostprocessing(
+            source="user",
+            identifier="hf_text",
+            verified=True,
+            config={},
+            description="user-requested Hugging Face text decode",
+            style="hf_text",
+            selected_output_head=meta.get(HEAD_KW),
+            label_source="tokenizer",
+            label_source_version=DETECTOR_VERSION,
+            confidence=1.0,
+        )
+    return None
+
+
+def semantic_output_cache_key(model: Any) -> dict[str, Any]:
     """Return a serializable semantic-output cache fingerprint.
 
     Parameters
     ----------
     model:
         Model passed to ``trace``.
-    output_style:
-        Requested output decoding style.
-    output_head:
-        Requested output head.
 
     Returns
     -------
@@ -212,8 +347,6 @@ def semantic_output_cache_key(
     weights = getattr(model, "_torchlens_weights", None)
     return {
         "version": DETECTOR_VERSION,
-        "output_style": output_style,
-        "output_head": output_head,
         "config_unreadable": config_unreadable,
         "config": {
             "id2label": _normalized_id2label(getattr(config, "id2label", None)),
@@ -235,7 +368,11 @@ def semantic_output_cache_key(
 
 
 def _build_output_meta(
-    trace: Trace, *, output_style: str | None, output_head: str | None
+    trace: Trace,
+    *,
+    style: str | None,
+    head: str | None,
+    tokenizer: Any | None = None,
 ) -> dict[str, Any]:
     """Build detector metadata from captured trace fields.
 
@@ -243,10 +380,13 @@ def _build_output_meta(
     ----------
     trace:
         Trace with in-band output metadata.
-    output_style:
-        Optional user-requested style.
-    output_head:
-        Optional user-requested output head.
+    style:
+        Requested style (read time) or ``None`` (the automatic capture pass).
+    head:
+        Requested output head (read time) or ``None``.
+    tokenizer:
+        Tokenizer passed at read time; at capture time the bridge-attached
+        session tokenizer is read from the trace instead.
 
     Returns
     -------
@@ -255,98 +395,58 @@ def _build_output_meta(
     """
 
     return {
-        "output_style": output_style,
-        "output_head": output_head,
+        STYLE_KW: style,
+        HEAD_KW: head,
         "id2label": getattr(trace, "output_id2label", None),
         "num_classes": getattr(trace, "output_num_classes", None),
-        "tokenizer": getattr(trace, "_output_tokenizer", None),
+        "tokenizer": tokenizer
+        if tokenizer is not None
+        else getattr(trace, "_output_tokenizer", None),
         "model_metadata": getattr(trace, "_semantic_output_metadata", None),
     }
 
 
-class OutputStyleUnknownError(InvalidArgumentError):
-    """``output_style=`` names a style no built-in or registered detector resolves."""
+class DecodeStyleUnknownError(InvalidArgumentError):
+    """``decode_output(style=...)`` names a style no built-in or registered detector resolves."""
 
 
-#: ``trace.annotations`` key recording a style no detector claimed.
-OUTPUT_STYLE_UNRESOLVED_KEY = "output_style_unresolved"
-
-
-def refuse_unresolved_output_style(trace: Trace) -> None:
-    """Raise the post-capture refusal recorded by the decode step, if any.
-
-    Called by the capture entry after the session closed, so the refusal
-    never interrupts teardown.
-    """
-
-    annotations = getattr(trace, "annotations", None)
-    if not isinstance(annotations, dict):
-        return
-    record = annotations.pop(OUTPUT_STYLE_UNRESOLVED_KEY, None)
-    if record is not None:
-        refuse_unknown_output_style(record.get("output_style"), custom_detectors=True)
-
-
-def _custom_detector_names() -> list[str]:
-    """Names of registered output detectors that are not built in."""
-
-    from . import output as autoroute_output
-
-    return [
-        detector.name
-        for detector in autoroute_output.list()
-        if detector.name not in _BUILTIN_DETECTOR_NAMES
-    ]
-
-
-def refuse_unknown_output_style(output_style: Any, *, custom_detectors: bool = False) -> None:
-    """Raise the typed did-you-mean refusal for an unresolvable ``output_style``.
+def refuse_unknown_decode_style(style: Any) -> NoReturn:
+    """Raise the typed did-you-mean refusal for an unresolvable decode style.
 
     Parameters
     ----------
-    output_style:
-        The requested style.
-    custom_detectors:
-        True when the check ran after the capture with custom detectors
-        registered (none of them resolved the style).
+    style:
+        The requested style, or ``None`` when no style was given and no
+        registered detector resolved one from the retained outputs.
 
     Raises
     ------
-    OutputStyleUnknownError
-        Always, with code ``output_style_unknown``.
+    DecodeStyleUnknownError
+        Always, with code ``decode_style_unknown``.
     """
 
     import difflib
 
-    close = difflib.get_close_matches(str(output_style), BUILTIN_OUTPUT_STYLES, n=1)
+    if style is None:
+        raise DecodeStyleUnknownError(
+            "no output detector resolved a decode style from the retained outputs. "
+            f"Built-in styles: {', '.join(BUILTIN_OUTPUT_STYLES)}.",
+            code=STYLE_UNKNOWN_CODE,
+            remedy=f"pass {STYLE_KW}= a built-in style or a registered custom style",
+            argument=STYLE_KW,
+        )
+    close = difflib.get_close_matches(str(style), BUILTIN_OUTPUT_STYLES, n=1)
     hint = f" (did you mean {close[0]!r}?)" if close else ""
-    where = (
-        "; no built-in or registered custom output detector resolved it" if custom_detectors else ""
-    )
-    raise OutputStyleUnknownError(
-        f"unknown output_style={output_style!r}{hint}{where}. Built-in styles: "
-        f"{', '.join(BUILTIN_OUTPUT_STYLES)}.",
-        code="output_style_unknown",
+    raise DecodeStyleUnknownError(
+        f"unknown {STYLE_KW}={style!r}{hint}; no built-in or registered custom output "
+        f"detector resolved it. Built-in styles: {', '.join(BUILTIN_OUTPUT_STYLES)}.",
+        code=STYLE_UNKNOWN_CODE,
         remedy=(
             "pass a built-in style, or register a custom detector that resolves it "
             "with tl._autoroute.output.register(...)"
         ),
+        argument=STYLE_KW,
     )
-
-
-def check_output_style(output_style: Any) -> None:
-    """Refuse an unknown ``output_style`` before the forward when provable.
-
-    A style outside the built-in set can only be resolved by a registered
-    custom detector; with none registered the request can never decode, so
-    it refuses here instead of after a wasted capture. With custom
-    detectors registered the post-capture check decides.
-    """
-
-    if output_style is None or output_style in BUILTIN_OUTPUT_STYLES:
-        return
-    if not isinstance(output_style, str) or not _custom_detector_names():
-        refuse_unknown_output_style(output_style)
 
 
 def _resolve_postprocessor_named(
@@ -363,45 +463,6 @@ def _resolve_postprocessor_named(
     return None, None
 
 
-@register(name="explicit_style", priority=0)
-def explicit_style(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
-    """Resolve user-requested built-in output styles."""
-
-    style = meta.get("output_style")
-    if style is None:
-        return None
-    if style in {"classification", "imagenet", "imagenet1k"}:
-        id2label = meta.get("id2label")
-        return ResolvedPostprocessing(
-            source="user",
-            identifier=str(style),
-            verified=True,
-            config={"id2label": id2label} if isinstance(id2label, dict) else {},
-            description=f"user-requested output decode: {style}",
-            style="imagenet" if style in {"imagenet", "imagenet1k"} else "classification",
-            selected_output_head=meta.get("output_head"),
-            label_source="config.id2label" if style == "classification" else IMAGENET_LABEL_SOURCE,
-            label_source_version=DETECTOR_VERSION
-            if style == "classification"
-            else IMAGENET_LABEL_SOURCE_VERSION,
-            confidence=1.0,
-        )
-    if style == "hf_text":
-        return ResolvedPostprocessing(
-            source="user",
-            identifier="hf_text",
-            verified=True,
-            config={},
-            description="user-requested Hugging Face text decode",
-            style="hf_text",
-            selected_output_head=meta.get("output_head"),
-            label_source="tokenizer",
-            label_source_version=DETECTOR_VERSION,
-            confidence=1.0,
-        )
-    return None
-
-
 @register(name="hf_config_classifier", priority=10)
 def hf_config_classifier(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
     """Detect classifiers with explicit ``config.id2label`` metadata."""
@@ -416,7 +477,7 @@ def hf_config_classifier(outputs: Any, meta: dict[str, Any]) -> ResolvedPostproc
         config={"num_labels": meta.get("num_classes"), "id2label": id2label},
         description="HF config labels",
         style="classification",
-        selected_output_head=meta.get("output_head"),
+        selected_output_head=meta.get(HEAD_KW),
         label_source="config.id2label",
         label_source_version=DETECTOR_VERSION,
         confidence=0.99,
@@ -427,9 +488,9 @@ def hf_config_classifier(outputs: Any, meta: dict[str, Any]) -> ResolvedPostproc
 def imagenet_verified(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
     """Detect verified ImageNet-width logits from live outputs only."""
 
-    if meta.get("output_style") not in {None, "imagenet", "imagenet1k"}:
+    if meta.get(STYLE_KW) not in {None, "imagenet", "imagenet1k"}:
         return None
-    logits = _select_tensor_by_head(outputs, meta.get("output_head"))
+    logits = _select_tensor_by_head(outputs, meta.get(HEAD_KW))
     if logits is None and isinstance(outputs, torch.Tensor):
         logits = outputs
     if logits is None or _safe_last_dim(logits) != 1000:
@@ -463,7 +524,7 @@ def imagenet_verified(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocess
         config={},
         description="verified ImageNet-1k output labels",
         style="imagenet",
-        selected_output_head=meta.get("output_head"),
+        selected_output_head=meta.get(HEAD_KW),
         label_source=IMAGENET_LABEL_SOURCE,
         label_source_version=IMAGENET_LABEL_SOURCE_VERSION,
         confidence=0.95,
@@ -472,11 +533,39 @@ def imagenet_verified(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocess
 
 @register(name="hf_text", priority=30)
 def hf_text(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
-    """Detect Hugging Face text logits only when explicitly requested."""
+    """Detect text logits when a tokenizer is attached and a ``logits`` head exists.
 
-    if meta.get("output_style") != "hf_text":
+    The transformers bridge attaches the tokenizer for the span of its own
+    capture, so an attached tokenizer means "this is a text model traced as
+    text". Only a head named ``logits`` (or the head the caller named) is
+    decoded (plus one bare output tensor): an encoder's ``last_hidden_state``
+    must never be argmax-decoded as token ids.
+    """
+
+    if meta.get(STYLE_KW) not in {None, "hf_text"}:
         return None
-    return explicit_style(outputs, meta)
+    tokenizer = meta.get("tokenizer")
+    if tokenizer is None or not hasattr(tokenizer, "decode"):
+        return None
+    head = meta.get(HEAD_KW)
+    if head is None and isinstance(outputs, torch.Tensor):
+        head = None  # one bare tensor: the whole output is the logits
+    elif _select_tensor_by_head(outputs, head or "logits") is None:
+        return None
+    else:
+        head = head or "logits"
+    return ResolvedPostprocessing(
+        source="attached_tokenizer",
+        identifier="hf_text",
+        verified=True,
+        config={},
+        description="Hugging Face text decode with the attached tokenizer",
+        style="hf_text",
+        selected_output_head=head,
+        label_source="tokenizer",
+        label_source_version=DETECTOR_VERSION,
+        confidence=0.9,
+    )
 
 
 def _labels_for_resolved(resolved: ResolvedPostprocessing) -> list[str] | None:
@@ -521,7 +610,7 @@ def _select_logits(
         Selected tensor and head label, or None when ambiguous.
     """
 
-    requested = resolved.selected_output_head or meta.get("output_head")
+    requested = resolved.selected_output_head or meta.get(HEAD_KW)
     by_head = _select_tensor_by_head(outputs, requested)
     if by_head is not None:
         return by_head, str(requested or "output")
@@ -529,6 +618,9 @@ def _select_logits(
         logits = getattr(outputs, "logits")
         if isinstance(logits, torch.Tensor):
             return logits, "logits"
+    if isinstance(outputs, dict) and isinstance(outputs.get("logits"), torch.Tensor):
+        # The read-time view keys retained output tensors by container path.
+        return outputs["logits"], "logits"
     if _is_hf_model_output(outputs):
         try:
             logits = outputs["logits"]
