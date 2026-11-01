@@ -189,9 +189,10 @@ def test_trace_docstring_has_no_self_referential_aliases():
     doc = inspect.cleandoc(tl.trace.__doc__ or "")
     signature_params = set(inspect.signature(tl.trace).parameters)
 
-    # activation_transform and recurrence_detection moved into the grouped
-    # options with the flat-kwarg removal; grad_transform stays a real param.
-    for name in ("grad_transform",):
+    # activation_transform, recurrence_detection and grad_transform moved into
+    # the grouped options with the flat-kwarg removals; stop_after stays a real
+    # param (its former spelling was halt).
+    for name in ("stop_after",):
         # No second spelling exists, so any "alias for <itself>" line is a lie.
         assert f"{name}: Alias for ``{name}``" not in doc
         assert f"{name}: Deprecated alias for ``{name}``" not in doc
@@ -200,7 +201,7 @@ def test_trace_docstring_has_no_self_referential_aliases():
         # "name:", after cleandoc normalization).
         assert name in signature_params
         assert doc.count(f"\n{name}:") == 1
-    for removed in ("activation_transform", "recurrence_detection"):
+    for removed in ("activation_transform", "recurrence_detection", "grad_transform"):
         assert removed not in signature_params
 
 

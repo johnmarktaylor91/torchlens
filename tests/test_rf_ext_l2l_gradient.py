@@ -34,13 +34,13 @@ def _trace_chain(*, save: object | None = None) -> object:
         model[0].weight.fill_(1.0)
         model[2].weight.fill_(1.0)
     inputs = torch.ones(1, 1, 5, 5, requires_grad=True)
-    kwargs: dict[str, object] = {"save_mode": "reference"}
+    kwargs: dict[str, object] = {}
     if save is not None:
         kwargs["save"] = save
     return tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         **kwargs,
     )
 
