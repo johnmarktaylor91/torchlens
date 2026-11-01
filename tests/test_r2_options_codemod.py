@@ -54,6 +54,8 @@ def test_visible_variable_migrates_to_each_door() -> None:
         'tl.trace(model, x, save="all", capture=CaptureOptions(layers_to_save=["relu"]))',
         'cap = CaptureOptions(layers_to_save=["relu"])\nunknown(cap)',
         "cap = CaptureOptions(save_preview=True)",
+        'cap = CaptureOptions(layers_to_save="all")\nunknown(cap)',
+        'def f():\n    cap = CaptureOptions(layers_to_save=["relu"])\n    cap = other\n    return tl.trace(model, x, capture=cap)',
     ],
 )
 def test_ambiguous_migrations_require_review(source: str) -> None:

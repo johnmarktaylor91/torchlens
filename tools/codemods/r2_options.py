@@ -393,93 +393,110 @@ def _report_private_builders(tree: ast.Module, reports: list[str], path: Path) -
             )
 
 
+def _capture_door_use(
+    node: ast.AST, parents: dict[int, ast.AST]
+) -> tuple[ast.Call, ast.keyword] | None:
+    """Recognize a whole capture argument at a supported public door."""
+
+    keyword = parents.get(id(node))
+    door = parents.get(id(keyword))
+    if (
+        isinstance(keyword, ast.keyword)
+        and keyword.arg == "capture"
+        and isinstance(door, ast.Call)
+        and _door_name(door.func) is not None
+    ):
+        return door, keyword
+    return None
+
+
+def _visible_capture_uses(
+    ctor: ast.Call, parents: dict[int, ast.AST]
+) -> list[tuple[ast.Call, ast.keyword]]:
+    """Require one binding and exclusively visible same-function capture uses."""
+
+    direct = _capture_door_use(ctor, parents)
+    if direct is not None:
+        return [direct]
+    owner = parents.get(id(ctor))
+    if not isinstance(owner, (ast.Assign, ast.AnnAssign)):
+        return []
+    targets = owner.targets if isinstance(owner, ast.Assign) else [owner.target]
+    if len(targets) != 1 or not isinstance(targets[0], ast.Name):
+        return []
+    scope: ast.AST = owner
+    while id(scope) in parents and not isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        scope = parents[id(scope)]
+    if not isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return []
+    name = targets[0].id
+    refs = [node for node in ast.walk(scope) if isinstance(node, ast.Name) and node.id == name]
+    if sum(isinstance(node.ctx, ast.Store) for node in refs) != 1:
+        return []
+    uses = []
+    for ref in (node for node in refs if isinstance(node.ctx, ast.Load)):
+        context: ast.AST = ref
+        while id(context) in parents and not isinstance(
+            context, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+        ):
+            context = parents[id(context)]
+        use = _capture_door_use(ref, parents)
+        if context is not scope or use is None or ref.lineno <= owner.lineno:
+            return []
+        uses.append(use)
+    return uses
+
+
+def _move_capture_selection(
+    ctor: ast.Call,
+    selection: ast.keyword,
+    removed: list[ast.keyword],
+    uses: list[tuple[ast.Call, ast.keyword]],
+    ed: _Edits,
+) -> None:
+    """Keep whole-argument replacements separate from nested argument deletions."""
+
+    remaining = [kw for kw in ctor.keywords if kw not in removed]
+    owner = uses[0][1]
+    if not remaining and not ctor.args and owner.value is ctor:
+        a, b = ed.span(owner)
+        ed.edits = [edit for edit in ed.edits if not (a <= edit[0] < b)]
+        ed.replace(a, b, f"save={ed.text(selection.value)}")
+        return
+    ed.remove_arg(selection, ctor)
+    for door, keyword in uses:
+        _, end = ed.span(keyword)
+        ed.replace(end, end, f", save={ed.text(selection.value)}")
+
+
 def _extract_capture_selection(
     tree: ast.Module, ed: _Edits, counts: Counter, reports: list[str], path: Path
 ) -> None:
-    """Move removed CaptureOptions fields to every visible capture door."""
+    """Move removed CaptureOptions fields, reporting every ambiguous migration."""
 
     parents = {id(child): node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
-    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
-    for ctor in calls:
+    for ctor in (node for node in ast.walk(tree) if isinstance(node, ast.Call)):
         if not _ctor_name(ctor.func, "CaptureOptions"):
             continue
-        removed = [kw for kw in ctor.keywords if kw.arg in {"layers_to_save", "save_preview"}]
-        if not removed:
-            continue
-        selection = next((kw for kw in removed if kw.arg == "layers_to_save"), None)
-        preview = next((kw for kw in removed if kw.arg == "save_preview"), None)
+        selection = next((kw for kw in ctor.keywords if kw.arg == "layers_to_save"), None)
+        preview = next((kw for kw in ctor.keywords if kw.arg == "save_preview"), None)
+        removed = [selection] if selection is not None else []
         if preview is not None:
             if isinstance(preview.value, ast.Constant) and preview.value.value is False:
                 ed.remove_arg(preview, ctor)
+                removed.append(preview)
                 counts["drop:save_preview"] += 1
             else:
                 reports.append(f"{path}:{ctor.lineno}: save_preview=True/expression; REVIEW")
         if selection is None:
             continue
-        owner = parents.get(id(ctor))
-        uses: list[tuple[ast.Call, ast.keyword]] = []
-        if isinstance(owner, ast.keyword) and owner.arg == "capture":
-            door = parents.get(id(owner))
-            if isinstance(door, ast.Call) and _door_name(door.func) is not None:
-                uses.append((door, owner))
-        elif isinstance(owner, (ast.Assign, ast.AnnAssign)):
-            targets = owner.targets if isinstance(owner, ast.Assign) else [owner.target]
-            if len(targets) == 1 and isinstance(targets[0], ast.Name):
-                scope = owner
-                while id(scope) in parents and not isinstance(
-                    scope, (ast.FunctionDef, ast.AsyncFunctionDef)
-                ):
-                    scope = parents[id(scope)]
-                name = targets[0].id
-                refs = [
-                    n
-                    for n in ast.walk(scope)
-                    if isinstance(n, ast.Name) and n.id == name and isinstance(n.ctx, ast.Load)
-                ]
-                for ref in refs:
-                    kw = parents.get(id(ref))
-                    door = parents.get(id(kw))
-                    if (
-                        isinstance(kw, ast.keyword)
-                        and kw.arg == "capture"
-                        and isinstance(door, ast.Call)
-                        and _door_name(door.func) is not None
-                    ):
-                        uses.append((door, kw))
-                    else:
-                        uses = []
-                        break
-        if (
-            not uses
-            and isinstance(selection.value, ast.Constant)
-            and selection.value.value == "all"
-        ):
-            ed.remove_arg(selection, ctor)
-            counts["drop:default_layers_to_save"] += 1
-            continue
+        uses = _visible_capture_uses(ctor, parents)
         if not uses or any(any(kw.arg == "save" for kw in door.keywords) for door, _ in uses):
             reports.append(
                 f"{path}:{ctor.lineno}: layers_to_save has no unique visible save= door or conflicts with save=; REVIEW"
             )
             continue
-        for door, capture_kw in uses:
-            _, end = ed.span(capture_kw)
-            ed.replace(end, end, f", save={ed.text(selection.value)}")
-        ed.remove_arg(selection, ctor)
-        remaining = [
-            kw
-            for kw in ctor.keywords
-            if kw not in removed
-            or kw is preview
-            and not (isinstance(kw.value, ast.Constant) and kw.value.value is False)
-        ]
-        if not remaining and not ctor.args and isinstance(owner, ast.keyword):
-            # Replace the whole capture argument so nested comma deletions cannot overlap.
-            a, b = ed.span(owner)
-            ed.edits = [edit for edit in ed.edits if not (a <= edit[0] < b)]
-            ed.replace(a, b, f"save={ed.text(selection.value)}")
-            # The insertion at b belongs to this same migration.
-            ed.edits = [edit for edit in ed.edits if not (edit[0] == b and edit[1] == b)]
+        _move_capture_selection(ctor, selection, removed, uses, ed)
         counts["capture_selection_to_save"] += 1
 
 
