@@ -51,11 +51,23 @@ rules, not an internal refactor.
 - `predicate.py`: `RecordContext` is the predicate-visible view during capture; deferred
   values via `is_deferred_value()` / `coerce_deferred_value()`.
 - `selector_eval.py`: selector walking and capability gating (`walk_selector()`,
-  `ensure_supported()`, `contains_followed_by()`); unsupported shapes raise
-  `SelectorCapabilityError` (defined in `intervention/errors`). The `facet`
-  kind refuses in every lifecycle here; its working doors sit above the
+  `ensure_supported()`, `contains_followed_by()`) and the compile-once evaluator:
+  `evaluate()` compiles a selector once per lane (`capture`, `site`, `live`, and
+  the backward `grad_fn` lane) into a plan of matcher nodes cached on the selector,
+  so per-subject evaluation never branches on selector shape; refusals compile to
+  nodes that raise when reached, keeping short-circuit behaviour. Unsupported
+  shapes raise `SelectorCapabilityError` (defined in `intervention/errors`). The
+  `facet` kind refuses in every lifecycle here; its working doors sit above the
   evaluator (`resolver.resolve_sites` for a bare facet selector, the save-only
   predicate for `trace(save=)`), and the refusal message names them.
+  `selector_from_spec()` is a builder table keyed by spec kind.
+- `_selector_nodes.py` / `_selector_universe.py`: leaf modules (no package imports)
+  holding the duck-typed plan nodes (label, substring, regex, func-transform,
+  grad-kind and backward-pass matchers) and the per-lifecycle subject adapters
+  (label universes, module-address candidates, GradFn type and call readers).
+  Nodes that need package types (container paths, `RecordContext`, GradFn pairing,
+  episode sessions) stay in `selector_eval.py` so the split adds nothing to the
+  import cycle measured by `scripts/checks/layering.py`.
 
 ## Small modules
 - `refs.py`: `DtypeRef`, `DeviceRef`, `TensorRef`, `ParamRef`, `DeferredRef`, `ReservedLabel`.
