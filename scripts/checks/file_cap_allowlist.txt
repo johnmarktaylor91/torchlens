@@ -322,7 +322,7 @@ torchlens/_io/streaming.py::BundleStreamWriter._validate_blob_submission	62
 torchlens/_io/streaming.py::BundleStreamWriter.publish_staged	78
 torchlens/_io/streaming.py::BundleStreamWriter.stage_for_settlement	87
 torchlens/_io/streaming.py::BundleStreamWriter.submit_blob	78
-torchlens/_io/tlspec.py	1115
+torchlens/_io/tlspec.py	1097
 torchlens/_io/tlspec.py::_TlSpecWriter.write_bundle	137
 torchlens/_io/tlspec.py::_TlSpecWriter.write_trace_manifest	72
 torchlens/_ir/capture_events.py	1226

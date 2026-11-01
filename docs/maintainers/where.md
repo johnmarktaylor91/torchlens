@@ -20,7 +20,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 18 | 10525 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 45 | 34603 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 45 | 34602 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 18 | 10066 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 11 | 5199 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2408 |
@@ -34,7 +34,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2940 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2113 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
-| `torchlens._utils` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. | 30 | 22167 |
+| `torchlens._utils` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. | 30 | 22168 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 64 | 42241 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 749 |
@@ -374,7 +374,7 @@ Extraction v2 runtime (extract memo items 4-19). (18 modules, 10525 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (45 modules, 34603 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (45 modules, 34602 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -382,7 +382,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (4
 | `_artifact_anchors` | Manifest <-> metadata integrity anchors (AUD-CODE 3.0b). | 91 |
 | `_artifact_strings` | Shared closed-grammar sanitizer for attacker-controlled portable device strings. | 162 |
 | `_canonical_pickle` | Hash-seed-independent metadata pickling for portable bundles (B3R4-). | 91 |
-| `_durability` | Crash-durability helpers for atomic artifact publishes. | 131 |
+| `_durability` | Crash-durability helpers for atomic artifact publishes. | 148 |
 | `_forgery_identity_facts` | C07X identity-fact load validators (tlspec v9 entry-dark slots). | 257 |
 | `_inline_tensor` | Inline metadata tensors: a bounded, TorchLens-owned pickle reduction. | 269 |
 | `_json` | Bounded JSON reads for attacker-controlled ''.tlspec'' manifest boundaries. | 385 |
@@ -421,7 +421,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (4
 | `streaming` | Streaming bundle writer used during forward-pass out capture. | 1009 |
 | `streaming_async` | Bounded single-worker write pipeline behind the async streaming bundle writer. | 229 |
 | `tensor_policy` | Compatibility checks for tensors saved into portable bundles. | 163 |
-| `tlspec` | Unified ''.tlspec'' manifest writer helpers. | 1115 |
+| `tlspec` | Unified ''.tlspec'' manifest writer helpers. | 1097 |
 | `writer_contract` | The normative writer contract and its digest (ecosystem MEMO 3.1). | 151 |
 
 ### `torchlens._ir`
@@ -660,7 +660,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 
 
 ### `torchlens._utils`
 
-Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. (30 modules, 22167 lines)
+Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. (30 modules, 22168 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -692,7 +692,7 @@ Focused utility modules: RNG, tensor ops, argument handling, introspection, coll
 | `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1104 |
 | `lazy_state` | Shared detection and enumeration of un-materialized lazy module state. | 167 |
 | `rng` | RNG and autocast state capture/restore for reproducible forward-pass replay. | 5080 |
-| `tensor_leaves` | Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload. | 99 |
+| `tensor_leaves` | Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload. | 100 |
 | `tensor_utils` | Tensor utilities: NaN-aware comparison, memory calculation, safe_copy, safe device transfer. | 1958 |
 
 ### `torchlens._visualization`
