@@ -29,10 +29,9 @@ field hulls) is carried as provenance disclosure (``provenance.relation``,
 one of the closed lattice ``exact | upper_bound | lower_bound | unknown``),
 never as a fuzzy mask.
 
-The kind vocabulary ``ACT | PARAM | EDGE`` is a CLOSED public vocabulary
-(S2-routed). Mixed-kind composition refuses typed
-(``selection_kind_incompatible``); the matrix cells change only via explicit
-D-ruling landing as an S2 amendment, never a lane-local edit.
+The kind vocabulary ``ACT | PARAM | EDGE`` is a CLOSED public vocabulary (S2-routed).
+Mixed-kind composition refuses typed (``selection_kind_incompatible``); the matrix
+cells change only via explicit D-ruling landing as an S2 amendment, never a lane-local edit.
 
 ``Selection`` is SESSION-TIME ONLY and is never persisted.
 """
@@ -62,14 +61,6 @@ from .mask import (
     _mask_union,
     _mask_whole,
 )
-from .resolver import (
-    _iter_sites,
-    _normalize_query,
-    _resolve_branch_sites,
-    multipass_bare_label_message,
-    split_site_branches,
-)
-from .selectors import _grad_selection_refusal
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -1057,6 +1048,7 @@ def _act_entry(op: Any, mask: _Mask, relation: str, source: str) -> Site:
 
 def _forward_ops(trace: Any) -> tuple[Any, ...]:
     """Return the trace's forward ops in execution order."""
+    from .resolver import _iter_sites
 
     return tuple(_iter_sites(trace, "forward"))
 
@@ -1100,6 +1092,8 @@ def _resolve_combinator(node: _Combinator, trace: Any, kind: str) -> Selection:
 
 def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> Selection:
     """Resolve a lifted selector to whole-site masks over its matched sites."""
+    from .resolver import _normalize_query, _resolve_branch_sites, split_site_branches
+    from .selectors import _grad_selection_refusal
 
     matched: list[Any] = []
     for branch in split_site_branches(node.selector):
@@ -1276,9 +1270,22 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
     return Selection(trace, "PARAM", [entry])
 
 
+def _multipass_bare_label_refusal(site: str, matches: list[Any]) -> SelectionError:
+    """Refuse a multi-pass layer's bare spelling: units() addresses ONE op's index space."""
+    from .resolver import multipass_bare_label_message
+
+    layer_label = getattr(matches[0], "layer_label", None) or site
+    pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
+    return _unresolvable(
+        "multipass_bare_label",
+        multipass_bare_label_message(layer_label, pass_indices),
+        site=site,
+        pass_indices=tuple(pass_indices),
+    )
+
+
 def _resolve_unit_term(node: _UnitTerm, trace: Any) -> Selection:
     """Resolve an explicit site + index set."""
-
     matches = _find_act_ops(trace, node.site)
     if not matches:
         raise _unresolvable(
@@ -1287,16 +1294,7 @@ def _resolve_unit_term(node: _UnitTerm, trace: Any) -> Selection:
             site=node.site,
         )
     if len(matches) > 1 and len({getattr(op, "layer_label", None) for op in matches}) == 1:
-        # A layer-wide spelling of a multi-pass layer names N distinct ops;
-        # units() addresses ONE op's index space, so never guess a pass.
-        layer_label = getattr(matches[0], "layer_label", None) or node.site
-        pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
-        raise _unresolvable(
-            "multipass_bare_label",
-            multipass_bare_label_message(layer_label, pass_indices),
-            site=node.site,
-            pass_indices=tuple(pass_indices),
-        )
+        raise _multipass_bare_label_refusal(node.site, matches)
     entries = []
     for op in matches:
         shape = _site_shape(op)
@@ -1518,6 +1516,8 @@ def random_like(
 
 def _selection_from_selector(selector: Any) -> Selector:
     """Lift a BaseSelector as a selector-term (predicate meaning intact)."""
+    from .resolver import split_site_branches
+    from .selectors import _grad_selection_refusal
 
     branches = split_site_branches(selector)
     if any(branch.universe == "gradient" for branch in branches):

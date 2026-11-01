@@ -47,6 +47,11 @@ from collections.abc import Callable, Iterator, Sequence
 from functools import partial
 from typing import Any, Literal, cast
 
+from .._selection.errors import (
+    SelectorCapabilityError,
+    SelectorCompositionError,
+    SiteResolutionError,
+)
 from .._selection.selectors import (
     BaseSelector,
     CompositeSelector,
@@ -55,11 +60,6 @@ from .._selection.selectors import (
     PrecededBySelector,
 )
 from .._selection.target import FrozenTargetSpec, TargetSpec
-from ..intervention.errors import (
-    SelectorCapabilityError,
-    SelectorCompositionError,
-    SiteResolutionError,
-)
 from ._selector_nodes import (
     _compile_backward_pass_capture,
     _compile_contains,
@@ -989,7 +989,7 @@ def _raise_for_finalized_live_label(selector_kind: str, label_value: str) -> Non
     """Reject finalized-looking label selectors during live capture."""
 
     if looks_like_finalized_label(label_value):
-        from ..intervention.errors import LiveModeLabelError
+        from .._selection.errors import LiveModeLabelError
 
         raise LiveModeLabelError(live_label_error_message(label_value, selector_kind))
 
