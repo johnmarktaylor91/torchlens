@@ -324,9 +324,7 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
         failures=failures,
         classes=classes,
         histograms=(replayed_histogram, pure_unverified_histogram, effect_region_histogram),
-        decisions_list=decisions_list,
-        unverified_reasons=unverified_reasons,
-        exempted_reasons=exempted_reasons,
+        decision_tallies=(decisions_list, unverified_reasons, exempted_reasons),
     )
 
 
@@ -348,13 +346,12 @@ def _detailed_result(
     failures: list[str],
     classes: dict[str, TFOpClass],
     histograms: tuple[Counter[str], Counter[str], Counter[str]],
-    decisions_list: list[Mapping[str, Any]],
-    unverified_reasons: Counter[str],
-    exempted_reasons: Counter[str],
+    decision_tallies: tuple[list[Mapping[str, Any]], Counter[str], Counter[str]],
 ) -> TFValidationResult:
-    """Assemble the detailed result from the replay loop's tallies."""
+    """Assemble the detailed result from the loop's tallies (decisions, unverified, exempted)."""
 
     replayed_histogram, pure_unverified_histogram, effect_region_histogram = histograms
+    decisions_list, unverified_reasons, exempted_reasons = decision_tallies
     decisions = tuple(decisions_list)
     return TFValidationResult(
         counts=counts,
