@@ -4,7 +4,7 @@ Cell universe (see ``README.md``):
 
 * the cheap corpus cases (the manifest's smoke tier) times the core pairs,
   ``heavy`` (each cell takes 1 to 7 s);
-* every pair of the 21 features, spread round-robin over the cheap cases so
+* every pair of the interaction-matrix features, spread round-robin over the cheap cases so
   each pair runs on one real model per session, ``slow``;
 * every other case (the rest of the corpus and the toy models) times the core
   pairs, ``slow``.
@@ -166,7 +166,7 @@ def test_feature_axis_matches_interaction_matrix() -> None:
 
     matrix = json.loads(MATRIX_PATH.read_text(encoding="utf-8"))
     assert {f.name for f in FEATURES} == set(matrix["features"])
-    assert len(FEATURES) == 21
+    assert len(FEATURES) == len(matrix["features"])
 
 
 def test_core_pairs_are_admitted_by_the_matrix() -> None:

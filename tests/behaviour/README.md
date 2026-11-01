@@ -2,7 +2,7 @@
 
 One parametrized harness replaces hand-written per-feature test files: every
 model in the net (the classics corpus plus the toy models) runs under pairs of
-the 21 interaction-matrix features, and every cell asserts the same six
+the interaction-matrix features, and every cell asserts the same six
 oracles through the public surface:
 
 | oracle | what it checks |
@@ -31,7 +31,7 @@ or mark the cell to make it pass (the validation-integrity rule in
 | file | holds |
 | --- | --- |
 | `cases.py` | the case registry: corpus entries (from `tests/classics_corpus/manifest.json`) and the toy rows |
-| `features.py` | the 21 feature rows: name, cost class, oracles changed, tags required, `prepare` and `after` hooks |
+| `features.py` | the feature rows (one per interaction-matrix feature): name, cost class, oracles changed, tags required, `prepare` and `after` hooks |
 | `harness.py` | `run_cell(case, features, tmp) -> CellResult` and the public-surface helpers |
 | `test_matrix.py` | the cell universe, one test per oracle, and the pins that tie the feature axis to `tests/interaction_matrix.json` |
 | `conftest.py` | the per-cell result cache and the xdist grouping |
@@ -42,7 +42,7 @@ or mark the cell to make it pass (the validation-integrity rule in
 * The cheap corpus cases (the manifest's `smoke` tier, the 13 cheapest
   measured entries) times `CORE_PAIRS`: `heavy` (each cell takes 1 to 7 s, too
   many for an unmarked family's aggregate budget).
-* Every pair of the 21 features once, spread round-robin over the cheap
+* Every pair of the interaction-matrix features once, spread round-robin over the cheap
   cases: `slow`.
 * Every other case (the rest of the corpus and the toys) times `CORE_PAIRS`:
   `slow`.
