@@ -1263,10 +1263,11 @@
   {
    "a": "fast_run",
    "b": "storage",
-   "status": "composes",
-   "evidence": "docs/reference/limitations.md",
-   "confidence": "low",
-   "note": "A loaded runnable artifact needs one verified ordinary run before fast runs are admitted."
+   "status": "refuses",
+   "evidence": "tests/test_storage_refusal_codes.py::test_run_on_streamed_trace_refuses_trace_option_unsupported",
+   "code": "trace_option_unsupported",
+   "confidence": "high",
+   "note": "A to_disk trace does not run, fast runs included (IO-8); a loaded runnable artifact needs one verified ordinary run before fast runs are admitted."
   },
   {
    "a": "fast_run",
@@ -1739,9 +1740,11 @@
   {
    "a": "rerun",
    "b": "storage",
-   "status": "composes",
-   "evidence": "tests/test_chunk_size.py::test_rerun_chunk_size_matches_manual_append_loop",
-   "confidence": "medium"
+   "status": "refuses",
+   "evidence": "tests/test_storage_refusal_codes.py::test_run_on_streamed_trace_refuses_trace_option_unsupported",
+   "code": "trace_option_unsupported",
+   "confidence": "high",
+   "note": "A to_disk trace does not run: run() would re-capture every payload into RAM while the bundle kept the first capture (IO-8). chunk_size reruns compose (tests/test_chunk_size.py::test_rerun_chunk_size_matches_manual_append_loop)."
   },
   {
    "a": "rerun",

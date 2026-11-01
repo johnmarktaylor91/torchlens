@@ -635,6 +635,10 @@ class TraceValidationMixin(_TraceMixinBase):
             When no provider is available: an analysis-only loaded Trace, or a
             live Trace whose source model has been garbage-collected (see
             Notes).
+        InvalidArgumentError
+            ``trace_option_unsupported`` for a Trace captured with ``storage=tl.to_disk(...)``:
+            a run would re-capture every payload into RAM while the bundle kept the first
+            capture, so capture again (``to_disk`` to a new path, or without it) and run that.
 
         Notes
         -----
@@ -679,7 +683,13 @@ class TraceValidationMixin(_TraceMixinBase):
         # classes. Pre-refuse only the statuses EVERY provider row refuses
         # (FAILED / ABORTED_NONFINITE / UNKNOWN); HALTED stays with the
         # provider-specific gates because the loaded-sparse row allows it.
-        from .._capture.outcome import CaptureStatus, outcome_for, require_capture_capability
+        from .._capture.outcome import (
+            CaptureStatus,
+            outcome_for,
+            refuse_streamed_trace_run,
+            require_capture_capability,
+        )
+        from .._runnable_execution import refuse_truncated_rerun, run_live_trace
 
         settled_outcome = outcome_for(self)
         if settled_outcome is None:
@@ -713,21 +723,8 @@ class TraceValidationMixin(_TraceMixinBase):
         from .._capture._episode_coupling import refuse_coupled_replay
 
         refuse_coupled_replay(self)
-        if self.__dict__.get("_run_truncation_skipped_raw_labels") is not None:
-            # L4 3.3.2: a truncated result cannot be re-run (any provider). The
-            # poison bit alone does NOT refuse a re-run -- the transaction's
-            # inherited-status leg would silently settle UNVERIFIABLE instead,
-            # which is exactly the silence the capability table forbids.
-            from .._runnable import RunnableErrorCode
-
-            raise RunCapabilityUnavailableError(
-                "This Trace is a TRUNCATED run product (until=): it covers only "
-                "the executed prefix, so re-running it would replay a cut "
-                "forward. Run the ORIGINAL source trace instead (with or "
-                "without until=).",
-                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                detection_stage="truncated_result_rerun",
-            )
+        refuse_streamed_trace_run(self)  # IO-8: a to_disk trace's payloads are its bundle
+        refuse_truncated_rerun(self)
         readiness = self._runnable.readiness
         loaded_provider = getattr(readiness, "provider", None)
         use_unified_provider = inputs is not MISSING or (
@@ -912,7 +909,6 @@ class TraceValidationMixin(_TraceMixinBase):
 
             require_structure_only_capability(self, "live_replay")
             _refuse_stats_capture(self, "live_replay")
-            from .._runnable_execution import run_live_trace
             from .._runnable_transaction import _LiveRunOptions
 
             _refuse_state_compromised_live_run(self)
@@ -1261,9 +1257,8 @@ class TraceValidationMixin(_TraceMixinBase):
         Trace
             This model log, for chaining.
         """
-        from torchlens.backends.registry import BackendUnsupportedError
-
         from .._capture.outcome import require_capture_capability
+        from ..backends._backend_protocol import refuse_backward_capture_unsupported
         from ..backends.registry import get_backend_spec
 
         # N3: the backward projection assumes a structurally complete captured
@@ -1276,12 +1271,7 @@ class TraceValidationMixin(_TraceMixinBase):
         _refuse_stats_capture(self, "backward_grads")
         _refuse_loaded_backward_capture(self, "log_backward")
         spec = get_backend_spec(getattr(self, "backend", "torch"))
-        if not spec.capabilities.backward_capture:
-            raise BackendUnsupportedError(
-                f"Backend {spec.name!r} does not support backward capture. "
-                "Use trace.derived_grads when this backend exposes leaf-level "
-                "derived gradients."
-            )
+        refuse_backward_capture_unsupported(spec)
         from ..backends.torch.backward import log_backward as _impl
 
         return cast("Trace", _impl(self, loss, **backward_kwargs))
@@ -1312,9 +1302,8 @@ class TraceValidationMixin(_TraceMixinBase):
         Any
             Backward recording context manager.
         """
-        from torchlens.backends.registry import BackendUnsupportedError
-
         from .._capture.outcome import require_capture_capability
+        from ..backends._backend_protocol import refuse_backward_capture_unsupported
         from ..backends.registry import get_backend_spec
 
         require_capture_capability(self, "backward")
@@ -1324,12 +1313,7 @@ class TraceValidationMixin(_TraceMixinBase):
         _refuse_stats_capture(self, "backward_grads")
         _refuse_loaded_backward_capture(self, "recording_backward")
         spec = get_backend_spec(getattr(self, "backend", "torch"))
-        if not spec.capabilities.backward_capture:
-            raise BackendUnsupportedError(
-                f"Backend {spec.name!r} does not support backward capture. "
-                "Use trace.derived_grads when this backend exposes leaf-level "
-                "derived gradients."
-            )
+        refuse_backward_capture_unsupported(spec)
         from ..backends.torch.backward import recording_backward as _impl
 
         return _impl(self)

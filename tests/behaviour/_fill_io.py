@@ -432,13 +432,9 @@ def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
 
     # Streamed payloads live on disk: every saved op carries an ``out_ref``. The output tail is
     # always retained (``torchlens/_user_funcs.py``, "always-retained output tail"): the caller
-    # holds that tensor anyway. A partner that changes forward_match reran the trace in the
-    # forward_match oracle, and ``trace.run`` re-captures every payload into RAM (``to_disk``
-    # docstring): then the promise is that each saved op holds its payload in memory.
-    if cell.changes("forward_match"):
-        rerun_unheld = sorted(op.label for op in trace.saved_ops if op.out is None)
-        cell.expect(not rerun_unheld, f"rerun saved ops without a payload: {rerun_unheld[:8]}")
-        return
+    # holds that tensor anyway. A partner that changes forward_match (intervene) makes the
+    # forward_match oracle call ``trace.run``, which refuses typed on a streamed trace
+    # (``trace_option_unsupported``, IO-8), so the payloads stay the bundle's here too.
     unstreamed = sorted(
         op.label for op in trace.saved_ops if op.out_ref is None and not _is_output(op)
     )
