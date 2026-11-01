@@ -2223,8 +2223,8 @@ class MLXBackend:
         policy (it is never laundered into a constant).
         """
 
-        param_ids = getattr(trace, "_mlx_param_ids", frozenset())
-        external = getattr(trace, "_mlx_external_arrays", {})
+        param_ids: frozenset[int] = getattr(trace, "_mlx_param_ids", frozenset())
+        external: dict[int, Any] = getattr(trace, "_mlx_external_arrays", {})
         policy = self._capture_policy(trace)
         leaves: list[Any] = []
         for value in args:

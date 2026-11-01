@@ -330,7 +330,7 @@ def test_mlx_perturbation_scan_includes_kwargs() -> None:
         args=(),
         kwargs={"a": value},
     )
-    assert _perturbation_evidence(capture, baseline) == PERTURBATION_PROVED
+    assert _perturbation_evidence(capture, baseline)[0] == PERTURBATION_PROVED
 
     def no_tensor() -> mx.array:
         return mx.ones((2, 2))
@@ -343,7 +343,7 @@ def test_mlx_perturbation_scan_includes_kwargs() -> None:
         kwargs={},
     )
     assert (
-        _perturbation_evidence(constant_capture, (no_tensor(),))
+        _perturbation_evidence(constant_capture, (no_tensor(),))[0]
         == PERTURBATION_NO_PERTURBABLE_INPUT
     )
 
@@ -389,7 +389,7 @@ def test_mlx_perturbation_proves_saturated_dependency_and_rejects_vacuous() -> N
         saturated = MLXOpCapture(
             labels_raw=("relu_1_raw",), op_name="relu", func=nn.relu, args=(value,)
         )
-        assert _perturbation_evidence(saturated, baseline) == PERTURBATION_PROVED
+        assert _perturbation_evidence(saturated, baseline)[0] == PERTURBATION_PROVED
 
         def ignores_argument(x: mx.array) -> mx.array:
             return mx.zeros((1, 3))
@@ -397,7 +397,7 @@ def test_mlx_perturbation_proves_saturated_dependency_and_rejects_vacuous() -> N
         vacuous = MLXOpCapture(
             labels_raw=("vacuous_1_raw",), op_name="vacuous", func=ignores_argument, args=(value,)
         )
-        assert _perturbation_evidence(vacuous, (mx.zeros((1, 3)),)) == PERTURBATION_UNPROVED
+        assert _perturbation_evidence(vacuous, (mx.zeros((1, 3)),))[0] == PERTURBATION_UNPROVED
 
 
 def test_mlx_validation_never_returns_a_bool() -> None:
