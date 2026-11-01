@@ -15,6 +15,7 @@ from torchlens.backends.tinygrad._rules import (
     ReplayVerdict,
     constant_kind_for_uop,
     describe_uop,
+    refusal_code,
     tinygrad_constant_ops,
 )
 from torchlens.errors import BackendUnsupportedError
@@ -123,8 +124,8 @@ def test_explicit_seed_refuses_with_registered_code() -> None:
 
     with pytest.raises(BackendUnsupportedError) as info:
         tl.trace(_block, Tensor([1.0, 2.0]), backend="tinygrad", random_seed=3)
-    assert info.value.code == "explicit_seed_unsupported"
-    assert info.value.code in REFUSAL_CODES
+    assert refusal_code(info.value) == "explicit_seed_unsupported"
+    assert refusal_code(info.value) in REFUSAL_CODES
 
 
 def test_module_identity_mode_refuses_with_registered_code() -> None:
@@ -132,7 +133,7 @@ def test_module_identity_mode_refuses_with_registered_code() -> None:
 
     with pytest.raises(BackendUnsupportedError) as info:
         tl.trace(_block, Tensor([1.0, 2.0]), backend="tinygrad", module_identity_mode="nope")
-    assert info.value.code == "module_identity_mode_unsupported"
+    assert refusal_code(info.value) == "module_identity_mode_unsupported"
 
 
 def test_host_copy_keeps_shape_and_dtype() -> None:

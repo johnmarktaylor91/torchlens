@@ -17,6 +17,7 @@ from torchlens._io.scrub import scrub_for_save
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.backends.tinygrad import GradOptions, TinygradBackend, capabilities
+from torchlens.backends.tinygrad._rules import refusal_code
 from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
 tinygrad = pytest.importorskip("tinygrad")
@@ -476,7 +477,7 @@ def test_unrealized_closure_constant_refuses_typed() -> None:
     with pytest.raises(BackendUnsupportedError) as info:
         tl.trace(forward, x, backend="tinygrad")
 
-    assert info.value.code == "constant_unrealizable"
+    assert refusal_code(info.value) == "constant_unrealizable"
     assert "BUFFER" in str(info.value)
 
 
@@ -497,7 +498,7 @@ def test_rng_bearing_graph_refuses_typed() -> None:
     with pytest.raises(BackendUnsupportedError) as info:
         tl.trace(lambda value: layer(value).relu(), x, backend="tinygrad")
 
-    assert info.value.code == "rng_state_in_graph"
+    assert refusal_code(info.value) == "rng_state_in_graph"
 
 
 def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
