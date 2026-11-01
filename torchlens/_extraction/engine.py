@@ -31,6 +31,8 @@ from torch import nn
 
 from torchlens.transforms._errors import TransformContractError
 
+from .._data_classes._layer_sites import layer_site_key
+from .._data_classes.layer import Layer
 from .._data_substrate import (
     ArtifactWriter,
     stimulus_ids_digest,
@@ -1115,8 +1117,6 @@ def _site_identity(
 ) -> tuple[str, str | None, str | None]:
     """Resolve one output key's layer label, site key and site-key-unavailable code."""
 
-    from .._data_classes._layer_sites import layer_site_key
-    from .._data_classes.layer import Layer
     from ..errors._base import TorchLensError
 
     if layer_views is not None and key in layer_views:

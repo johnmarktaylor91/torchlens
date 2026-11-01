@@ -22,6 +22,7 @@ from torch import nn
 from .. import _state
 from .._constants import get_orig_torch_funcs
 from .._utils import _torch_compat as _tc
+from .._utils._subprocess import run_bounded_subprocess
 from .._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS, get_torch_capability_snapshot
 from .._utils.introspection import nested_getattr
 
@@ -229,7 +230,6 @@ def _probe_graphviz() -> _EnvironmentCheck:
         # timeout killed only the direct child, so a wedged ``dot`` wrapper's
         # grandchild survived the "bounded" probe for the life of the box;
         # the shared runner tears down the whole process group.
-        from .._utils._subprocess import run_bounded_subprocess
 
         completed = run_bounded_subprocess(
             ["dot", "-V"],

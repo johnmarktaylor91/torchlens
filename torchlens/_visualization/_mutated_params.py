@@ -22,6 +22,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote as _percent_quote
 
+from torchlens._data_classes.layer import Layer
+from torchlens._data_classes.op import Op
+
 from ._render_common import (
     FROZEN_PARAMS_BG_COLOR,
     TRAINABLE_PARAMS_BG_COLOR,
@@ -119,9 +122,6 @@ def _receiver_param(op: Any) -> Any | None:
     Any | None
         The receiver ``Param``, or ``None``.
     """
-
-    from torchlens._data_classes.layer import Layer
-    from torchlens._data_classes.op import Op
 
     if not _is_inplace_func_name(getattr(op, "func_name", None)):
         return None

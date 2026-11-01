@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from .._data_classes._layer_sites import layer_site_key
 from .._data_classes._site_key import ROOT_CALL_INSTANCE, SITE_KEY_PREFIX, parse_site_key
 
 if TYPE_CHECKING:
@@ -144,7 +145,6 @@ def _check_layer_site_coherence(ml: Trace, name: str) -> None:
     tripwire exists to catch.
     """
 
-    from .._data_classes._layer_sites import layer_site_key
     from .._errors import InvalidArgumentError
     from .invariants import MetadataInvariantError
 

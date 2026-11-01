@@ -17,6 +17,7 @@ from typing import Any, cast
 import numpy as np
 import torch
 
+from torchlens._data_classes import layer as _layer_mod, op as _op_mod
 from torchlens._runnable import RunnableCompatibility, RunnableDiagnostic
 
 from .. import __version__ as TORCHLENS_VERSION
@@ -1683,8 +1684,6 @@ def _build_call_arguments(
     diagnostics: list[RunnableDiagnostic],
 ) -> tuple[list[TensorArgumentRef], list[LiteralArgumentRef], bool]:
     """Build tensor and literal call leaves from one cooked argument template."""
-    from torchlens._data_classes import layer as _layer_mod, op as _op_mod
-
     tensor_args: list[TensorArgumentRef] = []
     literal_args: list[LiteralArgumentRef] = []
     is_record = isinstance(op, (_op_mod.Op, _layer_mod.Layer))
