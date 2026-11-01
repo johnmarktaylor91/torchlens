@@ -4032,6 +4032,8 @@ package-docstrings	torchlens/_io/_artifact_strings.py	57
 package-docstrings	torchlens/_io/_canonical_pickle.py	21
 package-docstrings	torchlens/_io/_canonical_pickle.py	3.10
 package-docstrings	torchlens/_io/_canonical_pickle.py	43
+package-docstrings	torchlens/_io/_durability.py	600
+package-docstrings	torchlens/_io/_durability.py	700
 package-docstrings	torchlens/_io/_forgery_identity_facts.py	10
 package-docstrings	torchlens/_io/_forgery_identity_facts.py	3.0
 package-docstrings	torchlens/_io/_forgery_identity_facts.py	41
@@ -4073,6 +4075,7 @@ package-docstrings	torchlens/_io/_safe_unpickle.py	88
 package-docstrings	torchlens/_io/_save_gates.py	3.2
 package-docstrings	torchlens/_io/_save_gates.py	4.3
 package-docstrings	torchlens/_io/_save_gates.py	43
+package-docstrings	torchlens/_io/_small_raw.py	256
 package-docstrings	torchlens/_io/_torch_symbols.py	42
 package-docstrings	torchlens/_io/_torch_symbols.py	45
 package-docstrings	torchlens/_io/_torch_symbols.py	47
@@ -4169,7 +4172,6 @@ package-docstrings	torchlens/_io/scrub.py	10
 package-docstrings	torchlens/_io/scrub.py	1041
 package-docstrings	torchlens/_io/scrub.py	2026
 package-docstrings	torchlens/_io/scrub.py	21
-package-docstrings	torchlens/_io/scrub.py	256
 package-docstrings	torchlens/_io/scrub.py	68
 package-docstrings	torchlens/_io/scrub.py	69
 package-docstrings	torchlens/_io/sidecar.py	14
@@ -4184,9 +4186,7 @@ package-docstrings	torchlens/_io/state_keys.py	64
 package-docstrings	torchlens/_io/streaming.py	18
 package-docstrings	torchlens/_io/streaming.py	2.0_
 package-docstrings	torchlens/_io/streaming.py	256
-package-docstrings	torchlens/_io/streaming.py	600
 package-docstrings	torchlens/_io/streaming.py	62
-package-docstrings	torchlens/_io/streaming.py	700
 package-docstrings	torchlens/_io/streaming_async.py	256
 package-docstrings	torchlens/_io/tlspec.py	12
 package-docstrings	torchlens/_io/tlspec.py	256
@@ -4199,14 +4199,16 @@ package-docstrings	torchlens/_io/writer_contract.py	2.34.1
 package-docstrings	torchlens/_io/writer_contract.py	256
 package-docstrings	torchlens/_io/writer_contract.py	3.1
 package-docstrings	torchlens/_io/writer_contract.py	3.3
+package-docstrings	torchlens/_ir/_container_type_probes.py	3.11
+package-docstrings	torchlens/_ir/_container_type_probes.py	3.12
+package-docstrings	torchlens/_ir/_container_type_probes.py	47
+package-docstrings	torchlens/_ir/_container_type_probes.py	51
 package-docstrings	torchlens/_ir/capture_events.py	15
 package-docstrings	torchlens/_ir/capture_events.py	2.4
 package-docstrings	torchlens/_ir/capture_events.py	4.5.5
 package-docstrings	torchlens/_ir/container.py	11
 package-docstrings	torchlens/_ir/container.py	25
 package-docstrings	torchlens/_ir/container.py	27
-package-docstrings	torchlens/_ir/container.py	3.11
-package-docstrings	torchlens/_ir/container.py	3.12
 package-docstrings	torchlens/_ir/container.py	37
 package-docstrings	torchlens/_ir/container.py	39
 package-docstrings	torchlens/_ir/container.py	42
@@ -4424,6 +4426,7 @@ package-docstrings	torchlens/_postprocess/__init__.py	20
 package-docstrings	torchlens/_postprocess/__init__.py	20,
 package-docstrings	torchlens/_postprocess/__init__.py	256
 package-docstrings	torchlens/_postprocess/_buffer_addresses.py	83
+package-docstrings	torchlens/_postprocess/_conditional_records.py	24
 package-docstrings	torchlens/_postprocess/_executor.py	10
 package-docstrings	torchlens/_postprocess/_executor.py	11
 package-docstrings	torchlens/_postprocess/_executor.py	11,
@@ -4481,7 +4484,6 @@ package-docstrings	torchlens/_postprocess/finalization.py	18,
 package-docstrings	torchlens/_postprocess/finalization.py	19
 package-docstrings	torchlens/_postprocess/finalization.py	20
 package-docstrings	torchlens/_postprocess/finalization.py	21.
-package-docstrings	torchlens/_postprocess/finalization.py	24
 package-docstrings	torchlens/_postprocess/finalization.py	52
 package-docstrings	torchlens/_postprocess/finalization.py	64
 package-docstrings	torchlens/_postprocess/finalization.py	78

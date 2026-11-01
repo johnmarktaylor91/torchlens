@@ -532,3 +532,127 @@ def test_trace_container_capability_fails_closed_on_unknown_backend() -> None:
     assert _trace_container_capability(legacy, Role.MODEL_INPUT) == str(
         torch_caps.input_container_structure
     )
+
+
+class _TupleAliasModel(nn.Module):
+    """Return one tensor object in two tuple slots."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Run the model."""
+
+        a = x * 2
+        return a, a
+
+
+class _NestedListAliasModel(nn.Module):
+    """Return the final tensor bare and again inside a list (the SPCA-Net shape)."""
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        """Run the model."""
+
+        x0 = x * 2
+        x1 = x0 + 1
+        return x1, [x0, x1]
+
+
+class _DictAliasModel(nn.Module):
+    """Return the same tensors under several dict keys and nested lists."""
+
+    def forward(self, x: torch.Tensor) -> dict[str, Any]:
+        """Run the model."""
+
+        a = torch.log(x * 2)
+        b = torch.sin(x) * 3
+        c = torch.tan(x)
+        return {"a": [a, b], "b": c, "c": [a, b, c], "d": [[a, b]]}
+
+
+class _EvalDropoutAliasModel(nn.Module):
+    """In eval mode dropout returns its input, so ``z`` is ``mu`` (the scGNN VAE shape)."""
+
+    def __init__(self) -> None:
+        """Build the layers."""
+
+        super().__init__()
+        self.mu = nn.Linear(4, 3)
+        self.drop = nn.Dropout(0.5)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Run the model."""
+
+        mu = self.mu(x)
+        z = self.drop(mu)
+        return z, mu, mu.exp()
+
+
+_ALIAS_MODELS = [
+    pytest.param(_TupleAliasModel, id="tuple"),
+    pytest.param(_NestedListAliasModel, id="tuple_list"),
+    pytest.param(_DictAliasModel, id="dict_nested"),
+    pytest.param(_EvalDropoutAliasModel, id="eval_dropout"),
+]
+
+
+def _alias_leaves(obj: Any) -> list[torch.Tensor]:
+    """Flatten tuple/list/dict outputs into their tensor leaves in walk order."""
+
+    if isinstance(obj, torch.Tensor):
+        return [obj]
+    if isinstance(obj, dict):
+        return [leaf for value in obj.values() for leaf in _alias_leaves(value)]
+    return [leaf for value in obj for leaf in _alias_leaves(value)]
+
+
+def _assert_same_output(rebuilt: Any, plain: Any) -> None:
+    """Assert ``rebuilt`` has the container shape and leaf values of ``plain``."""
+
+    assert type(rebuilt) is type(plain)
+    if isinstance(plain, dict):
+        assert list(rebuilt) == list(plain)
+    want = _alias_leaves(plain)
+    got = _alias_leaves(rebuilt)
+    assert len(got) == len(want)
+    for got_leaf, want_leaf in zip(got, want):
+        assert torch.equal(got_leaf, want_leaf)
+
+
+def _alias_model(model_cls: type[nn.Module]) -> tuple[nn.Module, torch.Tensor, Any]:
+    torch.manual_seed(0)
+    model = model_cls().eval()
+    x = torch.rand(2, 4) + 0.1
+    with torch.no_grad():
+        plain = model(x)
+    assert len({id(t) for t in _alias_leaves(plain)}) < len(_alias_leaves(plain))
+    return model, x, plain
+
+
+@pytest.mark.parametrize("model_cls", _ALIAS_MODELS)
+def test_aliased_output_slots_each_keep_their_own_path(model_cls: type[nn.Module]) -> None:
+    """One tensor object at several output paths gives one output op per path, each at its path."""
+
+    model, x, plain = _alias_model(model_cls)
+    trace = tl.trace(model, x)
+
+    paths = [tuple(trace.ops[label].container_path) for label in trace.output_layers]
+    assert len(paths) == len(_alias_leaves(plain))
+    assert len(set(paths)) == len(paths)
+    _assert_same_output(trace.reconstruct_output(), plain)
+
+
+@pytest.mark.parametrize("model_cls", _ALIAS_MODELS)
+def test_aliased_output_slots_rebuild_after_run_and_load(
+    model_cls: type[nn.Module], tmp_path: Path
+) -> None:
+    """Rerun, intervention-ready capture and save/load all rebuild every aliased slot."""
+
+    model, x, plain = _alias_model(model_cls)
+    trace = tl.trace(model, x)
+    trace.run(model, x)
+    _assert_same_output(trace.reconstruct_output(), plain)
+
+    ready = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    _assert_same_output(ready.reconstruct_output(), plain)
+
+    path = tmp_path / "alias.tlspec"
+    trace.save(path)
+    _assert_same_output(tl.load(path).reconstruct_output(), plain)
