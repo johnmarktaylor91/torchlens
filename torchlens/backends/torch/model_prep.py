@@ -24,6 +24,7 @@ from torch import nn
 from torchlens._ir.capture_events import CaptureEvents
 
 from ... import _state
+from ..._capture.projections import active_recording_state_or_none
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..._data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
@@ -53,6 +54,7 @@ from ..._utils.tensor_utils import (
 from ...recording._halt import StopSignal
 from . import module_stack as _mstack
 from ._held_refs import normalize_held_torch_function_refs, register_released_model
+from ._module_aliases import _add_shared_module_aliases, shared_module_addresses
 from ._module_arg_stubs import stub_module_arg_payloads
 from ._module_boundary_adoption import (
     collect_pre_forward_tensor_ids,
@@ -173,70 +175,6 @@ def _module_address(module: nn.Module) -> str:
     """
     meta = get_module_meta(module)
     return "" if meta is None or meta.address is None else meta.address
-
-
-#: Ceiling on the alias addresses one enumeration collects. Every registration
-#: path is an address, so a model that shares a shared module's parent many
-#: times over grows the count multiplicatively; past the ceiling the remaining
-#: alias spellings go unrecorded (no door can refuse them, and a selector spelled
-#: with one matches nothing), never a wrong module.
-_MAX_ALIAS_ADDRESSES = 4096
-
-
-def shared_module_addresses(model: nn.Module) -> dict[int, tuple[str, ...]]:
-    """Return every registered address of each module registered more than once.
-
-    ``named_modules()`` reports a module object once, under its first
-    registration (the canonical address TorchLens labels its calls with). The
-    other registrations (``self.alias = self.block``, and every address beneath
-    them such as ``alias.fc``) are alias addresses of the same object, as
-    ``named_modules(remove_duplicate=False)`` reports them. Unlike that call,
-    this walk is bounded on cyclic registrations (a module registered inside
-    its own subtree), which it skips.
-
-    Parameters
-    ----------
-    model:
-        Root module; its own address is ``""``.
-
-    Returns
-    -------
-    dict[int, tuple[str, ...]]
-        ``id(module)`` -> ``(canonical, alias, ...)`` for modules with at least
-        one alias address; empty when no module is registered twice.
-    """
-
-    registrations = 0
-    distinct: set[int] = set()
-    for module in model.modules():
-        for child in module._modules.values():
-            if child is not None:
-                registrations += 1
-                distinct.add(id(child))
-    if registrations == len(distinct) and id(model) not in distinct:
-        return {}
-    canonical = {id(module): address for address, module in model.named_modules()}
-    max_depth = len(canonical)
-    aliases: dict[int, list[str]] = {}
-    collected = 0
-    stack: list[tuple[str, nn.Module, int]] = [("", model, 0)]
-    while stack and collected < _MAX_ALIAS_ADDRESSES:
-        prefix, module, depth = stack.pop()
-        if depth >= max_depth:
-            continue  # only a cyclic registration nests deeper than the module count
-        for name, child in reversed(module._modules.items()):
-            if child is None or child is model:
-                continue
-            address = f"{prefix}.{name}" if prefix else name
-            if address != canonical.get(id(child)):
-                aliases.setdefault(id(child), []).append(address)
-                collected += 1
-            stack.append((address, child, depth + 1))
-    return {
-        module_id: (canonical[module_id], *dict.fromkeys(names))
-        for module_id, names in aliases.items()
-        if module_id in canonical
-    }
 
 
 def _module_type(module: nn.Module) -> str:
@@ -388,6 +326,52 @@ def release_model(model: nn.Module) -> None:
         register_released_model(model)
 
 
+def _make_once_visitor(
+    model: nn.Module, addressed_module_ids: set[int]
+) -> Callable[[nn.Module, str, list[tuple[str, nn.Module, str]], bool], None]:
+    """Return the per-module visitor ``_prepare_model_once`` traverses ``model`` with.
+
+    ``addressed_module_ids`` collects the modules already given a canonical
+    address, so a shared module keeps its first registration path.
+    """
+
+    def _visit_once(
+        module: nn.Module,
+        address: str,
+        child_entries: list[tuple[str, nn.Module, str]],
+        is_root: bool,
+    ) -> None:
+        """Prepare one module and recursively visit its children once."""
+        # Stamp this module's current root and flag any prior root it was
+        # re-rooted away from as stale (role-swap bookkeeping).
+        _state.record_module_root_prep(model, module)
+
+        # Annotate children with their full dotted address path (root-relative).
+        # The traversal visits a shared module once per registration path; its
+        # canonical address is the FIRST one (``named_modules()`` order, the
+        # address stock-torch module hooks and the glossary use), so a later
+        # path never overwrites it. The other paths stay alias addresses.
+        for _, child_module, child_address in child_entries:
+            if id(child_module) in addressed_module_ids:
+                continue
+            addressed_module_ids.add(id(child_module))
+            set_module_meta(
+                child_module,
+                address=child_address,
+                module_type=str(type(child_module).__name__),
+            )
+
+        # Root module is handled separately by trace.
+        if is_root:
+            return
+
+        if id(module) not in addressed_module_ids:
+            addressed_module_ids.add(id(module))
+            set_module_meta(module, address=address, module_type=str(type(module).__name__))
+
+    return _visit_once
+
+
 def _prepare_model_once(model: nn.Module) -> None:
     """Phase 1: One-time (per role) model preparation.
 
@@ -430,32 +414,8 @@ def _prepare_model_once(model: nn.Module) -> None:
     # a stale non-root decoration from an earlier trace where it was a submodule.
     _restore_undecorated_forward(model)
 
-    def _visit_once(
-        module: nn.Module,
-        address: str,
-        child_entries: list[tuple[str, nn.Module, str]],
-        is_root: bool,
-    ) -> None:
-        """Prepare one module and recursively visit its children once."""
-        # Stamp this module's current root and flag any prior root it was
-        # re-rooted away from as stale (role-swap bookkeeping).
-        _state.record_module_root_prep(model, module)
-
-        # Annotate children with their full dotted address path (root-relative).
-        for _, child_module, child_address in child_entries:
-            set_module_meta(
-                child_module,
-                address=child_address,
-                module_type=str(type(child_module).__name__),
-            )
-
-        # Root module is handled separately by trace.
-        if is_root:
-            return
-
-        set_module_meta(module, address=address, module_type=str(type(module).__name__))
-
-    _traverse_model_modules(model, _visit_once)
+    addressed_module_ids: set[int] = set()
+    _traverse_model_modules(model, _make_once_visitor(model, addressed_module_ids))
     _state._prepared_models.add(model)
 
 
@@ -464,36 +424,12 @@ def _prepare_model_once(model: nn.Module) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _prepare_model_session(
-    trace: "Trace",
-    model: nn.Module,
-    optimizer: Any = None,
-) -> None:
-    """Phase 2: Per-session model preparation, called on every ``trace``.
+def _record_model_identity(trace: "Trace", model: nn.Module) -> None:
+    """Record the root's class, signatures, docstrings and source locations on ``trace``.
 
-    Performs setup that must be fresh for each logging session:
-
-    1. Clears metadata caches (class metadata, dir cache).
-    2. Captures module metadata (source file, signatures, hooks, etc.) into
-       ``trace._module_capture_ws.module_metadata``.
-    3. Sets session-scoped Trace dictionaries for module pass counters and
-       tensor entry/exit tracking.
-    4. Creates ``Param`` objects and forces ``requires_grad=True`` on all
-       parameters (needed so ``grad_fn_handle`` chain is available for metadata).
-    5. Tags buffer tensors with ``_tl.address``.
-
-    All session-scoped state is cleaned up by ``_cleanup_model_session``.
+    Moved out of ``_prepare_model_session`` unchanged.
     """
-    # r83 C1: install this capture's label-anchoring session FIRST, before any
-    # path can stamp a label. A previously installed session is dropped here,
-    # so a label issued by an earlier capture resolves against nothing. The
-    # registry is module-level state in ``_tl`` (not a Trace field): it must be
-    # reachable from ``set_tensor_label`` itself, which is the choke point every
-    # label stamp flows through and which has no Trace in scope.
-    begin_label_session()
-    _state._dir_cache.clear()
-    trace._module_capture_ws.exhaustive_module_stack = []
-    _install_session_forward_wrappers(trace, model)
+
     # F41 bound-method roots: the synthetic TL-authored root's identity reads
     # the OWNER (type(owner).__name__, the owner's class/source metadata) and
     # the bound METHOD as the entry callable -- never the wrapper class name
@@ -539,6 +475,39 @@ def _prepare_model_session(
     except (OSError, TypeError):
         trace.forward_source_file = None
         trace.forward_source_line = None
+
+
+def _prepare_model_session(
+    trace: "Trace",
+    model: nn.Module,
+    optimizer: Any = None,
+) -> None:
+    """Phase 2: Per-session model preparation, called on every ``trace``.
+
+    Performs setup that must be fresh for each logging session:
+
+    1. Clears metadata caches (class metadata, dir cache).
+    2. Captures module metadata (source file, signatures, hooks, etc.) into
+       ``trace._module_capture_ws.module_metadata``.
+    3. Sets session-scoped Trace dictionaries for module pass counters and
+       tensor entry/exit tracking.
+    4. Creates ``Param`` objects and forces ``requires_grad=True`` on all
+       parameters (needed so ``grad_fn_handle`` chain is available for metadata).
+    5. Tags buffer tensors with ``_tl.address``.
+
+    All session-scoped state is cleaned up by ``_cleanup_model_session``.
+    """
+    # r83 C1: install this capture's label-anchoring session FIRST, before any
+    # path can stamp a label. A previously installed session is dropped here,
+    # so a label issued by an earlier capture resolves against nothing. The
+    # registry is module-level state in ``_tl`` (not a Trace field): it must be
+    # reachable from ``set_tensor_label`` itself, which is the choke point every
+    # label stamp flows through and which has no Trace in scope.
+    begin_label_session()
+    _state._dir_cache.clear()
+    trace._module_capture_ws.exhaustive_module_stack = []
+    _install_session_forward_wrappers(trace, model)
+    _record_model_identity(trace, model)
 
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: dict[int, str] = {}
@@ -613,6 +582,8 @@ def _prepare_model_session(
             trace._module_capture_ws.mod_exited[mod_id] = []
     if trace.capture_mode != "predicate":
         _create_session_param_logs(trace, model, optimizer)
+    else:
+        _register_predicate_session_params(model)
     prepare_buffer_tensors(trace, model)
     # Pre-forward ownership snapshot for the R16 module-entry adoption
     # disclosure: tensors reachable NOW (nested caches, forward globals) are
@@ -743,24 +714,26 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     trace.param_logs = ParamAccessor(param_logs)
 
 
-def _add_shared_module_aliases(
-    model: nn.Module, param_logs: dict[str, Param], param_id_to_address: dict[int, str]
-) -> None:
-    """Add the addresses of modules registered under a second name to their Params.
+def _register_predicate_session_params(model: nn.Module) -> None:
+    """Register the model's own Parameters for this predicate pass.
 
-    ``model.modules()`` yields a module object once (``self.tied2 = self.tied``),
-    so only the duplicate-keeping parameter walk sees the second name.
+    Predicate capture skips ``_create_session_param_logs`` (no ``Param`` logs, no
+    stamps), which left a Parameter write unable to tell prepared model state
+    from a Parameter the forward created. Registering identities (weakly, with
+    the lazy-at-prep flag) lets ``parameter_mutation_output_for_logging`` keep a
+    prepared ``param.data = rhs`` rebind and a lazy module's in-forward
+    initialization out of the op graph, exactly as exhaustive capture does.
     """
 
-    for alias_address, param in model.named_parameters(remove_duplicate=False):
-        param_log = param_logs.get(param_id_to_address.get(id(param), ""))
-        if param_log is None:
-            continue
-        if alias_address not in param_log.all_addresses:
-            param_log.all_addresses.append(alias_address)
-        alias_module_address = alias_address.rpartition(".")[0] or "self"
-        if alias_module_address not in param_log.all_module_addresses:
-            param_log.all_module_addresses.append(alias_module_address)
+    state = active_recording_state_or_none()
+    if state is None:
+        return
+    registry: dict[int, tuple[weakref.ref[torch.nn.Parameter], bool]] = {}
+    for module in model.modules():
+        for param in module._parameters.values():
+            if param is not None and id(param) not in registry:
+                registry[id(param)] = (weakref.ref(param), _is_uninitialized_param(param))
+    state.prepared_params = registry
 
 
 # ---------------------------------------------------------------------------

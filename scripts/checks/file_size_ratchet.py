@@ -286,7 +286,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # lanes landed reviewed fix mass on the merged tree (measures 4457);
     # next 50-line step above it. PRE-SPRINT BASELINE 3800 unchanged; the
     # post-features debloat pass keeps it as the target.
-    "torchlens/backends/torch/backward.py": 4500,
+    # 4500 -> 4300: the GradFn order-resolution helpers moved to
+    # _grad_fn_orders.py (4297 measured); the ceiling follows the file down.
+    "torchlens/backends/torch/backward.py": 4300,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
     # 3850 -> 3900: L9 adds the two DROP-gated backward-residuals fields

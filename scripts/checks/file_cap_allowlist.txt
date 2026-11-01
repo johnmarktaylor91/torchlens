@@ -34,7 +34,7 @@ torchlens/_capture/outcome.py::settle_failed	63
 torchlens/_capture/outcome.py::stamp_backend_finalized	80
 torchlens/_capture/predicates.py::build_op_record_context	109
 torchlens/_capture/preflight.py::_escrow_remedy	69
-torchlens/_capture/projections.py	1644
+torchlens/_capture/projections.py	1600
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
 torchlens/_capture/projections.py::_record_from_record_context	104
@@ -424,7 +424,7 @@ torchlens/_postprocess/finalization.py::_finalize_param_logs	71
 torchlens/_postprocess/finalization.py::_finalize_streamed_bundle	73
 torchlens/_postprocess/finalization.py::_reconcile_multipass_layer_fields	77
 torchlens/_postprocess/finalization.py::_reuse_streamed_blob_ids	86
-torchlens/_postprocess/graph_traversal.py	1062
+torchlens/_postprocess/graph_traversal.py	987
 torchlens/_postprocess/graph_traversal.py::_add_output_layers	296
 torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	103
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	132
@@ -991,7 +991,7 @@ torchlens/backends/torch/backend.py::TorchBackend.extract_and_mark_outputs	161
 torchlens/backends/torch/backend.py::TorchBackend.fetch_label_move_input_tensors	153
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	89
 torchlens/backends/torch/backend.py::_promote_layers_to_save_output_parent	127
-torchlens/backends/torch/backward.py	4403
+torchlens/backends/torch/backward.py	4297
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	95
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	76
@@ -1033,7 +1033,7 @@ torchlens/backends/torch/identity_shims.py	1043
 torchlens/backends/torch/identity_shims.py::_install_causal_bias_shim	81
 torchlens/backends/torch/identity_shims.py::_install_expanded_weights_shims	70
 torchlens/backends/torch/identity_shims.py::_install_overrides_membership_shims	70
-torchlens/backends/torch/model_prep.py	3145
+torchlens/backends/torch/model_prep.py	3118
 torchlens/backends/torch/model_prep.py::_capture_module_metadata	88
 torchlens/backends/torch/model_prep.py::_clear_callable_session_tensor_metadata	70
 torchlens/backends/torch/model_prep.py::_clear_session_tensor_metadata	119
@@ -1042,8 +1042,7 @@ torchlens/backends/torch/model_prep.py::_ensure_module_output_tensor_logged	336
 torchlens/backends/torch/model_prep.py::_get_class_metadata	97
 torchlens/backends/torch/model_prep.py::_make_user_forward_hook_wrapper	101
 torchlens/backends/torch/model_prep.py::_make_user_forward_hook_wrapper.wrapped_hook	79
-torchlens/backends/torch/model_prep.py::_prepare_model_once	69
-torchlens/backends/torch/model_prep.py::_prepare_model_session	175
+torchlens/backends/torch/model_prep.py::_prepare_model_session	133
 torchlens/backends/torch/model_prep.py::_record_module_entry_metadata	183
 torchlens/backends/torch/model_prep.py::_record_module_exit_metadata	183
 torchlens/backends/torch/model_prep.py::_record_predicate_module_boundary_outputs	144
@@ -1571,13 +1570,13 @@ torchlens/validation/_invariants_topology.py::_check_graph_topology	214
 torchlens/validation/_invariants_topology.py::_check_op_label_resolution	67
 torchlens/validation/_invariants_topology.py::_check_sibling_relation_derivation	81
 torchlens/validation/_invariants_topology.py::_check_trace_self_consistency	91
-torchlens/validation/_layer_grad_report.py::_compare_module_output_grads	213
+torchlens/validation/_layer_grad_report.py::_compare_module_output_grads	212
 torchlens/validation/_operand_value_proofs.py::operand_value_proof_decision	87
 torchlens/validation/_pristine.py::pristine_torch_oracle	68
-torchlens/validation/backward.py	829
+torchlens/validation/backward.py	823
 torchlens/validation/backward.py::_clone_inputs_with_grad	64
 torchlens/validation/backward.py::_sum_tensors	74
-torchlens/validation/backward.py::validate_backward_pass	288
+torchlens/validation/backward.py::validate_backward_pass	285
 torchlens/validation/consolidated.py::_intervention_report	69
 torchlens/validation/consolidated.py::validate	248
 torchlens/validation/core.py	5156
