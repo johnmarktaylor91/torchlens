@@ -534,7 +534,7 @@ def test_scorecard_command_writes_checks_and_grades(tmp_path: Path, monkeypatch:
         )
     )
     target = tmp_path / "stub" / "scorecard.json"
-    monkeypatch.setattr(_scorecard, "preview_scorecard", lambda backend, **kw: card)
+    monkeypatch.setattr(_scorecard, "_preview_scorecard", lambda backend, **kw: card)
     monkeypatch.setattr(_scorecard, "shipped_scorecard_path", lambda backend: target)
     assert scorecard.main(["--backend", "stub", "--graduation"]) == 2
     assert scorecard.main(["--backend", "stub", "--check"]) == 2

@@ -52,7 +52,7 @@ class MLXProtocol(SpecBackedProtocol):
         only, so the protocol routes through ``tl.trace`` like a caller does.
         """
 
-        from ...user_funcs import trace
+        from ..._user_funcs import trace
 
         return trace(model, args, kwargs, backend="mlx", **options)
 

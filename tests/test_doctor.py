@@ -338,7 +338,9 @@ def test_environment_status_mapping(
     )
     monkeypatch.setattr(_utils, "_environment_checks", lambda: raw_checks)
     report = tl.report.doctor()
-    for row in report.checks:
+    environment_rows = [row for row in report.checks if row.key in _ENVIRONMENT_REMEDIES]
+    assert len(environment_rows) == len(raw_checks)
+    for row in environment_rows:
         assert row.status == status
         assert row.severity == severity
         assert row.is_detected is (status != "pass")
