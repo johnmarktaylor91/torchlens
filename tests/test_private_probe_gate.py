@@ -116,9 +116,7 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
     # entire declared 2.1->2.12+ floor. Unguarded on purpose: if torch ever
     # moves them the read fails LOUDLY at call time -- there is no
     # silent-degradation path for a capability flag to disclose.
-    "torchlens/_data_classes/_trace_validation.py": frozenset(
-        {"torch.nn.modules.batchnorm._BatchNorm"}
-    ),
+    "torchlens/intervention/_trace_run.py": frozenset({"torch.nn.modules.batchnorm._BatchNorm"}),
     "torchlens/intervention/rerun.py": frozenset(
         {
             "torch.nn.modules.batchnorm._BatchNorm",

@@ -104,11 +104,8 @@ torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	97
 torchlens/_data_classes/_trace_stack.py::TraceStackMixin.stack	90
 torchlens/_data_classes/_trace_stats.py	1771
 torchlens/_data_classes/_trace_stats.py::TraceStatsMixin.collapse_plan	69
-torchlens/_data_classes/_trace_validation.py	1425
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin._batch_remove_log_entries	67
-torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	525
-torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.validate_forward_pass	65
-torchlens/_data_classes/_trace_validation.py::_warn_pending_value_edits_on_new_input_run	64
+torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	133
 torchlens/_data_classes/_trace_viz.py	989
 torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.animate_ops	61
 torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.draw	259
@@ -1182,6 +1179,7 @@ torchlens/intervention/_subspace_spec.py::rebuild_subspace_edit	71
 torchlens/intervention/_super/_base.py::_TensorBearing._require_immutable_param_evidence	64
 torchlens/intervention/_topology/topology.py::_find_alignment	70
 torchlens/intervention/_topology/topology.py::build_supergraph	108
+torchlens/intervention/_trace_run.py::run	377
 torchlens/intervention/audit.py::build_fire_record	71
 torchlens/intervention/audit.py::record_intervention_event	152
 torchlens/intervention/binding.py	1576
