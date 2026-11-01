@@ -163,6 +163,8 @@ def record_operation(trace: Trace, op: str, **payload: Any) -> None:
 
     Parameters
     ----------
+    trace:
+        The trace whose ``state_history`` receives the record.
     op:
         Operation name.
     **payload:

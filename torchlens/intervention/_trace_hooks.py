@@ -39,7 +39,7 @@ from .spec import (
 )
 
 
-def attach_hooks(
+def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     hooks_or_site: Any,
     hook: Any = None,

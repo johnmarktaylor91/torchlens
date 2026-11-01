@@ -1170,10 +1170,10 @@ torchlens/intervention/_subspace_spec.py::rebuild_subspace_edit	71
 torchlens/intervention/_super/_base.py::_TensorBearing._require_immutable_param_evidence	64
 torchlens/intervention/_topology/topology.py::_find_alignment	70
 torchlens/intervention/_topology/topology.py::build_supergraph	108
-torchlens/intervention/_trace_edits.py	894
+torchlens/intervention/_trace_edits.py	893
 torchlens/intervention/_trace_edits.py::apply_do_mutation	111
 torchlens/intervention/_trace_edits.py::do_with_options	111
-torchlens/intervention/_trace_edits.py::record_do_intervention_event	80
+torchlens/intervention/_trace_edits.py::record_do_intervention_event	78
 torchlens/intervention/_trace_edits.py::set_site	89
 torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	79
 torchlens/intervention/_trace_hooks.py::attach_hooks	83

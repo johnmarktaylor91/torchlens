@@ -348,7 +348,7 @@ def attach_selection_plan_hooks(
     return tuple(attached)
 
 
-def apply_selection_edge_do(
+def apply_selection_edge_do(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     selection: Any,
     lifted: Any,
@@ -386,7 +386,7 @@ def apply_selection_edge_do(
     return "selection_replayed"
 
 
-def apply_selection_param_do(
+def apply_selection_param_do(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     selection: Any,
     lifted: Any,

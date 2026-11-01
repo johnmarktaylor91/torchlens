@@ -1,12 +1,9 @@
 """Trace edit functions reached from the records through ``_data_classes._doors.intervention``.
 
-The ``do``, ``set``, ``remove``, ``clear_edits`` and ``save_intervention`` bodies
-of ``Trace`` (one transaction envelope per ``do()`` attempt, the engine
-dispatch, the rerun identity gate and the site lowering helpers) live here as
-functions taking the trace first; the record keeps one thin method per verb.
-Selection-kind ``do`` bodies are in ``_trace_selection_edits``; sticky hook
-attachment is in ``_trace_hooks``; spec state and history records are in
-``_data_classes._trace_intervention_records``.
+The ``do``, ``set``, ``remove``, ``clear_edits`` and ``save_intervention`` bodies of ``Trace``
+live here as functions taking the trace first; the record keeps one thin method per verb.
+Selection-kind ``do`` bodies: ``_trace_selection_edits``; sticky hook attachment:
+``_trace_hooks``; spec state and history records: ``_data_classes._trace_intervention_records``.
 """
 
 from __future__ import annotations
@@ -38,11 +35,7 @@ from .._data_classes._trace_intervention_records import (
 )
 from .._errors import InvalidArgumentError
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
-from ._trace_selection_edits import (
-    apply_selection_batch_do,
-    apply_selection_do,
-    is_selection_batch,
-)
+from ._trace_selection_edits import apply_selection_batch_do, apply_selection_do, is_selection_batch
 from .types import InterventionSpec, TargetSpec
 
 if TYPE_CHECKING:
@@ -50,9 +43,7 @@ if TYPE_CHECKING:
 
 __all__: list[str] = []
 
-from .._capture._episode_coupling import (
-    quarantine_episode_after_perturbed_replay,
-)
+from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
 from .._capture_state_helpers import _fingerprint_model_weights, _qualname_for_model
 from .._ir.selector_eval import normalize_selector_like
 from .._runnable import refuse_poisoned_trace
@@ -148,7 +139,7 @@ def save_intervention(
     )
 
 
-def set_site(
+def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     site: Any,
     value: Any,
@@ -252,6 +243,8 @@ def refuse_chunked_batch_coupling(trace: Trace, entries: list[Any]) -> None:
 
     Parameters
     ----------
+    trace:
+        The trace whose capture metadata says whether the batch ran in chunks.
     entries:
         Normalized hook entries about to attach.
     """
@@ -363,7 +356,7 @@ def settle_selection_do(
         quarantine_episode_after_perturbed_replay(trace)
 
 
-def do(
+def do(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     hooks_or_site: Any,
     value_or_hook: Any = None,
@@ -395,12 +388,13 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
 ) -> Trace:
     """Run one ``do()`` transaction under its merged options.
 
-    :meth:`do` enters the ``allow_changed_params`` scope around this call, so
-    every replay the transaction runs (push, push_from, selection and region
-    doors) sees one opt-in.
+    :meth:`do` enters the ``allow_changed_params`` scope around this call, so every replay
+    the transaction runs (push, push_from, selection and region doors) sees one opt-in.
 
     Parameters
     ----------
+    trace:
+        The trace the transaction edits.
     hooks_or_site:
         Mapping/list batch input or selector-like site.
     value_or_hook:
@@ -417,7 +411,6 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     Trace
         This model log after the selected propagation engine runs.
     """
-
     engine_value = intervention_options.engine
     confirm_mutation_value = intervention_options.confirm_mutation
     strict_value = intervention_options.strict
@@ -497,7 +490,7 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     return result
 
 
-def record_do_intervention_event(
+def record_do_intervention_event(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     txn: _DoTransaction,
     *,
@@ -511,6 +504,8 @@ def record_do_intervention_event(
 
     Parameters
     ----------
+    trace:
+        The trace whose audit receives the envelope.
     txn:
         The transaction identity minted at the do() door (WHERE/edit
         arguments, selected engine, FireRecord time bound, and the
@@ -534,7 +529,6 @@ def record_do_intervention_event(
     dict
         The envelope row.
     """
-
     hooks_or_site = txn.hooks_or_site
     value_or_hook = txn.value_or_hook
     engine = txn.engine
@@ -556,10 +550,7 @@ def record_do_intervention_event(
         rules = ()
         edit_names, selection_repr = do_event_edit_names(trace, hooks_or_site, value_or_hook)
         zero_fire_rule_ids = ()
-    if status is None:
-        resolved_status = "fired" if fires else "no_fire"
-    else:
-        resolved_status = status
+    resolved_status = ("fired" if fires else "no_fire") if status is None else status
     extra = do_event_extra(trace, hooks_or_site, staged_only=staged_only, extra_fields=extra_fields)
     return record_intervention_event(
         trace,
@@ -584,6 +575,8 @@ def warn_if_root_mutation(trace: Trace, *, confirm_mutation: bool) -> None:
 
     Parameters
     ----------
+    trace:
+        The root trace about to be mutated in place.
     confirm_mutation:
         Whether the caller explicitly accepted in-place mutation.
     """
@@ -606,6 +599,8 @@ def select_do_engine(trace: Trace, engine: str, *, model: nn.Module | None, x: A
 
     Parameters
     ----------
+    trace:
+        The trace the engine will act on.
     engine:
         Requested engine name.
     model:
@@ -639,7 +634,7 @@ def select_do_engine(trace: Trace, engine: str, *, model: nn.Module | None, x: A
     return "rerun" if model is not None else "replay"
 
 
-def apply_do_mutation(
+def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved method
     trace: Trace,
     hooks_or_site: Any,
     value_or_hook: Any,
@@ -652,6 +647,8 @@ def apply_do_mutation(
 
     Parameters
     ----------
+    trace:
+        The trace being mutated.
     hooks_or_site:
         Mapping/list batch input or selector-like site.
     value_or_hook:
@@ -666,11 +663,9 @@ def apply_do_mutation(
     Returns
     -------
     tuple[str, tuple[str, ...]]
-        The mutation kind (``"set"``, ``"attach_hooks"``, or a
-        ``"selection_*"`` kind) and the sticky-hook handle ids THIS call
-        attached (for the caller's failure cleanup).
+        The mutation kind (``"set"``, ``"attach_hooks"``, or a ``"selection_*"`` kind) and the
+        sticky-hook handle ids THIS call attached (for the caller's failure cleanup).
     """
-
     if isinstance(hooks_or_site, PublicInterventionSpec):
         # C03 spec door: do(spec) applies the whole immutable spec through
         # the attach path (one preflight, all rules or none), then the
@@ -757,17 +752,17 @@ def validate_supplied_model_matches_capture(trace: Trace, model: nn.Module) -> N
 
     Parameters
     ----------
+    trace:
+        The trace whose capture evidence the model is checked against.
     model:
         Candidate model for rerun.
 
     Raises
     ------
     ModelMismatchError
-        Fail-closed on the root entry-point fact (absent fact or a
-        non-``module_call`` root, F41), then if available class or
-        weight-fingerprint evidence differs.
+        Fail-closed on the root entry-point fact (absent fact or a non-``module_call`` root,
+        F41), then if available class or weight-fingerprint evidence differs.
     """
-
     # The root entry-point fact joins this gate FAIL-CLOSED: it is written
     # unconditionally on every capture, so absence (a legacy artifact)
     # refuses, and a non-module_call root refuses rather than re-running
@@ -838,6 +833,8 @@ def validate_intervention_site(trace: Trace, site: Any, *, strict: bool) -> None
 
     Parameters
     ----------
+    trace:
+        The trace the site must resolve on.
     site:
         Selector-like target to validate.
     strict:
@@ -863,6 +860,8 @@ def target_spec_from_site(trace: Trace, site: Any, *, strict: bool) -> TargetSpe
 
     Parameters
     ----------
+    trace:
+        The trace that resolves the site.
     site:
         Selector-like target, target spec, or layer pass.
     strict:
