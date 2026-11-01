@@ -21,7 +21,7 @@ def _member_outcome_token(member: Any) -> str:
 
 
 def outcome_distribution(self: Bundle) -> dict[str, int]:
-    """Count member capture outcomes by settled status (F10)."""
+    """Count member capture outcomes by settled status (``Bundle.outcome_distribution``)."""
 
     counts: dict[str, int] = {}
     for member in self._members.values():
@@ -64,7 +64,7 @@ def bundle_repr(self: Bundle) -> str:
 
 
 def bundle_str(self: Bundle) -> str:
-    """Bounded bundle view: repr line + per-member one-liners (F10)."""
+    """Bounded bundle view: repr line + per-member one-liners (``Bundle.__str__``)."""
 
     from ..stats._envelope import COLLECTION_MAX_CHILDREN
 
@@ -80,7 +80,7 @@ def bundle_str(self: Bundle) -> str:
 
 
 def bundle_outcome(self: Bundle) -> CaptureOutcome:
-    """Derived worst-of-members capture-outcome fold (foldB D9)."""
+    """Derived worst-of-members capture-outcome fold (``Bundle.outcome``)."""
 
     return _fold_member_outcomes(
         [(name, outcome_for(member)) for name, member in self._members.items()]

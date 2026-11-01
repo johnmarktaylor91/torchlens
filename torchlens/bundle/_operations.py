@@ -148,7 +148,7 @@ def bundle_show(self: Bundle, kind: str | None = None, **kwargs: Any) -> dict[st
 
 
 def effects_table(self: Bundle, history_id: str | None = None) -> Any:
-    """Serve the stored per-candidate effect table (F03 item 8)."""
+    """Serve the stored per-candidate effect table (``Bundle.effects``)."""
 
     from ..experiment._engine import bundle_effects
 

@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 def _bundle_relate(
     self: Bundle, *rows: str | MemberRelationRow | Mapping[str, Any], **params: Any
 ) -> Bundle:
-    """Append S6 relation rows, installing a NEW validated table (R4).
+    """Append member-relation rows, installing a NEW validated table (``Bundle._build_relation_table``).
 
     Two spellings. The POSITIONAL form reads as the sentence it records:
     ``b.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 3, 7]])``
@@ -359,7 +359,7 @@ def relation_table_for_removal(
     cascade_relations: bool,
     operation: str,
 ) -> MemberRelationTable | None:
-    """Return the cascaded relation table a removal must install, or ``None`` (S6 R5)."""
+    """Return the cascaded relation table a removal must install, or ``None``."""
 
     removed = set(removed_names)
     related = sorted({name for name in removed if self._member_relations.rows_naming(name)})
