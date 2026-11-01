@@ -7,6 +7,7 @@ from .._selection.errors import (
     AmbiguousSiteError as AmbiguousSiteError,
     BindingPreflightError as BindingPreflightError,
     InterventionWarning as InterventionWarning,
+    LiveModeLabelError as LiveModeLabelError,
     MultiMatchWarning as MultiMatchWarning,
     SelectionError as SelectionError,
     SelectorCapabilityError as SelectorCapabilityError,
@@ -302,10 +303,6 @@ class HookSiteCoverageError(SiteResolutionError):
 
 class HelperMountError(HookSiteCoverageError):
     """Raised when a helper is mounted on an incompatible selector universe."""
-
-
-class LiveModeLabelError(SiteResolutionError):
-    """Raised when live capture cannot resolve a finalized-label selector."""
 
 
 class BundleMemberError(ConfigurationError, ValueError):

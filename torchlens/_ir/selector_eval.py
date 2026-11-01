@@ -48,6 +48,7 @@ from collections.abc import Iterator, Sequence
 from typing import Any, Literal, cast
 
 from .._selection.errors import (
+    LiveModeLabelError,
     SelectorCapabilityError,
     SelectorCompositionError,
     SiteResolutionError,
@@ -61,7 +62,6 @@ from .._selection.selectors import (
 )
 from .._selection.target import FrozenTargetSpec, TargetSpec
 from ..backends import TORCH_BACKEND_NAME
-from ..intervention.errors import LiveModeLabelError
 from ._selector_labels import (
     _STRING_LABEL_ATTRS,
     _is_module_scope_alias,

@@ -17,6 +17,7 @@ __all__ = [
     "MultiMatchWarning",
     "AmbiguousSiteError",
     "BindingPreflightError",
+    "LiveModeLabelError",
     "SelectionError",
     "SelectorCapabilityError",
     "SelectorCompositionError",
@@ -67,6 +68,10 @@ class BindingPreflightError(ConfigurationError, ValueError):
 
 class SiteResolutionError(ConfigurationError, ValueError):
     """Raised when future selector resolution cannot identify requested sites."""
+
+
+class LiveModeLabelError(SiteResolutionError):
+    """Raised when live capture cannot resolve a finalized-label selector."""
 
 
 class SelectorCompositionError(SiteResolutionError):
