@@ -32,7 +32,6 @@ from support.r1_venue import IN_OFFLINE_VENUE
 import torchlens as tl
 from torchlens.intervention.errors import (
     BindingPreflightError,
-    LiveModeLabelError,
     MultiMatchWarning,
 )
 
@@ -391,17 +390,23 @@ def test_in_module_composite_selector(tiny: _Fixture) -> None:
     assert not torch.equal(got["transformer.wpe.weight"], tiny.clean["transformer.wpe.weight"])
 
 
-def test_label_selector_on_capture_door_refuses_typed(tiny: _Fixture) -> None:
-    """A finalized label at ``intervene=`` refuses typed: live selectors run pre-postprocess."""
+def test_label_selector_on_capture_door_arms_and_matches_oracle(tiny: _Fixture) -> None:
+    """A finalized label in ``tl.grad`` at ``intervene=`` arms and edits that layer norm.
 
-    with pytest.raises(LiveModeLabelError):
-        trace = tl.trace(
-            tiny.fresh(),
-            tiny.ids,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            intervene=tl.when(tl.grad(tl.label(tiny.ln_label)), tl.zero_ablate()),
-        )
-        trace.backward(_loss(trace[trace.output_layers[0]].out))
+    SPEC 1.2 and 1.4: a gradient address resolves its inner site against the
+    finished forward ops, where finalized labels exist, and SPEC 3.5 gives the
+    capture door the same lowering as the post-capture doors.
+    """
+
+    _check_spelling(
+        tiny,
+        door="intervene",
+        runner="trace.backward",
+        opt_in="backward_ready",
+        selector=tl.grad(tl.label(tiny.ln_label)),
+        helper=tl.zero_ablate(),
+        want=tiny.oracle("module", _LN_SINGLE, _zero),
+    )
 
 
 def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None:
