@@ -870,7 +870,7 @@ torchlens/backends/paddle/backend.py::PaddleBackend.validate_trace	68
 torchlens/backends/paddle/backend.py::_PaddleIntermediateTapObserver.call	62
 torchlens/backends/paddle/model_prep.py::discover_paddle_module_tree	82
 torchlens/backends/paddle/validation.py::_rebuild_inputs	77
-torchlens/backends/paddle/wrappers.py::_PaddleWrapperRegistry.wrap_attr	73
+torchlens/backends/paddle/wrappers.py::_PaddleWrapperRegistry.wrap_attr	71
 torchlens/backends/tf/backend.py	1400
 torchlens/backends/tf/backend.py::TFBackend._new_trace	137
 torchlens/backends/tf/backend.py::TFBackend.capture_trace	380
