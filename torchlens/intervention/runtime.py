@@ -351,16 +351,13 @@ def validate_hook_output(
         return out
     if not isinstance(result, torch.Tensor):
         raise _payload_refusal("returned a non-tensor", "torch.Tensor", type(result).__name__)
-    if allow_shape_change:
-        result = _copy_reused_live_hook_result(out, result)
-        _copy_tl_replacement_attrs(out, result)
-        return result
-    if result.dtype != out.dtype:
-        raise _payload_refusal("has the wrong dtype", out.dtype, result.dtype)
-    if result.device != out.device:
-        raise _payload_refusal("is on the wrong device", out.device, result.device)
-    if tuple(result.shape) != tuple(out.shape):
-        raise _payload_refusal("has the wrong shape", tuple(out.shape), tuple(result.shape))
+    if not allow_shape_change:
+        if result.dtype != out.dtype:
+            raise _payload_refusal("has the wrong dtype", out.dtype, result.dtype)
+        if result.device != out.device:
+            raise _payload_refusal("is on the wrong device", out.device, result.device)
+        if tuple(result.shape) != tuple(out.shape):
+            raise _payload_refusal("has the wrong shape", tuple(out.shape), tuple(result.shape))
     result = _copy_reused_live_hook_result(out, result)
     _copy_tl_replacement_attrs(out, result)
     return result
@@ -552,14 +549,12 @@ def _apply_live_hooks(
             replaced=replaced,
         )
         _append_active_spec_records([record])
+        metadata = normalized_entry.metadata
         fire_results.append(
             FireResult(
                 plan_id=str(
-                    normalized_entry.metadata.get(
-                        "plan_id",
-                        normalized_entry.metadata.get(
-                            "hook_id", _hook_display_name(normalized_entry)
-                        ),
+                    metadata.get(
+                        "plan_id", metadata.get("hook_id", _hook_display_name(normalized_entry))
                     )
                 ),
                 site_label=site._layer_label_raw,
@@ -1054,6 +1049,31 @@ def _fire_gradient_entry(
             "call_index": call_index,
         },
     )
+    result, replaced = _run_gradient_hook(entry, grad, context)
+    return result, _gradient_fire_record(entry, site_label, context, replaced=replaced)
+
+
+def _run_gradient_hook(
+    entry: NormalizedHookEntry, grad: torch.Tensor, context: HookContext
+) -> tuple[torch.Tensor, bool]:
+    """Call one gradient-universe hook and report whether it changed the gradient.
+
+    Parameters
+    ----------
+    entry:
+        Matching gradient-universe hook entry.
+    grad:
+        Current gradient (after the earlier entries of the chain).
+    context:
+        Hook context of this fire.
+
+    Returns
+    -------
+    tuple[torch.Tensor, bool]
+        Gradient after the hook, and whether the hook replaced the gradient or
+        mutated it in place.
+    """
+
     version_before = _tensor_version(grad)
     probe_before = _tensor_content_probe(grad)
     with HOOK_REENTRANCY_GUARD, pause_logging():
@@ -1072,7 +1092,32 @@ def _fire_gradient_entry(
         or (version_before is not None and _tensor_version(grad) != version_before)
         or _content_probe_mutated(probe_before, _tensor_content_probe(grad))
     )
-    record = build_fire_record(
+    return result, replaced
+
+
+def _gradient_fire_record(
+    entry: NormalizedHookEntry, site_label: str, context: HookContext, *, replaced: bool
+) -> FireRecord:
+    """Return the fire record of one gradient-universe hook fire.
+
+    Parameters
+    ----------
+    entry:
+        Gradient-universe hook entry that fired.
+    site_label:
+        Forward site label of the op whose output gradient fired.
+    context:
+        Hook context of the fire; its kwargs carry the pass, call and slot.
+    replaced:
+        Whether the hook replaced or mutated the gradient.
+
+    Returns
+    -------
+    FireRecord
+        Live backward fire record.
+    """
+
+    return build_fire_record(
         target_label=site_label,
         call_label=site_label,
         func_call_id=None,
@@ -1083,13 +1128,12 @@ def _fire_gradient_entry(
         timing="post",
         signal="backward",
         helper_name=_hook_display_name(entry),
-        backward_pass_index=pass_index,
-        call_index=call_index,
+        backward_pass_index=context.kwargs["backward_pass_index"],
+        call_index=context.kwargs["call_index"],
         grad_kind="grad_output",
-        tuple_index=tuple_index,
+        tuple_index=context.kwargs["tuple_index"],
         replaced=replaced,
     )
-    return result, record
 
 
 def _gradient_site_ops(trace: Any, op: Any) -> list[Any]:
