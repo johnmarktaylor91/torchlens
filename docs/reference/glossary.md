@@ -769,7 +769,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Bundle.token_divergence** *(spelling documented-unstable)*
 : `b.token_divergence(original, rerun)` returns a `TokenDivergence`: where two members' prompts and
-  completions part, by exact token ids. Each member needs a token-stream binding that names its
+  completions part, by exact token ids: `original=` is the member from the original run (the
+  reference), `rerun=` the member from the re-run compared against it. Each member needs a
+  token-stream binding that names its
   `completion` range, with its token ids retained; the prompt is the bound stream before the
   completion. Typical use is a call and its copy from a steered re-run
   (`b.token_divergence("critique", "cf_critique")`), but any two bound members compare. Refuses

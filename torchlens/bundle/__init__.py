@@ -700,12 +700,29 @@ class Bundle:
         return _bundle_downstream(self, name)
 
     def token_pairs(self, reader: str | Trace, source: str | Trace) -> TokenPairs:
-        """Return the verified one-to-one token positions of ``reader`` fed by ``source``."""
+        """Return the verified one-to-one token positions of ``reader`` fed by ``source``.
+
+        Parameters
+        ----------
+        reader:
+            The later member (name or Trace) whose prompt holds the fed text.
+        source:
+            The earlier member (name or Trace) that produced that text.
+        """
 
         return _bundle_token_pairs(self, reader, source)
 
     def token_divergence(self, original: str | Trace, rerun: str | Trace) -> TokenDivergence:
-        """Return where two members' prompts and completions part, by exact token ids."""
+        """Return where two members' prompts and completions part, by exact token ids.
+
+        Parameters
+        ----------
+        original:
+            The member (name or Trace) from the original run, the reference.
+        rerun:
+            The member (name or Trace) from the re-run compared against it,
+            typically its copy from a steered second run (``"cf_critique"``).
+        """
 
         return _bundle_token_divergence(self, original, rerun)
 
@@ -716,7 +733,18 @@ class Bundle:
         steered: str | Sequence[str],
         prefix: str = "cf_",
     ) -> AlternativeReport:
-        """Merge a re-run of the harness with some calls steered; report what changed."""
+        """Merge a re-run of the harness with some calls steered; report what changed.
+
+        Parameters
+        ----------
+        second_run:
+            The bundle the same harness built with the ``steered`` calls captured
+            under their specs.
+        steered:
+            The steered call name, or a sequence of names.
+        prefix:
+            Prefix naming each second-run member's copy (default ``"cf_"``).
+        """
 
         return _bundle_add_alternative(self, second_run, steered=steered, prefix=prefix)
 
@@ -1374,8 +1402,13 @@ class Bundle:
             Output format. Defaults to ``"pdf"``, or ``"svg"`` for ``graph="diff"``.
         open_viewer:
             Open the rendered file; ``False`` only writes it.
-        graph_overrides, node_overrides, edge_overrides:
-            Graphviz style overrides (edges keyed by ``(source, target)``).
+        graph_overrides:
+            Graph-level Graphviz attributes.
+        node_overrides:
+            Graphviz node attributes keyed by op label (member name under
+            ``nodes="members"``).
+        edge_overrides:
+            Graphviz edge attributes keyed by ``(source, target)`` labels.
         members:
             For ``graph="diff"``: the ``(left, right)`` members to compare.
             Defaults to the baseline and the next member.
