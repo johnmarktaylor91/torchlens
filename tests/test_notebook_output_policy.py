@@ -8,7 +8,7 @@ filter. Static JSON reads only, no kernel.
 
 from __future__ import annotations
 
-import importlib.util
+import ast
 import json
 import subprocess
 from pathlib import Path
@@ -19,15 +19,16 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _stored_output_notebooks() -> tuple[str, ...]:
-    """Return ``STORED_OUTPUT_NOTEBOOKS`` from the notebook runner script."""
+    """Return ``STORED_OUTPUT_NOTEBOOKS`` from the notebook runner script (static read)."""
 
-    spec = importlib.util.spec_from_file_location(
-        "_run_notebooks_policy", REPO_ROOT / "scripts" / "run_notebooks.py"
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return tuple(module.STORED_OUTPUT_NOTEBOOKS)
+    tree = ast.parse((REPO_ROOT / "scripts" / "run_notebooks.py").read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "STORED_OUTPUT_NOTEBOOKS"
+            for target in node.targets
+        ):
+            return tuple(ast.literal_eval(node.value))
+    raise AssertionError("scripts/run_notebooks.py no longer defines STORED_OUTPUT_NOTEBOOKS")
 
 
 def _committed_notebooks() -> list[str]:
