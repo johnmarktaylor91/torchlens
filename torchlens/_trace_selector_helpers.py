@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ._capture.arg_positions import _normalize_func_name
 from ._errors import AmbiguousOpLookupError, ArgumentConflictError, ArgumentTypeError
-from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
+from .backends._trace_options import _BACKEND_CAPABILITIES, _trace_option_names
 from .intervention.selectors import BaseSelector
 from .options import SaveOptions
 from .recording.options import PredicateFn
@@ -735,11 +735,16 @@ def _combine_save_predicates(
     return cast(PredicateFn, predicate)
 
 
-_TRACE_OPTION_FILTERED_NAMES = (
-    *PUBLIC_OPTION_SPINE_TRACE_OPTIONS,
-    "jax_static_argnums",
-    "grad_options",
+_TRACE_OPTION_FILTERED_NAMES: tuple[str, ...] = _trace_option_names(
+    capability for capability in _BACKEND_CAPABILITIES if not capability.gated
 )
+"""Public trace options the dispatcher strips or refuses per backend.
+
+Every option of every non-gated capability record, in table order: the
+public-option spine plus the backend-extra keywords (``jax_static_argnums``,
+``grad_options``). Gated options are refused through their capability flag
+(``TRACE_OPTION_CAPABILITY_GATES``) instead.
+"""
 
 
 def _trace_module_addresses(trace: Any) -> list[str]:

@@ -1291,6 +1291,53 @@ def test_capability_tables_derive_from_the_records_in_table_order() -> None:
         assert options == ("module_identity_mode", "grad_options")
 
 
+def test_dispatch_filtered_names_are_the_non_gated_record_options() -> None:
+    """The dispatcher's strip-or-refuse list is derived from the records, not spelled.
+
+    ``_TRACE_OPTION_FILTERED_NAMES`` equals the options of every non-gated
+    capability record in table order (the public spine plus the backend-extra
+    keywords); gated options are refused through ``TRACE_OPTION_CAPABILITY_GATES``
+    instead, so the two tables partition the recorded options.
+    """
+
+    from torchlens._trace_selector_helpers import _TRACE_OPTION_FILTERED_NAMES
+    from torchlens.backends import registry
+    from torchlens.backends._options import TRACE_OPTION_CAPABILITY_GATES
+
+    non_gated = tuple(
+        option
+        for record in registry._BACKEND_CAPABILITIES
+        if not record.gated
+        for option in record.trace_options
+    )
+    assert non_gated == _TRACE_OPTION_FILTERED_NAMES
+    assert (
+        *_PUBLIC_OPTION_SPINE_AT_RECORDS,
+        "jax_static_argnums",
+        "grad_options",
+    ) == _TRACE_OPTION_FILTERED_NAMES
+    assert not set(_TRACE_OPTION_FILTERED_NAMES) & set(TRACE_OPTION_CAPABILITY_GATES)
+    recorded = {
+        option for record in registry._BACKEND_CAPABILITIES for option in record.trace_options
+    }
+    assert set(_TRACE_OPTION_FILTERED_NAMES) | set(TRACE_OPTION_CAPABILITY_GATES) == recorded
+
+
+def test_torch_refuses_every_control_flow_record_option_explicitly() -> None:
+    """The torch value refusal reads the control-flow record, not a spelled pair."""
+
+    from torchlens._capture.prepare.dispatch import (
+        _reject_unsupported_torch_trace_option_values,
+    )
+    from torchlens.backends._trace_options import _CONTROL_FLOW
+    from torchlens.options import CaptureOptions
+
+    assert _CONTROL_FLOW.trace_options == ("jax_control_flow", "jax_max_control_flow_unroll")
+    for option_name, value in (("jax_control_flow", "unroll"), ("jax_max_control_flow_unroll", 2)):
+        with pytest.raises(BackendUnsupportedError, match="does not support explicit"):
+            _reject_unsupported_torch_trace_option_values(CaptureOptions(**{option_name: value}))
+
+
 def test_registered_backends_list_only_recorded_trace_options() -> None:
     """A backend's ``trace_options`` names only recorded, non-gated options."""
 

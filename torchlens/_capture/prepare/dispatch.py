@@ -40,6 +40,7 @@ from ...backends._options import (
     TRACE_OPTION_CAPABILITY_GATES,
     reject_extra_trace_kwargs,
 )
+from ...backends._trace_options import _CONTROL_FLOW
 from ...backends.registry import (
     BackendSpec,
     get_backend_spec,
@@ -575,7 +576,7 @@ def _reject_unsupported_torch_trace_option_values(capture_options: CaptureOption
         )
     if capture_options.is_field_explicit("save_preview") and capture_options.save_preview:
         raise BackendUnsupportedError("backend='torch' does not support save_preview=True.")
-    for option_name in ("jax_control_flow", "jax_max_control_flow_unroll"):
+    for option_name in _CONTROL_FLOW.trace_options:
         if capture_options.is_field_explicit(option_name):
             raise BackendUnsupportedError(
                 f"backend='torch' does not support explicit {option_name}; "
