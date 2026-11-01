@@ -674,7 +674,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	32.1
 docs-md	docs/agent-reference/current-2-x-surface.md	33
 docs-md	docs/agent-reference/current-2-x-surface.md	34.1
 docs-md	docs/agent-reference/current-2-x-surface.md	34.2
-docs-md	docs/agent-reference/current-2-x-surface.md	35
 docs-md	docs/agent-reference/current-2-x-surface.md	36.2,
 docs-md	docs/agent-reference/current-2-x-surface.md	38.1
 docs-md	docs/agent-reference/current-2-x-surface.md	389
@@ -699,8 +698,8 @@ docs-md	docs/agent-reference/current-2-x-surface.md	64
 docs-md	docs/agent-reference/current-2-x-surface.md	64,
 docs-md	docs/agent-reference/current-2-x-surface.md	657
 docs-md	docs/agent-reference/current-2-x-surface.md	79
-docs-md	docs/agent-reference/current-2-x-surface.md	87
 docs-md	docs/agent-reference/current-2-x-surface.md	873
+docs-md	docs/agent-reference/current-2-x-surface.md	88
 docs-md	docs/agent-reference/current-2-x-surface.md	9.2.2
 docs-md	docs/agent-reference/current-2-x-surface.md	921,
 docs-md	docs/agent-reference/current-2-x-surface.md	947
@@ -736,7 +735,7 @@ docs-md	docs/agent-reference/package/public-surface.md	2.16
 docs-md	docs/agent-reference/package/public-surface.md	37
 docs-md	docs/agent-reference/package/public-surface.md	39
 docs-md	docs/agent-reference/package/public-surface.md	42
-docs-md	docs/agent-reference/package/public-surface.md	87
+docs-md	docs/agent-reference/package/public-surface.md	88
 docs-md	docs/agent-reference/package/subpackages.md	10
 docs-md	docs/agent-reference/package/subpackages.md	11
 docs-md	docs/agent-reference/package/subpackages.md	11,
@@ -814,7 +813,7 @@ docs-md	docs/for-ai-agents.md	2020
 docs-md	docs/for-ai-agents.md	25,000
 docs-md	docs/for-ai-agents.md	4,000
 docs-md	docs/for-ai-agents.md	64
-docs-md	docs/for-ai-agents.md	87
+docs-md	docs/for-ai-agents.md	88
 docs-md	docs/gradient_contract.md	64
 docs-md	docs/guides/fast_paths.md	0.17
 docs-md	docs/guides/fast_paths.md	0.18
@@ -881,6 +880,7 @@ docs-md	docs/guides/treescope_cards.md	1_1
 docs-md	docs/guides/treescope_cards.md	2.0
 docs-md	docs/guides/treescope_cards.md	2.13
 docs-md	docs/guides/treescope_cards.md	2.75
+docs-md	docs/guides/treescope_cards.md	3.0
 docs-md	docs/guides/treescope_cards.md	82.9
 docs-md	docs/intervention_api.md	0.60
 docs-md	docs/intervention_api.md	0.62
@@ -1093,7 +1093,7 @@ docs-md	docs/migration/scoped_detached_patching.md	27
 docs-md	docs/migration/v2.0_api_changes.md	2.0
 docs-md	docs/migration/v2.0_api_changes.md	2026
 docs-md	docs/migration/v2.0_api_changes.md	42
-docs-md	docs/migration/v2.0_api_changes.md	87
+docs-md	docs/migration/v2.0_api_changes.md	88
 docs-md	docs/monitor_training.md	10
 docs-md	docs/monitor_training.md	100
 docs-md	docs/monitor_training.md	125
@@ -1906,6 +1906,7 @@ docs-md	docs/reference/glossary.md	1.1,
 docs-md	docs/reference/glossary.md	10
 docs-md	docs/reference/glossary.md	100
 docs-md	docs/reference/glossary.md	1000,
+docs-md	docs/reference/glossary.md	1024
 docs-md	docs/reference/glossary.md	12
 docs-md	docs/reference/glossary.md	13
 docs-md	docs/reference/glossary.md	14,400
@@ -3001,7 +3002,6 @@ package-docstrings	torchlens/_data_classes/_trace_stats.py	42
 package-docstrings	torchlens/_data_classes/_trace_validation.py	21
 package-docstrings	torchlens/_data_classes/_trace_validation.py	5.4
 package-docstrings	torchlens/_data_classes/_trace_viz.py	1.0
-package-docstrings	torchlens/_data_classes/_trace_viz.py	11
 package-docstrings	torchlens/_data_classes/_trace_viz.py	16
 package-docstrings	torchlens/_data_classes/_trace_viz.py	3.11
 package-docstrings	torchlens/_data_classes/_trace_viz.py	3.6
@@ -3971,6 +3971,7 @@ package-docstrings	torchlens/_user_public_impls.py	4.5
 package-docstrings	torchlens/_user_public_impls.py	64
 package-docstrings	torchlens/_user_public_impls.py	75
 package-docstrings	torchlens/_utils/__init__.py	1,900
+package-docstrings	torchlens/_utils/__init__.py	26
 package-docstrings	torchlens/_utils/__init__.py	562
 package-docstrings	torchlens/_utils/__init__.py	64
 package-docstrings	torchlens/_utils/_call_site.py	3.10
@@ -6544,6 +6545,7 @@ test-docstrings	tests/test_docs_snippets.py	72
 test-docstrings	tests/test_docs_tier_drift.py	10
 test-docstrings	tests/test_docstring_coverage.py	69
 test-docstrings	tests/test_doctor.py	2.1
+test-docstrings	tests/test_doctor.py	2.2
 test-docstrings	tests/test_doctor.py	26
 test-docstrings	tests/test_doctor.py	40
 test-docstrings	tests/test_doctor.py	657

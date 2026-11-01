@@ -80,6 +80,7 @@ StorageOptions.on_save
 StorageOptions.path
 StorageOptions.retain_in_memory
 VisualizationOptions._specified_fields
+VisualizationOptions.animate
 VisualizationOptions.collapse
 VisualizationOptions.collapse_fn
 VisualizationOptions.collapsed_node_spec_fn
@@ -92,8 +93,8 @@ VisualizationOptions.edge_overrides
 VisualizationOptions.file_format
 VisualizationOptions.fold_repeats
 VisualizationOptions.font_size
-VisualizationOptions.for_paper
 VisualizationOptions.grad_edge_overrides
+VisualizationOptions.graph
 VisualizationOptions.graph_overrides
 VisualizationOptions.intervention_mode
 VisualizationOptions.layout
@@ -102,10 +103,10 @@ VisualizationOptions.node_label_fields
 VisualizationOptions.node_overlay
 VisualizationOptions.node_spec_fn
 VisualizationOptions.node_style
+VisualizationOptions.open_viewer
 VisualizationOptions.order_siblings
 VisualizationOptions.renderer
-VisualizationOptions.return_graph
-VisualizationOptions.save_only
+VisualizationOptions.rolled
 VisualizationOptions.show_buffers
 VisualizationOptions.show_cone
 VisualizationOptions.show_legend
@@ -115,4 +116,3 @@ VisualizationOptions.size_scale
 VisualizationOptions.skip_fn
 VisualizationOptions.stack_by
 VisualizationOptions.theme
-VisualizationOptions.view
