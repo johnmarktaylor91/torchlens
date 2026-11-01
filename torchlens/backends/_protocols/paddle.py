@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from .._backend_protocol import REFUSAL_CODES, FrameworkRequirement, SpecBackedProtocol
+from .._trace_options import PADDLE_TRACE_OPTIONS
 
 # Refusal codes the Paddle preview raises, each spelled once. Every
 # ``BackendUnsupportedError`` raised inside ``torchlens.backends.paddle`` passes
@@ -86,8 +87,6 @@ class PaddleProtocol(SpecBackedProtocol):
     """The Paddle preview's protocol object."""
 
     def __init__(self) -> None:
-        from ..registry import PADDLE_TRACE_OPTIONS
-
         super().__init__(
             name="paddle",
             maturity="preview",

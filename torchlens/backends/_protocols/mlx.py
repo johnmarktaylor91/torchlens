@@ -6,6 +6,9 @@ from collections.abc import Sequence
 from typing import Any
 
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
+from .._errors import BackendUnsupportedError
+from .._trace_options import MLX_TRACE_OPTIONS
+from .mlx_wrapped_state import mlx_wrappers_installed
 
 #: Every refusal code the MLX preview raises today (subset of ``REFUSAL_CODES``).
 MLX_REFUSAL_CODES: tuple[str, ...] = (
@@ -35,8 +38,6 @@ class MLXProtocol(SpecBackedProtocol):
     """The MLX preview's protocol object."""
 
     def __init__(self) -> None:
-        from ..registry import MLX_TRACE_OPTIONS
-
         super().__init__(
             name="mlx",
             maturity="preview",
@@ -67,8 +68,6 @@ class MLXProtocol(SpecBackedProtocol):
             flight), since the result would not be an independent oracle arm.
         """
 
-        from .mlx_wrapped_state import mlx_wrappers_installed
-
         if mlx_wrappers_installed():
             raise RuntimeError(
                 "MLX reference_output called while capture wrappers are installed; "
@@ -86,8 +85,6 @@ class MLXProtocol(SpecBackedProtocol):
         """
 
         import numpy as np
-
-        from ..registry import BackendUnsupportedError
 
         if not (self.is_tensor(value) or isinstance(value, (np.ndarray, np.generic))):
             raise BackendUnsupportedError(

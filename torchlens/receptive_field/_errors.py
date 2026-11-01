@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..backends.registry import BackendUnsupportedError
+from ..backends._errors import BackendUnsupportedError
 from ..errors import TorchLensError
 
 

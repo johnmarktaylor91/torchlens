@@ -27,7 +27,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from ..registry import BackendUnsupportedError
+from .._errors import BackendUnsupportedError
 
 #: Refusal code for a closure constant whose buffer tinygrad cannot read back.
 CONSTANT_UNREALIZABLE_CODE = "constant_unrealizable"

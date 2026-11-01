@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ..._utils._torch_compat import TorchCapabilityWarning
-from ..registry import BackendUnsupportedError
+from .._errors import BackendUnsupportedError
 
 TFCapabilitySnapshot = dict[str, bool]
 """Stable mapping from TensorFlow capability flag name to availability."""

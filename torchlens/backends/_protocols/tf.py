@@ -6,6 +6,8 @@ from collections.abc import Sequence
 from typing import Any
 
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
+from .._errors import BackendUnsupportedError
+from .._trace_options import TF_TRACE_OPTIONS
 
 #: The TensorFlow requirement, stated once (SPEC 1.2; the ceiling is F-M's
 #: ``tested_through`` arm). ``pinned`` is the version the per-change CI leg
@@ -39,8 +41,6 @@ class TFProtocol(SpecBackedProtocol):
     """The TensorFlow preview's protocol object."""
 
     def __init__(self) -> None:
-        from ..registry import TF_TRACE_OPTIONS
-
         super().__init__(
             name="tf",
             maturity="preview",
@@ -101,8 +101,6 @@ class TFProtocol(SpecBackedProtocol):
         """Detached NumPy copy of a tensor or variable; shape and dtype kept (0-d stays 0-d)."""
 
         import numpy as np
-
-        from ..registry import BackendUnsupportedError
 
         to_numpy = getattr(value, "numpy", None)
         try:

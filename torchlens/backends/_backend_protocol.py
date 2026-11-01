@@ -38,6 +38,20 @@ from packaging.version import InvalidVersion, Version
 __tl_layer__ = "L2"
 
 Maturity = Literal["preview", "stable"]
+
+#: ``registry.get_backend_spec``, bound by the registry at import. The shells
+#: read specs through this hook so this leaf never imports the registry that
+#: imports it (``protocol_problems``, ``MATURITIES``).
+_spec_lookup: Callable[[str], Any] | None = None
+
+
+def _install_spec_lookup(lookup: Callable[[str], Any]) -> None:
+    """Bind the spec lookup ``SpecBackedProtocol._spec`` resolves through."""
+
+    global _spec_lookup
+    _spec_lookup = lookup
+
+
 Materialization = Literal["eager", "lazy"]
 
 #: The launch labels a backend may carry. Only a recorded maintainer decision
@@ -399,9 +413,12 @@ class SpecBackedProtocol:
     def _spec(self) -> Any:
         """The registered ``BackendSpec`` this protocol is backed by."""
 
-        from .registry import get_backend_spec
-
-        return get_backend_spec(self.name)
+        if _spec_lookup is None:  # pragma: no cover - registry import installs it
+            raise RuntimeError(
+                "backend spec lookup is not bound; import torchlens.backends before "
+                "constructing a protocol shell"
+            )
+        return _spec_lookup(self.name)
 
     def capabilities(self) -> Any:
         """The registered ``BackendCapabilities`` (the only capability truth)."""

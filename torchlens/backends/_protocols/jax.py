@@ -6,6 +6,8 @@ from collections.abc import Sequence
 from typing import Any
 
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
+from .._errors import BackendUnsupportedError
+from .._trace_options import JAX_TRACE_OPTIONS
 
 #: The JAX requirement, stated once (SPEC 1.2; F-M ``tested_through`` arm).
 #: The ``jax`` extra is unpinned, so the pin is what the CI leg resolved when
@@ -42,8 +44,6 @@ class JAXProtocol(SpecBackedProtocol):
     """The JAX preview's protocol object."""
 
     def __init__(self) -> None:
-        from ..registry import JAX_TRACE_OPTIONS
-
         super().__init__(
             name="jax",
             maturity="preview",
@@ -103,8 +103,6 @@ class JAXProtocol(SpecBackedProtocol):
         """Detached NumPy copy of a ``jax.Array``; shape and dtype kept (0-d stays 0-d)."""
 
         import numpy as np
-
-        from ..registry import BackendUnsupportedError
 
         try:
             return np.array(value, copy=True)

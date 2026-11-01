@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from types import ModuleType
 from typing import Any, cast
 
-from torchlens.backends.registry import BackendUnsupportedError
+from torchlens.backends._errors import BackendUnsupportedError
 
 from ... import _state
 from .._protocols.paddle import (

@@ -13,6 +13,8 @@ from collections.abc import Sequence
 from typing import Any
 
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
+from .._errors import BackendUnsupportedError
+from .._trace_options import TORCH_TRACE_OPTIONS
 
 TORCH_FRAMEWORK = FrameworkRequirement(
     distributions=("torch",),
@@ -41,8 +43,6 @@ class TorchProtocol(SpecBackedProtocol):
     """The reference backend's protocol object (delegating adapter)."""
 
     def __init__(self) -> None:
-        from ..registry import TORCH_TRACE_OPTIONS
-
         super().__init__(
             name="torch",
             maturity="stable",
@@ -100,8 +100,6 @@ class TorchProtocol(SpecBackedProtocol):
 
         unknown = sorted(set(options) - _trace_keyword_names())
         if unknown:
-            from ..registry import BackendUnsupportedError
-
             raise BackendUnsupportedError(
                 f"The torch backend protocol does not recognise trace option(s) "
                 f"{unknown}: they are not tl.trace parameters, and passing them "

@@ -14,7 +14,8 @@ from collections.abc import Sequence
 from typing import Any
 
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
-from ..registry import BackendUnsupportedError
+from .._errors import BackendUnsupportedError
+from .._trace_options import TINYGRAD_TRACE_OPTIONS
 
 TINYGRAD_FRAMEWORK = FrameworkRequirement(
     distributions=("tinygrad",),
@@ -30,8 +31,6 @@ class TinygradProtocol(SpecBackedProtocol):
     """The tinygrad preview's protocol object."""
 
     def __init__(self) -> None:
-        from ..registry import TINYGRAD_TRACE_OPTIONS
-
         super().__init__(
             name="tinygrad",
             maturity="preview",
