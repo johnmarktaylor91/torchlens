@@ -263,7 +263,7 @@ OVERVIEW_LENS = register_lens(
             "fold_repeats": None,
             "node_mode": "default",
             "show_buffer_layers": "meaningful",
-            "show_containers": "auto",
+            "show_containers": "collapsed",
             "show_legend": None,
         },
         disclosure=(
