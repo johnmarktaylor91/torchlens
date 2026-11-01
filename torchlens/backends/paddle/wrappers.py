@@ -438,10 +438,8 @@ class _PaddleWrapperRegistry:
             if observer is not None:
                 observe_call = cast(Any, observer).call
                 return observe_call(original, op_name, args, kwargs)
-            if not _state._logging_enabled:
-                return original(*args, **kwargs)
-            trace = _state._active_trace
-            if trace is None:
+            trace, logging_enabled = _state.active_capture()
+            if not logging_enabled or trace is None:
                 return original(*args, **kwargs)
             depth = int(trace._paddle_capture_depth)
             if action == "deny":
@@ -486,8 +484,8 @@ def _conv_layer_wrapper(original: Any, op_name: str, backend: object) -> Any:
     def forward(layer: Any, *args: Any, **kwargs: Any) -> Any:
         """Run the layer forward and emit one layer-level convolution op."""
 
-        trace = _state._active_trace if _state._logging_enabled else None
-        if trace is None or _ACTIVE_TAP_OBSERVER is not None:
+        trace, logging_enabled = _state.active_capture()
+        if not logging_enabled or trace is None or _ACTIVE_TAP_OBSERVER is not None:
             return original(layer, *args, **kwargs)
         depth = int(trace._paddle_capture_depth)
         x = conv_layer_input(args, kwargs)
