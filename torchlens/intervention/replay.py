@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import warnings
 from collections import OrderedDict, deque
-from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
@@ -36,6 +36,9 @@ from ._replay_context import (
     REPLAY_CAPTURE_DIGESTS_KEY,
     _ensure_replay_run_ctx,
     _final_label_for_ref,
+    _func_call_groups,
+    _group_for_site,
+    _group_representative,
     _record_capture_digest,
     _replay_site_key,
 )
@@ -631,26 +634,7 @@ def _run_replay(
                     _install_replay_tensor_hook(log, member, tensor)
                 _check_edge_expectations(member, strict=strict)
             continue
-        # A synthesized boundary output node carries the parent call's
-        # template but ``func=identity`` -- it replays THROUGH its parent's
-        # function call, so a member that carries the call's real func must
-        # execute the group. Fall back to the full (cone-unfiltered) call
-        # group when the cone holds only boundary nodes (an output-node
-        # origin replayed with recomputation).
-        representative = next(
-            (member for member in replay_group if not getattr(member, "is_output", False)),
-            None,
-        )
-        if representative is None:
-            representative = next(
-                (
-                    member
-                    for member in call_groups.get(site.func_call_id, ())
-                    if not getattr(member, "is_output", False)
-                    and not getattr(member, "is_buffer", False)
-                ),
-                replay_group[0],
-            )
+        representative = _group_representative(replay_group, call_groups, site)
         args, kwargs = _reconstruct_args_from_template(
             _template_for_site(representative),
             representative,
@@ -1602,57 +1586,6 @@ def _resolve_single_origin(
     if hasattr(site, "layer_label") and hasattr(site, "out"):
         return cast("Op", site)
     return cast("Op", log._resolve_sites(site, strict=strict, max_fanout=1).first())
-
-
-def _func_call_groups(log: Trace) -> dict[int | None, tuple[Op, ...]]:
-    """Return function-call groups in topological order.
-
-    Parameters
-    ----------
-    log:
-        Model log to inspect.
-
-    Returns
-    -------
-    dict[int | None, tuple[Op, ...]]
-        Sites grouped by ``func_call_id``.
-    """
-
-    groups: dict[int | None, list[Op]] = {}
-    for layer in log.layer_list:
-        groups.setdefault(layer.func_call_id, []).append(layer)
-    return {call_id: tuple(layers) for call_id, layers in groups.items()}
-
-
-def _group_for_site(
-    site: Op,
-    call_groups: Mapping[int | None, Sequence[Op]],
-    cone_keys: Collection[str],
-) -> tuple[Op, ...]:
-    """Return same-call group members for a site.
-
-    Parameters
-    ----------
-    site:
-        Representative site.
-    call_groups:
-        Function-call grouping map.
-    cone_keys:
-        Replay keys of the current replay cone, computed once per replay.
-
-    Returns
-    -------
-    tuple[Op, ...]
-        Same-call members in topological order.
-    """
-
-    if site.func_call_id is None:
-        return (site,)
-    return tuple(
-        member
-        for member in call_groups.get(site.func_call_id, (site,))
-        if _replay_site_key(member) in cone_keys
-    )
 
 
 def _child_labels(site: Op) -> tuple[str, ...]:

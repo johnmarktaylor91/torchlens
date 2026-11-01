@@ -28,6 +28,7 @@ from .._utils.tensor_utils import (
     tensor_nanequal,
 )
 from ._buffer_addresses import _recorded_buffer_address
+from ._orphan_seeds import _orphan_flood_seeds
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -570,32 +571,6 @@ def _remove_foreign_kernel_interiors(self: "Trace") -> None:
     self._raw_graph_ws.raw_layer_dict = new_layer_dict
 
 
-_MODULE_BOUNDARY_KINDS = frozenset({"module_enter", "module_exit"})
-
-
-def _is_module_boundary_row(self: "Trace", label_raw: str, entry: Any) -> bool:
-    """Whether a raw row is a module enter/exit marker rather than an operation.
-
-    The sparse recorder journals module boundaries as op-lane rows (kind
-    ``module_enter`` / ``module_exit``, no parents, no children), so a cooked
-    ``Recording.to_trace()`` carries them into the raw graph, where the orphan
-    flood drops them. The halted carve-out above must not resurrect them: a
-    boundary marker is not an op that ran, and keeping it would mint fake
-    ``module_enter_N`` layers and shift every later label away from the live
-    halted capture's. The live exhaustive path keeps boundaries in their own
-    event lanes, so this answers False for every row it has.
-    """
-
-    capture_events = getattr(self, "capture_events", None)
-    event = None
-    if capture_events is not None:
-        event = capture_events.op_event_by_label_raw.get(label_raw)
-    kind = getattr(event, "kind", None)
-    if kind is None:
-        kind = getattr(entry, "type", None)
-    return kind in _MODULE_BOUNDARY_KINDS
-
-
 def _remove_orphan_nodes(self: "Trace") -> None:
     """Step 3: Remove orphan nodes unreachable from both inputs and outputs.
 
@@ -612,29 +587,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     _remove_foreign_kernel_interiors(self)
     orig_nodes = set(self._raw_graph_ws.raw_layer_labels_list)
     nodes_seen = set()
-    # Seed with inputs, outputs, and written buffer-version nodes. Written
-    # buffers such as BatchNorm.num_batches_tracked are state transitions even
-    # when the updated value is not read later in the forward graph.
-    written_buffer_layers = [
-        label
-        for label in self.buffer_layers
-        if getattr(self._raw_graph_ws.raw_layer_dict[label], "buffer_write_kind", None) is not None
-    ]
-    node_stack = self.input_layers + self.output_layers + written_buffer_layers
-    # A halted capture is an honest prefix of the forward: every op that ran
-    # stays. A value computed before the halt whose consumer never ran (a
-    # positional-weight table built from numpy ahead of the embedding it
-    # scales) is childless AND input-disconnected at the frontier, so the
-    # bidirectional flood from inputs and the halt output alone would prune
-    # it as dead computation it is not. Seed every childless op as frontier.
-    if getattr(self, "halted", False):
-        node_stack = node_stack + [
-            label
-            for label, entry in self._raw_graph_ws.raw_layer_dict.items()
-            if len(entry.children) == 0
-            and label not in node_stack
-            and not _is_module_boundary_row(self, label, entry)
-        ]
+    node_stack = _orphan_flood_seeds(self)
     # Shadow sets over the two trace-level list[str] sink ledgers: the former
     # per-node `label not in <list>` scans were O(k^2) in sink count
     # (hunt-6 R52-2). The lists stay the portable source of truth.

@@ -17,6 +17,7 @@ from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
 from .._runnable import DivergencePolicy, RunProvider, RunResult
 from ..options import ReplayOptions, merge_replay_options
+from ._staged_spec import _staged_user_entries
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
     _clear_entry_attributes,
@@ -749,13 +750,7 @@ class TraceValidationMixin(_TraceMixinBase):
             # this trace's saved values (audit-recorded and propagated); their
             # inertness on a new-input run is the PendingValueEditsWarning
             # DISCLOSURE at the run door below, never a refusal.
-            staged_spec = getattr(self, "_intervention_spec", None)
-            staged_user_hooks = [
-                hook_spec
-                for hook_spec in getattr(staged_spec, "hook_specs", ())
-                if not (getattr(hook_spec, "metadata", None) or {}).get("selection_do_engine_owned")
-            ]
-            staged_value_specs = getattr(staged_spec, "target_value_specs", ())
+            staged_user_hooks, staged_value_specs = _staged_user_entries(self)
             # The guarded fast LIVE engine applies the staged spec at real
             # module boundaries (``_fast_live_steer``), so the gate's reason
             # does not hold there; loaded providers and the ordinary live

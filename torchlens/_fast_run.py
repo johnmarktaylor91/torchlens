@@ -41,7 +41,7 @@ from ._fast_live_until import (
     resolve_fast_until,
     truncate_after,
 )
-from ._fast_sparse_state import _state_mutating_call_ids
+from ._fast_sparse_state import _input_layout_ok, _state_mutating_call_ids
 from ._ir.container import ContainerSpec, rebuild_container_from_spec
 from ._runnable import (
     DivergencePolicy,
@@ -107,7 +107,6 @@ from ._runnable_execution import (
     run_loaded_sparse_trace,
 )
 from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
-from ._utils._torch_compat import tensor_has_named_dims
 from ._utils.arg_handling import normalize_input_args
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError
@@ -235,19 +234,6 @@ def _compile_sparse_call(
             or call.execution_context.inference_mode != ambient_inference_mode
             or any(entry.enabled for entry in call.execution_context.autocast)
         ),
-    )
-
-
-def _input_layout_ok(value: torch.Tensor) -> bool:
-    """Return whether an input is in the fast sparse executor's admitted domain."""
-
-    return (
-        type(value) in {torch.Tensor, torch.nn.Parameter}
-        and value.layout == torch.strided
-        and not value.is_nested
-        and not bool(getattr(value, "is_meta", False))
-        and not bool(getattr(value, "is_quantized", False))
-        and not tensor_has_named_dims(value)
     )
 
 
