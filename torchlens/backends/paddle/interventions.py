@@ -26,6 +26,12 @@ from ...fastlog.exceptions import PredicateError
 from ...intervention.predicates import as_intervention_decision
 from ...intervention.selectors import BaseSelector
 from ...intervention.types import Edit, FireRecord, InterventionDecision, TargetSpec
+from .._protocols.paddle import (
+    PADDLE_REFUSAL_BACKWARD,
+    PADDLE_REFUSAL_FOREIGN,
+    PADDLE_REFUSAL_OPTION,
+    PADDLE_REFUSAL_PREDICATE,
+)
 from ..registry import BackendUnsupportedError
 
 _PADDLE_SUPPORTED_HELPER_NAMES = ("add", "replace_with", "scale", "zero_ablate")
@@ -86,12 +92,16 @@ class PaddleInterventionRuntime:
             raise BackendUnsupportedError(
                 "paddle backend trace(intervene=...) requires a callable predicate "
                 "such as tl.when(condition, action); got "
-                f"{type(intervene).__name__!s}."
+                f"{type(intervene).__name__!s}.",
+                code=PADDLE_REFUSAL_OPTION,
+                option="intervene",
             )
         if halt is not None and not callable(halt):
             raise BackendUnsupportedError(
                 "paddle backend trace(halt=...) requires a callable predicate "
-                f"returning bool; got {type(halt).__name__!s}."
+                f"returning bool; got {type(halt).__name__!s}.",
+                code=PADDLE_REFUSAL_OPTION,
+                option="halt",
             )
         self._backend = backend
         self.intervene = intervene
@@ -170,7 +180,8 @@ class PaddleInterventionRuntime:
             raise BackendUnsupportedError(
                 "paddle backend trace(intervene=...) hooks must return a "
                 f"paddle.Tensor; hook for site {ctx.label_raw!r} returned "
-                f"{type(replacement).__name__!s}."
+                f"{type(replacement).__name__!s}.",
+                code=PADDLE_REFUSAL_PREDICATE,
             )
         replaced = replacement is not tensor
         self.fire_count += 1
@@ -287,12 +298,15 @@ class PaddleInterventionRuntime:
                 "paddle backend preview supports forward interventions only; "
                 f"direction {decision.direction!r} needs true backward capture, "
                 "which paddle does not declare. Use the PyTorch backend for "
-                "backward interventions."
+                "backward interventions.",
+                code=PADDLE_REFUSAL_BACKWARD,
             )
         if decision.isolate:
             raise BackendUnsupportedError(
                 "paddle backend preview does not support isolate=True intervention "
-                "decisions; backend isolation is a torch capture feature."
+                "decisions; backend isolation is a torch capture feature.",
+                code=PADDLE_REFUSAL_OPTION,
+                option="isolate",
             )
 
     def _resolve_hook(self, decision: InterventionDecision) -> Callable[[Any], Any]:
@@ -316,7 +330,9 @@ class PaddleInterventionRuntime:
             return hook
         raise BackendUnsupportedError(
             "paddle backend trace(intervene=...) decisions must carry a builtin "
-            f"helper spec or a callable hook; got {type(hook).__name__!s}."
+            f"helper spec or a callable hook; got {type(hook).__name__!s}.",
+            code=PADDLE_REFUSAL_OPTION,
+            option="intervene",
         )
 
     def _resolve_helper_hook(self, helper: Edit) -> Callable[[Any], Any]:
@@ -368,7 +384,9 @@ class PaddleInterventionRuntime:
         raise BackendUnsupportedError(
             f"paddle backend preview has no adapter for intervention helper "
             f"{name!r}; supported builtin helpers: {supported}. Pass a callable "
-            "hook operating on paddle.Tensor values, or use the PyTorch backend."
+            "hook operating on paddle.Tensor values, or use the PyTorch backend.",
+            code=PADDLE_REFUSAL_OPTION,
+            option="intervene",
         )
 
     def _reject_foreign_tensor(self, value: Any, *, helper_name: str) -> None:
@@ -386,7 +404,8 @@ class PaddleInterventionRuntime:
         if module_root == "torch":
             raise BackendUnsupportedError(
                 f"paddle backend intervention helper {helper_name!r} received a "
-                "torch.Tensor argument; pass a paddle.Tensor or Python scalar."
+                "torch.Tensor argument; pass a paddle.Tensor or Python scalar.",
+                code=PADDLE_REFUSAL_FOREIGN,
             )
 
 

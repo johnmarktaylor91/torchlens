@@ -317,6 +317,7 @@ def _parent_perturbations_change_output(
     ops_by_label: Mapping[str, Any],
     *,
     baseline_output: Any | None = None,
+    constant_labels: frozenset[str] = frozenset(),
 ) -> bool:
     """Return whether at least one value-parent perturbation changes output.
 
@@ -333,6 +334,12 @@ def _parent_perturbations_change_output(
         the sensitivity check compares perturbed replays against the pre-hook
         value: comparing against the recorded replacement payload would make
         the check vacuously pass for constant replacements.
+    constant_labels
+        Raw labels of ops the constants rule recorded (closure tensors that
+        existed before the forward). They have no upstream, so they are never
+        perturbed (SPEC 2 rule 3); the op is still perturbed on every other
+        value parent, and an op whose value parents are all constants has
+        nothing to perturb (its replay comparison is the whole check).
 
     Returns
     -------
@@ -346,6 +353,8 @@ def _parent_perturbations_change_output(
         return False
     if not rebuilt.parent_values:
         return _is_factory_or_source_capture(capture)
+    if set(rebuilt.parent_values) <= constant_labels:
+        return True
     saved_output = (
         baseline_output
         if baseline_output is not None
@@ -354,6 +363,8 @@ def _parent_perturbations_change_output(
     output_path = _capture_output_path(capture)
     attempted = False
     for parent_label, parent_value in rebuilt.parent_values.items():
+        if parent_label in constant_labels:
+            continue
         paths = rebuilt.leaf_paths_by_parent.get(parent_label, ())
         if not paths:
             continue
@@ -407,48 +418,99 @@ def _coverage_oracle(trace: Any) -> bool:
         True when capture records conserve tensor inputs and graph parents.
     """
 
+    return _coverage_first_gap(trace) is None
+
+
+def _coverage_first_gap(trace: Any) -> tuple[str | None, str, str] | None:
+    """Return the first coverage gap as ``(raw label, reason, detail)``, or ``None``.
+
+    The single implementation behind :func:`_coverage_oracle`; the tuple names
+    the offending capture so a failed status can say where and why.
+
+    Parameters
+    ----------
+    trace
+        Paddle trace containing independent ``PaddleOpCapture`` records.
+
+    Returns
+    -------
+    tuple[str | None, str, str] | None
+        ``None`` when capture records conserve tensor inputs and graph parents.
+    """
+
+    from .validation_decisions import REASON_EFFECTFUL_REGION, REASON_PARENT_PAYLOAD_MISSING
+
     # A parameter the forward wrote in place outside any wrapped op is an
     # untraced effect even when nothing reads it afterwards: fail closed.
-    if any(marker.startswith(PARAMETER_WRITE_MARKER) for marker in _capture_gap_markers(trace)):
-        return False
+    for marker in _capture_gap_markers(trace):
+        if marker.startswith(PARAMETER_WRITE_MARKER):
+            return None, REASON_EFFECTFUL_REGION, marker
     captures = tuple(getattr(trace, "_paddle_op_captures", ()))
     ops_by_label = _ops_by_label(trace)
     for capture in captures:
-        if getattr(capture, "label_raw", None) not in ops_by_label:
+        label_raw = getattr(capture, "label_raw", None)
+        if label_raw not in ops_by_label:
             if tuple(getattr(capture, "alias_annotations", ())):
                 continue
-            return False
-        is_factory = _is_factory_or_source_capture(capture)
-        if not is_factory:
-            for leaf in getattr(capture, "tensor_inputs", ()):
-                if getattr(leaf, "label", None) is None and not _is_known_param_leaf(capture, leaf):
-                    return False
-            if tuple(getattr(capture, "capture_gap_markers", ())) != ():
-                return False
+            return label_raw, REASON_PARENT_PAYLOAD_MISSING, "capture has no recorded op"
+        gap = _capture_input_gap(capture)
+        if gap is not None:
+            return label_raw, *gap
         op = ops_by_label.get(getattr(capture, "label_raw", ""))
         if op is None:
             continue
-        # Capture records speak RAW label space (their labels are immutable
-        # capture identities). Recurrence grouping rewrites graph edges to
-        # final pass-qualified labels, so parents are resolved back to raw
-        # space before comparison; an unresolvable parent keeps its literal
-        # label and fails closed.
-        graph_parents: set[str] = set()
-        for parent in getattr(op, "parents", ()):
-            parent_text = str(parent)
-            if parent_text.startswith("input."):
-                continue
-            parent_op = ops_by_label.get(parent_text)
-            parent_raw = getattr(parent_op, "_label_raw", None) if parent_op is not None else None
-            graph_parents.add(parent_raw if isinstance(parent_raw, str) else parent_text)
-        for label in getattr(capture, "producer_labels", frozenset()):
-            if not isinstance(label, str):
-                return False
-            if not label.startswith("input.") and label not in ops_by_label:
-                return False
-            if not label.startswith("input.") and label not in graph_parents:
-                return False
-    return True
+        parent_gap = _producer_parent_gap(capture, op, ops_by_label)
+        if parent_gap is not None:
+            return label_raw, REASON_PARENT_PAYLOAD_MISSING, parent_gap
+    return None
+
+
+def _capture_input_gap(capture: Any) -> tuple[str, str] | None:
+    """Return ``(reason, detail)`` for an untraced input or capture-gap marker."""
+
+    from .validation_decisions import REASON_EFFECTFUL_REGION, REASON_PARENT_PAYLOAD_MISSING
+
+    if _is_factory_or_source_capture(capture):
+        return None
+    for leaf in getattr(capture, "tensor_inputs", ()):
+        if getattr(leaf, "label", None) is None and not _is_known_param_leaf(capture, leaf):
+            path = tuple(getattr(leaf, "path", ()))
+            return REASON_PARENT_PAYLOAD_MISSING, f"untraced tensor input at {path!r}"
+    markers = tuple(getattr(capture, "capture_gap_markers", ()))
+    if markers != ():
+        reason = (
+            REASON_EFFECTFUL_REGION
+            if any("same-object" in str(marker) for marker in markers)
+            else REASON_PARENT_PAYLOAD_MISSING
+        )
+        return reason, str(markers[0])
+    return None
+
+
+def _producer_parent_gap(capture: Any, op: Any, ops_by_label: Mapping[str, Any]) -> str | None:
+    """Return why a capture's producer labels disagree with the graph's parents."""
+
+    # Capture records speak RAW label space (their labels are immutable
+    # capture identities). Recurrence grouping rewrites graph edges to
+    # final pass-qualified labels, so parents are resolved back to raw
+    # space before comparison; an unresolvable parent keeps its literal
+    # label and fails closed.
+    graph_parents: set[str] = set()
+    for parent in getattr(op, "parents", ()):
+        parent_text = str(parent)
+        if parent_text.startswith("input."):
+            continue
+        parent_op = ops_by_label.get(parent_text)
+        parent_raw = getattr(parent_op, "_label_raw", None) if parent_op is not None else None
+        graph_parents.add(parent_raw if isinstance(parent_raw, str) else parent_text)
+    for label in getattr(capture, "producer_labels", frozenset()):
+        if not isinstance(label, str):
+            return f"non-string producer label {label!r}"
+        if not label.startswith("input.") and label not in ops_by_label:
+            return f"producer {label!r} is not a recorded op"
+        if not label.startswith("input.") and label not in graph_parents:
+            return f"producer {label!r} is not a graph parent"
+    return None
 
 
 def _is_known_param_leaf(capture: Any, leaf: Any) -> bool:

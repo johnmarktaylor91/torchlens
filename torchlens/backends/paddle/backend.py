@@ -66,7 +66,21 @@ from .._options import (
     reject_unsupported_trace_options,
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
+from .._protocols.paddle import (
+    PADDLE_REFUSAL_IDENTITY_MODE,
+    PADDLE_REFUSAL_INTERMEDIATE_GRADS,
+    PADDLE_REFUSAL_OPTION,
+    PADDLE_REFUSAL_RUNTIME_MODE,
+    PADDLE_REFUSAL_SEED,
+)
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
+from .constants_rule import (
+    PADDLE_CONSTANT_OP,
+    constant_labels,
+    find_closure_tensors,
+    is_constant_capture,
+    is_literal_producer_capture,
+)
 from .interventions import PaddleInterventionCapture, PaddleInterventionRuntime
 from .model_prep import (
     PaddleModuleTree,
@@ -76,6 +90,24 @@ from .model_prep import (
     prepare_model_session,
 )
 from .tensor_store import PaddleTensorLabelStore
+from .validation_decisions import (
+    OUTCOME_EXEMPTED,
+    OUTCOME_FAILED,
+    OUTCOME_REPLAYED,
+    REASON_CONSTANT_PARENT_PAYLOAD,
+    REASON_CONSTANT_PRODUCER_LEAF,
+    REASON_METADATA_INVARIANT,
+    REASON_NO_REPLAYABLE_FUNCTION,
+    REASON_PARENT_PAYLOAD_MISSING,
+    REASON_PERTURBATION_INSENSITIVE,
+    REASON_REPLAY_MISMATCH,
+    REASON_USER_INTERVENTION,
+    PaddleReplayOutcome,
+    decision as validation_decision,
+    fold_status,
+    public_label,
+    with_failure_message,
+)
 from .wrappers import is_alias_allowed_op, paddle_tap_observer, unwrap_paddle, wrap_paddle
 
 
@@ -290,6 +322,9 @@ class PaddleBackend:
         self.tensor_store = PaddleTensorLabelStore()
         self._param_address_by_id: dict[int, str] = {}
         self._param_write_guard = ParameterWriteGuard()
+        # Tensors proven to exist before the forward (constants rule): held
+        # strongly for the capture so their ids cannot be reused.
+        self._closure_tensors: dict[int, Any] = {}
 
     def capture_trace(
         self,
@@ -416,7 +451,9 @@ class PaddleBackend:
                 "trace(intervene=...) or trace(halt=...): derived-gradient "
                 "replay re-executes the forward without interventions, so the "
                 "matched intermediates would misrepresent the intervened "
-                "capture. Capture derived gradients in a separate plain trace."
+                "capture. Capture derived gradients in a separate plain trace.",
+                code=PADDLE_REFUSAL_OPTION,
+                option="grad_options",
             )
         intervention_runtime = (
             PaddleInterventionRuntime(self, intervene=intervene, halt=halt)
@@ -427,7 +464,8 @@ class PaddleBackend:
         if random_seed is not None:
             raise BackendUnsupportedError(
                 "paddle backend preview does not support random_seed; use paddle.seed(...) "
-                "outside tl.trace or pass explicit RNG state through the model/input surface."
+                "outside tl.trace or pass explicit RNG state through the model/input surface.",
+                code=PADDLE_REFUSAL_SEED,
             )
         reject_unsupported_trace_options(
             {
@@ -508,11 +546,15 @@ class PaddleBackend:
                 recipe_tuple = tuple(facet_recipes)
             except TypeError as exc:
                 raise BackendUnsupportedError(
-                    "paddle backend trace(facets=...) requires an iterable of recipe callables."
+                    "paddle backend trace(facets=...) requires an iterable of recipe callables.",
+                    code=PADDLE_REFUSAL_OPTION,
+                    option="facets",
                 ) from exc
             if not all(callable(recipe) for recipe in recipe_tuple):
                 raise BackendUnsupportedError(
-                    "paddle backend trace(facets=...) requires recipe callables."
+                    "paddle backend trace(facets=...) requires recipe callables.",
+                    code=PADDLE_REFUSAL_OPTION,
+                    option="facets",
                 )
             from ...semantic import facets as facets_mod
 
@@ -539,6 +581,12 @@ class PaddleBackend:
             else {}
         )
         self._param_write_guard = ParameterWriteGuard.capture(model, self._param_address_by_id)
+        self._closure_tensors = find_closure_tensors(
+            model,
+            self.paddle.Tensor,
+            getattr(getattr(self.paddle, "nn", None), "Layer", None),
+            exclude_ids=self._param_address_by_id,
+        )
         # R07: the try owns the wrap call itself -- a raise anywhere between
         # wrapper install and the forward (source labeling) used to strand the
         # process-global Paddle wrappers because the unwrap-owning finally had
@@ -609,6 +657,7 @@ class PaddleBackend:
         finally:
             self._param_address_by_id = {}
             self._param_write_guard = ParameterWriteGuard()
+            self._closure_tensors = {}
             # Independently-owned resources: a raising hook cleanup must not
             # leave the process-global Paddle wrappers installed.
             try:
@@ -882,7 +931,8 @@ class PaddleBackend:
             raise BackendUnsupportedError(
                 "Paddle intermediate derived gradients are capped at "
                 f"{grad_options.max_intermediate_grads} attached records; got "
-                f"{len(records)}."
+                f"{len(records)}.",
+                code=PADDLE_REFUSAL_INTERMEDIATE_GRADS,
             )
         return IntermediateDerivedGradAccessor(records)
 
@@ -919,46 +969,87 @@ class PaddleBackend:
             )
             setattr(trace, "_validation_replay_status", status_result)
             return status_result
-        replayed_count = 0
-        failed_count = 0
+        source = _validation_source(trace)
+        payload_load_status = getattr(trace, "payload_load_status", None)
         try:
-            from ...validation.invariants import check_metadata_invariants
             from ...validation.status import count_importer_region_annotations
-            from .validation import _coverage_oracle
 
-            if (
-                not _coverage_oracle(trace)
-                or kwargs.get("validate_metadata", True)
-                and not check_metadata_invariants(trace)
-            ):
-                failed_count = 1
-            else:
-                replayed_count, failed_count = self._validate_paddle_captures(trace)
-            if failed_count == 0 and replayed_count < 1:
-                failed_count = 1
-            status_result = ValidationStatus.from_replay_counts(
-                backend=self.name,
-                source=_validation_source(trace),
-                num_replayed_ops=replayed_count,
-                num_unverified_ops=(
-                    count_importer_region_annotations(trace) if failed_count == 0 else 0
-                ),
-                num_failed_ops=failed_count,
-                payload_load_status=getattr(trace, "payload_load_status", None),
+            outcome = self._paddle_replay_outcome(
+                trace, validate_metadata=bool(kwargs.get("validate_metadata", True))
             )
-        except Exception:
-            status_result = ValidationStatus.result(
-                passed=False,
+            status_result = fold_status(
+                outcome,
                 backend=self.name,
-                source=_validation_source(trace),
-                payload_load_status=getattr(trace, "payload_load_status", None),
-                num_replayed_ops=replayed_count,
-                num_failed_ops=max(1, failed_count),
+                source=source,
+                num_unverified_ops=count_importer_region_annotations(trace),
+                payload_load_status=payload_load_status,
+            )
+        except Exception as exc:  # noqa: BLE001 - any oracle crash is a failed validation
+            status_result = with_failure_message(
+                ValidationStatus.result(
+                    passed=False,
+                    backend=self.name,
+                    source=source,
+                    payload_load_status=payload_load_status,
+                    num_failed_ops=1,
+                    decisions=(
+                        validation_decision(
+                            None,
+                            OUTCOME_FAILED,
+                            REASON_NO_REPLAYABLE_FUNCTION,
+                            f"validation raised {type(exc).__name__}: {exc}",
+                        ),
+                    ),
+                )
             )
         setattr(trace, "_validation_replay_status", status_result)
         return status_result if status_result.state == "unverified" else status_result.passed
 
-    def _validate_paddle_captures(self, trace: Trace) -> tuple[int, int]:
+    def _paddle_replay_outcome(
+        self, trace: Trace, *, validate_metadata: bool
+    ) -> PaddleReplayOutcome:
+        """Run the coverage oracle, metadata invariants and per-op replay.
+
+        Parameters
+        ----------
+        trace
+            Paddle trace to validate.
+        validate_metadata
+            Whether backend-neutral invariant checks run.
+
+        Returns
+        -------
+        PaddleReplayOutcome
+            One decision per checked op; a coverage or invariant failure is a
+            single failed decision naming the offending op.
+        """
+
+        from .validation import _coverage_first_gap, _ops_by_label as _validation_ops
+
+        gap = _coverage_first_gap(trace)
+        if gap is not None:
+            raw_label, reason, detail = gap
+            label = public_label(raw_label, _validation_ops(trace))
+            return PaddleReplayOutcome(
+                (validation_decision(label, OUTCOME_FAILED, reason, detail),)
+            )
+        if validate_metadata:
+            from ...validation.invariants import check_metadata_invariants
+
+            try:
+                invariants_ok = check_metadata_invariants(trace)
+            except Exception as exc:  # noqa: BLE001 - the invariant error names the problem
+                invariants_ok = False
+                detail = f"{type(exc).__name__}: {exc}"
+            else:
+                detail = "metadata invariants rejected the trace"
+            if not invariants_ok:
+                return PaddleReplayOutcome(
+                    (validation_decision(None, OUTCOME_FAILED, REASON_METADATA_INVARIANT, detail),)
+                )
+        return self._validate_paddle_captures(trace)
+
+    def _validate_paddle_captures(self, trace: Trace) -> PaddleReplayOutcome:
         """Replay and perturb Paddle captures against saved trace payloads.
 
         Parameters
@@ -968,65 +1059,108 @@ class PaddleBackend:
 
         Returns
         -------
-        tuple[int, int]
-            Replayed and failed node counts.
+        PaddleReplayOutcome
+            One decision per capture (factory ``*_like`` captures excepted, as
+            before): replayed, failed with a reason, or a constant leaf.
         """
 
+        from .validation import _coverage_first_gap
+
+        ops_by_label = _ops_by_label(trace)
+        gap = _coverage_first_gap(trace)
+        if gap is not None:
+            raw_label, reason, detail = gap
+            return PaddleReplayOutcome(
+                (
+                    validation_decision(
+                        public_label(raw_label, ops_by_label), OUTCOME_FAILED, reason, detail
+                    ),
+                )
+            )
+        captures = tuple(getattr(trace, "_paddle_op_captures", ()))
+        constants = constant_labels(captures)
+        decisions = tuple(
+            self._capture_decision(trace, capture, ops_by_label, constants)
+            for capture in captures
+            if is_literal_producer_capture(capture)
+            or is_constant_capture(capture)
+            or not _paddle_capture_is_factory_or_source(capture)
+        )
+        return PaddleReplayOutcome(decisions)
+
+    def _capture_decision(
+        self,
+        trace: Trace,
+        capture: PaddleOpCapture,
+        ops_by_label: Mapping[str, Any],
+        constants: frozenset[str],
+    ) -> dict[str, Any]:
+        """Replay, compare and perturb one capture; return its decision."""
+
         from .validation import (
-            _coverage_oracle,
             _parent_perturbations_change_output,
             _payloads_close,
             _rebuild_inputs,
         )
 
-        if not _coverage_oracle(trace):
-            return 0, 1
-        ops_by_label = _ops_by_label(trace)
-        replayed_count = 0
-        failed_count = 0
-        for capture in tuple(getattr(trace, "_paddle_op_captures", ())):
-            if _paddle_capture_is_factory_or_source(capture):
-                continue
-            op = ops_by_label.get(getattr(capture, "label_raw", ""))
-            if op is None or bool(getattr(op, "is_input", False)):
-                failed_count += 1
-                continue
-            try:
-                expected_output = op.out
-                intervention = getattr(capture, "intervention", None)
-                if intervention is not None:
-                    # Narrow user-intervention carve-out (tripwire doctrine):
-                    # the replay target switches to the pre-hook value ONLY
-                    # when trace-level evidence corroborates a genuine live
-                    # fire. A capture-side record without corroboration is a
-                    # forged/mispresented stamp and fails outright.
-                    if not _paddle_intervention_corroborated(trace, capture, op):
-                        failed_count += 1
-                        continue
-                    if intervention.raw_first_output is not None:
-                        expected_output = intervention.raw_first_output
-                rebuilt = _rebuild_inputs(capture, ops_by_label)
-                if not rebuilt.ok:
-                    failed_count += 1
-                    continue
-                with _state.pause_logging(), self.paddle.no_grad():
-                    replayed = capture.func(*rebuilt.args, **rebuilt.kwargs)
-                replayed_output = _value_at_path(
-                    replayed,
-                    _first_output_path(capture),
+        label = public_label(getattr(capture, "label_raw", None), ops_by_label)
+        op = ops_by_label.get(getattr(capture, "label_raw", ""))
+        if op is None or bool(getattr(op, "is_input", False)):
+            return validation_decision(
+                label, OUTCOME_FAILED, REASON_PARENT_PAYLOAD_MISSING, "no recorded op"
+            )
+        if is_constant_capture(capture):
+            # SPEC 2 rule 3 / FORKS F-L: a closure constant has no function and
+            # nothing upstream to replay from; it is a leaf whose saved payload
+            # feeds its consumers' replays. A missing payload still fails.
+            if not bool(getattr(op, "has_saved_activation", False)) or op.out is None:
+                return validation_decision(
+                    label, OUTCOME_FAILED, REASON_PARENT_PAYLOAD_MISSING, "constant has no payload"
                 )
-                if expected_output is None or not _payloads_close(replayed_output, expected_output):
-                    failed_count += 1
-                    continue
-                if not _parent_perturbations_change_output(
-                    self, capture, ops_by_label, baseline_output=expected_output
-                ):
-                    failed_count += 1
-                    continue
-                replayed_count += 1
-            except Exception:
-                failed_count += 1
-        return replayed_count, failed_count
+            return validation_decision(label, OUTCOME_EXEMPTED, REASON_CONSTANT_PRODUCER_LEAF)
+        try:
+            expected_output = op.out
+            intervention = getattr(capture, "intervention", None)
+            if intervention is not None:
+                # Narrow user-intervention carve-out (tripwire doctrine):
+                # the replay target switches to the pre-hook value ONLY
+                # when trace-level evidence corroborates a genuine live
+                # fire. A capture-side record without corroboration is a
+                # forged/mispresented stamp and fails outright.
+                if not _paddle_intervention_corroborated(trace, capture, op):
+                    return validation_decision(
+                        label, OUTCOME_FAILED, REASON_USER_INTERVENTION, "fire not corroborated"
+                    )
+                if intervention.raw_first_output is not None:
+                    expected_output = intervention.raw_first_output
+            rebuilt = _rebuild_inputs(capture, ops_by_label)
+            if not rebuilt.ok:
+                return validation_decision(
+                    label, OUTCOME_FAILED, REASON_PARENT_PAYLOAD_MISSING, str(rebuilt.reason)
+                )
+            with _state.pause_logging(), self.paddle.no_grad():
+                replayed = cast(Callable[..., Any], capture.func)(*rebuilt.args, **rebuilt.kwargs)
+            replayed_output = _value_at_path(replayed, _first_output_path(capture))
+            if expected_output is None or not _payloads_close(replayed_output, expected_output):
+                return validation_decision(label, OUTCOME_FAILED, REASON_REPLAY_MISMATCH)
+            if is_literal_producer_capture(capture):
+                return validation_decision(label, OUTCOME_REPLAYED)
+            if not _parent_perturbations_change_output(
+                self,
+                capture,
+                ops_by_label,
+                baseline_output=expected_output,
+                constant_labels=constants,
+            ):
+                return validation_decision(label, OUTCOME_FAILED, REASON_PERTURBATION_INSENSITIVE)
+        except Exception as exc:  # noqa: BLE001 - a replay crash fails this op
+            return validation_decision(
+                label, OUTCOME_FAILED, REASON_NO_REPLAYABLE_FUNCTION, type(exc).__name__
+            )
+        if rebuilt.parent_values and set(rebuilt.parent_values) <= constants:
+            return validation_decision(label, OUTCOME_REPLAYED, REASON_CONSTANT_PARENT_PAYLOAD)
+        reason = REASON_USER_INTERVENTION if intervention is not None else None
+        return validation_decision(label, OUTCOME_REPLAYED, reason)
 
     def emit_paddle_operation(
         self,
@@ -1056,6 +1190,7 @@ class PaddleBackend:
         if events is None:
             events = CaptureEvents()
             trace.capture_events = events
+        self._record_closure_constants(trace, events, args, kwargs)
         reserved = events.reserve_label_block(op_name, len(outputs))
         func_call_id = events.func_call_id_counter + 1
         events.func_call_id_counter = func_call_id
@@ -1195,6 +1330,84 @@ class PaddleBackend:
                     )
                     raise StopSignal(site.label_raw, frontier_output=final_output)
         return final_output
+
+    def _record_closure_constants(
+        self,
+        trace: Trace,
+        events: CaptureEvents,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> None:
+        """Record each proven closure constant among an op's inputs (SPEC 2 rule 1).
+
+        A tensor leaf qualifies only when it has no label, is not a registered
+        parameter of the captured tree, and was found before the forward by
+        the reachability walk. It becomes a parentless ``constant`` source op
+        with a saved payload, labelled like any op, so the consuming op lists
+        it as a parent. Every other unlabeled leaf stays a capture gap.
+        """
+
+        if not self._closure_tensors:
+            return
+        leaves = (
+            *self._iter_tensors_with_paths(args, root=("args",)),
+            *self._iter_tensors_with_paths(kwargs, root=("kwargs",)),
+        )
+        for _path, tensor in leaves:
+            if self._closure_tensors.get(id(tensor)) is not tensor:
+                continue
+            if self.tensor_store.get_label(tensor) is not None:
+                continue
+            if id(tensor) in self._param_address_by_id:
+                continue
+            self._emit_constant(trace, events, tensor)
+
+    def _emit_constant(self, trace: Trace, events: CaptureEvents, tensor: object) -> None:
+        """Append one closure-constant op event and its validation record."""
+
+        site = events.reserve_label_block(PADDLE_CONSTANT_OP, 1)[0]
+        func_call_id = events.func_call_id_counter + 1
+        events.func_call_id_counter = func_call_id
+        event = self._build_event(
+            session=trace,
+            kind="op",
+            reserved=site,
+            func_event_input=FunctionEventInput(
+                func=None,
+                func_name=PADDLE_CONSTANT_OP,
+                func_qualname=None,
+                args=(),
+                kwargs={},
+                raw_output=tensor,
+                arg_copies=None,
+                kwarg_copies=None,
+                module_stack=tuple(getattr(trace, "_paddle_module_stack", ())),
+                is_bottom_level_func=True,
+                func_call_id=func_call_id,
+                expected_output_count=1,
+            ),
+            output=tensor,
+            parents=(),
+            parent_arg_positions={"args": {}, "kwargs": {}},
+            edge_uses=(),
+            policy=self._capture_policy(trace),
+            is_input=False,
+            container_path=(),
+        )
+        trace._paddle_op_captures.append(
+            PaddleOpCapture(
+                func=None,
+                op_name=PADDLE_CONSTANT_OP,
+                label_raw=site.label_raw,
+                args_template=(),
+                kwargs_template={},
+                tensor_inputs=(),
+                output_leaf_paths=((),),
+                producer_labels=frozenset(),
+            )
+        )
+        events.extend((event,))
+        self.tensor_store.set_label(tensor, site.label_raw)
 
     def build_record_context(
         self,
@@ -1800,10 +2013,16 @@ class PaddleBackend:
 
         in_dynamic_mode = getattr(paddle, "in_dynamic_mode", None)
         if callable(in_dynamic_mode) and not in_dynamic_mode():
-            raise BackendUnsupportedError("Paddle backend preview requires Paddle dygraph mode.")
+            raise BackendUnsupportedError(
+                "Paddle backend preview requires Paddle dygraph mode.",
+                code=PADDLE_REFUSAL_RUNTIME_MODE,
+            )
         in_pir_mode = getattr(paddle, "in_pir_mode", None)
         if callable(in_pir_mode) and in_pir_mode():
-            raise BackendUnsupportedError("Paddle backend preview does not support PIR mode.")
+            raise BackendUnsupportedError(
+                "Paddle backend preview does not support PIR mode.",
+                code=PADDLE_REFUSAL_RUNTIME_MODE,
+            )
 
 
 def paddle_param_logs(tree: PaddleModuleTree, trace: Trace) -> dict[str, Param]:
@@ -1917,12 +2136,14 @@ def _resolve_paddle_module_identity_mode(
 
     if value not in {None, "function_root", "object_module"}:
         raise BackendUnsupportedError(
-            "Paddle module_identity_mode must be None, 'function_root', or 'object_module'."
+            "Paddle module_identity_mode must be None, 'function_root', or 'object_module'.",
+            code=PADDLE_REFUSAL_IDENTITY_MODE,
         )
     if value == "object_module" and module_tree is None:
         raise BackendUnsupportedError(
             "Paddle module_identity_mode='object_module' requires a paddle.nn.Layer object. "
-            "Raw callables use module_identity_mode='function_root'."
+            "Raw callables use module_identity_mode='function_root'.",
+            code=PADDLE_REFUSAL_IDENTITY_MODE,
         )
     if value == "function_root":
         return False
