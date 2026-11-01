@@ -10,6 +10,9 @@ by the real run, and the two machines decide alike -- whether or not it found a 
 
 Streams that would allocate without bound are loaded in a SUBPROCESS under an address-space
 limit, so a regression fails this file instead of the test runner's host.
+
+No test here carries the ``smoke`` mark: several of them spawn a child interpreter, and the
+smoke tier is already at its size ceiling. This file is a targeted suite, run by name.
 """
 
 from __future__ import annotations
@@ -141,7 +144,6 @@ def _load_in_subprocess(data: bytes, address_space_bytes: int = 4 * 1024**3) -> 
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "put_opcode",
     [
@@ -166,7 +168,6 @@ def test_memo_put_index_above_the_opcode_count_is_refused(put_opcode: bytes) -> 
         _new_path(data)
 
 
-@pytest.mark.smoke
 def test_the_memo_index_ceiling_admits_an_honest_sequential_stream() -> None:
     """The guard is a ceiling on dishonesty, not on size: real streams memoize densely."""
 
@@ -175,7 +176,6 @@ def test_the_memo_index_ceiling_admits_an_honest_sequential_stream() -> None:
     assert pickle.BINPUT[0] in honest or pickle.MEMOIZE[0] in honest
 
 
-@pytest.mark.smoke
 def test_an_absurd_memo_index_never_allocates_the_table() -> None:
     """The amplifier is refused inside a 2 GiB child, not merely refused eventually."""
 
@@ -183,7 +183,6 @@ def test_an_absurd_memo_index_never_allocates_the_table() -> None:
     assert _load_in_subprocess(data) == "refused"
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "length_opcode",
     [
@@ -203,7 +202,6 @@ def test_a_declared_length_above_the_stream_never_allocates(length_opcode: bytes
     _both_refuse(data)
 
 
-@pytest.mark.smoke
 def test_a_frame_longer_than_the_stream_is_refused_by_the_reader() -> None:
     """A FRAME may not declare more bytes than the stream holds.
 
@@ -218,7 +216,6 @@ def test_a_frame_longer_than_the_stream_is_refused_by_the_reader() -> None:
     assert _load_in_subprocess(data) == "refused"
 
 
-@pytest.mark.smoke
 def test_an_exact_frame_still_loads() -> None:
     """The frame check is a bound on the declaration, not a refusal of framing."""
 
@@ -227,7 +224,6 @@ def test_an_exact_frame_still_loads() -> None:
     assert _new_path(pickle.dumps({"a": [1, 2, 3]}, protocol=4)) == {"a": [1, 2, 3]}
 
 
-@pytest.mark.smoke
 def test_repeated_empty_container_growth_is_bounded_by_the_stream() -> None:
     """``EMPTY_LIST`` plus ``APPENDS`` grows only with the items the stream spells out."""
 
@@ -240,7 +236,6 @@ def test_repeated_empty_container_growth_is_bounded_by_the_stream() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_extension_codes_never_resolve_through_the_process_wide_registry() -> None:
     """EXT1 / EXT2 / EXT4 are refused by both machines before anything is cached.
 
@@ -282,7 +277,6 @@ def test_extension_codes_never_resolve_through_the_process_wide_registry() -> No
     assert completed.stdout.decode().strip() == "refused refused cache={}"
 
 
-@pytest.mark.smoke
 def test_a_reduce_result_that_is_built_and_called_takes_the_interpreter() -> None:
     """A guard may never stand in for its own result at a BUILD.
 
@@ -311,7 +305,6 @@ def test_a_reduce_result_that_is_built_and_called_takes_the_interpreter() -> Non
     assert unpickler.load_path == "pure_python"
 
 
-@pytest.mark.smoke
 def test_a_build_on_a_bare_global_takes_the_interpreter() -> None:
     """A BUILD landing on a global is a shape the dry run will not plan.
 
@@ -325,7 +318,6 @@ def test_a_build_on_a_bare_global_takes_the_interpreter() -> None:
     assert unpickler.load_path == "pure_python"
 
 
-@pytest.mark.smoke
 def test_more_reduces_than_planned_are_refused() -> None:
     """The guard takes planned sites in order and runs out rather than improvising."""
 
@@ -341,7 +333,6 @@ def test_more_reduces_than_planned_are_refused() -> None:
         plan.take_reduce_site()
 
 
-@pytest.mark.smoke
 def test_no_guard_survives_into_a_second_load_in_the_same_process() -> None:
     """Two loads of the same bytes in one process give the same value and the same path."""
 
@@ -352,7 +343,6 @@ def test_no_guard_survives_into_a_second_load_in_the_same_process() -> None:
     assert first.load_path == second.load_path == "c"
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "label,stream",
     [
@@ -438,7 +428,6 @@ def test_indirect_callable_shapes_decide_alike(label: str, stream: bytes) -> Non
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "label,stream",
     [
@@ -491,7 +480,6 @@ def test_the_allocation_belt_refuses_through_both_machines(label: str, stream: b
     assert _load_in_subprocess(stream) == "refused"
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "name",
     ["system", "popen", "eval", "exec", "__import__", "compile", "open", "getattr"],
@@ -507,7 +495,6 @@ def test_code_execution_globals_stay_denied_on_the_fast_path(name: str) -> None:
         _old_path(stream)
 
 
-@pytest.mark.smoke
 def test_a_global_the_prescan_never_saw_is_refused_by_the_c_phase() -> None:
     """``find_class`` serves pre-resolved pairs only; an unseen pair is a changed stream."""
 
@@ -585,7 +572,6 @@ _SEVEN_ELEMENT_DTYPE_STATE = (
 )
 
 
-@pytest.mark.smoke
 def test_an_honest_numpy_dtype_still_round_trips_through_both_machines() -> None:
     """The dtype reconstruction legitimate metadata uses is unaffected by the gap below."""
 
@@ -596,7 +582,6 @@ def test_an_honest_numpy_dtype_still_round_trips_through_both_machines() -> None
     assert _old_path(data) == np.dtype("f8")
 
 
-@pytest.mark.smoke
 @pytest.mark.xfail(
     strict=True,
     reason=(
@@ -618,7 +603,6 @@ def test_a_malformed_dtype_build_state_does_not_crash_the_process() -> None:
     assert _load_machine_in_child(data, "_PurePythonBundleUnpickler") == 0
 
 
-@pytest.mark.smoke
 def test_the_malformed_dtype_build_state_treats_both_machines_alike() -> None:
     """Whatever the gap above does, it does to both machines; neither is the weaker path."""
 
