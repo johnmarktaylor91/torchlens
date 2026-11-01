@@ -266,7 +266,7 @@ def _arm_or_record_error(
 
 
 def _record_armed_signal_plan(
-    result: Trace,
+    result: Any,
     plan: _SignalPlan,
     request: _SignalDoRequest,
     txn: _DoTransaction,
