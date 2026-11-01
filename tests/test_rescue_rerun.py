@@ -706,7 +706,7 @@ def test_ownership_snapshot_pins_members_against_id_reuse() -> None:
     import gc
     import weakref
 
-    from torchlens.backends.torch.model_prep import _collect_model_owned_tensor_ids
+    from torchlens.backends.torch._module_boundary_adoption import _collect_model_owned_tensor_ids
 
     class Model(nn.Module):
         def __init__(self) -> None:

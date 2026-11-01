@@ -15,9 +15,9 @@ from __future__ import annotations
 import copy
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, NamedTuple
 
+from ._field_policy import FieldPolicy as FieldPolicy
 from ._pre3_module_paths import pre_3_artifact_error
 from .format_errors import (
     ArtifactError,
@@ -352,26 +352,13 @@ class BlobRef(NamedTuple):
     kind: str
 
 
-class FieldPolicy(str, Enum):
-    """Portable scrub policy for one serialized field."""
-
-    KEEP = "keep"
-    BLOB = "blob"
-    BLOB_RECURSIVE = "blob_recursive"
-    DROP = "drop"
-    STRINGIFY = "stringify"
-    WEAKREF_STRIP = "weakref_strip"
-
-
 # Pickle-visible identity stays the historical facade path: bundle metadata
 # pickles reference these types by (module, qualname), and the guarded
 # unpickler allowlists exactly those paths -- the physical split must not
 # change a single persisted byte (move-compat law, memo org rule 9). The
 # load-hint classes are runtime options, never persisted, so they keep their
 # real defining module (the class-member license oracle reads it).
-for _cls in (BlobRef, FieldPolicy):
-    _cls.__module__ = "torchlens._io"
-del _cls
+BlobRef.__module__ = "torchlens._io"
 
 
 def read_tlspec_version(state: dict[str, Any], *, cls_name: str, cls: type | None = None) -> int:

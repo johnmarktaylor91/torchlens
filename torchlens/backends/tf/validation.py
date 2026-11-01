@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 import numpy as np
 
-from ... import _state
 from ...validation.status import ValidationReplaySource, ValidationStatus
+from .._constants import CONSTANT_PARENT_PAYLOAD_REASON, CONSTANT_PRODUCER_LEAF_REASON
 from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
+from ._raw_op_replay import _import_tensorflow, _replay_raw_op
 from .op_callback_capture import TFOpCapture
 
 TFOpClass = Literal[
@@ -24,15 +25,6 @@ TFOpClass = Literal[
     "control-region",
 ]
 
-_INIT_OP_TYPES = frozenset(
-    {
-        "StatelessRandomUniformV2",
-        "RandomUniform",
-        "Fill",
-        "VarHandleOp",
-        "AssignVariableOp",
-    }
-)
 _PURE_REPLAY_ALLOWLIST = frozenset(
     {
         "AddV2",
@@ -44,26 +36,64 @@ _PURE_REPLAY_ALLOWLIST = frozenset(
         "Conv2D",
         "DepthwiseConv2dNative",
         "Einsum",
+        "Elu",
+        "Erf",
+        "Erfc",
+        "Exp",
+        "ExpandDims",
+        "Fill",
+        "Greater",
+        "Less",
+        "Log",
         "MatMul",
+        "Maximum",
         "MaxPool",
         "Mean",
+        "Minimum",
         "Mul",
         "Neg",
         "Pad",
+        "Pow",
+        "Prod",
         "RealDiv",
         "Relu",
         "Relu6",
         "Reshape",
         "Rsqrt",
+        "Sigmoid",
+        "Sin",
         "Softmax",
         "Sqrt",
         "SquaredDifference",
         "Sub",
+        "Sum",
         "Squeeze",
         "Tanh",
+        "Tile",
         "Transpose",
     }
 )
+
+#: Literal producers (SPEC section 2, rule 2): ops whose every input is a host
+#: literal or shape, so the op has no graph parents and its output is a
+#: constant of the forward. ``Fill`` is also a variable-initializer op type;
+#: the classification keeps the initializer-contamination failure for a
+#: ``Fill`` nothing in the forward consumed and admits only a ``Fill`` whose
+#: output feeds a materialized op (``_is_literal_producer``).
+_LITERAL_PRODUCER_OPS = frozenset({"Fill"})
+
+#: Validation decision reasons this backend emits. All are members of the
+#: closed ``VALIDATION_REASONS`` list in ``backends/_backend_protocol.py``
+#: except the two structural ones, which are requested additions to it.
+_REASON_REPLAYED = "replay_match"
+_REASON_REPLAY_MISMATCH = "replay_mismatch"
+_REASON_PERTURBATION = "perturbation_insensitive"
+_REASON_NO_FUNCTION = "no_replayable_function"
+_REASON_EFFECT = "effectful_region"
+_REASON_UNCLASSIFIED = "op_unclassified"
+_REASON_INCONSISTENT = "capture_inconsistent"
+_REASON_CONSTANT_LEAF = CONSTANT_PRODUCER_LEAF_REASON
+_REASON_CONSTANT_PERTURB = CONSTANT_PARENT_PAYLOAD_REASON
 _VALUE_OPS = _PURE_REPLAY_ALLOWLIST | frozenset(
     {
         "Elu",
@@ -92,7 +122,7 @@ _VALUE_OPS = _PURE_REPLAY_ALLOWLIST | frozenset(
 _STRUCTURAL_VALUE_OPS = frozenset({"Shape", "Size", "Rank", "StridedSlice"})
 _ANNOTATION_OPS = frozenset({"Identity", "StopGradient"})
 _PURE_RESOURCE_READ_OPS = frozenset({"ReadVariableOp"})
-_SOURCE_OPS = frozenset({"Const", "Placeholder"})
+_SOURCE_OPS = frozenset({"Const", "Placeholder", "constant"})
 _EFFECT_DENIED_OPS = frozenset(
     {
         "Assert",
@@ -161,6 +191,10 @@ class TFValidationResult:
     replayed_histogram: Counter[str]
     pure_unverified_histogram: Counter[str]
     effect_region_histogram: Counter[str]
+    decisions: tuple[Mapping[str, Any], ...] = ()
+    unverified_reason_counts: Mapping[str, int] = field(default_factory=dict)
+    exempted_reason_counts: Mapping[str, int] = field(default_factory=dict)
+    first_failure: tuple[str, str, str] | None = None
 
 
 def validate_tf_trace(trace: Any, *, validate_metadata: bool = True) -> ValidationStatus:
@@ -193,9 +227,22 @@ def validate_tf_trace(trace: Any, *, validate_metadata: bool = True) -> Validati
         num_effect_region_ops=result.counts.effect_region_node_count,
         num_failed_ops=result.counts.failed_node_count,
         payload_load_status=getattr(trace, "payload_load_status", None),
+        unverified_reason_counts=result.unverified_reason_counts,
+        exempted_reason_counts=result.exempted_reason_counts,
+        decisions=result.decisions,
     )
-    setattr(trace, "_tf_validation_result", result)
-    setattr(trace, "_validation_replay_status", status)
+    if status.state == "failed" and result.first_failure is not None:
+        label, op_type, reason = result.first_failure
+        status = replace(
+            status,
+            message=(
+                f"Replay validation failed at {label} ({op_type}): {reason}; "
+                f"{result.counts.failed_node_count} failing op(s), "
+                f"{result.counts.replayed_node_count} replayed."
+            ),
+        )
+    trace._tf_validation_result = result
+    trace._validation_replay_status = status
     return status
 
 
@@ -213,14 +260,127 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
         Detailed validation outcome.
     """
 
-    failures: list[str] = []
-    classes: dict[str, TFOpClass] = {}
     replayed_histogram: Counter[str] = Counter()
     pure_unverified_histogram: Counter[str] = Counter()
     effect_region_histogram: Counter[str] = Counter()
 
     ops_by_label = _ops_by_label(trace)
     captures_by_label = _captures_by_label(trace)
+    failures, classes = _structural_failures(trace, ops_by_label, captures_by_label)
+    if failures:
+        return _structural_failure_result(failures, classes, ops_by_label)
+
+    replayed_count = 0
+    pure_unverified_count = 0
+    effect_region_count = 0
+    decisions_list: list[Mapping[str, Any]] = []
+    unverified_reasons: Counter[str] = Counter()
+    exempted_reasons: Counter[str] = Counter()
+    for label, op in ops_by_label.items():
+        if label != getattr(op, "_label_raw", None):
+            continue
+        op_class = classes[label]
+        op_type = str(getattr(op, "func_name", ""))
+        op_label = str(getattr(op, "label", label))
+        if op_class == "source":
+            if op_type == "constant":
+                _record_constant_leaf(op_label, decisions_list, exempted_reasons)
+            continue
+        if op_class != "value":
+            if op_class in {"pure-resource-read", "effect-denied", "control-region"}:
+                effect_region_count += 1
+                effect_region_histogram[op_type] += 1
+                unverified_reasons[_REASON_EFFECT] += 1
+                decisions_list.append(
+                    _decision(op_label, op_type, "replay", "unverified", _REASON_EFFECT)
+                )
+            continue
+        capture = captures_by_label.get(label)
+        if op_type not in _PURE_REPLAY_ALLOWLIST or capture is None:
+            pure_unverified_count += 1
+            pure_unverified_histogram[op_type] += 1
+            unverified_reasons[_REASON_NO_FUNCTION] += 1
+            decisions_list.append(
+                _decision(op_label, op_type, "replay", "unverified", _REASON_NO_FUNCTION)
+            )
+            continue
+        outcome = _replay_and_perturb_op(op=op, capture=capture, ops_by_label=ops_by_label)
+        if outcome == _REASON_REPLAYED:
+            replayed_count += 1
+            replayed_histogram[op_type] += 1
+            decisions_list.append(_decision(op_label, op_type, "replay", "validated", outcome))
+            continue
+        failures.append(f"replay_or_perturbation_failed:{label}:{op_type}:{outcome}")
+        phase = "perturbation" if outcome == _REASON_PERTURBATION else "replay"
+        decisions_list.append(_decision(op_label, op_type, phase, "failed", outcome))
+
+    return _detailed_result(
+        counts=TFValidationCounts(
+            replayed_node_count=replayed_count,
+            pure_unverified_node_count=pure_unverified_count,
+            effect_region_node_count=effect_region_count,
+            failed_node_count=len(failures),
+        ),
+        failures=failures,
+        classes=classes,
+        histograms=(replayed_histogram, pure_unverified_histogram, effect_region_histogram),
+        decision_tallies=(decisions_list, unverified_reasons, exempted_reasons),
+    )
+
+
+def _record_constant_leaf(
+    op_label: str, decisions_list: list[Mapping[str, Any]], exempted_reasons: Counter[str]
+) -> None:
+    """Record a closure constant as an exempted leaf (constants rule item 3)."""
+
+    # Constants rule item 3: a closure constant is a leaf whose
+    # saved payload is the record; nothing upstream to perturb.
+    decisions_list.extend(_constant_leaf_decisions(op_label))
+    exempted_reasons[_REASON_CONSTANT_LEAF] += 1
+    exempted_reasons[_REASON_CONSTANT_PERTURB] += 1
+
+
+def _detailed_result(
+    *,
+    counts: TFValidationCounts,
+    failures: list[str],
+    classes: dict[str, TFOpClass],
+    histograms: tuple[Counter[str], Counter[str], Counter[str]],
+    decision_tallies: tuple[list[Mapping[str, Any]], Counter[str], Counter[str]],
+) -> TFValidationResult:
+    """Assemble the detailed result from the loop's tallies (decisions, unverified, exempted)."""
+
+    replayed_histogram, pure_unverified_histogram, effect_region_histogram = histograms
+    decisions_list, unverified_reasons, exempted_reasons = decision_tallies
+    decisions = tuple(decisions_list)
+    return TFValidationResult(
+        counts=counts,
+        failures=tuple(failures),
+        classes=classes,
+        replayed_histogram=replayed_histogram,
+        pure_unverified_histogram=pure_unverified_histogram,
+        effect_region_histogram=effect_region_histogram,
+        decisions=decisions,
+        unverified_reason_counts=dict(unverified_reasons),
+        exempted_reason_counts=dict(exempted_reasons),
+        first_failure=_first_failure(decisions),
+    )
+
+
+def _structural_failures(
+    trace: Any, ops_by_label: Mapping[str, Any], captures_by_label: Mapping[str, Any]
+) -> tuple[list[str], dict[str, TFOpClass]]:
+    """Classify every op and check the capture's self-consistency.
+
+    Returns
+    -------
+    tuple[list[str], dict[str, TFOpClass]]
+        The structural failure strings (empty when the capture is sound) and
+        the op class by raw label.
+    """
+
+    failures: list[str] = []
+    classes: dict[str, TFOpClass] = {}
     init_labels = set(getattr(trace, "_tf_init_op_labels", ()))
     _validate_classification(
         ops_by_label=ops_by_label,
@@ -234,53 +394,145 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
         captures_by_label=captures_by_label,
         failures=failures,
     )
-    if failures:
-        return TFValidationResult(
-            counts=TFValidationCounts(failed_node_count=len(failures)),
-            failures=tuple(failures),
-            classes=classes,
-            replayed_histogram=replayed_histogram,
-            pure_unverified_histogram=pure_unverified_histogram,
-            effect_region_histogram=effect_region_histogram,
-        )
+    return failures, classes
 
-    replayed_count = 0
-    pure_unverified_count = 0
-    effect_region_count = 0
-    for label, op in ops_by_label.items():
-        if label != getattr(op, "_label_raw", None):
-            continue
-        op_class = classes[label]
-        op_type = str(getattr(op, "func_name", ""))
-        if op_class != "value":
-            if op_class in {"pure-resource-read", "effect-denied", "control-region"}:
-                effect_region_count += 1
-                effect_region_histogram[op_type] += 1
-            continue
-        capture = captures_by_label.get(label)
-        if op_type not in _PURE_REPLAY_ALLOWLIST or capture is None:
-            pure_unverified_count += 1
-            pure_unverified_histogram[op_type] += 1
-            continue
-        if _replay_and_perturb_op(op=op, capture=capture, ops_by_label=ops_by_label):
-            replayed_count += 1
-            replayed_histogram[op_type] += 1
-        else:
-            failures.append(f"replay_or_perturbation_failed:{label}:{op_type}")
 
+def _structural_failure_result(
+    failures: list[str], classes: dict[str, TFOpClass], ops_by_label: Mapping[str, Any]
+) -> TFValidationResult:
+    """The result of a capture whose structure failed before any replay ran."""
+
+    decisions = tuple(_structural_failure_decision(item, ops_by_label) for item in failures)
     return TFValidationResult(
-        counts=TFValidationCounts(
-            replayed_node_count=replayed_count,
-            pure_unverified_node_count=pure_unverified_count,
-            effect_region_node_count=effect_region_count,
-            failed_node_count=len(failures),
-        ),
+        counts=TFValidationCounts(failed_node_count=len(failures)),
         failures=tuple(failures),
         classes=classes,
-        replayed_histogram=replayed_histogram,
-        pure_unverified_histogram=pure_unverified_histogram,
-        effect_region_histogram=effect_region_histogram,
+        replayed_histogram=Counter(),
+        pure_unverified_histogram=Counter(),
+        effect_region_histogram=Counter(),
+        decisions=decisions,
+        first_failure=_first_failure(decisions),
     )
+
+
+def _decision(
+    op_label: str, func_name: str, phase: str, decision: str, reason: str
+) -> Mapping[str, Any]:
+    """One per-op validation decision in the torch record shape."""
+
+    return {
+        "op_label": op_label,
+        "func_name": func_name,
+        "phase": phase,
+        "decision": decision,
+        "reason": reason,
+    }
+
+
+def _constant_leaf_decisions(op_label: str) -> tuple[Mapping[str, Any], ...]:
+    """The two named leaf decisions of a ``constant`` source op (constants rule item 3)."""
+
+    replay = dict(_decision(op_label, "constant", "replay", "exempted", _REASON_CONSTANT_LEAF))
+    replay["justification"] = "closure constant: its saved payload is the record"
+    perturb = dict(
+        _decision(op_label, "constant", "perturbation", "exempted", _REASON_CONSTANT_PERTURB)
+    )
+    perturb["justification"] = "closure constant: no upstream op to perturb"
+    return (replay, perturb)
+
+
+def _structural_failure_decision(item: str, ops_by_label: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Decision for one classification or self-consistency failure string.
+
+    Failure strings are ``<kind>:<raw label>:<detail...>``; the op label is
+    resolved through the op index so the decision names the public label.
+    """
+
+    kind, _, rest = item.partition(":")
+    raw_label, _, detail = rest.partition(":")
+    op = ops_by_label.get(raw_label)
+    op_label = str(getattr(op, "label", raw_label)) if op is not None else raw_label
+    func_name = str(getattr(op, "func_name", "")) if op is not None else detail
+    structural = {"unclassified_op", "initializer_contamination"}
+    reason = _REASON_UNCLASSIFIED if kind in structural else _REASON_INCONSISTENT
+    record = dict(_decision(op_label, func_name, "metadata", "failed", reason))
+    record["justification"] = item
+    return record
+
+
+def _first_failure(decisions: tuple[Mapping[str, Any], ...]) -> tuple[str, str, str] | None:
+    """Label, func name and reason of the first failed decision, if any."""
+
+    for record in decisions:
+        if record.get("decision") == "failed":
+            return (
+                str(record.get("op_label")),
+                str(record.get("func_name")),
+                str(record.get("reason")),
+            )
+    return None
+
+
+def validate_tf_trace_status(trace: Any, *, validate_metadata: bool = True) -> ValidationStatus:
+    """The protocol's ``validate``: always a ``ValidationStatus``, never a bool.
+
+    Parameters
+    ----------
+    trace
+        TensorFlow trace produced by the eager op-callback backend.
+    validate_metadata
+        Whether backend-neutral metadata invariants run first.
+
+    Returns
+    -------
+    ValidationStatus
+        ``unavailable`` for a loaded trace whose runtime captures were
+        stripped; otherwise the replay result with per-op ``decisions`` and,
+        on failure, a message naming the first offending op.
+    """
+
+    status = trace.validation_replay_status
+    if not status.is_available:
+        trace._validation_replay_status = status
+        return status
+    # Direct read of the load-provenance marker: present only on a loaded
+    # trace, so its absence IS the typed "live" reading (the live-reading seam).
+    try:
+        loaded_from_bundle = bool(trace._loaded_from_bundle)
+    except AttributeError:
+        loaded_from_bundle = False
+    if loaded_from_bundle and not getattr(trace, "_tf_op_captures", ()):
+        # Portable save strips the runtime callback captures; a loaded trace
+        # has nothing to replay, which is "unavailable", never "failed".
+        stripped = ValidationStatus.unavailable_loaded_runtime_stripped(
+            backend="tf", payload_load_status=getattr(trace, "payload_load_status", None)
+        )
+        trace._validation_replay_status = stripped
+        return stripped
+    source: ValidationReplaySource = "loaded" if loaded_from_bundle else "live"
+    try:
+        if validate_metadata:
+            from ...validation.invariants import check_metadata_invariants
+
+            check_metadata_invariants(trace)
+        return validate_tf_trace(trace, validate_metadata=validate_metadata)
+    except Exception as exc:  # noqa: BLE001 - the tripwire reports, never raises
+        failed = ValidationStatus.result(
+            passed=False,
+            backend="tf",
+            source=source,
+            payload_load_status=getattr(trace, "payload_load_status", None),
+            num_failed_ops=1,
+            decisions=(
+                _decision("<trace>", "", "metadata", "failed", "metadata_invariant_exception"),
+            ),
+        )
+        failed = replace(
+            failed,
+            message=f"Replay validation failed before replay: {type(exc).__name__}: {exc}",
+        )
+        trace._validation_replay_status = failed
+        return failed
 
 
 def replay_allowlist() -> tuple[str, ...]:
@@ -325,7 +577,7 @@ def _validate_classification(
         if label != getattr(op, "_label_raw", None):
             continue
         op_type = str(getattr(op, "func_name", ""))
-        if label in init_labels or op_type in _INIT_OP_TYPES and label in init_labels:
+        if label in init_labels and not _is_literal_producer(op):
             failures.append(f"initializer_contamination:{label}:{op_type}")
             continue
         op_class = _classify_op(op)
@@ -386,6 +638,23 @@ def _propagate_control_region_classes(
             if any(parent in region_labels for parent in _raw_parent_labels(op)):
                 classes[label] = "control-region"
                 changed = True
+
+
+def _is_literal_producer(op: Any) -> bool:
+    """Whether ``op`` is a forward literal producer rather than initializer contamination.
+
+    A literal producer (SPEC section 2, rule 2) has no graph parents and its
+    output is consumed by at least one materialized op of the forward. An
+    initializer ``Fill`` feeds only ``AssignVariableOp`` (never materialized),
+    so it has no children and stays a contamination failure.
+    """
+
+    op_type = str(getattr(op, "func_name", ""))
+    if op_type not in _LITERAL_PRODUCER_OPS:
+        return False
+    if tuple(getattr(op, "parents", ()) or ()):
+        return False
+    return bool(tuple(getattr(op, "children", ()) or ()))
 
 
 def _classify_op(op: Any) -> TFOpClass | None:
@@ -456,12 +725,7 @@ def _validate_self_consistency(
             f"unresolved_producer:{item.consumer_op_type}:{item.input_index}" for item in unresolved
         )
     produced_labels: set[str] = set()
-    source_labels: set[str] = set()
-    for label, op in ops_by_label.items():
-        if label != getattr(op, "_label_raw", None):
-            continue
-        if bool(getattr(op, "is_input", False)) or getattr(op, "func_name", None) == "input":
-            source_labels.add(label)
+    source_labels = _source_labels(ops_by_label)
     for capture in captures_by_label.values():
         if capture.label_raw not in ops_by_label:
             failures.append(f"captured_output_missing_materialized_op:{capture.label_raw}")
@@ -469,7 +733,7 @@ def _validate_self_consistency(
     for label, op in ops_by_label.items():
         if label != getattr(op, "_label_raw", None):
             continue
-        if bool(getattr(op, "is_input", False)):
+        if bool(getattr(op, "is_input", False)) or label in source_labels:
             continue
         if label not in captures_by_label:
             failures.append(f"materialized_op_missing_capture:{label}")
@@ -517,12 +781,27 @@ def _validate_self_consistency(
             )
 
 
+def _source_labels(ops_by_label: Mapping[str, Any]) -> set[str]:
+    """Raw labels of the trace's source ops: inputs and constants."""
+
+    source_labels: set[str] = set()
+    for label, op in ops_by_label.items():
+        if label != getattr(op, "_label_raw", None):
+            continue
+        if bool(getattr(op, "is_input", False)) or getattr(op, "func_name", None) in {
+            "input",
+            "constant",
+        }:
+            source_labels.add(label)
+    return source_labels
+
+
 def _replay_and_perturb_op(
     *,
     op: Any,
     capture: TFOpCapture,
     ops_by_label: Mapping[str, Any],
-) -> bool:
+) -> str:
     """Replay one pure TensorFlow op and run the parent perturbation tripwire.
 
     Parameters
@@ -536,9 +815,10 @@ def _replay_and_perturb_op(
 
     Returns
     -------
-    bool
-        True when replay matches and at least one parent perturbation changes
-        the output when value parents exist.
+    str
+        ``replay_match`` when replay matches and at least one parent
+        perturbation changes the output when value parents exist; else the
+        reason it did not (``replay_mismatch`` or ``perturbation_insensitive``).
     """
 
     try:
@@ -546,14 +826,16 @@ def _replay_and_perturb_op(
         replayed = _replay_raw_op(capture, inputs)
         saved = _saved_payload(op)
         if not _payloads_close(replayed, saved):
-            return False
-        return _parent_perturbations_change_output(
+            return _REASON_REPLAY_MISMATCH
+        if _parent_perturbations_change_output(
             capture=capture,
             ops_by_label=ops_by_label,
             saved_output=saved,
-        )
+        ):
+            return _REASON_REPLAYED
+        return _REASON_PERTURBATION
     except Exception:
-        return False
+        return _REASON_REPLAY_MISMATCH
 
 
 def _rebuild_inputs(
@@ -602,359 +884,6 @@ def _rebuild_inputs(
             continue
         raise LookupError(f"unresolved input {capture.label_raw}:{input_record.input_index}")
     return inputs
-
-
-def _replay_raw_op(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay one TensorFlow raw op from rebuilt callback inputs.
-
-    Parameters
-    ----------
-    capture
-        Callback capture containing op type and attrs.
-    inputs
-        Rebuilt TensorFlow inputs.
-
-    Returns
-    -------
-    Any
-        Replayed TensorFlow output tensor.
-    """
-
-    dispatch: dict[str, Callable[[TFOpCapture, Sequence[Any]], Any]] = {
-        "AddV2": lambda item, args: _raw(item).AddV2(x=args[0], y=args[1]),
-        "AvgPool": _replay_pool,
-        "BatchMatMulV2": _replay_batch_matmul_v2,
-        "BiasAdd": _replay_bias_add,
-        "Cast": _replay_cast,
-        "ConcatV2": _replay_concat_v2,
-        "Conv2D": _replay_conv2d,
-        "DepthwiseConv2dNative": _replay_depthwise_conv2d,
-        "Einsum": _replay_einsum,
-        "MatMul": _replay_matmul,
-        "MaxPool": _replay_pool,
-        "Mean": _replay_mean,
-        "Mul": lambda item, args: _raw(item).Mul(x=args[0], y=args[1]),
-        "Neg": lambda item, args: _raw(item).Neg(x=args[0]),
-        "Pad": lambda item, args: _raw(item).Pad(input=args[0], paddings=args[1]),
-        "RealDiv": lambda item, args: _raw(item).RealDiv(x=args[0], y=args[1]),
-        "Relu": lambda item, args: _raw(item).Relu(features=args[0]),
-        "Relu6": lambda item, args: _raw(item).Relu6(features=args[0]),
-        "Reshape": lambda item, args: _raw(item).Reshape(tensor=args[0], shape=args[1]),
-        "Rsqrt": lambda item, args: _raw(item).Rsqrt(x=args[0]),
-        "Softmax": lambda item, args: _raw(item).Softmax(logits=args[0]),
-        "Sqrt": lambda item, args: _raw(item).Sqrt(x=args[0]),
-        "SquaredDifference": lambda item, args: _raw(item).SquaredDifference(
-            x=args[0],
-            y=args[1],
-        ),
-        "Sub": lambda item, args: _raw(item).Sub(x=args[0], y=args[1]),
-        "Squeeze": lambda item, args: _raw(item).Squeeze(
-            input=args[0],
-            axis=_optional_int_list(item.attrs.get("squeeze_dims")),
-        ),
-        "Tanh": lambda item, args: _raw(item).Tanh(x=args[0]),
-        "Transpose": lambda item, args: _raw(item).Transpose(x=args[0], perm=args[1]),
-    }
-    replay = dispatch.get(capture.op_type)
-    if replay is None:
-        raise ValueError(f"op is not raw-op replayable: {capture.op_type}")
-    with _state.pause_logging():
-        return replay(capture, inputs)
-
-
-def _raw(_capture: TFOpCapture) -> Any:
-    """Return TensorFlow raw ops module.
-
-    Parameters
-    ----------
-    _capture
-        Unused capture, accepted for dispatch lambdas.
-
-    Returns
-    -------
-    Any
-        ``tf.raw_ops``.
-    """
-
-    return _import_tensorflow().raw_ops
-
-
-def _replay_batch_matmul_v2(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``BatchMatMulV2``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).BatchMatMulV2(
-        x=inputs[0],
-        y=inputs[1],
-        adj_x=bool(capture.attrs.get("adj_x", False)),
-        adj_y=bool(capture.attrs.get("adj_y", False)),
-    )
-
-
-def _replay_bias_add(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``BiasAdd``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    data_format = capture.attrs.get("data_format")
-    kwargs = {} if data_format is None else {"data_format": _attr_str(data_format)}
-    return _raw(capture).BiasAdd(value=inputs[0], bias=inputs[1], **kwargs)
-
-
-def _replay_cast(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``Cast``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).Cast(
-        x=inputs[0],
-        DstT=capture.attrs["DstT"],
-        Truncate=bool(capture.attrs.get("Truncate", False)),
-    )
-
-
-def _replay_concat_v2(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``ConcatV2``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    del capture
-    return _import_tensorflow().raw_ops.ConcatV2(values=list(inputs[:-1]), axis=inputs[-1])
-
-
-def _replay_conv2d(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``Conv2D``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).Conv2D(
-        input=inputs[0],
-        filter=inputs[1],
-        strides=list(capture.attrs["strides"]),
-        padding=_attr_str(capture.attrs["padding"]),
-        explicit_paddings=list(capture.attrs.get("explicit_paddings", [])),
-        data_format=_attr_str(capture.attrs.get("data_format", "NHWC")),
-        dilations=list(capture.attrs.get("dilations", [1, 1, 1, 1])),
-        use_cudnn_on_gpu=bool(capture.attrs.get("use_cudnn_on_gpu", True)),
-    )
-
-
-def _replay_depthwise_conv2d(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``DepthwiseConv2dNative``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    # ``tf.nn.depthwise_conv2d`` records unset attrs as ``None``.
-    return _raw(capture).DepthwiseConv2dNative(
-        input=inputs[0],
-        filter=inputs[1],
-        strides=list(capture.attrs["strides"]),
-        padding=_attr_str(capture.attrs["padding"]),
-        explicit_paddings=list(capture.attrs.get("explicit_paddings") or []),
-        data_format=_attr_str(capture.attrs.get("data_format") or "NHWC"),
-        dilations=list(capture.attrs.get("dilations") or [1, 1, 1, 1]),
-    )
-
-
-def _replay_einsum(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``Einsum``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).Einsum(
-        inputs=list(inputs),
-        equation=_attr_str(capture.attrs["equation"]),
-    )
-
-
-def _replay_matmul(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``MatMul``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).MatMul(
-        a=inputs[0],
-        b=inputs[1],
-        transpose_a=bool(capture.attrs.get("transpose_a", False)),
-        transpose_b=bool(capture.attrs.get("transpose_b", False)),
-    )
-
-
-def _replay_mean(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``Mean``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    return _raw(capture).Mean(
-        input=inputs[0],
-        axis=inputs[1],
-        keep_dims=bool(capture.attrs.get("keep_dims", False)),
-    )
-
-
-def _replay_pool(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
-    """Replay ``MaxPool`` or ``AvgPool``.
-
-    Parameters
-    ----------
-    capture
-        Callback capture.
-    inputs
-        Rebuilt inputs.
-
-    Returns
-    -------
-    Any
-        Replayed output.
-    """
-
-    raw_op = getattr(_raw(capture), capture.op_type)
-    return raw_op(
-        input=inputs[0],
-        ksize=list(capture.attrs["ksize"]),
-        strides=list(capture.attrs["strides"]),
-        padding=_attr_str(capture.attrs["padding"]),
-        explicit_paddings=list(capture.attrs.get("explicit_paddings", [])),
-        data_format=_attr_str(capture.attrs.get("data_format", "NHWC")),
-    )
-
-
-def _attr_str(value: Any) -> str:
-    """Return a TensorFlow string attr as text.
-
-    Parameters
-    ----------
-    value
-        TensorFlow callback attr value.
-
-    Returns
-    -------
-    str
-        Decoded text attr.
-    """
-
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return str(value)
-
-
-def _optional_int_list(value: Any) -> list[int]:
-    """Return a TensorFlow optional int-list attr.
-
-    Parameters
-    ----------
-    value
-        Callback attr value.
-
-    Returns
-    -------
-    list[int]
-        Empty list for omitted attrs, otherwise the integer list.
-    """
-
-    if value is None:
-        return []
-    return [int(item) for item in value]
 
 
 def _parent_perturbations_change_output(
@@ -1139,7 +1068,7 @@ def _saved_payload(op: Any) -> Any:
 
     if not bool(getattr(op, "has_saved_activation", False)):
         raise ValueError(f"op has no saved activation: {getattr(op, 'label', op)!r}")
-    return getattr(op, "out")
+    return op.out
 
 
 def _captures_by_label(trace: Any) -> dict[str, TFOpCapture]:
@@ -1161,20 +1090,6 @@ def _captures_by_label(trace: Any) -> dict[str, TFOpCapture]:
         for capture in getattr(trace, "_tf_op_captures", ())
         if isinstance(capture, TFOpCapture)
     }
-
-
-def _import_tensorflow() -> Any:
-    """Import TensorFlow lazily.
-
-    Returns
-    -------
-    Any
-        Imported TensorFlow module.
-    """
-
-    import tensorflow as tf
-
-    return tf
 
 
 __all__ = [

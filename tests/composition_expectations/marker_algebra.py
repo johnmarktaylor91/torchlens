@@ -69,6 +69,7 @@ MARKER_ALGEBRA: dict[str, str] = {
     "backend_paddle": "capability",
     "tf_backend": "capability",
     "cuda": "capability",
+    "packaging": "suite",
     "compo": "selection",
     "real_model": "selection",
 }

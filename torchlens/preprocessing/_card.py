@@ -15,6 +15,9 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any
 
+from torchlens._errors import InvalidArgumentError
+from torchlens.errors import TorchLensWarning
+
 from ._audit import VERDICT_MISMATCH, PreprocessingComparison, compare
 from ._records import COMPARABLE_FIELDS, DeclaredPreprocessing, Resolution
 
@@ -74,8 +77,6 @@ def check_card(
     else:
         source = model if model is not None else _live_model(trace)
         if source is None:
-            from torchlens._errors import InvalidArgumentError
-
             raise InvalidArgumentError(
                 "check_card needs a card to compare against: no authority= was "
                 "given and the trace has no live source model.",
@@ -86,8 +87,6 @@ def check_card(
     report = compare(card, declared_from_record(record))
     report = _relabel_recorded(report, record)
     if report.verdict == VERDICT_MISMATCH:
-        from torchlens.errors import TorchLensWarning
-
         rows = "; ".join(
             f"{name}: card={finding.authority_value!r} recorded={finding.applied_value!r}"
             for name in report.mismatched_fields

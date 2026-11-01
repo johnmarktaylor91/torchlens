@@ -32,7 +32,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._user_funcs as user_funcs
 from torchlens import _user_public_impls, _validation_argument_references as arg_references
-from torchlens.backends.torch import _ops_retention
+from torchlens.backends.torch import _ops_arguments, _ops_retention
 from torchlens.options import CaptureOptions
 from torchlens.validation import _replay_device
 from torchlens.validation.diagnostics import get_validation_diagnostics, get_validation_failure
@@ -195,9 +195,9 @@ def test_retained_copy_and_budget_device_follow_the_offload_target() -> None:
     t_args = (bare, [item, 2], [[nested]])
     token = arg_references._ACTIVE.set(references)
     try:
-        devices = _ops_retention._saved_arg_retention_devices(t_args, {"k": item})
-        retained = [_ops_retention._copy_saved_arg_tree(arg, True) for arg in t_args]
-        pre_call = _ops_retention._copy_saved_arg_tree(bare)
+        devices = _ops_arguments._saved_arg_retention_devices(t_args, {"k": item})
+        retained = [_ops_arguments._copy_saved_arg_tree(arg, True) for arg in t_args]
+        pre_call = _ops_arguments._copy_saved_arg_tree(bare)
     finally:
         arg_references._ACTIVE.reset(token)
     assert devices == {id(bare): torch.device("meta"), id(item): torch.device("meta")}
@@ -280,9 +280,9 @@ def test_the_commit_charges_a_saved_alias_only_without_its_parameter_owner() -> 
 
 def test_outside_validation_the_retained_copy_is_the_plain_copy() -> None:
     value = torch.ones(3)
-    copied = _ops_retention._copy_saved_arg_tree(value, True)
+    copied = _ops_arguments._copy_saved_arg_tree(value, True)
     assert copied.device == value.device and copied is not value and not hasattr(copied, _TAG)
-    assert _ops_retention._saved_arg_retention_devices((value,), {}) == {}
+    assert _ops_arguments._saved_arg_retention_devices((value,), {}) == {}
 
 
 def test_offload_is_off_for_same_and_outside_a_validation_session() -> None:

@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ..backends.registry import TORCH_BACKEND_NAME
+from ..backends._backend_names import TORCH_BACKEND_NAME
 
 if TYPE_CHECKING:  # typing only
     from .._data_classes.trace import Trace

@@ -528,15 +528,19 @@ def test_jax_raw_function_traces_remain_function_root() -> None:
 
 
 def test_jax_nnx_explicit_function_root_keeps_raw_callable_behavior() -> None:
-    """Explicit function-root mode should not auto-wrap NNX module constants."""
+    """Explicit function-root mode does not auto-wrap NNX modules: params are constants."""
 
-    with pytest.raises(ValueError, match="closed-jaxpr constants"):
-        tl.trace(
-            SimpleNnxMlp(),
-            jnp.ones(3, dtype=jnp.float32),
-            backend="jax",
-            capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
-        )
+    trace = tl.trace(
+        SimpleNnxMlp(),
+        jnp.ones(3, dtype=jnp.float32),
+        backend="jax",
+        capture=tl.options.CaptureOptions(module_identity_mode="function_root"),
+    )
+    assert trace.module_identity_mode == "function_root"
+    assert [module.address for module in trace.modules] == ["self"]
+    constants = [op for op in trace.layer_list if op.func_name == "constant"]
+    assert constants, "NNX parameters closed over by the raw callable are constant ops"
+    assert all(op.out is not None for op in constants)
 
 
 @pytest.mark.parametrize(

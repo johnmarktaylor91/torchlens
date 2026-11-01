@@ -1,7 +1,8 @@
 # backends/tf/ - Implementation Guide
 
-TensorFlow preview backend. Tier-1 standalone spec (no `capture_backend`); the
-`BackendSpec` in `../default_specs.py` is the only capability truth.
+TensorFlow preview backend. It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+`BackendSpec` in `../default_specs.py` and its protocol shell in
+`../_protocols/tf.py` are the capability truth (contract: `../AGENTS.md`).
 
 ## backend.py
 - `TFBackend.capture_trace()` is the standalone entry. Eager `op_callbacks` live
