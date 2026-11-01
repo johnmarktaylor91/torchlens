@@ -5,6 +5,18 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import TYPE_CHECKING
 
+from .._ir.events import (
+    BackwardCoverageGap,
+    BackwardPassEnd,
+    BackwardPassStart,
+    GradFnDiscovered,
+    GradFnFired,
+    InterventionAppliedEvent,
+    OpGradObserved,
+    ParamGradObserved,
+)
+from ._constant_source import is_closure_constant_source
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
@@ -38,16 +50,6 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
         If runtime backward sidecar events are internally inconsistent or no
         longer match projected records.
     """
-
-    from .._ir.events import (
-        BackwardCoverageGap,
-        BackwardPassEnd,
-        BackwardPassStart,
-        GradFnDiscovered,
-        GradFnFired,
-        OpGradObserved,
-        ParamGradObserved,
-    )
 
     capture_events = getattr(trace, "_capture_events", None)
     events = list(getattr(capture_events, "backward_events", ()) or ())
@@ -377,7 +379,6 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
         # live PASS after a save/load round trip, contradicting the locked
         # 2026-06-02 rule.
         return _persisted_replacement_stamp(layer) is True
-    from .._ir.events import InterventionAppliedEvent
 
     stream = getattr(trace, "_capture_events", None)
     # Causal binding: an edit counts only when it is bound to THIS stream's
@@ -527,7 +528,6 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     # A closure-constant source (SPEC 2 rule 1) is a functionless source like
     # a buffer: no torch call, so no ``func_call_id``. The predicate is the
     # narrow shared one (parentless, internal source, no callable, no call id).
-    from ._constant_source import is_closure_constant_source
 
     return is_closure_constant_source(layer)
 

@@ -12,6 +12,7 @@ import torch
 from torch import nn
 
 from .._capture_state_helpers import unwrap_compiled_model
+from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._input_coerce import _coerce_input_args
 from .._input_walk import INPUT_TREE_MAX_DEPTH, raise_input_tree_depth_refusal
 from .._robustness import check_model_and_input_variants
@@ -72,7 +73,6 @@ def _sum_tensors(
         return value.sum()
     if not isinstance(value, (dict, list, tuple)):
         raise ValueError("validate_backward_pass requires the model to return at least one tensor.")
-    from .._errors import InvalidArgumentError
     from .._ir.container_registry import OUTPUT_TREE_MAX_DEPTH
 
     if _depth >= OUTPUT_TREE_MAX_DEPTH:
@@ -652,7 +652,6 @@ def validate_backward_pass(
         # distortion corrupted stock and captured gradients IDENTICALLY and
         # the comparison passed vacuously. Refuse (fail-closed) if the
         # wrappers cannot be removed because a capture is active.
-        from .._errors import CaptureNotActiveError
         from ._pristine import pristine_torch_oracle
 
         try:

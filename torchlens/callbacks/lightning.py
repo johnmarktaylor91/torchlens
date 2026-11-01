@@ -16,6 +16,8 @@ from typing import Any, cast
 
 import torch
 
+from torchlens.errors import TorchLensError, TorchLensWarning
+
 
 def _lightning_callback_base() -> type[Any]:
     """Return Lightning's callback base when the optional extra is installed.
@@ -302,7 +304,6 @@ class _LayerProfilerCallbackMixin:
         """
 
         from torchlens import trace
-        from torchlens.errors import TorchLensError, TorchLensWarning
         from torchlens.options import CaptureOptions
 
         # Snapshot every submodule's flag: ``pl_module.train()`` afterwards
@@ -475,7 +476,6 @@ class _SummaryCallbackMixin:
         """
 
         import torchlens as tl
-        from torchlens.errors import TorchLensError, TorchLensWarning
 
         self._summarized = True
         if not getattr(trainer, "is_global_zero", True):

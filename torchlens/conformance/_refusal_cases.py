@@ -20,6 +20,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
+import torchlens as tl
+
+from ..backends._backend_protocol import refusal_code_for_capability
+from ..backends.registry import BackendUnsupportedError
+from ..options import CaptureOptions, StorageOptions
 from ._adapters import RosterModel
 from ._cases import CaseResult, _failed, _passed
 from ._protocol_cases import (
@@ -69,8 +74,6 @@ def _storage_probe() -> Any:
     """A streaming-save request with a throwaway destination."""
 
     import tempfile
-
-    from ..options import StorageOptions
 
     return StorageOptions(path=Path(tempfile.mkdtemp(prefix="tl_conf_stream_")))
 
@@ -161,8 +164,6 @@ def run_c1_refusal_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[
         One row per refusal cell the backend defines.
     """
 
-    from ..backends._backend_protocol import refusal_code_for_capability
-
     protocol = adapter_protocol(adapter)
     if protocol is None or not roster:
         return []
@@ -202,8 +203,6 @@ def _refusal_cell(
     """Run one request; passed only on a typed refusal with the contracted code and no side effect."""
 
     import warnings
-
-    from ..backends.registry import BackendUnsupportedError
 
     adapter, protocol, model = target
     snapshot = getattr(adapter, "side_effect_snapshot", None)
@@ -254,8 +253,6 @@ def _issue_request(
 ) -> None:
     """Issue one capability request through the public entry."""
 
-    from ..options import CaptureOptions
-
     net, example, trace = prepared
     value = request.value() if request.value is not None else None
     options: dict[str, Any] = {
@@ -271,8 +268,6 @@ def _issue_request(
         capture = CaptureOptions(**options)
         adapter.trace_with(net, example, capture=capture)
     elif request.kind == "record":
-        import torchlens as tl
-
         tl.record(net, example, backend=protocol.name)
     elif request.kind == "validate":
         protocol.validate(trace, _as_output_list(adapter.reference_output(net, example)))

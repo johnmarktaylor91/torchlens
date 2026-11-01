@@ -15,6 +15,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._errors import InvalidArgumentError
+from .._utils._callable_safety import _unwrap_capture_wrapper
+
 #: Registry namespaces resolved for replay; ``custom`` (foreign code) never is.
 RESOLVABLE_NAMESPACES: frozenset[str] = frozenset(
     {"torch", "torch.Tensor", "torch.nn.functional", "operator"}
@@ -89,7 +92,6 @@ def _public_key_for_torch_c_function(key: Any) -> Any:
 
     import torch
 
-    from .._utils._callable_safety import _unwrap_capture_wrapper
     from ..intervention.types import FunctionRegistryKey
 
     module_name, _, name = str(key.import_path or "").partition(":")
@@ -122,7 +124,6 @@ def resolve_loaded_callables(trace: Any) -> list[Any]:
         names them.
     """
 
-    from .._errors import InvalidArgumentError
     from ..intervention.errors import ReplayPreconditionError, UntrustedCallableError
     from ..intervention.resolver import resolve_function_registry_key
 

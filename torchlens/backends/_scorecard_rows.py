@@ -17,6 +17,9 @@ from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .._io import _json
+from .registry import registered_backend_specs
+
 if TYPE_CHECKING:
     from ..conformance._scorecard import PreviewScorecard
     from ..report._doctor import DoctorCheck, Severity, Status
@@ -46,8 +49,6 @@ def read_shipped_scorecard(backend: str) -> dict[str, Any] | None:
     malformed file is a packaging defect the scorecard ``--check`` leg
     catches, not something the doctor report should raise on.
     """
-
-    from .._io import _json
 
     path = shipped_scorecard_path(backend)
     if not path.is_file():
@@ -88,8 +89,6 @@ def scorecard_from_record(record: dict[str, Any]) -> PreviewScorecard:
 def backend_scorecards() -> tuple[PreviewScorecard, ...]:
     """The shipped records of every registered backend that has one."""
 
-    from .registry import registered_backend_specs
-
     cards = []
     for spec in registered_backend_specs():
         record = read_shipped_scorecard(spec.name)
@@ -100,8 +99,6 @@ def backend_scorecards() -> tuple[PreviewScorecard, ...]:
 
 def backend_scorecard_rows() -> tuple[DoctorCheck, ...]:
     """One ``backend_scorecard:<name>`` row per registered backend."""
-
-    from .registry import registered_backend_specs
 
     return tuple(_row_for_spec(spec) for spec in registered_backend_specs())
 

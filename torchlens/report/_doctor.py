@@ -10,6 +10,10 @@ from typing import Any, Literal
 import torch
 from torch import nn
 
+from .._utils import _environment_checks, capability_snapshot
+from ..backends._scorecard_rows import backend_scorecard_rows
+from ..compat._report import _model_checks, _qualified_type_name
+
 Status = Literal["pass", "known_broken", "scope", "not_tested"]
 Severity = Literal["ok", "info", "warning", "error"]
 
@@ -220,8 +224,6 @@ class DoctorReport:
             Capability flag availability.
         """
 
-        from .._utils import capability_snapshot
-
         return capability_snapshot()
 
 
@@ -339,15 +341,10 @@ def doctor(model: nn.Module | None = None, inputs: Any = None) -> DoctorReport:
         compatibility findings, if a model was supplied.
     """
 
-    from .._utils import _environment_checks
-    from ..backends._scorecard_rows import backend_scorecard_rows
-
     checks = tuple(_environment_row(row) for row in _environment_checks())
     checks += backend_scorecard_rows()
     model_type = None
     if model is not None:
-        from ..compat._report import _model_checks, _qualified_type_name
-
         checks += _model_checks(model, inputs)
         model_type = _qualified_type_name(model)
     return DoctorReport(model_type, str(torch.__version__), checks)

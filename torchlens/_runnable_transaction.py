@@ -12,6 +12,7 @@ import torch
 from torchlens._runnable import ContractCheck, ReadinessReport
 
 from . import _state
+from ._errors import InvalidArgumentError
 from ._runnable import (
     ActivationPayloadLayerDescriptor,
     DivergencePolicy,
@@ -41,6 +42,7 @@ from .errors import (
     PathDivergenceError,
     RunCapabilityUnavailableError,
     RuntimeSignatureDriftError,
+    StateBindingError,
 )
 from .intervention.replay import _CallConeNode, _walk_call_cone
 
@@ -507,8 +509,6 @@ def _resolve_run_until_plan(trace: Any, until: Any) -> _RunUntilPlan:
 def _validated_until_tokens(until: Any) -> list[Any]:
     """Normalize the until= selection to tokens; refuse empty/non-static forms."""
 
-    from ._errors import InvalidArgumentError
-
     tokens = list(until) if isinstance(until, (list, tuple, set, frozenset)) else [until]
     if not tokens:
         raise InvalidArgumentError(
@@ -545,7 +545,6 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
     from ._trace_selector_helpers import canonical_module_site_key
 
     token = canonical_module_site_key(trace, token) or token
-    from ._errors import InvalidArgumentError
 
     if token == "saved":
         saved_layers = [
@@ -590,8 +589,6 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
 
 def _until_stop_raw_index(resolved: list[Any]) -> int:
     """The stop frontier: the max recorded raw index across resolved sites."""
-
-    from ._errors import InvalidArgumentError
 
     stop_raw_index = -1
     for layer in resolved:
@@ -645,8 +642,6 @@ def _loaded_until_cut(
     certified-fresh vocabulary is not yet shipped) and the run discloses the
     ``sequential_prefix`` regime with the ``unprovable_independence`` cause tag.
     """
-
-    from ._errors import InvalidArgumentError
 
     calls = tuple(descriptor.calls)
     requested = set(plan.requested_layer_labels)
@@ -1208,7 +1203,6 @@ def _restore_declared_state_or_mark(trace: Any, fork: Any, snapshot: Any) -> Non
 
     from ._runnable import mark_trace_path_status
     from ._runnable_state_live import LiveStateRestoreFailure, restore_live_declared_state
-    from .errors import StateBindingError
 
     try:
         restore_live_declared_state(snapshot, trace=fork)

@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 import torch
 from torch import nn
 
+from ._tl import get_tensor_label
+
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
@@ -84,8 +86,6 @@ def is_forward_closure_constant(trace: "Trace", t: torch.Tensor) -> bool:
     only while it carries no TorchLens label. Disclosed transform and dynamo
     regions are excluded: their untagged tensors are not proven pre-forward.
     """
-
-    from ._tl import get_tensor_label
 
     if (
         trace._raw_transform_escape_detected

@@ -16,6 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import torchlens as tl
+from torchlens._io._json import read_bounded
+
+from ..backends.registry import BackendUnsupportedError, get_backend_spec
+from ..backends.torch import _torch_ops_calls
 from ..errors import ConfigurationError
 
 __tl_layer__ = "L9"
@@ -108,8 +113,6 @@ class TorchReferenceAdapter:
     def protocol(self) -> Any:
         """The registered torch ``BackendProtocol`` object (the suite's view of the backend)."""
 
-        from ..backends.registry import get_backend_spec
-
         factory = get_backend_spec("torch").protocol
         return factory() if factory is not None else None
 
@@ -148,8 +151,6 @@ class TorchReferenceAdapter:
 
         import torch
 
-        from ..backends.torch import _torch_ops_calls
-
         return (torch.get_rng_state().numpy().tobytes(), len(_torch_ops_calls._WRAPPED_FUNC_CODE))
 
     #: Save level whose bundle keeps what torch replay validation re-executes
@@ -168,8 +169,6 @@ class TorchReferenceAdapter:
 
     def load(self, path: Path) -> Any:
         """Reload one persisted artifact."""
-
-        import torchlens as tl
 
         return tl.load(str(path))
 
@@ -258,7 +257,6 @@ class FakeProviderAdapter:
         plain ``RuntimeError`` instead (the refusal cell must read failed).
         """
 
-        from ..backends.registry import BackendUnsupportedError
         from ._protocol_cases import false_capability_flags
         from ._refusal_cases import request_option_for_flag
 
@@ -325,8 +323,6 @@ class FakeProviderAdapter:
             # (c2_roundtrip_completes goes red), proving load-side tamper
             # detection rather than trusting the adapter's own report.
             import json
-
-            from torchlens._io._json import read_bounded
 
             manifest_path = Path(path) / "manifest.json"
             manifest = read_bounded(manifest_path)

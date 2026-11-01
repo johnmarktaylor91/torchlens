@@ -21,6 +21,14 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from ._graduation import _graduation_report
+from ._scorecard import (
+    _preview_scorecard,
+    scorecards_differ,
+    shipped_scorecard,
+    shipped_scorecard_path,
+)
+
 if TYPE_CHECKING:
     from ._scorecard import PreviewScorecard
 
@@ -67,9 +75,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         a shipped record is required and missing.
     """
 
-    from ._graduation import _graduation_report
-    from ._scorecard import _preview_scorecard, shipped_scorecard, shipped_scorecard_path
-
     args = _parser().parse_args(argv)
     if args.graduation:
         if shipped_scorecard(args.backend) is None:
@@ -94,8 +99,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _check_shipped(backend: str, card: PreviewScorecard) -> int:
     """Compare the shipped record with ``card``: ``0`` equal, ``1`` differs, ``2`` none ships."""
-
-    from ._scorecard import scorecards_differ, shipped_scorecard, shipped_scorecard_path
 
     shipped = shipped_scorecard(backend)
     if shipped is None:

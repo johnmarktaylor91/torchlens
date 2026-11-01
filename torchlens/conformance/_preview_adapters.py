@@ -26,7 +26,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import torchlens as tl
+
+from ..backends.registry import get_backend_spec
 from ._adapters import RosterModel
+from ._rosters.jax import roster as _jax_roster
+from ._rosters.mlx import roster as _mlx_roster
+from ._rosters.paddle import roster as _paddle_roster
+from ._rosters.tf import roster as _tf_roster
+from ._rosters.tinygrad import runner_rows
 
 __tl_layer__ = "L9"
 
@@ -104,25 +112,19 @@ def framework_unavailable_reason(framework: PreviewFramework) -> str | None:
 def _roster_jax() -> tuple[RosterModel, ...]:
     """The JAX packet's roster (``torchlens.conformance._rosters.jax``)."""
 
-    from ._rosters.jax import roster
-
-    return roster()
+    return _jax_roster()
 
 
 def _roster_tf() -> tuple[RosterModel, ...]:
     """The TensorFlow packet's roster (``torchlens.conformance._rosters.tf``)."""
 
-    from ._rosters.tf import roster
-
-    return roster()
+    return _tf_roster()
 
 
 def _roster_mlx() -> tuple[RosterModel, ...]:
     """The MLX packet's roster (``torchlens.conformance._rosters.mlx``)."""
 
-    from ._rosters.mlx import roster
-
-    return roster()
+    return _mlx_roster()
 
 
 def _roster_tinygrad() -> tuple[RosterModel, ...]:
@@ -175,7 +177,6 @@ def _roster_tinygrad() -> tuple[RosterModel, ...]:
     inventories = _TINYGRAD_INVENTORIES.get(_tinygrad_default_device() or "CPU")
     fn_ops, module_ops = inventories if inventories is not None else (None, None)
     # The backend's own roster (``_rosters/tinygrad.py``) follows the two probe rows.
-    from ._rosters.tinygrad import runner_rows
 
     return _rows(build_fn, build_module, fn_ops=fn_ops, module_ops=module_ops) + runner_rows()
 
@@ -341,9 +342,7 @@ _TINYGRAD_INVENTORIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 def _roster_paddle() -> tuple[RosterModel, ...]:
     """The Paddle packet's roster (``torchlens.conformance._rosters.paddle``)."""
 
-    from ._rosters.paddle import roster
-
-    return roster()
+    return _paddle_roster()
 
 
 def _rows(
@@ -428,8 +427,6 @@ class PreviewBackendAdapter:
     def protocol(self) -> Any:
         """The backend's registered ``BackendProtocol`` object (``BackendSpec.protocol()``)."""
 
-        from ..backends.registry import get_backend_spec
-
         factory = get_backend_spec(self.name).protocol
         return factory() if factory is not None else None
 
@@ -440,8 +437,6 @@ class PreviewBackendAdapter:
 
     def trace_with(self, model: Any, example_input: Any, **options: Any) -> Any:
         """Capture through the public entry with explicit trace options (refusal cells)."""
-
-        import torchlens as tl
 
         return tl.trace(model, example_input, backend=self.name, **options)
 
@@ -484,8 +479,6 @@ class PreviewBackendAdapter:
 
     def load(self, path: Path) -> Any:
         """Reload one persisted artifact."""
-
-        import torchlens as tl
 
         return tl.load(str(path))
 

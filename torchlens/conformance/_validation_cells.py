@@ -11,6 +11,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..backends._backend_protocol import VALIDATION_REASONS
+from ..options import CaptureOptions
+
 
 def _is_input(op: Any) -> bool:
     """Whether the op is an input leaf (record field ``is_input``)."""
@@ -50,8 +53,6 @@ def validation_capture_options(protocol: Any) -> dict[str, Any]:
 
     name = str(getattr(protocol, "name", ""))
     if name in _SAVED_ARGS_VALIDATION_BACKENDS:
-        from ..options import CaptureOptions
-
         return {"capture": CaptureOptions(save_args=True)}
     return {}
 
@@ -93,8 +94,6 @@ def capture_for_validation(adapter: Any, net: Any, example: Any) -> Any:
 
 def validation_status_problems(status: Any) -> tuple[str, ...]:
     """Why a ``validate`` return is not a passed status with registered reasons."""
-
-    from ..backends._backend_protocol import VALIDATION_REASONS
 
     state = getattr(status, "state", None)
     if state is None:
@@ -151,8 +150,6 @@ def _consumer_keys(target: Any, trace: Any | None) -> set[str]:
 
 def names_reason_problems(status: Any, target: Any, trace: Any | None = None) -> tuple[str, ...]:
     """Why a failed status does not name the tampered op (or its consumer) with a reason."""
-
-    from ..backends._backend_protocol import VALIDATION_REASONS
 
     state = getattr(status, "state", None)
     if state is None:
