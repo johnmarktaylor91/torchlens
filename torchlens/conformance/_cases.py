@@ -217,14 +217,28 @@ def _run_capture(adapter: Any, model: RosterModel) -> tuple[Any, Any, Any]:
 
 
 def _parity_holds(trace: Any, reference: Any, adapter: Any) -> bool:
-    """Direct-reference parity: the captured output equals the direct run.
+    """Direct-reference parity: every captured output equals the direct run's.
 
+    A tuple (or list) reference compares per output against the trace's
+    output ops in order; a single reference compares against the first.
     Torch outputs compare with ``torch.equal``. An adapter exposing
     ``as_array`` (the preview backends) only converts each arm to a NumPy
     array; the runner compares dtype, shape and every element exactly.
     """
 
-    captured = trace.output_ops[0].out if getattr(trace, "output_ops", None) else None
+    outputs = list(getattr(trace, "output_ops", None) or ())
+    if not outputs:
+        return False
+    if isinstance(reference, (tuple, list)):
+        if len(outputs) != len(reference):
+            return False
+        return all(_output_arm_equal(op.out, arm, adapter) for op, arm in zip(outputs, reference))
+    return _output_arm_equal(outputs[0].out, reference, adapter)
+
+
+def _output_arm_equal(captured: Any, reference: Any, adapter: Any) -> bool:
+    """One captured output against one direct-run output, exactly."""
+
     if captured is None:
         return False
     as_array = getattr(adapter, "as_array", None)
@@ -342,8 +356,9 @@ def _capability_consumption_case(adapter: Any, roster: tuple[RosterModel, ...]) 
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            _, trace, _ = _run_capture(adapter, roster[0])
+            net, trace, _ = _run_capture(adapter, roster[0])
         replay_door(trace)
+        del net
     except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
         return _failed(
             "c1_capabilities_consumed",

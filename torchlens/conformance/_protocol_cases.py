@@ -263,6 +263,7 @@ PLANT_INTENDED_CELL: dict[str, str] = {
     "missing_constant_payload": C1_CONSTANTS_CASE,
     "shape_drift_after_load": "c2_payload_values_equal",
     "flagged_trace": "c1_no_silent_gap",
+    "shape_metadata_drift": "c1_shape_metadata_matches_payload",
 }
 
 

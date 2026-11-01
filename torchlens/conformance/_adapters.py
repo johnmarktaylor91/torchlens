@@ -39,6 +39,7 @@ FAKE_PLANTS: tuple[str, ...] = (
     "missing_constant_payload",
     "shape_drift_after_load",
     "flagged_trace",
+    "shape_metadata_drift",
 )
 
 
@@ -125,9 +126,12 @@ class TorchReferenceAdapter:
         return tl.trace(model, example_input, **options)
 
     def reference_output(self, model: Any, example_input: Any) -> Any:
-        """Run the model directly (the parity oracle's independent arm)."""
+        """Run the model directly through the protocol's pristine oracle arm."""
 
-        return model(example_input)
+        protocol = self.protocol()
+        if protocol is None:
+            return model(example_input)
+        return protocol.reference_output(model, example_input, None)
 
     def side_effect_snapshot(self) -> Any:
         """Framework state a refusal must leave untouched: RNG bytes and wrapper count."""
@@ -259,6 +263,8 @@ class FakeProviderAdapter:
             trace.capture_verification_reason = "unwrapped_op_in_capture"
         if self.plant == "missing_constant_payload":
             _drop_first_constant_payload(trace)
+        if self.plant == "shape_metadata_drift":
+            _drift_first_shape_metadata(trace)
         return trace
 
     def side_effect_snapshot(self) -> Any:
@@ -326,6 +332,22 @@ def _drop_first_constant_payload(trace: Any) -> None:
         if getattr(op, "out", None) is not None:
             op.out = None
             return
+
+
+def _drift_first_shape_metadata(trace: Any) -> None:
+    """Give the first saved payload's recorded ``shape`` a leading unit axis (payload kept)."""
+
+    import warnings
+
+    for op in trace.layer_list:
+        shape = getattr(op, "shape", None)
+        if getattr(op, "out", None) is None or shape is None:
+            continue
+        with warnings.catch_warnings():
+            # The metadata write is the plant itself, not a recipe edit.
+            warnings.simplefilter("ignore")
+            op.shape = (1, *tuple(shape))
+        return
 
 
 def _drift_first_payload_shape(trace: Any) -> None:

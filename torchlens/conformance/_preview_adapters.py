@@ -189,8 +189,8 @@ def _roster_tf() -> tuple[RosterModel, ...]:
     return _rows(
         build_fn,
         build_module,
-        fn_ops=("input", "MatMul", "Relu"),
-        module_ops=("input", "MatMul", "Relu", "MatMul"),
+        fn_ops=("input", "constant", "MatMul", "Relu"),
+        module_ops=("input", "constant", "MatMul", "Relu", "constant", "MatMul"),
     )
 
 
