@@ -11586,7 +11586,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
-   "_output_slot": "<torchlens._capture.output_readback.OutputSlot>",
+   "_output_slot": "<torchlens.recording.types.OutputSlot>",
    "_output_transform": null,
    "_phase_timings": "<measured>",
    "_raw_to_final_layer_labels": {
@@ -23982,7 +23982,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
-   "_output_slot": "<torchlens._capture.output_readback.OutputSlot>",
+   "_output_slot": "<torchlens.recording.types.OutputSlot>",
    "_output_transform": null,
    "_phase_timings": "<measured>",
    "_raw_to_final_layer_labels": {
