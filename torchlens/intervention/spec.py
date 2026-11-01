@@ -52,7 +52,7 @@ from ._site_signal import (
 )
 from .predicates import as_intervention_decision
 from .selectors import BaseSelector, CompositeSelector
-from .types import Edit, InterventionDecision
+from .types import Edit, HelperDirection, InterventionDecision
 
 AddressClass = Literal["structural", "recorded", "value_dependent"]
 
@@ -62,9 +62,9 @@ AddressClass = Literal["structural", "recorded", "value_dependent"]
 SiteSignal = Literal["forward", "backward", "both"]
 
 
-#: Rule identities hash a third component that used to be the removed
-#: ``direction=`` keyword (always ``None`` for site-addressed rules). It stays a
-#: constant so rule ids minted before the keyword was removed keep their value.
+#: Decision renderings print a constant where the removed decision
+#: ``direction=`` keyword used to print (always ``None`` for site-addressed
+#: rules), so renderings minted before the keyword was removed keep their value.
 _RULE_ID_TAIL = "None"
 
 #: Selector kinds addressable on a FIRST capture of a model (no recorded
@@ -269,6 +269,8 @@ class Rule:
     action:
         Helper spec, callable transform, or intervention decision (the raw
         user spelling, preserved for audit).
+    direction:
+        Optional declared signal for the action, kept in the rule identity.
 
     The pass the rule edits is :attr:`signal`, derived from the target:
     ``tl.grad(site)`` edits the gradient, a bare site the activation.
@@ -276,6 +278,7 @@ class Rule:
 
     target: Any
     edit: Any
+    direction: HelperDirection | None = None
     address_class: AddressClass = field(default="value_dependent", compare=False)
     decision: InterventionDecision | None = field(default=None, compare=False, repr=False)
     where_repr: str = field(default="", compare=False, repr=False)
@@ -345,7 +348,7 @@ class Rule:
             return memo[1]
         action_repr = _canonical_repr(self.edit, exact=exact)
         digest = hashlib.sha256(
-            f"{self.where_repr}||{action_repr}||{_RULE_ID_TAIL}".encode()
+            f"{self.where_repr}||{action_repr}||{self.direction}".encode()
         ).hexdigest()[:10]
         identity = (action_repr, f"r-{digest}")
         object.__setattr__(self, "_identity_memo", (versions, identity))
@@ -374,7 +377,7 @@ class Rule:
 
         return (
             f"Rule(target={self.target!r}, edit={self.edit!r}, "
-            f"signal={self.signal!r}, rule_id={self.rule_id!r}, "
+            f"direction={self.direction!r}, signal={self.signal!r}, rule_id={self.rule_id!r}, "
             f"address_class={self.address_class!r})"
         )
 
