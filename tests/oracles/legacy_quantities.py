@@ -73,10 +73,10 @@ DOOR_PATHS = {
     "TraceCost": "torchlens._data_classes._trace_groups.TraceCost",
     "TraceGraph": "torchlens._data_classes._trace_groups.TraceGraph",
     "TraceAutograd": "torchlens._data_classes._trace_groups.TraceAutograd",
-    "TraceSource": "torchlens._data_classes._trace_groups.TraceSource",
+    "TraceSource": "torchlens._data_classes._trace_groups_capture.TraceSource",
     "TraceProvenance": "torchlens._data_classes._trace_groups.TraceProvenance",
-    "TraceOptions": "torchlens._data_classes._trace_groups.TraceOptions",
-    "TraceHealth": "torchlens._data_classes._trace_groups.TraceHealth",
+    "TraceOptions": "torchlens._data_classes._trace_groups_capture.TraceOptions",
+    "TraceHealth": "torchlens._data_classes._trace_groups_capture.TraceHealth",
     "ParamAccessor": "torchlens._data_classes.param.ParamAccessor",
 }
 
