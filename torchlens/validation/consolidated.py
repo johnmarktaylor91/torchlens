@@ -15,6 +15,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 from .._literals import OutputDeviceLiteral
 from .._save_budget import SaveBudgetOption
 from .._utils.display import user_stacklevel
+from .._utils.rng import restores_rng_streams
 from ..backends.registry import BackendName, resolve_backend_spec
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
@@ -413,6 +414,7 @@ def _validate_receptive_field_scope(
     return [*receptive, *projective]
 
 
+@restores_rng_streams
 def validate(
     model: nn.Module,
     input_args: Any,
@@ -449,7 +451,8 @@ def validate(
         writes its own buffers in place (a train-mode BatchNorm's running
         statistics) raises ``MutatedReferenceError``; validate it in eval mode.
     seed:
-        Optional random seed for forward-like validation.
+        Optional random seed for forward-like validation. Like ``tl.trace``, the call
+        restores the caller's global RNG streams on return and on error.
     verbose:
         Whether validators should emit diagnostics.
     validate_metadata:
@@ -457,11 +460,10 @@ def validate(
     loss_fn:
         Backward-only loss function.
     atol:
-        Backward-only absolute tolerance. ``None`` (default) derives per
-        gradient dtype in ``validate_backward_pass``.
+        Backward-only absolute tolerance. ``None`` (default) derives per gradient
+        dtype in ``validate_backward_pass``.
     rtol:
-        Backward-only relative tolerance. ``None`` derives per dtype
-        likewise.
+        Backward-only relative tolerance. ``None`` derives per dtype likewise.
     validate_layer_grads:
         Backward-only layer-gradient validation flag. Omission enables honest
         captured-gradient validation by default for backward scope. The root
