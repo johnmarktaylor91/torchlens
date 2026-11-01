@@ -1,0 +1,93 @@
+"""``tl.extract`` and ``tl.pluck`` refuse an unknown layer typed, never with a builtin error.
+
+Behaviour-net finding IO-1 (2026-11-01): a list or mapping request naming a layer the
+capture does not record raised a builtin ``ValueError`` ("Layer ... not found. Did you
+mean ...?"), a request whose key is a bare module address with no pass qualifier crashed
+with ``ValueError: not enough values to unpack``, and the error contract promises
+``op_lookup_not_found`` for every lookup that matches nothing.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+import torch
+from torch import nn
+
+import torchlens as tl
+from torchlens.errors import InvalidArgumentError, TorchLensError
+
+pytestmark = [pytest.mark.smoke]
+
+
+class _Tiny(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.lin(x)).sum(dim=-1)
+
+
+def _code(exc: BaseException) -> Any:
+    return exc.fields.get("code") if isinstance(exc, TorchLensError) else None
+
+
+@pytest.fixture
+def tiny() -> tuple[nn.Module, torch.Tensor]:
+    torch.manual_seed(0)
+    return _Tiny().eval(), torch.randn(2, 4)
+
+
+@pytest.mark.parametrize(
+    "layers",
+    [
+        ["no_such_layer_anywhere"],
+        {"mine": "no_such_layer_anywhere"},
+        ["lin:3"],
+        ["self"],
+    ],
+    ids=["list", "mapping", "module-pass-beyond-count", "bare-module-address"],
+)
+def test_extract_unknown_layer_refuses_op_lookup_not_found(
+    tiny: tuple[nn.Module, torch.Tensor], layers: Any
+) -> None:
+    model, x = tiny
+    with pytest.raises(InvalidArgumentError) as info:
+        tl.extract(model, x, layers)
+    assert _code(info.value) in {"op_lookup_not_found", "op_lookup_pass_out_of_range"}, info.value
+    assert info.value.fields.get("remedy")
+    assert "not enough values to unpack" not in str(info.value)
+
+
+def test_extract_unknown_layer_message_still_suggests_candidates(
+    tiny: tuple[nn.Module, torch.Tensor],
+) -> None:
+    model, x = tiny
+    with pytest.raises(InvalidArgumentError) as info:
+        tl.extract(model, x, ["linear_1_1_typo"])
+    assert _code(info.value) == "op_lookup_not_found"
+    assert "Did you mean" in str(info.value)
+    assert info.value.fields.get("key") == "linear_1_1_typo"
+
+
+def test_pluck_unknown_layer_refuses_op_lookup_not_found(
+    tiny: tuple[nn.Module, torch.Tensor],
+) -> None:
+    model, x = tiny
+    with pytest.raises(InvalidArgumentError) as info:
+        tl.pluck(model, x, "no_such_layer_anywhere")
+    assert _code(info.value) == "op_lookup_not_found"
+
+
+def test_trace_lookup_of_bare_module_address_does_not_crash(
+    tiny: tuple[nn.Module, torch.Tensor],
+) -> None:
+    """A key with no ``:`` never reaches the module-pass unpack."""
+
+    model, x = tiny
+    trace = tl.trace(model, x)
+    with pytest.raises(InvalidArgumentError) as info:
+        trace["no_such_module_address"]
+    assert _code(info.value) == "op_lookup_not_found"

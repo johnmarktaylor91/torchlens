@@ -47,7 +47,7 @@ def _give_user_feedback_about_lookup_key(
             key=repr(key),
         )
 
-    if hasattr(self, "_module_logs") and key.rsplit(":", 1)[0] in self._module_logs:
+    if ":" in key and hasattr(self, "_module_logs") and key.rsplit(":", 1)[0] in self._module_logs:
         module, call_index = key.rsplit(":", 1)
         module_log = self._module_logs[module]
         module_num_calls = getattr(module_log, "num_calls")

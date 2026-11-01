@@ -345,6 +345,13 @@ def __dir__() -> list[str]:
     return facade_dir(globals(), _LAZY_ATTRS)
 
 
+#: Remedy every extract-side lookup refusal carries.
+_EXTRACT_LOOKUP_REMEDY = (
+    "pass a layer label, module address or pass-qualified label the capture records; "
+    "trace.find_layers(substring) lists the candidates"
+)
+
+
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     """Build a short suggestion suffix for lookup failures.
 
@@ -384,27 +391,39 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
 
     Raises
     ------
-    ValueError
-        If the layer cannot be resolved or has no saved out.
+    InvalidArgumentError
+        ``op_lookup_not_found`` if the layer cannot be resolved;
+        ``activation_not_saved`` if it resolved but kept no out.
     """
 
-    from ._errors import AmbiguousOpLookupError
+    from ._errors import InvalidArgumentError, TorchLensError
     from ._trace_selector_helpers import canonical_module_site_key
 
     try:
         layer_log = trace[canonical_module_site_key(trace, layer) or layer]
-    except AmbiguousOpLookupError:
-        # An ambiguity names its candidates; a "not found" would hide them.
+    except TorchLensError:
+        # A typed refusal (ambiguity, pass qualifier, index) already names its
+        # condition; a "not found" would hide it.
         raise
     except (KeyError, ValueError) as exc:
         suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
-        raise ValueError(_did_you_mean_message(layer, suggestions)) from exc
+        raise InvalidArgumentError(
+            _did_you_mean_message(layer, suggestions),
+            code="op_lookup_not_found",
+            remedy=_EXTRACT_LOOKUP_REMEDY,
+            key=layer,
+        ) from exc
 
     import torch
 
     out = getattr(layer_log, "out", None)
     if out is None:
-        raise ValueError(f"Layer {layer!r} resolved but has no saved out.")
+        raise InvalidArgumentError(
+            f"Layer {layer!r} resolved but has no saved out.",
+            code="activation_not_saved",
+            remedy="request the layer through extract's layers argument so the capture saves it",
+            key=layer,
+        )
     if not isinstance(out, torch.Tensor):
         raise TypeError(f"Layer {layer!r} out is not a torch.Tensor.")
     return out
@@ -486,7 +505,7 @@ def pluck(
         Positional input argument or argument container for ``model.forward``.
     layer:
         Layer label, module path, pass-qualified label, or unique substring.
-        Resolves strictly to one result; ambiguous lookups raise ``ValueError``.
+        Resolves strictly to one result; ambiguous lookups refuse typed.
     stop_after:
         Stop-early site, passed to the capture as
         ``CaptureOptions(stop_after=...)``: the forward halts inclusively after
@@ -500,8 +519,9 @@ def pluck(
 
     Raises
     ------
-    ValueError
-        If ``layer`` does not resolve or did not produce a saved tensor.
+    InvalidArgumentError
+        ``op_lookup_not_found`` if ``layer`` does not resolve;
+        ``activation_not_saved`` if it produced no saved tensor.
     """
 
     from .options import CaptureOptions
@@ -602,10 +622,12 @@ def _extract_layers_with_trace(
 
     Raises
     ------
-    ValueError
-        If a lookup does not resolve or did not produce a saved tensor.
+    InvalidArgumentError
+        ``op_lookup_not_found`` if a lookup resolves to no layer;
+        ``activation_not_saved`` if it resolved but produced no saved tensor.
     """
 
+    from ._errors import InvalidArgumentError
     from ._trace_selector_helpers import canonical_module_site_key
     from .options import CaptureOptions as _LazyCaptureOptions
 
@@ -635,7 +657,12 @@ def _extract_layers_with_trace(
         matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
             suggestions = trace.find_layers(pattern)
-            raise ValueError(_did_you_mean_message(pattern, suggestions))
+            raise InvalidArgumentError(
+                _did_you_mean_message(pattern, suggestions),
+                code="op_lookup_not_found",
+                remedy=_EXTRACT_LOOKUP_REMEDY,
+                key=pattern,
+            )
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
             views[match] = trace[match]
