@@ -183,7 +183,7 @@ def _refresh_replay_config(self: "Trace") -> dict[str, Any]:
 def _run_refresh_forward(
     self: "Trace",
     request: _RefreshRequest,
-    refresh_seed: int,
+    refresh_seed: int | None,
     resolved_layer_nums: tuple[int, ...] | None,
     grad_layer_nums_to_save: str | list[Any],
 ) -> Any:

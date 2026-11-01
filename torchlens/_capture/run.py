@@ -339,6 +339,7 @@ def run_and_log_inputs_through_model(
     def _forward_result(
         arm: ForwardArm, *, raw_output: Any = None, exc: BaseException | None = None
     ) -> ForwardResult:
+        """Bundle the forward's live state into the FINALIZE hand-off record."""
         return ForwardResult(
             trace=self,
             request=CaptureRequest(

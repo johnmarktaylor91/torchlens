@@ -1487,6 +1487,7 @@ def _trace_torch_model(
             raise
 
     def _store_capture_cache(cache_trace: Trace, path: Path, secret: Any) -> None:
+        """Write the authenticated capture-cache entry and evict stale siblings."""
         _prepare_log_for_capture_cache(cache_trace)
         if _store_authenticated_capture_cache(cache_trace, path, secret):
             _evict_capture_cache(path.parent, keep=path)
