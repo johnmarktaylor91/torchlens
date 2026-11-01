@@ -498,7 +498,8 @@ class RecordingSettings:
     storage:
         The disk sink from ``storage=``, if any.
     narrate:
-        The live narration options from ``narrate=``, if any.
+        The live narration settings (a ``NarrationOptions``) that printed each captured
+        event as the forward ran, from the door's ``narrate=``; ``None`` when off.
     """
 
     keep_op: PredicateFn | None
