@@ -182,12 +182,13 @@ subsystem (new run modes, run-time state interventions, segment or backward repl
 products). Everything else inside the runnable machinery is internal and may change
 without notice.
 
-**Binding rule.** `torchlens/_runnable_execution.py` is a namespace-aggregator facade over
+**Binding rule.** `torchlens/_runnable/execution.py` is a namespace-aggregator facade over
 its slice modules; slice modules have no importers besides the aggregator. Every extension
-point below is named on ONE of `torchlens/_runnable.py`, `torchlens/_runnable_seam.py`,
-`torchlens/_runnable_execution.py`, or `torchlens/_runnable_state.py` (the coordinator
-verbs additionally have their transport-side homes in `torchlens/_io/runnable.py` and
-`torchlens/_io/runnable_load.py`, reached through the coordinator boundary). Consumers
+point below is named on ONE of `torchlens._runnable` (the package `__init__.py`),
+`torchlens._runnable.seam`, `torchlens._runnable.execution`, or `torchlens._runnable.state`
+(the coordinator verbs additionally have their transport-side homes in
+`torchlens/_io/runnable.py` and `torchlens/_io/runnable_load.py`, reached through the
+coordinator boundary). Consumers
 never import a slice module directly; moving a name off its contract module is a contract
 change.
 
@@ -200,7 +201,7 @@ plus a registered persisted-field family (pre-release fields ship DROP-gated); n
 adds a descriptor field directly.
 
 **E2 -- Provider.** `RunProvider` is a closed enum. The four-verb coordinator boundary is
-`RunnableCoordinator` (`torchlens/_runnable_seam.py`): produce
+`RunnableCoordinator` (`torchlens/_runnable/seam.py`): produce
 (`build_sparse_run_descriptor`), decode (`parse_sparse_run_descriptor`), prepare
 (`attach_sparse_run_readiness` plus preflight), execute (`run_loaded_sparse_trace` /
 `run_live_trace`). Provider dispatch is the one hardcoded ladder inside `Trace.run`; a new
