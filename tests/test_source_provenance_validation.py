@@ -1,9 +1,10 @@
 """Forward validation fails a capture whose graph is missing a tensor argument's origin.
 
 Replay re-executes each op on its saved arguments, so a tensor argument with no
-recorded graph/source provenance (a closure or module-global tensor, a module-held
-tensor the held-tensor scan cut off, an opaque module output adopted at a module
-boundary) replays perfectly and used to validate. The ``source_provenance`` check in
+recorded graph/source provenance (a module-held tensor the held-tensor scan cut off,
+an opaque module output adopted at a module boundary or consumed by an op) replays
+perfectly and used to validate. A closure or module-global tensor that existed
+before the forward is a recorded ``constant`` source op (SPEC 2), not a gap. The ``source_provenance`` check in
 ``validation/_source_provenance.py`` fails the run instead, on the final trace, with
 the single existing carve-out: a genuine, ledger-corroborated intervention
 replacement. These tests pin both sides: every source-less class fails, and every
@@ -23,6 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._state import pause_logging
 from torchlens.backends.torch import rescue
 from torchlens.validation import last_validation_failure
 
@@ -60,35 +62,41 @@ def _closure_model() -> nn.Module:
     return _ClosureReader()
 
 
-@pytest.mark.smoke
-def test_global_tensor_argument_fails_forward_validation() -> None:
-    torch.manual_seed(0)
-    x = torch.randn(5)
-    assert _validate(_GlobalReader(), x) is False
-    check, reasons = _failure_reasons()
-    assert check == "source_provenance"
-    assert reasons == ["unattributed_tensor_args"]
-    failure = last_validation_failure()
-    assert failure is not None and failure.func_name == "__add__"
-    assert failure.op_label is not None and failure.op_label.startswith("add")
+def _constant_ops(trace: Any) -> list[Any]:
+    return [op for op in trace.layer_list if op.func_name == "constant"]
 
 
-def test_closure_tensor_argument_fails_forward_validation() -> None:
+@pytest.mark.parametrize(
+    "make_model",
+    [
+        pytest.param(_GlobalReader, id="global", marks=pytest.mark.smoke),
+        pytest.param(_closure_model, id="closure"),
+    ],
+)
+def test_closure_or_global_tensor_is_a_constant_source_and_validates(make_model: Any) -> None:
+    """A pre-forward tensor reachable only from the forward is a ``constant`` source op.
+
+    SPEC 2 rule 1: no provenance warning, a parentless constant op whose saved
+    value the consumer reads, and forward validation passes.
+    """
+
     torch.manual_seed(0)
     x = torch.randn(5)
-    assert _validate(_closure_model(), x) is False
-    check, reasons = _failure_reasons()
-    assert check == "source_provenance"
-    assert reasons == ["unattributed_tensor_args"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        trace = tl.trace(make_model(), x)
+    (constant,) = _constant_ops(trace)
+    assert not tuple(constant.parents or ()) and constant.has_saved_activation
+    assert not trace.annotations.get("capture_advisories")
+    assert _validate(make_model(), x) is True
+    assert last_validation_failure() is None
 
 
 def test_saved_scope_fails_the_same_source_less_capture() -> None:
-    torch.manual_seed(0)
     x = torch.randn(5)
-    model = _GlobalReader()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        assert tl.validate(model, x, scope="saved") is False
+        assert tl.validate(_TooDeepUnread(), x, scope="saved") is False
     assert _failure_reasons()[0] == "source_provenance"
 
 
@@ -188,38 +196,49 @@ def _returns_closure() -> nn.Module:
 @pytest.mark.parametrize(
     "make_sub", [_returns_closure, _ReturnsGlobal], ids=["closure", "module_global"]
 )
-def test_submodule_returning_an_outside_tensor_fails(make_sub: Any) -> None:
-    """The pre-forward snapshot no longer hides a closure/global a module returns."""
+def test_submodule_returning_an_outside_tensor_returns_a_constant(make_sub: Any) -> None:
+    """A submodule returning a closure/global tensor returns a recorded ``constant`` source."""
 
     x = torch.randn(5)
     model = _returns_outside_parent(make_sub())
-    with pytest.warns(UserWarning, match="closure or forward-global tensor"):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
         trace = tl.trace(copy.deepcopy(model), x)
-    kinds = [row["kind"] for row in trace.annotations.get("capture_advisories", [])]
-    assert kinds == ["module_boundary_adoption"]
-    assert _validate(model, x) is False
-    assert _failure_reasons() == ("source_provenance", ["module_boundary_adoption"])
+    assert len(_constant_ops(trace)) == 1
+    assert not trace.annotations.get("capture_advisories")
+    assert _validate(model, x) is True
 
 
-class _GlobalItemSink(nn.Module):
-    """The only consumer of the global is ``.item()``-bound, so it is orphan-pruned."""
+def _unseen_tanh(x: torch.Tensor) -> torch.Tensor:
+    """A value built where TorchLens cannot see it (logging paused): no provenance."""
+
+    with pause_logging():
+        return x.tanh()
+
+
+class _UnseenItemSink(nn.Module):
+    """An unseen tensor is consumed only by ``.item()`` (orphan-pruned)."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + _GLOBAL_TABLE.sum().item()
+        return x + _unseen_tanh(x).sum().item()
 
 
-class _GlobalControlFlowSink(nn.Module):
-    """The global only drives a branch predicate, which is orphan-pruned."""
+class _UnseenControlFlowSink(nn.Module):
+    """The unseen tensor only drives a branch predicate, which is orphan-pruned."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x * 2 if (_GLOBAL_TABLE.sum() > 0).item() else x * 3
+        return x * 2 if (_unseen_tanh(x).sum() > 0).item() else x * 3
 
 
 @pytest.mark.parametrize(
-    "model", [_GlobalItemSink(), _GlobalControlFlowSink()], ids=["item", "control_flow"]
+    "model", [_UnseenItemSink(), _UnseenControlFlowSink()], ids=["item", "control_flow"]
 )
-def test_orphan_pruned_consumer_keeps_the_source_less_witness(model: nn.Module) -> None:
+def test_orphan_pruned_consumer_keeps_the_source_less_witness(
+    model: nn.Module, monkeypatch: pytest.MonkeyPatch
+) -> None:
     x = torch.randn(5)
+    # Keep the primary capture: a rescue re-run could record the unseen op.
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(model, x)
@@ -231,6 +250,13 @@ def test_orphan_pruned_consumer_keeps_the_source_less_witness(model: nn.Module) 
     assert len(rows) == 1 and "sum" in rows[0]["message"]
     assert _validate(model, x) is False
     assert _failure_reasons() == ("source_provenance", ["orphan_unattributed_tensor_args"])
+
+
+class _GlobalItemSink(nn.Module):
+    """The global's only consumer is ``.item()``-bound: a constant, so nothing is source-less."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + _GLOBAL_TABLE.sum().item()
 
 
 class _DeadGlobalOp(nn.Module):
@@ -270,8 +296,16 @@ class _OrphanFromConstants(nn.Module):
         _returns_outside_parent(_ReturnsOwn("weight")),
         _OrphanFromConstants(),
         _DeadGlobalOp(),
+        _GlobalItemSink(),
     ],
-    ids=["returns_held", "returns_buffer", "returns_param", "orphan_from_constants", "dead_op"],
+    ids=[
+        "returns_held",
+        "returns_buffer",
+        "returns_param",
+        "orphan_from_constants",
+        "dead_op",
+        "global_item_sink",
+    ],
 )
 def test_model_owned_returns_and_sourced_orphans_still_validate(model: nn.Module) -> None:
     torch.manual_seed(0)

@@ -129,6 +129,28 @@ def test_tf_default_tlspec_round_trip_materializes_payloads(tmp_path: Path) -> N
     np.testing.assert_allclose(restored.numpy(), expected.numpy())
 
 
+def test_tf_tlspec_round_trip_keeps_scalar_shape(tmp_path: Path) -> None:
+    """A 0-d op output loads back 0-d, not ``(1,)``.
+
+    ``np.ascontiguousarray`` promotes a 0-d host array to shape ``(1,)``; the
+    TensorFlow materializer passed its result straight to ``convert_to_tensor``,
+    so a saved scalar came back one-dimensional.
+    """
+
+    x = tf.constant([[1.0, -2.0], [3.0, 4.0]], dtype=tf.float32)
+    trace = tl.trace(lambda value: tf.reduce_sum(value), x, backend="tf")
+    saved = trace[trace.output_layers[0]].out
+    assert tuple(saved.shape) == ()
+    path = tmp_path / "tf_scalar.tlspec"
+
+    trace.save(path)
+    loaded = tl.load(path)
+
+    restored = loaded[loaded.output_layers[0]].out
+    assert tuple(restored.shape) == ()
+    np.testing.assert_allclose(np.asarray(restored), np.asarray(saved))
+
+
 def test_tf_bfloat16_tlspec_round_trip_preserves_logical_dtype_and_bits(
     tmp_path: Path,
 ) -> None:

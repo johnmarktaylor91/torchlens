@@ -34,7 +34,11 @@ from torchlens.backends.default_specs import (
 from torchlens.backends.jax import capabilities as jax_capabilities
 from torchlens.backends.mlx import capabilities as mlx_capabilities
 from torchlens.backends.paddle import capabilities as paddle_capabilities
-from torchlens.backends.registry import _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES, SerializationPolicy
+from torchlens.backends.registry import (
+    _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES,
+    BackendRegistryError,
+    SerializationPolicy,
+)
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.errors import (
@@ -1142,3 +1146,29 @@ def test_backend_none_ambiguity_is_deterministic() -> None:
     finally:
         tl.backends.unregister("fake_a")
         tl.backends.unregister("fake_b")
+
+
+def test_refusal_code_passed_at_the_raise_site_is_the_instance_code() -> None:
+    """``exc.code`` is the contract: a raise-site ``code=`` wins; the class code is the default."""
+
+    exc = BackendUnsupportedError(
+        "tf backend refuses backward capture", code="backward_capture_unsupported"
+    )
+    assert exc.code == "backward_capture_unsupported"
+    assert exc.fields["code"] == "backward_capture_unsupported"
+    assert BackendUnsupportedError.code == "backend_unsupported"
+
+    default = BackendUnsupportedError("tf backend refuses something")
+    assert default.code == "backend_unsupported"
+    assert default.fields["code"] == "backend_unsupported"
+
+    registry_default = BackendRegistryError("registry failed")
+    assert registry_default.code == "backend_error"
+    typed = UnknownBackendError("no such backend", code="runtime_missing")
+    assert typed.code == "runtime_missing" and typed.fields["code"] == "runtime_missing"
+    # The instance code survives the pickle recipe the class defines.
+    import pickle
+
+    restored = pickle.loads(pickle.dumps(exc))
+    assert restored.code == "backward_capture_unsupported"
+    assert restored.fields["code"] == "backward_capture_unsupported"

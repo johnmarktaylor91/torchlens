@@ -265,7 +265,9 @@ validation treats declared interventions as genuine user substitutions: the orac
 raw producer output, re-applies the declared hook, and compares — stripping or forging the
 declaration fails coverage against the emit-time inventory fingerprint. `mx.compile`/`mx.grad`/
 `mx.vmap` traced-transform wrappers refuse at capture entry, and a compiled attribute on the model
-ceilings the capture with `capture_verified=False` (`mlx_compiled_attribute_not_logged`).
+ceilings the capture with `capture_verified=False` (`mlx_compiled_attribute_not_logged`). An output that no wrapped operation produced (an array operator such as `a + b`, an array
+method, or an `mx.*` function outside the wrapped surface) warns and ceilings the capture the same
+way (`unwrapped_op_in_capture`); those operations are not logged.
 
 MLX rejects `tl.model_output(...)`, `tl.where(...)`,
 `tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `recipes=`,

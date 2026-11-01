@@ -13,6 +13,238 @@ from .model_prep import MLXModuleTree
 
 _ACTIVE_TAP_OBSERVER: object | None = None
 
+#: ``mlx.core`` functions logged as ops. Names absent from the installed
+#: MLX are skipped at install time, so the table may run ahead of a version.
+MLX_CORE_FUNCTION_OPS: tuple[str, ...] = (
+    # arithmetic and linear algebra
+    "add",
+    "subtract",
+    "multiply",
+    "divide",
+    "floor_divide",
+    "remainder",
+    "negative",
+    "power",
+    "matmul",
+    "addmm",
+    "inner",
+    "outer",
+    "tensordot",
+    "einsum",
+    "maximum",
+    "minimum",
+    "abs",
+    "square",
+    "sqrt",
+    "rsqrt",
+    "exp",
+    "expm1",
+    "log",
+    "log2",
+    "log10",
+    "log1p",
+    "sigmoid",
+    "tanh",
+    "erf",
+    "erfinv",
+    "sin",
+    "cos",
+    "tan",
+    "floor",
+    "ceil",
+    "round",
+    "clip",
+    "where",
+    "softmax",
+    "logsumexp",
+    # reductions
+    "sum",
+    "prod",
+    "mean",
+    "var",
+    "std",
+    "max",
+    "min",
+    "argmax",
+    "argmin",
+    "cumsum",
+    "cumprod",
+    # comparisons and logic
+    "greater",
+    "greater_equal",
+    "less",
+    "less_equal",
+    "equal",
+    "not_equal",
+    "logical_and",
+    "logical_or",
+    "logical_not",
+    # shape and indexing
+    "reshape",
+    "transpose",
+    "swapaxes",
+    "moveaxis",
+    "expand_dims",
+    "squeeze",
+    "flatten",
+    "broadcast_to",
+    "concatenate",
+    "stack",
+    "split",
+    "repeat",
+    "tile",
+    "pad",
+    "take",
+    "take_along_axis",
+    "tril",
+    "triu",
+    "sort",
+    "argsort",
+    "topk",
+    # convolutions
+    "conv1d",
+    "conv2d",
+    "conv3d",
+    "conv_general",
+    "conv_transpose1d",
+    "conv_transpose2d",
+    "conv_transpose3d",
+    # literal producers (zero tensor parents; the shared constants rule)
+    "zeros",
+    "ones",
+    "full",
+    "arange",
+    "linspace",
+    "eye",
+    "tri",
+    "identity",
+)
+
+#: ``mlx.core`` ops that build an array from Python literals or shapes only.
+#: They have no tensor parent; the shared constants rule records them as
+#: literal producers with a saved payload (SPEC section 2, rule 2).
+MLX_LITERAL_PRODUCER_OPS: frozenset[str] = frozenset(
+    {"zeros", "ones", "full", "arange", "linspace", "eye", "tri", "identity"}
+)
+
+#: ``mlx.core.fast`` fused kernels logged as ops under their own names.
+MLX_FAST_FUNCTION_OPS: tuple[str, ...] = (
+    "layer_norm",
+    "rms_norm",
+    "rope",
+    "scaled_dot_product_attention",
+)
+
+#: ``mx.array`` operator dunders and the op name each is logged under (the
+#: ``mlx.core`` function spelling, so ``a + b`` and ``mx.add(a, b)`` agree).
+MLX_ARRAY_DUNDER_OPS: dict[str, str] = {
+    "__add__": "add",
+    "__radd__": "add",
+    "__sub__": "subtract",
+    "__rsub__": "subtract",
+    "__mul__": "multiply",
+    "__rmul__": "multiply",
+    "__truediv__": "divide",
+    "__rtruediv__": "divide",
+    "__floordiv__": "floor_divide",
+    "__rfloordiv__": "floor_divide",
+    "__mod__": "remainder",
+    "__rmod__": "remainder",
+    "__matmul__": "matmul",
+    "__rmatmul__": "matmul",
+    "__pow__": "power",
+    "__rpow__": "power",
+    "__neg__": "negative",
+    "__abs__": "abs",
+    "__getitem__": "getitem",
+    "__lt__": "less",
+    "__le__": "less_equal",
+    "__gt__": "greater",
+    "__ge__": "greater_equal",
+    "__eq__": "equal",
+    "__ne__": "not_equal",
+}
+
+#: ``mx.array`` properties that compute a new array, and their op names.
+MLX_ARRAY_PROPERTY_OPS: dict[str, str] = {"T": "transpose"}
+
+#: ``mx.array`` methods logged as ops under their own names.
+MLX_ARRAY_METHOD_OPS: tuple[str, ...] = (
+    "sum",
+    "prod",
+    "mean",
+    "var",
+    "std",
+    "max",
+    "min",
+    "argmax",
+    "argmin",
+    "cumsum",
+    "cumprod",
+    "reshape",
+    "transpose",
+    "swapaxes",
+    "moveaxis",
+    "squeeze",
+    "flatten",
+    "astype",
+    "abs",
+    "square",
+    "sqrt",
+    "rsqrt",
+    "exp",
+    "log",
+    "log2",
+    "log10",
+    "log1p",
+    "sin",
+    "cos",
+    "round",
+    "any",
+    "all",
+    "diag",
+    "diagonal",
+)
+
+#: ``mlx.nn`` layer classes captured at the layer-forward level, and the op
+#: name each call is logged under. Their Python bodies run under the nested-op
+#: guard, so a layer appears once, never as its internal primitives.
+MLX_LAYER_CLASS_OPS: dict[str, str] = {
+    "Linear": "linear",
+    "Bilinear": "bilinear",
+    "Conv1d": "conv1d",
+    "Conv2d": "conv2d",
+    "Conv3d": "conv3d",
+    "ConvTranspose1d": "conv_transpose1d",
+    "ConvTranspose2d": "conv_transpose2d",
+    "ConvTranspose3d": "conv_transpose3d",
+    "MaxPool1d": "max_pool1d",
+    "MaxPool2d": "max_pool2d",
+    "MaxPool3d": "max_pool3d",
+    "AvgPool1d": "avg_pool1d",
+    "AvgPool2d": "avg_pool2d",
+    "AvgPool3d": "avg_pool3d",
+    "Upsample": "upsample",
+    "LayerNorm": "layernorm",
+    "RMSNorm": "rmsnorm",
+    "BatchNorm": "batchnorm",
+    "GroupNorm": "groupnorm",
+    "InstanceNorm": "instancenorm",
+    "Dropout": "dropout",
+    "Dropout2d": "dropout2d",
+    "Dropout3d": "dropout3d",
+    "Embedding": "embedding",
+    "QuantizedEmbedding": "quantized_embedding",
+    "QuantizedLinear": "quantized_linear",
+    "MultiHeadAttention": "multiheadattention",
+    "RoPE": "rope",
+    "SinusoidalPositionalEncoding": "sinusoidal_positional_encoding",
+    "ALiBi": "alibi",
+    "RNN": "rnn",
+    "GRU": "gru",
+    "LSTM": "lstm",
+}
+
 
 class _MLXWrapperRegistry:
     """Per-process MLX wrapper registry with clean backend rebinding."""
@@ -71,28 +303,24 @@ class _MLXWrapperRegistry:
             Optional discovered MLX module tree.
         """
 
-        for name in (
-            "add",
-            "matmul",
-            "multiply",
-            "subtract",
-            "divide",
-            "maximum",
-            "minimum",
-            "power",
-            "sum",
-            "mean",
-            "max",
-            "min",
-            "argmax",
-            "argmin",
-            "reshape",
-            "transpose",
-            "concatenate",
-            "stack",
-            "split",
-        ):
+        for name in MLX_CORE_FUNCTION_OPS:
             self.wrap_attr(mx, name, backend, name)
+        fast = getattr(mx, "fast", None)
+        if fast is not None:
+            for name in MLX_FAST_FUNCTION_OPS:
+                self.wrap_attr(fast, name, backend, name)
+        # Array operators and methods (``a + b``, ``v.sum()``): mx.array is a
+        # nanobind type whose slots accept assignment and route the Python
+        # call through the assigned callable (probed on mlx 0.26.3); the
+        # C++ internals of mx.* functions and nn layers do not re-enter them.
+        array_type = getattr(mx, "array", None)
+        if isinstance(array_type, type):
+            for dunder, op_name in MLX_ARRAY_DUNDER_OPS.items():
+                self.wrap_attr(array_type, dunder, backend, op_name)
+            for name in MLX_ARRAY_METHOD_OPS:
+                self.wrap_attr(array_type, name, backend, name)
+            for name, op_name in MLX_ARRAY_PROPERTY_OPS.items():
+                self.wrap_attr(array_type, name, backend, op_name)
         for name in ("relu", "gelu", "sigmoid", "tanh", "softmax", "silu"):
             self.wrap_attr(nn, name, backend, name)
         # Most functions of mlx.nn.layers.activations are mx.compile'd. An
@@ -104,18 +332,9 @@ class _MLXWrapperRegistry:
         for name in mlx_activation_function_names(activations):
             self.wrap_attr(activations, name, backend, name)
             self.wrap_attr(nn, name, backend, name)
-        class_op_names = {
-            "Linear": "linear",
-            "Conv2d": "conv2d",
-            "LayerNorm": "layernorm",
-            "RMSNorm": "rmsnorm",
-            "BatchNorm": "batchnorm",
-            "GroupNorm": "groupnorm",
-            "Dropout": "dropout",
-            "Embedding": "embedding",
-            "MultiHeadAttention": "multiheadattention",
-        }
-        layer_ops = [(getattr(nn, cls_name, None), op) for cls_name, op in class_op_names.items()]
+        layer_ops = [
+            (getattr(nn, cls_name, None), op) for cls_name, op in MLX_LAYER_CLASS_OPS.items()
+        ]
         # The activation layers (nn.ReLU, ...) reach their function through a
         # closure MLX binds at class creation, so no attribute wrapper sees the
         # call: wrap the layer itself, like nn.Linear.
@@ -204,13 +423,17 @@ class _MLXWrapperRegistry:
             Optional mapping from wrapped module instance id to primary address.
         """
 
-        original = getattr(owner, name, None)
+        original_attribute = inspect.getattr_static(owner, name, None)
+        as_property = isinstance(original_attribute, property)
+        original = original_attribute.fget if as_property else original_attribute
         if original is None or not callable(original):
             return
         key = (owner, name)
         if key in self._originals:
             return
-        self._originals[key] = original
+        # The registry keeps the attribute as it was (the property object for
+        # ``T``), so ``unwrap`` restores it with one setattr.
+        self._originals[key] = original_attribute
 
         @functools.wraps(
             original,
@@ -242,23 +465,26 @@ class _MLXWrapperRegistry:
                     return original(*args, **kwargs)
                 if getattr(trace, "_mlx_capture_depth", 0) > 0:
                     return original(*args, **kwargs)
+                # The guard stays up through emit as well: intervention
+                # appliers and payload bookkeeping run array arithmetic that
+                # the wrapped operator dunders would otherwise log as ops.
                 trace._mlx_capture_depth = getattr(trace, "_mlx_capture_depth", 0) + 1
                 try:
                     output = original(*args, **kwargs)
+                    module_stack = tuple(getattr(trace, "_mlx_module_stack", ()))
+                    emit = getattr(backend, "emit_mlx_operation")
+                    # emit returns the effective output: intervention-replaced
+                    # leaves must be what the model consumes downstream.
+                    return emit(
+                        trace, op_name, original, args, kwargs, output, module_stack=module_stack
+                    )
                 finally:
                     trace._mlx_capture_depth -= 1
-                module_stack = tuple(getattr(trace, "_mlx_module_stack", ()))
-                emit = getattr(backend, "emit_mlx_operation")
-                # emit returns the effective output: intervention-replaced
-                # leaves must be what the model consumes downstream.
-                return emit(
-                    trace, op_name, original, args, kwargs, output, module_stack=module_stack
-                )
             finally:
                 if frame is not None:
                     getattr(trace, "_mlx_module_stack").pop()
 
-        setattr(owner, name, wrapper)
+        setattr(owner, name, property(wrapper) if as_property else wrapper)
 
 
 @contextmanager
@@ -502,4 +728,15 @@ def _import_mlx() -> tuple[object, object]:
     return mx, nn
 
 
-__all__ = ["is_mlx_wrapped", "unwrap_mlx", "wrap_mlx"]
+__all__ = [
+    "MLX_ARRAY_DUNDER_OPS",
+    "MLX_ARRAY_METHOD_OPS",
+    "MLX_ARRAY_PROPERTY_OPS",
+    "MLX_CORE_FUNCTION_OPS",
+    "MLX_FAST_FUNCTION_OPS",
+    "MLX_LAYER_CLASS_OPS",
+    "MLX_LITERAL_PRODUCER_OPS",
+    "is_mlx_wrapped",
+    "unwrap_mlx",
+    "wrap_mlx",
+]

@@ -711,10 +711,11 @@ class PaddlePayloadCodec:
             )
             place = _resolve_paddle_place(paddle, safe_device)
         try:
+            host = _contiguous_keeping_shape(array)
             if logical_dtype == "paddle.bfloat16":
-                value = paddle.to_tensor(np.ascontiguousarray(array), place=place)
+                value = paddle.to_tensor(host, place=place)
                 return value if str(value.dtype) == logical_dtype else value.view(dtype)
-            return paddle.to_tensor(np.ascontiguousarray(array), dtype=dtype, place=place)
+            return paddle.to_tensor(host, dtype=dtype, place=place)
         except (TypeError, ValueError, RuntimeError) as exc:
             raise BackendRuntimeCompatibilityError(
                 f"Portable Paddle payload could not be materialized: {exc}"
@@ -840,13 +841,11 @@ class TFPayloadCodec:
 
         try:
             with _tf_device_context(tf, map_location):
+                host = _contiguous_keeping_shape(array)
                 if logical_dtype == "tf.bfloat16":
-                    transport = tf.convert_to_tensor(
-                        np.ascontiguousarray(array),
-                        dtype=tf.uint16,
-                    )
+                    transport = tf.convert_to_tensor(host, dtype=tf.uint16)
                     return tf.bitcast(transport, dtype)
-                return tf.convert_to_tensor(np.ascontiguousarray(array), dtype=dtype)
+                return tf.convert_to_tensor(host, dtype=dtype)
         except (TypeError, ValueError, RuntimeError) as exc:
             raise BackendRuntimeCompatibilityError(
                 f"Portable TensorFlow payload could not be materialized: {exc}"
@@ -1146,6 +1145,17 @@ def _restore_jax_scalar_semantics(jax_module: Any, value: Any, entry: Any) -> An
                 "Portable JAX payload could not restore committed=True."
             ) from exc
     return value
+
+
+def _contiguous_keeping_shape(array: np.ndarray) -> np.ndarray:
+    """Return a C-contiguous host copy with the array's own shape.
+
+    ``np.ascontiguousarray`` promotes a 0-d array to shape ``(1,)`` by its own
+    contract, so a saved scalar op output came back one-dimensional through the
+    Paddle and TensorFlow materializers.
+    """
+
+    return np.ascontiguousarray(array).reshape(array.shape)
 
 
 def _transport_tensor_to_numpy(tensor: torch.Tensor, entry: Any) -> np.ndarray:

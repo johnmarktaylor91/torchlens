@@ -1090,6 +1090,54 @@ def _tf_validate_trace(*args: Any, **kwargs: Any) -> Any:
     return TFBackend().validate_trace(*args, **kwargs)
 
 
+def _torch_protocol() -> Any:
+    """Build the torch ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.torch import protocol
+
+    return protocol()
+
+
+def _mlx_protocol() -> Any:
+    """Build the mlx ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.mlx import protocol
+
+    return protocol()
+
+
+def _jax_protocol() -> Any:
+    """Build the jax ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.jax import protocol
+
+    return protocol()
+
+
+def _tinygrad_protocol() -> Any:
+    """Build the tinygrad ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.tinygrad import protocol
+
+    return protocol()
+
+
+def _paddle_protocol() -> Any:
+    """Build the paddle ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.paddle import protocol
+
+    return protocol()
+
+
+def _tf_protocol() -> Any:
+    """Build the tf ``BackendProtocol`` object (lazy; imports no framework)."""
+
+    from ._protocols.tf import protocol
+
+    return protocol()
+
+
 def register_default_backend_specs() -> None:
     """Register built-in backend specs.
 
@@ -1137,6 +1185,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(1, 2),
                 runtime_name="torch",
             ),
+            protocol=_torch_protocol,
+            maturity="stable",
             priority=0,
         ),
         replace=True,
@@ -1171,6 +1221,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="mlx",
             ),
+            protocol=_mlx_protocol,
+            maturity="preview",
             priority=10,
         ),
         replace=True,
@@ -1202,6 +1254,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="jax",
             ),
+            protocol=_jax_protocol,
+            maturity="preview",
             priority=20,
         ),
         replace=True,
@@ -1233,6 +1287,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="tinygrad",
             ),
+            protocol=_tinygrad_protocol,
+            maturity="preview",
             priority=30,
         ),
         replace=True,
@@ -1268,6 +1324,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="paddle",
             ),
+            protocol=_paddle_protocol,
+            maturity="preview",
             priority=40,
             coercible=False,
         ),
@@ -1304,6 +1362,8 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="tf",
             ),
+            protocol=_tf_protocol,
+            maturity="preview",
             priority=50,
             coercible=False,
         ),

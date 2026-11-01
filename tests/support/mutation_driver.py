@@ -137,6 +137,12 @@ CORE_CHECK_EXCLUSIONS: dict[str, str] = {
         "enrolled as X01: its dangerous direction is exempt-everything "
         "(return True), not always-validated"
     ),
+    "_validate_saved_outs_run": (
+        "the whole-run body of the public validate_saved_outs entry, split out "
+        "only so the entry's finally clears per-run scratch and loaded callables; "
+        "it adds no verdict logic of its own (its verdict is composed of the "
+        "enrolled comparators and checkers)"
+    ),
 }
 
 

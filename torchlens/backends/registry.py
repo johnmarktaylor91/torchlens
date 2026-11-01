@@ -8,6 +8,7 @@ from typing import Any, Final, Literal, TypeAlias, cast
 
 from ..errors._base import ConfigurationError
 from ._backend_names import TORCH_BACKEND_NAME as TORCH_BACKEND_NAME
+from ._backend_protocol import MATURITIES, protocol_problems
 from ._protocol import CaptureBackend
 
 BackendName: TypeAlias = Literal["torch", "mlx", "jax", "tinygrad", "paddle", "tf", "fake"] | str
@@ -152,12 +153,17 @@ class BackendRegistryError(ConfigurationError, ValueError):
         message_text = message.rstrip()
         if not message_text.endswith((".", "!", "?", ":", ";")):
             message_text = f"{message_text}."
+        resolved_code = code or type(self).code
         super().__init__(
             f"{message_text} Remedy: {resolved_remedy.rstrip().rstrip('.')}.",
-            code=code or type(self).code,
+            code=resolved_code,
             remedy=resolved_remedy,
             **cast(dict[str, Any], context),
         )
+        # ``exc.code`` is the refusal contract (one code per cause, declared at
+        # the raise site); the class attribute is only the default. Keep the
+        # instance attribute and ``fields["code"]`` saying the same thing.
+        self.code = resolved_code
 
     def __reduce__(
         self,
@@ -361,6 +367,13 @@ class BackendSpec:
         :func:`require_capability_implementation`, never through the boolean
         alone, so a flag flip without a registered implementation refuses
         typed instead of silently admitting unimplemented behavior.
+    protocol:
+        Lazy factory for this backend's ``BackendProtocol`` object (the one
+        protocol every backend fills; ``_backend_protocol.py``). Validated at
+        registration like ``capture_backend``.
+    maturity:
+        Launch label, ``"preview"`` or ``"stable"``; only a recorded
+        maintainer decision changes it.
     """
 
     name: BackendName
@@ -379,6 +392,8 @@ class BackendSpec:
     capability_implementations: dict[str, Callable[[], object]] | None = field(
         default=None, compare=False
     )
+    protocol: Callable[[], Any] | None = None
+    maturity: str = "preview"
 
 
 _REGISTRY: dict[str, BackendSpec] = {}
@@ -453,6 +468,56 @@ def _validate_capture_backend_factory(spec: BackendSpec) -> None:
         raise TypeError(
             f"Backend {spec.name!r} capture_backend is missing CaptureBackend "
             f"attribute(s): {names}."
+        )
+
+
+def _validate_protocol_factory(spec: BackendSpec) -> None:
+    """Validate a supplied ``BackendProtocol`` factory and the maturity label.
+
+    Parameters
+    ----------
+    spec:
+        Backend spec being registered.
+
+    Returns
+    -------
+    None
+        Returns when the label is valid and the protocol object (if any)
+        satisfies every member of the protocol.
+
+    Raises
+    ------
+    BackendRegistryError
+        ``backend_maturity_invalid`` for a label outside the closed set.
+    TypeError
+        When the protocol object misses members or contradicts the spec.
+    """
+
+    if spec.maturity not in MATURITIES:
+        raise BackendRegistryError(
+            f"Backend {spec.name!r} declares maturity {spec.maturity!r}; the labels are "
+            f"{sorted(MATURITIES)}",
+            code="backend_maturity_invalid",
+            remedy='register the spec with maturity "preview" or "stable"',
+        )
+    if spec.protocol is None:
+        return
+    try:
+        candidate = spec.protocol()
+    except ImportError as exc:
+        if str(spec.name) == "torch" and "partially initialized module" in str(exc):
+            return
+        raise
+    problems = protocol_problems(candidate, expected_name=str(spec.name))
+    if not problems and candidate.maturity != spec.maturity:
+        problems = (
+            f"protocol maturity {candidate.maturity!r} differs from the spec's {spec.maturity!r}",
+        )
+    if problems:
+        raise TypeError(
+            f"Backend {spec.name!r} protocol does not satisfy BackendProtocol: "
+            + "; ".join(problems)
+            + "."
         )
 
 
@@ -562,6 +627,7 @@ def register_backend_spec(spec: BackendSpec, *, replace: bool = False) -> None:
         if not replace and name in _REGISTRY:
             raise ValueError(f"Backend {name!r} is already registered.")
     _validate_capture_backend_factory(spec)
+    _validate_protocol_factory(spec)
     _validate_capability_implementations(spec)
     if replace:
         replaced_specs = {

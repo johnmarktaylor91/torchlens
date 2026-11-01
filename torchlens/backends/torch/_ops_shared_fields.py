@@ -36,7 +36,7 @@ from .aliasing import (
 )
 from .buffer_writes import resolve_registered_buffer_address, session_validated_buffer_address
 from .completeness_witness import internal_scalar_read
-from .sources import log_source_tensor
+from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import (
     _add_tensor_backward_hook,
 )
@@ -54,6 +54,7 @@ if TYPE_CHECKING:
         _build_param_fields,
         _check_if_tensor_arg,
         _extract_arg_tensors_and_params,
+        _function_registry_key,
         _record_label_version_snapshot,
         _unattributed_tensor_arg_positions,
     )
@@ -107,6 +108,8 @@ def _build_shared_fields_dict(
             buffer_address = resolve_registered_buffer_address(self, tensor)
         if buffer_address is not None:
             log_source_tensor(self, tensor, "buffer", buffer_address)
+        else:
+            log_closure_constant_if_known(self, tensor)
 
     # Separate tensor args (which define graph edges) from non-tensor args
     # (which become metadata and feed into equivalence_class hashing).
@@ -139,7 +142,12 @@ def _build_shared_fields_dict(
     else:
         fields_dict["args_template"] = None
         fields_dict["kwargs_template"] = None
-        fields_dict["func_id"] = None
+        # A capture that saves arguments is replay-ready; its portable function
+        # identity lets replay validation resolve the callable on a loaded
+        # bundle (``validation/_loaded_callables.py``), which carries no callables.
+        fields_dict["func_id"] = (
+            _function_registry_key(func, func_name) if self.save_arg_values else None
+        )
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
     fields_dict["multi_output_name"] = None

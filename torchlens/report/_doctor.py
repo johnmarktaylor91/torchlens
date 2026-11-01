@@ -61,7 +61,9 @@ class DoctorReport:
     torch_version:
         PyTorch version used for the inspection.
     checks:
-        Truth-table rows for the inspected model/input pair.
+        Truth-table rows: environment checks, one ``backend_scorecard:<name>``
+        row per registered backend (its shipped conformance record), then the
+        model/input findings when a model was supplied.
     """
 
     model_type: str | None
@@ -333,12 +335,15 @@ def doctor(model: nn.Module | None = None, inputs: Any = None) -> DoctorReport:
     Returns
     -------
     DoctorReport
-        Environment checks followed by model compatibility findings, if supplied.
+        Environment checks, the ``backend_scorecard:<name>`` rows, then model
+        compatibility findings, if a model was supplied.
     """
 
     from .._utils import _environment_checks
+    from ..backends._scorecard_rows import backend_scorecard_rows
 
     checks = tuple(_environment_row(row) for row in _environment_checks())
+    checks += backend_scorecard_rows()
     model_type = None
     if model is not None:
         from ..compat._report import _model_checks, _qualified_type_name

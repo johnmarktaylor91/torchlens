@@ -120,11 +120,13 @@ def build_capture_template(
         if _is_mlx_array(node):
             label = next(cursor, None)
             return node if label is None else REPLAY_SLOT
-        if isinstance(node, tuple):
+        # Exact container types only: an ``mlx.nn.Module`` is a dict subclass
+        # and must stay the module object (its ``__call__`` reads attributes).
+        if type(node) is tuple:
             return tuple(_slot(item) for item in node)
-        if isinstance(node, list):
+        if type(node) is list:
             return [_slot(item) for item in node]
-        if isinstance(node, dict):
+        if type(node) is dict:
             return {key: _slot(item) for key, item in node.items()}
         return node
 
@@ -246,8 +248,96 @@ PERTURBATION_PROVED = "proved"
 PERTURBATION_NO_PERTURBABLE_INPUT = "no_perturbable_input"
 PERTURBATION_UNPROVED = "unproved"
 
+#: Local cause -> reason code from ``VALIDATION_REASONS`` (SPEC 4.3), coded
+#: once. Every per-op decision and every count key reads from this table.
+MLX_VALIDATION_REASONS: dict[str, str] = {
+    "coverage": "replay_mismatch",
+    "parents_inconsistent": "replay_mismatch",
+    "arity": "replay_mismatch",
+    "value_mismatch": "replay_mismatch",
+    "payload_missing": "parent_payload_missing",
+    "replay_error": "no_replayable_function",
+    "intervention_applier_missing": "user_intervention_replacement",
+    "perturbation_unproved": "perturbation_insensitive",
+    "perturbation_gap": "perturbation_insensitive",
+    "constant_leaf": "constant_producer_leaf",
+    "literal_producer": "constant_producer_leaf",
+    "constant_parent": "constant_parent_payload",
+    "metadata_invariant": "replay_mismatch",
+    "nothing_replayed": "replay_mismatch",
+}
 
-def _perturbation_evidence(capture: MLXOpCapture, baseline: tuple[Any, ...]) -> str:
+
+@dataclass(frozen=True)
+class MLXValidationOutcome:
+    """What the replay oracle decided, op by op.
+
+    Parameters
+    ----------
+    replayed_count:
+        Ops replayed, compared equal and perturbation-proven.
+    failed_count:
+        Failed checks (coverage failures count one each).
+    perturbation_gaps:
+        Raw labels of replayed ops whose dependency could not be perturbation
+        proven (unverified, never a pass).
+    decisions:
+        One record per op or trace-level check with keys ``op_label``,
+        ``func_name``, ``phase``, ``decision``, ``reason`` and ``detail``.
+    exempted_reason_counts:
+        Provable exemptions by reason code (constant leaves only).
+    unverified_reason_counts:
+        Unverified decisions by reason code.
+    """
+
+    replayed_count: int
+    failed_count: int
+    perturbation_gaps: tuple[str, ...]
+    decisions: tuple[dict[str, Any], ...]
+    exempted_reason_counts: dict[str, int]
+    unverified_reason_counts: dict[str, int]
+
+
+@dataclass(frozen=True)
+class _DecisionSite:
+    """The op a validation decision is about.
+
+    Parameters
+    ----------
+    label
+        Raw op label (``"<trace>"`` for trace-wide decisions).
+    op_name
+        The op's ``func_name``; ``None`` for trace-wide decisions.
+    """
+
+    label: str
+    op_name: str | None
+
+
+def _decision(
+    site: _DecisionSite,
+    phase: str,
+    decision: str,
+    cause: str | None,
+    detail: str,
+) -> dict[str, Any]:
+    """Build one decision record for ``site`` with the reason code for ``cause``."""
+
+    return {
+        "op_label": site.label,
+        "func_name": site.op_name,
+        "phase": phase,
+        "decision": decision,
+        "reason": None if cause is None else MLX_VALIDATION_REASONS[cause],
+        "detail": detail,
+    }
+
+
+def _perturbation_evidence(
+    capture: MLXOpCapture,
+    baseline: tuple[Any, ...],
+    constant_labels: frozenset[str] = frozenset(),
+) -> tuple[str, bool]:
     """Classify the parent-perturbation evidence for one replayed call.
 
     Both positional AND keyword tensor arguments are scanned; the first array
@@ -262,22 +352,36 @@ def _perturbation_evidence(capture: MLXOpCapture, baseline: tuple[Any, ...]) -> 
     baseline:
         Replayed baseline output arrays.
 
+    constant_labels:
+        Raw labels of constant source ops. An argument whose every leaf is a
+        constant is perturbed only when no other array argument exists
+        (SPEC section 2 rule 3: the consuming op is perturbed on its
+        non-constant parents first).
+
     Returns
     -------
-    str
-        ``PERTURBATION_PROVED`` when some candidate changes the output,
-        ``PERTURBATION_NO_PERTURBABLE_INPUT`` when the call has no tensor
-        argument to perturb (positional or keyword), and
-        ``PERTURBATION_UNPROVED`` when every candidate left the output
-        unchanged.
+    tuple[str, bool]
+        The evidence (``PERTURBATION_PROVED`` when some candidate changes the
+        output, ``PERTURBATION_NO_PERTURBABLE_INPUT`` when the call has no
+        tensor argument to perturb, ``PERTURBATION_UNPROVED`` when every
+        candidate left the output unchanged) and whether the perturbed
+        argument was a constant parent.
     """
 
     import mlx.core as mx
 
-    arg_position: int | None = next(
-        (index for index, value in enumerate(capture.args) if _is_mlx_array(value)),
-        None,
+    def _all_constant(labels: tuple[str | None, ...]) -> bool:
+        """Whether every leaf label in ``labels`` names a constant op."""
+
+        return bool(labels) and all(label in constant_labels for label in labels)
+
+    positions = [index for index, value in enumerate(capture.args) if _is_mlx_array(value)]
+    positions.sort(
+        key=lambda index: _all_constant(
+            capture.arg_leaf_labels[index] if index < len(capture.arg_leaf_labels) else ()
+        )
     )
+    arg_position: int | None = positions[0] if positions else None
     kwarg_key = ""
     if arg_position is None:
         found_key = next(
@@ -285,9 +389,18 @@ def _perturbation_evidence(capture: MLXOpCapture, baseline: tuple[Any, ...]) -> 
             None,
         )
         if found_key is None:
-            return PERTURBATION_NO_PERTURBABLE_INPUT
+            return PERTURBATION_NO_PERTURBABLE_INPUT, False
         kwarg_key = found_key
-    original = capture.args[arg_position] if arg_position is not None else capture.kwargs[kwarg_key]
+    if arg_position is not None:
+        original = capture.args[arg_position]
+        perturbed_constant = _all_constant(
+            capture.arg_leaf_labels[arg_position]
+            if arg_position < len(capture.arg_leaf_labels)
+            else ()
+        )
+    else:
+        original = capture.kwargs[kwarg_key]
+        perturbed_constant = _all_constant(capture.kwarg_leaf_labels.get(kwarg_key, ()))
     for candidate in _perturb_candidates(original):
         try:
             if arg_position is not None:
@@ -305,13 +418,13 @@ def _perturbation_evidence(capture: MLXOpCapture, baseline: tuple[Any, ...]) -> 
         except Exception:
             continue
         if len(perturbed) != len(baseline):
-            return PERTURBATION_PROVED
+            return PERTURBATION_PROVED, perturbed_constant
         if any(
             not _payloads_close(p_out, b_out)
             for p_out, b_out in zip(perturbed, baseline, strict=True)
         ):
-            return PERTURBATION_PROVED
-    return PERTURBATION_UNPROVED
+            return PERTURBATION_PROVED, perturbed_constant
+    return PERTURBATION_UNPROVED, perturbed_constant
 
 
 def _saved_payload(trace: Any, ops_by_label: dict[str, Any], label_raw: str) -> Any:
@@ -460,11 +573,13 @@ def _reconstruct_value(
                     raise ValueError("MLX replay template slot has no recorded parent label.")
                 return node
             return _saved_payload(trace, ops_by_label, label)
-        if isinstance(node, tuple):
+        # Exact container types only (see ``build_capture_template``): a
+        # module instance replays as itself, never as a plain dict.
+        if type(node) is tuple:
             return tuple(_rebuild(item) for item in node)
-        if isinstance(node, list):
+        if type(node) is list:
             return [_rebuild(item) for item in node]
-        if isinstance(node, dict):
+        if type(node) is dict:
             return {key: _rebuild(item) for key, item in node.items()}
         return node
 
@@ -579,14 +694,7 @@ def _coverage_failure_count(trace: Any, captures: tuple[MLXOpCapture, ...]) -> i
 
 
 def validate_mlx_captures(trace: Any) -> tuple[int, int, tuple[str, ...]]:
-    """Replay every captured MLX call against the trace's saved payloads.
-
-    Coverage is fail-closed: the emit-time ``_mlx_replay_inventory`` is the
-    denominator, so partial deletion of replay records fails instead of
-    shrinking the evidence set. Replay arguments are reconstructed from the
-    saved payloads of each op's DECLARED parents, and the declared parent set
-    is cross-checked against the per-leaf labels recorded at emit time, so
-    wrong-parent attribution fails either structurally or numerically.
+    """Replay every captured MLX call; the count-only view of the oracle.
 
     Parameters
     ----------
@@ -596,82 +704,283 @@ def validate_mlx_captures(trace: Any) -> tuple[int, int, tuple[str, ...]]:
     Returns
     -------
     tuple[int, int, tuple[str, ...]]
-        ``(replayed_count, failed_count, perturbation_gap_labels)`` over the
-        captured op set. Gap labels name replayed calls whose parent
-        dependency could not be perturbation-proven (no tensor argument to
-        perturb); they replayed numerically but must surface as UNVERIFIED
-        evidence, never as a silent pass.
+        ``(replayed_count, failed_count, perturbation_gap_labels)`` as
+        :func:`validate_mlx_captures_detailed` decided them.
+    """
+
+    outcome = validate_mlx_captures_detailed(trace)
+    return outcome.replayed_count, outcome.failed_count, outcome.perturbation_gaps
+
+
+def _constant_leaf_decision(
+    trace: Any, ops_by_label: dict[str, Any], capture: MLXOpCapture
+) -> dict[str, Any]:
+    """Decide a closure-constant leaf: its saved payload must exist.
+
+    A constant has no function to replay and nothing upstream to perturb;
+    the narrow carve-out (FORKS F-L) exempts exactly that, and only when the
+    payload consumers replay from is saved. A constant without a payload is a
+    failed check, never an exemption.
+    """
+
+    label = capture.labels_raw[0]
+    try:
+        _saved_payload(trace, ops_by_label, label)
+    except ValueError as exc:
+        return _decision(
+            _DecisionSite(label, "constant"), "leaf", "failed", "payload_missing", str(exc)
+        )
+    return _decision(
+        _DecisionSite(label, "constant"),
+        "leaf",
+        "exempted",
+        "constant_leaf",
+        "closure constant: saved payload is the leaf consumers replay from",
+    )
+
+
+def _replay_one(
+    trace: Any,
+    ops_by_label: dict[str, Any],
+    capture: MLXOpCapture,
+    constant_labels: frozenset[str],
+) -> dict[str, Any]:
+    """Replay, compare and perturbation-check one captured call.
+
+    Returns
+    -------
+    dict[str, Any]
+        The decision record (``decision`` is ``passed``, ``failed``,
+        ``exempted`` for a literal producer, or ``unverified`` for a
+        perturbation gap on a non-literal call).
     """
 
     import mlx.core as mx
 
+    label = capture.labels_raw[0] if capture.labels_raw else "<unlabeled>"
+    name = capture.op_name
+    if not _declared_parents_consistent(trace, ops_by_label, capture):
+        return _decision(
+            _DecisionSite(label, name),
+            "replay",
+            "failed",
+            "parents_inconsistent",
+            "declared parents differ from the recorded argument leaves",
+        )
+    replay_args, replay_kwargs = _reconstruct_call(trace, ops_by_label, capture)
+    replayed = _iter_output_arrays(capture.func(*replay_args, **replay_kwargs))
+    mx.eval(*replayed)
+    if len(replayed) != len(capture.labels_raw) or not replayed:
+        return _decision(
+            _DecisionSite(label, name),
+            "replay",
+            "failed",
+            "arity",
+            f"replay produced {len(replayed)} arrays for {len(capture.labels_raw)} labels",
+        )
+    final = list(replayed)
+    if capture.interventions:
+        # Genuine-intervention carve-out, scoped by the emit-time inventory
+        # fingerprint (coverage): replay recomputes the RAW producer output,
+        # re-applies the declared hook, and the saved payload must equal
+        # hook(raw). A record whose declared interventions lack a matching
+        # applier fails closed; a plain capture never reaches this branch.
+        declared = dict(capture.interventions)
+        appliers = dict(capture.appliers)
+        if set(declared) != set(appliers) or any(
+            index < 0 or index >= len(final) for index in declared
+        ):
+            return _decision(
+                _DecisionSite(label, name),
+                "replay",
+                "failed",
+                "intervention_applier_missing",
+                "declared interventions have no matching applier",
+            )
+        for index, apply in appliers.items():
+            final[index] = apply(final[index])
+        mx.eval(*final)
+    expected = tuple(_saved_payload(trace, ops_by_label, lab) for lab in capture.labels_raw)
+    mx.eval(*expected)
+    # Fail CLOSED on an arity mismatch: pairing positionally without this
+    # check would compare only the common prefix.
+    if len(final) != len(expected):
+        return _decision(
+            _DecisionSite(label, name), "replay", "failed", "arity", "output count drifted"
+        )
+    mismatched = [
+        lab
+        for lab, f_out, e_out in zip(capture.labels_raw, final, expected, strict=True)
+        if not _payloads_close(f_out, e_out)
+    ]
+    if mismatched:
+        return _decision(
+            _DecisionSite(mismatched[0], name),
+            "replay",
+            "failed",
+            "value_mismatch",
+            "replayed output differs from the saved payload",
+        )
+    perturb_capture = MLXOpCapture(
+        labels_raw=capture.labels_raw,
+        op_name=name,
+        func=capture.func,
+        args=replay_args,
+        kwargs=replay_kwargs,
+        output=capture.output,
+        arg_leaf_labels=capture.arg_leaf_labels,
+        kwarg_leaf_labels=capture.kwarg_leaf_labels,
+    )
+    evidence, perturbed_constant = _perturbation_evidence(
+        perturb_capture, replayed, constant_labels
+    )
+    return _perturbation_decision(_DecisionSite(label, name), evidence, perturbed_constant)
+
+
+def _perturbation_decision(
+    site: _DecisionSite, evidence: str, perturbed_constant: bool
+) -> dict[str, Any]:
+    """The perturbation-step decision for a replayed-equal call (FORKS F-L for literals)."""
+
+    name = site.op_name
+    if evidence == PERTURBATION_UNPROVED:
+        return _decision(
+            site,
+            "perturbation",
+            "failed",
+            "perturbation_unproved",
+            "every perturbed parent left the output unchanged",
+        )
+    if evidence == PERTURBATION_NO_PERTURBABLE_INPUT:
+        from .wrappers import MLX_LITERAL_PRODUCER_OPS
+
+        if name in MLX_LITERAL_PRODUCER_OPS:
+            # The one by-design case: a literal producer was re-executed from
+            # its saved literal arguments and compared equal; it has no
+            # tensor parent to perturb (FORKS F-L).
+            return _decision(
+                site,
+                "perturbation",
+                "exempted",
+                "literal_producer",
+                "literal producer replayed equal; no tensor parent to perturb",
+            )
+        return _decision(
+            site,
+            "perturbation",
+            "unverified",
+            "perturbation_gap",
+            "no tensor argument to perturb",
+        )
+    return _decision(
+        site,
+        "perturbation",
+        "passed",
+        "constant_parent" if perturbed_constant else None,
+        "replayed equal; dependency proven"
+        + (" by perturbing a constant parent" if perturbed_constant else ""),
+    )
+
+
+def validate_mlx_captures_detailed(trace: Any) -> MLXValidationOutcome:
+    """Replay every captured MLX call against the trace's saved payloads.
+
+    Coverage is fail-closed: the emit-time ``_mlx_replay_inventory`` is the
+    denominator, so partial deletion of replay records fails instead of
+    shrinking the evidence set. Replay arguments are reconstructed from the
+    saved payloads of each op's DECLARED parents (closure constants included),
+    and the declared parent set is cross-checked against the per-leaf labels
+    recorded at emit time, so wrong-parent attribution fails either
+    structurally or numerically. Constant leaves are exempted only with a
+    saved payload; a literal producer is replayed and compared before its
+    perturbation step is exempted; every other gap is unverified or failed.
+
+    Parameters
+    ----------
+    trace:
+        Live MLX trace carrying ``_mlx_op_captures`` replay material.
+
+    Returns
+    -------
+    MLXValidationOutcome
+        Counts, per-op decisions and reason-coded tallies.
+    """
+
     ops_by_label = _ops_by_label(trace)
     captures = tuple(getattr(trace, "_mlx_op_captures", ()))
+    constant_labels = frozenset(
+        label
+        for name, labels, _args, _kwargs, _fires in tuple(
+            getattr(trace, "_mlx_replay_inventory", None) or ()
+        )
+        if name == "constant"
+        for label in labels
+    )
+    decisions: list[dict[str, Any]] = []
     replayed_count = 0
     failed_count = _coverage_failure_count(trace, captures)
+    if failed_count:
+        decisions.append(
+            _decision(
+                _DecisionSite("<trace>", None),
+                "coverage",
+                "failed",
+                "coverage",
+                f"{failed_count} replay-inventory coverage failure(s)",
+            )
+        )
+    exempted: dict[str, int] = {}
+    unverified: dict[str, int] = {}
     perturbation_gaps: list[str] = []
     for capture in captures:
-        try:
-            if not _declared_parents_consistent(trace, ops_by_label, capture):
-                failed_count += 1
-                continue
-            replay_args, replay_kwargs = _reconstruct_call(trace, ops_by_label, capture)
-            replayed = _iter_output_arrays(capture.func(*replay_args, **replay_kwargs))
-            mx.eval(*replayed)
-            if len(replayed) != len(capture.labels_raw) or not replayed:
-                failed_count += 1
-                continue
-            final = list(replayed)
-            if capture.interventions:
-                # Genuine-intervention carve-out, scoped by the emit-time
-                # inventory fingerprint (coverage above): replay recomputes
-                # the RAW producer output, re-applies the declared hook, and
-                # the saved payload must equal hook(raw). A record whose
-                # declared interventions lack a matching applier fails
-                # closed; a plain capture never reaches this branch.
-                declared = dict(capture.interventions)
-                appliers = dict(capture.appliers)
-                if set(declared) != set(appliers) or any(
-                    index < 0 or index >= len(final) for index in declared
-                ):
-                    failed_count += 1
-                    continue
-                for index, apply in appliers.items():
-                    final[index] = apply(final[index])
-                mx.eval(*final)
-            expected = tuple(
-                _saved_payload(trace, ops_by_label, label) for label in capture.labels_raw
-            )
-            mx.eval(*expected)
-            # Fail CLOSED on an arity mismatch. The replay must produce exactly one
-            # output per captured label; pairing them positionally without this
-            # check would compare only the common prefix, so a replay that dropped
-            # outputs would validate on the surviving ones and report PASS.
-            if len(final) != len(expected):
-                failed_count += 1
-                continue
-            if any(
-                not _payloads_close(f_out, e_out)
-                for f_out, e_out in zip(final, expected, strict=True)
-            ):
-                failed_count += 1
-                continue
-            perturb_capture = MLXOpCapture(
-                labels_raw=capture.labels_raw,
-                op_name=capture.op_name,
-                func=capture.func,
-                args=replay_args,
-                kwargs=replay_kwargs,
-                output=capture.output,
-            )
-            evidence = _perturbation_evidence(perturb_capture, replayed)
-            if evidence == PERTURBATION_UNPROVED:
-                failed_count += 1
-                continue
-            if evidence == PERTURBATION_NO_PERTURBABLE_INPUT:
-                perturbation_gaps.extend(capture.labels_raw)
-            replayed_count += 1
-        except Exception:
+        if capture.func is None and capture.op_name == "constant":
+            record = _constant_leaf_decision(trace, ops_by_label, capture)
+        else:
+            try:
+                record = _replay_one(trace, ops_by_label, capture, constant_labels)
+            except ValueError as exc:
+                cause = "payload_missing" if "no saved payload" in str(exc) else "replay_error"
+                record = _decision(
+                    _DecisionSite(
+                        capture.labels_raw[0] if capture.labels_raw else "<unlabeled>",
+                        capture.op_name,
+                    ),
+                    "replay",
+                    "failed",
+                    cause,
+                    str(exc),
+                )
+            except Exception as exc:  # noqa: BLE001 - a raising replay is a failed check
+                record = _decision(
+                    _DecisionSite(
+                        capture.labels_raw[0] if capture.labels_raw else "<unlabeled>",
+                        capture.op_name,
+                    ),
+                    "replay",
+                    "failed",
+                    "replay_error",
+                    f"{type(exc).__name__}: {exc}",
+                )
+        decisions.append(record)
+        verdict = record["decision"]
+        reason = record["reason"]
+        if verdict == "failed":
             failed_count += 1
-    trace._mlx_perturbation_gaps = tuple(perturbation_gaps)
-    return replayed_count, failed_count, tuple(perturbation_gaps)
+        elif verdict == "exempted":
+            exempted[reason] = exempted.get(reason, 0) + 1
+            if record["phase"] == "perturbation":
+                replayed_count += 1
+        elif verdict == "unverified":
+            unverified[reason] = unverified.get(reason, 0) + 1
+            perturbation_gaps.extend(capture.labels_raw)
+            replayed_count += 1
+        else:
+            replayed_count += 1
+    return MLXValidationOutcome(
+        replayed_count=replayed_count,
+        failed_count=failed_count,
+        perturbation_gaps=tuple(perturbation_gaps),
+        decisions=tuple(decisions),
+        exempted_reason_counts=exempted,
+        unverified_reason_counts=unverified,
+    )

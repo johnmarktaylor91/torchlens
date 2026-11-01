@@ -2295,6 +2295,25 @@ def _trace_option_explicit(option_name: str, public_trace_kwargs: dict[str, Any]
     return False
 
 
+#: Filtered trace options that are a capability flag's entry (SPEC 1.3: one code per
+#: cause): refusing one raises that flag's contracted code. Every other filtered option
+#: refuses with ``trace_option_unsupported``.
+_TRACE_OPTION_CAPABILITY_FLAGS: dict[str, str] = {
+    "grad_options": "intermediate_derived_grads",
+}
+
+
+def _trace_option_refusal_code(option_name: str) -> str:
+    """The refusal code for an explicit trace option the resolved backend lacks."""
+
+    flag = _TRACE_OPTION_CAPABILITY_FLAGS.get(option_name)
+    if flag is None:
+        return "trace_option_unsupported"
+    from .backends._backend_protocol import refusal_code_for_capability
+
+    return refusal_code_for_capability(flag)
+
+
 def _unsupported_trace_option_message(option_name: str, backend_name: str) -> str:
     """Return an actionable unsupported-option message.
 
@@ -2374,7 +2393,10 @@ def _filter_trace_kwargs_for_backend(
             continue
         if _trace_option_explicit(option_name, public_trace_kwargs):
             raise BackendUnsupportedError(
-                _unsupported_trace_option_message(option_name, backend_name)
+                _unsupported_trace_option_message(option_name, backend_name),
+                code=_trace_option_refusal_code(option_name),
+                backend=backend_name,
+                option=option_name,
             )
         public_trace_kwargs.pop(option_name, None)
 
@@ -2427,12 +2449,17 @@ def _enforce_capability_option_gates(
         ):
             requested = _capability_option_requested(getattr(capture_value, option_name))
         if requested:
+            from .backends._backend_protocol import refusal_code_for_capability
+
             raise BackendUnsupportedError(
                 f"backend {str(resolved_spec.name)!r} declares capability "
                 f"{flag}=False, so explicit {option_name} is refused instead of "
                 "silently ignored or run unsupported. Use a backend whose "
                 f"registered capability table declares {flag}=True (e.g. "
-                "backend='torch')."
+                "backend='torch').",
+                code=refusal_code_for_capability(flag),
+                backend=str(resolved_spec.name),
+                option=option_name,
             )
 
 
@@ -2747,10 +2774,15 @@ def trace(
         if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
             raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
         if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
+            refused_option = (
+                "jax_static_argnums" if jax_static_argnums is not MISSING else ("grad_options")
+            )
             raise BackendUnsupportedError(
                 "jax_static_argnums is only supported with backend='jax'; grad_options is "
                 "only supported with backend='jax', backend='mlx', backend='tinygrad', "
-                "backend='paddle', or backend='tf'."
+                "backend='paddle', or backend='tf'.",
+                code=_trace_option_refusal_code(refused_option),
+                option=refused_option,
             )
         explicit_backend_spec = None
         if backend is not None:

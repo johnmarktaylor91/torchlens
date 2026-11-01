@@ -140,6 +140,17 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
             ),
         ),
         EnvFlagSpec(
+            name="TORCHLENS_CONFORMANCE_ECOSYSTEM",
+            kind="enum",
+            reader="torchlens.conformance._rosters",
+            description=(
+                "Enables the pretrained ecosystem rows of the conformance "
+                "rosters, which download weights; '1' runs them, unset (the "
+                "default) leaves them out of the scorecard."
+            ),
+            values=("", "1"),
+        ),
+        EnvFlagSpec(
             name="TORCHLENS_DETERMINISTIC",
             kind="bool",
             reader="torchlens._visualization.collapse_estimator",
