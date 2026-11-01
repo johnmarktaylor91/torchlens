@@ -127,7 +127,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "link_format_invalid",
         "max_pairs_invalid",
         "metric_name_invalid",
-        "metric_shape_mismatch",
         "metric_tensor_type_invalid",
         "metric_type_invalid",
         "module_call_ambiguous",

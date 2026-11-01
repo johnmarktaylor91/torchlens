@@ -103,4 +103,4 @@ def test_bundle_draw_refuses_an_unknown_graph_typed() -> None:
     bundle = _pair()
     with pytest.raises(InvalidArgumentError) as excinfo:
         bundle.draw(graph="sideways", open_viewer=False)
-    assert excinfo.value.code == "bundle_draw_graph_invalid"
+    assert excinfo.value.fields["code"] == "bundle_draw_graph_invalid"
