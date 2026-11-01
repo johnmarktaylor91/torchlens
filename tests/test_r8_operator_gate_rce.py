@@ -15,7 +15,7 @@ Two defense-in-depth tripwire gaps in the sparse-runnable untrusted-load path:
   comparison / bitwise / index operators are admitted, default-denying the rest of
   ``operator`` by construction.
 
-* LOW -- :func:`torchlens._runnable_execution._decode_literal` admitted ANY
+* LOW -- :func:`torchlens._runnable.execution._decode_literal` admitted ANY
   non-callable ``torch`` attribute for a ``LiteralTorchSymbol``, including whole
   submodules (``torch.serialization`` / ``torch.os``). The fix tightens it to a
   POSITIVE allowlist of the torch symbolic constant types a forward op legitimately
@@ -42,7 +42,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import LiteralTorchSymbol, PathFaithfulness
-from torchlens._runnable_verification import _decode_literal
+from torchlens._runnable.verification import _decode_literal
 from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.errors.runnable import RunPreconditionError
 from torchlens.intervention.errors import UntrustedCallableError

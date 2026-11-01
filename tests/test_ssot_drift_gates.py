@@ -111,9 +111,10 @@ class TestSecurityDriftGateIsRedCapable:
 def test_runnable_wire_vocabulary_uses_one_authority_per_concept() -> None:
     """Writers and readers alias the same prefix and closed-vocabulary objects."""
 
-    from torchlens import _input_walk, _runnable_execution, _runnable_state
+    from torchlens import _input_walk
     from torchlens._io import runnable_load
     from torchlens._ir import container
+    from torchlens._runnable import execution as _runnable_execution, state as _runnable_state
     from torchlens._utils import _callable_safety
     from torchlens.backends.torch import ops
 

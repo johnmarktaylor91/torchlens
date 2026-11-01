@@ -3570,7 +3570,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_runnable.py",
+  "file": "torchlens/_runnable/__init__.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -3578,7 +3578,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_runnable.py",
+  "file": "torchlens/_runnable/__init__.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -3586,7 +3586,7 @@
  {
   "ambiguous": true,
   "field": "output",
-  "file": "torchlens/_runnable.py",
+  "file": "torchlens/_runnable/__init__.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -3594,7 +3594,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_runnable_attestation.py",
+  "file": "torchlens/_runnable/attestation.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -3602,7 +3602,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_runnable_call_outputs.py",
+  "file": "torchlens/_runnable/call_outputs.py",
   "has_default": false,
   "sites": 4,
   "via_getattr": false
@@ -3610,7 +3610,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_runnable_input_sites.py",
+  "file": "torchlens/_runnable/input_sites.py",
   "has_default": false,
   "sites": 4,
   "via_getattr": false
@@ -3618,7 +3618,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_runnable_output_contracts.py",
+  "file": "torchlens/_runnable/output_contracts.py",
   "has_default": false,
   "sites": 10,
   "via_getattr": false
@@ -3626,7 +3626,7 @@
  {
   "ambiguous": true,
   "field": "output",
-  "file": "torchlens/_runnable_output_contracts.py",
+  "file": "torchlens/_runnable/output_contracts.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -3634,7 +3634,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_runnable_state.py",
+  "file": "torchlens/_runnable/state.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -3642,7 +3642,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_runnable_state_live.py",
+  "file": "torchlens/_runnable/state_live.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -3650,7 +3650,7 @@
  {
   "ambiguous": false,
   "field": "layer_type",
-  "file": "torchlens/_runnable_transaction.py",
+  "file": "torchlens/_runnable/transaction.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -3658,7 +3658,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_runnable_transaction.py",
+  "file": "torchlens/_runnable/transaction.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -3666,7 +3666,7 @@
  {
   "ambiguous": true,
   "field": "output",
-  "file": "torchlens/_runnable_transaction.py",
+  "file": "torchlens/_runnable/transaction.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -3674,7 +3674,7 @@
  {
   "ambiguous": false,
   "field": "raw_index",
-  "file": "torchlens/_runnable_transaction.py",
+  "file": "torchlens/_runnable/transaction.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -3698,7 +3698,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_runnable_verification.py",
+  "file": "torchlens/_runnable/verification.py",
   "has_default": false,
   "sites": 3,
   "via_getattr": false
@@ -3706,7 +3706,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_runnable_witness_contracts.py",
+  "file": "torchlens/_runnable/witness_contracts.py",
   "has_default": false,
   "sites": 5,
   "via_getattr": false

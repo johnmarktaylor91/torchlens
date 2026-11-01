@@ -13,7 +13,7 @@ from _source_corpus import package_ast, package_files
 from torchlens._constants import MODEL_LOG_FIELD_ORDER
 from torchlens._data_classes.trace import Trace
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
-from torchlens._runnable_seam import (
+from torchlens._runnable.seam import (
     LEGACY_RUNNABLE_TRACE_FIELD_MAP,
     RUNNABLE_TRACE_PUBLIC_MEMBERS,
     RunnableCoordinator,
@@ -236,9 +236,9 @@ def test_runnable_fork_keeps_mutable_witness_ledgers_independent() -> None:
 def test_public_runnable_schema_has_no_runtime_imports() -> None:
     """Keep the public schema module behavior-free and transport-independent."""
 
-    forbidden = {"_io", "capture", "_runnable_execution", "_runnable_state"}
+    forbidden = {"_io", "capture", "execution", "state"}
     imported: set[str] = set()
-    for node in ast.walk(_module_ast("_runnable.py")):
+    for node in ast.walk(_module_ast("_runnable/__init__.py")):
         if isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.lstrip(".").split(".")[0])
         elif isinstance(node, ast.Import):

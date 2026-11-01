@@ -48,18 +48,18 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._runnable_call_arguments
-import torchlens._runnable_call_outputs
-import torchlens._runnable_state as rstate
-from torchlens._runnable_call_arguments import _preflight_call_allocation
-from torchlens._runnable_execution import _ProjectionCountExceeded
-from torchlens._runnable_state import (
+import torchlens._runnable.call_arguments
+import torchlens._runnable.call_outputs
+import torchlens._runnable.state as rstate
+from torchlens._runnable.call_arguments import _preflight_call_allocation
+from torchlens._runnable.execution import _ProjectionCountExceeded
+from torchlens._runnable.state import (
     _OUTPUT_COUNT_FLOOR,
     _OUTPUT_COUNT_MARGIN,
     RunResourceCeiling,
     _torch_dtype,
 )
-from torchlens._runnable_state_context import _count_bounded_fake_tensor_mode_class
+from torchlens._runnable.state_context import _count_bounded_fake_tensor_mode_class
 from torchlens.errors import RunCapabilityUnavailableError
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(intervention_ready=True)}
@@ -407,7 +407,7 @@ def test_retained_slots_resolve_op_labels_like_bind() -> None:
     """Run-prep decides which op outputs the run copies with the same label lookup bind
     uses, so an op found only by its ``layer_list`` label still counts as saved."""
 
-    from torchlens._runnable_retention import _retained_output_slot_ids
+    from torchlens._runnable.retention import _retained_output_slot_ids
 
     saved = types.SimpleNamespace(label="add_1", has_saved_activation=True)
     trace = types.SimpleNamespace(layer_dict_all_keys={}, layer_list=[saved])
@@ -534,9 +534,9 @@ def test_no_raw_clone_on_op_output_bind_or_reconstruct_paths() -> None:
     import inspect
 
     for fn in (
-        torchlens._runnable_call_outputs._bind_call_outputs,
-        torchlens._runnable_call_outputs._reconstruct_output,
-        torchlens._runnable_call_arguments._populate_source_slots,
+        torchlens._runnable.call_outputs._bind_call_outputs,
+        torchlens._runnable.call_outputs._reconstruct_output,
+        torchlens._runnable.call_arguments._populate_source_slots,
     ):
         src = inspect.getsource(fn)
         assert "value.detach().clone()" not in src, (

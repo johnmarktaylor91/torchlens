@@ -208,18 +208,18 @@ _S1_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
         "mark_trace_path_status",
         "refuse_poisoned_trace",
     ),
-    "torchlens._runnable_seam": (
+    "torchlens._runnable.seam": (
         "RUNNABLE_TRACE_PUBLIC_MEMBERS",
         "RunnableCoordinator",
         "RunnableTraceState",
         "runnable_trace_state",
     ),
-    "torchlens._runnable_execution": (
+    "torchlens._runnable.execution": (
         "run_loaded_sparse_trace",
         "run_live_trace",
     ),
-    "torchlens._runnable_providers": ("_finalize_provider_run",),
-    "torchlens._runnable_state": ("load_trace_state_dict",),
+    "torchlens._runnable.providers": ("_finalize_provider_run",),
+    "torchlens._runnable.state": ("load_trace_state_dict",),
     # Coordinator verbs reached through the RunnableCoordinator boundary keep
     # their transport-side homes (contract E2).
     "torchlens._io.runnable": ("build_sparse_run_descriptor",),
@@ -314,7 +314,8 @@ def test_run_door_conflict_matrix_codes_present_in_door_source() -> None:
         member_name = RunnableErrorCode(code).name
         referenced = any(
             member_name in path.read_text(encoding="utf-8")
-            for path in package_root.glob("_runnable_*.py")
+            for path in (package_root / "_runnable").glob("*.py")
+            if path.name != "__init__.py"
         )
         assert referenced, (
             f"run-door conflict code {code} has no enum-member raise site in runnable machinery"

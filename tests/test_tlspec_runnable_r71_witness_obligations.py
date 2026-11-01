@@ -314,7 +314,7 @@ def test_r71_registry_closure_meta() -> None:
     import pkgutil
 
     import torchlens
-    import torchlens._runnable_execution  # noqa: F401  (loads every runnable split)
+    import torchlens._runnable.execution  # noqa: F401  (loads every runnable split)
 
     runnable_modules = [
         importlib.import_module(f"torchlens.{info.name}")
@@ -860,18 +860,20 @@ def test_r71_floor_source_scan_tripwire() -> None:
     the single derivation function + the parse-time equality/re-assert belts."""
 
     import torchlens._io.runnable_load as runnable_load
-    import torchlens._runnable_execution as execution
-    import torchlens._runnable_path_faithfulness
-    import torchlens._runnable_state as state
+    import torchlens._runnable.execution as execution
+    import torchlens._runnable.path_faithfulness
+    import torchlens._runnable.state as state
 
     # The verdict gate consults ONLY the derived floor.
-    verdict_source = inspect.getsource(torchlens._runnable_path_faithfulness._path_faithfulness)
+    verdict_source = inspect.getsource(torchlens._runnable.path_faithfulness._path_faithfulness)
     assert "derived_witness_completeness" in verdict_source
     assert "descriptor.witness_completeness" not in verdict_source
     # The ONLY raw read left in the executor is the run-preparation equality
     # re-assert (defense in depth), and staging never reads it at all.
     execution_source = "\n".join(
-        path.read_text() for path in sorted(Path(execution.__file__).parent.glob("_runnable_*.py"))
+        path.read_text()
+        for path in sorted(Path(execution.__file__).parent.glob("*.py"))
+        if path.name != "__init__.py"
     )
     assert execution_source.count("descriptor.witness_completeness") == 1
     assert "witness_completeness" not in inspect.getsource(state._apply_state_metadata_facts)

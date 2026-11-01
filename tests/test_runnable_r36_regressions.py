@@ -1215,23 +1215,23 @@ class TestContextFieldValidation:
 
 
 _COUPLED_WITNESS_EXEC_FILES = (
-    "torchlens/_runnable_execution.py",
-    "torchlens/_runnable_attestation.py",
-    "torchlens/_runnable_call_arguments.py",
-    "torchlens/_runnable_call_outputs.py",
-    "torchlens/_runnable_input_aliases.py",
-    "torchlens/_runnable_input_metadata.py",
-    "torchlens/_runnable_input_sites.py",
-    "torchlens/_runnable_output_contracts.py",
-    "torchlens/_runnable_path_faithfulness.py",
-    "torchlens/_runnable_providers.py",
-    "torchlens/_runnable_retention.py",
-    "torchlens/_runnable_state_context.py",
-    "torchlens/_runnable_transaction.py",
-    "torchlens/_runnable_verification.py",
-    "torchlens/_runnable_witness_contracts.py",
-    "torchlens/_runnable_state.py",
-    "torchlens/_runnable_state_live.py",
+    "torchlens/_runnable/execution.py",
+    "torchlens/_runnable/attestation.py",
+    "torchlens/_runnable/call_arguments.py",
+    "torchlens/_runnable/call_outputs.py",
+    "torchlens/_runnable/input_aliases.py",
+    "torchlens/_runnable/input_metadata.py",
+    "torchlens/_runnable/input_sites.py",
+    "torchlens/_runnable/output_contracts.py",
+    "torchlens/_runnable/path_faithfulness.py",
+    "torchlens/_runnable/providers.py",
+    "torchlens/_runnable/retention.py",
+    "torchlens/_runnable/state_context.py",
+    "torchlens/_runnable/transaction.py",
+    "torchlens/_runnable/verification.py",
+    "torchlens/_runnable/witness_contracts.py",
+    "torchlens/_runnable/state.py",
+    "torchlens/_runnable/state_live.py",
     "torchlens/_io/runnable.py",
     "torchlens/backends/torch/completeness_witness.py",
     "torchlens/backends/torch/backend.py",
@@ -1256,9 +1256,8 @@ class TestClassClosureMetaGates:
                 stripped = line.strip()
                 if "RunReport(" not in stripped or stripped.startswith("#"):
                     continue
-                if (
-                    "return RunReport(" in stripped
-                    and path.name == "_runnable_path_faithfulness.py"
+                if "return RunReport(" in stripped and path.as_posix().endswith(
+                    "torchlens/_runnable/path_faithfulness.py"
                 ):
                     continue  # the _run_report finalizer itself
                 if "class RunReport" in stripped or "RunReport(`" in stripped:
@@ -1358,7 +1357,7 @@ class TestOutputCapabilityMetaGates:
         """secB_1 adversarial pin: a hand-edited lossy_reconstruction=False is impotent."""
 
         from torchlens._ir.container import ContainerSpec
-        from torchlens._runnable_call_outputs import _spec_node_reconstruction_lossy
+        from torchlens._runnable.call_outputs import _spec_node_reconstruction_lossy
 
         forged = ContainerSpec(
             kind="namedtuple",
@@ -1372,7 +1371,7 @@ class TestOutputCapabilityMetaGates:
 
     def test_plain_namedtuple_spec_recompute_stays_lossless(self) -> None:
         from torchlens._ir.container import ContainerSpec
-        from torchlens._runnable_call_outputs import _spec_node_reconstruction_lossy
+        from torchlens._runnable.call_outputs import _spec_node_reconstruction_lossy
 
         plain = ContainerSpec(
             kind="namedtuple",

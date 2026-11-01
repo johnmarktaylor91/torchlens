@@ -267,7 +267,7 @@ def test_encode_literal_rejects_a_non_integer_slice_component() -> None:
 def test_encode_literal_round_trips_slice_ellipsis_and_none() -> None:
     """Unit-level encode/decode parity for the three new literal shapes."""
 
-    from torchlens._runnable_verification import _decode_literal
+    from torchlens._runnable.verification import _decode_literal
 
     assert _decode_literal(_encode_literal(slice(3, None, None))) == slice(3, None, None)
     assert _decode_literal(_encode_literal(slice(1, 5, None))) == slice(1, 5, None)
@@ -387,7 +387,7 @@ def test_r71b_ratified_stock_wrapper_slice_component_normalizes() -> None:
     """The ratified stock-numpy wrapper int lane normalizes to the exact builtin atom
     at the encoder (value-transparent; no semantic refusal)."""
 
-    from torchlens._runnable_verification import _decode_literal
+    from torchlens._runnable.verification import _decode_literal
 
     encoded = _encode_literal(slice(_np.int64(1), _np.int64(5), _np.int64(2)))
     assert _decode_literal(encoded) == slice(1, 5, 2)
@@ -454,7 +454,7 @@ def test_r71b_composite_component_policy_covers_every_edge() -> None:
     assert slice_source.index("classify_scalar") < slice_source.index("isinstance(")
 
     # _literal_leaf_equal descends slices component-by-component, never slice.__eq__.
-    import torchlens._runnable_input_metadata
+    import torchlens._runnable.input_metadata
 
-    compare_source = inspect.getsource(torchlens._runnable_input_metadata._literal_leaf_equal)
+    compare_source = inspect.getsource(torchlens._runnable.input_metadata._literal_leaf_equal)
     assert "isinstance(recorded, slice)" in compare_source

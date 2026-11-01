@@ -5394,7 +5394,7 @@
     "\"tanh_3_7_raw\"": "tanh_1_2"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class RecurrentModel(nn.Module):\n    \"\"\"Tiny recurrent model that calls one module three times.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the recurrent cell and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.cell = nn.Linear(4, 4)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Apply the shared cell for three recurrent steps.\n\n        Parameters\n        ----------\n        x:\n            Initial recurrent state.\n\n        Returns\n        -------\n        torch.Tensor\n            Final recurrent state.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        state = x\n        for _ in range(3):\n            state = torch.tanh(self.cell(state))\n        return state",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Apply the shared cell for three recurrent steps.\n\n    Parameters\n    ----------\n    x:\n        Initial recurrent state.\n\n    Returns\n    -------\n    torch.Tensor\n        Final recurrent state.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    state = x\n    for _ in range(3):\n        state = torch.tanh(self.cell(state))\n    return state",
@@ -11618,7 +11618,7 @@
     "\"tanh_3_7_raw\"": "tanh_1_2"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class RecurrentModel(nn.Module):\n    \"\"\"Tiny recurrent model that calls one module three times.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the recurrent cell and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.cell = nn.Linear(4, 4)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Apply the shared cell for three recurrent steps.\n\n        Parameters\n        ----------\n        x:\n            Initial recurrent state.\n\n        Returns\n        -------\n        torch.Tensor\n            Final recurrent state.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        state = x\n        for _ in range(3):\n            state = torch.tanh(self.cell(state))\n        return state",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Apply the shared cell for three recurrent steps.\n\n    Parameters\n    ----------\n    x:\n        Initial recurrent state.\n\n    Returns\n    -------\n    torch.Tensor\n        Final recurrent state.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    state = x\n    for _ in range(3):\n        state = torch.tanh(self.cell(state))\n    return state",
@@ -17785,7 +17785,7 @@
     "\"tanh_3_7_raw\"": "tanh_1_2"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class RecurrentModel(nn.Module):\n    \"\"\"Tiny recurrent model that calls one module three times.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the recurrent cell and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.cell = nn.Linear(4, 4)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Apply the shared cell for three recurrent steps.\n\n        Parameters\n        ----------\n        x:\n            Initial recurrent state.\n\n        Returns\n        -------\n        torch.Tensor\n            Final recurrent state.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        state = x\n        for _ in range(3):\n            state = torch.tanh(self.cell(state))\n        return state",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Apply the shared cell for three recurrent steps.\n\n    Parameters\n    ----------\n    x:\n        Initial recurrent state.\n\n    Returns\n    -------\n    torch.Tensor\n        Final recurrent state.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    state = x\n    for _ in range(3):\n        state = torch.tanh(self.cell(state))\n    return state",
@@ -24003,7 +24003,7 @@
     "\"tanh_3_7_raw\"": "tanh_1_2"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class RecurrentModel(nn.Module):\n    \"\"\"Tiny recurrent model that calls one module three times.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the recurrent cell and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.cell = nn.Linear(4, 4)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Apply the shared cell for three recurrent steps.\n\n        Parameters\n        ----------\n        x:\n            Initial recurrent state.\n\n        Returns\n        -------\n        torch.Tensor\n            Final recurrent state.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        state = x\n        for _ in range(3):\n            state = torch.tanh(self.cell(state))\n        return state",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Apply the shared cell for three recurrent steps.\n\n    Parameters\n    ----------\n    x:\n        Initial recurrent state.\n\n    Returns\n    -------\n    torch.Tensor\n        Final recurrent state.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    state = x\n    for _ in range(3):\n        state = torch.tanh(self.cell(state))\n    return state",
@@ -30010,7 +30010,7 @@
     "\"tanh_3_7_raw\"": "tanh_1_2"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class RecurrentModel(nn.Module):\n    \"\"\"Tiny recurrent model that calls one module three times.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize the recurrent cell and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.cell = nn.Linear(4, 4)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Apply the shared cell for three recurrent steps.\n\n        Parameters\n        ----------\n        x:\n            Initial recurrent state.\n\n        Returns\n        -------\n        torch.Tensor\n            Final recurrent state.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        state = x\n        for _ in range(3):\n            state = torch.tanh(self.cell(state))\n        return state",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Apply the shared cell for three recurrent steps.\n\n    Parameters\n    ----------\n    x:\n        Initial recurrent state.\n\n    Returns\n    -------\n    torch.Tensor\n        Final recurrent state.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    state = x\n    for _ in range(3):\n        state = torch.tanh(self.cell(state))\n    return state",

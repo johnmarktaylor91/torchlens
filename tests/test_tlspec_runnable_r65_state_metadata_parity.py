@@ -39,7 +39,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import runnable as io_runnable, runnable_load
 from torchlens._runnable import ControlWitness, ControlWitnessKind, PathFaithfulness
-from torchlens._runnable_state import (
+from torchlens._runnable.state import (
     _ORACLE_POLICY_CLASSES,
     _STATE_METADATA_BIND_SCOPE,
     _STATE_METADATA_OBSERVED_PLACEMENT_KINDS,
@@ -877,7 +877,7 @@ def test_r65_contiguous_identity_alias_is_documented_residual(tmp_path: Path) ->
 # ``refuse_on_any_read`` -- no static expected scalar may exist without an oracle probe
 # recipe exercised here.
 
-from torchlens._runnable_state import _staged_state_clone  # noqa: E402
+from torchlens._runnable.state import _staged_state_clone  # noqa: E402
 
 
 class _OracleProbeModule(nn.Module):

@@ -8250,7 +8250,7 @@
     "\"relu_1_10_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TrainBatchNorm(nn.Module):\n    \"\"\"Train-mode BatchNorm model whose running buffers mutate per forward.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize BatchNorm and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.bn = nn.BatchNorm2d(2)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.train()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Normalize an image batch in training mode.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Normalized activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.bn(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Normalize an image batch in training mode.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Normalized activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.bn(x))",
@@ -17575,7 +17575,7 @@
     "\"relu_1_10_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TrainBatchNorm(nn.Module):\n    \"\"\"Train-mode BatchNorm model whose running buffers mutate per forward.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize BatchNorm and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.bn = nn.BatchNorm2d(2)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.train()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Normalize an image batch in training mode.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Normalized activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.bn(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Normalize an image batch in training mode.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Normalized activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.bn(x))",
@@ -26822,7 +26822,7 @@
     "\"relu_1_10_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TrainBatchNorm(nn.Module):\n    \"\"\"Train-mode BatchNorm model whose running buffers mutate per forward.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize BatchNorm and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.bn = nn.BatchNorm2d(2)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.train()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Normalize an image batch in training mode.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Normalized activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.bn(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Normalize an image batch in training mode.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Normalized activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.bn(x))",
@@ -36141,7 +36141,7 @@
     "\"relu_1_10_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TrainBatchNorm(nn.Module):\n    \"\"\"Train-mode BatchNorm model whose running buffers mutate per forward.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize BatchNorm and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.bn = nn.BatchNorm2d(2)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.train()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Normalize an image batch in training mode.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Normalized activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.bn(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Normalize an image batch in training mode.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Normalized activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.bn(x))",
@@ -45194,7 +45194,7 @@
     "\"relu_1_10_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class TrainBatchNorm(nn.Module):\n    \"\"\"Train-mode BatchNorm model whose running buffers mutate per forward.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize BatchNorm and side-effect counters.\"\"\"\n\n        super().__init__()\n        self.bn = nn.BatchNorm2d(2)\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n        self.train()\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Normalize an image batch in training mode.\n\n        Parameters\n        ----------\n        x:\n            Input image batch.\n\n        Returns\n        -------\n        torch.Tensor\n            Normalized activation.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        return torch.relu(self.bn(x))",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Normalize an image batch in training mode.\n\n    Parameters\n    ----------\n    x:\n        Input image batch.\n\n    Returns\n    -------\n    torch.Tensor\n        Normalized activation.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    return torch.relu(self.bn(x))",

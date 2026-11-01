@@ -41,7 +41,7 @@ from torchlens._runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from torchlens._runnable_state import _preflight_run_allocation, _recorded_output_slots
+from torchlens._runnable.state import _preflight_run_allocation, _recorded_output_slots
 from torchlens.errors import RunCapabilityUnavailableError
 
 

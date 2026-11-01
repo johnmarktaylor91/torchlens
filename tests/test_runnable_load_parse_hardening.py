@@ -156,7 +156,7 @@ def test_encode_literal_exact_type_discipline() -> None:
     from collections import OrderedDict, namedtuple
 
     from torchlens._io.runnable import _encode_literal, _UnsupportedLiteralError
-    from torchlens._runnable_verification import _decode_literal
+    from torchlens._runnable.verification import _decode_literal
 
     # Exact builtins and the ratified torch.Size allowlist still encode.
     assert _decode_literal(_encode_literal([1, 2])) == [1, 2]

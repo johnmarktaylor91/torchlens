@@ -3449,7 +3449,7 @@
     "\"relu_1_4_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
@@ -7561,7 +7561,7 @@
     "\"relu_1_4_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
@@ -11662,7 +11662,7 @@
     "\"relu_1_4_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
@@ -15768,7 +15768,7 @@
     "\"relu_1_4_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
@@ -19789,7 +19789,7 @@
     "\"relu_1_4_raw\"": "relu_1_3"
    },
    "_replay_arg_version_data_complete": true,
-   "_runnable": "<torchlens._runnable_seam.RunnableTraceState>",
+   "_runnable": "<torchlens._runnable.seam.RunnableTraceState>",
    "_source_code_blob": {
     "\"class\"": "class InPlaceModel(nn.Module):\n    \"\"\"Model with explicit in-place operations on an internal tensor.\"\"\"\n\n    def __init__(self) -> None:\n        \"\"\"Initialize side-effect counters.\"\"\"\n\n        super().__init__()\n        self.forward_invocations = 0\n        self.pre_hook_invocations = 0\n\n    def forward(self, x: torch.Tensor) -> torch.Tensor:\n        \"\"\"Clone, add, and rectify in place.\n\n        Parameters\n        ----------\n        x:\n            Input tensor.\n\n        Returns\n        -------\n        torch.Tensor\n            Mutated internal tensor.\n        \"\"\"\n\n        count_side_effect(self, \"forward_invocations\")\n        result = x.clone()\n        result.add_(2.0)\n        return result.relu_()",
     "\"forward\"": "def forward(self, x: torch.Tensor) -> torch.Tensor:\n    \"\"\"Clone, add, and rectify in place.\n\n    Parameters\n    ----------\n    x:\n        Input tensor.\n\n    Returns\n    -------\n    torch.Tensor\n        Mutated internal tensor.\n    \"\"\"\n\n    count_side_effect(self, \"forward_invocations\")\n    result = x.clone()\n    result.add_(2.0)\n    return result.relu_()",
