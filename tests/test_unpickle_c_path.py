@@ -523,7 +523,6 @@ def test_hostile_corpus_is_refused_by_both_machines() -> None:
             assert outcome[0] in ("refused", "raised"), (label, factory.__name__, outcome)
 
 
-@pytest.mark.smoke
 def test_honest_corpus_takes_the_fast_path() -> None:
     """Every honest stream loads on the C machine; no honest shape needs the interpreter."""
 
@@ -669,7 +668,6 @@ class _TwoLayer(nn.Module):
         return self.second(torch.relu(self.first(x)))
 
 
-@pytest.mark.smoke
 def test_saved_bundle_loads_on_the_fast_path_and_round_trips(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
