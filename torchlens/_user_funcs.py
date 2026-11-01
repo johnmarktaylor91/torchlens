@@ -134,9 +134,14 @@ from ._training_validation import (
     effective_inference_only,
     validate_training_compatibility,
 )
-from ._utils._torch_compat import is_dynamo_compiled_callable
+from ._user_funcs_guards import (
+    _refuse_non_torch_episode,
+    _reject_auto_environment,
+    _reject_compiled_plain_callable,
+    _reject_unrouted_jax_options,
+    _trace_option_refusal_code,
+)
 from ._utils.display import _vprint, ensure_trace_visualizer_dir, warn_parallel
-from ._utils.env_flags import closed_bool_env
 from ._utils.introspection import _get_code_context
 from ._utils.tensor_utils import SaveMode
 from ._visualization.code_panel import (
@@ -2295,25 +2300,6 @@ def _trace_option_explicit(option_name: str, public_trace_kwargs: dict[str, Any]
     return False
 
 
-#: Filtered trace options that are a capability flag's entry (SPEC 1.3: one code per
-#: cause): refusing one raises that flag's contracted code. Every other filtered option
-#: refuses with ``trace_option_unsupported``.
-_TRACE_OPTION_CAPABILITY_FLAGS: dict[str, str] = {
-    "grad_options": "intermediate_derived_grads",
-}
-
-
-def _trace_option_refusal_code(option_name: str) -> str:
-    """The refusal code for an explicit trace option the resolved backend lacks."""
-
-    flag = _TRACE_OPTION_CAPABILITY_FLAGS.get(option_name)
-    if flag is None:
-        return "trace_option_unsupported"
-    from .backends._backend_protocol import refusal_code_for_capability
-
-    return refusal_code_for_capability(flag)
-
-
 def _unsupported_trace_option_message(option_name: str, backend_name: str) -> str:
     """Return an actionable unsupported-option message.
 
@@ -2739,17 +2725,7 @@ def trace(
             from ._quickstart._ladder import _trace_via_ladder
 
             return _trace_via_ladder(model, input_args, input_kwargs, input_shape, ladder_kwargs)
-        if not isinstance(model, nn.Module) and is_dynamo_compiled_callable(model):
-            raise InvalidArgumentError(
-                "TorchLens cannot capture a torch.compile-produced plain callable because it is "
-                "not an nn.Module",
-                code="compiled_callable_unsupported",
-                remedy=(
-                    "pass the original eager nn.Module instead of the compiled callable; to "
-                    "inspect what torch.compile generated, use tl.bridge.depyf.dump(fn, x, path)"
-                ),
-                argument="model",
-            )
+        _reject_compiled_plain_callable(model)
         _reject_extra_positional_input(grad_transform)
         public_trace_kwargs = locals().copy()
         public_trace_kwargs.pop("backend")
@@ -2773,17 +2749,7 @@ def trace(
             normalize_echo(narrate)
         if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
             raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
-        if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
-            refused_option = (
-                "jax_static_argnums" if jax_static_argnums is not MISSING else ("grad_options")
-            )
-            raise BackendUnsupportedError(
-                "jax_static_argnums is only supported with backend='jax'; grad_options is "
-                "only supported with backend='jax', backend='mlx', backend='tinygrad', "
-                "backend='paddle', or backend='tf'.",
-                code=_trace_option_refusal_code(refused_option),
-                option=refused_option,
-            )
+        _reject_unrouted_jax_options(backend, jax_static_argnums, grad_options)
         explicit_backend_spec = None
         if backend is not None:
             explicit_backend_spec = get_backend_spec(str(backend))
@@ -2823,13 +2789,7 @@ def trace(
                 result = detector(model, input_args, **autoroute_kwargs)
                 if result is not None:
                     return cast("Trace", result)
-        if closed_bool_env("TORCHLENS_AUTO"):
-            raise CaptureNotActiveError(
-                "TORCHLENS_AUTO requested an unsupported implicit capture mode",
-                code="auto_environment_unsupported",
-                remedy="unset TORCHLENS_AUTO and call auto_capture() explicitly",
-                environment_variable="TORCHLENS_AUTO",
-            )
+        _reject_auto_environment()
         resolved_spec = explicit_backend_spec or resolve_backend_spec(
             backend, model, input_args, input_kwargs
         )
@@ -2841,19 +2801,6 @@ def trace(
         _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
         _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
         return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
-
-
-def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec: Any) -> None:
-    """episode= capture (capture_kind=episode) is torch-only in this release."""
-
-    if str(resolved_spec.name) != "torch":
-        episode_value = public_trace_kwargs.pop("episode", None)
-        if episode_value is not None:
-            raise BackendUnsupportedError(
-                "episode= capture (capture_kind=episode) is torch-only in this "
-                f"release; backend {str(resolved_spec.name)!r} does not support "
-                "episode declarations."
-            )
 
 
 def _model_type_remedy(model: Any) -> str:
