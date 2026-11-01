@@ -475,7 +475,7 @@ def _move_capture_selection(
         ed.replace(a, b, f"save={ed.text(selection.value)}")
         return
     ed.remove_arg(selection, ctor)
-    for door, keyword in uses:
+    for _door, keyword in uses:
         _, end = ed.span(keyword)
         ed.replace(end, end, f", save={ed.text(selection.value)}")
 

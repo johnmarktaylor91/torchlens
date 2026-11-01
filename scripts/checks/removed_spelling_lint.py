@@ -337,6 +337,11 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         "sibling removed-spelling scanner over docs/examples cells; naming "
         "old spellings (tl.StreamingOptions needle) is its job",
     ),
+    "tests/test_options_codemod.py": (
+        frozenset({"trace_flat"}),
+        "migration codemod fixtures: the removed CaptureOptions(layers_to_save=...) "
+        "spelling is the input the codemod rewrites; rewriting it is its job",
+    ),
 }
 
 
