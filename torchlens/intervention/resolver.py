@@ -854,7 +854,7 @@ class _SiteTable:
 
         kept = [
             (site, signal)
-            for site, signal in zip(self._sites, self._site_signals())
+            for site, signal in zip(self._sites, self._site_signals(), strict=True)
             if predicate(site)
         ]
         return _SiteTable(
@@ -929,7 +929,9 @@ class _SiteTable:
                 "modules": getattr(site, "modules", ()),
                 "output_of_module_calls": getattr(site, "output_of_module_calls", ()),
             }
-            for site, signal in zip(map(_site_record, self._sites), self._site_signals())
+            for site, signal in zip(
+                map(_site_record, self._sites), self._site_signals(), strict=True
+            )
         ]
         return pd.DataFrame(rows)
 
@@ -1716,11 +1718,7 @@ def _resolve_branch_sites(
 
 
 def resolve_site_plan(
-    trace: Trace,
-    selector: SelectorInput,
-    *,
-    strict: bool = False,
-    require_match: bool = True,
+    trace: Trace, selector: SelectorInput, *, strict: bool = False, require_match: bool = True
 ) -> tuple[SiteBranch, ...]:
     """Resolve a selector into one site set per universe branch (SPEC 1.6).
 
