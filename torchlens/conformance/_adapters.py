@@ -112,17 +112,27 @@ class TorchReferenceAdapter:
         factory = get_backend_spec("torch").protocol
         return factory() if factory is not None else None
 
+    def default_roster(self) -> tuple[RosterModel, ...]:
+        """Torch's own roster (``_rosters/torch.py``): the reference rows."""
+
+        from ._rosters.torch import roster
+
+        return roster()
+
     def trace(self, model: Any, example_input: Any) -> Any:
-        """Capture one forward pass through the public surface."""
+        """Capture one forward pass through the torch protocol object."""
 
         return self.trace_with(model, example_input)
 
     def trace_with(self, model: Any, example_input: Any, **options: Any) -> Any:
-        """Capture through the public entry with explicit trace options (refusal cells)."""
+        """Capture through ``protocol().capture`` (the public ``tl.trace`` entry).
 
-        import torchlens as tl
+        The protocol's capture records what replay validation needs unless
+        ``options`` carries its own ``capture=``; refusal cells pass their
+        trace options here.
+        """
 
-        return tl.trace(model, example_input, **options)
+        return self.protocol().capture(model, example_input, None, **options)
 
     def reference_output(self, model: Any, example_input: Any) -> Any:
         """Run the model directly (the parity oracle's independent arm)."""
