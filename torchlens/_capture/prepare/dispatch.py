@@ -7,6 +7,8 @@ import collections.abc
 from collections.abc import Callable
 from typing import Any, cast
 
+from torch import nn
+
 from torchlens.backends.registry import BackendUnsupportedError
 
 from ..._data_classes.trace import (
@@ -14,11 +16,13 @@ from ..._data_classes.trace import (
 )
 from ..._deprecations import MISSING, MissingType
 from ..._errors import (
+    CaptureNotActiveError,
     InvalidArgumentError,
 )
 from ..._literals import (
     OutputDeviceLiteral,
 )
+from ..._postprocess._grouping_stamp import validate_grouping_knob
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
     reject_selector_outside_kinds,
@@ -27,6 +31,8 @@ from ..._trace_selector_helpers import (
     _TRACE_OPTION_FILTERED_NAMES,
     _split_save_options_and_predicate,
 )
+from ..._utils._torch_compat import is_dynamo_compiled_callable
+from ..._utils.env_flags import closed_bool_env
 from ...backends._options import (
     MLX_EXTRA_KWARG_POLICY,
     TRACE_OPTION_CAPABILITY_GATES,
@@ -35,7 +41,9 @@ from ...backends._options import (
 from ...backends.registry import (
     BackendSpec,
     get_backend_spec,
+    resolve_backend_spec,
 )
+from ...intervention.errors import ChunkedForwardConfigError
 from ...intervention.selectors import BaseSelector
 from ...options import (
     CaptureOptions,
@@ -563,3 +571,156 @@ def _reject_unsupported_torch_trace_option_values(capture_options: CaptureOption
                 f"backend='torch' does not support explicit {option_name}; "
                 "JAX control-flow options are only meaningful with backend='jax'."
             )
+
+
+def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec: Any) -> None:
+    """episode= capture (capture_kind=episode) is torch-only in this release."""
+
+    if str(resolved_spec.name) != "torch":
+        episode_value = public_trace_kwargs.pop("episode", None)
+        if episode_value is not None:
+            raise BackendUnsupportedError(
+                "episode= capture (capture_kind=episode) is torch-only in this "
+                f"release; backend {str(resolved_spec.name)!r} does not support "
+                "episode declarations."
+            )
+
+
+#: Public ``trace`` keywords forwarded to the autoroute detectors, in the order
+#: the facade built them; the grouped ``capture=`` object carries the rest.
+_AUTOROUTE_FORWARDED_KWARGS = (
+    "input_kwargs",
+    "grad_transform",
+    "save_mode",
+    "reconstruction_ready",
+    "capture",
+    "save",
+    "intervene",
+    "halt",
+    "lookback",
+    "lookback_payload_policy",
+    "storage",
+    "streaming",
+    "profile",
+    "facets",
+    "episode",
+    "grouping",
+    "narrate",
+    "on_zero_fire",
+)
+
+
+def _refuse_compiled_callable_root(model: Any) -> None:
+    """A ``torch.compile``-produced plain callable is not a capturable root."""
+
+    if not isinstance(model, nn.Module) and is_dynamo_compiled_callable(model):
+        raise InvalidArgumentError(
+            "TorchLens cannot capture a torch.compile-produced plain callable because it is "
+            "not an nn.Module",
+            code="compiled_callable_unsupported",
+            remedy=(
+                "pass the original eager nn.Module instead of the compiled callable; to "
+                "inspect what torch.compile generated, use tl.bridge.depyf.dump(fn, x, path)"
+            ),
+            argument="model",
+        )
+
+
+def _refuse_trace_entry_shapes(
+    *,
+    grouping: Any,
+    narrate: Any,
+    chunk_size: Any,
+    chunk_paths: Any,
+    backend: Any,
+    jax_static_argnums: Any,
+    grad_options: Any,
+) -> None:
+    """Entry-time refusals that fire before any backend or capture work."""
+
+    if grouping is not MISSING:
+        # grouping= (UNSTABLE, keyword-only; L1 wave 0): closed-vocabulary knob.
+        # Only "structural" (today's grouping, the default) is entry-legal;
+        # "strict_shapes" waits on its own reviewed design and "fold_sites" on
+        # an affirmative D1 ruling (the flip PR) / the episode capture kind.
+        validate_grouping_knob(grouping)
+    if narrate is not None and narrate is not False:
+        # Entry-time echo refusals (bad spellings, finalized-label selectors)
+        # fire BEFORE any capture work on every backend path.
+        from ..._snoop import normalize_echo
+
+        normalize_echo(narrate)
+    if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
+        raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
+    if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
+        raise BackendUnsupportedError(
+            "jax_static_argnums is only supported with backend='jax'; grad_options is "
+            "only supported with backend='jax', backend='mlx', backend='tinygrad', "
+            "backend='paddle', or backend='tf'."
+        )
+
+
+def _autoroute_trace(model: Any, input_args: Any, forwarded: dict[str, Any]) -> Trace | None:
+    """Offer the call to the autoroute input detectors; ``None`` when none claims it."""
+
+    from ... import _autoroute as autoroute
+
+    # Only the surviving public kwargs are forwarded: capture knobs travel
+    # inside the grouped ``capture=`` object, so re-entrant trace() calls
+    # inside detectors receive exactly what the user could have passed.
+    autoroute_kwargs = {name: forwarded[name] for name in _AUTOROUTE_FORWARDED_KWARGS}
+    for detector in autoroute.input.iter_by_priority():
+        result = detector(model, input_args, **autoroute_kwargs)
+        if result is not None:
+            return cast("Trace", result)
+    return None
+
+
+def _dispatch_trace(
+    public_trace_kwargs: dict[str, Any], *, backend: Any, grouping: Any, on_zero_fire: Any
+) -> Trace:
+    """Route a refused-clean ``trace`` call to its backend and run it.
+
+    ``public_trace_kwargs`` is the facade's surviving keyword set (``backend``,
+    ``input_shape``, ``on_zero_fire`` and ``grouping`` already popped); the
+    backend filters mutate it in place before ``capture_trace`` receives it.
+    """
+
+    model = public_trace_kwargs["model"]
+    input_args = public_trace_kwargs["input_args"]
+    input_kwargs = public_trace_kwargs["input_kwargs"]
+    chunk_size = public_trace_kwargs["chunk_size"]
+    capture = public_trace_kwargs["capture"]
+    narrate = public_trace_kwargs["narrate"]
+    explicit_backend_spec = None
+    if backend is not None:
+        explicit_backend_spec = get_backend_spec(str(backend))
+        _filter_trace_kwargs_for_backend(public_trace_kwargs, explicit_backend_spec)
+        explicit_backend_spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+    if (
+        backend is None
+        and chunk_size in (MISSING, None)
+        and (capture is None or not capture.is_field_explicit("input_transform"))
+    ):
+        forwarded = {**public_trace_kwargs, "grouping": grouping, "on_zero_fire": on_zero_fire}
+        routed = _autoroute_trace(model, input_args, forwarded)
+        if routed is not None:
+            return routed
+    if closed_bool_env("TORCHLENS_AUTO"):
+        raise CaptureNotActiveError(
+            "TORCHLENS_AUTO requested an unsupported implicit capture mode",
+            code="auto_environment_unsupported",
+            remedy="unset TORCHLENS_AUTO and call auto_capture() explicitly",
+            environment_variable="TORCHLENS_AUTO",
+        )
+    resolved_spec = explicit_backend_spec or resolve_backend_spec(
+        backend, model, input_args, input_kwargs
+    )
+    from ..._snoop._entry import refuse_echo_non_torch
+
+    # Never a silent no-op: narrate= is torch-only in wave 1 (typed refusal).
+    refuse_echo_non_torch(narrate, resolved_spec)
+    _filter_trace_kwargs_for_backend(public_trace_kwargs, resolved_spec)
+    _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
+    _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
+    return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))

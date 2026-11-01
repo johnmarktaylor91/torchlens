@@ -58,6 +58,7 @@ CAPTURE_SEAM_MOVES = {
         "_capture.prepare.cache",
         "_capture.prepare.dispatch",
         "_capture.prepare.door",
+        "_capture.prepare.request",
         "_capture.prepare.resolve",
         "_capture.run_entry",
         "_capture.finalize.epilogue",

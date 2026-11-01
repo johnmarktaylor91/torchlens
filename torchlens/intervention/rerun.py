@@ -1004,11 +1004,9 @@ def _capture_with_active_spec(
         Fresh log built off to the side.
     """
 
-    from .._user_funcs import (
-        _run_model_and_save_specified_outs,
-        _unwrap_data_parallel,
-        check_model_and_input_variants,
-    )
+    from .._capture.run_entry import _run_model_and_save_specified_outs
+    from .._capture_state_helpers import _unwrap_data_parallel
+    from .._robustness import check_model_and_input_variants
 
     model = _unwrap_data_parallel(model)
     x = _coerce_input_args(model, x)

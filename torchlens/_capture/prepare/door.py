@@ -18,7 +18,6 @@ import torch
 from torch import nn
 
 from torchlens import _state
-from torchlens.backends.registry import BackendUnsupportedError
 
 from ..._autoroute._builtin_output import semantic_output_cache_key
 from ..._capture_state_helpers import (
@@ -40,12 +39,16 @@ from ..._errors import (
     CaptureNotActiveError,
     InvalidArgumentError,
     KeywordConflictError,
+    TorchLensWarning,
 )
 from ..._input_coerce import (
     _coerce_input_args,
     _reject_non_mapping_input_kwargs,
 )
+from ..._ir.selector_eval import looks_like_finalized_label
+from ..._options_validation import _validate_output_device
 from ..._robustness import check_model_and_input_variants
+from ..._runnable_state_live import capture_observer_bracket
 from ..._trace_selector_helpers import (
     _combine_save_predicates,
     _is_selective_label_save,
@@ -72,8 +75,10 @@ from ...backends.torch.bound_root import (
     TLBoundMethodRoot,
     is_bound_method_of_module,
 )
+from ...backends.torch.rescue import capture_with_rescue
+from ...errors.episode import EpisodeDeclarationError
 from ...intervention.errors import ChunkedForwardConfigError
-from ...intervention.selectors import BaseSelector
+from ...intervention.selectors import BaseSelector, FuncSelector, ModuleSelector
 from ...options import (
     CaptureOptions,
     ReplayOptions,
@@ -84,18 +89,23 @@ from ...options import (
 )
 from ...recording.options import PredicateFn
 from ...types import _ActivationPostfunc, _GradientPostfunc
+from .._episode_coupling import CouplingSession, rule_identity_of
 from .._episode_failed import attach_failed_episode_ledger
+from .._episode_join import armed_capture
 from .._episode_ledger import (
     resolve_episode_declaration,
     write_episode_ledger,
 )
+from .._structure_evidence import settle_weightsfree_capture
 from .._structure_only_entry import (
     _enforce_structure_only_entry_contract,
     _StructureOnlyEntryFacts,
 )
+from .._weightsfree_admission import pending_admission
 from ..finalize.epilogue import _render_layer_visualizers
 from ..run_entry import run_capture
 from ..stages import CaptureRequest, ForwardResult
+from ..structure_only import STRUCTURE_ONLY_EPISODE_UNSUPPORTED
 from .cache import (
     CAPTURE_CACHE_KEY_CURATED,
     CAPTURE_CACHE_KEY_NEUTRAL,
@@ -156,10 +166,8 @@ def _warn_once_train_mode_running_stats(model: nn.Module) -> None:
     if not mutating:
         return
     _BATCHNORM_TRAIN_STATS_WARNED = True
-    from ...errors import TorchLensWarning as _TorchLensWarning
-
     warnings.warn(
-        _TorchLensWarning(
+        TorchLensWarning(
             "tracing runs the model's REAL forward with CaptureOptions(carry_state=True) "
             f"(forward-equivalent state): {len(mutating)} norm layer(s) in train mode with track_running_stats=True updated "
             "their running statistics in place during this capture "
@@ -236,10 +244,8 @@ def _warn_failed_capture_release_incomplete(release_exc: BaseException) -> None:
         Warns coded; never raises (the capture exception must propagate).
     """
 
-    from ...errors import TorchLensWarning as _TorchLensWarning
-
     warnings.warn(
-        _TorchLensWarning(
+        TorchLensWarning(
             "TorchLens could not fully release its preparation of "
             f"the model after the failed capture "
             f"({type(release_exc).__name__}: {release_exc}); its module "
@@ -251,19 +257,6 @@ def _warn_failed_capture_release_incomplete(release_exc: BaseException) -> None:
         ),
         stacklevel=4,
     )
-
-
-def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec: Any) -> None:
-    """episode= capture (capture_kind=episode) is torch-only in this release."""
-
-    if str(resolved_spec.name) != "torch":
-        episode_value = public_trace_kwargs.pop("episode", None)
-        if episode_value is not None:
-            raise BackendUnsupportedError(
-                "episode= capture (capture_kind=episode) is torch-only in this "
-                f"release; backend {str(resolved_spec.name)!r} does not support "
-                "episode declarations."
-            )
 
 
 def _model_type_remedy(model: Any) -> str:
@@ -606,8 +599,6 @@ def _refuse_predicate_shapes(args: _DoorArgs) -> None:
 
 def _refuse_episode_combinations(args: _DoorArgs, capture_options: CaptureOptions) -> None:
     """Refuse the episode declarations the marker-combination table rules out."""
-    from ...errors.episode import EpisodeDeclarationError
-
     if args.chunk_size not in (MISSING, None) or args.chunk_paths not in (MISSING, None):
         raise EpisodeDeclarationError(
             "episode= cannot combine with chunked forwards (chunk_size/"
@@ -628,8 +619,6 @@ def _refuse_episode_combinations(args: _DoorArgs, capture_options: CaptureOption
         # code is L7a's capability-table constant — ONE vocabulary for
         # the combination across the entry check and the post-capture
         # capability gate (_capture/structure_only.py owns the row).
-        from ..structure_only import STRUCTURE_ONLY_EPISODE_UNSUPPORTED
-
         raise EpisodeDeclarationError(
             "structure-only episodes are out of scope this sprint: "
             "capture_kind=episode with the structure-only marker refuses "
@@ -666,8 +655,6 @@ def _resolve_episode(state: _DoorState) -> _DoorState:
         # ATTESTED COUPLING (lane F42, the foldA D5 flip): the session
         # armed here feeds the settlement writers (fire counts,
         # intervention digest, perturbed fidelity) -- the D5 evidence bar.
-        from .._episode_coupling import CouplingSession, rule_identity_of
-
         episode_resolved = replace(
             episode_resolved,
             coupling_session=CouplingSession(rule_identity=rule_identity_of(state.args.intervene)),
@@ -780,8 +767,6 @@ def _compile_stop_after_site(stop_after_site: Any) -> tuple[Any, bool]:
     if isinstance(stop_after_site, BaseSelector):
         return stop_after_site, True
     if isinstance(stop_after_site, str):
-        from ..._ir.selector_eval import looks_like_finalized_label
-
         if looks_like_finalized_label(stop_after_site):
             raise InvalidArgumentError(
                 f"stop_after={stop_after_site!r} looks like a finalized postprocess "
@@ -795,8 +780,6 @@ def _compile_stop_after_site(stop_after_site: Any) -> tuple[Any, bool]:
                 ),
                 argument="stop_after",
             )
-        from ...intervention.selectors import FuncSelector, ModuleSelector
-
         # A bare string is the pluck-vocabulary spelling: halt at the first
         # emission whose module address OR function name matches, whichever
         # fires first ("encoder.layer.4" never names a func; "relu" never
@@ -843,8 +826,6 @@ def _resolve_gradient_policy(state: _DoorState) -> _DoorState:
 
 def _refuse_output_routing(state: _DoorState) -> None:
     """Refuse an invalid output device and a disk-plus-callback output sink."""
-    from ..._options_validation import _validate_output_device
-
     _validate_output_device(state.capture_options.output_device)
     streaming_options = state.streaming_options
     if streaming_options.path is not None and streaming_options.on_save is not None:
@@ -1414,10 +1395,6 @@ def _finish_chunked_trace(state: _DoorState, request: CaptureRequest, trace: Tra
 
 def _run_request(request: CaptureRequest) -> ForwardResult:
     """Run the forward pass for a prepared request inside the observer bracket."""
-    from ..._runnable_state_live import capture_observer_bracket
-    from ...backends.torch.rescue import capture_with_rescue
-    from .._episode_join import armed_capture
-    from .._weightsfree_admission import pending_admission
 
     model = request.model
     facts = _door_facts(request)
@@ -1494,8 +1471,6 @@ def _settle_stop_after_never_fired(request: CaptureRequest, trace: Trace) -> Non
         stop_annotations.setdefault("unmatched_capture_selectors", []).append(
             {"slot": "stop_after", "selector": site_repr}
         )
-    from ...errors import TorchLensWarning
-
     warnings.warn(
         TorchLensWarning(
             f"stop_after={site_repr} never fired; the capture ran the full "
@@ -1516,10 +1491,8 @@ def _warn_module_filter_zero_saved(request: CaptureRequest, trace: Trace) -> Non
         and module_filter_suppressed > 0
         and int(getattr(trace, "num_saved_ops", 0) or 0) == 0
     ):
-        from ...errors import TorchLensWarning as _TorchLensWarning
-
         warnings.warn(
-            _TorchLensWarning(
+            TorchLensWarning(
                 f"module_filter suppressed every selected payload "
                 f"({module_filter_suppressed} ops): the returned trace has full "
                 "metadata but ZERO saved activations. module_filter is a third "
@@ -1607,7 +1580,5 @@ def _finish_door_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     # Weightsfree settlement (F33): wrap-generation stamp on every capture
     # (W1-ORD preflight input), D22 invariant net + persisted evidence
     # envelope on structure-only captures.
-    from .._structure_evidence import settle_weightsfree_capture
-
     settle_weightsfree_capture(trace, facts["meta_admission"])
     return trace
