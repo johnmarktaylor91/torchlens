@@ -12,6 +12,7 @@ refusals and cleanup, the mixed plan, and the ``no_fire`` reasons.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
@@ -146,7 +147,8 @@ def test_a9_edit_applies_to_the_output_gradient() -> None:
     assert torch.allclose(result[h_site].grad, torch.ones_like(result[h_site].grad))
     fires = _backward_fires(result)
     assert fires and all(record.grad_kind == "grad_output" for record in fires)
-    assert {record.site_label for record in fires} == {y_site}
+    # Records name the forward layer (no pass suffix on this single-pass op).
+    assert {record.site_label for record in fires} == {y_site.split(":")[0]}
 
 
 @pytest.mark.smoke
@@ -176,7 +178,9 @@ def test_a11_saved_grad_is_the_edited_gradient() -> None:
     model = _BranchMLP()
     baseline, _grads = _unedited(model)
     relu = _label(baseline, "relu")
-    result = baseline.do(tl.grad(relu), tl.scale(0.25), model=model, x=_X, loss=_loss)
+    source = _capture(model, _X)
+    result = source.do(tl.grad(relu), tl.scale(0.25), model=model, x=_X, loss=_loss)
+    assert result.num_backward_passes == 1
     assert torch.allclose(result[relu].grad, 0.25 * baseline[relu].grad)
 
 
@@ -200,7 +204,7 @@ def test_a19_do_returns_an_armed_trace_and_leaves_the_source_alone() -> None:
     assert not _backward_fires(result)
     assert not result[relu].has_grad
     assert trace.recipe == recipe_before
-    assert "gradient edits armed" in str(result) + repr(result)
+    assert re.search(r"\b1 gradient edits? armed; call trace\.backward\(loss\)", repr(result))
 
 
 @pytest.mark.smoke
@@ -315,9 +319,14 @@ def test_a24_mixed_plan_edits_the_activation_and_the_gradient() -> None:
     trace = _capture(model, _X)
     relu = _label(trace, "relu")
 
-    # Reference: halve the activation only, then run the unedited backward.
-    act_only = trace.do(relu, tl.scale(0.5), model=model, x=_X)
+    # Reference: halve the activation only (a capture-time rule), then the unedited backward.
     _clear_param_grads(model)
+    act_only = tl.trace(
+        model,
+        _X,
+        capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
+        intervene=tl.when(tl.func("relu"), tl.scale(0.5)),
+    )
     act_only.backward(_loss(act_only))
     act_only_grads = _param_grads(model)
     _clear_param_grads(model)
