@@ -108,11 +108,30 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # channel" reading (net +1 against a discharged older site).
     "_io": 26,
     "_autoroute": 2,
-    "backends/jax": 7,
-    "backends/mlx": 21,
-    "backends/paddle": 20,
-    "backends/tf": 9,
-    "backends/tinygrad": 5,
+    # Preview-protocol union reconcile (2026-11-01, wip/mp-pp-union): the six
+    # preview packets each trued their own package row on their own tree; the
+    # union carries every packet's sites at once, and the B009 autofix on the
+    # same branch turned default-less `getattr(trace, "_x")` reads into
+    # direct attribute reads (jax -3, mlx -3, tf -5, tinygrad -1). Every
+    # remaining site is the ledgered preview idiom: a backend-private
+    # runtime-only scratch field (`_<backend>_op_captures`, `_module_stack`,
+    # `_replay_inventory`, `_loaded_from_bundle`, `_validation_replay_status`)
+    # read back with a default that is the correct "not attached" reading on
+    # a loaded or never-captured trace.
+    # 0 -> 1: the shared tinygrad protocol reads the optional
+    # `_validation_replay_status` of a loaded trace.
+    "backends/_protocols": 1,
+    # 7 -> 5 (shrank: B009 direct reads).
+    "backends/jax": 5,
+    # 21 -> 25 (+7 P3 constants-rule and unwrapped-gap scratch reads, -3 B009).
+    "backends/mlx": 25,
+    # 20 -> 24 (+4 P5 constants-rule, loaded-bundle and module-stack reads).
+    "backends/paddle": 24,
+    # 9 -> 10 (+6 P2 validation reads of the optional loaded-bundle flag and
+    # `_tf_op_captures`, -5 B009).
+    "backends/tf": 10,
+    # 5 -> 4 (shrank: B009 direct read).
+    "backends/tinygrad": 4,
     # 111 -> 112 (2026-08-14 fixwave-2 reconcile): heavy site churn from the
     # ops.py/completeness_witness.py file splits nets +1, dominated by the
     # intended safetynet stage-2 rescue path (rescue.py) and backward-projection
