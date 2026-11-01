@@ -522,6 +522,9 @@ class TinygradBackend:
         trace.raw_output = output_transform(output) if callable(output_transform) else None
         input_leaves = self._input_leaves(args)
         uops = _unique_uops(outputs)
+        # ``realize_once`` rewrites each output's ``.uop`` to its buffer, so the
+        # output UOps are read before realization.
+        output_uops = [cast(Any, output).uop for output in outputs]
         payloads, identities = self._realize_capture_payloads(input_leaves, uops, outputs)
         uop_labels = self._emit_input_sources(trace, input_leaves, payloads)
         captures = self._emit_uop_graph(
@@ -534,7 +537,7 @@ class TinygradBackend:
             observed_module_stacks,
             module_tree if use_object_module else None,
         )
-        self._mark_output_events(trace, outputs, uop_labels, captures)
+        self._mark_output_events(trace, outputs, uop_labels, captures, output_uops)
         if use_object_module and module_tree is not None:
             trace.param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
             trace.num_param_tensors = len(trace.param_logs)
@@ -1245,6 +1248,7 @@ class TinygradBackend:
         outputs: Sequence[Any],
         uop_labels: Mapping[int, str],
         captures: Sequence[TinygradUOpCapture] = (),
+        output_uops: Sequence[Any] | None = None,
     ) -> None:
         """Mark final output UOps as output parents.
 
@@ -1259,6 +1263,9 @@ class TinygradBackend:
         captures
             Captured UOps for structural fallback when tinygrad returns
             equivalent UOp objects with different Python identities.
+        output_uops
+            Output UOps read before realization, parallel to ``outputs``;
+            ``None`` reads ``output.uop``.
 
         Returns
         -------
@@ -1270,13 +1277,13 @@ class TinygradBackend:
             _uop_signature(capture.uop): capture.label_raw for capture in captures
         }
         output_labels: list[str] = []
-        for output in outputs:
-            output_uop = cast(Any, output).uop
+        for index, output in enumerate(outputs):
+            output_uop = cast(Any, output).uop if output_uops is None else output_uops[index]
             label = uop_labels.get(id(output_uop))
             if label is None:
                 label = labels_by_signature.get(_uop_signature(output_uop))
             if label is None:
-                label = _fallback_output_label(output, captures, output_labels)
+                label = _fallback_output_label(output, captures, output_labels, output_uop)
             if label is not None:
                 output_labels.append(label)
         labels = tuple(output_labels)
@@ -2350,6 +2357,7 @@ def _fallback_output_label(
     output: Any,
     captures: Sequence[TinygradUOpCapture],
     used_labels: Sequence[str],
+    output_uop: Any | None = None,
 ) -> str | None:
     """Return a best-effort captured label for a returned tinygrad output.
 
@@ -2361,6 +2369,8 @@ def _fallback_output_label(
         Captures emitted from output-reachable UOps.
     used_labels
         Output labels already assigned to earlier leaves.
+    output_uop
+        The output's UOp read before realization; ``None`` reads ``output.uop``.
 
     Returns
     -------
@@ -2368,7 +2378,7 @@ def _fallback_output_label(
         Matching raw label, if one can be inferred.
     """
 
-    output_name = _uop_name(output.uop)
+    output_name = _uop_name(output.uop if output_uop is None else output_uop)
     output_shape = tuple(getattr(output, "shape", ()))
     output_dtype = str(getattr(output, "dtype", ""))
     used = set(used_labels)
@@ -2813,9 +2823,16 @@ def _has_payload_structure(uop: Any) -> bool:
 
         tensor = Tensor(uop)
         tuple(tensor.shape)
+        device = str(tensor.device)
     except Exception:
         return False
-    return getattr(tensor.dtype.base, "fmt", None) is not None
+    if getattr(tensor.dtype.base, "fmt", None) is None:
+        return False
+    # The host-only ``NPY`` device holds numpy-backed buffers and has no
+    # renderer: its buffers are readable, but a view over one (a RESHAPE before
+    # the copy to the compute device) has no value until copied, so it is not
+    # recorded, matching what the read-back test dropped.
+    return not device.startswith("NPY") or _uop_name(uop) == "BUFFER"
 
 
 def _first_unrealizable_uop(uops: Sequence[Any]) -> Any:
