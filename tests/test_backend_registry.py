@@ -1200,3 +1200,115 @@ def test_refusal_code_passed_at_the_raise_site_is_the_instance_code() -> None:
     restored = pickle.loads(pickle.dumps(exc))
     assert restored.code == "backward_capture_unsupported"
     assert restored.fields["code"] == "backward_capture_unsupported"
+
+
+_GATED_TRACE_OPTION_FLAGS_AT_RECORDS = {
+    "intervene": "interventions",
+    "halt": "interventions",
+    "facets": "interventions",
+    "storage": "has_streaming",
+    "streaming": "has_streaming",
+    "save_grads": "backward_capture",
+    "backward_ready": "backward_capture",
+    "save_rng": "rng_replay",
+    "seed": "rng_replay",
+    "structure_only": "structure_only_capture",
+}
+_PUBLIC_OPTION_SPINE_AT_RECORDS = (
+    "jax_control_flow",
+    "jax_max_control_flow_unroll",
+    "module_identity_mode",
+    "payload_policy",
+    "save_preview",
+    "capture_container_structure",
+    "inference_only",
+    "chunk_size",
+    "chunk_paths",
+)
+
+
+def test_backend_capability_records_are_consistent() -> None:
+    """Every capability record is well formed and every option has one owner."""
+
+    from dataclasses import fields
+
+    from torchlens.backends import registry
+
+    bool_flags = {
+        field.name for field in fields(BackendCapabilities) if field.type in ("bool", bool)
+    }
+    seen: dict[str, str] = {}
+    for record in registry._BACKEND_CAPABILITIES:
+        assert isinstance(record, registry._BackendCapability)
+        assert not (record.gated and record.public_spine), record.name
+        if record.gated:
+            assert record.name in bool_flags, record.name
+        else:
+            assert record.trace_options, record.name
+        for option in record.trace_options:
+            assert option not in seen, (option, seen.get(option), record.name)
+            seen[option] = record.name
+    assert len({record.name for record in registry._BACKEND_CAPABILITIES}) == len(
+        registry._BACKEND_CAPABILITIES
+    )
+
+
+def test_capability_tables_derive_from_the_records_in_table_order() -> None:
+    """The gate table, the public spine and each backend's options keep their order."""
+
+    from torchlens.backends import registry
+    from torchlens.backends._options import TRACE_OPTION_CAPABILITY_GATES
+
+    expected_flags = frozenset(
+        {
+            "backward_capture",
+            "fastlog",
+            "interventions",
+            "rng_replay",
+            "has_streaming",
+            "structure_only_capture",
+        }
+    )
+    assert expected_flags == registry.GATED_CAPABILITY_FLAGS
+    assert list(TRACE_OPTION_CAPABILITY_GATES.items()) == list(
+        _GATED_TRACE_OPTION_FLAGS_AT_RECORDS.items()
+    )
+    assert registry.PUBLIC_OPTION_SPINE_TRACE_OPTIONS == _PUBLIC_OPTION_SPINE_AT_RECORDS
+    assert registry.TORCH_TRACE_OPTIONS == _PUBLIC_OPTION_SPINE_AT_RECORDS
+    assert registry.JAX_TRACE_OPTIONS == (
+        "jax_static_argnums",
+        "grad_options",
+        "jax_control_flow",
+        "jax_max_control_flow_unroll",
+        "module_identity_mode",
+    )
+    for options in (
+        registry.MLX_TRACE_OPTIONS,
+        registry.TINYGRAD_TRACE_OPTIONS,
+        registry.PADDLE_TRACE_OPTIONS,
+        registry.TF_TRACE_OPTIONS,
+    ):
+        assert options == ("module_identity_mode", "grad_options")
+
+
+def test_registered_backends_list_only_recorded_trace_options() -> None:
+    """A backend's ``trace_options`` names only recorded, non-gated options."""
+
+    from torchlens.backends import registry
+
+    recorded = {
+        option
+        for record in registry._BACKEND_CAPABILITIES
+        if not record.gated
+        for option in record.trace_options
+    }
+    gated = {
+        option
+        for record in registry._BACKEND_CAPABILITIES
+        if record.gated
+        for option in record.trace_options
+    }
+    for spec in registry.registered_backend_specs():
+        listed = set(spec.capabilities.trace_options)
+        assert listed <= recorded, (spec.name, listed - recorded)
+        assert not (listed & gated), (spec.name, listed & gated)

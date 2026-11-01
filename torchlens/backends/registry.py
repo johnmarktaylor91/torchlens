@@ -21,6 +21,9 @@ from ._errors import (
 )
 from ._protocol import CaptureBackend
 from ._trace_options import (
+    _BACKEND_CAPABILITIES as _BACKEND_CAPABILITIES,
+    _GATED_TRACE_OPTION_FLAGS as _GATED_TRACE_OPTION_FLAGS,
+    GATED_CAPABILITY_FLAGS as GATED_CAPABILITY_FLAGS,
     JAX_TRACE_OPTIONS as JAX_TRACE_OPTIONS,
     MLX_TRACE_OPTIONS as MLX_TRACE_OPTIONS,
     PADDLE_TRACE_OPTIONS as PADDLE_TRACE_OPTIONS,
@@ -28,7 +31,8 @@ from ._trace_options import (
     TF_TRACE_OPTIONS as TF_TRACE_OPTIONS,
     TINYGRAD_TRACE_OPTIONS as TINYGRAD_TRACE_OPTIONS,
     TORCH_TRACE_OPTIONS as TORCH_TRACE_OPTIONS,
-    TRACE_OPTION_CAPABILITY_EPOCHS as TRACE_OPTION_CAPABILITY_EPOCHS,
+    _BackendCapability as _BackendCapability,
+    _trace_option_names as _trace_option_names,
 )
 
 BackendName: TypeAlias = Literal["torch", "mlx", "jax", "tinygrad", "paddle", "tf", "fake"] | str
@@ -50,20 +54,6 @@ CaptureTraceFn: TypeAlias = Callable[..., Any]
 ValidateEntryFn: TypeAlias = Callable[..., bool]
 ValidateTraceFn: TypeAlias = Callable[..., Any]
 CaptureBackendFactory: TypeAlias = Callable[[], CaptureBackend]
-
-
-GATED_CAPABILITY_FLAGS: frozenset[str] = frozenset(
-    {
-        "backward_capture",
-        "fastlog",
-        "interventions",
-        "rng_replay",
-        "has_streaming",
-        "structure_only_capture",
-    }
-)
-"""Capability flags that open behavior gates and therefore require a bound
-implementing surface (see ``BackendSpec.capability_implementations``)."""
 
 
 @dataclass(frozen=True)
