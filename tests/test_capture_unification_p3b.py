@@ -18,7 +18,7 @@ from torchlens.backends.default_specs import _tf_runtime_supported
 from torchlens.intervention.errors import SelectorCompositionError
 from torchlens.recording import RecordContext
 from torchlens.recording.exceptions import PredicateError
-from torchlens.validation.invariants import _check_backend_neutral_graph_topology
+from torchlens.validation._invariants_payloads import _check_backend_neutral_graph_topology
 
 
 class ViewThenMutate(nn.Module):

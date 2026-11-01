@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.tensor_leaves import iter_tensors
 from torchlens.backends.torch import param_mutation, wrappers
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
@@ -510,7 +511,7 @@ def test_operand_scan_reaches_nested_containers() -> None:
     grad = torch.ones(2, requires_grad=True)
     plain = torch.ones(2)
     operand = (plain, [{"values": grad}], 3)
-    found = list(param_mutation._iter_operand_tensors(operand))
+    found = list(iter_tensors(operand))
     assert len(found) == 2
     assert found[0] is plain and found[1] is grad
 

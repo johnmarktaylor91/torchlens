@@ -31,6 +31,7 @@ from typing import Any
 
 from .._io import _json
 from .._io._durability import fsync_dir, fsync_tree
+from .._utils.hashing import update_hasher_from_file
 from ._engine import derive_merge
 from ._enums import (
     MERGED_BUNDLE_FORMAT,
@@ -44,8 +45,6 @@ from ._evidence import extract_rank_evidence
 from ._presenter import MergedTrace, _RankHandle
 
 __all__ = ["canonical_json_bytes", "load_merged", "save_merged", "tree_hash"]
-
-_TREE_HASH_CHUNK_BYTES = 1 << 20
 
 _EXC_TEXT_LIMIT = 300
 
@@ -143,15 +142,8 @@ def tree_hash(root: Path) -> str:
             continue
         # Chunked: a rank core's safetensors blobs are legitimately multi-GiB, so
         # ``read_bytes()`` materialized the whole file just to hash it.
-        size = 0
         digest = hashlib.sha256()
-        with candidate.open("rb") as handle:
-            while True:
-                chunk = handle.read(_TREE_HASH_CHUNK_BYTES)
-                if not chunk:
-                    break
-                size += len(chunk)
-                digest.update(chunk)
+        size = update_hasher_from_file(digest, candidate)
         entry = _tree_hash_entry(
             candidate.relative_to(root).as_posix(),
             size,

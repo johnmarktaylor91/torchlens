@@ -33,7 +33,7 @@ hostile input, and every load path here is fail-closed.
 
 ## manifest.py / tlspec.py
 - `Manifest`, `TensorEntry`, `Provenance`; `enforce_version_policy()` gates artifact versions;
-  `sha256_of_file()` hashes blobs.
+  `torchlens._utils.hashing.sha256_file()` hashes blobs.
 - `_TlSpecWriter` writes unified bundles; `coerce_tlspec_save_level()` validates save levels.
 
 ## scrub.py / rehydrate.py / accessor_rebuild.py

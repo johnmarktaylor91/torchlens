@@ -486,7 +486,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # clears the union and stays.
     # 3300 -> 3150: the quantized-module FLOPs estimator split to
     # _quantized_flops.py (3127 measured); the ceiling follows the file down.
-    "torchlens/backends/torch/model_prep.py": 2900,
+    # 2900 -> 2800: the session-cleanup extraction and the helper-dedupe batch landed
+    # together (measured 2791; one 50-line step of slack).
+    "torchlens/backends/torch/model_prep.py": 2800,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
     # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
@@ -569,7 +571,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # parent already carried 2354 from the T67f union). Re-step to the next
     # 50-line step; no new growth licensed, debloat target unchanged.
     "torchlens/_capture/trace.py": 2400,
-    "torchlens/backends/torch/completeness_witness.py": 2100,
 }
 
 

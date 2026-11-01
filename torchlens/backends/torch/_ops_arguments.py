@@ -41,10 +41,6 @@ from .buffer_writes import session_validated_buffer_address
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        _SAFE_TENSOR_PROPERTY_NAMES,
-    )
 
 __all__ = (
     "_function_registry_key",
@@ -636,3 +632,10 @@ def _project_saved_args_bytes(t_args: Any, t_kwargs: Any) -> dict[Any, int]:
             seen_identities.add(identity)
             per_device[storage.device] = per_device.get(storage.device, 0) + num_bytes
     return per_device
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from .ops import (  # noqa: E402
+    _SAFE_TENSOR_PROPERTY_NAMES,
+)

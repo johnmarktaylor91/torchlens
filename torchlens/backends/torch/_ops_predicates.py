@@ -29,24 +29,19 @@ from ...recording.types import (
     ActivationRecord,
     CaptureSpec,
 )
+from ._completeness_origins import internal_scalar_read
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
 )
-from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        _BULK_ALIAS_FREE_TORCH_FUNCTIONS,
-        _is_hf_model_output,
-        _should_keep_alias_mutation_contract,
-    )
 
 __all__ = (
     "_replace_output_value",
+    "_replace_output_tensors_by_path",
     "_record_predicate_output",
     "_is_default_ram_payload",
     "_predicate_function_ref",
@@ -117,6 +112,30 @@ def _replace_output_value(
             for key, item in value.items()
         }
     return value
+
+
+def _replace_output_tensors_by_path(
+    out_orig: Any,
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
+) -> Any:
+    """Return an output object with selected tensor paths replaced.
+
+    Parameters
+    ----------
+    out_orig
+        Original output container.
+    replacements
+        Replacement tensors keyed by output path.
+
+    Returns
+    -------
+    Any
+        Rebuilt output object when supported, otherwise the original object.
+    """
+
+    if () in replacements:
+        return replacements[()]
+    return _replace_output_value(out_orig, (), replacements)
 
 
 def _record_predicate_output(
@@ -442,3 +461,16 @@ def _alias_free_backend_semantics(grad_fn_handle: Any) -> BackendSemantics:
         bytes_delta_at_call=None,
         bytes_peak_at_call=None,
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_capture_records import (  # noqa: E402
+    _should_keep_alias_mutation_contract,
+)
+from ._ops_container_base import (  # noqa: E402
+    _is_hf_model_output,
+)
+from .ops import (  # noqa: E402
+    _BULK_ALIAS_FREE_TORCH_FUNCTIONS,
+)

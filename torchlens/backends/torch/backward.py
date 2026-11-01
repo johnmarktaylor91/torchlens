@@ -58,7 +58,7 @@ from ..._utils._torch_compat import (
     get_accumulate_grad_class,
     get_current_autograd_node_fn,
 )
-from ..._utils._torch_symbols import torch_attr
+from ..._utils._torch_symbols import torch_dtype_named
 from ..._utils.introspection import _get_code_qualname, _get_col_offset
 from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ...errors import ConfigurationError
@@ -1759,9 +1759,8 @@ def _torch_dtype_from_string(dtype_name: str) -> torch.dtype | str:
     """Return a ``torch.dtype`` for canonical dtype strings when possible."""
 
     if dtype_name.startswith("torch."):
-        dtype_attr = dtype_name.removeprefix("torch.")
-        dtype = torch_attr(dtype_attr)  # r47 secD_1: no lazy ``torch.__getattr__``
-        if isinstance(dtype, torch.dtype):
+        dtype = torch_dtype_named(dtype_name.removeprefix("torch."))
+        if dtype is not None:
             return dtype
     return dtype_name
 

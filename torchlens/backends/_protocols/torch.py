@@ -190,7 +190,7 @@ def _ground_truth_tensors(ground_truth: Any) -> list[Any]:
     recorded its outputs.
     """
 
-    from ..torch.ops import _walk_output_tensors_with_paths
+    from ..torch._ops_containers import _walk_output_tensors_with_paths
 
     tensors: list[Any] = []
     seen: set[tuple[Any, ...]] = set()

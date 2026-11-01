@@ -19,11 +19,12 @@ from safetensors.torch import load_file, save_file
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_dir, fsync_file
 from .._io._json import read_bounded
-from .._io.manifest import TensorEntry, sha256_of_file
+from .._io.manifest import TensorEntry
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
 from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._utils.hashing import sha256_file
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from .errors import (
     DirectActivationWriteWarning,
@@ -286,7 +287,7 @@ def save_intervention(
             save_level=save_level.value,
         )
         _write_text_file(tmp_path / _README_FILE, _readme_text(spec_json, tensor_entries))
-        # Blob file data is fsynced at write time (_fsync_file), but directory
+        # Blob file data is fsynced at write time (fsync_file), but directory
         # ENTRIES must be flushed bottom-up: without fsyncing tensors/ first, a
         # power crash just after publish can leave a durable spec.json whose
         # tensors/*.safetensors entries were lost (R59; siblings use fsync_tree).
@@ -1929,7 +1930,7 @@ def _write_tlspec_tensor_blob(
     relative_path = Path(_TENSOR_DIR) / f"{blob_id}.safetensors"
     blob_path = tmp_path / relative_path
     save_file({_BLOB_TENSOR_KEY: contiguous}, str(blob_path))
-    _fsync_file(blob_path)
+    fsync_file(blob_path)
     return TensorEntry(
         blob_id=blob_id,
         kind=kind,
@@ -1941,7 +1942,7 @@ def _write_tlspec_tensor_blob(
         device_at_save=str(tensor.device),
         layout=str(contiguous.layout).replace("torch.", ""),
         bytes=int(contiguous.numel() * contiguous.element_size()),
-        sha256=sha256_of_file(blob_path),
+        sha256=sha256_file(blob_path),
         requires_grad=bool(tensor.requires_grad),
     )
 
@@ -1965,7 +1966,7 @@ def _load_tensor_refs(spec_path: Path, entries: list[TensorEntry]) -> dict[str, 
     tensors: dict[str, torch.Tensor] = {}
     for entry in entries:
         path = _resolve_intervention_tensor_path(spec_path, entry.relative_path)
-        if sha256_of_file(path) != entry.sha256:
+        if sha256_file(path) != entry.sha256:
             raise ReplayPreconditionError(f"Tensor sidecar checksum mismatch: {entry.blob_id}")
         tensor = load_file(str(path))[_BLOB_TENSOR_KEY]
         if entry.requires_grad:
@@ -2225,18 +2226,6 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ReplayPreconditionError(f"{path} must contain a JSON object")
     return data
-
-
-def _fsync_file(path: Path) -> None:
-    """Fsync an existing file (write-capable handle on Windows; see ``_durability``).
-
-    Parameters
-    ----------
-    path:
-        File path.
-    """
-
-    fsync_file(path)
 
 
 def _fsync_directory(path: Path) -> None:

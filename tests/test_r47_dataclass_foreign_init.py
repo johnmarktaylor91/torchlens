@@ -32,7 +32,7 @@ from torchlens._ir.container import (
     ContainerSpec,
     reconstruction_is_lossy_by_type,
 )
-from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+from torchlens._runnable_call_outputs import _spec_node_reconstruction_lossy
 
 _FIELDS = ("a", "b")
 

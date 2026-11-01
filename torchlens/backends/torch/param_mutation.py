@@ -20,6 +20,7 @@ import torch
 from ... import _state
 from ..._capture.projections import active_recording_state_or_none
 from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
+from ..._utils.tensor_leaves import iter_tensors
 from ..._utils.tensor_utils import safe_copy
 from ._tl import get_param_meta
 
@@ -83,30 +84,6 @@ def is_prepared_parameter_receiver(trace: Any, value: Any) -> bool:
     return not getattr(trace.param_logs[meta.param_address], "_lazy_at_prep", False)
 
 
-def _iter_operand_tensors(value: Any) -> Iterator[torch.Tensor]:
-    """Yield the tensors in one call operand, descending into plain containers.
-
-    Parameters
-    ----------
-    value:
-        A positional or keyword argument of a wrapped call.
-
-    Yields
-    ------
-    torch.Tensor
-        Each tensor found directly or inside nested tuples, lists and dicts.
-    """
-
-    if isinstance(value, torch.Tensor):
-        yield value
-    elif isinstance(value, (tuple, list)):
-        for item in value:
-            yield from _iter_operand_tensors(item)
-    elif isinstance(value, dict):
-        for item in value.values():
-            yield from _iter_operand_tensors(item)
-
-
 @contextmanager
 def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
     """Run one in-place call with a frozen Parameter's own ``requires_grad=False``.
@@ -128,7 +105,7 @@ def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
         Control for the wrapped call.
     """
 
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with _state.pause_logging(), internal_scalar_read():
         receiver.requires_grad_(False)
@@ -184,7 +161,7 @@ def frozen_parameter_receiver_context(
     receiver = args[0]
     if not isinstance(receiver, torch.nn.Parameter):
         return nullcontext()
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         is_forced_leaf = receiver.requires_grad and receiver.is_leaf
@@ -194,7 +171,7 @@ def frozen_parameter_receiver_context(
     if meta is None or meta.requires_grad_before_capture is not False:
         return nullcontext()
     for operand in (*args[1:], *kwargs.values()):
-        if any(tensor.requires_grad for tensor in _iter_operand_tensors(operand)):
+        if any(tensor.requires_grad for tensor in iter_tensors(operand)):
             return _frozen_receiver_flag(receiver)
     return torch.no_grad()
 

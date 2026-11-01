@@ -1082,7 +1082,7 @@ def recorded_state_metadata_facts(descriptor: SparseRunDescriptor) -> dict[str, 
     nothing (fail closed into "no fact", which stages the detached default).
     """
 
-    from ._runnable_execution import _decode_literal
+    from ._runnable_verification import _decode_literal
 
     facts: dict[str, dict[str, bool]] = {}
     for witness in descriptor.control_witnesses:

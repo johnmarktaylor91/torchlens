@@ -2175,7 +2175,7 @@ def mark_torch_capability_missing(capability_name: str, detail: str) -> None:
     Setting the ``TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS`` environment
     variable to a closed-vocabulary true spelling (``1``/``true``/``yes``/
     ``on``) suppresses the warning (the flag still flips, and the degradation
-    stays visible through ``tl.compat.report()`` / ``tl.report.doctor()``);
+    stays visible through ``tl.report.doctor()``);
     false spellings and unset keep the warning, and unrecognized values
     refuse (``env_flag_invalid``) -- the historical any-non-empty-value
     truthiness meant ``=false`` SUPPRESSED, the exact silent-inversion class
@@ -2230,9 +2230,9 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     # get_dynamo_optimized_module_type / get_fsdp_wrapper_type /
     # get_dtensor_type / get_device_mesh_type / get_pipelining_module_types) to
     # avoid unconditional torch._dynamo / torch.distributed imports on the
-    # capture hot path. Diagnostic snapshot consumers (tl.compat.report(),
-    # tl.report.doctor()) are not on that hot path, so force the probes here to
-    # report the real capabilities instead of the pre-probe placeholders.
+    # capture hot path. The diagnostic snapshot consumer (tl.report.doctor()) is
+    # not on that hot path, so force the probes here to report the real
+    # capabilities instead of the pre-probe placeholders.
     get_dynamo_optimized_module_type(force_probe=True)
     get_fsdp_wrapper_type(force_probe=True)
     get_dtensor_type(force_probe=True)
@@ -2763,7 +2763,7 @@ def get_funcol_group_resolvers(
     ``torch.distributed.distributed_c10d._resolve_process_group`` maps a group
     name to its live ProcessGroup. Both are torch-private surfaces, so their
     absence flips the named ``HAS_FUNCOL_GROUP_RESOLUTION`` flag (visible in
-    ``doctor()`` / ``compat.report()``) instead of failing mid-capture; the
+    ``tl.report.doctor()``) instead of failing mid-capture; the
     boundary wrap then refuses captured funcol calls typed rather than letting
     an uncorrelatable collective execute silently.
     """
@@ -2884,7 +2884,7 @@ def get_funcol_module() -> Any | None:
     calls), so this accessor hands out the module itself. The import is
     eager on first call -- callers only reach it at distributed arm/disarm
     time, never on the plain-capture hot path. Absence flips the named
-    ``HAS_FUNCOL_MODULE`` flag (visible in ``doctor()`` / ``compat.report()``)
+    ``HAS_FUNCOL_MODULE`` flag (visible in ``tl.report.doctor()``)
     and funcol calls then run unwrapped, exactly the pre-C2 disclosure class.
     """
 

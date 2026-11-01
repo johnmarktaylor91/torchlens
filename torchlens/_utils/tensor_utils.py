@@ -1101,7 +1101,7 @@ def _paused_internal_reads() -> Iterator[None]:
     would register as user raw-pointer escapes on witness-armed captures.
     """
     from .._state import pause_logging
-    from ..backends.torch.completeness_witness import internal_scalar_read
+    from ..backends.torch._completeness_origins import internal_scalar_read
 
     with pause_logging(), internal_scalar_read():
         yield
@@ -1209,7 +1209,7 @@ def _try_defer_payload_alias(
     state_ptrs = _DEFER_STATE_PTRS
     if state_ptrs is None:
         return None
-    from ..backends.torch.completeness_witness import internal_scalar_read
+    from ..backends.torch._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         key = _deferred_storage_key(x)

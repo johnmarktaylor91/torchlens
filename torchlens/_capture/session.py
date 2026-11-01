@@ -715,7 +715,7 @@ class CaptureSession:
                     ),
                     stacklevel=user_stacklevel(),
                 )
-            from .._postprocess import _refresh_fast_saved_summary
+            from .._postprocess.saved_summary import _refresh_fast_saved_summary
 
             _refresh_fast_saved_summary(trace)
             trace._layer_nums_to_save = sorted(selected_nums)

@@ -35,13 +35,12 @@ Pattern-of-record for the validators: :mod:`torchlens.bundle._relations`
 
 from __future__ import annotations
 
-import hashlib
-import json
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from .._utils.hashing import sha256_canonical_json
 from ..errors.episode import BundleRelationError
 
 __all__ = [
@@ -203,8 +202,7 @@ def validate_member_construction(
 def _canonical_digest(payload: Mapping[str, Any]) -> str:
     """SHA-256 over the canonical-JSON encoding of ``payload``."""
 
-    encoded = json.dumps(dict(payload), sort_keys=True, separators=(",", ":"), default=repr)
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    return sha256_canonical_json(dict(payload), default=repr)
 
 
 @dataclass(frozen=True)

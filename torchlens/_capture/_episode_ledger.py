@@ -33,13 +33,12 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-import hashlib
-import json
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from .._utils.hashing import sha256_canonical_json
 from ..errors.episode import EpisodeCaptureError, EpisodeLedgerError
 from ._episode_derivation import (
     _call_returned,
@@ -1084,16 +1083,9 @@ def producer_digest(outcome_payload: Mapping[str, Any], ledger: EpisodeLedger) -
     DOCUMENTED-UNSTABLE (naming session 2).
     """
 
-    canonical = json.dumps(
-        {
-            "outcome": dict(outcome_payload),
-            "ledger": ledger.to_payload(),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
+    return sha256_canonical_json(
+        {"outcome": dict(outcome_payload), "ledger": ledger.to_payload()}, default=str
     )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------

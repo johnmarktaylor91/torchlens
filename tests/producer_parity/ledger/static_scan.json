@@ -2801,14 +2801,6 @@
  },
  {
   "ambiguous": false,
-  "field": "unattributed_tensor_args",
-  "file": "torchlens/_postprocess/__init__.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
   "field": "equivalence_class",
   "file": "torchlens/_postprocess/_buffer_addresses.py",
   "has_default": false,
@@ -2885,14 +2877,6 @@
   "file": "torchlens/_postprocess/_conditional_records.py",
   "has_default": false,
   "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_postprocess/_executor.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {
@@ -3536,6 +3520,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "unattributed_tensor_args",
+  "file": "torchlens/_postprocess/source_provenance.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_quickstart/_grammar.py",
@@ -3660,7 +3652,7 @@
   "field": "layer_type",
   "file": "torchlens/_runnable_transaction.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -3684,7 +3676,23 @@
   "field": "raw_index",
   "file": "torchlens/_runnable_transaction.py",
   "has_default": true,
-  "sites": 3,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/_runnable_until.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/_runnable_until.py",
+  "has_default": true,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -10297,18 +10305,10 @@
  },
  {
   "ambiguous": false,
-  "field": "step_index",
-  "file": "torchlens/validation/_invariants_connectivity.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
   "field": "unattributed_tensor_args",
   "file": "torchlens/validation/_invariants_connectivity.py",
   "has_default": true,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": true
  },
  {
@@ -10389,6 +10389,22 @@
   "file": "torchlens/validation/_invariants_modules_params.py",
   "has_default": true,
   "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "step_index",
+  "file": "torchlens/validation/_invariants_parentless.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "unattributed_tensor_args",
+  "file": "torchlens/validation/_invariants_parentless.py",
+  "has_default": true,
+  "sites": 1,
   "via_getattr": true
  },
  {

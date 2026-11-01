@@ -11,7 +11,7 @@ import torchlens as tl
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
-from torchlens.backends.torch.ops import _get_autograd_saved_stats_for_tensor
+from torchlens.backends.torch._ops_autograd import _get_autograd_saved_stats_for_tensor
 from torchlens.options import CaptureOptions
 
 

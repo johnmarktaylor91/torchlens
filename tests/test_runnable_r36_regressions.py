@@ -390,7 +390,7 @@ class TestCorr21EventLedgerExhaustive:
         """
         monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)  # keep primary capture
 
-        from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
+        from torchlens.backends.torch._completeness_dispatch import runnable_ledger_facts
 
         x = torch.tensor([-2.0, -0.5, 0.5, 2.0])
         trace = tl.trace(_RawNonMutating(), x.clone(), capture=_CAPTURE)
@@ -412,7 +412,7 @@ class TestCorr21EventLedgerExhaustive:
     def test_plain_model_has_no_ledger_facts_and_verifies(self, tmp_path: Path) -> None:
         """Over-trigger pin: an ordinary capture stays COMPLETE and VERIFIED."""
 
-        from torchlens.backends.torch.completeness_witness import runnable_ledger_facts
+        from torchlens.backends.torch._completeness_dispatch import runnable_ledger_facts
 
         torch.manual_seed(0)
         model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
@@ -1358,7 +1358,7 @@ class TestOutputCapabilityMetaGates:
         """secB_1 adversarial pin: a hand-edited lossy_reconstruction=False is impotent."""
 
         from torchlens._ir.container import ContainerSpec
-        from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+        from torchlens._runnable_call_outputs import _spec_node_reconstruction_lossy
 
         forged = ContainerSpec(
             kind="namedtuple",
@@ -1372,7 +1372,7 @@ class TestOutputCapabilityMetaGates:
 
     def test_plain_namedtuple_spec_recompute_stays_lossless(self) -> None:
         from torchlens._ir.container import ContainerSpec
-        from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+        from torchlens._runnable_call_outputs import _spec_node_reconstruction_lossy
 
         plain = ContainerSpec(
             kind="namedtuple",
