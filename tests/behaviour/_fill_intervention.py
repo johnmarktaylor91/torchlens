@@ -227,13 +227,20 @@ def _expect_cone_only(cell: Cell, base: Any, edited: Any, label: str, what: str)
         cell.expect(not _same(before[label], after[label]), f"{what}: {label} did not change")
 
 
+def _marked_replaced(trace: Any) -> set[str]:
+    """Return the labels marked replaced, over ``saved_ops`` (``trace.ops`` omits input records)."""
+
+    rows = getattr(trace, "saved_ops", None)
+    return {op.label for op in (trace.ops if rows is None else rows) if op.intervention_replaced}
+
+
 def _expect_edit_marks(
     cell: Cell, base: Any, edited: Any, label: str, helper: str, what: str
 ) -> None:
     """Expect the edit stamped on exactly ``label`` beyond what ``base`` already carried."""
 
-    marked_before = {op.label for op in base.ops if op.intervention_replaced}
-    marked_after = {op.label for op in edited.ops if op.intervention_replaced}
+    marked_before = _marked_replaced(base)
+    marked_after = _marked_replaced(edited)
     cell.expect(
         marked_after == marked_before | {label},
         f"{what}: ops marked replaced {sorted(marked_after)[:8]} != "
