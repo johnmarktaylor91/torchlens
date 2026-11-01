@@ -1135,8 +1135,8 @@ def test_intervention_direction_doors_split_by_site_history() -> None:
     The door raised a raw ``TypeError`` since the 2.16 intervention era, and
     the live capture-path callers catch ``TypeError`` to convert a bad
     predicate result into ``PredicateError``. Its code is distinct from the
-    ValueError-lineage trace-side ``intervention_direction_invalid`` doors so
-    ``fields["code"]`` determines the catchable builtin.
+    ValueError-lineage trace-side doors so ``fields["code"]`` determines the
+    catchable builtin.
     """
 
     from torchlens.intervention.predicates import as_intervention_decision

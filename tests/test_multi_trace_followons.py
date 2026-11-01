@@ -229,7 +229,7 @@ def test_show_bundle_graph_rolled_and_backward_modes(tmp_path: Path) -> None:
     backward_source = tl.visualization.show_bundle_graph(
         bundle,
         path=str(tmp_path / "backward_bundle"),
-        direction="backward",
+        signal="backward",
         vis_save_only=True,
         file_format="svg",
     )
@@ -248,7 +248,7 @@ def test_bundle_backward_regression_path(tmp_path: Path) -> None:
     source = tl.visualization.show_bundle_graph(
         bundle,
         path=str(tmp_path / "backward_bundle_regression"),
-        direction="backward",
+        signal="backward",
         vis_save_only=True,
         file_format="svg",
     )
@@ -266,7 +266,7 @@ def test_bundle_backward_no_unified_supergraph(tmp_path: Path) -> None:
     source = tl.visualization.show_bundle_graph(
         bundle,
         path=str(tmp_path / "backward_bundle_no_supergraph"),
-        direction="backward",
+        signal="backward",
         vis_save_only=True,
         file_format="svg",
     )

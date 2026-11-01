@@ -52,10 +52,10 @@ def test_freeze_reflects_in_place_metadata_mutation() -> None:
     target = TargetSpec("label", "relu_1_1")
     assert target.freeze().metadata == ()
 
-    target.metadata["direction"] = "forward"
+    target.metadata["signal"] = "forward"
     mutated = target.freeze()
-    assert mutated.metadata == (("direction", "forward"),)
-    assert mutated == TargetSpec("label", "relu_1_1", metadata={"direction": "forward"}).freeze()
+    assert mutated.metadata == (("signal", "forward"),)
+    assert mutated == TargetSpec("label", "relu_1_1", metadata={"signal": "forward"}).freeze()
 
     target.metadata.clear()
     assert target.freeze() == TargetSpec("label", "relu_1_1").freeze()

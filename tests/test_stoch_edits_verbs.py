@@ -115,14 +115,14 @@ def test_permute_batch_gradients_route_to_permuted_sources() -> None:
     assert edit.factory is not None
     hook_fn = edit.factory()
     x = torch.randn(4, 3, requires_grad=True)
-    run_ctx: dict[str, object] = {}
+    run_state: dict[str, object] = {}
     context = make_hook_context(
         name="permute_batch",
         op={"label": "unit", "pass_index": 1},
-        run_context=run_ctx,
+        run_context=run_state,
     )
     out = hook_fn(x, ctx=context)
-    permutation = run_ctx["sampling_records"][-1]["permutation"]  # type: ignore[index]
+    permutation = run_state["sampling_records"][-1]["permutation"]  # type: ignore[index]
     weights = torch.tensor([1.0, 10.0, 100.0, 1000.0]).reshape(4, 1)
     (out * weights).sum().backward()
     # Row j of the output is row permutation[j] of the input, so input row

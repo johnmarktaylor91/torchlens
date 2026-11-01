@@ -12,9 +12,7 @@ from torchlens.intervention.types import Edit
 @pytest.mark.parametrize(
     ("edit", "expected"),
     [
-        (tl.zero_grad(), "tl.zero_grad()"),
-        (tl.scale_grad(2.0), "tl.scale_grad(2.0)"),
-        (tl.clamp_grad(low=-1.0), "tl.clamp_grad(low=-1.0)"),
+        (tl.clip_norm(1.0), "tl.clip_norm(1.0)"),
         (tl.zero_ablate(), "tl.zero_ablate()"),
         (tl.scale(0.5), "tl.scale(0.5)"),
         (tl.add_noise(0.1, seed=3), "tl.add_noise(0.1, seed=3)"),
@@ -46,14 +44,14 @@ def test_tensor_arguments_print_by_shape_and_dtype() -> None:
 def test_session_bound_edit_prints_as_tl_edit() -> None:
     """An edit no public call rebuilds prints as ``tl.Edit`` with its identity fields."""
 
-    edit = Edit("custom_edit", kind="backward", portability="opaque_audit")
-    assert repr(edit) == "tl.Edit('custom_edit', kind='backward', portability='opaque_audit')"
+    edit = Edit("custom_edit", portability="opaque_audit")
+    assert repr(edit) == "tl.Edit('custom_edit', portability='opaque_audit')"
 
 
 def test_no_edit_repr_prints_the_internal_class_name() -> None:
     """``Edit(`` never appears in an edit's printed form."""
 
-    edits = [tl.zero_grad(), tl.hook_grad(lambda g, *, ctx: g), tl.steer(torch.zeros(3))]
+    edits = [tl.zero_ablate(), tl.clip_norm(1.0), tl.steer(torch.zeros(3))]
     for edit in edits:
         assert "Edit(" not in repr(edit)
         assert repr(edit).startswith("tl.")

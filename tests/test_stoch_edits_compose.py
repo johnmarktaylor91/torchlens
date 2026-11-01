@@ -60,7 +60,7 @@ def test_flattening_is_syntactic_and_audit_visible() -> None:
 
 
 def test_construction_refusals() -> None:
-    """D20/D21: empty, non-helper, unseeded-stochastic, shape-change, backward."""
+    """D20/D21: empty, non-helper, unseeded-stochastic, shape-change."""
 
     with pytest.raises(Exception) as excinfo:
         compose()
@@ -74,9 +74,6 @@ def test_construction_refusals() -> None:
     with pytest.raises(Exception) as excinfo:
         compose(tl.scale(2.0, allow_shape_change=True))
     assert excinfo.value.fields["code"] == "compose_shape_change_unsupported"
-    with pytest.raises(Exception) as excinfo:
-        compose(tl.scale(2.0), tl.zero_grad())
-    assert excinfo.value.fields["code"] == "compose_kind_mismatch"
 
 
 def test_one_fire_one_record_with_ordered_leaves() -> None:

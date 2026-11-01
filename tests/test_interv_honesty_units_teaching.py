@@ -95,7 +95,7 @@ def test_note_keeps_public_labels_and_drops_internal_ones() -> None:
         run_context={},
     )
     _enqueue_nondeterminism_note(public, "scramble_elements")
-    assert public.run_ctx["ledger_notes"] == [
+    assert public.run_state["ledger_notes"] == [
         "scramble_elements used unseeded stochastic RNG at relu_1_2:1"
     ]
 
@@ -105,4 +105,4 @@ def test_note_keeps_public_labels_and_drops_internal_ones() -> None:
         run_context={},
     )
     _enqueue_nondeterminism_note(raw_only, "scramble_elements")
-    assert raw_only.run_ctx["ledger_notes"] == ["scramble_elements used unseeded stochastic RNG"]
+    assert raw_only.run_state["ledger_notes"] == ["scramble_elements used unseeded stochastic RNG"]
