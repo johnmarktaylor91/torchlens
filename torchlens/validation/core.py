@@ -77,7 +77,9 @@ from ._saved_outs_steps import (
     _check_metadata_invariants_recorded,
     _fail_bfs_incomplete,
     _fail_dispatch_census,
+    _fail_ground_truth_mismatch,
     _fail_output_count_mismatch,
+    _fail_output_missing,
     _finish_run_status,
     _record_dispatch_census_decision,
     _reset_run_diagnostics,
@@ -852,19 +854,8 @@ def validate_saved_outs(
 _ORPHAN_CANDIDATE_INDEX_KEY = "_validation_orphan_candidate_index"
 
 
-def _validate_saved_outs_run(
-    self: "Trace",
-    ground_truth_output_tensors: list[torch.Tensor],
-    verbose: bool,
-    validate_metadata: bool,
-    resolved_callables: list[Any] | None = None,
-) -> ValidationStatus:
-    """One validation run; :func:`validate_saved_outs` clears its scratch after it.
-
-    ``resolved_callables`` are the loaded ops whose ``func`` the replay phase
-    resolved; they are released before the metadata invariants, which check
-    the loaded artifact's own shape (``func`` never persists).
-    """
+def _refuse_unreplayable_trace(self: Trace) -> None:
+    """Refuse traces that cannot be replay-validated, then prove the comparator."""
     from .._runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
 
     refuse_poisoned_trace(self, "validation")
@@ -880,6 +871,22 @@ def _validate_saved_outs_run(
     # test stays green, so the entry point proves the judge on known
     # sentinel pairs before trusting any verdict it produces.
     _comparator_self_test()
+
+
+def _validate_saved_outs_run(
+    self: "Trace",
+    ground_truth_output_tensors: list[torch.Tensor],
+    verbose: bool,
+    validate_metadata: bool,
+    resolved_callables: list[Any] | None = None,
+) -> ValidationStatus:
+    """One validation run; :func:`validate_saved_outs` clears its scratch after it.
+
+    ``resolved_callables`` are the loaded ops whose ``func`` the replay phase
+    resolved; they are released before the metadata invariants, which check
+    the loaded artifact's own shape (``func`` never persists).
+    """
+    _refuse_unreplayable_trace(self)
     _reset_run_diagnostics(self)
     # Per-run cache for the orphan-arg sweep; stale entries from a previous
     # validation of a since-mutated trace must never leak into this run.
@@ -929,14 +936,6 @@ def _check_ground_truth_outputs(
     decision_recorder: ValidationDecisionRecorder,
 ) -> ValidationStatus | None:
     """Compare every logged output against ground truth; return the failed status, else None."""
-    from .diagnostics import (
-        CHECK_GROUND_TRUTH,
-        CHECK_OUTPUT_MISSING,
-        ValidationFailure,
-        describe_tensor_mismatch,
-        record_validation_failure,
-    )
-
     if len(self.output_layers) != len(ground_truth_output_tensors):
         return _fail_output_count_mismatch(
             self, ground_truth_output_tensors, verbose, decision_recorder
@@ -947,49 +946,19 @@ def _check_ground_truth_outputs(
             self, output_layer_label, output_label_counts
         )
         if output_layer.out is None:
-            if verbose:
-                print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
-            record_validation_failure(
-                self,
-                ValidationFailure(
-                    check_name=CHECK_OUTPUT_MISSING,
-                    op_label=output_layer_label,
-                    message=f"output layer #{i} has no saved out",
-                ),
+            return _fail_output_missing(
+                self, decision_recorder, i, output_layer_label, output_layer, verbose
             )
-            decision_recorder.record(
-                op_label=output_layer_label,
-                func_name=getattr(output_layer, "func_name", None),
-                phase="ground_truth",
-                decision="failed",
-                reason="output_missing",
-            )
-            return _finish_run_status(self, decision_recorder)
         if not _ground_truth_output_matches_saved(output_layer.out, ground_truth_output_tensors[i]):
-            if verbose:
-                print(
-                    f"The {i}th output layer, {output_layer_label}, does not "
-                    "match the ground truth output tensor."
-                )
-            record_validation_failure(
+            return _fail_ground_truth_mismatch(
                 self,
-                describe_tensor_mismatch(
-                    output_layer.out,
-                    ground_truth_output_tensors[i],
-                    check=CHECK_GROUND_TRUTH,
-                    op_label=output_layer_label,
-                    func_name=getattr(output_layer, "func_name", None),
-                    message=f"output #{i} does not match ground truth",
-                ),
+                decision_recorder,
+                i,
+                output_layer_label,
+                output_layer,
+                ground_truth_output_tensors[i],
+                verbose,
             )
-            decision_recorder.record(
-                op_label=output_layer_label,
-                func_name=getattr(output_layer, "func_name", None),
-                phase="ground_truth",
-                decision="failed",
-                reason="ground_truth_mismatch",
-            )
-            return _finish_run_status(self, decision_recorder)
         decision_recorder.record(
             op_label=output_layer_label,
             func_name=getattr(output_layer, "func_name", None),

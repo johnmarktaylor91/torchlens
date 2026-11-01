@@ -11,10 +11,12 @@ from typing import TYPE_CHECKING, Any
 
 from .diagnostics import (
     CHECK_COMPLETENESS,
+    CHECK_GROUND_TRUTH,
     CHECK_METADATA_INVARIANT,
     CHECK_OUTPUT_MISSING,
     ValidationDiagnostic,
     ValidationFailure,
+    describe_tensor_mismatch,
     record_validation_diagnostic,
     record_validation_failure,
     reset_validation_diagnostics,
@@ -170,6 +172,71 @@ def _fail_output_count_mismatch(
         phase="ground_truth",
         decision="failed",
         reason="output_count_mismatch",
+    )
+    return _finish_run_status(self, decision_recorder)
+
+
+def _fail_output_missing(
+    self: Trace,
+    decision_recorder: ValidationDecisionRecorder,
+    i: int,
+    output_layer_label: str,
+    output_layer: Any,
+    verbose: bool,
+) -> ValidationStatus:
+    """Record an output layer with no saved out and return the failed status."""
+    if verbose:
+        print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
+    record_validation_failure(
+        self,
+        ValidationFailure(
+            check_name=CHECK_OUTPUT_MISSING,
+            op_label=output_layer_label,
+            message=f"output layer #{i} has no saved out",
+        ),
+    )
+    decision_recorder.record(
+        op_label=output_layer_label,
+        func_name=getattr(output_layer, "func_name", None),
+        phase="ground_truth",
+        decision="failed",
+        reason="output_missing",
+    )
+    return _finish_run_status(self, decision_recorder)
+
+
+def _fail_ground_truth_mismatch(
+    self: Trace,
+    decision_recorder: ValidationDecisionRecorder,
+    i: int,
+    output_layer_label: str,
+    output_layer: Any,
+    ground_truth_output: torch.Tensor,
+    verbose: bool,
+) -> ValidationStatus:
+    """Record a logged output that differs from ground truth and return the failed status."""
+    if verbose:
+        print(
+            f"The {i}th output layer, {output_layer_label}, does not "
+            "match the ground truth output tensor."
+        )
+    record_validation_failure(
+        self,
+        describe_tensor_mismatch(
+            output_layer.out,
+            ground_truth_output,
+            check=CHECK_GROUND_TRUTH,
+            op_label=output_layer_label,
+            func_name=getattr(output_layer, "func_name", None),
+            message=f"output #{i} does not match ground truth",
+        ),
+    )
+    decision_recorder.record(
+        op_label=output_layer_label,
+        func_name=getattr(output_layer, "func_name", None),
+        phase="ground_truth",
+        decision="failed",
+        reason="ground_truth_mismatch",
     )
     return _finish_run_status(self, decision_recorder)
 
