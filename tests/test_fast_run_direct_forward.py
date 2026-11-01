@@ -118,7 +118,7 @@ def _assert_same(left: Any, right: Any) -> None:
 
 
 def test_caller_frame_tells_a_direct_forward_call_apart() -> None:
-    """``module(x)`` reads as a module call, ``module.forward(x)`` as direct."""
+    """``module(x)`` reads as a module call, ``module.forward(x)`` as direct, hooked or not."""
 
     import sys
 
@@ -131,7 +131,11 @@ def test_caller_frame_tells_a_direct_forward_call_apart() -> None:
     probe = Probe()
     probe()
     probe.forward()
-    assert seen == [True, False]
+    handle = probe.register_forward_hook(lambda *_: None)
+    probe()
+    probe.forward()
+    handle.remove()
+    assert seen == [True, False, True, False]
 
 
 def test_capture_marks_only_modules_entered_by_a_direct_forward_call() -> None:
@@ -156,6 +160,13 @@ def test_capture_marks_only_modules_entered_by_a_direct_forward_call() -> None:
     plain = _build(Plain)
     tl.trace(plain, x)
     assert _marked(plain) == set()
+    # A hooked ``module(x)`` runs forward from torch's nested hooked-call
+    # closure; it is still a ``__call__`` call, never marked direct.
+    hooked = _build(Plain)
+    hooked.parent.inner.register_forward_hook(lambda *_: None)
+    hooked.parent.register_forward_pre_hook(lambda *_: None)
+    tl.trace(hooked, x)
+    assert _marked(hooked) == set()
 
 
 @pytest.mark.parametrize("parent_type", [DirectParent, BothWaysParent])
@@ -169,7 +180,7 @@ def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     trace = tl.trace(model, torch.randn(2, 3))
     new_x = torch.randn(2, 3)
     result = trace.run(inputs=new_x, fast=True)
-    assert trace.last_run["engine"] == "guarded_fast"
+    assert trace.last_run["engine"] == "guarded_fast", trace.last_run.get("fast_refused")
     with torch.no_grad():
         native = model(new_x)
     _assert_same(native, result.output)
@@ -193,7 +204,7 @@ def test_fast_run_matches_the_full_run_on_the_same_input() -> None:
     full_trace = tl.trace(model, x)
     fast = fast_trace.run(inputs=x, fast=True)
     full = full_trace.run(inputs=x)
-    assert fast_trace.last_run["engine"] == "guarded_fast"
+    assert fast_trace.last_run["engine"] == "guarded_fast", fast_trace.last_run.get("fast_refused")
     _assert_same(full.output, fast.output)
 
 
@@ -214,7 +225,7 @@ def test_fast_run_steers_through_a_directly_called_module() -> None:
     assert trace.last_run["engine"] == "rerun"
     full = [op.out.clone() for op in trace.output_ops]
     trace.run(model, x)
-    assert trace.last_run["engine"] == "guarded_fast"
+    assert trace.last_run["engine"] == "guarded_fast", trace.last_run.get("fast_refused")
     assert not trace.last_run.get("hooks_unfired")
     fast = [op.out for op in trace.output_ops]
     _assert_same(full, fast)
@@ -233,6 +244,6 @@ def test_fast_run_reruns_urbandriver() -> None:
     full_trace = tl.trace(model, inputs)
     fast = trace.run(inputs=inputs, fast=True)
     full = full_trace.run(inputs=inputs)
-    assert trace.last_run["engine"] == "guarded_fast"
+    assert trace.last_run["engine"] == "guarded_fast", trace.last_run.get("fast_refused")
     _assert_same(full.output, fast.output)
     _assert_no_routed_forward(model)
