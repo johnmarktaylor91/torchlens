@@ -39,6 +39,7 @@ from ..recording.types import (
     Recording,
     StorageIntent,
 )
+from ._record_stores import _GradFnContextMap, _StorageBackend
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -66,65 +67,6 @@ _EMPTY_BACKEND_SEMANTICS = BackendSemantics(
     bytes_peak_at_call=None,
 )
 _CAPTURE_POLICY_CACHE: dict[tuple[bool, bool, str], CapturePolicy] = {}
-
-
-class _GradFnContextMap:
-    """Map autograd nodes to record contexts with weak keys when supported."""
-
-    def __init__(self) -> None:
-        """Initialize weak-key and object-key fallback storage."""
-
-        self._weak: weakref.WeakKeyDictionary[Any, RecordContext] = weakref.WeakKeyDictionary()
-        self._strong: dict[Any, RecordContext] = {}
-
-    def __setitem__(self, key: Any, value: RecordContext) -> None:
-        """Store a context by grad_fn_handle object."""
-
-        try:
-            self._weak[key] = value
-        except TypeError:
-            self._strong[key] = value
-
-    def get(self, key: Any, default: RecordContext | None = None) -> RecordContext | None:
-        """Return the context for a grad_fn_handle object, if present."""
-
-        try:
-            value = self._weak.get(key)
-        except TypeError:
-            value = None
-        if value is not None:
-            return value
-        return self._strong.get(key, default)
-
-
-class _StorageBackend(Protocol):
-    """Protocol implemented by fastlog storage backends."""
-
-    def append(self, record: ActivationRecord) -> None:
-        """Append one retained record."""
-
-    def resolve_payloads(
-        self,
-        tensor: torch.Tensor,
-        spec: CaptureSpec,
-        intent: StorageIntent,
-        *,
-        options: RecordingOptions,
-        ctx: RecordContext | GradRecordContext | None,
-        kind: str = "activation",
-    ) -> tuple[
-        torch.Tensor | None,
-        torch.Tensor | None,
-        torch.Tensor | None,
-        torch.Tensor | None,
-    ]:
-        """Resolve payloads for one selected tensor."""
-
-    def finalize(self) -> None:
-        """Finalize storage."""
-
-    def abort(self, reason: str) -> None:
-        """Abort storage."""
 
 
 def _resolve_storage_intent(options: RecordingOptions) -> StorageIntent:
@@ -200,6 +142,14 @@ class RecordingState:
         tuple[ModuleStackFrame, ...],
         tuple[tuple[ModuleFrame, ...], tuple[tuple[str, int], ...]],
     ] = field(default_factory=dict)
+    # The model's own Parameters at this pass's prep, ``id -> (weak ref, lazy at
+    # prep)``. Predicate capture builds no ``Param`` logs, so this is the only
+    # place a Parameter write can learn it targets prepared model state (see
+    # ``param_mutation.parameter_mutation_output_for_logging``). Weak refs keep
+    # the registry from extending any Parameter's lifetime.
+    prepared_params: dict[int, tuple[weakref.ref[torch.nn.Parameter], bool]] = field(
+        default_factory=dict
+    )
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -352,6 +302,12 @@ def get_active_recording_state() -> RecordingState:
 
     if _active_recording_state is None:
         raise RuntimeError("fastlog predicate state is not active")
+    return _active_recording_state
+
+
+def active_recording_state_or_none() -> RecordingState | None:
+    """Return the active recording state, or ``None`` outside a recording pass."""
+
     return _active_recording_state
 
 

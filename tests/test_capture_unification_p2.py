@@ -131,6 +131,7 @@ def test_no_hot_path_liveoprecord_construction_or_field_writes() -> None:
         *sorted((root / "torchlens/backends/torch").glob("_ops_*.py")),
         root / "torchlens/backends/torch/model_prep.py",
         root / "torchlens/backends/torch/buffer_writes.py",
+        root / "torchlens/backends/torch/_held_tensor_scan.py",
         root / "torchlens/backends/torch/tensor_tracking.py",
         root / "torchlens/_capture/trace.py",
         root / "torchlens/_capture/run.py",
