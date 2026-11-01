@@ -28,9 +28,12 @@ glossary documents:
   cases too;
 * two edits on one site apply in order, an edit on a view site stays inside
   its cone, and a seeded stochastic edit reproduces;
-* an intervened capture persists: the loaded trace carries the same
-  replaced-op set, recipe rules and fire records, and its replay reproduces
-  the captured output.
+* an intervened capture persists as documented: the loaded trace carries
+  the same replaced-op set and fire records, its ``recipe`` is empty because
+  ``trace.save()`` does not persist the intervention spec, and its replay
+  refuses by the door ``run_intervention_spec_not_persisted``
+  (:data:`RECIPE_PERSISTS` flips the check when the saved format decides to
+  carry the spec).
 """
 
 from __future__ import annotations
@@ -50,6 +53,12 @@ if TYPE_CHECKING:
     from tests.behaviour.harness import Cell
 
 SEED = 0
+#: Whether ``trace.save()`` persists the intervention recipe. ``False`` is the
+#: documented state (door ``run_intervention_spec_not_persisted`` in
+#: ``torchlens/intervention/_staged_spec_persistence.py``); flip it when the
+#: saved format decides to carry the spec and the loaded-trace checks assert
+#: an equal recipe and a reproducing replay instead.
+RECIPE_PERSISTS = False
 _VIEW_FUNCS = frozenset(
     {
         "view",
@@ -253,11 +262,32 @@ def _merge_intervene(cell: Cell, recipe: Any) -> None:
     cell.trace_kwargs["on_zero_fire"] = "error"
 
 
+def _float_target_labels(cell: Cell, trace: Any) -> set[str]:
+    """Return the labels of the floating-point ops of the intervene row's function."""
+
+    target = cell.facts.common_float_func
+    return {op.label for op in trace.ops if op.func_name == target and _is_float(op.dtype)}
+
+
 def _prepare_intervene(cell: Cell) -> None:
+    """Scale the floating-point ops of the most common floating-point function.
+
+    ``tl.func(name)`` matches every op of that name, integer ones included, and
+    ``tl.scale`` on an integer tensor is a typed dtype refusal; the integer ops
+    the plain capture saw under that name are excluded by label.
+    """
+
     target = cell.facts.common_float_func
     if target is None:
         _not_applicable("no floating-point op to scale")
-    _merge_intervene(cell, tl.when(tl.func(target), tl.scale(0.5)))
+    plain = cell.facts.plain
+    integer = sorted(
+        op.label for op in plain.ops if op.func_name == target and not _is_float(op.dtype)
+    )
+    selector: Any = tl.func(target)
+    for label in integer:
+        selector = selector & ~tl.label(label)
+    _merge_intervene(cell, tl.when(selector, tl.scale(0.5)))
 
 
 def _fire_facts(op: Any) -> list[tuple[Any, ...]]:
@@ -286,12 +316,23 @@ def _rule_facts(recipe: Any) -> list[tuple[str, Any]]:
     ]
 
 
+def _recipe_is_empty(recipe: Any) -> bool:
+    """Return whether a frozen recipe carries no targets and no fire records."""
+
+    return not getattr(recipe, "targets", ()) and not getattr(recipe, "records", ())
+
+
 def _after_intervene(cell: Cell) -> None:
-    """Selected ops record a replaced value, and the edit persists through save and load."""
+    """Selected ops record a replaced value, and the edit persists through save and load.
+
+    The persisted part follows the documented saved format: replaced-op set and
+    fire records survive, the recipe does not (``loaded.recipe`` is empty) and
+    the loaded trace's replay refuses by the typed door. :data:`RECIPE_PERSISTS`
+    selects the other reading once the format carries the spec.
+    """
 
     trace = cell.require_trace()
-    target = cell.facts.common_float_func
-    want = {op.label for op in trace.ops if op.func_name == target}
+    want = _float_target_labels(cell, trace)
     got = {op.label for op in trace.ops if op.intervention_replaced}
     hooked = any(feature.name == "hooks" for feature in cell.features)
     cell.expect(
@@ -312,28 +353,35 @@ def _after_intervene(cell: Cell) -> None:
             f"{label}: fire records differ after load",
         )
     live_rules, loaded_rules = _rule_facts(trace.recipe), _rule_facts(loaded.recipe)
-    cell.expect(
-        live_rules == loaded_rules,
-        f"recipe differs after load: live {live_rules!r:.160} vs loaded {loaded_rules!r:.160}",
-    )
-    if cell.case.has("stochastic"):
+    if RECIPE_PERSISTS:
+        cell.expect(
+            live_rules == loaded_rules,
+            f"recipe differs after load: live {live_rules!r:.160} vs loaded {loaded_rules!r:.160}",
+        )
+    else:
+        cell.expect(
+            _recipe_is_empty(loaded.recipe),
+            f"trace.save() does not persist the recipe, yet loaded.recipe holds {loaded_rules!r:.160}",
+        )
+    before = None if cell.case.has("stochastic") else cell.output_leaves(trace)
+    _expect_loaded_replay(cell, loaded, before)
+    if before is None:
         return
-    before = cell.output_leaves(trace)
     torch.manual_seed(SEED)
     trace.run(cell.model, cell.fresh_inputs())
     cell.expect_same_leaves(before, cell.output_leaves(trace), "replay of the intervened trace")
-    _expect_loaded_replay(cell, loaded, before)
 
 
-def _expect_loaded_replay(cell: Cell, loaded: Any, before: list[Any]) -> None:
-    """A loaded intervened trace replays its output, or refuses by the typed door.
+def _expect_loaded_replay(cell: Cell, loaded: Any, before: list[Any] | None) -> None:
+    """A loaded intervened trace replays as the saved format documents.
 
-    The door ``run_intervention_spec_not_persisted`` says the artifact carries no
-    intervention spec; an artifact whose loaded recipe still lists the rules while
-    the door refuses is a contradiction, so that case fails instead of refusing.
+    Without a persisted recipe (:data:`RECIPE_PERSISTS` false) ``loaded.run``
+    must refuse by the door ``run_intervention_spec_not_persisted``: a run that
+    goes through would return un-intervened numbers under intervened records.
+    With a persisted recipe it must reproduce the captured output (``before``;
+    ``None`` for a stochastic case, whose output is not comparable).
     """
 
-    rules = _rule_facts(loaded.recipe)
     torch.manual_seed(SEED)
     try:
         loaded.run(cell.model, cell.fresh_inputs())
@@ -341,11 +389,17 @@ def _expect_loaded_replay(cell: Cell, loaded: Any, before: list[Any]) -> None:
         if _error_code(exc) != "run_intervention_spec_not_persisted":
             raise
         cell.expect(
-            not rules,
-            f"the loaded trace carries recipe rules {rules} yet run() refuses as not persisted",
+            not RECIPE_PERSISTS,
+            "the loaded trace refuses run() as not persisted although the recipe persists",
         )
         return
-    cell.expect_same_leaves(before, cell.output_leaves(loaded), "replay of the loaded trace")
+    cell.expect(
+        RECIPE_PERSISTS,
+        "the loaded intervened trace ran without its recipe instead of refusing by "
+        "run_intervention_spec_not_persisted",
+    )
+    if before is not None:
+        cell.expect_same_leaves(before, cell.output_leaves(loaded), "replay of the loaded trace")
 
 
 # --- claimed rows: fork_do ----------------------------------------------------
