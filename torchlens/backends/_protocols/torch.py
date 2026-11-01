@@ -187,9 +187,9 @@ def _trace_keyword_names() -> frozenset[str]:
 def _ground_truth_tensors(ground_truth: Any) -> list[Any]:
     """Detached clones of the reference outputs' tensor leaves, deduplicated.
 
-    Uses the capture-side output walker (the one ``tl.validate_forward_pass``
-    uses for its own ground truth), so leaf order and deduplication match how
-    the trace recorded its outputs.
+    Uses the capture-side output walker (the one forward validation uses for
+    its own ground truth), so leaf order and deduplication match how the trace
+    recorded its outputs.
     """
 
     from ..torch.ops import _walk_output_tensors_with_paths

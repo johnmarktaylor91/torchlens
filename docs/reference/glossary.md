@@ -1691,7 +1691,7 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
 : `tl.report.doctor()` carries one row per registered backend, key `backend_scorecard:<name>`,
   label `"<name> backend scorecard"`, built from the scorecard record shipped in the backend's
   package (no framework is imported and nothing executes). Status `pass` when the record's highest
-  tier is C2 with no failed cell, `known_broken` when any cell failed, `scope` when the framework
+  tier is the durable tier with no failed cell, `known_broken` when any cell failed, `scope` when the framework
   is not installed here, `not_tested` when no record ships. Details read
   `"<maturity>; <passed>/<denominator> cells passed, <unsupported> unsupported, <failed> failed;
   pinned <pinned>, installed <version or absent>, supported [<minimum>, <below>)"`; the
@@ -1726,13 +1726,13 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   summary and renders `untested` as "not yet proven" (`tests/test_backend_docs_lockstep.py`).
 
 **Conformance case ids added by the protocol**
-: C0 (no model execution): `c0_protocol_complete`, `c0_framework_requirement_consistent`,
-  `c0_refusal_codes_registered`, `c0_capability_table_complete`. C1 (capture):
+: Tier 0, the provider API (no model execution): `c0_protocol_complete`, `c0_framework_requirement_consistent`,
+  `c0_refusal_codes_registered`, `c0_capability_table_complete`. Tier 1 (capture):
   `c1_graph_integrity`, `c1_intermediates_match`, `c1_shape_metadata_matches_payload`,
   `c1_validation_passes`, `c1_validation_names_reason`, `c1_constant_parents_recorded`,
   `c1_rng_consumed_once`, `c1_no_silent_gap`, one `c1_refusal_<flag>` per capability flag the
   backend sets `False` and one `c1_refusal_trace_option_<name>` per public trace option outside
-  its `trace_options()`. C2 (durable): `c2_payload_values_equal`, `c2_validation_after_load`. A
+  its `trace_options()`. Tier 2 (durable): `c2_payload_values_equal`, `c2_validation_after_load`. A
   typed refusal inside any other cell makes it `unsupported`; an untyped exception, a wrong value
   or a trace marked `capture_verified=False` makes it `failed`.
 
@@ -3154,7 +3154,7 @@ deprecation shim owed*
 
 **torchlens.conformance.PreviewScorecard** — *unstable — no deprecation shim owed*
 : The frozen canonical scorecard (`scorecard_version`
-  `torchlens.conformance.preview_scorecard.v2`): `backend`,
+  "torchlens.conformance.preview_scorecard.v2"): `backend`,
   `framework_version` (`""` when absent), `suite_version`,
   `torchlens_version`, `cells` (`ScorecardCell` rows of `tier`, `case_id`,
   `family`, `state`, `detail`), `counts` (cells per state plus `denominator`),
