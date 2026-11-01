@@ -49,8 +49,6 @@ from torchlens.validation.exemptions import (
     _posthoc_overwrite_decision,
 )
 
-pytestmark = pytest.mark.smoke
-
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _THIS_FILE = "tests/test_validation_exemption_table.py::"
 
@@ -308,7 +306,8 @@ def test_decision_rows_match_the_exemption_ledger() -> None:
     for code, row in rows.items():
         assert row.kind == ledger[code].tier, code
         assert row.guard == ledger[code].proof, code
-        assert row.reason.startswith(ledger[code].contract.split(" ")[0]), code
+        clause = ledger[code].contract.split(" ", 1)[1]
+        assert row.reason.startswith(clause), (code, row.reason, clause)
 
 
 def test_every_emitted_exemption_code_has_a_table_row() -> None:

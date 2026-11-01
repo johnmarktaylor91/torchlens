@@ -9,7 +9,7 @@ table and its views live in :mod:`torchlens.validation._exemption_table`.
 
 from __future__ import annotations
 
-from ._exemption_schema import ExemptionKind, ExemptionRow
+from ._exemption_schema import ExemptionRow
 
 _HARDENING = "tests/validation_goldens/test_validation_exemption_hardening.py::"
 _TIGHTENING = "tests/test_validation_exemption_tightening.py::"
@@ -18,23 +18,10 @@ _EX = "torchlens.validation.exemptions:"
 _CORE = "torchlens.validation.core:"
 
 
-def _row(
-    names: str | tuple[str, ...],
-    kind: ExemptionKind,
-    admits: str,
-    reason: str,
-    guard: str,
-    removal_test: str,
-    negative_test: str | None,
-    positions: frozenset[int] = frozenset(),
-    kwarg_aliases: tuple[tuple[int, frozenset[str]], ...] = (),
-) -> ExemptionRow:
-    """Build a row from compact arguments (a single name becomes a 1-tuple)."""
+def _spell(names: str | tuple[str, ...]) -> tuple[str, ...]:
+    """Return the row's spellings as a tuple (a single name becomes a 1-tuple)."""
 
-    spelled = (names,) if isinstance(names, str) else names
-    return ExemptionRow(
-        spelled, kind, admits, reason, guard, removal_test, negative_test, positions, kwarg_aliases
-    )
+    return (names,) if isinstance(names, str) else names
 
 
 def _member_test(kind: str, name: str) -> str:
@@ -48,8 +35,8 @@ def _skip_validation(name: str, reason: str, negative_test: str | None) -> Exemp
         "forward replay and perturbation are both skipped for this op; the saved "
         "bytes are uninitialized memory and no deterministic replay exists"
     )
-    return _row(
-        name,
+    return ExemptionRow(
+        (name,),
         "skip_validation",
         admits,
         reason,
@@ -64,8 +51,8 @@ def _skip_perturbation(name: str, reason: str, negative_test: str | None) -> Exe
         "perturbation is skipped for every parent of this op; forward replay still "
         "runs and must reproduce the saved output"
     )
-    return _row(
-        name,
+    return ExemptionRow(
+        (name,),
         "skip_perturbation",
         admits,
         reason,
@@ -75,16 +62,22 @@ def _skip_perturbation(name: str, reason: str, negative_test: str | None) -> Exe
     )
 
 
+_Aliases = tuple[tuple[int, frozenset[str]], ...]
+
+
 def _structural(
     names: str | tuple[str, ...],
-    positions: frozenset[int],
+    slots: frozenset[int] | tuple[frozenset[int], _Aliases],
     admits: str,
     reason: str,
     negative_test: str | None,
-    kwarg_aliases: tuple[tuple[int, frozenset[str]], ...] = (),
 ) -> ExemptionRow:
-    spelled = (names,) if isinstance(names, str) else names
-    return _row(
+    """Declare structural positions; ``slots`` is the position set, optionally paired with
+    the kwarg aliases that name those positions."""
+
+    spelled = _spell(names)
+    positions, aliases = slots if isinstance(slots, tuple) else (slots, ())
+    return ExemptionRow(
         spelled,
         "structural_position",
         admits,
@@ -93,15 +86,15 @@ def _structural(
         _member_test("structural_position", spelled[0]),
         negative_test,
         positions,
-        kwarg_aliases,
+        aliases,
     )
 
 
 def _custom(
     names: str | tuple[str, ...], check: str, admits: str, reason: str, negative_test: str | None
 ) -> ExemptionRow:
-    spelled = (names,) if isinstance(names, str) else names
-    return _row(
+    spelled = _spell(names)
+    return ExemptionRow(
         spelled,
         "custom_check",
         admits,
@@ -232,51 +225,45 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
     ),
     _structural(
         ("reshape_as", "reshapeas"),
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"other"})),)),
         "reshape_as(other) is self.reshape(other.sizes())",
         _SHAPE,
         _POSITION_NEGATIVE,
-        ((1, frozenset({"other"})),),
     ),
     _structural(
         ("view_as", "viewas"),
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"other"})),)),
         "view_as(other) is self.view(other.size())",
         _SHAPE,
         _POSITION_NEGATIVE,
-        ((1, frozenset({"other"})),),
     ),
     _structural(
         "resize_as_",
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"the_template"})),)),
         "resize_as_(the_template) is self.resize_(the_template.size())",
         _SHAPE + "; the receiver keeps the element prefix it carries and stays tested",
         _POSITION_NEGATIVE,
-        ((1, frozenset({"the_template"})),),
     ),
     _structural(
         "_pack_padded_sequence",
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"lengths"})),)),
         "the lengths tensor at arg 1 (keyword lengths)",
         "lengths are packing metadata, not output values",
         _POSITION_NEGATIVE,
-        ((1, frozenset({"lengths"})),),
     ),
     _structural(
         "_pad_packed_sequence",
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"lengths"})),)),
         "the lengths tensor at arg 1 (keyword lengths)",
         "lengths are packing metadata, not output values",
         _POSITION_NEGATIVE,
-        ((1, frozenset({"lengths"})),),
     ),
     _structural(
         "type_as",
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"tensor", "other"})),)),
         "the type template at arg 1 (keywords tensor, other)",
         "type template tensor; its values are irrelevant",
         _POSITION_NEGATIVE,
-        ((1, frozenset({"tensor", "other"})),),
     ),
     _structural(
         ("new_tensor", "newtensor"),
@@ -308,51 +295,45 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
     ),
     _structural(
         "nms",
-        frozenset({0}),
+        (frozenset({0}), ((0, frozenset({"boxes"})),)),
         "boxes at arg 0 (keyword boxes); scores at arg 1 stay tested",
         _COORDS,
         None,
-        ((0, frozenset({"boxes"})),),
     ),
     _structural(
         "deform_conv2d",
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"offset"})),)),
         "sampling offsets at arg 1 (keyword offset); input, weight, bias, mask stay tested",
         _COORDS,
         None,
-        ((1, frozenset({"offset"})),),
     ),
     _structural(
         "roi_align",
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"boxes", "rois"})),)),
         "boxes at arg 1 (keywords boxes, rois); the feature map at arg 0 stays tested",
         _COORDS,
         None,
-        ((1, frozenset({"boxes", "rois"})),),
     ),
     _structural(
         "roi_pool",
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"boxes", "rois"})),)),
         "boxes at arg 1 (keywords boxes, rois)",
         _COORDS,
         None,
-        ((1, frozenset({"boxes", "rois"})),),
     ),
     _structural(
         "ps_roi_align",
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"boxes", "rois"})),)),
         "boxes at arg 1 (keywords boxes, rois)",
         _COORDS,
         None,
-        ((1, frozenset({"boxes", "rois"})),),
     ),
     _structural(
         "ps_roi_pool",
-        frozenset({1}),
+        (frozenset({1}), ((1, frozenset({"boxes", "rois"})),)),
         "boxes at arg 1 (keywords boxes, rois)",
         _COORDS,
         None,
-        ((1, frozenset({"boxes", "rois"})),),
     ),
     # --------------------------------------------------------------- custom_check
     _custom(
