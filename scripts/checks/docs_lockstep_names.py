@@ -152,11 +152,11 @@ def check_dated_test_tier_claim_is_present_and_selector_is_additive() -> None:
 #: docs. The numbers are compared against the constants ``scripts/tier_durations.py``
 #: ships, so budget and doc can only move together.
 BUDGET_CLAIM_RE = re.compile(
-    r"budget (?P<smoke>\d+(?:\.\d+)?)s and heavy (?P<heavy>\d+(?:\.\d+)?)s per test "
-    r"\(the slowest measured test per file in `tests/tiers/durations\.csv`, allowed up to "
-    r"(?P<factor>\d+(?:\.\d+)?)x under a parallel or coverage-instrumented measurement, "
-    r"plus a (?P<grace>\d+(?:\.\d+)?)s grace\)"
-)
+    r"budget\s+(?P<smoke>\d+(?:\.\d+)?)s\s+and\s+heavy\s+(?P<heavy>\d+(?:\.\d+)?)s\s+per\s+test\s+"
+    r"\(the\s+slowest\s+measured\s+test\s+per\s+file\s+in\s+`tests/tiers/durations\.csv`,\s+"
+    r"allowed\s+up\s+to\s+(?P<factor>\d+(?:\.\d+)?)x\s+under\s+a\s+parallel\s+or\s+"
+    r"coverage-instrumented\s+measurement,\s+plus\s+a\s+(?P<grace>\d+(?:\.\d+)?)s\s+grace\)"
+)  # the docs wrap this sentence across lines
 
 _BUDGET_CONSTANTS = (
     ("smoke", r"^SMOKE_DURATION_BUDGET_SECONDS\s*=\s*([\d.]+)"),

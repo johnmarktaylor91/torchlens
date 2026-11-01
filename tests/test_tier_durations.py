@@ -105,7 +105,7 @@ def test_budget_findings_fail_bounded_files_and_ignore_unbounded_ones() -> None:
         td.FileRow("tests/test_fast.py", 3, 2.0, 1.0, "smoke"),
         td.FileRow("tests/test_near.py", 1, 6.0, 6.0, "unmarked"),
         td.FileRow("tests/test_over.py", 1, 8.0, 8.0, "smoke"),
-        td.FileRow("tests/test_heavy.py", 1, 21.0, 21.0, "heavy"),
+        td.FileRow("tests/test_heavy.py", 1, 23.0, 23.0, "heavy"),
         td.FileRow("tests/test_slow.py", 1, 90.0, 90.0, "slow"),
         td.FileRow("tests/test_rare.py", 1, 90.0, 90.0, "rare"),
         td.FileRow("tests/test_gone.py", 1, 90.0, 90.0, "missing"),
@@ -115,7 +115,7 @@ def test_budget_findings_fail_bounded_files_and_ignore_unbounded_ones() -> None:
     assert [w.split(":")[0] for w in warnings] == ["tests/test_heavy.py"]
     failures, warnings = td.budget_findings(rows, {"workers": 8})
     assert failures == []
-    assert [w.split(":")[0] for w in warnings] == ["tests/test_over.py"]
+    assert [w.split(":")[0] for w in warnings] == ["tests/test_over.py", "tests/test_heavy.py"]
 
 
 def test_balanced_shards_cover_every_file_once_and_spread_the_seconds() -> None:

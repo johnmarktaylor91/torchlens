@@ -32,12 +32,13 @@ import ast
 import functools
 import re
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from _source_corpus import package_ast, package_files, package_source
 from _tiers_plugin import (
     SMOKE_INCOMPATIBLE_MARKERS,
-    fail_on_recorded_tier_violations,
+    fail_on_tier_violations,
     item_combo_violations,
     smoke_only_session,
     tier_combo_violations,
@@ -94,17 +95,21 @@ def test_tier_combo_policy_is_red_capable(
 
 
 @pytest.mark.smoke
-def test_recorded_tier_violations_fail_the_session_at_collection() -> None:
-    """``_tiers_plugin`` refuses a session whose collection recorded a violation."""
+def test_tier_violations_among_selected_items_fail_the_session_at_collection() -> None:
+    """``_tiers_plugin`` refuses a session whose selected items include a violation."""
 
-    from types import SimpleNamespace
+    class _Item:
+        def __init__(self, nodeid: str, *names: str) -> None:
+            self.nodeid = nodeid
+            self._marks = [SimpleNamespace(name=name) for name in names]
 
-    fail_on_recorded_tier_violations(SimpleNamespace())
-    fail_on_recorded_tier_violations(SimpleNamespace(_tl_tier_violations=[]))
+        def iter_markers(self, name: str | None = None) -> list[SimpleNamespace]:
+            return [m for m in self._marks if name is None or m.name == name]
+
+    fail_on_tier_violations([])
+    fail_on_tier_violations([_Item("planted::fine", "smoke"), _Item("planted::heavy", "heavy")])
     with pytest.raises(pytest.UsageError, match=r"planted::node \[smoke \+ heavy\]"):
-        fail_on_recorded_tier_violations(
-            SimpleNamespace(_tl_tier_violations=["planted::node [smoke + heavy]"])
-        )
+        fail_on_tier_violations([_Item("planted::node", "smoke", "heavy")])
 
 
 def warm_scan_caches() -> None:
@@ -1282,8 +1287,6 @@ def test_smoke_file_token_detection(tmp_path: Path, source: str, expected: bool)
 def test_smoke_cells_marks_exactly_the_named_items(item_name: str, expected: bool) -> None:
     """``smoke_cells`` applies ``smoke`` to exactly the items it names."""
 
-    from types import SimpleNamespace
-
     from _tiers_plugin import pytest_itemcollected
 
     class _FakeItem:
@@ -1305,7 +1308,6 @@ def test_smoke_cells_marks_exactly_the_named_items(item_name: str, expected: boo
     item = _FakeItem(item_name)
     pytest_itemcollected(item)  # type: ignore[arg-type]
     assert item.added == (["smoke"] if expected else [])
-    assert not hasattr(item.config, "_tl_tier_violations")
 
 
 @pytest.mark.smoke

@@ -2,8 +2,9 @@
 
 pytest markers are additive, so a test carrying ``smoke`` together with
 ``heavy`` or ``slow`` still runs under ``-m smoke``. Such a combination is a
-partition mistake; this plugin records every one while items are collected and
-fails the session before the first test runs. The marker names themselves are
+partition mistake; this plugin checks every item the session selects (after
+``-m`` deselection, as the former lint test did) and fails the session before
+the first test runs. The marker names themselves are
 declared in ``pyproject.toml`` (``[tool.pytest.ini_options] markers``), in
 lockstep with ``tests/composition_expectations/marker_algebra.py``.
 
@@ -15,6 +16,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import re
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -100,35 +102,33 @@ def pytest_itemcollected(item: pytest.Item) -> None:
     ``@pytest.mark.smoke_cells("test_x[a]", "test_x[b]")`` on a function, class
     or module (``pytestmark``) puts exactly the named items (matched on
     ``item.name``) in the smoke tier, so a parametrized family keeps one or two
-    representative cells while the rest run in the backstops. Both steps run
-    at item collection, before any ``-m`` deselection, so the census covers
-    every collected item whatever the session selects.
+    representative cells while the rest run in the backstops. Applied at item
+    collection, before any ``-m`` deselection.
     """
 
     for mark in item.iter_markers("smoke_cells"):
         if item.name in mark.args:
             item.add_marker(pytest.mark.smoke)
-            break
-    violations = item_combo_violations(item)
-    if violations:
-        recorded = getattr(item.config, "_tl_tier_violations", None)
-        if recorded is None:
-            recorded = item.config._tl_tier_violations = []
-        recorded.extend(violations)
+            return
 
 
-@pytest.hookimpl(tryfirst=True)
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Fail the session when any collected item carries a contradictory tier combination."""
+    """Fail the session when any SELECTED item carries a contradictory tier combination.
 
-    del items
-    fail_on_recorded_tier_violations(config)
+    Runs after the mark plugin's deselection, so a session judges the items it
+    will run (targeted runs included); items the session deselects are not
+    judged, as the former lint test's ``session.items`` census did.
+    """
+
+    del config
+    fail_on_tier_violations(items)
 
 
-def fail_on_recorded_tier_violations(config: Any) -> None:
-    """Raise ``pytest.UsageError`` listing the violations ``pytest_itemcollected`` recorded."""
+def fail_on_tier_violations(items: Iterable[Any]) -> None:
+    """Raise ``pytest.UsageError`` listing every contradictory combination among ``items``."""
 
-    violations = getattr(config, "_tl_tier_violations", None)
+    violations = [violation for item in items for violation in item_combo_violations(item)]
     if violations:
         raise pytest.UsageError(
             "tests carry contradictory tier-marker combinations (markers are additive; "

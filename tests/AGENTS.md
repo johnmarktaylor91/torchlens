@@ -66,8 +66,8 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 Markers are additive: a test carrying `smoke` together with `heavy`/`slow`/`serial`/`rare`
 still runs under `-m smoke`, so those combinations are forbidden — drop `smoke` instead
 (a per-parametrize-cell `slow` refinement of a `heavy` family is the one sanctioned combo).
-`tests/_tiers_plugin.py` enforces the partition at collection: a session that collects a
-forbidden combination fails before its first test, in targeted runs too. Duration is a
+`tests/_tiers_plugin.py` enforces the partition at collection: a session that selects a
+forbidden combination (after `-m` deselection) fails before its first test, in targeted runs too. Duration is a
 repository check over a tracked measurement, not a runtime tripwire. `tests/tiers/durations.csv`
 holds one row per test file (`file,tests,seconds,max_seconds,tier`: measured test count,
 summed wall seconds, slowest test, loosest tier marker the file spells, `missing` once the

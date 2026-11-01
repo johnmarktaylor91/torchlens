@@ -24,9 +24,10 @@ SCRIPT = Path("scripts/tier_durations.py")
 
 
 def _load_script(repo: Path):
-    spec = importlib.util.spec_from_file_location("tier_durations", repo / SCRIPT)
+    spec = importlib.util.spec_from_file_location("_torchlens_tier_durations", repo / SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve the module by name
     spec.loader.exec_module(module)
     return module
 

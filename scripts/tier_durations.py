@@ -119,10 +119,11 @@ def file_tier(path: Path) -> str:
     return "unmarked"
 
 
-def test_files_on_disk(root: Path = TESTS_DIR) -> list[str]:
-    """Return every ``test_*.py`` under ``root`` as a repository-relative posix path."""
+def test_files_on_disk(root: Path | None = None) -> list[str]:
+    """Return every ``test_*.py`` under ``root`` (default ``TESTS_DIR``) relative to the repo."""
 
-    return sorted(str(p.relative_to(REPO_ROOT).as_posix()) for p in root.rglob("test_*.py"))
+    base = TESTS_DIR if root is None else root
+    return sorted(str(p.relative_to(REPO_ROOT).as_posix()) for p in base.rglob("test_*.py"))
 
 
 # ------------------------------------------------------------ measurement input

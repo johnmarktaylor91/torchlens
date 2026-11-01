@@ -142,10 +142,11 @@ def smoke_test_files() -> list[str]:
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
-        "tier_durations", PROJECT_ROOT / "scripts" / "tier_durations.py"
+        "_torchlens_tier_durations", PROJECT_ROOT / "scripts" / "tier_durations.py"
     )
     assert spec is not None and spec.loader is not None
     tier_durations = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = tier_durations  # dataclasses resolve the module by name
     spec.loader.exec_module(tier_durations)
     return [
         file
