@@ -1093,7 +1093,7 @@ def _tf_validate_trace(*args: Any, **kwargs: Any) -> Any:
 def _torch_protocol() -> Any:
     """Build the torch ``BackendProtocol`` object (lazy; imports no framework)."""
 
-    from .torch._protocol import protocol
+    from ._protocols.torch import protocol
 
     return protocol()
 
@@ -1101,7 +1101,7 @@ def _torch_protocol() -> Any:
 def _mlx_protocol() -> Any:
     """Build the mlx ``BackendProtocol`` object (lazy; imports no framework)."""
 
-    from .mlx._protocol import protocol
+    from ._protocols.mlx import protocol
 
     return protocol()
 
@@ -1109,7 +1109,7 @@ def _mlx_protocol() -> Any:
 def _jax_protocol() -> Any:
     """Build the jax ``BackendProtocol`` object (lazy; imports no framework)."""
 
-    from .jax._protocol import protocol
+    from ._protocols.jax import protocol
 
     return protocol()
 
@@ -1117,7 +1117,7 @@ def _jax_protocol() -> Any:
 def _tinygrad_protocol() -> Any:
     """Build the tinygrad ``BackendProtocol`` object (lazy; imports no framework)."""
 
-    from .tinygrad._protocol import protocol
+    from ._protocols.tinygrad import protocol
 
     return protocol()
 
@@ -1125,7 +1125,7 @@ def _tinygrad_protocol() -> Any:
 def _paddle_protocol() -> Any:
     """Build the paddle ``BackendProtocol`` object (lazy; imports no framework)."""
 
-    from .paddle._protocol import protocol
+    from ._protocols.paddle import protocol
 
     return protocol()
 
@@ -1133,7 +1133,7 @@ def _paddle_protocol() -> Any:
 def _tf_protocol() -> Any:
     """Build the tf ``BackendProtocol`` object (lazy; imports no framework)."""
 
-    from .tf._protocol import protocol
+    from ._protocols.tf import protocol
 
     return protocol()
 
