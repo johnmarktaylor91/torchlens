@@ -4194,6 +4194,7 @@ package-docstrings	torchlens/_io/writer_contract.py	2.34.1
 package-docstrings	torchlens/_io/writer_contract.py	256
 package-docstrings	torchlens/_io/writer_contract.py	3.1
 package-docstrings	torchlens/_io/writer_contract.py	3.3
+package-docstrings	torchlens/_ir/_selector_universe.py	4_27
 package-docstrings	torchlens/_ir/capture_events.py	15
 package-docstrings	torchlens/_ir/capture_events.py	2.4
 package-docstrings	torchlens/_ir/capture_events.py	4.5.5
@@ -4225,8 +4226,6 @@ package-docstrings	torchlens/_ir/predicate.py	1_2
 package-docstrings	torchlens/_ir/predicate.py	1_2_
 package-docstrings	torchlens/_ir/predicate.py	34
 package-docstrings	torchlens/_ir/refs.py	32
-package-docstrings	torchlens/_ir/selector_eval.py	42
-package-docstrings	torchlens/_ir/selector_eval.py	4_27
 package-docstrings	torchlens/_ir/semantics.py	47
 package-docstrings	torchlens/_ir/summary_role.py	25
 package-docstrings	torchlens/_ir/summary_role.py	64

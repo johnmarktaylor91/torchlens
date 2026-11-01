@@ -1577,6 +1577,70 @@
  },
  {
   "ambiguous": false,
+  "field": "is_transform",
+  "file": "torchlens/_ir/_selector_nodes.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/_ir/_selector_nodes.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "transform_kind",
+  "file": "torchlens/_ir/_selector_nodes.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_label_raw",
+  "file": "torchlens/_ir/_selector_universe.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/_ir/_selector_universe.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_ir/_selector_universe.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_ir/_selector_universe.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/_ir/_selector_universe.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "grad_fn_handle",
   "file": "torchlens/_ir/capture_events.py",
   "has_default": false,
@@ -2473,22 +2537,6 @@
  },
  {
   "ambiguous": false,
-  "field": "is_transform",
-  "file": "torchlens/_ir/selector_eval.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
-  "field": "layer_label_raw",
-  "file": "torchlens/_ir/selector_eval.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
   "field": "layer_type",
   "file": "torchlens/_ir/selector_eval.py",
   "has_default": true,
@@ -2496,48 +2544,16 @@
   "via_getattr": true
  },
  {
-  "ambiguous": false,
-  "field": "module_stack",
+  "ambiguous": true,
+  "field": "parents",
   "file": "torchlens/_ir/selector_eval.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
  },
  {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_ir/selector_eval.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/_ir/selector_eval.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
-  "field": "pass_index",
-  "file": "torchlens/_ir/selector_eval.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
- },
- {
   "ambiguous": false,
   "field": "source_trace",
-  "file": "torchlens/_ir/selector_eval.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
-  "field": "transform_kind",
   "file": "torchlens/_ir/selector_eval.py",
   "has_default": true,
   "sites": 1,
