@@ -430,10 +430,10 @@ torchlens/_quickstart/_primitive.py::capture_concrete	82
 torchlens/_quickstart/_render.py::_render_finished_trace	74
 torchlens/_quickstart/_render.py::render	111
 torchlens/_registry/kernel.py::Registry.register	88
-torchlens/_robustness.py	822
+torchlens/_robustness.py	821
 torchlens/_robustness.py::_iter_tensors_with_paths	88
 torchlens/_robustness.py::_maybe_admit_meta	63
-torchlens/_robustness.py::check_model_and_input_variants	270
+torchlens/_robustness.py::check_model_and_input_variants	268
 torchlens/_runnable/__init__.py	1825
 torchlens/_runnable/__init__.py::derive_required_witness_members	82
 torchlens/_runnable/attestation.py::_nondeterministic_value_sources	180

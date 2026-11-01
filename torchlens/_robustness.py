@@ -42,6 +42,7 @@ from torch import nn
 
 from ._distributed import check_distributed_capture
 from ._input_walk import INPUT_TREE_MAX_DEPTH
+from ._source_links import file_line_text
 from ._utils._torch_compat import get_tracing_tensor_types
 from .errors._base import CompatibilityError, TorchLensWarning
 
@@ -630,8 +631,6 @@ def check_model_and_input_variants(
         caller_file, caller_line = _first_user_frame()
         callsite_note = ""
         if caller_file is not None and caller_line is not None:
-            from ._source_links import file_line_text
-
             callsite_note = (
                 f"\nCapture was requested at {file_line_text(caller_file, caller_line)}."
             )

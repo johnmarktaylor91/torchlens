@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1290 modules, 622923 lines, 0 modules without a docstring.
+83 packages, 1290 modules, 622921 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 64 | 31408 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 64 | 31407 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -29,7 +29,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observability` | Observability substrates. | 21 | 7920 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1507 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 737 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17122 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17124 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 2188 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 2 | 473 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14686 |
@@ -76,7 +76,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5228 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 62 | 31245 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 62 | 31242 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 328 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (64 modules, 31408 lines)
+TorchLens - extract outs and metadata from PyTorch models. (64 modules, 31407 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -141,7 +141,7 @@ TorchLens - extract outs and metadata from PyTorch models. (64 modules, 31408 li
 | `_plain_attr_fidelity` | Plain-attribute fidelity facts for the validation deepcopy and fallback paths. | 334 |
 | `_quantities` | Numeric quantity types with unit-aware display. | 680 |
 | `_record_type` | Readers for a record that may be an ''Op'' or a ''Layer''-like record. | 69 |
-| `_robustness` | Tensor-variant detection and pre-flight guards for ''trace''. | 822 |
+| `_robustness` | Tensor-variant detection and pre-flight guards for ''trace''. | 821 |
 | `_runnable_until` | Stop-frontier and dependency-closure arithmetic for ''run(until=...)''. | 95 |
 | `_save_budget` | Running budget for retained activation bytes, with a typed refusal. | 971 |
 | `_source_links` | Source-location link formatting helpers. | 110 |
@@ -564,7 +564,7 @@ Partial capture helpers for failed TorchLens forward ops. (1 modules, 737 lines)
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (29 modules, 17122 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (29 modules, 17124 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -581,7 +581,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (2
 | `_module_census` | Module-build helpers for the root call's labels, uncalled modules and Layer roles. | 87 |
 | `_multipass_params` | Parameter fields of a layer whose passes consume different parameters (step 14). | 48 |
 | `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 71 |
-| `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 606 |
+| `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 608 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 375 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 374 |
 | `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 343 |
@@ -1533,7 +1533,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3005 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (62 modules, 31245 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (62 modules, 31242 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1580,7 +1580,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `errors` | Error ownership for TorchLens intervention APIs. | 385 |
 | `handles` | Scoped handles for removable TorchLens hook attachments. | 71 |
 | `helpers` | Built-in helper constructors for TorchLens interventions. | 1456 |
-| `hooks` | Hook parsing and hook-spec ownership for TorchLens interventions. | 1834 |
+| `hooks` | Hook parsing and hook-spec ownership for TorchLens interventions. | 1831 |
 | `injection` | ''log_injections'' stages 0-2: anchored injected-op recording (/). | 860 |
 | `masked_edit` | Engine-owned masked-edit derivation for ''do(selection, edit)''. | 250 |
 | `model_door` | The ONE audited model-argument funnel (surgery item 10, OP2). | 221 |
