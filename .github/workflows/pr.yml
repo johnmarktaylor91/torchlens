@@ -412,12 +412,12 @@ jobs:
         # with the protocol shells, the pyproject extras and nightly.yml.
         include:
           - backend: tf
-            install: '"tensorflow-cpu>=2.16"'
+            install: '"tensorflow-cpu==2.21.0"'
             marker: tf_backend
             import_check: "import tensorflow, keras"
             executed_floor: 18
           - backend: jax
-            install: '"jax[cpu]>=0.4.30" equinox flax'
+            install: '"jax[cpu]==0.10.2" equinox flax'
             marker: backend_jax
             import_check: "import jax, jax.numpy, equinox, flax"
             executed_floor: 60
