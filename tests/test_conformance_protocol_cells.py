@@ -71,6 +71,7 @@ _PLANT_SIGNATURE: dict[str, str] = {"bare_bool_validation": "validate returned b
 _PLANT_ALLOWED_COLLATERAL: dict[str, frozenset[str]] = {
     "missing_constant_payload": frozenset({"c1_validation_passes", "c1_validation_names_reason"}),
     "shape_drift_after_load": frozenset({"c2_validation_after_load"}),
+    "shape_metadata_drift": frozenset({"c1_validation_passes"}),
 }
 
 
@@ -234,7 +235,9 @@ def test_torch_reference_passes_every_protocol_cell(tmp_path: Path) -> None:
     # The refusal gap sits in C1, so the ladder stops at C0 until P1 codes the refusal.
     assert card.highest_tier == "C0"
     assert card.roster_groups == {"config_built": 2}
-    assert card.capabilities["intermediate_derived_grads"] == "unsupported"
+    # SPEC 4.5: a False flag reads "unsupported" only once its refusal cell passes; while
+    # the refusal pin holds, the card says "untested". Flips with the pin.
+    assert card.capabilities["intermediate_derived_grads"] == "untested"
     assert all(
         state == "supported"
         for flag, state in card.capabilities.items()
