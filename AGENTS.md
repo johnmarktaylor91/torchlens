@@ -133,7 +133,7 @@ Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0) 
 outside it and outside CI, so only the script's answer equals CI's (`tests/AGENTS.md`, "The smoke tier").
 
 Tiers by cost (every tier's count: `tests/tiers/collection.json`): `smoke` selects
-~1.5k tests (1,485/37,865 collect-only, measured 2026-10-31),
+~1.5k tests (1,482/37,034 collect-only, measured 2026-11-01),
 a coverage-chosen subset of the former ~9.9k-test tier (see `tests/AGENTS.md`, "The smoke
 tier"); under `-m smoke` the conftest skips test modules with no smoke mark before import.
 The instrumented smoke wall measurement (measured 2026-10-02, one 4-core Linux worker,
