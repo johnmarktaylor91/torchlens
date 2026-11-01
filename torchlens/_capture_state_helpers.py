@@ -594,16 +594,15 @@ def hold_fused_attention_fastpath_off(model: Any) -> Iterator[tuple[str, ...]]:
 
     ``nn.MultiheadAttention`` and ``nn.TransformerEncoderLayer`` run a fused native
     kernel (``_native_multi_head_attention`` / ``_transformer_encoder_layer_fwd``)
-    in eval mode only while, among other gates, no parameter requires a gradient
-    under grad mode. Capture forces ``requires_grad`` on every parameter for
-    provenance, which alone flips that gate: the same eval model ran the fused
-    kernel eagerly and the unfused program under capture, and forward validation's
-    pristine ground truth differed from the replay by one float rounding (wave-3
-    stress F4). Holding the public switch (``torch.backends.mha``) off makes the
-    capture forward, its replays and the validation ground truth run the SAME
-    unfused program regardless of grad mode; the fused kernel exposes no internals,
-    so the unfused path is also the one worth recording. The capture records the
-    hold as a ``fused_attention_fastpath_held_off`` capture advisory.
+    in eval mode only while, among other gates, no input or parameter requires a
+    gradient under grad mode. The fused kernel is one opaque op: the attention
+    internals (projections, ``scaled_dot_product_attention``) would not appear in
+    the trace, and which program ran would depend on the ambient grad mode and on
+    the input's ``requires_grad``. Holding the public switch (``torch.backends.mha``)
+    off makes the capture forward, its replays and the validation ground truth run
+    the SAME unfused program in every case, so the recorded ops are always the
+    attention internals. The capture records the hold as a
+    ``fused_attention_fastpath_held_off`` capture advisory.
 
     The ``training``-flag fallback of ``force_mha_slow_path`` is deliberately NOT
     used: in eval mode it would enable the modules' dropout. Where torch lacks the

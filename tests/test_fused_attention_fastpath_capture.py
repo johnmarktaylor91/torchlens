@@ -1,14 +1,14 @@
 """Capture, replay and ground truth run one attention program (wave-3 stress F4).
 
 ``nn.MultiheadAttention`` takes its fused ``_native_multi_head_attention`` fast path
-in eval mode only while no parameter requires a gradient under grad mode. Capture
-forces ``requires_grad`` on every parameter for provenance, which alone flipped that
-gate: an eval, frozen, batch-first attention module ran the fused kernel eagerly and
-the unfused program under capture, so forward validation's pristine ground truth
-differed from the replay by one float rounding and ``ground_truth`` failed. Capture
-now holds torch's public fast-path switch off for its forward, validation holds it
-for the ground truth and the fast live run for its native forward, and the trace
-records the hold as a capture advisory.
+in eval mode only while no input or parameter requires a gradient under grad mode.
+The fused kernel is one opaque op, and whether it runs depends on grad mode and on
+the input's ``requires_grad``. Capture holds torch's public fast-path switch off for
+its forward, validation holds it for the ground truth and the fast live run for its
+native forward, so every one of them runs the unfused program, and the trace records
+the hold as a capture advisory. Capture never forces ``requires_grad`` on the frozen
+weights, so the replay and the ground truth are the same program kernel for kernel
+and agree bit for bit, in float64 as in float32.
 """
 
 from __future__ import annotations
@@ -102,10 +102,28 @@ def test_capture_runs_the_unfused_program_under_no_grad_too() -> None:
     assert "scaled_dot_product_attention" in names
 
 
-def test_forward_validation_passes_ground_truth_on_the_fast_path_row() -> None:
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_forward_validation_passes_ground_truth_on_the_fast_path_row(dtype: torch.dtype) -> None:
     _needs_switch()
     model, x = _model_and_input()
+    model, x = model.to(dtype), x.to(dtype)
     assert tl.validate(model, [x], scope="forward"), last_validation_failure()
+
+
+def test_capture_keeps_the_frozen_attention_weights_frozen() -> None:
+    """The frozen weights stay frozen inside the captured forward and after it."""
+
+    model, x = _model_and_input()
+    seen: list[bool] = []
+    handle = model.attention.register_forward_pre_hook(
+        lambda module, args: seen.extend(p.requires_grad for p in module.parameters())
+    )
+    try:
+        tl.trace(model, [x])
+    finally:
+        handle.remove()
+    assert seen and not any(seen)
+    assert not any(p.requires_grad for p in model.parameters())
 
 
 def test_switch_is_restored_after_capture_and_after_a_failing_forward() -> None:
