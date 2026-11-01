@@ -70,9 +70,10 @@ across `_render_*.py`), smart collapse v2 (`auto_collapse.py`, `collapse_plan.py
 dagua renderer itself is explicit opt-in via `torchlens.experimental.dagua`.
 
 ### `torchlens/_utils/`
-Focused stateless helpers: `_torch_compat.py` (the ONLY home for fragile torch-private
-probes and cross-version signatures), `rng.py`, `hashing.py`, tensor ops, argument
-handling, introspection, collections, display.
+Helpers shared by two or more packages: `_torch_compat.py` (the ONLY home for fragile
+torch-private probes and cross-version signatures), `rng.py`, `hashing.py`, tensor ops,
+argument handling, introspection, collections, display. A helper with one owning package
+lives in that package (environment checks in `report/_environment.py`).
 
 ## Data Flow
 
