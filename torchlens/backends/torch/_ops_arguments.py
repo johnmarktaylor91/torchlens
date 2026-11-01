@@ -411,7 +411,7 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
 
     if isinstance(value, torch.nn.Parameter) and _session_validated_parameter(trace, value):
         return True
-    from ._tl import _async_collective_elem
+    from ._tl_collective import _async_collective_elem
 
     act_inner = _async_collective_elem(value)
     if act_inner is not None:

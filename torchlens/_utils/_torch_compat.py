@@ -52,6 +52,8 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
+from ._module_call_dispatch import probe_module_call_dispatch_frame
+from ._producer_version import _torch_minor_version
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
 __all__ = [
@@ -125,6 +127,7 @@ __all__ = [
     "HAS_SAVED_TENSORS_HOOKS_PATCHABLE",
     "HAS_CODE_POSITIONS",
     "HAS_CODE_QUALNAME",
+    "HAS_MODULE_CALL_DISPATCH_FRAME",
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
@@ -544,29 +547,6 @@ def resolve_runnable_torch_alias(
             continue
         return alias.target_namespace, target_qualname, alias.provenance
     return None
-
-
-def _torch_minor_version(version: str | None) -> tuple[int, int] | None:
-    """Parse a torch major/minor prefix without inspecting the live runtime.
-
-    Parameters
-    ----------
-    version:
-        Producer torch version from runnable compatibility metadata.
-
-    Returns
-    -------
-    tuple[int, int] | None
-        Major/minor pair, or ``None`` when producer metadata is absent or not
-        parseable (for example a legacy placeholder).
-    """
-
-    if version is None:
-        return None
-    components = version.split("+", maxsplit=1)[0].split(".")
-    if len(components) < 2 or not components[0].isdigit() or not components[1].isdigit():
-        return None
-    return int(components[0]), int(components[1])
 
 
 def _probe_device_type_arg_supported() -> bool:
@@ -1710,6 +1690,9 @@ HAS_SAVED_TENSORS_HOOK_INTROSPECTION: bool = _probe_saved_tensors_hook_introspec
 HAS_SAVED_TENSORS_HOOKS_PATCHABLE: bool = _probe_saved_tensors_hooks_patchable()
 HAS_CODE_POSITIONS: bool = _probe_code_positions()
 HAS_CODE_QUALNAME: bool = _probe_code_qualname()
+#: ``Module.__call__`` frames that call ``forward`` (see ``_module_call_dispatch``).
+_FORWARD_CALLERS = tuple(getattr(torch.nn.Module, n, None) for n in ("_call_impl", "_slow_forward"))
+HAS_MODULE_CALL_DISPATCH_FRAME: bool = probe_module_call_dispatch_frame(_FORWARD_CALLERS)
 HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_fastpath_flag()
 HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
@@ -1916,6 +1899,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_SAVED_TENSORS_HOOKS_PATCHABLE",
     "HAS_CODE_POSITIONS",
     "HAS_CODE_QUALNAME",
+    "HAS_MODULE_CALL_DISPATCH_FRAME",
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",

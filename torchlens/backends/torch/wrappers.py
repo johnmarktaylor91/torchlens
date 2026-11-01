@@ -1556,7 +1556,7 @@ def torch_func_decorator(
                         raise
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
-                fast_collector.capture_function(func_name, out)
+                fast_collector.capture_function(func_name, out, args, property_accessor)
             if is_detached_propagation_func and has_detached_saved_activations():
                 propagate_detached_saved_activation(
                     func_name,

@@ -111,6 +111,12 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "port-equivalence leg (F16): the slice-then-convert adapter comparison",
     ),
     "PIL": (TEST_EXTRA, "pillow (also a core torchlens dependency)"),
+    "build": (
+        UNAVAILABLE_OK,
+        "python -m build ships with the dev extra, not [test]; the clean-install "
+        "packaging tests (tests/packaging_install/) skip in a test-only environment",
+    ),
+    "yaml": (TEST_EXTRA, "PyYAML, declared in the [test] extra (workflow YAML parses)"),
     "_pytest.nodeid": (
         TEST_EXTRA,
         "pytest 9.2+ structured node ids (tests/test_xdist_groups.py); the pin allows"
@@ -1268,6 +1274,11 @@ TRIPWIRE_GUARD_TARGETS: dict[str, str] = {
 
 #: unavailable-ok target -> why its absence is breadth loss, not gate loss.
 OPTIONAL_INTEGRATION_TARGETS: dict[str, str] = {
+    "build": (
+        "tests/packaging_install/ (clean wheel and sdist installs); build ships with "
+        "the dev extra, not [test], and the dedicated pr.yml packaging-install job "
+        "installs it beside its runner, so the full-[test]-extra box never needs it"
+    ),
     "netron": (
         "tests/test_netron_export_vendor.py (the executed netron 9.2.2 parser "
         "harness) and the serve round-trip in tests/test_netron_export_serve.py; "
