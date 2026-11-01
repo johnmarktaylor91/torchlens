@@ -952,7 +952,7 @@ def _call_unlogged_off_owner(
     steady state, so the disarmed path pays one bool read.
     """
 
-    if _state._nonowner_belt_armed and _state._active_trace is not None:
+    if _state._nonowner_belt_armed and _state.active_capture()[0] is not None:
         observe_nonowner_operands(args, kwargs)
     if func_name in _DEVICE_CONSTRUCTOR_NAMES:
         kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
@@ -989,7 +989,7 @@ def _call_inside_functorch_transform(
 
     if not _state._functorch_warning_emitted:
         _state._functorch_warning_emitted = True
-        trace = _state._active_trace
+        trace, _enabled = _state.active_capture()
         if trace is not None:
             trace._raw_transform_escape_detected = True
         _warn_functorch_region_not_logged()
