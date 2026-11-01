@@ -309,21 +309,83 @@ def _expected_intermediates() -> dict[str, dict[str, Any]]:
     }
 
 
-#: Rows: family, builder, op inventory, has_constants, random_init.
+#: Input, weight buffer, then per step: matmul, (bias buffer once), add, relu.
+_LOOP3_OPS: tuple[str, ...] = (
+    "none",
+    "none",
+    "matmul",
+    "none",
+    "__add__",
+    "relu",
+    "matmul",
+    "__add__",
+    "relu",
+    "matmul",
+    "__add__",
+    "relu",
+    "none",
+)
+
+#: Rows: family, builder, op inventory, has_constants, random_init. Input,
+#: output and buffer ops carry ``func_name`` ``"none"``. The closure-constant
+#: row's ``"constant"`` op is the shared constants rule's closure source op
+#: (SPEC section 2, rule 1).
 _CONFIG_BUILT: tuple[
     tuple[str, Callable[[], tuple[Any, Any]], tuple[str, ...] | None, bool, bool], ...
 ] = (
-    ("chain_branch", _build_chain_branch, None, False, False),
-    ("multi_output", _build_multi_output, None, False, False),
-    ("loop3", _build_loop3, None, False, False),
-    ("norm_softmax", _build_norm_softmax, None, False, False),
-    ("reshape_transpose", _build_reshape_transpose, None, True, False),
-    ("mlp", _build_mlp, None, False, False),
-    ("shared_twice", _build_shared_twice, None, False, False),
-    ("cnn", _build_cnn, None, False, False),
-    ("nested_residual", _build_nested_residual, None, False, False),
-    ("closure_constant", _build_constants, None, True, False),
-    ("random_forward", _build_random_forward, None, False, True),
+    (
+        "chain_branch",
+        _build_chain_branch,
+        ("none", "__add__", "__mul__", "relu", "none"),
+        False,
+        False,
+    ),
+    ("multi_output", _build_multi_output, ("none", "sum", "__mul__", "none", "none"), False, False),
+    ("loop3", _build_loop3, _LOOP3_OPS, False, False),
+    (
+        "norm_softmax",
+        _build_norm_softmax,
+        ("none", "mean", "var", "__sub__", "__add__", "sqrt", "__truediv__", "softmax", "none"),
+        False,
+        False,
+    ),
+    (
+        "reshape_transpose",
+        _build_reshape_transpose,
+        ("none", "reshape", "transpose", "ones", "matmul", "none"),
+        True,
+        False,
+    ),
+    ("mlp", _build_mlp, ("none", "linear", "relu", "linear", "none"), False, False),
+    (
+        "shared_twice",
+        _build_shared_twice,
+        ("none", "linear", "relu", "linear", "none"),
+        False,
+        False,
+    ),
+    (
+        "cnn",
+        _build_cnn,
+        ("none", "conv2d", "relu", "max_pool2d", "flatten", "linear", "none"),
+        False,
+        False,
+    ),
+    (
+        "nested_residual",
+        _build_nested_residual,
+        ("none", "linear", "gelu", "__add__", "layer_norm", "none"),
+        False,
+        False,
+    ),
+    (
+        "closure_constant",
+        _build_constants,
+        ("none", "full", "constant", "matmul", "__add__", "none"),
+        True,
+        False,
+    ),
+    ("random_forward", _build_random_forward, ("none", "__mul__", "dropout", "none"), False, True),
 )
 
 
@@ -336,25 +398,29 @@ def _build_resnet18_imagenet() -> tuple[Any, Any]:
     return resnet18(weights=ResNet18_Weights.IMAGENET1K_V1).eval(), torch.randn(1, 3, 64, 64)
 
 
-def _build_bert_tiny() -> tuple[Any, Any]:
+def _build_mobilenet_v3_small_imagenet() -> tuple[Any, Any]:
     import torch
-    from transformers import AutoModel
+    from torchvision.models import MobileNet_V3_Small_Weights, mobilenet_v3_small
 
-    model = AutoModel.from_pretrained(BERT_TINY_REPO, revision=BERT_TINY_REVISION)
-    model.config.return_dict = False
-    return model.eval(), torch.tensor([[101, 7592, 2088, 102]])
+    torch.manual_seed(0)
+    weights = MobileNet_V3_Small_Weights.IMAGENET1K_V1
+    return mobilenet_v3_small(weights=weights).eval(), torch.randn(1, 3, 64, 64)
 
 
-#: Pinned ecosystem checkpoints. torchvision publishes the weight file's
-#: SHA-256 prefix in its file name; the Hugging Face row pins a revision.
+#: Pinned ecosystem checkpoints. torchvision names each weight file with the
+#: SHA-256 prefix it verifies on download.
 RESNET18_EVIDENCE = "torchvision ResNet18_Weights.IMAGENET1K_V1 resnet18-f37072fd.pth"
-BERT_TINY_REPO = "prajjwal1/bert-tiny"
-BERT_TINY_REVISION = "main"
-BERT_TINY_EVIDENCE = f"huggingface {BERT_TINY_REPO}@{BERT_TINY_REVISION}"
+MOBILENET_V3_SMALL_EVIDENCE = (
+    "torchvision MobileNet_V3_Small_Weights.IMAGENET1K_V1 mobilenet_v3_small-047dcff4.pth"
+)
 
 _ECOSYSTEM: tuple[tuple[str, Callable[[], tuple[Any, Any]], str], ...] = (
     ("resnet18_imagenet", _build_resnet18_imagenet, RESNET18_EVIDENCE),
-    ("bert_tiny", _build_bert_tiny, BERT_TINY_EVIDENCE),
+    (
+        "mobilenet_v3_small_imagenet",
+        _build_mobilenet_v3_small_imagenet,
+        MOBILENET_V3_SMALL_EVIDENCE,
+    ),
 )
 
 
