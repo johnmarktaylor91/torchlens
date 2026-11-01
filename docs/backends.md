@@ -6,6 +6,87 @@ preview, explicit `backend="tinygrad"` enables the tinygrad preview, and explici
 `backend="paddle"` enables the Paddle dygraph/eager preview. Explicit `backend="tf"` or
 `backend="tensorflow"` enables the TensorFlow eager preview.
 
+## Backend protocol and maturity
+
+Every backend, torch included, fills one contract, `tl.backends.BackendProtocol`: a framework
+requirement, a capability table, capture, replay validation, a reference output computed with no
+TorchLens wrapper installed, host copies of values, a realize-once hook for lazy frameworks and a
+closed set of refusal codes. `BackendSpec.protocol()` returns a backend's protocol object. The
+older `CaptureBackend` orchestration adapter in `torchlens/backends/_protocol.py` stays torch's
+internal capture seam; it is not the backend contract.
+
+| Backend | Maturity | Materialization | Page |
+|---|---|---|---|
+| `torch` | stable | eager | [PyTorch](backends/torch.md) |
+| `tf` | preview | eager | [TensorFlow](backends/tf.md) |
+| `jax` | preview | eager | [JAX](backends/jax.md) |
+| `mlx` | preview | lazy | [MLX](backends/mlx.md) |
+| `paddle` | preview | eager | [Paddle](backends/paddle.md) |
+| `tinygrad` | preview | lazy | [tinygrad](backends/tinygrad.md) |
+
+`maturity` is the launch label on `BackendSpec.maturity`. It changes only on a recorded maintainer
+decision; `stable` requires every graduation item below to be met in the backend's shipped
+scorecard. Each page has a runnable tutorial, a can and cannot table and the backend's framework
+requirement (supported version range, the version the per-change CI leg pins, and the install
+extra). `tests/test_backend_docs_lockstep.py` holds this table to the registry and each page's
+can and cannot table to the backend's shipped capability summary.
+
+Shared rules every backend follows:
+
+- **Typed refusals.** An unsupported capability, option or input refuses with
+  `BackendUnsupportedError` before any framework call with side effects; `exc.code` is a member of
+  `tl.backends.REFUSAL_CODES`. A backend never returns a silent wrong result: where it cannot
+  capture correctly it refuses, or marks the trace `capture_verified=False` with the reason code
+  and a warning when the extent of the gap is itself recorded.
+- **Constants.** A tensor the forward reads from outside the traced call (a closure constant) is
+  recorded as a parentless `constant` op with a saved payload, and the op that read it lists it as
+  a parent. A literal producer (`ones`, `fill` inside the forward) keeps its own `func_name`, has
+  no parents and a saved payload. Validation reads a constant's payload as a leaf
+  (`constant_producer_leaf`, `constant_parent_payload`); a constant with no readable buffer refuses
+  `constant_unrealizable`.
+- **Realize-once.** On lazy frameworks the forward runs once to its outputs and every recorded
+  value is evaluated in one framework evaluation before any payload is read, so random-number
+  consumption equals one eager forward. A lazy backend that cannot do this yet refuses graphs that
+  carry lazy random-number state with `rng_state_in_graph`.
+- **Validation reasons.** `validate` returns a `ValidationStatus` whose per-op decisions name a
+  reason from `tl.backends.VALIDATION_REASONS`; a failure names the first offending op.
+
+### Scorecards and `tl.compat.report()`
+
+The shared conformance suite (`torchlens.conformance`) runs the same case ids over every backend
+and records each cell as `passed`, `failed`, `unsupported` (a typed refusal with a registered code)
+or `not_run`; every cell stays in the denominator. Each backend ships the result as
+`torchlens/backends/<name>/scorecard.json`, written by
+`python -m torchlens.conformance.scorecard --backend <name> --write` on the backend's pinned
+version and checked by `--check` in its CI leg, so the record is a measured fact, never hand-edited.
+The record's capability summary reads each `BackendCapabilities` flag as `supported` (True and
+exercised), `unsupported` (False, and the request refuses with the contracted code) or `untested`
+(False, refusal not yet proven by a passing cell); the pages render `untested` as "not yet proven".
+
+`tl.compat.report()` shows one row per registered backend, key `backend_scorecard:<name>`, read
+from the shipped record only (no framework import). Its status is `pass` (highest tier C2, no
+failed cell), `known_broken` (a cell failed), `scope` (framework not installed here) or
+`not_tested` (no record ships). Its details read
+`<maturity>; <passed>/<denominator> cells passed, <unsupported> unsupported, <failed> failed;
+pinned <pin>, installed <version or absent>, supported [<minimum>, <ceiling>)`, and the
+suggestion names the install extra or the first failed cell. `CompatReport.backend_scorecards`
+holds the records.
+
+### Graduation
+
+`torchlens.conformance.graduation_report(backend)` (also
+`python -m torchlens.conformance.scorecard --backend <name> --graduation`) checks six items and
+never changes `maturity`:
+
+| Item | Criterion |
+|---|---|
+| G1 | passes the conformance suite torch passes; every unsupported capability is a typed refusal |
+| G2 | replay validation works on it, including on a saved and reloaded trace |
+| G3 | at least two pretrained families from its own ecosystem are captured and validated |
+| G4 | a per-change CI leg installs the pinned framework version inside a stated supported range |
+| G5 | its page has a runnable tutorial and a can and cannot table equal to its capability summary |
+| G6 | its spellings are frozen: no unstable marker in its package, a glossary entry for every public name |
+
 ## Capability Matrix
 
 | Backend | Capture | Validation | Payloads | Modules | Gradients |
@@ -265,9 +346,11 @@ validation treats declared interventions as genuine user substitutions: the orac
 raw producer output, re-applies the declared hook, and compares — stripping or forging the
 declaration fails coverage against the emit-time inventory fingerprint. `mx.compile`/`mx.grad`/
 `mx.vmap` traced-transform wrappers refuse at capture entry, and a compiled attribute on the model
-ceilings the capture with `capture_verified=False` (`mlx_compiled_attribute_not_logged`). An output that no wrapped operation produced (an array operator such as `a + b`, an array
-method, or an `mx.*` function outside the wrapped surface) warns and ceilings the capture the same
-way (`unwrapped_op_in_capture`); those operations are not logged.
+ceilings the capture with `capture_verified=False` (`mlx_compiled_attribute_not_logged`). Array operators (`a + b` logs `add`, `v[0]` logs `getitem`), array methods and `v.T` are
+captured. An output that no wrapped operation produced (an `mx.*` function outside the wrapped
+surface, or an `mx.array(...)` built inside the forward) warns and ceilings the capture the same
+way (`unwrapped_op_in_capture`), or refuses with that code when the caller asks for a refusal;
+see [the MLX page](backends/mlx.md).
 
 MLX rejects `tl.model_output(...)`, `tl.where(...)`,
 `tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `recipes=`,
