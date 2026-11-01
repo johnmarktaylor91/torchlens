@@ -287,6 +287,47 @@ def _source_code_context_cache(self: "Trace") -> dict[Any, tuple[Any, ...]]:
     return code_context_cache
 
 
+def _source_grad_fields(self: "Trace") -> dict[str, Any]:
+    """Gradient fields a source tensor starts with before any backward pass."""
+
+    return {
+        "grad": None,
+        "transformed_grad": None,
+        "save_grads": getattr(self, "save_grads", None) not in (None, False),
+        "has_grad": False,
+        "grad_shape": None,
+        "transformed_grad_shape": None,
+        "grad_dtype": None,
+        "transformed_grad_dtype": None,
+        "gradient_memory": 0,
+        "transformed_gradient_memory": None,
+    }
+
+
+def _source_conditional_fields() -> dict[str, Any]:
+    """Conditional-capture fields a source tensor starts with, fresh per call."""
+
+    return {
+        "is_terminal_bool": False,
+        "is_terminal_conditional_bool": False,
+        "conditional_context_kind": None,
+        "conditional_wrapper_kind": None,
+        "terminal_conditional_id": None,
+        "is_scalar_bool": False,
+        "bool_value": None,
+        "in_conditionals": [],
+        "terminal_bool_for": None,
+        "is_in_conditional_body": False,
+        "conditional_branch_stack": [],
+        "conditional_branch_depth": 0,
+        "conditional_entry_children": [],
+        "conditional_then_children": [],
+        "conditional_elif_children": {},
+        "conditional_else_children": [],
+        "conditional_arm_children": {},
+    }
+
+
 def log_source_tensor_exhaustive(
     self: "Trace", t: torch.Tensor, source: str, extra_addr: str | None = None
 ) -> None:
@@ -424,17 +465,7 @@ def log_source_tensor_exhaustive(
         # Child tensor variation tracking
         "has_out_variations": False,
         "out_versions_by_child": {},
-        # Grad info:
-        "grad": None,
-        "transformed_grad": None,
-        "save_grads": getattr(self, "save_grads", None) not in (None, False),
-        "has_grad": False,
-        "grad_shape": None,
-        "transformed_grad_shape": None,
-        "grad_dtype": None,
-        "transformed_grad_dtype": None,
-        "gradient_memory": 0,
-        "transformed_gradient_memory": None,
+        **_source_grad_fields(self),
         # Function call info:
         "func": None,
         "func_call_id": None,
@@ -518,24 +549,7 @@ def log_source_tensor_exhaustive(
         "internal_source_parents": [],
         "internal_source_ancestors": internal_source_ancestors,
         "is_internal_sink": False,
-        # Conditional info:
-        "is_terminal_bool": False,
-        "is_terminal_conditional_bool": False,
-        "conditional_context_kind": None,
-        "conditional_wrapper_kind": None,
-        "terminal_conditional_id": None,
-        "is_scalar_bool": False,
-        "bool_value": None,
-        "in_conditionals": [],
-        "terminal_bool_for": None,
-        "is_in_conditional_body": False,
-        "conditional_branch_stack": [],
-        "conditional_branch_depth": 0,
-        "conditional_entry_children": [],
-        "conditional_then_children": [],
-        "conditional_elif_children": {},
-        "conditional_else_children": [],
-        "conditional_arm_children": {},
+        **_source_conditional_fields(),
         # Module info:
         "module": modules[-1] if modules else None,
         "modules": modules,
