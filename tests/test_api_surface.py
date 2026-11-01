@@ -40,6 +40,7 @@ TARGET_ALL = [
     "in_backward_pass",
     "without_op",
     "label_matches",
+    "all_sites",
     "module",
     "model_output",
     "model_input",
@@ -188,7 +189,8 @@ def test_all_matches_frozen_target_ledger() -> None:
     The decided-surface rename moves `AmbiguousOpLookupError` and
     `ReentrantTraceError` to `tl.errors`, and the visuals-and-kits rename moves
     `aggregate` to `tl.stats.aggregate`. With every area's renames, moves and
-    removals merged, the total is 87.
+    removals merged, the total is 87. JMT's walk ruling late.9 (31 Oct 2026)
+    adds `all_sites`, the named universal selector = 88.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """
