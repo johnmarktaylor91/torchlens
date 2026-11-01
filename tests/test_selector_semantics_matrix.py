@@ -380,7 +380,7 @@ def _probe_spec(
     """
 
     from torchlens._ir.selector_eval import selector_from_spec
-    from torchlens.intervention.selectors import _classify_selector_direction
+    from torchlens.intervention.selectors import classify_selector_universe
 
     try:
         selector = make_selector()
@@ -390,9 +390,9 @@ def _probe_spec(
         return f"NOT_A_SELECTOR:{type(selector).__name__}"
     cell: dict[str, Any] = {"kind": str(selector.selector_kind)}
     try:
-        cell["direction"] = _classify_selector_direction(selector)
+        cell["universe"] = classify_selector_universe(selector)
     except Exception as exc:  # noqa: BLE001
-        cell["direction"] = _error_cell(exc)
+        cell["universe"] = _error_cell(exc)
     try:
         spec = selector.to_target_spec()
     except Exception as exc:  # noqa: BLE001
@@ -404,7 +404,7 @@ def _probe_spec(
             spec.selector_kind, spec.selector_value, spec.metadata, lifecycle="site"
         )
         cell["resolver_repr"] = repr(rebuilt)
-        cell["resolver_direction"] = _classify_selector_direction(rebuilt)
+        cell["resolver_universe"] = classify_selector_universe(rebuilt)
         if model_key is not None:
             cell["resolver_labels"] = _rebuilt_selector_labels(
                 rebuilt, model_key, backward=backward
@@ -416,7 +416,7 @@ def _probe_spec(
             spec.selector_kind, spec.selector_value, spec.metadata, lifecycle="live"
         )
         cell["hooks_repr"] = repr(rebuilt_live)
-        cell["hooks_direction"] = _classify_selector_direction(rebuilt_live)
+        cell["hooks_universe"] = classify_selector_universe(rebuilt_live)
     except Exception as exc:  # noqa: BLE001
         cell["hooks_repr"] = _error_cell(exc)
     try:
@@ -534,7 +534,10 @@ LIVE_BACKWARD_CASES: tuple[tuple[str, Callable[[], Any]], ...] = (
     ("grad_output", lambda: tl.grad_output()),
     ("grad_fn_class", lambda: tl.grad_fn("ReluBackward0")),
     ("without_op", lambda: tl.without_op()),
+    # A bare forward selector no longer bridges into backward hooks (it is an
+    # activation address); tl.grad(...) is the gradient address.
     ("func_relu_bridge", lambda: tl.func("relu")),
+    ("grad_func_relu", lambda: tl.grad(tl.func("relu"))),
     ("bwd_and_binary", lambda: tl.grad_fn("ReluBackward0") & tl.grad_input()),
     (
         "bwd_and_nary_flat",
@@ -618,17 +621,21 @@ BACKWARD_CASES: tuple[tuple[str, Callable[[], Any]], ...] = (
     ),
     ("bwd_plain_label", lambda: tl.label("relu_back_1_9")),
     ("bwd_not_accumulate", lambda: ~tl.grad_fn("AccumulateGrad")),
-    # Direction-agnostic container kinds must intersect with backward kinds
-    # through the grad_fn boundary-alias bridge (deleted-code invariant).
+    # Gradient addresses resolve to the forward sites whose output gradient they name.
+    ("grad_func_relu", lambda: tl.grad(tl.func("relu"))),
+    ("grad_func_relu_pass_1", lambda: tl.grad(tl.func("relu")) & tl.in_backward_pass(1)),
+    ("grad_or_activation_relu", lambda: tl.grad(tl.func("relu")) | tl.func("relu")),
+    ("grad_not_relu", lambda: ~tl.grad(tl.func("relu"))),
+    # Container kinds joined to node selectors: the bridge from a bare selector
+    # into the node universe is removed, so these refuse at construction.
     ("bwd_output_at_and_grad_input", lambda: output_at((0,)) & tl.grad_input()),
     ("bwd_output0_and_grad_input", lambda: tl.model_output(0) & tl.grad_input()),
     ("bwd_input_at_and_grad_output", lambda: tl.model_input(0) & tl.grad_output()),
 )
 
-#: Backward composition against container/multi-output models: the
-#: direction-agnostic bridge (paired op + grad_fn boundary aliases) must make
-#: ``output(0) & grad_input()`` and ``output_at(path) & grad_input()``
-#: NON-vacuously intersect (deleted-code invariant; conv-only cells are []).
+#: Backward composition against container/multi-output models: a bare container
+#: selector joined to a node selector refuses (``selector_cross_universe_and``);
+#: the gradient of a model output is ``tl.grad(tl.model_output(0))``.
 BACKWARD_CONTAINER_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
     ("split_output0_and_grad_input", "split", lambda: tl.model_output(0) & tl.grad_input()),
     ("split_output1_and_grad_input", "split", lambda: tl.model_output(1) & tl.grad_input()),
@@ -638,6 +645,8 @@ BACKWARD_CONTAINER_CASES: tuple[tuple[str, str, Callable[[], Any]], ...] = (
         lambda: output_at(("logits",)) & tl.grad_input(),
     ),
     ("dictout_output_at_logits", "dictout", lambda: output_at(("logits",))),
+    ("split_grad_output0", "split", lambda: tl.grad(tl.model_output(0))),
+    ("dictout_grad_output_at_logits", "dictout", lambda: tl.grad(output_at(("logits",)))),
 )
 
 #: Selector compositions expected to be decided at construction time.
@@ -647,6 +656,14 @@ CONSTRUCT_CASES: tuple[tuple[str, Callable[[], Any]], ...] = (
     ("not_followed_by", lambda: ~tl.followed_by(tl.func("relu"))),
     ("double_followed_by", lambda: tl.followed_by(tl.func("a")) & tl.followed_by(tl.func("b"))),
     ("func_non_string", lambda: tl.func(torch.relu)),  # type: ignore[arg-type]
+    ("grad_nested", lambda: tl.grad(tl.grad(tl.func("relu")))),
+    ("grad_inner_node", lambda: tl.grad(tl.grad_fn("ReluBackward0"))),
+    ("grad_inner_pass_qualifier", lambda: tl.grad(tl.func("relu") & tl.in_backward_pass(2))),
+    ("grad_and_activation", lambda: tl.grad(tl.func("relu")) & tl.func("relu")),
+    ("grad_and_node", lambda: tl.grad(tl.func("relu")) & tl.grad_fn("ReluBackward0")),
+    ("activation_and_pass_qualifier", lambda: tl.func("relu") & tl.in_backward_pass(2)),
+    ("grad_or_grad", lambda: tl.grad(tl.func("relu")) | tl.grad(tl.func("add"))),
+    ("grad_not", lambda: ~tl.grad(tl.func("relu"))),
 )
 
 

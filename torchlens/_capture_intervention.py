@@ -14,19 +14,53 @@ import warnings
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from .intervention.hooks import normalize_hook_plan
+from .intervention.hooks import normalize_hook_plan, split_site_branches
 from .intervention.predicates import InterventionPredicate
-from .intervention.resolver import _selector_resolution_direction
 from .intervention.types import InterventionDecision, InterventionSpec, TargetSpec
 
 if TYPE_CHECKING:
     from ._data_classes.trace import Trace
 
 
+def _intervene_rule_pairs(intervene_predicate: Any) -> list[tuple[Any, Any]]:
+    """Return ``(selector, decision)`` for every rule of a capture ``intervene=``.
+
+    Parameters
+    ----------
+    intervene_predicate:
+        Predicate or ``Recipe`` supplied to ``trace(intervene=...)``.
+
+    Returns
+    -------
+    list[tuple[Any, Any]]
+        One pair per rule (a bare predicate is one rule).
+    """
+
+    from .intervention.spec import Recipe as PublicInterventionSpec
+
+    if isinstance(intervene_predicate, PublicInterventionSpec):
+        # C03 spec door: EVERY rule of a multi-clause spec is read -- a
+        # single-selector read would silently drop all but a lone clause.
+        return [(rule.target, rule.decision) for rule in intervene_predicate.rules]
+    return [
+        (
+            getattr(intervene_predicate, "selector", None),
+            getattr(intervene_predicate, "decision", None),
+        )
+    ]
+
+
 def _backward_intervention_spec_from_predicate(
     intervene_predicate: InterventionPredicate | None,
 ) -> InterventionSpec | None:
-    """Build a sticky intervention spec for backward-only ``tl.when`` predicates.
+    """Build the sticky backward spec for the gradient and node branches of ``intervene=``.
+
+    A rule's site decides its pass (SPEC 3.5): the activation branch fires
+    live during the capture's forward, and each ``tl.grad(site)`` or
+    autograd-node branch becomes a sticky backward hook that the next
+    ``trace.backward(loss)`` fires. The branch is validated here, so an edit
+    that reads activations on a gradient site refuses ``edit_signal_mismatch``
+    at the capture door, before the capture runs.
 
     Parameters
     ----------
@@ -36,72 +70,134 @@ def _backward_intervention_spec_from_predicate(
     Returns
     -------
     InterventionSpec | None
-        Spec containing one backward hook for a backward selector, or ``None``.
+        Spec holding one sticky hook per backward branch, or ``None``.
     """
 
     if intervene_predicate is None:
         return None
-    from .intervention.spec import Recipe as PublicInterventionSpec
-
-    if isinstance(intervene_predicate, PublicInterventionSpec):
-        # C03 spec door: EVERY backward rule of a multi-clause spec builds its
-        # sticky backward hook -- the single-selector read below would have
-        # silently dropped all but a lone clause (the exact silent-drop class
-        # the spec noun exists to kill).
-        rule_pairs: list[tuple[Any, Any]] = [
-            (rule.target, rule.decision) for rule in intervene_predicate.rules
-        ]
-    else:
-        rule_pairs = [
-            (
-                getattr(intervene_predicate, "selector", None),
-                getattr(intervene_predicate, "decision", None),
-            )
-        ]
     spec: InterventionSpec | None = None
-    for selector, decision in rule_pairs:
+    for selector, decision in _intervene_rule_pairs(intervene_predicate):
         if selector is None or not isinstance(decision, InterventionDecision):
-            continue
-        selector_direction = _selector_resolution_direction(selector)
-        if selector_direction == "backward" and decision.direction not in {"backward", "both"}:
-            warnings.warn(
-                "Forward intervention helper attached to a backward-only selector will not "
-                "fire. Use a gradient helper such as tl.zero_grad(), tl.scale_grad(), or "
-                "tl.hook_grad().",
-                UserWarning,
-                stacklevel=3,
-            )
-            continue
-        if selector_direction != "backward" or decision.direction not in {"backward", "both"}:
             continue
         if decision.hook is None:
             continue
-        target = (
-            selector.to_target_spec()
-            if hasattr(selector, "to_target_spec")
-            else TargetSpec("label", selector)
-        )
-        if spec is None:
-            spec = InterventionSpec()
-        spec.targets.append(target)
-        entries = normalize_hook_plan(
-            target,
-            decision.hook,
-            direction="backward",
-        )
-        for entry in entries:
-            metadata = {
-                **dict(entry.metadata),
-                "created_by": "intervene_backward_selector",
-                "direction": "backward",
-            }
-            spec.add_hook(
-                target,
-                entry.helper_spec if entry.helper_spec is not None else entry.normalized_callable,
-                helper=entry.helper_spec,
-                metadata=metadata,
-            )
+        for universe, branch in split_site_branches(selector):
+            if universe == "activation":
+                continue
+            target = _target_spec_for(branch)
+            # Normalize the selector itself so refusals name the user's spelling.
+            entries = normalize_hook_plan(branch, decision.hook)
+            if spec is None:
+                spec = InterventionSpec()
+            spec.targets.append(target)
+            for entry in entries:
+                spec.add_hook(
+                    target,
+                    entry.helper_spec
+                    if entry.helper_spec is not None
+                    else entry.normalized_callable,
+                    helper=entry.helper_spec,
+                    metadata={
+                        **dict(entry.metadata),
+                        "created_by": "intervene_backward_selector",
+                    },
+                )
     return spec
+
+
+def activation_only_predicate(intervene_predicate: Any) -> Any:
+    """Return the view of a capture ``intervene=`` that the live forward evaluates.
+
+    The live forward predicate matches rules against forward ops. A gradient
+    address evaluates as its inner site there (the site plan, not the
+    evaluator, decides the universe), so a rule's ``tl.grad(...)`` or node
+    branch must not reach the forward predicate: it would edit the
+    activation. Those branches arm as sticky backward hooks instead
+    (:func:`_backward_intervention_spec_from_predicate`).
+
+    Parameters
+    ----------
+    intervene_predicate:
+        Predicate or ``Recipe`` supplied to ``trace(intervene=...)``.
+
+    Returns
+    -------
+    Any
+        The predicate unchanged when every rule is an activation rule; a
+        ``Recipe`` of the activation branches otherwise; ``None`` when no rule
+        has an activation branch.
+    """
+
+    if intervene_predicate is None:
+        return None
+    from .intervention.spec import Recipe, Rule
+
+    if not isinstance(intervene_predicate, Recipe):
+        selector = getattr(intervene_predicate, "selector", None)
+        if selector is not None and all(
+            universe != "activation" for universe, _branch in split_site_branches(selector)
+        ):
+            return None
+        return intervene_predicate
+    rules: list[Any] = []
+    changed = False
+    for rule in intervene_predicate.rules:
+        branches = split_site_branches(rule.target)
+        activation = [branch for universe, branch in branches if universe == "activation"]
+        if len(activation) == len(branches):
+            rules.append(rule)
+            continue
+        changed = True
+        if activation:
+            rules.append(Rule(activation[0], rule.edit))
+    if not changed:
+        return intervene_predicate
+    return Recipe(rules=tuple(rules)) if rules else None
+
+
+def _target_spec_for(selector: Any) -> TargetSpec:
+    """Return the stored target spec of one branch selector.
+
+    Parameters
+    ----------
+    selector:
+        Branch selector (a ``tl.grad`` address, a node selector, ...).
+
+    Returns
+    -------
+    TargetSpec
+        Target spec carrying the branch.
+    """
+
+    if isinstance(selector, TargetSpec):
+        return selector
+    if hasattr(selector, "to_target_spec"):
+        return selector.to_target_spec()
+    return TargetSpec("label", selector)
+
+
+def _armed_branch_count(intervene_request: Any) -> int:
+    """Return how many gradient or node branches a capture ``intervene=`` armed.
+
+    Parameters
+    ----------
+    intervene_request:
+        The ``intervene=`` argument as configured.
+
+    Returns
+    -------
+    int
+        Number of backward branches with an executable hook.
+    """
+
+    count = 0
+    for selector, decision in _intervene_rule_pairs(intervene_request):
+        if selector is None or getattr(decision, "hook", None) is None:
+            continue
+        count += sum(
+            1 for universe, _branch in split_site_branches(selector) if universe != "activation"
+        )
+    return count
 
 
 def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> None:
@@ -122,6 +218,7 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
     if intervene_request is None:
         return
     from .intervention.audit import (
+        EventStatus,
         record_intervention_event,
         rules_payload,
         site_keys_for_labels,
@@ -160,17 +257,20 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         )
         edit_names = (str(edit_name),)
         selection_repr = repr(getattr(intervene_request, "selector", intervene_request))
+    armed_edits = _armed_branch_count(intervene_request)
+    status: EventStatus = "fired" if fire_count else ("armed" if armed_edits else "no_fire")
     record_intervention_event(
         trace,
         lane="capture",
         door="trace",
         edit_names=edit_names,
         selection_repr=selection_repr,
-        status="fired" if fire_count else "no_fire",
+        status=status,
         fire_count=fire_count,
         site_keys=site_keys_for_labels(trace, tuple(fired_labels)),
         rules=rules,
         zero_fire_rule_ids=zero_fire_rule_ids,
+        extra={"armed_edits": armed_edits, "awaiting": "backward"} if armed_edits else None,
     )
     if fire_count and zero_fire_rule_ids:
         # Some rules fired and some did not: the fact is on the audit row above;
@@ -288,15 +388,13 @@ def _merge_intervention_spec_hooks(
     )
 
 
-def intervene_selector_fired_nowhere(trace: Trace, selector: Any, direction: str | None) -> bool:
-    """Return whether a capture-time ``intervene=`` selector edited nothing.
+def intervene_selector_fired_nowhere(trace: Trace, selector: Any) -> bool:
+    """Return whether a capture-time ``intervene=`` selector addressed nothing.
 
-    A forward (or both-direction) edit counts its forward fires. A gradient
-    edit on a forward selector arms at backward time through the paired
-    forward op, so no forward fire counts it: its zero-match fact is the
-    selector resolving to no captured op (the same site lifecycle the
-    backward match evaluates). Backward selectors defer to the after-backward
-    check and never reach here.
+    The site decides the branch. An activation branch counts its forward
+    fires. A gradient branch (``tl.grad(site)``) fires only at backward time,
+    so its zero-match fact is its forward site resolving to no captured op.
+    A node branch defers to the after-backward check and never counts here.
 
     Parameters
     ----------
@@ -304,26 +402,34 @@ def intervene_selector_fired_nowhere(trace: Trace, selector: Any, direction: str
         Completed capture.
     selector:
         Capture-time ``intervene=`` selector.
-    direction:
-        The rule's signal direction.
 
     Returns
     -------
     bool
-        ``True`` when the selector matched zero sites.
+        ``True`` when every branch matched zero sites.
     """
 
-    if direction in {"forward", "both"}:
-        return int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) == 0
-    if direction != "backward":
-        return False
     from .intervention.errors import MultiMatchWarning, SiteResolutionError
+    from .intervention.hooks import gradient_inners
 
+    branches = split_site_branches(selector)
+    if any(universe == "node" for universe, _branch in branches):
+        return False
+    if any(universe == "activation" for universe, _branch in branches) and int(
+        getattr(trace, "_tl_intervene_selector_fire_count", 0)
+    ):
+        return False
     fanout = len(getattr(trace, "layer_list", ()) or ()) + 1
-    try:
-        with warnings.catch_warnings():
-            # Only the zero-match fact is asked; fan-out is the user's design.
-            warnings.simplefilter("ignore", MultiMatchWarning)
-            return not trace._resolve_sites(selector, max_fanout=fanout)
-    except SiteResolutionError:
-        return True
+    for universe, branch in branches:
+        if universe != "gradient":
+            continue
+        for inner in gradient_inners(branch):
+            try:
+                with warnings.catch_warnings():
+                    # Only the zero-match fact is asked; fan-out is the user's design.
+                    warnings.simplefilter("ignore", MultiMatchWarning)
+                    if trace._resolve_sites(inner, max_fanout=fanout):
+                        return False
+            except SiteResolutionError:
+                continue
+    return True

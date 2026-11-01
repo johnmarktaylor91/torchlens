@@ -9,7 +9,6 @@ Selection	declared
 Selector	declared
 Trace	declared
 add	declared
-add_grad_noise	declared
 add_noise	declared
 agent	submodule
 appliances	submodule
@@ -23,9 +22,8 @@ callbacks	submodule
 changed	declared
 checks	submodule
 clamp	declared
-clamp_grad	declared
 clear_cache	declared
-clip_grad	declared
+clip_norm	declared
 compat	submodule
 conformance	submodule
 dataset_extraction	submodule
@@ -47,11 +45,11 @@ fingerprint	declared
 followed_by	declared
 func	declared
 func_transform	declared
+grad	declared
 grad_fn	declared
 grad_input	declared
 grad_output	declared
 head	declared
-hook_grad	declared
 in_backward_pass	declared
 in_module	declared
 intervention	submodule
@@ -93,6 +91,7 @@ report	submodule
 saturated	declared
 scale	declared
 scale_grad	declared
+semantic	submodule
 sign	declared
 site	declared
 splice_module	declared
@@ -120,4 +119,3 @@ when	declared
 where	declared
 without_op	declared
 zero_ablate	declared
-zero_grad	declared

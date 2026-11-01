@@ -539,6 +539,9 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # timing/token/finalization bookkeeping. They must disappear with
         # that Trace and never become process-lifetime caches.
         ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
+        # Backward-ready rerun results -> the rerun capture whose tensor grad
+        # hooks route to them; weak on the result, dies with it.
+        ("torchlens/intervention/rerun.py", "_RERUN_GRAPH_SOURCES"),
         ("torchlens/backends/torch/backward.py", "_CHECKPOINT_TOKEN_STATE"),
         ("torchlens/backends/torch/_fire_timing.py", "_FIRE_TIMING_STAMPS"),
         # F27 FLIP-2 open-marker LIFO + session-time Kineto join results:
@@ -874,6 +877,7 @@ _WEAKLY_HELD = frozenset(
         # release registration must never pin the released model itself.
         ("torchlens/backends/torch/_held_refs.py", "_RELEASED_MODELS"),
         ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
+        ("torchlens/intervention/rerun.py", "_RERUN_GRAPH_SOURCES"),
         ("torchlens/backends/torch/backward.py", "_CHECKPOINT_TOKEN_STATE"),
         ("torchlens/backends/torch/_fire_timing.py", "_FIRE_TIMING_STAMPS"),
         # Executed-backward dispatch census: per-trace recorded ops by pass,

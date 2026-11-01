@@ -1265,6 +1265,11 @@ class Layer(_SelectionOperand):
     def grad(self) -> Any:
         """Return the saved grad for a single-pass layer.
 
+        The gradient of the layer's output for the latest backward pass, as
+        it leaves this trace's edit chain: a ``tl.grad(site)`` edit that fired
+        is what this read shows. A site the backward never reached has no
+        grad (``has_grad`` is ``False``); TorchLens never fills in zeros.
+
         Returns
         -------
         Any
@@ -1281,6 +1286,8 @@ class Layer(_SelectionOperand):
     @property
     def has_grad(self) -> bool:
         """Return whether the single pass has a saved grad.
+
+        ``False`` when no backward pass reached the layer's output.
 
         Returns
         -------

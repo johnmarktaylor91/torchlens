@@ -18,7 +18,7 @@ import torch
 from .errors import AmbiguousAxisError, HookValueError, NonExecutableSpecError
 from .hooks import HookContext
 from .stochastic import _NAMED_AXIS_TOKENS, _resolve_over_axes
-from .types import Edit, HelperDirection, HelperPortability
+from .types import Edit, HelperPortability, Signal
 
 
 def _mean_ablate_axes(dim: Any) -> Literal["all"] | tuple[int, ...] | None:
@@ -49,11 +49,10 @@ def _helper_spec(
     *,
     args: tuple[Any, ...] = (),
     kwargs: dict[str, Any] | None = None,
-    kind: str = "forward",
     portability: HelperPortability = "builtin",
     factory: Callable[[], Callable[..., Any]],
     metadata: dict[str, Any] | None = None,
-    direction: HelperDirection | None = None,
+    signal: Signal | None = None,
     batch_independent: bool = False,
     compatible_with_append: bool = False,
 ) -> Edit:
@@ -67,16 +66,15 @@ def _helper_spec(
         Positional helper arguments.
     kwargs:
         Keyword helper arguments.
-    kind:
-        Forward or backward helper class.
     portability:
         Portability tag.
     factory:
         Runtime hook factory.
     metadata:
         Extra helper metadata.
-    direction:
-        Optional default signal direction requested by legacy helpers.
+    signal:
+        ``None`` for a neutral edit; ``"forward"`` for an edit that reads
+        recorded forward state (refused on a gradient site).
     batch_independent:
         Whether this helper can be applied independently to each batch item.
     compatible_with_append:
@@ -92,11 +90,10 @@ def _helper_spec(
         helper_name=helper_name,
         args=args,
         kwargs=tuple(sorted((kwargs or {}).items())),
-        kind=kind,  # type: ignore[arg-type]
         portability=portability,
         factory=factory,
         metadata=tuple(sorted((metadata or {}).items())),
-        direction=direction,
+        signal=signal,
         batch_independent=batch_independent,
         compatible_with_append=compatible_with_append,
     )
@@ -209,8 +206,7 @@ def _non_executable_builtin_placeholder(
     return Edit(
         helper_name=name,
         portability="opaque_audit",
-        kind=cast(Any, data.get("kind", "forward")),
-        direction=cast(Any, data.get("direction")),
+        signal=cast(Any, data.get("signal")),
         factory=factory,
         metadata=(
             ("repr", f"<non-executable {name} helper (audit-only argument)>"),
@@ -262,8 +258,8 @@ def _enqueue_nondeterminism_note(ctx: HookContext, helper_name: str) -> None:
         note = f"{helper_name} used unseeded stochastic RNG at {site}"
     else:
         note = f"{helper_name} used unseeded stochastic RNG"
-    ctx.run_ctx.setdefault("ledger_notes", []).append(note)
-    state_history = ctx.run_ctx.get("state_history")
+    ctx.run_state.setdefault("ledger_notes", []).append(note)
+    state_history = ctx.run_state.get("state_history")
     if isinstance(state_history, list):
         state_history.append(note)
 

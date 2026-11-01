@@ -741,12 +741,12 @@ def _fire_record_key(record: FireRecord) -> tuple[Any, ...]:
     Returns
     -------
     tuple[Any, ...]
-        Key covering direction, site, pass/call position, tuple slot, and
+        Key covering signal, site, pass/call position, tuple slot, and
         helper identity.
     """
 
     return (
-        record.direction,
+        record.signal,
         record.engine,
         record.target_label,
         record.call_label,
@@ -783,7 +783,7 @@ def _helper_identity(helper: Edit | None) -> tuple[Any, ...] | None:
 
     return (
         helper.name,
-        helper.kind,
+        helper.signal,
         helper.portability,
         tuple(render_value(arg) for arg in helper.args),
         tuple((key, render_value(value)) for key, value in helper.kwargs),
@@ -1121,8 +1121,7 @@ def _serialize_helper(
     return {
         "portability": "builtin",
         "name": helper.name,
-        "kind": helper.kind,
-        "direction": helper.direction,
+        "signal": helper.signal,
         "args": [_serialize_value(arg, save_level, state) for arg in helper.args],
         "kwargs": {key: _serialize_value(value, save_level, state) for key, value in helper.kwargs},
         "metadata": _jsonish_metadata(dict(helper.metadata)),
@@ -1322,7 +1321,7 @@ def _deserialize_fire_record(
         helper=helper if isinstance(helper, Edit) else None,
         site_label=data.get("site_label"),
         timing=data.get("timing"),
-        direction=data.get("direction"),
+        signal=data.get("signal"),
         helper_name=data.get("helper_name"),
         seed=data.get("seed"),
         determinism_note=data.get("determinism_note"),

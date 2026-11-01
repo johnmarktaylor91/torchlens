@@ -22,6 +22,7 @@ from typing import Any
 from ... import _state
 from ..._ir.intervention import FireResult
 from ..._ir.predicate import RecordContext
+from ...intervention.hooks import split_site_branches
 from ...intervention.predicates import as_intervention_decision
 from ...intervention.selectors import BaseSelector
 from ...intervention.types import Edit, FireRecord, InterventionDecision, TargetSpec
@@ -92,6 +93,15 @@ class PaddleInterventionRuntime:
             raise BackendUnsupportedError(
                 "paddle backend trace(halt=...) requires a callable predicate "
                 f"returning bool; got {type(halt).__name__!s}."
+            )
+        selector = getattr(intervene, "selector", None)
+        if selector is not None and any(
+            universe != "activation" for universe, _branch in split_site_branches(selector)
+        ):
+            raise BackendUnsupportedError(
+                "paddle backend preview supports forward interventions only; the site "
+                f"{selector!r} addresses a gradient, which needs true backward capture "
+                "that paddle does not declare. Use the PyTorch backend for gradient edits."
             )
         self._backend = backend
         self.intervene = intervene
@@ -183,7 +193,7 @@ class PaddleInterventionRuntime:
             helper=helper_spec,
             site_label=ctx.label_raw,
             timing="post",
-            direction="forward",
+            signal="forward",
             helper_name=helper_spec.helper_name if helper_spec is not None else None,
             timestamp=time.time(),
             call_index=ctx.raw_index,
@@ -258,7 +268,7 @@ class PaddleInterventionRuntime:
             target,
             decision.hook,
             helper=helper_spec,
-            metadata={"created_by": "intervene_predicate", "direction": "forward"},
+            metadata={"created_by": "intervene_predicate", "signal": "forward"},
         )
 
     def warn_if_zero_matches(self) -> None:
@@ -282,13 +292,6 @@ class PaddleInterventionRuntime:
             Normalized intervention decision.
         """
 
-        if decision.direction != "forward":
-            raise BackendUnsupportedError(
-                "paddle backend preview supports forward interventions only; "
-                f"direction {decision.direction!r} needs true backward capture, "
-                "which paddle does not declare. Use the PyTorch backend for "
-                "backward interventions."
-            )
         if decision.isolate:
             raise BackendUnsupportedError(
                 "paddle backend preview does not support isolate=True intervention "

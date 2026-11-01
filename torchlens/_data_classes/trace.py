@@ -2734,6 +2734,9 @@ class Trace(
             tokens.append("no NaN/Inf (exact)")
         elif verdict == "found":
             tokens.append("NaN/Inf FOUND (.nonfinite_ops)")
+        armed = fail_open(self._armed_summary_line, lambda _error: None)
+        if armed:
+            tokens.append(armed)
         return f" [{'; '.join(tokens)}]" if tokens else ""
 
     def __treescope_repr__(self, path: Any, subtree_renderer: Any) -> Any:

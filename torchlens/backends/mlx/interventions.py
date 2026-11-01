@@ -215,15 +215,11 @@ def _resolve_decision_applier(decision: InterventionDecision, mx: Any) -> MLXHoo
     Raises
     ------
     BackendUnsupportedError
-        For directions, actions, flags, or helpers outside the MLX contract.
+        For actions, flags, or helpers outside the MLX contract.
     """
 
-    if decision.direction != "forward":
-        raise BackendUnsupportedError(
-            "MLX backend supports forward interventions only; direction "
-            f"{decision.direction!r} requires backward capture, which MLX does "
-            "not support (functional AD has no per-op backward nodes)."
-        )
+    # Gradient sites (tl.grad(...)) are outside the static selector kinds the
+    # caller admits, so every decision reaching here edits an activation.
     if decision.keep_grad or decision.isolate:
         raise BackendUnsupportedError(
             "MLX backend interventions do not support keep_grad or isolate; "
@@ -324,7 +320,7 @@ def _resolve_callable_applier(hook: Callable[..., Any]) -> MLXHookApplier:
         Applier invoking the callable with a minimal hook context.
     """
 
-    normalized = normalize_hook(hook, direction="forward")
+    normalized = normalize_hook(hook)
     identity = f"callable:{getattr(hook, '__qualname__', type(hook).__name__)}"
 
     def _apply(out: Any) -> Any:

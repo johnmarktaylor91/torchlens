@@ -62,7 +62,7 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
         r"|unwrap_torch|wrapped|get_model_metadata|check_spec_compat"
         r"|check_metadata_invariants|resolve_sites|preview_fastlog"
         r"|ModuleInputSnapshot|PreHookEffect|TensorInputObservation|TraceState"
-        r"|SaveLevel)\b"
+        r"|SaveLevel|zero_grad|scale_grad|clamp_grad|add_grad_noise|clip_grad|hook_grad)\b"
     ),
     # Removed Trace/Bundle method spellings (canonical: push/push_from/run/
     # span/conditional_arm_entry_edges). ``validate_saved_outs`` is absent on
@@ -171,6 +171,13 @@ _TL_MOVED_NEEDLE_NAMES = (
     "TensorInputObservation",
     "TraceState",
     "SaveLevel",
+    # Gradient-only edit helpers, removed for edits on tl.grad(site) (gradient sites).
+    "zero_grad",
+    "scale_grad",
+    "clamp_grad",
+    "add_grad_noise",
+    "clip_grad",
+    "hook_grad",
 )
 
 #: Plain-substring prefilter needles per group: a group's regex can only

@@ -182,7 +182,6 @@ def _fire_boundary_predicate_hooks(
     hook_entries = normalize_hook_plan(
         decision.hook,
         default_site_target=predicate_selector,
-        direction=decision.direction,
     )
     # F01 log_injections: anchor this boundary firing's injected ops to the
     # PERSISTED rule id (the public spec threads it through the decision),

@@ -172,7 +172,7 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
 
     assert spec.records
     assert all(isinstance(record, FireRecord) for record in spec.records)
-    assert any(record.direction == "forward" for record in spec.records)
+    assert any(record.signal == "forward" for record in spec.records)
     assert any(record.replaced is True for record in spec.records)
 
 
@@ -483,14 +483,14 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp_grad(0, 0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
     log.save_intervention(path, level="portable")
     spec = load_intervention_spec(path, trust_custom_callables=True)
 
-    backward_records = [record for record in spec.records if record.direction == "backward"]
+    backward_records = [record for record in spec.records if record.signal == "backward"]
     assert backward_records
     assert backward_records[0].backward_pass_index == 1
     assert backward_records[0].call_index == 1
@@ -505,7 +505,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale_grad(2.0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_execute.tlspec"
 
@@ -536,7 +536,7 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale_grad(2.0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
     path = tmp_path / "backward_before_pass.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -604,11 +604,11 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp_grad(0, 0),
+        helper=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
-        direction="backward",
-        helper_name="clamp_grad",
+        signal="backward",
+        helper_name="clamp",
         timestamp=1.0,
         backward_pass_index=1,
         call_index=1,
@@ -620,11 +620,11 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp_grad(0, 0),
+        helper=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
-        direction="backward",
-        helper_name="clamp_grad",
+        signal="backward",
+        helper_name="clamp",
         timestamp=2.0,
         backward_pass_index=1,
         call_index=1,
@@ -636,11 +636,11 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp_grad(0, 0),
+        helper=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
-        direction="backward",
-        helper_name="clamp_grad",
+        signal="backward",
+        helper_name="clamp",
         timestamp=1.0,
         backward_pass_index=1,
         call_index=1,

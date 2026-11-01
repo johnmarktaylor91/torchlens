@@ -93,7 +93,7 @@ def _hook_key(hook_spec: Any) -> tuple[Any, ...]:
     return (
         hook_spec.site_target.selector_value,
         metadata.get("spec_rule_id"),
-        metadata.get("direction"),
+        metadata.get("signal"),
         metadata.get("timing"),
         hook_identity,
     )

@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import mean_ablate, project_onto, project_out, splice_module, zero_grad
+from torchlens import mean_ablate, project_onto, project_out, splice_module
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import (
     compose,
@@ -235,21 +235,13 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
         lambda: (_subspace_sel(), splice_module(nn.Identity(), input_route="in")),
         lambda: (_subspace_sel(), splice_module(nn.Identity(), input_route="out")),
     ),
-    "grad_zero": (
-        lambda: (_subspace_sel(), zero_grad()),
-        lambda: ("capture", zero_grad()),
-    ),
 }
 
 
 def _run_remedy(target: Any, edit: Any) -> None:
-    """Run one remedy spelling; backward verbs attach at capture time."""
+    """Run one remedy spelling on a fresh fork."""
 
-    if target != "capture":
-        _trace().fork().do(target, edit)
-        return
-    trace = tl.trace(_Mlp(), _COORDS @ _H, intervene=tl.when(tl.module("lin1"), edit))
-    trace[trace.output_layers[0]].out.sum().backward()
+    _trace().fork().do(target, edit)
 
 
 @pytest.mark.parametrize("name", sorted(_REFUSED))

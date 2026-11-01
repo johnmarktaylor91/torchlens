@@ -817,7 +817,7 @@ def show_bundle_graph(
     bundle: Any,
     path: str = "bundle_modelgraph",
     vis_mode: VisModeLiteral = "unrolled",
-    direction: str = "forward",
+    signal: str = "forward",
     vis_direction: VisDirectionLiteral = "bottomup",
     vis_graph_overrides: dict[str, Any] | None = None,
     vis_node_overrides: dict[str, Any] | None = None,
@@ -838,8 +838,8 @@ def show_bundle_graph(
         Output path for Graphviz rendering.
     vis_mode:
         ``"rolled"``, ``"unrolled"``, or ``"none"``.
-    direction:
-        Graph content direction: ``"forward"``, ``"backward"``, ``"both"``, or
+    signal:
+        Which pass's graph to draw: ``"forward"``, ``"backward"``, ``"both"``, or
         ``"overlay"``.
     vis_direction:
         Graphviz layout direction.
@@ -861,7 +861,7 @@ def show_bundle_graph(
         ``label`` and, on ``fed_by``, its basis and coverage; solid edges
         carry token spans TorchLens checked, every other row is dashed.
         Node overrides key by member name, edge overrides by
-        ``(earlier, later)``; ``direction`` must stay ``"forward"``.
+        ``(earlier, later)``; ``signal`` must stay ``"forward"``.
     theme:
         Skin preset, the names ``Trace.draw`` takes: ``"torchlens"`` (default),
         ``"paper"``, ``"dark"``, ``"colorblind"`` or ``"high_contrast"``.
@@ -878,14 +878,14 @@ def show_bundle_graph(
 
     if nodes not in {"ops", "members"}:
         raise ValueError("nodes must be 'ops' or 'members'.")
-    if nodes == "members" and direction != "forward":
-        raise ValueError("nodes='members' draws the relation graph; leave direction='forward'.")
+    if nodes == "members" and signal != "forward":
+        raise ValueError("nodes='members' draws the relation graph; leave signal='forward'.")
     if vis_mode == "none":
         return None
     if vis_mode not in {"rolled", "unrolled"}:
         raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
-    if direction not in {"forward", "backward", "both", "overlay"}:
-        raise ValueError("direction must be 'forward', 'backward', 'both', or 'overlay'.")
+    if signal not in {"forward", "backward", "both", "overlay"}:
+        raise ValueError("signal must be 'forward', 'backward', 'both', or 'overlay'.")
 
     from ._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
     from ._visualization._render_utils import direction_to_rankdir
@@ -893,7 +893,7 @@ def show_bundle_graph(
     options = BundlePictureOptions(
         outpath=path,
         vis_mode=vis_mode,
-        direction=direction,
+        direction=signal,
         rankdir=direction_to_rankdir(vis_direction),
         graph_overrides=vis_graph_overrides,
         node_overrides=vis_node_overrides,

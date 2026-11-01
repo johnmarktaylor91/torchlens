@@ -1,6 +1,6 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 87 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 83 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
@@ -17,14 +17,17 @@
   reason).
 - Intervention nouns (spellings DOCUMENTED-UNSTABLE): `tl.Recipe` is the immutable multi-clause
   spec (`tl.when(...)` builds one; `Recipe.merge` or `&` joins them); each clause in
-  `Recipe.rules` is a `tl.intervention.Rule` (`target`, `edit`, `direction`);
+  `Recipe.rules` is a `tl.intervention.Rule` (`target`, `edit`; `Rule.signal` is a derived, read-only `"forward"`/`"backward"` property);
   `spec.bind(model)` returns a `tl.intervention.BoundModel`, whose `.recipe` is the bound spec.
   `tl.intervention.population(source, *, origin, ...)` builds the provenance-stamped donor
   population, a `tl.intervention.Population` (`origin=` is required; `.members`, `.origin`,
   `.identity`, `.mean(dim=None, ...)`, `.std(dim=None, ...)`).
-- Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. Gradient helpers:
-  `tl.hook_grad` (live or rerun backward hook), `tl.zero_grad`, `tl.scale_grad`, `tl.clamp_grad`,
-  `tl.clip_grad` and `tl.add_grad_noise` edit gradients during the backward pass.
+- Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. There are no
+  gradient-only helpers: `tl.grad(site)` addresses the gradient of the site's OUTPUT, and the
+  ordinary edits (`tl.scale`, `tl.zero_ablate`, `tl.clamp`, `tl.add_noise`, `tl.clip_norm(max_norm,
+  norm_type=2.0)` or a callable `fn(grad, *, ctx)`) apply to whichever tensor the site names. See
+  "Gradient sites" in [common-patterns.md](common-patterns.md). Hook scratch dicts are `ctx.state` (per site and hook) and
+  `ctx.run_state` (run-scoped); `ctx.signal` is `"forward"` or `"backward"`.
 - Report and statistics additions: `tl.debug.amp_scaled_grads_hint` returns the GradScaler
   loss-scale disclosure text; `tl.report.flops_vs_dispatch` runs the two-way FLOP cross-check;
   `tl.stats.cosine_distance`, `tl.stats.relative_l1` and `tl.stats.relative_l2` are the 0-d

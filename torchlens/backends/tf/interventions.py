@@ -201,11 +201,6 @@ def normalize_tf_interventions(intervene: Any, tf: Any) -> TFInterventionPlan:
             allowed=_TF_INTERVENTION_SELECTOR_KINDS,
             backend_name="tf",
         )
-        if decision.direction != "forward":
-            raise BackendUnsupportedError(
-                "tf backend interventions are forward-only; direction="
-                f"{decision.direction!r} requires true backward capture."
-            )
         hook = _resolve_tf_hook(decision, tf)
         level: Literal["module", "op"] = (
             "module" if _selector_kinds(selector) <= _MODULE_ONLY_KINDS else "op"

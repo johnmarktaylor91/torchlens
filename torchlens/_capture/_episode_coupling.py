@@ -77,7 +77,7 @@ class CouplingFire:
     site: str
     helper: str | None
     timing: str | None
-    direction: str | None
+    signal: str | None
     replaced: bool
 
 
@@ -131,7 +131,7 @@ class CouplingSession:
                     ),
                     helper=getattr(record, "helper_name", None),
                     timing=getattr(record, "timing", None),
-                    direction=getattr(record, "direction", None),
+                    signal=getattr(record, "signal", None),
                     replaced=bool(getattr(record, "replaced", False)),
                 )
             )
@@ -185,7 +185,7 @@ def mint_intervention_digest(session: CouplingSession) -> str:
     """Mint the intervention digest binding fire evidence to the product.
 
     Hex SHA-256 over the canonical-JSON encoding of the armed rule identity
-    and the ORDERED fire facts (step, site, helper, timing, direction,
+    and the ORDERED fire facts (step, site, helper, timing, signal,
     replaced) plus the outside-step count. Every input is deterministic for
     a fixed capture (raw site labels follow capture order; no timestamps),
     so an identical re-run mints the identical digest -- the "assert digest
@@ -197,7 +197,7 @@ def mint_intervention_digest(session: CouplingSession) -> str:
             "schema": INTERVENTION_DIGEST_SCHEMA,
             "rules": [list(row) for row in session.rule_identity],
             "fires": [
-                [fire.step, fire.site, fire.helper, fire.timing, fire.direction, fire.replaced]
+                [fire.step, fire.site, fire.helper, fire.timing, fire.signal, fire.replaced]
                 for fire in session.fires
             ],
             "outside_step_fires": session.outside_step_fires,

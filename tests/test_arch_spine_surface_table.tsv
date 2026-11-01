@@ -14,7 +14,6 @@ torchlens.Selection	torchlens._selection	L4	core	1	0
 torchlens.Selector	torchlens._selection	L4	core	1	0
 torchlens.Trace	torchlens._data_classes.trace	L1	core	1	0
 torchlens.add	torchlens.intervention.predicates	L4	core	1	0
-torchlens.add_grad_noise	torchlens.intervention.helpers	L4	core	1	0
 torchlens.add_noise	torchlens.intervention.helpers	L4	core	1	0
 torchlens.agent	torchlens.agent	FACADE	facade	0	0
 torchlens.appliances	torchlens.appliances	L1	core	0	0
@@ -26,9 +25,8 @@ torchlens.bridge	torchlens.bridge	L8	bridge	0	1
 torchlens.callbacks	torchlens.callbacks	L8	bridge	0	1
 torchlens.changed	torchlens._selection_compare	L4	core	1	0
 torchlens.clamp	torchlens.intervention.helpers	L4	core	1	0
-torchlens.clamp_grad	torchlens.intervention.helpers	L4	core	1	0
 torchlens.clear_cache	torchlens._user_funcs	FACADE	facade	1	0
-torchlens.clip_grad	torchlens.intervention.helpers	L4	core	1	0
+torchlens.clip_norm	torchlens.intervention.helpers	L4	core	1	0
 torchlens.compat	torchlens.compat	L3	core	0	0
 torchlens.dataset_extraction	torchlens.dataset_extraction	L5	core	0	0
 torchlens.dead	torchlens._selection_values	L4	core	1	0
@@ -46,11 +44,11 @@ torchlens.fingerprint	torchlens.fingerprint	L1	core	1	0
 torchlens.followed_by	torchlens.intervention.selectors	L4	core	1	0
 torchlens.func	torchlens.intervention.selectors	L4	core	1	0
 torchlens.func_transform	torchlens.intervention.selectors	L4	core	1	0
+torchlens.grad	torchlens.intervention.selectors	L4	core	1	0
 torchlens.grad_fn	torchlens.intervention.selectors	L4	core	1	0
 torchlens.grad_input	torchlens.intervention.selectors	L4	core	1	0
 torchlens.grad_output	torchlens.intervention.selectors	L4	core	1	0
 torchlens.head	torchlens.intervention.selectors	L4	core	1	0
-torchlens.hook_grad	torchlens.intervention.helpers	L4	core	1	0
 torchlens.in_backward_pass	torchlens.intervention.selectors	L4	core	1	0
 torchlens.in_module	torchlens.intervention.selectors	L4	core	1	0
 torchlens.intervention	torchlens.intervention	L4	core	0	0
@@ -88,7 +86,6 @@ torchlens.replace_with	torchlens.intervention.predicates	L4	core	1	0
 torchlens.report	torchlens.report	L7	present	0	1
 torchlens.saturated	torchlens._selection_values	L4	core	1	0
 torchlens.scale	torchlens.intervention.helpers	L4	core	1	0
-torchlens.scale_grad	torchlens.intervention.helpers	L4	core	1	0
 torchlens.sign	torchlens._selection_values	L4	core	1	0
 torchlens.site	torchlens.intervention.selectors	L4	core	1	0
 torchlens.splice_module	torchlens.intervention.helpers	L4	core	1	0
@@ -114,4 +111,3 @@ torchlens.when	torchlens.intervention.spec	L4	core	1	0
 torchlens.where	torchlens.intervention.selectors	L4	core	1	0
 torchlens.without_op	torchlens.intervention.selectors	L4	core	1	0
 torchlens.zero_ablate	torchlens.intervention.helpers	L4	core	1	0
-torchlens.zero_grad	torchlens.intervention.helpers	L4	core	1	0

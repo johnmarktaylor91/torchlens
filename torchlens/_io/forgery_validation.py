@@ -44,7 +44,7 @@ _KERNEL_ATTRIBUTION_STATUSES = frozenset({"ambiguous", "attributed", "unattribut
 # tlspec v9 (C07): closed vocabularies for the EVENT audit row family (the
 # intervention_event_v2 transaction envelope promoted to a first-class
 # intervention_audit row kind; ledger memo D1a / build item 1).
-_EVENT_STATUSES = frozenset({"fired", "no_fire", "error"})
+_EVENT_STATUSES = frozenset({"fired", "no_fire", "error", "armed"})
 _EVENT_LANES = frozenset({"replay", "rerun", "capture", "live_hook", "set_only", "bind"})
 _EVENT_REQUIRED_FIELDS = frozenset(
     {

@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._errors import InvalidArgumentError
 from torchlens.intervention.errors import MultiMatchWarning
 
 
@@ -66,8 +67,8 @@ def test_aggregate_grad_requires_loss_fn_raises_typeerror() -> None:
     model = TinyClassifier()
     batches = [(torch.ones(2, 3), torch.ones(2, 1))]
 
-    with pytest.raises(TypeError, match="loss_fn"):
-        tl.stats.aggregate(model, batches, {"relu": tl.stats.Mean()}, target="grad")
+    with pytest.raises(InvalidArgumentError, match="loss_fn"):
+        tl.stats.aggregate(model, batches, {tl.grad("relu"): tl.stats.Mean()})
 
 
 def test_aggregate_grad_basic_norms() -> None:
@@ -82,8 +83,7 @@ def test_aggregate_grad_basic_norms() -> None:
     result = tl.stats.aggregate(
         model,
         batches,
-        {"relu": tl.stats.Norm(name="norm")},
-        target="grad",
+        {tl.grad("relu"): tl.stats.Norm(name="norm")},
         loss_fn=_mse_loss,
     )
 
@@ -100,7 +100,7 @@ def test_aggregate_grad_basic_norms() -> None:
         expected_norms.append(float(torch.linalg.vector_norm(grad.reshape(-1)).item()))
         trace.cleanup()
 
-    assert result["relu"] == pytest.approx(sum(expected_norms) / len(expected_norms))
+    assert result["tl.grad('relu')"] == pytest.approx(sum(expected_norms) / len(expected_norms))
 
 
 def test_aggregate_grad_warns_on_ambiguous_saved_selector_and_uses_first_match() -> None:
@@ -127,9 +127,8 @@ def test_aggregate_grad_warns_on_ambiguous_saved_selector_and_uses_first_match()
         result = tl.stats.aggregate(
             model,
             [batch],
-            {"linear": tl.stats.Norm(name="norm")},
-            target="grad",
+            {tl.grad("linear"): tl.stats.Norm(name="norm")},
             loss_fn=_mse_loss,
         )
 
-    assert result["linear"] == pytest.approx(expected)
+    assert result["tl.grad('linear')"] == pytest.approx(expected)

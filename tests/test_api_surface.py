@@ -34,6 +34,7 @@ TARGET_ALL = [
     "func",
     "func_transform",
     "followed_by",
+    "grad",
     "grad_fn",
     "grad_input",
     "grad_output",
@@ -50,6 +51,7 @@ TARGET_ALL = [
     "in_module",
     "head",
     "clamp",
+    "clip_norm",
     "mean_ablate",
     "merge_ranks",
     "merge_report",
@@ -65,12 +67,6 @@ TARGET_ALL = [
     "site",
     "at_step",
     "when",
-    "hook_grad",
-    "clip_grad",
-    "add_grad_noise",
-    "clamp_grad",
-    "scale_grad",
-    "zero_grad",
     "Selector",
     "Selection",
     "units",
@@ -188,7 +184,9 @@ def test_all_matches_frozen_target_ledger() -> None:
     The decided-surface rename moves `AmbiguousOpLookupError` and
     `ReentrantTraceError` to `tl.errors`, and the visuals-and-kits rename moves
     `aggregate` to `tl.stats.aggregate`. With every area's renames, moves and
-    removals merged, the total is 87.
+    removals merged, the total is 87. The gradient-sites change adds `grad`
+    and `clip_norm` and removes `zero_grad`, `scale_grad`, `clamp_grad`,
+    `add_grad_noise`, `clip_grad` and `hook_grad` = 83.
     Paper-era compatibility shims remain available through ``__getattr__`` but
     are not advertised in ``__all__``.
     """

@@ -615,7 +615,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
     ]
     assert records
     assert all(isinstance(record, FireRecord) for record in records)
-    assert records[0].direction == "forward"
+    assert records[0].signal == "forward"
 
 
 def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_path: Path) -> None:
@@ -627,7 +627,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
         x,
         capture=CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp_grad(0, 0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 
@@ -643,7 +643,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
     ]
     assert refs
     assert isinstance(refs[0], FireRecord)
-    assert refs[0].direction == "backward"
+    assert refs[0].signal == "backward"
     assert isinstance(refs[0].helper, Edit)
 
 

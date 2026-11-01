@@ -401,11 +401,13 @@ Helpers must be batch-independent and append-compatible. Batch-dependent helpers
 resampling from the current batch are rejected. Training-mode batch normalization warns because
 cross-batch statistics can make chunked evaluation semantically different from one full batch.
 
-## Tier-1 Backward Hook
+## Gradient Sites
 
-Backward helpers (`hook_grad`, `zero_grad`, `scale_grad`) are live/run-only in this release. They
-are not portable `.tlspec/` publication units and are not pushed post hoc over a saved forward
-graph. Use them when the experiment explicitly re-executes the model and backward pass.
+Gradient edits (`tl.grad(site)` with an ordinary edit or a callable) are live/run-only in this
+release. A callable stays audit-only in a saved artifact, and gradient edits are not pushed post hoc
+over a saved forward graph (replay refuses `replay_gradient_edit_unsupported`). Use them when the
+experiment explicitly re-executes the model and backward pass:
+`trace.do(tl.grad(site), edit, model=model, inputs=x, loss=...)`.
 
 ## Attribution-Patching Note
 

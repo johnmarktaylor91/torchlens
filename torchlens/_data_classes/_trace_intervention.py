@@ -10,6 +10,7 @@ import sys
 import time
 import uuid
 import warnings
+from collections.abc import Callable
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
@@ -37,12 +38,26 @@ from ._trace_fork import (
     _memoized_deep_copy,
     build_fork,
 )
+from ._trace_grad_sites import (
+    _ARMING_EVENT_KEY,
+    _ARMING_GROUP_KEY,
+    armed_edits,
+    armed_summary_line,
+    do_signal_plan,
+    is_gradient_entry,
+    live_backward_graph_available,
+    refresh_armed_annotation,
+    refuse_invalid_do_loss,
+    settle_armed_gradient_edits,
+    signal_plan,
+)
 
 __all__ = [
     "_STREAM_DERIVED_GUARD_FIELDS",
     "TraceInterventionMixin",
     "_ForkMemo",
     "_memoized_deep_copy",
+    "settle_armed_gradient_edits",
 ]
 
 
@@ -206,32 +221,16 @@ class TraceInterventionMixin(_TraceMixinBase):
                 argument="direction",
             )
         if direction in {"backward", "both"}:
-
-            def _backward_set_hook(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-                """Return a static or callable gradient replacement."""
-
-                del ctx
-                if callable(value):
-                    return cast(torch.Tensor, value(grad))
-                return cast(torch.Tensor, value)
-
-            self.attach_hooks(
-                site,
-                _backward_set_hook,
-                direction="backward",
-                strict=strict,
-                confirm_mutation=True,
+            # Gradients are addressed as sites now; ``set`` (removed by wave D)
+            # keeps only its activation path rather than a second gradient door.
+            raise InvalidArgumentError(
+                f"set(..., direction={direction!r}) no longer edits gradients: a gradient "
+                "is addressed as a site, tl.grad(site)",
+                code="intervention_direction_invalid",
+                remedy="trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
+                "trace.attach_hooks(tl.grad(site), edit) then trace.backward(loss)",
+                argument="direction",
             )
-            if direction == "backward":
-                self._record_operation(
-                    "set",
-                    site=self._history_site_payload(site),
-                    value_kind=type(value).__name__,
-                    strict=strict,
-                    callable=callable(value),
-                    direction=direction,
-                )
-                return self
         from ..intervention.hooks import is_facet_target
 
         if is_facet_target(site):
@@ -260,7 +259,6 @@ class TraceInterventionMixin(_TraceMixinBase):
             self.attach_hooks(
                 site,
                 _facet_replacement_hook,
-                direction="forward",
                 strict=strict,
                 confirm_mutation=True,
             )
@@ -300,9 +298,14 @@ class TraceInterventionMixin(_TraceMixinBase):
         strict: bool = False,
         prepend: bool = False,
         confirm_mutation: bool = False,
-        direction: str | None = None,
     ) -> Any:
         """Attach sticky hooks to the current intervention spec.
+
+        The site decides which tensor a hook sees: a bare site mounts on the
+        activation, ``tl.grad(site)`` on the gradient of the site's output
+        (fired by ``trace.backward(loss)``), and ``tl.grad(site) | site`` on
+        both. Attaching is registration only: nothing runs until the next
+        forward (activation hooks) or backward (gradient hooks).
 
         Raw PyTorch ``register_forward_hook`` remains supported for users who
         need module-local replacement logic outside this API; during active
@@ -324,9 +327,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         confirm_mutation:
             Suppress the once-per-root mutate-in-place warning for callers that
             intentionally mutate this log.
-        direction:
-            Optional signal direction override: ``"forward"``, ``"backward"``,
-            or ``"both"``.
 
         Returns
         -------
@@ -343,23 +343,15 @@ class TraceInterventionMixin(_TraceMixinBase):
             entries_from_spec,
         )
 
-        if direction is not None and direction not in {"forward", "backward", "both"}:
-            raise InvalidArgumentError(
-                "attach_hooks(..., direction=...) must be 'forward', 'backward', or 'both'; "
-                f"received {direction!r}",
-                code="intervention_direction_invalid",
-                remedy="pass direction='forward', 'backward', 'both', or None",
-                argument="direction",
-            )
         if isinstance(hooks_or_site, PublicInterventionSpec):
             # C03 spec door: the ONE immutable spec is accepted unchanged.
-            # Its rules already carry site, action, and direction, so extra
-            # call arguments have nothing sound to bind to.
-            if hook is not None or extra_hooks or direction is not None:
+            # Its rules already carry site and action, so extra call
+            # arguments have nothing sound to bind to.
+            if hook is not None or extra_hooks:
                 raise InvalidArgumentError(
                     "attach_hooks(spec) takes the InterventionSpec alone: its "
-                    "rules already carry the site, action, and direction, so "
-                    "extra hook/direction arguments have nothing to bind to",
+                    "rules already carry the site and action, so extra hook "
+                    "arguments have nothing to bind to",
                     code="spec_door_extra_arguments",
                     remedy="pass only the spec (build clauses with tl.when and "
                     "merge them), or use the (site, hook) call shape without a spec",
@@ -371,14 +363,12 @@ class TraceInterventionMixin(_TraceMixinBase):
                 raise HookSignatureError("extra hooks require an initial hook argument.")
             entries = normalize_hook_plan(
                 [(hooks_or_site, hook_like) for hook_like in (hook, *extra_hooks)],
-                direction=cast(Any, direction),
                 allow_replay_only_site_targets=True,
             )
         else:
             entries = normalize_hook_plan(
                 hooks_or_site,
                 hook,
-                direction=cast(Any, direction),
                 allow_replay_only_site_targets=True,
             )
         from ..intervention.hooks import expand_facet_hook_entries
@@ -389,10 +379,19 @@ class TraceInterventionMixin(_TraceMixinBase):
             self._validate_intervention_site(entry.site_target, strict=strict)
         spec = self._ensure_intervention_spec()
         handle_ids: list[str] = []
+        arming_group = f"arm-{uuid.uuid4().hex}"
+        gradient_entries = 0
         for entry in entries:
             handle_id = f"hook-{uuid.uuid4().hex}"
             handle_ids.append(handle_id)
             metadata = dict(entry.metadata)
+            if is_gradient_entry(entry):
+                # Settle contract: every gradient rule names the attach batch
+                # that armed it, so the backward pass end writes one settle
+                # row per arming transaction (settle_armed_gradient_edits).
+                metadata[_ARMING_GROUP_KEY] = arming_group
+                metadata.setdefault(_ARMING_EVENT_KEY, None)
+                gradient_entries += 1
             if metadata.get("facet_write"):
                 # Facet-slice entries MUST store the scatter wrapper built by
                 # expand_facet_hook_entries as the fire-time hook: storing the raw
@@ -414,7 +413,16 @@ class TraceInterventionMixin(_TraceMixinBase):
                 metadata=metadata,
                 prepend=prepend,
             )
-        self._mark_intervention_spec_mutated()
+        if gradient_entries == len(entries):
+            # Gradient rules edit nothing the forward recorded, so the saved
+            # activations stay current: bump the recipe revision without
+            # marking the outs stale.
+            self._mark_intervention_spec_mutated(outs_stale=False)
+        else:
+            self._mark_intervention_spec_mutated()
+        history: dict[str, Any] = {}
+        if gradient_entries and not live_backward_graph_available(self):
+            history["armed_for"] = "next_rerun"
         self._record_operation(
             "attach_hooks",
             hook_count=len(entries),
@@ -422,7 +430,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             strict=strict,
             prepend=prepend,
             handles=tuple(handle_ids),
-            direction=direction,
+            **history,
         )
         self._last_hook_handle_ids = tuple(handle_ids)
         return HookHandle(self, tuple(handle_ids), confirm_mutation=confirm_mutation)
@@ -635,9 +643,18 @@ class TraceInterventionMixin(_TraceMixinBase):
         model: nn.Module | None = None,
         inputs: Any = None,
         intervention: InterventionOptions | None = None,
-        direction: str | None = None,
+        loss: Callable[["Trace"], torch.Tensor] | None = None,
     ) -> "Trace":
         """Apply an intervention and dispatch to replay, rerun, or set-only.
+
+        The site decides which tensor the edit changes: a bare site edits the
+        activation, ``tl.grad(site)`` the gradient of the site's output, and
+        ``tl.grad(site) | site`` both. A gradient edit needs a backward pass:
+        with ``model=`` and ``x=`` the forward reruns on a new trace with the
+        edit armed (the audit row says ``"armed"``) and the next
+        ``result.backward(loss)`` applies it; ``engine="set_only"`` arms it on
+        this trace instead. Replay re-executes forward ops only and refuses a
+        gradient edit (``replay_gradient_edit_unsupported``).
 
         Parameters
         ----------
@@ -653,13 +670,19 @@ class TraceInterventionMixin(_TraceMixinBase):
             Grouped intervention options (``InterventionOptions``: ``engine``
             in ``"auto"``/``"replay"``/``"rerun"``/``"set_only"``,
             ``confirm_mutation``, ``strict``).
-        direction:
-            Optional signal direction override for hook-style mutations.
+        loss:
+            Callable of the returned trace giving a scalar loss, for a plan
+            with a gradient site: after arming, the door runs
+            ``result.backward(loss(result))`` so the gradient edit fires inside
+            this call. Refuses ``do_loss_not_callable`` for a tensor or any
+            other non-callable and ``do_loss_without_gradient_site`` when no
+            site is a gradient site.
 
         Returns
         -------
         Trace
-            This model log after the selected propagation engine runs.
+            This model log after the selected propagation engine runs, or, for
+            a gradient plan rerun, the new trace holding the armed edits.
         """
 
         if type(hooks_or_site).__name__ == "_SiteTable":
@@ -670,16 +693,26 @@ class TraceInterventionMixin(_TraceMixinBase):
 
             hooks_or_site = normalize_selector_like(hooks_or_site, lifecycle="live")
         intervention_options = merge_intervention_options(intervention=intervention)
+        plan = signal_plan(hooks_or_site, value_or_hook)
+        refuse_invalid_do_loss(loss, plan)
         from ..intervention._param_fingerprint import changed_param_scope
 
         with changed_param_scope(intervention_options.allow_changed_params):
+            if plan is not None:
+                return do_signal_plan(
+                    self,
+                    plan,
+                    model=model,
+                    x=inputs,
+                    intervention_options=intervention_options,
+                    loss=loss,
+                )
             return self._do_with_options(
                 hooks_or_site,
                 value_or_hook,
                 model=model,
                 x=inputs,
                 intervention_options=intervention_options,
-                direction=direction,
             )
 
     def _do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges the options and enters the changed-parameter scope
@@ -690,7 +723,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         model: nn.Module | None,
         x: Any,
         intervention_options: InterventionOptions,
-        direction: str | None,
     ) -> "Trace":
         """Run one ``do()`` transaction under its merged options.
 
@@ -710,8 +742,6 @@ class TraceInterventionMixin(_TraceMixinBase):
             Input required when ``engine="rerun"``.
         intervention_options:
             Merged ``InterventionOptions``.
-        direction:
-            Optional signal direction override for hook-style mutations.
 
         Returns
         -------
@@ -757,7 +787,6 @@ class TraceInterventionMixin(_TraceMixinBase):
                 engine=selected_engine,
                 strict=strict_value,
                 confirm_mutation=confirm_mutation_value,
-                direction=direction,
             )
         except BaseException as exc:
             self._record_do_intervention_event(txn, status="error", error=repr(exc))
@@ -770,7 +799,6 @@ class TraceInterventionMixin(_TraceMixinBase):
             model_supplied=model is not None,
             x_supplied=x is not None,
             strict=strict_value,
-            direction=direction,
         )
 
         if (
@@ -801,6 +829,22 @@ class TraceInterventionMixin(_TraceMixinBase):
         quarantine_episode_after_perturbed_replay(result)
         return result
 
+    @property
+    def armed_edits(self: "Trace") -> tuple[Any, ...]:
+        """The gradient rules in this trace's recipe, as ``Rule`` clauses.
+
+        Read-only. Each entry is ``Rule(target=tl.grad(...), edit=...)`` with
+        ``signal == "backward"``; the rules stay armed (sticky) until
+        ``clear_edits(...)`` or their handle's ``remove()``.
+        """
+
+        return armed_edits(self)
+
+    def _armed_summary_line(self: "Trace") -> str | None:
+        """Summary text while an armed gradient rule has not fired (or ``None``)."""
+
+        return armed_summary_line(self)
+
     def _record_do_intervention_event(
         self: "Trace",
         txn: _DoTransaction,
@@ -808,7 +852,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         status: str | None,
         error: str | None = None,
         staged_only: bool = False,
-    ) -> None:
+        extra_fields: dict[str, Any] | None = None,
+        event_row: bool = False,
+    ) -> dict[str, Any]:
         """Write the ONE InterventionEvent envelope for one do() transaction.
 
         Parameters
@@ -824,6 +870,17 @@ class TraceInterventionMixin(_TraceMixinBase):
             Stringified failure for error rows.
         staged_only:
             Whether the edit was staged without any propagation attempt.
+        extra_fields:
+            Further envelope disclosures (the armed keys of a gradient plan).
+        event_row:
+            Write the canonical audit row as the ``EVENT`` envelope row (which
+            carries ``status``) instead of the ``ACT`` row: a gradient plan's
+            row must say ``"armed"`` in ``intervention_audit[-1]``.
+
+        Returns
+        -------
+        dict
+            The envelope row.
         """
 
         from ..intervention.audit import (
@@ -889,6 +946,8 @@ class TraceInterventionMixin(_TraceMixinBase):
         extra: dict[str, Any] = {}
         if staged_only:
             extra["staged_only"] = True
+        if extra_fields:
+            extra.update(extra_fields)
         if self._is_selection_batch(hooks_or_site):
             kinds = [self._selection_batch_kind(selection) for selection, _edit in hooks_or_site]
             extra["selection_batch"] = {
@@ -900,7 +959,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                     for door in ("act", "param", "edge")
                 },
             }
-        record_intervention_event(
+        return record_intervention_event(
             self,
             lane="set_only" if engine == "set_only" else engine,  # type: ignore[arg-type]
             door="do",
@@ -913,7 +972,9 @@ class TraceInterventionMixin(_TraceMixinBase):
             zero_fire_rule_ids=zero_fire_rule_ids,
             error=error,
             extra=extra or None,
-            append_audit_row=len(self.intervention_audit) == txn.audit_rows_before,
+            append_audit_row=not event_row
+            and len(self.intervention_audit) == txn.audit_rows_before,
+            audit_event_row=event_row,
         )
 
     def fork(self: "Trace", name: str | None = None) -> "Trace":
@@ -1038,7 +1099,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         engine: str,
         strict: bool,
         confirm_mutation: bool,
-        direction: str | None,
     ) -> tuple[str, tuple[str, ...]]:
         """Apply the mutation part of ``do`` and report its kind.
 
@@ -1054,8 +1114,6 @@ class TraceInterventionMixin(_TraceMixinBase):
             Whether selector checks should be strict.
         confirm_mutation:
             Whether root mutation warnings should be suppressed.
-        direction:
-            Optional signal direction override.
 
         Returns
         -------
@@ -1121,9 +1179,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                     remedy="pass only the (selection, edit) pair list",
                     argument="value_or_hook",
                 )
-            return self._apply_selection_batch_do(
-                hooks_or_site, engine=engine, strict=strict, direction=direction
-            )
+            return self._apply_selection_batch_do(hooks_or_site, engine=engine, strict=strict)
         if isinstance(hooks_or_site, (Selector, Selection)):
             self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
             return self._apply_selection_do(
@@ -1131,13 +1187,11 @@ class TraceInterventionMixin(_TraceMixinBase):
                 value_or_hook,
                 engine=engine,
                 strict=strict,
-                direction=direction,
             )
         if value_or_hook is not None and (engine == "set_only" or not callable(value_or_hook)):
             self.set(
                 hooks_or_site,
                 value_or_hook,
-                direction=direction or "forward",
                 strict=strict,
                 confirm_mutation=confirm_mutation,
             )
@@ -1145,7 +1199,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         handle = self.attach_hooks(
             hooks_or_site,
             value_or_hook,
-            direction=direction,
             strict=strict,
             confirm_mutation=confirm_mutation,
         )
@@ -1190,7 +1243,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         *,
         engine: str,
         strict: bool,
-        direction: str | None,
     ) -> tuple[str, tuple[str, ...]]:
         """Apply a selection-batch ``do([(selection, edit), ...])`` (D33, v1).
 
@@ -1250,17 +1302,13 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         normalized = assign_batch_donor_groups(normalized)
         if any(kind != "ACT" for kind in kinds):
-            return self._apply_cross_kind_batch_do(
-                normalized, kinds, engine=engine, strict=strict, direction=direction
-            )
+            return self._apply_cross_kind_batch_do(normalized, kinds, engine=engine, strict=strict)
         plans = [
             self._batch_act_plan(index, selection, edit)
             for index, (selection, edit) in enumerate(normalized)
         ]
         all_hook_items = [item for _resolved, plan, _audit in plans for item in plan]
-        attached = self._attach_selection_plan_hooks(
-            all_hook_items, strict=strict, direction=direction
-        )
+        attached = self._attach_selection_plan_hooks(all_hook_items, strict=strict)
         for _resolved, _plan, audit in plans:
             self.intervention_audit.append(audit)
         return "selection_hooks", attached
@@ -1294,7 +1342,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         *,
         engine: str,
         strict: bool,
-        direction: str | None,
     ) -> tuple[str, tuple[str, ...]]:
         """Apply a batch mixing ACT with PARAM/EDGE selections as ONE transaction.
 
@@ -1338,14 +1385,12 @@ class TraceInterventionMixin(_TraceMixinBase):
             for kind, step in steps:
                 if kind == "ACT":
                     items = [item for _resolved, plan, _audit in step for item in plan]
-                    attached.extend(
-                        self._attach_selection_plan_hooks(items, strict=strict, direction=direction)
-                    )
+                    attached.extend(self._attach_selection_plan_hooks(items, strict=strict))
                     self.intervention_audit.extend(audit for _resolved, _plan, audit in step)
                     self.push(replay=ReplayOptions(strict=strict))
                     continue
                 mutation_kind, handles = self._apply_selection_do(
-                    *step, engine=engine, strict=strict, direction=direction
+                    *step, engine=engine, strict=strict
                 )
                 attached.extend(handles)
                 if mutation_kind == "selection_hooks":
@@ -1364,7 +1409,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         *,
         engine: str,
         strict: bool,
-        direction: str | None,
     ) -> tuple[str, tuple[str, ...]]:
         """Apply a Selection-targeted edit under the mask-application contract.
 
@@ -1443,7 +1487,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 return "selection_replayed", ()
             self.intervention_audit.append(audit)
             return "selection_set", ()
-        attached = self._attach_selection_plan_hooks(hook_items, strict=strict, direction=direction)
+        attached = self._attach_selection_plan_hooks(hook_items, strict=strict)
         self.intervention_audit.append(audit)
         return "selection_hooks", attached
 
@@ -1452,7 +1496,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         hook_items: list[dict[str, Any]],
         *,
         strict: bool,
-        direction: str | None,
     ) -> tuple[str, ...]:
         """Attach one selection plan's hooks transactionally.
 
@@ -1471,7 +1514,6 @@ class TraceInterventionMixin(_TraceMixinBase):
                     item["edit"],
                     strict=strict,
                     confirm_mutation=True,
-                    direction=direction,
                 )
                 attached.extend(handle.handle_ids)
         except BaseException:
@@ -1658,9 +1700,9 @@ class TraceInterventionMixin(_TraceMixinBase):
                     helper=helper_spec,
                     site_label=op.layer_label,
                     timing="post",
-                    direction="forward",
+                    signal="forward",
                     helper_name=helper_name,
-                    run_ctx=context.run_ctx if hasattr(context, "run_ctx") else None,
+                    run_ctx=getattr(context, "run_state", None),
                     replaced=applied is not saved,
                 )
             ]
@@ -1828,8 +1870,12 @@ class TraceInterventionMixin(_TraceMixinBase):
             self._intervention_spec = InterventionSpec()
         return self._intervention_spec
 
-    def _mark_intervention_spec_mutated(self: "Trace") -> None:
+    def _mark_intervention_spec_mutated(self: "Trace", *, outs_stale: bool = True) -> None:
         """Invalidate cached frozen views and mark the spec stale.
+
+        ``outs_stale=False`` is for gradient-only recipe changes: they edit
+        nothing the forward recorded, so a trace whose outs matched its recipe
+        keeps that state and stays current.
 
         Returns
         -------
@@ -1837,10 +1883,15 @@ class TraceInterventionMixin(_TraceMixinBase):
             This model log is mutated in place.
         """
 
+        was_clean = self._recipe_is_clean()
         self._spec_revision += 1
         self.__dict__.pop("recipe", None)
         self.__dict__.pop("_frozen_intervention_spec", None)
         self.__dict__.pop("_cached_frozen_intervention_spec", None)
+        refresh_armed_annotation(self)
+        if not outs_stale and was_clean:
+            self._out_recipe_revision = self._spec_revision
+            return
         self.state = TraceState.SPEC_STALE
 
     def _validate_intervention_site(self: "Trace", site: Any, *, strict: bool) -> None:
@@ -1859,17 +1910,13 @@ class TraceInterventionMixin(_TraceMixinBase):
             Raises when the site cannot resolve.
         """
 
-        from ..intervention.errors import SiteResolutionError
-        from ..intervention.resolver import _selector_resolution_direction
+        from ..intervention.spec import addresses_autograd_nodes
 
-        # L1 narrowing (r3): only a typed direction-classification refusal may
-        # fall through to the strict forward resolution below (which raises its
-        # own typed refusal); any other exception is a bug and propagates.
-        try:
-            if _selector_resolution_direction(site) == "backward":
-                return
-        except SiteResolutionError:
-            pass
+        # Autograd-node sites resolve against grad_fn records, which exist
+        # only after a backward pass; gradient (tl.grad) sites resolve their
+        # inner selector against the forward ops like any activation site.
+        if addresses_autograd_nodes(site):
+            return
         max_fanout = max(1, len(self.layer_list))
         self._resolve_sites(site, strict=strict, max_fanout=max_fanout)
 

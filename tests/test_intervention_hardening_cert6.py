@@ -182,7 +182,12 @@ def test_spec_serialize_rejects_unpreservable_dict_key() -> None:
 
 
 def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
-    """MAJOR-3: ``output_at(0) & grad_input()`` intersects meaningfully (not 0)."""
+    """MAJOR-3: the gradient at ``output_at(0)`` resolves to nonzero sites.
+
+    The gradient of a forward position is spelled ``tl.grad(output_at(0))``;
+    joining the forward position to the node selector ``tl.grad_input()``
+    with ``&`` refuses (a bare selector never reaches the backward universe).
+    """
 
     model = _TupleOut()
     # Gradient retention is opt-in: log_backward no longer silently widens the
@@ -197,10 +202,16 @@ def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
     assert branch0, "expected output_at(0) to match the first tuple branch"
     log.log_backward(branch0[0].out.sum())
 
-    # A backward-only selector composed with a forward output-position selector
-    # must bridge the GradFn site back to its paired forward op.
-    composed = log.find_sites(output_at(0) & tl.grad_input())
+    from torchlens.intervention.errors import SelectorCompositionError
+
+    with pytest.raises(SelectorCompositionError) as refused:
+        _ = output_at(0) & tl.grad_input()
+    assert refused.value.fields["code"] == "selector_cross_universe_and"
+
+    composed = log.find_sites(tl.grad(output_at(0)))
     assert len(composed) >= 1
+    # The gradient address resolves to the forward ops whose output gradient it names.
+    assert all(type(site).__name__ != "GradFn" for site in composed)
 
 
 @pytest.mark.parametrize(

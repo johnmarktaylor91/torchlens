@@ -161,6 +161,7 @@ def push(
 
     replay_options = merge_replay_options(replay=replay)
     _preflight_log(trace)
+    _refuse_armed_gradient_rules(trace, replay_options.hooks)
     _warn_if_direct_writes_will_be_overlaid(trace)
     hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
     origins = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
@@ -181,6 +182,75 @@ def push(
             hook_entries=hook_entries,
             strict=replay_options.strict,
             preserve_origins=False,
+        )
+
+
+def gradient_edit_replay_text(sites: str) -> tuple[str, str]:
+    """Return the ONE ``(message, remedy)`` for a gradient edit meeting replay.
+
+    Every door that refuses ``replay_gradient_edit_unsupported`` for a
+    gradient site (``do`` with a replay engine, ``push`` on an armed recipe)
+    raises with this text, so the spelling lives in one place.
+
+    Parameters
+    ----------
+    sites:
+        Rendering of the gradient sites the edit addresses.
+
+    Returns
+    -------
+    tuple[str, str]
+        The refusal message and its remedy.
+    """
+
+    message = (
+        f"Replay re-executes forward ops only and cannot edit the gradient at {sites}. "
+        "Pass model= and x= to rerun with the edit armed, then call "
+        "result.backward(loss) (or pass loss=), or stage it with engine='set_only' "
+        "and call trace.backward(loss) on this trace."
+    )
+    remedy = (
+        "trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
+        "do(..., intervention=InterventionOptions(engine='set_only')) then trace.backward(loss)"
+    )
+    return message, remedy
+
+
+def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
+    """Refuse a push whose recipe or explicit replay hooks address a gradient.
+
+    Replay recomputes forward values off the autograd graph, so a gradient
+    rule could never fire there, whether the recipe arms it or the call
+    passes it as ``ReplayOptions(hooks={tl.grad(site): edit})``; refusing
+    keeps a push from returning a result that silently dropped it.
+
+    Parameters
+    ----------
+    trace:
+        Trace about to be pushed.
+    hooks:
+        The push's explicit ``ReplayOptions.hooks`` mapping, or ``None``.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``replay_gradient_edit_unsupported`` naming the gradient sites.
+    """
+
+    from .spec import is_gradient_site
+
+    spec = trace._intervention_spec
+    targets = [hook_spec.site_target for hook_spec in getattr(spec, "hook_specs", ())]
+    if isinstance(hooks, Mapping):
+        targets.extend(hooks)
+    sites = [repr(target) for target in targets if is_gradient_site(target)]
+    if sites:
+        message, remedy = gradient_edit_replay_text(", ".join(dict.fromkeys(sites)))
+        raise InvalidArgumentError(
+            message,
+            code="replay_gradient_edit_unsupported",
+            remedy=remedy,
+            argument="hooks_or_site",
         )
 
 

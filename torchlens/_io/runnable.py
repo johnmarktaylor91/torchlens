@@ -2788,7 +2788,7 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
 
     Only forward-direction, value-replacing interventions are flagged. An
     observe-only intervention (``replaced=False``) or a backward/grad intervention
-    (``direction != "forward"``) leaves the forward output reproducible byte-for-byte
+    (``signal != "forward"``) leaves the forward output reproducible byte-for-byte
     and is intentionally NOT flagged, so it still saves and VERIFIES. A plain,
     non-intervened capture records no such op and is unchanged.
     """
@@ -2797,8 +2797,8 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
         if not getattr(op, "intervention_replaced", False):
             continue
         for record in getattr(op, "interventions", ()) or ():
-            direction = getattr(record, "direction", None)
-            if bool(getattr(record, "replaced", False)) and direction == "forward":
+            signal = getattr(record, "signal", None)
+            if bool(getattr(record, "replaced", False)) and signal == "forward":
                 return True
     return False
 

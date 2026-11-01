@@ -3027,3 +3027,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 7d4e7370cf28a53c20cdfbf8133dd61e38273c7d (dirty)
 recorded: 2026-10-31T20:09:52.929157+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: gradient-site integration (P5): Trace.armed_edits (SPEC ARMED_PROP) joins the public surface; producer sites for the gradient settle rows
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6e1129926b3a8c4e2c100dc5fb0bfa29f08eb527 (dirty)
+recorded: 2026-11-01T04:17:56.190177+00:00

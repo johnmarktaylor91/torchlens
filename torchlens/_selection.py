@@ -639,13 +639,13 @@ class Selector:
     ``Selection`` is truthy on "has any selected element".
     """
 
-    __slots__ = ("_direction", "_kind", "_node")
+    __slots__ = ("_kind", "_node", "_signal")
 
-    _direction: str
     _kind: str
     _node: Any
+    _signal: str
 
-    def __init__(self, node: Any, *, kind: str, direction: str = "forward") -> None:
+    def __init__(self, node: Any, *, kind: str, signal: str = "forward") -> None:
         """Freeze one query AST node (internal constructor).
 
         Users build selections through producers (``__selection__`` lifts,
@@ -657,7 +657,7 @@ class Selector:
             raise ValueError(f"selection kind must be one of {_SELECTION_KINDS}; got {kind!r}.")
         object.__setattr__(self, "_node", node)
         object.__setattr__(self, "_kind", kind)
-        object.__setattr__(self, "_direction", direction)
+        object.__setattr__(self, "_signal", signal)
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Refuse mutation after freeze."""
@@ -714,9 +714,7 @@ class Selector:
     def __invert__(self) -> Selector:
         """Mask complement per touched site (uniform; never predicate negation)."""
 
-        return Selector(
-            _Combinator("invert", (self._node,)), kind=self._kind, direction=self._direction
-        )
+        return Selector(_Combinator("invert", (self._node,)), kind=self._kind, signal=self._signal)
 
     # Resolution ------------------------------------------------------------
 
@@ -824,10 +822,10 @@ def _check_kinds(op: str, left_kind: str, right_kind: str) -> None:
         )
 
 
-def _check_directions(left_direction: str, right_direction: str) -> None:
+def _check_signals(left_signal: str, right_signal: str) -> None:
     """Refuse forward x backward composition (inherited refusal)."""
 
-    if left_direction != right_direction:
+    if left_signal != right_signal:
         from .intervention.errors import SelectorCompositionError
 
         raise SelectorCompositionError(
@@ -884,7 +882,7 @@ def _compose_queries(op: str, lifted_left: Selector, lifted_right: Selector) -> 
     """Compose two query selections into one AST node (n-ary flatten for or)."""
 
     _check_kinds(op, lifted_left._kind, lifted_right._kind)
-    _check_directions(lifted_left._direction, lifted_right._direction)
+    _check_signals(lifted_left._signal, lifted_right._signal)
     if op == "or":
         # n-ary flatten for constant depth under chained composition.
         operands: list[Any] = []
@@ -897,7 +895,7 @@ def _compose_queries(op: str, lifted_left: Selector, lifted_right: Selector) -> 
         node_out: Any = _Combinator("or", tuple(operands))
     else:
         node_out = _Combinator(op, (lifted_left._node, lifted_right._node))
-    return Selector(node_out, kind=lifted_left._kind, direction=lifted_left._direction)
+    return Selector(node_out, kind=lifted_left._kind, signal=lifted_left._signal)
 
 
 def _compose_resolved(op: str, left: Selection, right: Selection) -> Selection:
@@ -1111,18 +1109,19 @@ def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> Selection:
     """Resolve a lifted selector to whole-site masks over its matched sites."""
 
     from .intervention.resolver import (
-        _indexed_label_match,
-        _iter_sites,
         _normalize_query,
-        _resolve_unchecked,
-        _selector_resolution_direction,
+        _resolve_branch_sites,
+        split_site_branches,
     )
 
-    direction = _selector_resolution_direction(node.selector)
-    matched = _indexed_label_match(trace, direction, _normalize_query(node.selector))
-    if matched is None:
-        sites = tuple(_iter_sites(trace, direction))
-        matched = _resolve_unchecked(sites, node.selector, strict=False)
+    matched: list[Any] = []
+    for branch in split_site_branches(node.selector):
+        if branch.universe == "gradient":
+            from .intervention.selectors import _grad_selection_refusal
+
+            raise _grad_selection_refusal(node.selector, code="grad_selection_unsupported")
+        branch_selector = _normalize_query(branch.selector)
+        matched.extend(_resolve_branch_sites(trace, branch_selector, branch.universe, strict=False))
     entries = [
         _act_entry(op, _mask_whole(_site_shape(op)), "exact", f"selector {node.selector!r}")
         for op in matched
@@ -1537,10 +1536,16 @@ def random_like(
 def _selection_from_selector(selector: Any) -> Selector:
     """Lift a BaseSelector as a selector-term (predicate meaning intact)."""
 
-    from .intervention.resolver import _selector_resolution_direction
+    from .intervention.resolver import split_site_branches
 
-    direction = _selector_resolution_direction(selector)
-    return Selector(_SelectorTerm(selector=selector), kind="ACT", direction=direction)
+    branches = split_site_branches(selector)
+    if any(branch.universe == "gradient" for branch in branches):
+        from .intervention.selectors import _grad_selection_refusal
+
+        # Gradient selections are not addressable this release (SPEC 1.3).
+        raise _grad_selection_refusal(selector, code="grad_selection_unsupported")
+    signal = "backward" if any(branch.universe == "node" for branch in branches) else "forward"
+    return Selector(_SelectorTerm(selector=selector), kind="ACT", signal=signal)
 
 
 def _selection_from_box(box: Any) -> Selector:

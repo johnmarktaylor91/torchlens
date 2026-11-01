@@ -516,17 +516,22 @@ def _install_tensor_grad_hook(
     trace_ref = weakref.ref(trace)
     hooked_tensor_id = id(t)
 
-    def log_grad_to_model_history(grad: torch.Tensor | None) -> None:
-        """Emit and optionally retain one gradient observed by a tensor hook.
+    def log_grad_to_model_history(grad: torch.Tensor | None) -> torch.Tensor | None:
+        """Edit, emit and optionally retain one gradient observed by a tensor hook.
 
         Autograd hands a hook ``None`` when no gradient reached the tensor (an
         unused output of a multi-output op: one half of ``torch.split``, the
         ``S`` of ``torch.svd``, the eigenvalues of ``torch.linalg.eig``). That
         records nothing: no gradient stored, no memory counted, no pass opened,
         so the op reads no gradient rather than an invented zero tensor.
+
+        This is the TorchLens boundary for the gradient of the op's output:
+        ``tl.grad(site)`` edits run here first (in declared order), the saved
+        gradient is the chain's final value, and the edited tensor is
+        returned so autograd feeds it into the op's backward function.
         """
         if grad is None:
-            return
+            return None
         active_trace = trace_ref()
         # One-owner-per-label: a non-owner alias registration drops its fire
         # so one logical op output emits exactly one OpGradObserved per pass.
@@ -536,7 +541,7 @@ def _install_tensor_grad_hook(
                 owner_map is not None
                 and owner_map.get(tensor_label, hooked_tensor_id) != hooked_tensor_id
             ):
-                return
+                return None
         refresh_target_ref = getattr(active_trace, "_refresh_projection_target_ref", None)
         if refresh_target_ref is not None:
             active_trace = refresh_target_ref()
@@ -544,9 +549,9 @@ def _install_tensor_grad_hook(
             # A fork probe resolves here to the BASE trace whose per-trace
             # flag is unset; the global depth suppresses grad recording on
             # every trace while any RF/PF probe runs.
-            return
+            return None
         if active_trace is not None and getattr(active_trace, "_tl_rf_probe_active", False):
-            return
+            return None
         # A managed backward directed at a FORK RELATIVE (a fork's
         # ``log_backward`` over the shared forward tensors) owns this
         # gradient: recording it here would silently mutate the hook trace's
@@ -566,7 +571,7 @@ def _install_tensor_grad_hook(
         if (owning_backward_only or _is_state_entangled(trace_ref())) and not (
             _owning_backward_is_running(trace_ref(), active_trace)
         ):
-            return
+            return None
         if active_trace is not None:
             # One-owner-per-label must hold on the FINAL emission target, not
             # just the hook's own trace: after a refresh-projection or fork
@@ -582,7 +587,8 @@ def _install_tensor_grad_hook(
                     target_owner_map is not None
                     and target_owner_map.get(tensor_label, hooked_tensor_id) != hooked_tensor_id
                 ):
-                    return
+                    return None
+            grad = _apply_gradient_site_edits(active_trace, grad, tensor_label)
             prebuilt = _emit_tensor_grad_event(active_trace, grad, tensor_label)
             # Gate the legacy layer-slot write on the ACTIVE per-call policy,
             # not the deprecated ``save_grads`` attribute: a per-call
@@ -595,6 +601,8 @@ def _install_tensor_grad_hook(
             # save budget (grind-r6 b5 R34-N1/R35-N1, fable+opus probe).
             if _active_save_grads_policy(active_trace) not in (None, False, "none", []):
                 _log_tensor_grad(active_trace, grad, tensor_label, prebuilt=prebuilt)
+            return grad
+        return None
 
     # TorchLens bookkeeping: torch's ``register_hook`` reads ``self.grad_fn``
     # internally, and ``t`` can be the user's registered state receiver (an
@@ -614,6 +622,39 @@ def _install_tensor_grad_hook(
             )
     if owning_backward_only:
         _OWNED_STATE_GRAD_HOOK_HANDLES.setdefault(trace, []).append(handle)
+
+
+def _apply_gradient_site_edits(
+    trace: "Trace", grad: torch.Tensor, tensor_label: str
+) -> torch.Tensor:
+    """Run the ``tl.grad(site)`` edits that address this op output's gradient.
+
+    Parameters
+    ----------
+    trace:
+        Trace the gradient is recorded on (the backwarded trace).
+    grad:
+        Gradient arriving at the op output.
+    tensor_label:
+        Raw label of the op output.
+
+    Returns
+    -------
+    torch.Tensor
+        The gradient after every matching edit (``grad`` when none fired).
+    """
+
+    if not _state._active_hook_plan:
+        return grad
+    final_label = trace._raw_to_final_layer_labels.get(tensor_label)
+    layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+    op = layer_dict.get(final_label) if final_label is not None else None
+    if op is None:
+        return grad
+    from ...intervention.runtime import apply_live_gradient_hooks
+
+    edited, _records = apply_live_gradient_hooks(grad, trace=trace, op=op)
+    return edited
 
 
 def _ensure_backward_event_stream(trace: "Trace") -> Any:

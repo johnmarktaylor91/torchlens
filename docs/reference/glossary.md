@@ -527,15 +527,18 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `torchlens.at_step(k)` on a bound call or `generate` names the k-th forward
   (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
   boundary rules, capture-free; outside a binding or an episode capture the qualifier still
-  refuses `episode_step_selector_without_episode`. Gradient edits (`tl.zero_grad`,
-  `tl.scale_grad`, `tl.hook_grad`, ...) refuse `bind_rule_unsupported`: the lane replaces forward
-  values only; edit gradients on a `backward_ready` trace and call `trace.backward(loss)`.
+  refuses `episode_step_selector_without_episode`. Gradient sites (`tl.grad(...)`) refuse
+  `bind_rule_unsupported`: the lane replaces forward values only; edit gradients with
+  `trace.do(tl.grad(site), edit, model=model, inputs=x, loss=...)`, or capture with
+  `backward_ready=True, intervene=tl.when(tl.grad(site), edit)` and call `trace.backward(loss)`.
 
 **Recipe and Rule** *(spelling documented-unstable)*
 : `tl.Recipe` is the immutable multi-clause intervention spec that `tl.when(...)` builds and every
   intervention door accepts. `Recipe.rules` is the tuple of its clauses, each a
-  `tl.intervention.Rule` with `target` (the selector or predicate), `edit` (the helper or
-  callable) and `direction` (`"forward"`, `"backward"`, `"both"` or `None`). `Recipe.merge(*others)`
+  `tl.intervention.Rule` with `target` (the selector or predicate) and `edit` (the helper or
+  callable). `Rule.signal` is a read-only property derived from the target, never a field and
+  never saved: `"backward"` for a gradient site (`tl.grad(...)`) or a node selector, `"forward"`
+  for an activation site, `"both"` for a union of the two. `Recipe.merge(*others)`
   (also `recipe_a & recipe_b`) returns one `tl.Recipe` joining the clauses; a duplicate clause
   refuses `spec_rules_duplicate`.
 
@@ -1067,7 +1070,56 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `tl.grad_fn` (backward grad_fn; `label=` matches one exact grad_fn label),
   `tl.grad_input` / `tl.grad_output` (backward event tensors), `tl.in_backward_pass`
   (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
-  the former `intervening` alias is removed).
+  the former `intervening` alias is removed). These are NODE selectors: they address an
+  autograd node and its `grad_input` tuple, resolved against `trace.grad_fn_logs` after
+  `log_backward()`. The gradient of a forward site's output is addressed with `tl.grad(site)`
+  instead (see **tl.grad**).
+
+**tl.grad(site)** *(spelling documented-unstable)*
+: Builds a `GradSelector` (frozen, hashable, selector kind `"grad"`; also
+  `torchlens.intervention.selectors.grad`) that names the gradient of the loss with respect to the
+  site's OUTPUT, observed at the TorchLens boundary before it enters the op's backward function:
+  the same tensor `trace[site].grad` stores. It is an address and never calls autograd.
+  `repr(tl.grad("relu_3"))` is `tl.grad('relu_3')`. It accepts a label (pass-qualified
+  `"relu_3:2"` on multi-pass layers), any activation selector (`tl.label`, `tl.func`,
+  `tl.module`, `tl.in_module`, `tl.label_contains`, `tl.label_matches`, `tl.where`,
+  `tl.model_output`, `tl.model_input`, `tl.followed_by`, `tl.preceded_by`, `tl.at_step`, ... and
+  `&`/`|`/`~` compositions of these), an `Op` or `Layer` record, or a `find_sites()` table. An op with
+  several outputs has one gradient per output (`tuple_index` names the slot). It refuses, with
+  `SelectorCompositionError` carrying `code` and `remedy`: a nested `tl.grad`
+  (`grad_selector_nested`), a node selector or a pass qualifier inside
+  (`grad_selector_inner_not_forward`: write `tl.grad(s) & tl.in_backward_pass(2)`), a facet or
+  head selector (`grad_facet_unsupported`), a `Selection` (`grad_selection_unsupported`), and a
+  list or mapping (`grad_selector_inner_invalid`). No site door takes a pass keyword; the site
+  decides. Read side is unchanged in spelling: `trace[site].grad`, `.grads` and `.has_grad`
+  (`trace[tl.grad(s)]` is not an indexing form).
+
+**Activation, gradient and node universes**
+: Every site belongs to one universe. A bare selector or label is an ACTIVATION site (forward out
+  hook, payload the activation); `tl.grad(inner)` is a GRADIENT site (the output gradient of each
+  forward op `inner` matches); the backward selectors are NODE sites (a grad_fn post-hook per
+  `grad_input` slot). A bare label never reaches the backward graph unless wrapped in `tl.grad`.
+  `tl.grad(a) | tl.grad(b)` is one gradient branch, `tl.grad(s) | s` is two branches (activation
+  and gradient, each resolved, mounted and recorded separately; union keeps both because
+  identity is typed, never the label alone), `~tl.grad(s)` normalises to `tl.grad(~s)`, and
+  `tl.grad(s) & tl.in_backward_pass(n)` restricts the gradient branch to pass `n`. `&` across
+  universes refuses `selector_cross_universe_and` (`tl.grad(s) & s`, `s & tl.grad_fn(...)`,
+  `tl.grad(s) & tl.grad_fn(...)`), `~` over a union that spans universes refuses
+  `selector_cross_universe_not` (negate inside each branch: `tl.grad(~a) | ~a`), and a pass
+  qualifier on a bare activation selector refuses `selector_signal_mismatch`. A gradient site resolves its inner selector exactly as the
+  activation door does (zero matches refuse); a matched op the loss never reaches is a
+  `no_fire`, never a resolution error and never a zero tensor. `Trace.find_sites(tl.grad(s))`
+  returns the matched forward sites with `signal="backward"`; its `.to_dataframe()` table
+  carries that value in a `signal` column (`"forward"` for activation sites, `"backward"` for node sites).
+
+**signal (record field)** *(spelling documented-unstable)*
+: The one field that says which pass a record or event belongs to: `"forward"` or `"backward"`
+  (plan and span summaries may say `"both"`). It is spelled `signal` on `HookContext`,
+  `FireRecord`, `TapRecord`, `Edit`, `NarrationEvent` and `Rule` (derived), on the audit payload,
+  the coupling record and the span record. Sites carry no `signal=` keyword; the only door that
+  does is `tl.observers.span(name, signal="both")`. `HookContext` also carries `ctx.state` (the
+  per-(site, hook) scratch dict) and `ctx.run_state` (the run-scoped dict); a callable attached
+  to `tl.grad(s) | s` runs in both passes and reads `ctx.signal`.
 
 **`Accessor.count_by(*keys)`**
 : Every accessor (`trace.layers`, `trace.ops`, `trace.modules`, `trace.params`, ...) counts
@@ -1090,7 +1142,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `intervention_helper_renamed`; for coherent donor patching use
   `tl.patch_from`), `tl.replace_with` (fixed value), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
   `tl.project_out` (keep or remove the component along a direction), and
-  `tl.splice_module` (call a module as a black-box forward splice). Availability outside
+  `tl.splice_module` (call a module as a black-box forward splice), and `tl.clip_norm` (norm clip).
+  Availability outside
   the torch backend is narrower; see the per-backend rosters in the backends guide.
   The value helpers take the keyword-only `allow_shape_change=` (default `False`), which
   allows the edit to change the site's output shape; by default the edit must preserve it. `tl.steer`
@@ -1120,18 +1173,57 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `mean_ablate(dim=...)`, the removed `mean_from(population)` is `mean_ablate(population,
   dim=None)`, and a saved spec naming `mean_fill` refuses `intervention_helper_renamed`.
 
-**Backward helpers**
-: `tl.hook_grad` builds a live/rerun-only backward hook; `tl.zero_grad`, `tl.scale_grad`,
-  `tl.clamp_grad`, `tl.clip_grad`, and `tl.add_grad_noise` edit gradient tensors during the
-  backward pass. `tl.zero_grad` and `tl.scale_grad` also take `allow_shape_change=`, with the
-  same meaning as on the value helpers.
+**Edits on gradient sites**
+: A tensor edit is a function of one tensor and the site decides which tensor, so the neutral
+  edits apply to activation and gradient sites alike: `tl.scale`, `tl.zero_ablate`, `tl.clamp`,
+  `tl.add_noise`, `torchlens.intervention.scramble_elements`, `tl.steer`, `tl.project_onto`,
+  `tl.project_out`, `tl.replace_with`, `tl.swap_with` with a fixed tensor donor, `tl.clip_norm`,
+  and any callable `fn(tensor, *, ctx)`; their `Edit.signal` is `None`. Edits that read recorded
+  forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`, `tl.swap_with` with a
+  site or trace donor; `Edit.signal == "forward"`) refuse on a gradient site with
+  `edit_signal_mismatch` at attach time, before any mutation. There are no gradient-only helpers:
+  `trace.do(tl.grad("relu_3"), tl.zero_ablate(), model=model, inputs=x)` zeroes a gradient.
+
+**tl.clip_norm(max_norm, norm_type=2.0)** *(spelling documented-unstable)*
+: Neutral, portable edit that rescales its tensor so its `norm_type` norm is at most `max_norm`,
+  per tensor. On `tl.grad(site)` it is gradient-norm clipping at that site.
+
+**Armed gradient edits and Trace.armed_edits** *(spellings documented-unstable)*
+: `trace.do(tl.grad(s), edit, model=model, inputs=x)` reruns the forward with the activation half of
+  the plan applied live and the gradient half carried into the result's recipe as sticky backward
+  hooks of the returned execution only (the source trace is not armed). The rerun is made
+  graph-connected whatever the source's `backward_ready` was and says so in
+  `result.last_run["backward_ready_forced"]`. Its `intervention_event_v2` envelope has status
+  `"armed"` (beside `"fired"`, `"no_fire"`, `"error"`), `fire_count=0` and
+  `extra={"armed_edits": n, "awaiting": "backward"}` (a mixed plan keeps the activation half's
+  `fired`/`no_fire` status and adds the same keys). `Trace.armed_edits` is the read-only tuple of
+  the gradient rules in the trace's recipe, and the trace summary says "N gradient edits armed;
+  call trace.backward(loss)" until they fire. Each `trace.backward(loss)` then writes one settle
+  envelope per arming transaction (`door="backward"`, `lane="live_hook"`, `parent_event_id` and
+  `extra["arming_event_id"]` the arming row, `backward_pass_index`, status `fired` or `no_fire`
+  with `no_fire_reason` `"gradient_not_reached"` or `"pass_filtered"`); a second backward never
+  rewrites the first pass's row. `loss=` on `Trace.do` (and `tl.sweep`) is a callable of the
+  returned trace returning a scalar with a `grad_fn`; the door runs `result.backward(loss(result))`
+  in the same call. A non-callable refuses `do_loss_not_callable`, a plan with no gradient site
+  refuses `do_loss_without_gradient_site`, and a callable that raises writes an `error` envelope,
+  detaches the hooks this call attached, and re-raises. `engine="set_only"` arms the gradient rules
+  on the trace itself for its own `trace.backward(loss)`. `attach_hooks(tl.grad(s), edit)`
+  registers the sticky rule without a rerun; when the trace holds no live backward graph its
+  `attach_hooks` history row carries `armed_for="next_rerun"` (the rule waits for the next rerun's
+  backward). A saved trace keeps the armed rules and records their
+  count in `annotations["armed_gradient_edits"]`.
 
 **Replay verbs**
 : `Trace.do` applies a one-shot intervention to a captured log; `Trace.push` pushes an edit
   downstream through the recorded graph (DAG replay) and `Trace.push_from` pushes from a
   pre-mutated site; `Trace.run` performs a full-forward run with the log's active
   intervention spec; `tl.sweep` captures one intervened trace per swept replacement
-  value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) The replay engine operates on pass-qualified op labels
+  value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) Replay re-executes
+  forward ops only, so a gradient site on `do` without `model=`/`x=`, on `engine="replay"`, or in
+  `push` refuses `replay_gradient_edit_unsupported` before any mutation ("Pass model= and x= to
+  rerun with the edit armed, then call result.backward(loss) (or pass loss=), or stage it with
+  engine='set_only' and call trace.backward(loss) on this trace"); differentiable replay of
+  gradient edits is out of scope this release. The replay engine operates on pass-qualified op labels
   (`label:pass`): cone traversal, the replay overlay, hook targets, and commits are
   keyed per pass, so edits on multi-pass (recurrence-grouped) layers touch exactly the
   addressed pass and recompute every downstream pass; a bare label naming a multi-pass
@@ -1249,8 +1341,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   once (the cross-shard mixing buffer) and yields token rows when `tokens=True`.
 
 **Observers**
-: `tl.observers.tap` creates a tap observer for a site; `tl.observers.span` records a named observer span
-  around captures or hook execution (the former `record_span` alias is removed);
+: `tl.observers.tap` creates a tap observer for a site (`tap(tl.grad(s))` records gradients with
+  `signal="backward"` and `grad_kind="grad_output"`; `tap(tl.grad(s) | s)` records both);
+  `tl.observers.span(name, signal="both")` records a named observer span around captures or hook
+  execution, `signal=` (`"forward"`, `"backward"` or `"both"`) scoping which records carry the span
+  name (the former `record_span` alias is removed);
   `tl.observers.register_tensor_connection` registers a manual parent-child tensor edge during
   capture.
 
@@ -1320,7 +1415,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.facets` is the semantic facet namespace (canonical home `torchlens._semantic`);
   `tl.export` holds static export helpers; `tl.Bundle(...)` / `tl.Bundle` build aligned
   Trace collections and `torchlens._visualization.show_bundle_graph` renders a bundle's graph:
-  `nodes="ops"` (default) the union op graph, `nodes="members"` (spelling documented-unstable)
+  `nodes="ops"` (default) the union op graph (`signal="forward"`, the default, or
+  `"backward"` picks which pass's graph), `nodes="members"` (spelling documented-unstable)
   one node per member and one edge per relation row, from the earlier member to the later one,
   labelled with the kind, the row's `label`, on `fed_by` its basis and coverage, and on
   `selected_by` its `chosen` decision; solid edges carry token spans TorchLens checked, every other
@@ -1361,11 +1457,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   DOCUMENTED-UNSTABLE, for any accumulator's whole state (`tl_stats_state_v1`; a reload
   keeps folding as if never interrupted; `load_fitted(path, encoder=...)` takes back an
   `encoder=` callable, which is not stored). `tl.stats.aggregate(model,
-  dataloader, metrics)` streams activations (`target="out"`) or gradients
-  (`target="grad"`, with `loss_fn=`) through those accumulators across a whole
+  dataloader, metrics)` streams activations or gradients through those accumulators, keyed
+  by site: `metrics={"relu_3": tl.stats.Mean(), tl.grad("relu_3"): tl.stats.Mean()}` (a plain
+  string key is an activation; a gradient key needs `loss_fn=`, else
+  `aggregate_loss_fn_required`; result and cache keys use the key's canonical repr) across a whole
   dataloader without retaining per-batch tensors; `cache=True` (with `cache_dir=`, as
   for `tl.trace`; DOCUMENTED-UNSTABLE) keys the run by value (model contents and code,
-  every batch, each accumulator's starting state and encoder, `target=`, `loss_fn=`,
+  every batch, each accumulator's starting state and encoder, the metric keys, `loss_fn=`,
   versions) so a rerun restores the saved states and skips the loop, and refuses a run
   it cannot key (`stats_aggregate_cache_unkeyable`). Per-unit statistics
   (DOCUMENTED-UNSTABLE): the keyword-only `unit_axis=` on `tl.stats.Quantile` and
@@ -2083,13 +2181,13 @@ default-keep); mask-application semantics documented-unstable*
 : `tl.Edit` is the public edit-object type (the old class
   spelling is removed, U00 clean break). `repr(edit)` prints the
   public spelling: a builtin edit prints as the public call that builds it
-  (`tl.scale_grad(2.0)`, default-valued keywords omitted; evaluating it
-  rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,
+  (`tl.scale(2.0)`, default-valued keywords omitted; evaluating it
+  rebuilds an equal edit), any other edit as `tl.Edit('name', signal=...,
   portability=...)`. An `Edit` is a frozen record of its identity:
   `helper_name` (also read as `name`), positional `args`, keyword `kwargs`
-  (a tuple of name and value pairs), `kind`, `portability`, `metadata`
+  (a tuple of name and value pairs), `signal`, `portability`, `metadata`
   (name and value pairs, such as `("keep_grad", True)` or the selection
-  disclosure a masked `do()` adds), `direction`, `batch_independent`,
+  disclosure a masked `do()` adds), `batch_independent`,
   `compatible_with_append` (an edit that may change the output shape is
   refused on an append rerun unless this is true) and `selection_recipe`
   (the selection recipe a selection-targeted `do()` attaches; `None`
@@ -3408,6 +3506,7 @@ The sections above describe each surface in depth.
 ### Namespace names
 | Spelling | Meaning |
 | --- | --- |
+| `tl.clip_norm` | Neutral edit that rescales a tensor (on `tl.grad(site)`, the gradient) to at most `max_norm` in `norm_type` norm |
 | `tl.debug.BackwardNanReport` | Result of `tl.debug.bisect_nan_backward`: the backward pass walked, the earliest provable non-finite birth and the full transition ledger |
 | `tl.debug.BisectNanReport` | Result of `tl.debug.bisect_nan` |
 | `tl.debug.BisectPrecisionReport` | Result of `tl.debug.bisect_precision` |
@@ -3468,6 +3567,7 @@ The sections above describe each surface in depth.
 | `tl.export.unregister_target` | Remove one export-target registration |
 | `tl.fingerprint.StructuralHashMismatchError` | Raised when a model's provisional structural hash differs from its pin |
 | `tl.fingerprint.content` | Return a deterministic SHA-256 digest of nested tensor content |
+| `tl.grad` | Address the gradient of a site's output: `tl.grad("relu_3")`; builds a `GradSelector` |
 | `tl.intervention.BundleComparisonError` | The same class as `tl.errors.BundleComparisonError` |
 | `tl.intervention.Population` | A prepared, provenance-stamped donor population: `members`, `datums`, `origin`, `kind`, `content_digest`, `digest_kind`, `identity`, `eligible_indices(...)`, `mean(dim=None, ...)`, `std(dim=None, ...)`; built by `tl.intervention.population` |
 | `tl.intervention.label_contains` | Create a label-substring selector |
@@ -3612,6 +3712,7 @@ The sections above describe each surface in depth.
 | `DiagnosticFinding.check_name` | Check name (`"nonfinite"`, `"dtype_regime"`, `"layout"` or `"confinement"`) |
 | `DiffReport.rows_with_status` | Return the rows carrying one closed-vocabulary status |
 | `DryRun.filter` | Return a new trace with decisions from a new op predicate |
+| `Edit.signal` | Pass an edit is bound to: `"forward"` for edits that read recorded activations, `None` for neutral edits |
 | `EffectsView.rank_changes` | Rank candidates by the size of their change from baseline, descending |
 | `EffectsView.to_selection` | Convert the view to a selection: the union of its WHERE regions |
 | `EpisodeOptions.acknowledge_step_cost` | Accept a step declaration beyond the cost ceiling |
@@ -3631,6 +3732,7 @@ The sections above describe each surface in depth.
 | `FindNanReport.found` | Whether a NaN or Inf was found |
 | `FindNanReport.label_status` | Whether the reported label is final (`"final"`) or absent (`"none"`) |
 | `FindNanReport.message` | Human-readable diagnostic summary |
+| `FireRecord.signal` | Pass the fire happened in: `"forward"` or `"backward"` |
 | `GqaInfo.num_query_heads` | Number of query heads |
 | `GradFnSketch.num_nodes` | Number of walked nodes |
 | `GradReceptiveField.batch_support` | Batch indices the influence set reaches, or `None` |
@@ -3660,6 +3762,9 @@ The sections above describe each surface in depth.
 | `HealthFacts.num_unmapped_ops` | Ops the health partition could not map |
 | `HistogramPoint.bin_edges` | Histogram bin edges for the point's counts |
 | `HistoryReader.num_chunks` | Number of committed chunks |
+| `HookContext.run_state` | Run-scoped scratch dict shared by every hook of one run |
+| `HookContext.signal` | Pass the hook is firing in: `"forward"` or `"backward"` |
+| `HookContext.state` | Per-(site, hook) scratch dict |
 | `HtmlReportOptions.deterministic` | Suppress the manifest timestamp for byte-exact regeneration |
 | `HtmlReportOptions.max_array_bytes` | Thumbnail byte budget, enforced before payloads are written |
 | `HtmlReportOptions.max_array_sites` | Thumbnail site budget, enforced before payloads are written |
@@ -3717,7 +3822,8 @@ The sections above describe each surface in depth.
 | `Rule.address_class` | How the rule addresses its sites (value-dependent by default) |
 | `Rule.decision` | The rule's normalized decision, or `None` |
 | `Rule.payload_fidelity` | Audit fidelity of this rule's action payload |
-| `Rule.rule_id` | Content-derived rule identity over WHERE, action and direction |
+| `Rule.rule_id` | Content-derived rule identity over WHERE and action |
+| `Rule.signal` | Pass the rule edits (`"forward"`, `"backward"` or `"both"`), derived from its target |
 | `Rule.where_repr` | Canonical rendering of the rule's WHERE clause |
 | `RunReport.has_carried_state` | Whether mutations were deliberately left on the live model; the default run restores declared state and reports `False` |
 | `RunReport.is_poisoned` | Whether the run left the provider unusable for further runs |
@@ -3747,7 +3853,9 @@ The sections above describe each surface in depth.
 | `SummaryTotals.retained_bytes` | Bytes this object holds now |
 | `Super.absent_names` | Return bundle member names not represented by this view |
 | `Super.is_complete` | Return whether every bundle member is represented |
+| `TapRecord.signal` | Pass the tapped value belongs to: `"forward"` or `"backward"` |
 | `TensorSpec.from_tensor` | Build a spec from a tensor (alternate constructor) |
+| `Trace.armed_edits` | Read-only tuple of the gradient rules in the trace's recipe |
 | `Trace.random_seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
@@ -4868,6 +4976,7 @@ alphabetical order.
 | `is_tripped=` | field and constructor keyword of `WatchdogSnapshot` |
 | `is_verified=` | field and constructor keyword of `CaptureFacts` |
 | `item_list=` | keyword of `tl.types.Accessor`: the ordered records |
+| `loss=` | keyword of `Trace.do` and `tl.sweep`: a callable of the returned trace whose scalar result the door runs `backward` on |
 | `min_stimuli=` | keyword of the `tl.repgeom` geometry functions (`classical_mds`, `effective_dimensionality`, `scree`): fewest stimuli accepted |
 | `num_audited_ops=` | field and constructor keyword of `DTypeRangeReport` |
 | `num_backward_passes=` | field and constructor keyword of `BackwardStatus`, `BackwardStyleInventory` |
@@ -4900,7 +5009,9 @@ alphabetical order.
 | `retained_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
 | `retained_lazy_ops=` | field and constructor keyword of `MemoryFacts` |
 | `retained_present_ops=` | field and constructor keyword of `MemoryFacts` |
+| `run_state=` | field and constructor keyword of `HookContext`: the run-scoped scratch dict (`ctx.run_state`) |
 | `serve=` | keyword of `tl.export.netron`: open the exported graph in a local viewer |
+| `signal=` | keyword of `tl.observers.span` (`"forward"`, `"backward"` or `"both"`) and `torchlens._visualization.show_bundle_graph` (`"forward"` or `"backward"`) |
 | `source_ref=` | keyword of `tl.types.Accessor`: weak reference to the owning trace |
 | `state_dict=` | keyword of `Trace.load_state_dict`: the sparse-run state to stage |
 | `uncounted_op_counts=` | field and constructor keyword of `BackwardStatus` |

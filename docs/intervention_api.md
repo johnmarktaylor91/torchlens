@@ -113,21 +113,36 @@ reconstruction fidelity plus output-level causal effect. The optional
 the feature-level causal-testing knob. See
 `notebooks/sae_splice_tutorial.ipynb` for the end-to-end experiment.
 
-## Backward Helpers
+## Gradient Sites
 
-Backward helpers are Tier-1 live/rerun-only helpers.
+A gradient is addressed as a site, not chosen by a keyword. `tl.grad("relu_3")` names the gradient of
+relu_3's OUTPUT (the tensor `trace["relu_3"].grad` stores), a bare `"relu_3"` names its activation, and
+`tl.grad("relu_3") | "relu_3"` names both. `tl.grad` is an address; it never calls autograd. It wraps a
+forward site once and refuses node selectors (`tl.grad_fn`, ...), facets and selections.
 
-| Helper | Signature | Portability |
-| --- | --- | --- |
-| `tl.hook_grad` | `hook_grad(fn)` | Live/rerun-only; not portable. |
-| `tl.zero_grad` | `zero_grad(*, allow_shape_change=False)` | Live/rerun-only; not portable. |
-| `tl.scale_grad` | `scale_grad(factor, *, allow_shape_change=False)` | Live/rerun-only; not portable. |
+There are no gradient-only helpers. The ordinary edits apply to whichever tensor the site names:
+
+| Edit | On `tl.grad(site)` |
+| --- | --- |
+| `tl.scale(f)`, `tl.zero_ablate()`, `tl.clamp(low=lo, high=hi)`, `tl.add_noise(std, seed=)` | Scale, zero, clamp or add noise to the gradient. |
+| `tl.clip_norm(max_norm, norm_type=2.0)` | Rescale the gradient so its norm is at most `max_norm`, per tensor. Portable. |
+| A callable `fn(grad, *, ctx)` | Receives the gradient; return a replacement or `None`. Audit-only when saved. |
+
+Edits that read recorded forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`,
+`tl.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
+
+`trace.do(tl.grad(site), edit, model=model, inputs=x)` reruns the forward with the edit armed; the next
+`result.backward(loss)` applies it. `loss=lambda t: ...` (a callable of the returned trace) does both in
+one call. The audit row status is `"armed"` until a backward settles it. Without `model=` and `x=` (or
+`intervention=tl.options.InterventionOptions(engine="set_only")` to arm in place), `do` refuses
+`replay_gradient_edit_unsupported`.
 
 Hook callables receive one positional tensor and a required keyword-only
-`ctx` context. For forward hooks the positional tensor is the activation; for
-backward hooks it is the gradient. The positional parameter is matched by
+`ctx` context. For an activation site the positional tensor is the activation; for
+a gradient site it is the gradient. The positional parameter is matched by
 position, so `def hook(activation, *, ctx): ...` and
-`lambda g, *, ctx: ...` are both valid. Hooks must return the replacement
+`lambda g, *, ctx: ...` are both valid. `ctx.state` is the per-(site, hook) scratch dict,
+`ctx.run_state` the run-scoped one, and `ctx.signal` is `"forward"` or `"backward"`. Hooks must return the replacement
 tensor.
 
 ## Attribution Patching
@@ -317,4 +332,4 @@ operands they actually read.
 
 | TransformerLens pattern | TorchLens pattern |
 | --- | --- |
-| `act_patch` attribution patching | Attach a `tl.hook_grad(...)` gradient observer at the site, then `log.run(model, x)` under the active spec and score from the captured gradients/outs. |
+| `act_patch` attribution patching | Attach a `tl.observers.tap(tl.grad(site))` gradient observer (or a callable on `tl.grad(site)`), run `log.run(model, x)` under the active spec, call `result.backward(loss)` and score from the captured gradients/outs. |

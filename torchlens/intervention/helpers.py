@@ -27,7 +27,7 @@ from .errors import (
     SpliceModuleDeviceError,
     SpliceModuleDtypeError,
 )
-from .hooks import HookContext, normalize_hook
+from .hooks import HookContext
 from .population import Population
 from .stochastic import (
     _prove_event_geometry,
@@ -174,6 +174,7 @@ def _source_mean_spec(
             "allow_shape_change": allow_shape_change,
         },
         factory=factory,
+        signal="forward",
         batch_independent=batch_independent,
         compatible_with_append=not allow_shape_change,
         metadata={"stochastic": False, **({} if batch_independent else {"batch_coherent": True})},
@@ -223,7 +224,7 @@ def _population_mean_spec(
                     "realized_draw_digest": None,
                     "replacement_mode": "evidence_mean",
                     "donor_grad": "detached",
-                    "recomputation": bool(ctx.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
                 },
             )
             return value.clone()
@@ -780,6 +781,9 @@ def swap_with(
         args=(other_label,),
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
+        # A fixed tensor donor is neutral; a site or trace donor reads
+        # recorded forward state.
+        signal=None if isinstance(other_label, torch.Tensor) else "forward",
         batch_independent=True,
         compatible_with_append=not allow_shape_change,
     )
@@ -870,309 +874,57 @@ def splice_module(
         },
         factory=factory,
         metadata={"input_route": input_route, "output_route": output_route},
+        signal="forward",
         batch_independent=False,
         compatible_with_append=False,
     )
 
 
-def hook_grad(fn: Callable[..., torch.Tensor]) -> Edit:
-    """Create a live/rerun-only backward hook helper.
+def clip_norm(max_norm: float, norm_type: float = 2.0) -> Edit:
+    """Create a neutral edit that rescales a tensor so its norm is at most ``max_norm``.
 
-    Parameters
-    ----------
-    fn:
-        Gradient hook callable. The first positional argument may be named
-        ``g``; the keyword-only ``hook`` argument is still required.
-
-    Returns
-    -------
-    Edit
-        Built-in backward helper spec.
-    """
-
-    normalize_hook(fn, direction="backward")
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the configured backward hook.
-
-        Returns
-        -------
-        Callable[..., torch.Tensor]
-            Backward hook callable.
-        """
-
-        return fn
-
-    return _helper_spec(
-        "hook_grad",
-        args=(fn,),
-        kind="backward",
-        factory=factory,
-        metadata={"live_rerun_only": True},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def zero_grad(*, allow_shape_change: bool = False) -> Edit:
-    """Create a live/rerun-only helper that zeros a grad tensor.
-
-    Parameters
-    ----------
-    allow_shape_change:
-        Stored escape-hatch metadata for later execution phases.
-
-    Returns
-    -------
-    Edit
-        Built-in backward helper spec.
-    """
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for zeroing grads.
-
-        Returns
-        -------
-        Callable[..., torch.Tensor]
-            Hook callable that replaces a grad with zeros.
-        """
-
-        def _hook(g: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
-            """Return a zero grad."""
-
-            return torch.zeros_like(g)
-
-        return _hook
-
-    return _helper_spec(
-        "zero_grad",
-        kind="backward",
-        kwargs={"allow_shape_change": allow_shape_change},
-        factory=factory,
-        metadata={"live_rerun_only": True},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def scale_grad(factor: float, *, allow_shape_change: bool = False) -> Edit:
-    """Create a live/rerun-only helper that scales a grad tensor.
-
-    Parameters
-    ----------
-    factor:
-        Multiplicative grad factor.
-    allow_shape_change:
-        Stored escape-hatch metadata for later execution phases.
-
-    Returns
-    -------
-    Edit
-        Built-in backward helper spec.
-    """
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for grad scaling.
-
-        Returns
-        -------
-        Callable[..., torch.Tensor]
-            Hook callable that multiplies a grad by ``factor``.
-        """
-
-        def _hook(g: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
-            """Scale the grad."""
-
-            return g * factor
-
-        return _hook
-
-    return _helper_spec(
-        "scale_grad",
-        args=(factor,),
-        kind="backward",
-        kwargs={"allow_shape_change": allow_shape_change},
-        factory=factory,
-        metadata={"live_rerun_only": True},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def clip_grad(max_norm: float, norm_type: float = 2.0) -> Edit:
-    """Create a grad_fn_handle helper that clips each grad_input tensor norm.
+    The edit is a function of one tensor, so it applies to whichever tensor
+    the site names: the activation at a bare site, or the output gradient at
+    ``tl.grad(site)``. The norm is taken over the whole tensor (one site, one
+    tensor).
 
     Parameters
     ----------
     max_norm:
-        Maximum per-tensor norm.
+        Largest allowed ``norm_type`` norm.
     norm_type:
         Norm order passed to ``torch.linalg.vector_norm``.
 
     Returns
     -------
     Edit
-        Built-in backward grad_fn_handle helper spec.
+        Built-in neutral helper spec.
     """
 
-    def factory() -> Callable[..., tuple[torch.Tensor | None, ...] | None]:
-        """Return the runtime grad_fn_handle hook for clipping gradients."""
+    if not max_norm > 0:
+        raise HookValueError(f"clip_norm max_norm must be positive; got {max_norm!r}")
 
-        def _hook(
-            grad_input: tuple[torch.Tensor | None, ...],
-            *,
-            grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_handle: Any,
-            call_index: int,
-            run_ctx: dict[str, Any],
-        ) -> tuple[torch.Tensor | None, ...] | None:
-            """Clip each tensor in a grad_input tuple."""
+    def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for norm clipping."""
 
-            del grad_output, grad_fn_handle, call_index, run_ctx
-            clipped: list[torch.Tensor | None] = []
-            changed = False
-            for grad in grad_input:
-                if grad is None:
-                    clipped.append(None)
-                    continue
-                norm = torch.linalg.vector_norm(grad, ord=norm_type)
-                if norm > max_norm:
-                    scale_value = max_norm / (norm + torch.finfo(grad.dtype).eps)
-                    clipped.append(grad * scale_value)
-                    changed = True
-                else:
-                    clipped.append(grad)
-            return tuple(clipped) if changed else None
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
+            """Rescale ``out`` when its norm exceeds ``max_norm``."""
+
+            del ctx
+            norm = torch.linalg.vector_norm(out, ord=norm_type)
+            if not bool(norm > max_norm):
+                return out
+            return out * (max_norm / norm)
 
         return _hook
 
     return _helper_spec(
-        "clip_grad",
+        "clip_norm",
         args=(max_norm,),
         kwargs={"norm_type": norm_type},
-        kind="backward",
         factory=factory,
-        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
-        direction="backward",
         batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def add_grad_noise(std: float, *, seed: int | None = None) -> Edit:
-    """Create a grad_fn_handle helper that adds Gaussian noise to grad_input tensors.
-
-    Parameters
-    ----------
-    std:
-        Noise standard deviation.
-    seed:
-        Optional hook-local seed.
-
-    Returns
-    -------
-    Edit
-        Built-in backward grad_fn_handle helper spec.
-    """
-
-    def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
-        """Return the runtime grad_fn_handle hook for noisy gradients."""
-
-        generator = _make_generator(seed)
-
-        def _hook(
-            grad_input: tuple[torch.Tensor | None, ...],
-            *,
-            grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_handle: Any,
-            call_index: int,
-            run_ctx: dict[str, Any],
-        ) -> tuple[torch.Tensor | None, ...]:
-            """Add Gaussian noise to each tensor in a grad_input tuple."""
-
-            del grad_output, grad_fn_handle, call_index
-            noisy: list[torch.Tensor | None] = []
-            for grad in grad_input:
-                if grad is None:
-                    noisy.append(None)
-                    continue
-                if seed is None:
-                    run_ctx.setdefault("ledger_notes", []).append("grad_noise used unseeded RNG")
-                    sample = torch.randn(grad.shape, device=grad.device, dtype=grad.dtype)
-                else:
-                    sample = torch.randn(grad.shape, generator=generator, dtype=grad.dtype).to(
-                        grad.device
-                    )
-                noisy.append(grad + sample * std)
-            return tuple(noisy)
-
-        return _hook
-
-    return _helper_spec(
-        "add_grad_noise",
-        args=(std,),
-        kwargs={"seed": seed},
-        kind="backward",
-        factory=factory,
-        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def clamp_grad(low: float | None = None, high: float | None = None) -> Edit:
-    """Create a grad_fn_handle helper that clamps grad_input tensors elementwise.
-
-    Parameters
-    ----------
-    low:
-        Optional lower bound.
-    high:
-        Optional upper bound.
-
-    Returns
-    -------
-    Edit
-        Built-in backward grad_fn_handle helper spec.
-    """
-
-    if low is None and high is None:
-        raise HookValueError("grad_clamp requires min, max, or both")
-
-    def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
-        """Return the runtime grad_fn_handle hook for clamping gradients."""
-
-        def _hook(
-            grad_input: tuple[torch.Tensor | None, ...],
-            *,
-            grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_handle: Any,
-            call_index: int,
-            run_ctx: dict[str, Any],
-        ) -> tuple[torch.Tensor | None, ...]:
-            """Clamp each tensor in a grad_input tuple."""
-
-            del grad_output, grad_fn_handle, call_index, run_ctx
-            return tuple(
-                None if grad is None else torch.clamp(grad, min=low, max=high)
-                for grad in grad_input
-            )
-
-        return _hook
-
-    return _helper_spec(
-        "clamp_grad",
-        kwargs={"low": low, "high": high},
-        kind="backward",
-        factory=factory,
-        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
+        compatible_with_append=True,
     )
 
 
@@ -1295,12 +1047,7 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
         "project_out": project_out,
         "swap_with": swap_with,
         "splice_module": splice_module,
-        "hook_grad": hook_grad,
-        "clamp_grad": clamp_grad,
-        "clip_grad": clip_grad,
-        "add_grad_noise": add_grad_noise,
-        "zero_grad": zero_grad,
-        "scale_grad": scale_grad,
+        "clip_norm": clip_norm,
         # Projection-valued subspace edit (a learned rotation's rows travel here).
         "subspace_edit": rebuild_subspace_edit,
         # Its source verb (LoReFT's W h + b); saved only inside subspace_edit.
@@ -1357,6 +1104,8 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
     """
 
     constructors = _builtin_constructors()
+    if name in _REMOVED_GRADIENT_HELPERS or name == "bwd_hook":
+        _refuse_removed_gradient_helper(name)
     renamed_to = _RENAMED_HELPER_NAMES.get(name)
     if name not in constructors and renamed_to is None:
         raise InvalidArgumentError(
@@ -1414,17 +1163,60 @@ _REDIRECTS: dict[str, str] = {"resample_ablate": _RESAMPLE_ABLATE_REDIRECT}
 #: stay under ``torchlens.intervention``.
 _ROOT_HOMED_RENAMED_HELPERS: frozenset[str] = frozenset(
     {
-        "hook_grad",
-        "clamp_grad",
-        "clip_grad",
-        "add_grad_noise",
-        "scale_grad",
-        "zero_grad",
+        "zero_ablate",
+        "scale",
+        "clamp",
+        "clip_norm",
         "add_noise",
         "project_out",
         "mean_ablate",
     }
 )
+
+#: Removed gradient-only helpers -> the neutral edit that replaces them. The
+#: gradient is now addressed by the site (``tl.grad(site)``), not by the edit,
+#: so a saved spec naming one refuses typed with that two-part remedy. A saved
+#: ``hook_grad`` maps to ``None``: its replacement is the user callable itself.
+_REMOVED_GRADIENT_HELPERS: dict[str, str | None] = {
+    "zero_grad": "zero_ablate",
+    "scale_grad": "scale",
+    "clamp_grad": "clamp",
+    "add_grad_noise": "add_noise",
+    "clip_grad": "clip_norm",
+    "hook_grad": None,
+}
+
+
+def _refuse_removed_gradient_helper(name: str) -> None:
+    """Raise the typed refusal for a saved spec naming a removed gradient helper.
+
+    Parameters
+    ----------
+    name:
+        Saved builtin helper name (``zero_grad``, ``hook_grad``, ...).
+
+    Raises
+    ------
+    InvalidArgumentError
+        Always, ``intervention_helper_renamed`` naming the neutral replacement.
+    """
+
+    replacement = _REMOVED_GRADIENT_HELPERS.get(name)
+    edit_spelling = (
+        "the callable itself" if replacement is None else f"torchlens.{replacement}(...)"
+    )
+    raise InvalidArgumentError(
+        f"The saved intervention names the removed gradient helper {name!r}; gradients "
+        "are addressed by the site now, so the edit is the ordinary one and the site is "
+        "wrapped in tl.grad(...). The spec does not load",
+        code="intervention_helper_renamed",
+        remedy=(
+            f"rebuild the rule as trace.do(tl.grad(site), {edit_spelling}) or "
+            f"tl.when(tl.grad(site), {edit_spelling}) and save it again"
+        ),
+        argument="name",
+        renamed_to=replacement if replacement is not None else "callable",
+    )
 
 
 def _public_helper_spelling(name: str) -> str:
@@ -1437,12 +1229,11 @@ def _public_helper_spelling(name: str) -> str:
 
 _RENAMED_HELPER_NAMES: dict[str, str] = {
     "resample_ablate": "scramble_elements",
-    "bwd_hook": "hook_grad",
-    "grad_clamp": "clamp_grad",
-    "grad_clip": "clip_grad",
-    "grad_noise": "add_grad_noise",
-    "grad_scale": "scale_grad",
-    "grad_zero": "zero_grad",
+    "grad_clamp": "clamp",
+    "grad_clip": "clip_norm",
+    "grad_noise": "add_noise",
+    "grad_scale": "scale",
+    "grad_zero": "zero_ablate",
     "noise": "add_noise",
     "project_off": "project_out",
     "affine_source": "set_affine_coordinates",
@@ -1477,13 +1268,8 @@ if not TYPE_CHECKING:
 
 __all__ = [
     "HELPER_REGISTRY_VERSION",
-    "hook_grad",
     "clamp",
-    "scale_grad",
-    "clamp_grad",
-    "clip_grad",
-    "add_grad_noise",
-    "zero_grad",
+    "clip_norm",
     "helper_from_serialized",
     "mean_ablate",
     "add_noise",
@@ -1678,5 +1464,6 @@ def patch_from(
         kwargs=identity,
         factory=factory,
         portability="opaque_audit",
+        signal="forward",
         batch_independent=True,
     )

@@ -198,7 +198,7 @@ def _execute_hook(
     HookSignatureError
         If the callable cannot be invoked with the hook signature.
     HookValueError
-        If the callable returns ``None`` or an incompatible value.
+        If the callable returns an incompatible value (``None`` keeps ``out``).
     """
 
     try:
@@ -261,11 +261,11 @@ _GRADIENT_CALLBACK_PARAMETERS = frozenset(
 def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookContext) -> None:
     """Refuse a gradient edit reached by a forward-only engine (replay, push).
 
-    A backward edit (``tl.zero_grad()``, ``tl.hook_grad(fn)``, ...) is normalized
-    to the gradient-tuple callback, whose ``grad_output``, ``grad_fn_handle``,
-    ``call_index`` and ``run_ctx`` arguments a forward value can never supply
-    (this runs only after the forward bind failed). The replay engine recomputes forward values only, so
-    such an edit has no gradient to edit there.
+    An autograd-node edit is normalized to the gradient-tuple callback, whose
+    ``grad_output``, ``grad_fn_handle``, ``call_index`` and ``run_ctx``
+    arguments a forward value can never supply (this runs only after the
+    forward bind failed). The replay engine recomputes forward values only,
+    so such an edit has no gradient to edit there.
 
     Raises
     ------
@@ -288,19 +288,20 @@ def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookConte
     address = hook_context.op.get("address")
     module = str(address) if isinstance(address, str) and address else "<module>"
     verb = hook_context.name
-    engine = hook_context.run_ctx.get("engine") or "forward"
+    engine = hook_context.run_state.get("engine") or "forward"
     raise InvalidArgumentError(
         f"The gradient edit {verb!r} at site {site!r} reached the {engine} engine, "
         "which recomputes forward values only and never runs a backward pass, so "
         "the edit has no gradient to edit there. Nothing was changed. Remedy: "
         "capture the backward pass live and edit the gradient there: "
         f"trace = tl.trace(model, x, capture=tl.options.CaptureOptions("
-        f"backward_ready=True), intervene=tl.when(tl.module({module!r}), edit)); "
+        f"backward_ready=True), intervene=tl.when(tl.grad(tl.module({module!r})), edit)); "
         "trace.backward(loss)",
         code="replay_gradient_edit_unsupported",
         remedy=(
             "tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True), "
-            f"intervene=tl.when(tl.module({module!r}), edit)) then trace.backward(loss)"
+            f"intervene=tl.when(tl.grad(tl.module({module!r})), edit)) then "
+            "trace.backward(loss)"
         ),
         argument="value_or_hook",
         verb=verb,
@@ -337,7 +338,7 @@ def validate_hook_output(
     Raises
     ------
     HookValueError
-        If the return value is invalid.
+        If the return value is not ``None`` and not a compatible tensor.
     """
 
     # R67: these are user-payload refusals. Say "intervention replacement" (the
@@ -364,7 +365,9 @@ def validate_hook_output(
         )
 
     if result is None:
-        raise _payload_refusal("returned None", "torch.Tensor", None)
+        # A hook is ``fn(tensor, *, ctx) -> Tensor | None``: None leaves the
+        # value unchanged (an observer, or one callable on a mixed site).
+        return out
     if not isinstance(result, torch.Tensor):
         raise _payload_refusal("returned a non-tensor", "torch.Tensor", type(result).__name__)
     if allow_shape_change:
@@ -479,7 +482,7 @@ def _apply_live_hooks(
     fire_results: list[FireResult] = []
     for entry in hook_plan:
         normalized_entry = _coerce_hook_entry(entry)
-        if normalized_entry.metadata.get("direction", "forward") != "forward":
+        if normalized_entry.signal != "forward":
             continue
         if normalized_entry.metadata.get("timing", "post") != "post":
             continue
@@ -505,16 +508,18 @@ def _apply_live_hooks(
             call_kwargs=call_kwargs,
             call_input_snapshots=call_input_snapshots,
         )
+        run_state = _live_run_ctx()
         hook_context = make_hook_context(
             name=_hook_display_name(normalized_entry),
             timing="post",
             signal="forward",
             op=site,
-            run_context=_live_run_ctx(),
+            state=_hook_state(run_state, getattr(site, "_layer_label_raw", None), normalized_entry),
+            run_context=run_state,
             args=hook_args or (current_out,),
             kwargs=hook_kwargs,
         )
-        previous_notes = tuple(hook_context.run_ctx.get("ledger_notes", ()))
+        previous_notes = tuple(hook_context.run_state.get("ledger_notes", ()))
         pre_hook_shape = tuple(current_out.shape)
         pre_hook_dtype = str(current_out.dtype)
         version_before = _tensor_version(current_out)
@@ -562,7 +567,7 @@ def _apply_live_hooks(
             site=site,
             container_path=container_path,
             previous_notes=previous_notes,
-            run_ctx=hook_context.run_ctx,
+            run_ctx=hook_context.run_state,
             replaced=replaced,
         )
         _append_active_spec_records([record])
@@ -950,9 +955,14 @@ def _has_matching_input_routed_intervention(
         return False
     if not _helper_routes_inputs(hook):
         return False
-    if getattr(decision, "direction", "forward") not in {"forward", "both"}:
+    from .hooks import split_site_branches
+
+    activation = [
+        target for universe, target in split_site_branches(selector) if universe == "activation"
+    ]
+    if not activation:
         return False
-    return _selector_may_match_provisional_site(selector, site)
+    return _selector_may_match_provisional_site(activation[0], site)
 
 
 def _entry_needs_input_snapshot(entry: NormalizedHookEntry, site: Any) -> bool:
@@ -971,7 +981,7 @@ def _entry_needs_input_snapshot(entry: NormalizedHookEntry, site: Any) -> bool:
         Whether the entry is a matching post-forward input-routed hook.
     """
 
-    if entry.metadata.get("direction", "forward") != "forward":
+    if entry.signal != "forward":
         return False
     if entry.metadata.get("timing", "post") != "post":
         return False
@@ -1243,7 +1253,7 @@ def _apply_live_backward_hooks(
     fire_records: list[FireRecord] = []
     for entry in hook_plan:
         normalized_entry = _coerce_hook_entry(entry)
-        if normalized_entry.metadata.get("direction", "forward") != "backward":
+        if normalized_entry.universe != "node":
             continue
         if not live_backward_selector_matches(
             normalized_entry.site_target,
@@ -1317,7 +1327,7 @@ def _apply_live_backward_prehooks(
     fire_records: list[FireRecord] = []
     for entry in hook_plan:
         normalized_entry = _coerce_hook_entry(entry)
-        if normalized_entry.metadata.get("direction", "forward") != "backward":
+        if normalized_entry.universe != "node":
             continue
         if not live_backward_selector_matches(
             normalized_entry.site_target,
@@ -1357,6 +1367,416 @@ def _apply_live_backward_prehooks(
         _record_backward_selector_fire(normalized_entry)
     _append_active_spec_records(fire_records)
     return (current if mutated else None), tuple(fire_records)
+
+
+def apply_live_gradient_hooks(
+    grad: torch.Tensor,
+    *,
+    trace: Any,
+    op: Any,
+) -> tuple[torch.Tensor, tuple[FireRecord, ...]]:
+    """Apply the gradient-universe edits addressed to one op's output gradient.
+
+    Called from the one TorchLens boundary that observes the gradient of a
+    forward op's output (the tensor hook or output-slot pre-hook that saves
+    ``Op.grad``), BEFORE the save, so the saved ``.grad`` is the edit chain's
+    final value (SPEC 3.7). The returned tensor is what autograd passes into
+    the op's backward function, so an edit here changes every gradient
+    upstream of the op (SPEC 1.1: output-gradient semantics, never the
+    node's ``grad_input``).
+
+    Parameters
+    ----------
+    grad:
+        Gradient of the op's output arriving at the boundary.
+    trace:
+        Trace whose published backward hook plan applies.
+    op:
+        Final forward op record whose output this gradient belongs to.
+
+    Returns
+    -------
+    tuple[torch.Tensor, tuple[FireRecord, ...]]
+        Edited gradient (``grad`` itself when nothing fired or changed it)
+        plus one fire record per matching entry, in declared order.
+    """
+
+    hook_plan = _state._active_hook_plan
+    if not hook_plan or _state._active_trace is not trace:
+        return grad, ()
+    pass_index = _trace_backward_pass_index(trace)
+    current = grad
+    fire_records: list[FireRecord] = []
+    candidates = _gradient_site_ops(trace, op)
+    for entry in hook_plan:
+        normalized_entry = _coerce_hook_entry(entry)
+        if normalized_entry.universe != "gradient":
+            continue
+        matched = next(
+            (
+                candidate
+                for candidate in candidates
+                if _gradient_entry_matches(trace, normalized_entry, candidate, pass_index)
+            ),
+            None,
+        )
+        if matched is None:
+            continue
+        current, record = _fire_gradient_entry(
+            normalized_entry, current, trace=trace, op=matched, pass_index=pass_index
+        )
+        fire_records.append(record)
+        _record_backward_selector_fire(normalized_entry)
+    _append_active_spec_records(fire_records)
+    return current, tuple(fire_records)
+
+
+def _fire_gradient_entry(
+    entry: NormalizedHookEntry,
+    grad: torch.Tensor,
+    *,
+    trace: Any,
+    op: Any,
+    pass_index: int | None,
+) -> tuple[torch.Tensor, FireRecord]:
+    """Run one gradient-universe hook on one output gradient and record it.
+
+    Parameters
+    ----------
+    entry:
+        Matching gradient-universe hook entry.
+    grad:
+        Current gradient (after the earlier entries of the chain).
+    trace:
+        Trace being backwarded.
+    op:
+        Forward op whose output gradient this is.
+    pass_index:
+        Active one-based backward pass index.
+
+    Returns
+    -------
+    tuple[torch.Tensor, FireRecord]
+        Gradient after this hook and its fire record.
+    """
+
+    site_label = _forward_site_label(op)
+    tuple_index = _op_output_slot(op)
+    run_state = _live_run_ctx()
+    call_index = _next_gradient_call_index(run_state, entry, site_label)
+    context = make_hook_context(
+        name=_hook_display_name(entry),
+        timing="post",
+        signal="backward",
+        op=op,
+        state=_hook_state(run_state, site_label, entry),
+        run_context=run_state,
+        args=(grad,),
+        kwargs={
+            "grad_kind": "grad_output",
+            "backward_pass_index": pass_index,
+            "tuple_index": tuple_index,
+            "call_index": call_index,
+        },
+    )
+    version_before = _tensor_version(grad)
+    probe_before = _tensor_content_probe(grad)
+    with HOOK_REENTRANCY_GUARD, pause_logging():
+        result = entry.normalized_callable(grad, ctx=context)
+    if result is None:
+        result = grad
+    else:
+        result = validate_hook_output(
+            result,
+            grad,
+            hook_context=context,
+            allow_shape_change=False,
+        )
+    replaced = (
+        result is not grad
+        or (version_before is not None and _tensor_version(grad) != version_before)
+        or _content_probe_mutated(probe_before, _tensor_content_probe(grad))
+    )
+    from .audit import build_fire_record
+
+    record = build_fire_record(
+        target_label=site_label,
+        call_label=site_label,
+        func_call_id=None,
+        container_path=(),
+        engine="live",
+        helper=entry.helper_spec,
+        site_label=site_label,
+        timing="post",
+        signal="backward",
+        helper_name=_hook_display_name(entry),
+        backward_pass_index=pass_index,
+        call_index=call_index,
+        grad_kind="grad_output",
+        tuple_index=tuple_index,
+        replaced=replaced,
+    )
+    return result, record
+
+
+def _gradient_site_ops(trace: Any, op: Any) -> list[Any]:
+    """Return the forward records whose output gradient is this op's output gradient.
+
+    An output layer is an identity wrapper of its parent: its gradient is the
+    parent's output gradient (the read side stores it on both), so
+    ``tl.grad("output_1")`` addresses the same boundary.
+
+    Parameters
+    ----------
+    trace:
+        Trace being backwarded.
+    op:
+        Final forward op whose output gradient arrived.
+
+    Returns
+    -------
+    list[Any]
+        ``op`` followed by its output-layer children.
+    """
+
+    ops = [op]
+    if not getattr(op, "is_output_parent", False):
+        return ops
+    layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+    for child_label in getattr(op, "children", ()) or ():
+        child = layer_dict.get(child_label)
+        if child is not None and getattr(child, "is_output", False):
+            ops.append(child)
+    return ops
+
+
+def _gradient_entry_matches(
+    trace: Any,
+    entry: NormalizedHookEntry,
+    op: Any,
+    pass_index: int | None,
+) -> bool:
+    """Return whether a gradient-universe entry addresses this op in this pass.
+
+    The inner selector of ``tl.grad(inner)`` resolves in the activation
+    universe against the finished forward op (the same lifecycle a post-hoc
+    activation door uses); ``tl.in_backward_pass(n)`` joined to it filters the
+    pass. Per-op answers of the selector part are cached per trace.
+
+    Parameters
+    ----------
+    trace:
+        Trace being backwarded.
+    entry:
+        Gradient-universe hook entry.
+    op:
+        Final forward op record.
+    pass_index:
+        Active one-based backward pass index.
+
+    Returns
+    -------
+    bool
+        Whether the entry fires on this op's output gradient.
+    """
+
+    return bool(_gradient_target_matches(trace, entry.site_target, op, pass_index))
+
+
+def _gradient_target_matches(trace: Any, target: Any, op: Any, pass_index: int | None) -> bool:
+    """Evaluate one gradient-branch target tree against an op and a pass.
+
+    Parameters
+    ----------
+    trace:
+        Trace being backwarded (owns the per-op cache).
+    target:
+        ``tl.grad(inner)``, a pass qualifier, or an ``&``/``|`` of these.
+    op:
+        Final forward op record.
+    pass_index:
+        Active one-based backward pass index.
+
+    Returns
+    -------
+    bool
+        Whether the target matches.
+    """
+
+    from .hooks import _target_operands, gradient_inner
+
+    inner = gradient_inner(target)
+    if inner is not None:
+        return _inner_selector_matches_op(inner, op)
+    # Live selectors and the stored TargetSpec a sticky rule is re-normalised
+    # from read the same way (a recipe stores ``tl.in_backward_pass(2)`` as
+    # kind ``"backward_pass"`` with the pass index as its value).
+    if getattr(target, "selector_kind", None) == "backward_pass":
+        return pass_index == getattr(target, "pass_index", target.selector_value)
+    operator, operands = _target_operands(target)
+    if operator == "not":
+        return not _gradient_target_matches(trace, operands[0], op, pass_index)
+    if operator is not None:
+        results = (_gradient_target_matches(trace, child, op, pass_index) for child in operands)
+        return all(results) if operator == "and" else any(results)
+    return False
+
+
+def _inner_selector_matches_op(inner: Any, op: Any) -> bool:
+    """Return whether a forward selector matches one finished op (cached per run).
+
+    Parameters
+    ----------
+    inner:
+        Forward-universe selector-like (a label string resolves as an exact
+        label, like every live hook target).
+    op:
+        Final forward op record.
+
+    Returns
+    -------
+    bool
+        Whether the selector matches the op.
+    """
+
+    from .._ir.selector_eval import normalize_selector_like
+    from .resolver import _resolve_unchecked
+
+    # Session-only cache in the run state (last_run is never persisted).
+    cache: dict[tuple[str, str], bool] = _live_run_ctx().setdefault(
+        "_tl_gradient_site_match_cache", {}
+    )
+    op_label = str(getattr(op, "label", ""))
+    # Keyed by the canonical selector repr, never id(): a recycled id of a
+    # dead selector must not inherit another selector's answers.
+    key = (repr(inner), op_label)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    selector = normalize_selector_like(inner, lifecycle="live")
+    matched = bool(_resolve_unchecked((op,), selector, strict=False))
+    cache[key] = matched
+    return matched
+
+
+def _forward_site_label(op: Any) -> str:
+    """Return the forward label a gradient fire records (``relu_3``, ``relu_3:2``).
+
+    The bare layer label names a single-pass layer; a multi-pass layer keeps
+    the pass-qualified label so each pass's fire names its own pass.
+
+    Parameters
+    ----------
+    op:
+        Final forward op record.
+
+    Returns
+    -------
+    str
+        Layer label, pass-qualified only on a multi-pass layer.
+    """
+
+    layer_label = str(getattr(op, "layer_label", "") or "")
+    if layer_label and int(getattr(op, "num_passes", 1) or 1) <= 1:
+        return layer_label
+    return str(getattr(op, "label", "") or layer_label)
+
+
+def _op_output_slot(op: Any) -> int | None:
+    """Return the output slot of a multi-output op's record, else ``None``.
+
+    Parameters
+    ----------
+    op:
+        Final forward op record.
+
+    Returns
+    -------
+    int | None
+        ``multi_output_index`` of the record when it is one output of several.
+    """
+
+    slot = getattr(op, "multi_output_index", None)
+    return slot if isinstance(slot, int) else None
+
+
+def _next_gradient_call_index(
+    run_state: dict[str, Any], entry: NormalizedHookEntry, site_label: str
+) -> int:
+    """Return the one-based fire count of one gradient hook at one site.
+
+    Parameters
+    ----------
+    run_state:
+        Run-scoped dictionary of the backwarded trace (session-only).
+    entry:
+        Gradient-universe hook entry.
+    site_label:
+        Forward site label.
+
+    Returns
+    -------
+    int
+        Number of times this hook has now fired at this site on this trace.
+    """
+
+    counts: dict[tuple[str, int], int] = run_state.setdefault("_tl_gradient_fire_counts", {})
+    key = (site_label, _hook_identity(entry))
+    counts[key] = counts.get(key, 0) + 1
+    return counts[key]
+
+
+def _hook_state(
+    run_state: dict[str, Any], site_key: Any, entry: NormalizedHookEntry
+) -> dict[str, Any]:
+    """Return the per-(site, hook) scratch dict exposed as ``ctx.state``.
+
+    The dict lives in the run state so it persists across fires of the same
+    hook at the same site (every backward pass of a sticky gradient hook,
+    every pass of a multi-pass layer) and ends with the run.
+
+    Parameters
+    ----------
+    run_state:
+        Run-scoped dictionary (``ctx.run_state``).
+    site_key:
+        Site identity of the fire (label).
+    entry:
+        Hook entry that fires.
+
+    Returns
+    -------
+    dict[str, Any]
+        Mutable scratch dictionary for this (site, hook) pair.
+    """
+
+    store: dict[tuple[str, str, int], dict[str, Any]] = run_state.setdefault("_tl_hook_state", {})
+    key = (entry.signal, str(site_key), _hook_identity(entry))
+    return store.setdefault(key, {})
+
+
+def _hook_identity(entry: NormalizedHookEntry) -> int:
+    """Return an identity for "the same hook" that survives plan re-normalization.
+
+    A sticky plan is re-normalized at every rerun and backward pass, which
+    rebuilds helper closures and observer bound methods; the stored helper
+    spec or the observer object is what stays the same.
+
+    Parameters
+    ----------
+    entry:
+        Hook entry.
+
+    Returns
+    -------
+    int
+        ``id`` of the helper spec, the bound method's owner, or the callable.
+    """
+
+    if entry.helper_spec is not None:
+        return id(entry.helper_spec)
+    hook = entry.normalized_callable
+    return id(getattr(hook, "__self__", hook))
 
 
 def _record_backward_selector_fire(entry: NormalizedHookEntry) -> None:
@@ -1686,7 +2106,7 @@ def _build_live_fire_record(
         helper=entry.helper_spec,
         site_label=site._layer_label_raw,
         timing="post",
-        direction="forward",
+        signal="forward",
         helper_name=_hook_display_name(entry),
         run_ctx=run_ctx,
         previous_notes=previous_notes,
@@ -1748,7 +2168,7 @@ def _build_live_backward_fire_record(
         helper=entry.helper_spec,
         site_label=label,
         timing=timing,  # type: ignore[arg-type]
-        direction="backward",
+        signal="backward",
         helper_name=_hook_display_name(entry),
         backward_pass_index=pass_index,
         call_index=call_index,
@@ -1800,6 +2220,26 @@ def _active_backward_pass_index(grad_fn_handle: Any) -> int | None:
     trace = getattr(grad_fn_handle, "trace", None)
     if trace is None:
         return None
+    return _trace_backward_pass_index(trace)
+
+
+def _trace_backward_pass_index(trace: Any) -> int | None:
+    """Return a trace's active one-based backward pass index (``None`` outside a pass).
+
+    The backward door sets the index for the length of one pass and drops it
+    afterwards, so its absence is the "no pass open" reading.
+
+    Parameters
+    ----------
+    trace:
+        Trace being backwarded.
+
+    Returns
+    -------
+    int | None
+        Active one-based backward pass index, when a pass is open.
+    """
+
     value = getattr(trace, "_active_backward_pass_index", None)
     return int(value) if isinstance(value, int) else None
 
@@ -1884,6 +2324,7 @@ __all__ = [
     "_apply_live_backward_hooks",
     "_apply_live_backward_prehooks",
     "_execute_hook",
+    "apply_live_gradient_hooks",
     "active_intervention_context",
     "do",
     "validate_hook_output",

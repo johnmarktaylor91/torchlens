@@ -355,7 +355,6 @@ def _apply_predicate_mode_interventions_to_outputs(
         hook_entries = normalize_hook_plan(
             decision.hook,
             default_site_target=make_label_selector(ctx.raw_label or ctx.label),
-            direction=decision.direction,
         )
         from ...intervention.runtime import _apply_live_hooks
 
@@ -502,10 +501,7 @@ def _hook_entry_reaches_op_door(entry: Any) -> bool:
 
     if type(entry) is not NormalizedHookEntry:
         return True
-    if (
-        entry.metadata.get("direction", "forward") != "forward"
-        or entry.metadata.get("timing", "post") != "post"
-    ):
+    if entry.signal != "forward" or entry.metadata.get("timing", "post") != "post":
         return False
     if _input_splice_module_scope(entry.site_target, entry) is not None:
         return not _is_plain_module_selector(entry.site_target)
@@ -542,7 +538,6 @@ def _predicate_hook_metadata(entry: Any, decision: InterventionDecision) -> dict
     metadata = {
         **dict(entry.metadata),
         "created_by": "intervene_predicate",
-        "direction": entry.metadata.get("direction", decision.direction),
     }
     if decision.where_repr is not None:
         metadata["spec_where_repr"] = decision.where_repr
@@ -569,7 +564,7 @@ def _record_predicate_intervention_spec(
     Returns
     -------
     None
-        Mutates ``trace._intervention_spec`` once per matched target/helper/direction.
+        Mutates ``trace._intervention_spec`` once per matched target/helper.
     """
 
     if decision.hook is None:
@@ -588,7 +583,7 @@ def _record_predicate_intervention_spec(
     # repr never perturbs the capture in progress.
     with pause_logging():
         hook_repr = repr(decision.hook)
-    key = (target_label, hook_repr, decision.direction)
+    key = (target_label, hook_repr)
     if key in seen:
         return
     seen.add(key)
@@ -596,7 +591,6 @@ def _record_predicate_intervention_spec(
     entries = normalize_hook_plan(
         target,
         decision.hook,
-        direction=decision.direction,
     )
     spec = trace._ensure_intervention_spec()
     # The target dedup was a freeze-and-compare scan over all of spec.targets
@@ -705,7 +699,6 @@ def _apply_predicate_intervention(
     hook_entries = normalize_hook_plan(
         decision.hook,
         default_site_target=make_label_selector(ctx.raw_label or ctx.label),
-        direction=decision.direction,
     )
     from ...intervention.runtime import _apply_live_hooks
 

@@ -35,7 +35,6 @@ from .selectors import (
     FacetSelector,
     GradKindSelector,
     NotSelector,
-    _classify_selector_direction,
     label,
 )
 from .types import (
@@ -49,7 +48,22 @@ from .types import (
 
 HookTiming: TypeAlias = Literal["pre", "post"]
 HookDirection: TypeAlias = Literal["forward", "backward"]
-HookDirectionRequest: TypeAlias = Literal["forward", "backward", "both"]
+#: Which tensor a site addresses (SPEC 1.4): the activation of a forward op,
+#: the gradient of that op's output (``tl.grad(site)``), or an autograd node's
+#: ``grad_input`` tuple (``tl.grad_fn(...)`` and the other node selectors).
+SiteUniverse: TypeAlias = Literal["activation", "gradient", "node"]
+_UNIVERSE_SIGNAL: dict[str, HookDirection] = {
+    "activation": "forward",
+    "gradient": "backward",
+    "node": "backward",
+}
+#: Selector kinds that address autograd nodes (the node universe). Kept equal
+#: to the node bucket of ``selectors.classify_selector_universe``.
+_NODE_SELECTOR_KINDS = frozenset(
+    {"grad_fn", "grad_fn_label", "grad_kind", "backward_pass", "intervening", "without_op"}
+)
+#: Selector kind of the ``tl.grad(...)`` wrapper (SPEC section 0, THE_WRAPPER).
+_GRAD_SELECTOR_KIND = "grad"
 HookCallable: TypeAlias = Callable[..., Any]
 HookInput: TypeAlias = Callable[..., Any] | Edit
 _DEFAULT_HEAD_FACET_NAMES = ("q", "k", "v")
@@ -84,12 +98,14 @@ class HookContext:
     timing:
         Hook timing, either ``"pre"`` or ``"post"``.
     signal:
-        ``"forward"`` for outs or ``"backward"`` for grads.
+        ``"forward"`` for an activation fire or ``"backward"`` for a gradient
+        fire; one callable mounted on ``tl.grad(s) | s`` reads it to tell which.
     layer_log:
         Mapping proxy over selected layer metadata, never a live Op.
-    ctx:
-        Per resolved ``(site, hook instance)`` scratch dictionary.
-    run_ctx:
+    state:
+        Per resolved ``(site, hook instance)`` scratch dictionary; it persists
+        across fires of the same hook at the same site.
+    run_state:
         Mutable dictionary shared across all hooks in a run.
     step_index:
         Trace index for bundle operations.
@@ -105,8 +121,8 @@ class HookContext:
     timing: HookTiming
     signal: HookDirection
     op: Mapping[str, Any]
-    ctx: dict[str, Any]
-    run_ctx: dict[str, Any]
+    state: dict[str, Any]
+    run_state: dict[str, Any]
     step_index: int
     trace_name: str
     args: tuple[Any, ...]
@@ -122,6 +138,35 @@ class NormalizedHookEntry:
     helper_spec: Edit | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+    @property
+    def signal(self) -> HookDirection:
+        """Return the pass this entry fires in, derived from its site branch.
+
+        Returns
+        -------
+        HookDirection
+            ``"forward"`` for an activation branch, ``"backward"`` for a
+            gradient or node branch.
+        """
+
+        value = self.metadata.get("signal", "forward")
+        return "backward" if value == "backward" else "forward"
+
+    @property
+    def universe(self) -> SiteUniverse:
+        """Return the site universe this entry mounts in.
+
+        Returns
+        -------
+        SiteUniverse
+            ``"activation"``, ``"gradient"`` or ``"node"``.
+        """
+
+        value = self.metadata.get("universe")
+        if value in {"activation", "gradient", "node"}:
+            return cast(SiteUniverse, value)
+        return "node" if self.signal == "backward" else "activation"
+
 
 def make_hook_context(
     *,
@@ -129,7 +174,7 @@ def make_hook_context(
     timing: HookTiming = "post",
     signal: HookDirection = "forward",
     op: Any | None = None,
-    ctx: dict[str, Any] | None = None,
+    state: dict[str, Any] | None = None,
     run_context: dict[str, Any] | None = None,
     step_index: int = 0,
     trace_name: str = "",
@@ -148,8 +193,9 @@ def make_hook_context(
         Hook signal, ``"forward"`` or ``"backward"``.
     op:
         Optional Op-like object or mapping to snapshot.
-    ctx:
-        Per-hook scratch dictionary. A new dictionary is created when omitted.
+    state:
+        Per-(site, hook) scratch dictionary. A new dictionary is created when
+        omitted.
     run_context:
         Shared run dictionary. A new dictionary is created when omitted.
     step_index:
@@ -172,8 +218,8 @@ def make_hook_context(
         timing=timing,
         signal=signal,
         op=MappingProxyType(_snapshot_layer_log(op)),
-        ctx={} if ctx is None else ctx,
-        run_ctx={} if run_context is None else run_context,
+        state={} if state is None else state,
+        run_state={} if run_context is None else run_context,
         step_index=step_index,
         trace_name=trace_name,
         args=tuple(args),
@@ -181,15 +227,37 @@ def make_hook_context(
     )
 
 
-def normalize_hook(fn: HookInput, *, direction: HookDirection = "forward") -> HookCallable:
-    """Normalize one callable or helper spec into a hook callable.
+def normalize_hook(fn: HookInput) -> HookCallable:
+    """Normalize one callable or helper spec into a tensor hook callable.
+
+    The protocol is ``fn(tensor, *, ctx)`` whichever tensor the site names
+    (an activation or an output gradient); the site, not the hook, decides
+    the pass.
 
     Parameters
     ----------
     fn:
         User callable or helper spec.
-    direction:
-        Expected hook direction.
+
+    Returns
+    -------
+    HookCallable
+        Signature-validated hook callable.
+    """
+
+    return _normalize_hook_for_signal(fn, signal="forward")
+
+
+def _normalize_hook_for_signal(fn: HookInput, *, signal: HookDirection) -> HookCallable:
+    """Normalize one callable or helper spec for the pass it mounts in.
+
+    Parameters
+    ----------
+    fn:
+        User callable or helper spec.
+    signal:
+        Pass of the site branch; a backward branch also admits the internal
+        ``grad_input`` tuple callback protocol of node-universe observers.
 
     Returns
     -------
@@ -201,7 +269,7 @@ def normalize_hook(fn: HookInput, *, direction: HookDirection = "forward") -> Ho
     hook_callable = helper_spec() if helper_spec is not None else fn
     if not callable(hook_callable):
         raise HookSignatureError(f"hook object {hook_callable!r} is not callable")
-    _validate_hook_signature(hook_callable, direction=direction)
+    _validate_hook_signature(hook_callable, signal=signal)
     return cast(HookCallable, hook_callable)
 
 
@@ -210,10 +278,15 @@ def normalize_hook_plan(
     hook: HookInput | None = None,
     *,
     default_site_target: Any | None = None,
-    direction: HookDirectionRequest | None = None,
     allow_replay_only_site_targets: bool = False,
 ) -> list[NormalizedHookEntry]:
     """Normalize all supported attach-hook shapes into hook-plan entries.
+
+    The pass each entry fires in comes from its site: a bare site is an
+    activation (forward), ``tl.grad(site)`` is that op's output gradient
+    (backward) and an autograd-node selector is a node's ``grad_input``
+    (backward). A union such as ``tl.grad(s) | s`` yields one entry per
+    branch, each mounted and recorded separately.
 
     Parameters
     ----------
@@ -224,14 +297,20 @@ def normalize_hook_plan(
     default_site_target:
         Site target for bare callable/helper input. Without this, bare hooks
         fail closed because they do not imply a model-log site.
-    direction:
-        Optional signal direction override. ``"both"`` expands to one forward
-        and one backward entry.
+    allow_replay_only_site_targets:
+        Whether replay-capable structural kinds (``site``) may pass.
 
     Returns
     -------
     list[NormalizedHookEntry]
         Uniform hook plan in left-to-right composition order.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``edit_signal_mismatch`` when an edit that reads recorded forward
+        state is addressed to a gradient site. Raised for the whole plan
+        before any entry is returned, so no caller mutates anything first.
     """
 
     pairs = _dispatch_hook_pairs(hooks_or_site, hook, default_site_target=default_site_target)
@@ -246,37 +325,186 @@ def normalize_hook_plan(
         entry_force_shape_change = helper_spec is not None and bool(
             dict(helper_spec.kwargs).get("allow_shape_change", False)
         )
-        _validate_live_site_target(
-            site_target,
-            allow_replay_only=allow_replay_only_site_targets,
-        )
-        for concrete_direction in _hook_directions(
-            hook_like,
-            helper_spec,
-            requested_direction=direction,
-        ):
-            _validate_helper_mount(site_target, helper_spec, direction=concrete_direction)
-            normalized_callable = _normalize_directional_hook(
-                hook_like,
-                direction=concrete_direction,
-            )
+        for universe, branch_target in split_site_branches(site_target):
+            for live_target in (
+                gradient_inners(branch_target) if universe == "gradient" else (branch_target,)
+            ):
+                _validate_live_site_target(
+                    live_target, allow_replay_only=allow_replay_only_site_targets
+                )
+            _validate_helper_mount(branch_target, helper_spec, universe=universe)
+            signal = _UNIVERSE_SIGNAL[universe]
             entries.append(
                 NormalizedHookEntry(
-                    site_target=site_target,
-                    normalized_callable=normalized_callable,
+                    site_target=branch_target,
+                    normalized_callable=_normalize_branch_hook(hook_like, universe=universe),
                     helper_spec=helper_spec,
                     metadata=MappingProxyType(
                         {
                             "attach_order": order,
                             "composition": "left_to_right",
                             "allow_shape_change": entry_force_shape_change,
-                            "direction": concrete_direction,
+                            "signal": signal,
+                            "universe": universe,
                             "timing": "post",
                         }
                     ),
                 )
             )
     return entries
+
+
+def gradient_inner(site_target: Any) -> Any | None:
+    """Return the forward site inside a ``tl.grad(...)`` address, else ``None``.
+
+    Duck-typed on the selector kind so a saved ``TargetSpec`` of kind
+    ``"grad"`` (whose value is the inner frozen target) reads the same way as
+    a live ``GradSelector``.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like target.
+
+    Returns
+    -------
+    Any | None
+        The inner forward selector, or ``None`` when ``site_target`` is not a
+        gradient address.
+    """
+
+    if getattr(site_target, "selector_kind", None) != _GRAD_SELECTOR_KIND:
+        return None
+    return getattr(site_target, "selector_value", None)
+
+
+def gradient_inners(site_target: Any) -> tuple[Any, ...]:
+    """Return the forward site of every ``tl.grad(...)`` leaf of a gradient branch.
+
+    Parameters
+    ----------
+    site_target:
+        Gradient-branch target: ``tl.grad(s)``, a union of them, or one joined
+        to ``tl.in_backward_pass(n)``.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Inner forward selectors in tree order.
+    """
+
+    inner = gradient_inner(site_target)
+    if inner is not None:
+        return (inner,)
+    _operator, children = _target_operands(site_target)
+    return tuple(found for child in children for found in gradient_inners(child))
+
+
+def _target_operands(site_target: Any) -> tuple[str | None, tuple[Any, ...]]:
+    """Return the connective and operands of a live or stored composite target.
+
+    A live ``CompositeSelector`` / ``NotSelector`` and the ``TargetSpec`` /
+    ``FrozenTargetSpec`` a recipe stores for it (kind ``"and"``, ``"or"`` or
+    ``"not"``, operands in ``selector_value``) read the same way, so a sticky
+    rule re-normalised from its stored spec keeps the branch it was attached
+    in.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like target.
+
+    Returns
+    -------
+    tuple[str | None, tuple[Any, ...]]
+        ``("and" | "or" | "not", operands)``, or ``(None, ())`` for a leaf.
+    """
+
+    if isinstance(site_target, CompositeSelector):
+        return site_target.operator, tuple(site_target.selectors)
+    if isinstance(site_target, NotSelector):
+        return "not", (site_target.selector,)
+    if not isinstance(site_target, (TargetSpec, FrozenTargetSpec)):
+        return None, ()
+    kind = site_target.selector_kind
+    value = site_target.selector_value
+    if kind in ("and", "or") and isinstance(value, (tuple, list)):
+        return kind, tuple(value)
+    if kind == "not" and value is not None:
+        return "not", (value,)
+    return None, ()
+
+
+def site_universe(site_target: Any) -> SiteUniverse:
+    """Return the universe of one union operand (SPEC 1.4).
+
+    A ``&`` subtree that mixes universes refuses at construction, so the
+    first gradient or node leaf decides; ``tl.in_backward_pass(n)`` joined to
+    a gradient address is a qualifier of that gradient branch.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like target with no top-level union.
+
+    Returns
+    -------
+    SiteUniverse
+        ``"gradient"``, ``"node"`` or ``"activation"``.
+    """
+
+    if gradient_inner(site_target) is not None:
+        return "gradient"
+    operator, children = _target_operands(site_target)
+    if operator is not None:
+        universes = {site_universe(child) for child in children}
+        if "gradient" in universes:
+            return "gradient"
+        return "node" if "node" in universes else "activation"
+    if not isinstance(site_target, (str, TargetSpec, FrozenTargetSpec, BaseSelector)):
+        return "activation"
+    kind = getattr(site_target, "selector_kind", None)
+    return "node" if kind in _NODE_SELECTOR_KINDS else "activation"
+
+
+def split_site_branches(site_target: Any) -> tuple[tuple[SiteUniverse, Any], ...]:
+    """Split a site into one target per universe, in first-appearance order.
+
+    ``tl.grad(a) | tl.grad(b)`` stays one gradient branch; ``tl.grad(s) | s``
+    becomes a gradient branch and an activation branch, so both halves
+    resolve, mount and record separately (SPEC 1.5, 1.6).
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like target.
+
+    Returns
+    -------
+    tuple[tuple[SiteUniverse, Any], ...]
+        ``(universe, target)`` per branch.
+    """
+
+    operator, operands = _target_operands(site_target)
+    if operator != "or":
+        return ((site_universe(site_target), site_target),)
+    groups: dict[SiteUniverse, list[Any]] = {}
+    for child in operands:
+        groups.setdefault(site_universe(child), []).append(child)
+    if len(groups) == 1:
+        return ((next(iter(groups)), site_target),)
+    stored = not isinstance(site_target, CompositeSelector)
+
+    def _rejoin(children: list[Any]) -> Any:
+        """Rejoin one universe's operands in the input's own form."""
+
+        if len(children) == 1:
+            return children[0]
+        if stored:
+            return type(site_target)(selector_kind="or", selector_value=tuple(children))
+        return CompositeSelector("or", tuple(children))
+
+    return tuple((universe, _rejoin(children)) for universe, children in groups.items())
 
 
 def lower_record_site_target(site_target: Any) -> Any:
@@ -389,75 +617,33 @@ def _reject_live_incapable_selector(
         )
 
 
-def _hook_directions(
-    hook_like: HookInput,
-    helper_spec: Edit | None,
-    *,
-    requested_direction: HookDirectionRequest | None = None,
-) -> tuple[HookDirection, ...]:
-    """Return hook directions requested by a hook-like object.
+def _normalize_branch_hook(hook_like: HookInput, *, universe: SiteUniverse) -> HookCallable:
+    """Normalize a hook for the site branch it mounts in.
+
+    An activation or gradient branch takes the tensor protocol
+    ``fn(tensor, *, ctx)``; an observer's ``record_backward`` takes over on a
+    backward branch. A node branch adapts a tensor hook to the autograd
+    node's ``grad_input`` tuple callback.
 
     Parameters
     ----------
     hook_like:
         User callable, observer, or helper spec.
-    helper_spec:
-        Helper spec when ``hook_like`` is a built-in helper.
-    requested_direction:
-        Explicit caller direction override.
-
-    Returns
-    -------
-    tuple[HookDirection, ...]
-        One or two concrete hook directions.
-    """
-
-    if helper_spec is not None and requested_direction in {"forward", "backward"}:
-        intrinsic_direction = helper_spec.direction or helper_spec.kind
-        if intrinsic_direction != "both" and intrinsic_direction != requested_direction:
-            raise HelperMountError(
-                f"{helper_spec.name} is intrinsically {intrinsic_direction!r} and cannot be "
-                f"attached with direction={requested_direction!r}."
-            )
-    if requested_direction == "both":
-        return ("forward", "backward")
-    if requested_direction in {"forward", "backward"}:
-        return (cast(HookDirection, requested_direction),)
-    if helper_spec is not None and helper_spec.direction == "both":
-        return ("forward", "backward")
-    if helper_spec is not None and helper_spec.direction in {"forward", "backward"}:
-        return (cast(HookDirection, helper_spec.direction),)
-    if helper_spec is not None:
-        return (helper_spec.kind,)
-    signal = getattr(hook_like, "signal", "forward")
-    if signal == "both":
-        return ("forward", "backward")
-    if signal in {"forward", "backward"}:
-        return (cast(HookDirection, signal),)
-    raise HookSignatureError("hook direction must be 'forward', 'backward', or 'both'")
-
-
-def _normalize_directional_hook(hook_like: HookInput, *, direction: HookDirection) -> HookCallable:
-    """Normalize a hook for a concrete direction.
-
-    Parameters
-    ----------
-    hook_like:
-        User callable, observer, or helper spec.
-    direction:
-        Concrete hook direction.
+    universe:
+        Universe of the site branch.
 
     Returns
     -------
     HookCallable
-        Direction-specific hook callable.
+        Branch-specific hook callable.
     """
 
-    if direction == "backward" and hasattr(hook_like, "record_backward"):
-        return normalize_hook(getattr(hook_like, "record_backward"), direction=direction)
+    signal = _UNIVERSE_SIGNAL[universe]
+    if signal == "backward" and hasattr(hook_like, "record_backward"):
+        return _normalize_hook_for_signal(getattr(hook_like, "record_backward"), signal=signal)
     helper_spec: Edit | None = hook_like if isinstance(hook_like, Edit) else None
-    hook_callable = normalize_hook(hook_like, direction=direction)
-    if direction == "backward" and _needs_tensor_backward_adapter(hook_callable, helper_spec):
+    hook_callable = _normalize_hook_for_signal(hook_like, signal=signal)
+    if universe == "node" and _needs_tensor_backward_adapter(hook_callable, helper_spec):
         return _adapt_tensor_backward_hook(hook_callable, helper_spec)
     return hook_callable
 
@@ -637,7 +823,13 @@ def normalize_hooks_from_spec(
         # before any forward runs -- a mid-forward capability error is a
         # late, ugly refusal.
         for entry in entries:
-            _validate_live_site_target(entry.site_target)
+            live_targets = (
+                gradient_inners(entry.site_target)
+                if entry.universe == "gradient"
+                else (entry.site_target,)
+            )
+            for live_target in live_targets:
+                _validate_live_site_target(live_target)
     return entries
 
 
@@ -858,7 +1050,8 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
             "attach_order": order,
             "composition": "left_to_right",
             "allow_shape_change": False,
-            "direction": "forward",
+            "signal": "forward",
+            "universe": "activation",
             "timing": "post",
             **value_spec.metadata,
         }
@@ -925,20 +1118,21 @@ def _normalize_sticky_hook_specs(
             )
             continue
         hook_like = hook_spec.helper if hook_spec.helper is not None else hook_spec.hook
-        metadata_direction = hook_spec.metadata.get("direction")
-        requested_direction = (
-            cast(HookDirectionRequest, metadata_direction)
-            if metadata_direction in {"forward", "backward", "both"}
-            else None
-        )
+        _refuse_legacy_backward_hook_spec(hook_spec)
         normalized_entries = normalize_hook_plan(
             hook_spec.site_target,
             hook_like,
-            direction=requested_direction,
             allow_replay_only_site_targets=allow_replay_only_site_targets,
         )
         for entry in normalized_entries:
-            metadata = {**entry.metadata, **hook_spec.metadata}
+            # The branch decides the pass: the freshly derived signal and
+            # universe win over anything the stored metadata carries.
+            metadata = {
+                **entry.metadata,
+                **hook_spec.metadata,
+                "signal": entry.metadata["signal"],
+                "universe": entry.metadata["universe"],
+            }
             entries.append(
                 NormalizedHookEntry(
                     site_target=entry.site_target,
@@ -948,6 +1142,43 @@ def _normalize_sticky_hook_specs(
                 )
             )
     return entries
+
+
+def _refuse_legacy_backward_hook_spec(hook_spec: HookSpec) -> None:
+    """Refuse a stored hook staged backward on an activation site by the old keyword.
+
+    Before gradient sites, ``direction="backward"`` on a bare label meant the
+    gradient at that op. That spelling is gone; re-normalizing the stored
+    hook from its site would silently turn a gradient edit into an
+    activation edit, so it refuses typed instead.
+
+    Parameters
+    ----------
+    hook_spec:
+        Stored sticky hook spec.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``edit_signal_mismatch`` for a legacy backward hook on an activation site.
+    """
+
+    if hook_spec.metadata.get("direction") not in {"backward", "both"}:
+        return
+    if site_universe(hook_spec.site_target) != "activation":
+        return
+    from .._errors import InvalidArgumentError
+
+    site = hook_spec.site_target
+    raise InvalidArgumentError(
+        f"A stored hook at {site!r} was staged with the removed direction="
+        f"{hook_spec.metadata.get('direction')!r} keyword; the site now decides the pass, "
+        "and this site is an activation. Nothing was attached.",
+        code="edit_signal_mismatch",
+        remedy="re-attach the edit on the gradient address: trace.attach_hooks(tl.grad(site), edit)",
+        argument="hooks_or_site",
+        site=repr(site),
+    )
 
 
 def _hook_like_from_spec(spec: InterventionSpec) -> HookInput | None:
@@ -1153,54 +1384,59 @@ def _validate_helper_mount(
     site_target: Any,
     helper_spec: Edit | None,
     *,
-    direction: HookDirection,
+    universe: SiteUniverse,
 ) -> None:
-    """Validate helper/selector mount compatibility at attach time.
+    """Refuse an edit addressed to a site whose tensor it cannot edit.
+
+    Runs at attach time for every branch of the plan, before any mutation
+    (SPEC 2.2). A neutral edit (``Edit.signal is None``) is a function of one
+    tensor and mounts anywhere; an edit that reads recorded forward state
+    (``Edit.signal == "forward"``: ``patch_from``, ``mean_ablate``,
+    ``splice_module``, ``swap_with`` from a site) has no meaning on a
+    gradient or autograd-node site.
 
     Parameters
     ----------
     site_target:
-        Selector-like site target.
+        Site target of this branch.
     helper_spec:
         Helper spec, if the hook came from a built-in helper.
-    direction:
-        Concrete signal direction requested for this hook entry.
+    universe:
+        Universe of the site branch.
 
-    Returns
-    -------
-    None
-        Raises for incompatible helper mount shapes.
+    Raises
+    ------
+    InvalidArgumentError
+        ``edit_signal_mismatch`` for an activation-only edit on a gradient or
+        node site.
     """
 
-    if helper_spec is None:
+    if helper_spec is None or universe == "activation":
         return
-    helper_metadata = dict(helper_spec.metadata)
-    mount_shape = helper_metadata.get("mount_shape", "tensor")
-    if direction == "backward":
-        if helper_metadata.get("requires_grad_output") and _targets_accumulate_grad(site_target):
+    if universe == "node" and dict(helper_spec.metadata).get("requires_grad_output"):
+        if _targets_accumulate_grad(site_target):
             raise HelperMountError(
-                f"{helper_spec.name} requires grad_output and cannot mount on AccumulateGrad prehooks."
+                f"{helper_spec.name} requires grad_output and cannot mount on "
+                "AccumulateGrad prehooks."
             )
+    if helper_spec.signal != "forward":
         return
-    from .resolver import _selector_resolution_direction
+    from .._errors import InvalidArgumentError
 
-    selector_direction = _selector_resolution_direction(site_target)
-    if mount_shape == "tuple" and selector_direction != "backward":
-        raise HelperMountError(
-            f"{helper_spec.name} is a grad_fn_handle helper and must be mounted on a backward selector."
-        )
-    if mount_shape == "tensor" and selector_direction == "backward":
-        raise HelperMountError(
-            f"{helper_spec.name} is a tensor-gradient helper and cannot mount on grad_fn_handle sites."
-        )
-    if helper_metadata.get("requires_grad_output") and selector_direction == "backward":
-        raise HelperMountError(
-            f"{helper_spec.name} requires grad_output and cannot mount on AccumulateGrad prehooks."
-        )
+    raise InvalidArgumentError(
+        f"{helper_spec.name} reads recorded forward activations and cannot edit the "
+        f"{'gradient' if universe == 'gradient' else 'autograd-node gradient'} at "
+        f"{site_target!r}. Nothing was attached. Remedy: {EDIT_SIGNAL_MISMATCH_REMEDY}",
+        code="edit_signal_mismatch",
+        remedy=EDIT_SIGNAL_MISMATCH_REMEDY,
+        argument="value_or_hook",
+        verb=helper_spec.name,
+        site=repr(site_target),
+    )
 
 
 def _targets_accumulate_grad(site_target: Any) -> bool:
-    """Return whether a selector target explicitly names ``AccumulateGrad``.
+    """Return whether a node selector target names ``AccumulateGrad``.
 
     Parameters
     ----------
@@ -1218,6 +1454,14 @@ def _targets_accumulate_grad(site_target: Any) -> bool:
         type_value = value.get("type")
         return type_value is not None and "accumulategrad" in str(type_value).lower()
     return "accumulategrad" in repr(site_target).lower()
+
+
+#: The one remedy text of ``edit_signal_mismatch`` (SPEC 2.2).
+EDIT_SIGNAL_MISMATCH_REMEDY = (
+    "this edit reads activations; the address tl.grad(...) is a gradient; use a "
+    "neutral edit (tl.scale, tl.zero_ablate, tl.clamp, tl.add_noise, tl.clip_norm or "
+    "a callable)"
+)
 
 
 def _facet_selector_from_target(site_target: Any) -> FacetSelector | None:
@@ -1557,32 +1801,6 @@ def _facet_scatter_hook(
     return _hook
 
 
-def _selector_direction_recursive(selector: BaseSelector) -> HookDirection | None:
-    """Return explicit selector direction for a selector tree, if any.
-
-    Parameters
-    ----------
-    selector:
-        Selector tree to inspect.
-
-    Returns
-    -------
-    HookDirection | None
-        Explicit forward/backward direction, or None.
-    """
-
-    if isinstance(selector, CompositeSelector):
-        found: HookDirection | None = None
-        for child in selector.selectors:
-            child_dir = _selector_direction_recursive(_normalize_live_selector(child))
-            if child_dir is not None:
-                found = child_dir
-        return found
-    if isinstance(selector, NotSelector):
-        return _selector_direction_recursive(_normalize_live_selector(selector.selector))
-    return _classify_selector_direction(selector)
-
-
 def make_live_site_proxy(
     *,
     _layer_label_raw: str,
@@ -1768,15 +1986,15 @@ def _is_site_like(value: Any) -> bool:
     return isinstance(value, (BaseSelector, TargetSpec, str)) or hasattr(value, "layer_label")
 
 
-def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection) -> None:
+def _validate_hook_signature(fn: Callable[..., Any], *, signal: HookDirection) -> None:
     """Validate the MVP hook callable signature.
 
     Parameters
     ----------
     fn:
         Hook callable to inspect.
-    direction:
-        Hook direction for diagnostics.
+    signal:
+        Pass of the site branch, for diagnostics and the backward tuple protocol.
 
     Raises
     ------
@@ -1806,9 +2024,9 @@ def _validate_hook_signature(fn: Callable[..., Any], *, direction: HookDirection
         parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters
     )
     if not has_positional and not has_var_positional:
-        noun = "grad" if direction == "backward" else "out"
+        noun = "grad" if signal == "backward" else "out"
         raise HookSignatureError(f"hook must accept a first positional {noun} argument")
-    if direction == "backward" and (
+    if signal == "backward" and (
         {"grad_output", "grad_fn_handle", "call_index", "run_ctx"} & set(signature.parameters)
     ):
         return

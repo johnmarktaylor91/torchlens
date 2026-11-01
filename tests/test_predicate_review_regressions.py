@@ -130,8 +130,11 @@ def test_nary_live_backward_matcher_does_not_crash() -> None:
         )
         armed.log_backward(armed[armed.output_layers[0]].out.sum(), retain_graph=True)
     grad_fns = {g.label: g for g in armed.autograd.grad_fns}
+    # Three node-universe children: a bare forward kind joined to a node
+    # selector refuses since the gradient-sites change, so the n-ary shape is
+    # exercised with node selectors only.
     selector = CompositeSelector(
-        "and", (tl.grad_input(), tl.func("relu"), tl.label_contains("relu"))
+        "and", (tl.grad_input(), tl.grad_fn("ReluBackward0"), tl.grad_fn(label="relu"))
     )
     grads = (torch.ones(1),)
     matches = {
@@ -399,6 +402,9 @@ _KIND_PAYLOADS: dict[str, Any] = {
     # F42 step qualifier: post-hoc site evaluation reads Op.episode_step
     # stamps (bool result, no capability refusal), matching upfront.
     "episode_step": (0,),
+    # Gradient address: evaluates its forward-site inner (no capability
+    # refusal); the universe split happens in the site plan, not here.
+    "grad": "x",
 }
 
 

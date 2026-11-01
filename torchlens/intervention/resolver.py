@@ -46,8 +46,9 @@ from .selectors import (
     BaseSelector,
     CompositeSelector,
     FacetSelector,
+    GradSelector,
     NotSelector,
-    _classify_selector_direction,
+    classify_selector_universe,
 )
 from .types import FrozenTargetSpec, FunctionRegistryKey, TargetSpec
 
@@ -64,6 +65,12 @@ if TYPE_CHECKING:
     Site: TypeAlias = Op | Layer | GradFn
 else:
     Site: TypeAlias = Any
+
+#: The three site universes a resolved address lands in (SPEC 1.4).
+BranchUniverse: TypeAlias = Literal["activation", "gradient", "node"]
+#: Legacy direction names ``_iter_sites`` still accepts from callers that have
+#: not moved to universe names: forward ops and backward GradFn records.
+_LEGACY_UNIVERSES: dict[str, BranchUniverse] = {"forward": "activation", "backward": "node"}
 _TORCH_INTERNAL_BUILTIN_NAMESPACE = "torch._C._VariableFunctionsClass"
 
 
@@ -750,6 +757,7 @@ class _SiteTable:
 
     _sites: tuple[Site, ...]
     selector: Any | None = None
+    _signals: tuple[str, ...] | None = None
 
     def __len__(self) -> int:
         """Return the number of resolved sites.
@@ -788,8 +796,27 @@ class _SiteTable:
         """
 
         if isinstance(idx, slice):
-            return _SiteTable(self._sites[idx], selector=self.selector)
+            return _SiteTable(
+                self._sites[idx],
+                selector=self.selector,
+                _signals=None if self._signals is None else self._signals[idx],
+            )
         return self._sites[idx]
+
+    def _site_signals(self) -> tuple[str, ...]:
+        """Return the pass each entry belongs to: ``"forward"`` or ``"backward"``.
+
+        Entries resolved through a site plan carry their branch's signal (a
+        ``tl.grad`` site is a forward op whose ``"backward"`` gradient is
+        addressed); otherwise a GradFn record is ``"backward"`` and every
+        other record ``"forward"``.
+        """
+
+        if self._signals is not None:
+            return self._signals
+        from .._ir.selector_eval import _is_grad_fn
+
+        return tuple("backward" if _is_grad_fn(site) else "forward" for site in self._sites)
 
     def __repr__(self) -> str:
         """Return a compact table representation.
@@ -825,8 +852,15 @@ class _SiteTable:
             Filtered table in original execution order.
         """
 
+        kept = [
+            (site, signal)
+            for site, signal in zip(self._sites, self._site_signals())
+            if predicate(site)
+        ]
         return _SiteTable(
-            tuple(site for site in self._sites if predicate(site)), selector=self.selector
+            tuple(site for site, _ in kept),
+            selector=self.selector,
+            _signals=tuple(signal for _, signal in kept),
         )
 
     def first(self) -> Site:
@@ -885,6 +919,7 @@ class _SiteTable:
         rows = [
             {
                 "label": getattr(site, "label", None),
+                "signal": signal,
                 "layer_label": getattr(site, "layer_label", None),
                 "call_index": getattr(site, "call_index", None),
                 "step_index": getattr(site, "step_index", None),
@@ -894,7 +929,7 @@ class _SiteTable:
                 "modules": getattr(site, "modules", ()),
                 "output_of_module_calls": getattr(site, "output_of_module_calls", ()),
             }
-            for site in map(_site_record, self._sites)
+            for site, signal in zip(map(_site_record, self._sites), self._site_signals())
         ]
         return pd.DataFrame(rows)
 
@@ -1008,23 +1043,9 @@ def _resolve_sites(
         )
 
     selector = _normalize_query(selector)
-    matched: tuple[Any, ...]
-    if isinstance(selector, FacetSelector):
-        matched = _resolve_facet_sites(trace, selector, selector)
-    else:
-        _guard_episode_step_query(trace, selector)
-        refuse_trace_alias_spellings(trace, selector)
-        direction = _selector_resolution_direction(selector)
-        indexed = _indexed_label_match(trace, direction, selector)
-        if indexed is None:
-            sites = tuple(_iter_sites(trace, direction))
-            indexed = _resolve_unchecked(sites, selector, strict=strict)
-        matched = indexed
-        if not matched:
-            raise SiteResolutionError(
-                f"selector {selector!r} matched 0 sites. Use trace[selector] to inspect what a selector matches."
-            )
-        _refuse_bare_multipass_label(selector, matched)
+    plan = resolve_site_plan(trace, selector, strict=strict)
+    matched = tuple(site for branch in plan for site in branch.sites)
+    signals = tuple(branch.signal for branch in plan for _ in branch.sites)
     if len(matched) > max_fanout:
         raise AmbiguousSiteError(
             f"site {selector!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
@@ -1036,7 +1057,7 @@ def _resolve_sites(
             MultiMatchWarning,
             stacklevel=2,
         )
-    return _SiteTable(matched, selector=selector)
+    return _SiteTable(matched, selector=selector, _signals=signals)
 
 
 def _resolve_facet_sites(
@@ -1135,7 +1156,7 @@ def _label_index_scope() -> Iterator[None]:
 
 def _indexed_label_match(
     log: Trace,
-    direction: Literal["forward", "backward"],
+    direction: str,
     selector: BaseSelector,
 ) -> tuple[Site, ...] | None:
     """Return a plain-label selector's matches from the scope's index, or ``None``.
@@ -1145,7 +1166,8 @@ def _indexed_label_match(
     log:
         Model log being searched.
     direction:
-        Resolver search universe.
+        Resolver search universe (``"activation"``, or its legacy name
+        ``"forward"``).
     selector:
         Normalized selector.
 
@@ -1159,7 +1181,11 @@ def _indexed_label_match(
     """
 
     indexes = _LABEL_INDEXES.get()
-    if indexes is None or direction != "forward" or str(selector.selector_kind) != "label":
+    if (
+        indexes is None
+        or direction not in ("forward", "activation")
+        or str(selector.selector_kind) != "label"
+    ):
         return None
     sites = _iter_sites(log, direction)
     ensure_supported(selector, lifecycle="site")
@@ -1250,17 +1276,19 @@ def find_sites(
         )
 
     selector = _normalize_query(query)
-    _guard_episode_step_query(log, selector)
-    refuse_trace_alias_spellings(log, selector)
-    direction = _selector_resolution_direction(selector)
-    sites = tuple(_iter_sites(log, direction))
-    matched = _resolve_unchecked(sites, selector, strict=strict)
+    if isinstance(selector, FacetSelector):
+        # Facets resolve through the write doors and _resolve_sites only; the
+        # post-hoc search refuses them with the capability message.
+        ensure_supported(selector, lifecycle="site")
+    plan = resolve_site_plan(log, selector, strict=strict, require_match=False)
+    matched = tuple(site for branch in plan for site in branch.sites)
     if len(matched) > max_fanout:
         raise AmbiguousSiteError(
             f"site {query!r} matched {len(matched)} sites, exceeding max_fanout={max_fanout}. "
             "Pass a larger max_fanout explicitly or use a narrower selector."
         )
-    return _SiteTable(matched, selector=query)
+    signals = tuple(branch.signal for branch in plan for _ in branch.sites)
+    return _SiteTable(matched, selector=query, _signals=signals)
 
 
 def _guard_episode_step_query(log: Trace, selector: Any) -> None:
@@ -1338,24 +1366,36 @@ def _iter_layer_ops(log: Trace) -> Sequence[Op]:
     return log.layer_list
 
 
-def _iter_sites(log: Trace, direction: Literal["forward", "backward"]) -> Sequence[Site]:
-    """Return candidate sites for the requested graph direction.
+def _iter_sites(log: Trace, universe: str) -> Sequence[Site]:
+    """Return the candidate sites of one universe.
 
     Parameters
     ----------
     log:
         Model log to inspect.
-    direction:
-        Site universe to return.
+    universe:
+        ``"activation"`` or ``"gradient"`` (both search the forward ops: a
+        gradient address names a forward op's output gradient, which exists
+        before any backward pass runs) or ``"node"`` (the GradFn records of
+        the backward passes). The legacy names ``"forward"`` and
+        ``"backward"`` mean ``"activation"`` and ``"node"``.
 
     Returns
     -------
     Sequence[Site]
-        Forward op sites or backward grad_fn_handle sites.
+        Forward op sites or backward GradFn sites.
+
+    Raises
+    ------
+    SiteResolutionError
+        For the node universe before any backward pass ran.
     """
 
-    if direction == "forward":
+    resolved = _LEGACY_UNIVERSES.get(universe, universe)
+    if resolved in ("activation", "gradient"):
         return _iter_layer_ops(log)
+    if resolved != "node":
+        raise SiteResolutionError(f"unknown site universe {universe!r}.")
     if not getattr(log, "has_backward_pass", False):
         raise SiteResolutionError("Backward selectors require log_backward() to run first.")
     return tuple(log.grad_fn_logs.values())
@@ -1397,44 +1437,354 @@ def _resolve_unchecked(
 
 
 def _selector_resolution_direction(query: SelectorInput) -> Literal["forward", "backward"]:
-    """Pick the resolver search universe for a selector query.
+    """Return the legacy search direction of a selector query.
+
+    Derived from the universe plan for the hook and door modules that still
+    read one direction: ``"backward"`` when any branch is a gradient or node
+    branch, else ``"forward"``. New code reads :func:`split_site_branches`.
 
     Parameters
     ----------
     query:
-        Selector query to inspect recursively.
+        Selector query to inspect.
 
     Returns
     -------
     Literal["forward", "backward"]
-        Direction whose site universe should be searched.
+        Legacy direction.
     """
 
-    selector = _normalize_query(query)
+    branches = split_site_branches(query)
+    return "backward" if any(b.universe != "activation" for b in branches) else "forward"
 
-    def _walk(sel: BaseSelector) -> tuple[bool, bool]:
-        """Return whether a selector tree contains backward or forward selectors."""
 
-        if isinstance(sel, CompositeSelector):
-            has_back = False
-            has_forward = False
-            for child in sel.selectors:
-                child_selector = _normalize_query(child)
-                child_back, child_forward = _walk(child_selector)
-                has_back = has_back or child_back
-                has_forward = has_forward or child_forward
-            return has_back, has_forward
-        if isinstance(sel, NotSelector):
-            return _walk(_normalize_query(sel.selector))
-        direction = _classify_selector_direction(sel)
-        return direction == "backward", direction == "forward"
+@dataclass(frozen=True)
+class SelectorBranch:
+    """One universe branch of a selector, before resolution against a trace.
 
-    has_backward, has_forward = _walk(selector)
-    if has_backward:
-        return "backward"
-    if has_forward:
-        return "forward"
-    return "forward"
+    Attributes
+    ----------
+    universe:
+        ``"activation"``, ``"gradient"`` or ``"node"``.
+    selector:
+        What the branch matches: the activation selector, the forward site a
+        gradient branch names (the ``tl.grad`` wrapper removed), or the node
+        selector (pass qualifiers included, as they always were).
+    pass_filter:
+        The branch's top-level ``tl.in_backward_pass`` qualifiers joined with
+        ``&``, or ``None`` for every pass. Activation branches never carry one.
+    """
+
+    universe: BranchUniverse
+    selector: Any
+    pass_filter: BaseSelector | None = None
+
+    @property
+    def signal(self) -> Literal["forward", "backward"]:
+        """Return the pass this branch's hooks belong to."""
+
+        return "forward" if self.universe == "activation" else "backward"
+
+    def accepts_pass(self, pass_index: int) -> bool:
+        """Return whether a backward pass number passes this branch's filter."""
+
+        return pass_filter_accepts(self.pass_filter, pass_index)
+
+
+@dataclass(frozen=True)
+class SiteBranch:
+    """One universe branch of a selector resolved against a trace.
+
+    Attributes
+    ----------
+    universe:
+        ``"activation"``, ``"gradient"`` or ``"node"``.
+    sites:
+        Matched sites in execution order: forward ops for the activation and
+        gradient universes (a gradient site is the op whose OUTPUT gradient is
+        addressed), GradFn records for the node universe.
+    pass_filter:
+        Top-level backward pass qualifier, or ``None`` for every pass.
+    selector:
+        The branch selector that matched ``sites``.
+    """
+
+    universe: BranchUniverse
+    sites: tuple[Site, ...]
+    pass_filter: BaseSelector | None = None
+    selector: Any = None
+
+    @property
+    def signal(self) -> Literal["forward", "backward"]:
+        """Return the pass this branch's hooks belong to."""
+
+        return "forward" if self.universe == "activation" else "backward"
+
+    def accepts_pass(self, pass_index: int) -> bool:
+        """Return whether a backward pass number passes this branch's filter."""
+
+        return pass_filter_accepts(self.pass_filter, pass_index)
+
+
+def pass_filter_accepts(pass_filter: Any, pass_index: int) -> bool:
+    """Evaluate a backward-pass qualifier tree against one pass number.
+
+    Parameters
+    ----------
+    pass_filter:
+        ``None`` (every pass), a ``tl.in_backward_pass`` selector, or an
+        ``&`` / ``|`` / ``~`` composition of them.
+    pass_index:
+        One-based backward pass number.
+
+    Returns
+    -------
+    bool
+        Whether the pass is accepted.
+    """
+
+    if pass_filter is None:
+        return True
+    selector = _normalize_query(pass_filter)
+    if isinstance(selector, CompositeSelector):
+        results = (pass_filter_accepts(child, pass_index) for child in selector.selectors)
+        return all(results) if selector.operator == "and" else any(results)
+    if isinstance(selector, NotSelector):
+        return not pass_filter_accepts(selector.selector, pass_index)
+    if selector.selector_kind == "backward_pass":
+        return int(selector.selector_value) == int(pass_index)
+    raise SiteResolutionError(f"{selector!r} is not a backward pass qualifier.")
+
+
+def _misplaced_qualifier(selector: Any, *, code: str) -> Exception:
+    """Build the refusal for a pass qualifier nested inside a gradient expression."""
+
+    from .errors import SelectorCompositionError
+
+    return SelectorCompositionError(
+        f"{selector!r} nests a backward pass qualifier inside a gradient expression "
+        "(under ~ or within a nested group); a pass qualifier filters a whole gradient "
+        "branch.",
+        code=code,
+        remedy="join the qualifier at the top of the branch: tl.grad(s) & tl.in_backward_pass(2)",
+    )
+
+
+def _split_operand(operand: Any) -> tuple[Any, ...]:
+    """Return an operand's children when it is a ``|`` node (selector or spec)."""
+
+    if isinstance(operand, CompositeSelector):
+        return tuple(operand.selectors) if operand.operator == "or" else ()
+    if isinstance(operand, (TargetSpec, FrozenTargetSpec)) and operand.selector_kind == "or":
+        return tuple(_normalize_query(operand).selector_value)
+    return ()
+
+
+def _flatten(operand: Any, operator: Literal["and", "or"]) -> list[Any]:
+    """Flatten nested same-operator nodes into one operand list."""
+
+    if operator == "or":
+        children = _split_operand(operand)
+    elif isinstance(operand, CompositeSelector) and operand.operator == "and":
+        children = tuple(operand.selectors)
+    elif isinstance(operand, (TargetSpec, FrozenTargetSpec)) and operand.selector_kind == "and":
+        children = tuple(_normalize_query(operand).selector_value)
+    else:
+        children = ()
+    if not children:
+        return [operand]
+    flat: list[Any] = []
+    for child in children:
+        flat.extend(_flatten(child, operator))
+    return flat
+
+
+def _join(operator: Literal["and", "or"], items: Sequence[Any]) -> Any:
+    """Join selectors with one operator; ``None`` for none, the item for one."""
+
+    if not items:
+        return None
+    if len(items) == 1:
+        return items[0]
+    return CompositeSelector(operator, tuple(items))
+
+
+def _unwrap_gradient(selector: Any) -> Any:
+    """Return the forward-site expression a gradient-universe expression names."""
+
+    if isinstance(selector, (TargetSpec, FrozenTargetSpec)):
+        selector = _normalize_query(selector)
+    if isinstance(selector, GradSelector):
+        return selector.inner
+    if isinstance(selector, CompositeSelector):
+        return CompositeSelector(
+            selector.operator, tuple(_unwrap_gradient(child) for child in selector.selectors)
+        )
+    if isinstance(selector, NotSelector):
+        return NotSelector(_unwrap_gradient(selector.selector))
+    raise _misplaced_qualifier(selector, code="selector_signal_mismatch")
+
+
+def _branch_for(operand: Any) -> SelectorBranch:
+    """Classify one union operand into its universe branch."""
+
+    from .errors import SelectorCompositionError
+
+    universe = classify_selector_universe(operand)
+    if universe in (None, "activation"):
+        return SelectorBranch("activation", operand)
+    if universe == "qualifier":
+        return SelectorBranch("node", operand, operand)
+    if universe == "mixed":
+        raise SelectorCompositionError(
+            f"{operand!r} mixes universes below its top-level union.",
+            code="selector_cross_universe_and",
+            remedy="write | at the top of the address and & inside each branch",
+        )
+    conjuncts = _flatten(operand, "and")
+    qualifiers = [c for c in conjuncts if classify_selector_universe(c) == "qualifier"]
+    pass_filter = _join("and", qualifiers)
+    if universe == "node":
+        return SelectorBranch("node", operand, pass_filter)
+    rest = [c for c in conjuncts if classify_selector_universe(c) != "qualifier"]
+    inner = _join("and", [_unwrap_gradient(c) for c in rest])
+    return SelectorBranch("gradient", inner, pass_filter)
+
+
+def split_site_branches(query: Any) -> tuple[SelectorBranch, ...]:
+    """Split a selector into its universe branches without a trace.
+
+    The selector is read with ``|`` at the top; each operand belongs to one
+    universe (an ``&`` across universes refused when it was built). Operands
+    of one universe and one pass filter merge into one branch, so
+    ``tl.grad(a) | tl.grad(b)`` is the single gradient branch ``tl.grad(a |
+    b)`` names, while ``tl.grad(s) | s`` keeps a gradient and an activation
+    branch. Bare label strings stay verbatim (each door gives them its own
+    meaning).
+
+    Parameters
+    ----------
+    query:
+        Selector, target spec, frozen target spec, or bare label string.
+
+    Returns
+    -------
+    tuple[SelectorBranch, ...]
+        Branches in order of first appearance.
+
+    Raises
+    ------
+    SelectorCompositionError
+        For a pass qualifier nested inside a gradient expression, or a tree
+        that mixes universes below its top-level union.
+    """
+
+    selector = query if isinstance(query, str) else _normalize_query(query)
+    operands = _flatten(selector, "or")
+    if len(operands) == 1:
+        return (_branch_for(selector),)
+    groups: list[tuple[SelectorBranch, list[Any]]] = []
+    for operand in operands:
+        branch = _branch_for(operand)
+        key = (branch.universe, branch.pass_filter)
+        for first, members in groups:
+            if (first.universe, first.pass_filter) == key:
+                members.append(branch.selector)
+                break
+        else:
+            groups.append((branch, [branch.selector]))
+    return tuple(
+        SelectorBranch(first.universe, _join("or", members), first.pass_filter)
+        for first, members in groups
+    )
+
+
+def _refuse_strict_bare_strings(selector: Any) -> None:
+    """Refuse bare label strings anywhere in a strict-mode selector tree."""
+
+    if isinstance(selector, str) or any(isinstance(node, str) for node in walk_selector(selector)):
+        raise SiteResolutionError(
+            "Bare strings are non-portable in strict mode; use tl.label(...), "
+            "tl.func(...), or another typed selector."
+        )
+
+
+def _resolve_branch_sites(
+    trace: Trace, selector: BaseSelector, universe: str, *, strict: bool
+) -> tuple[Site, ...]:
+    """Resolve one branch selector against its universe's sites."""
+
+    search = "node" if universe == "node" else "activation"
+    indexed = _indexed_label_match(trace, search, selector)
+    if indexed is not None:
+        return indexed
+    return _resolve_unchecked(tuple(_iter_sites(trace, search)), selector, strict=strict)
+
+
+def resolve_site_plan(
+    trace: Trace,
+    selector: SelectorInput,
+    *,
+    strict: bool = False,
+    require_match: bool = True,
+) -> tuple[SiteBranch, ...]:
+    """Resolve a selector into one site set per universe branch (SPEC 1.6).
+
+    A gradient branch resolves its forward site in the activation universe
+    (same strictness and refusal texts) and keeps the matched forward ops: each
+    names its output-gradient boundary, which exists once a backward runs, so
+    no backward pass is required. A node branch resolves against the GradFn
+    records and still requires one.
+
+    Parameters
+    ----------
+    trace:
+        Finished trace to resolve against.
+    selector:
+        Selector, target spec, frozen target spec, or non-strict bare string.
+    strict:
+        Whether to reject non-portable query forms.
+    require_match:
+        Whether a plan matching no site at all refuses (the door rule; the
+        zero-match refusal recommends ``find_sites``) and a bare multi-pass
+        label refuses as at the activation door. ``find_sites`` passes False.
+
+    Returns
+    -------
+    tuple[SiteBranch, ...]
+        One branch per (universe, pass filter), in order of first appearance.
+
+    Raises
+    ------
+    SiteResolutionError
+        For a zero-match plan, an unsupported query, or a node branch on a
+        trace with no backward pass.
+    """
+
+    if strict and isinstance(selector, str):
+        _refuse_strict_bare_strings(selector)
+    normalized = _normalize_query(selector)
+    if isinstance(normalized, FacetSelector):
+        facets = _resolve_facet_sites(trace, normalized, normalized)
+        return (SiteBranch("activation", tuple(facets), None, normalized),)
+    if strict:
+        _refuse_strict_bare_strings(normalized)
+    _guard_episode_step_query(trace, normalized)
+    refuse_trace_alias_spellings(trace, normalized)
+    resolved: list[SiteBranch] = []
+    for planned in split_site_branches(normalized):
+        branch_selector = _normalize_query(planned.selector)
+        sites = _resolve_branch_sites(trace, branch_selector, planned.universe, strict=strict)
+        resolved.append(SiteBranch(planned.universe, sites, planned.pass_filter, branch_selector))
+    if require_match:
+        if not any(branch.sites for branch in resolved):
+            raise SiteResolutionError(
+                f"selector {normalized!r} matched 0 sites. Use trace[selector] to inspect what a selector matches."
+            )
+        for branch in resolved:
+            if branch.universe != "node":
+                _refuse_bare_multipass_label(branch.selector, branch.sites)
+    return tuple(resolved)
 
 
 def _normalize_query(query: SelectorInput) -> BaseSelector:
@@ -1459,4 +1809,14 @@ def _normalize_query(query: SelectorInput) -> BaseSelector:
     return normalize_selector_like(query, lifecycle="site")
 
 
-__all__ = ["_SiteTable", "_selector_resolution_direction", "find_sites", "_resolve_sites"]
+__all__ = [
+    "SelectorBranch",
+    "SiteBranch",
+    "_SiteTable",
+    "_selector_resolution_direction",
+    "find_sites",
+    "pass_filter_accepts",
+    "resolve_site_plan",
+    "_resolve_sites",
+    "split_site_branches",
+]

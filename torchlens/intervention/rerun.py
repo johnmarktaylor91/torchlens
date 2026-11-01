@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import warnings
+import weakref
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
@@ -153,6 +154,7 @@ def run(
         _release_discarded_capture(new_log)
     else:
         trace.replace_state_from(new_log)
+    _adopt_rerun_backward_graph(trace, new_log)
     trace.is_appended = False
     trace._append_sequence_id = 0
     trace.append_history = []
@@ -196,6 +198,49 @@ def run(
     trace._has_direct_writes = False
     trace._out_recipe_revision = getattr(trace, "_spec_revision", 0)
     return trace
+
+
+#: Rerun captures whose autograd graph a backward-ready rerun result adopted,
+#: kept alive exactly as long as that result (their tensor hooks route there).
+_RERUN_GRAPH_SOURCES: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
+
+
+def _adopt_rerun_backward_graph(trace: Trace, new_log: Trace) -> None:
+    """Make a backward-ready rerun result own the rerun capture's autograd graph.
+
+    The rerun's forward ran under ``new_log``, so its tensor grad hooks and
+    grad_fn registrations name ``new_log``, which the state swap discards. A
+    later ``trace.backward(loss)`` on the result would then record nothing on
+    the result (and an implicit pass on the discarded capture). Route the
+    capture's tensor hooks to ``trace`` and register its grad_fns there, the
+    same rebind the refresh projector performs, so a gradient edit armed on a
+    rerun result fires and ``.grad`` lands on the result. Traces that are not
+    backward-ready keep no graph and are left as they are.
+
+    Parameters
+    ----------
+    trace:
+        The rerun result (updated in place).
+    new_log:
+        The rerun's own capture.
+    """
+
+    if not getattr(trace, "backward_ready", False):
+        return
+    from ..backends.torch.backward import _register_forward_grad_fn
+
+    new_log._refresh_projection_target_ref = weakref.ref(trace)
+    _RERUN_GRAPH_SOURCES[trace] = new_log
+    # The redirected hooks pass the one-owner-per-label check against the
+    # result's map, so the result adopts the rerun capture's hook ownership
+    # (the map the state swap left names the previous capture's tensors).
+    for key in ("_tl_grad_hook_owner_by_label", "_tl_backward_hooked_tensor_keys"):
+        if key in new_log.__dict__:
+            trace.__dict__[key] = new_log.__dict__[key]
+    for layer in trace.layer_list:
+        _register_forward_grad_fn(
+            trace, getattr(layer, "grad_fn_handle", None), layer._layer_label_raw
+        )
 
 
 def _release_discarded_capture(new_log: Trace) -> None:
@@ -1496,10 +1541,13 @@ def _reconcile_rerun_hook_fires(
         corresponding fire, retaining multiplicity for duplicate plans.
     """
 
-    plan_ids = [_hook_plan_identifier(entry) for entry in hook_plan]
+    # Only forward entries can fire during the rerun's forward; a gradient or
+    # node entry is armed for the result's next backward and settles there.
+    forward_plan = [entry for entry in hook_plan if entry.signal == "forward"]
+    plan_ids = [_hook_plan_identifier(entry) for entry in forward_plan]
     base_by_id = {
         plan_id: str(entry.metadata.get("plan_id_base", plan_id))
-        for entry, plan_id in zip(hook_plan, plan_ids)
+        for entry, plan_id in zip(forward_plan, plan_ids)
     }
     planned = Counter(plan_ids)
     fired: Counter[str] = Counter()
@@ -1517,7 +1565,7 @@ def _reconcile_rerun_hook_fires(
         fallback_fired.update(
             str(record.helper_name)
             for record in (getattr(op, "interventions", None) or ())
-            if getattr(record, "direction", None) == "forward"
+            if getattr(record, "signal", None) == "forward"
             and getattr(record, "helper_name", None) is not None
         )
     total_fired = sum(fired.values()) + sum(fallback_fired.values())
@@ -1698,8 +1746,6 @@ def _refuse_source_matched_zero_fire(
             continue
         if not matched:
             continue
-        if _is_gradient_edit(entry):
-            _refuse_gradient_edit_rerun(plan_id, matched)
         raise LiveModeLabelError(
             f"A staged edit ({plan_id}) matched {matched} site(s) {where} but fired at none "
             f"during the rerun's forward, and {why}, so the rerun would return an un-edited "
@@ -1714,37 +1760,6 @@ def _refuse_source_matched_zero_fire(
             unfired_plan_id=plan_id,
             source_site_count=matched,
         )
-
-
-def _refuse_gradient_edit_rerun(plan_id: str, matched: int) -> None:
-    """Refuse a rerun whose unfired staged edit is a gradient edit (its real cause).
-
-    Raises
-    ------
-    LiveModeLabelError
-        ``rerun_gradient_edit_unsupported``: a rerun replays the forward only.
-    """
-
-    raise LiveModeLabelError(
-        f"A staged gradient edit ({plan_id}) matched {matched} site(s) on this trace, "
-        "but a rerun replays the forward only, so a gradient edit can never fire "
-        "there. The rerun is refused and the trace is unchanged. Remedy: capture "
-        "with tl.options.CaptureOptions(backward_ready=True), attach the edit with "
-        "trace.attach_hooks(site, edit) or intervene=tl.when(site, edit), and run "
-        "trace.backward(loss)",
-        code="rerun_gradient_edit_unsupported",
-        unfired_plan_id=plan_id,
-        source_site_count=matched,
-    )
-
-
-def _is_gradient_edit(entry: Any) -> bool:
-    """Return whether one planned hook entry edits gradients."""
-
-    helper = getattr(entry, "helper_spec", None)
-    if helper is not None and (helper.kind == "backward" or helper.direction == "backward"):
-        return True
-    return entry.metadata.get("direction") == "backward"
 
 
 __all__ = ["run"]

@@ -6,7 +6,7 @@ import builtins
 import re as _re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, cast
 
 from .._errors import ArgumentTypeError
 from .types import TargetSpec
@@ -42,6 +42,7 @@ SelectorKind: TypeAlias = Literal[
     "preceded_by",
     "site",
     "episode_step",
+    "grad",
 ]
 
 
@@ -54,6 +55,7 @@ _KIND_SPELLINGS: dict[str, str] = {
     "regex": "label_matches",
     "grad_fn_label": "intervention.grad_fn_label",
     "output_at": "intervention.output_at",
+    "backward_pass": "in_backward_pass",
 }
 
 
@@ -86,6 +88,26 @@ class BaseSelector:
         _check_composition(self, other)
         return CompositeSelector("and", _flatten_same_operator("and", self, other))
 
+    def __rand__(self, other: str) -> CompositeSelector:
+        """Return ``other & self`` for a bare label string on the left.
+
+        Parameters
+        ----------
+        other:
+            Bare label string; it keeps the meaning a bare string has at the
+            door that evaluates the composite.
+
+        Returns
+        -------
+        CompositeSelector
+            Intersection selector.
+        """
+
+        if not isinstance(other, str):
+            return NotImplemented
+        _check_composition(other, self)
+        return CompositeSelector("and", _flatten_same_operator("and", cast(Any, other), self))
+
     def __or__(self, other: SelectorLike) -> CompositeSelector:
         """Return a selector that matches the union of two selectors.
 
@@ -112,16 +134,46 @@ class BaseSelector:
                 "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
                 "OR-composed followed_by selectors cannot be evaluated safely."
             )
-        _check_composition(self, other)
+        _check_composition(self, other, operator="or")
         return CompositeSelector("or", _flatten_same_operator("or", self, other))
 
-    def __invert__(self) -> NotSelector:
+    def __ror__(self, other: str) -> CompositeSelector:
+        """Return ``other | self`` for a bare label string on the left.
+
+        Parameters
+        ----------
+        other:
+            Bare label string; it keeps the meaning a bare string has at the
+            door that evaluates the composite.
+
+        Returns
+        -------
+        CompositeSelector
+            Union selector.
+        """
+
+        if not isinstance(other, str):
+            return NotImplemented
+        from .._ir.selector_eval import contains_followed_by
+
+        if contains_followed_by(self):
+            from .errors import SelectorCompositionError
+
+            raise SelectorCompositionError(
+                "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
+                "OR-composed followed_by selectors cannot be evaluated safely."
+            )
+        _check_composition(other, self, operator="or")
+        return CompositeSelector("or", _flatten_same_operator("or", cast(Any, other), self))
+
+    def __invert__(self) -> BaseSelector:
         """Return a selector that matches the complement of this selector.
 
         Returns
         -------
-        NotSelector
-            Negated selector.
+        BaseSelector
+            Negated selector (``tl.grad`` keeps the complement inside its
+            universe and returns a gradient address).
         """
 
         from .._ir.selector_eval import contains_followed_by
@@ -132,6 +184,15 @@ class BaseSelector:
             raise SelectorCompositionError(
                 "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
                 "negated followed_by selectors cannot be evaluated safely."
+            )
+        if classify_selector_universe(self) == "mixed":
+            from .errors import SelectorCompositionError
+
+            raise SelectorCompositionError(
+                f"~{self!r} negates a union of addresses in different universes "
+                "(activation, gradient, node); its complement is not one address set.",
+                code="selector_cross_universe_not",
+                remedy="negate inside each branch before joining them, e.g. tl.grad(~a) | ~a",
             )
         return NotSelector(self)
 
@@ -1287,6 +1348,91 @@ class NotSelector(BaseSelector):
         return f"(~{self.selector!r})"
 
 
+@dataclass(frozen=True, repr=False)
+class GradSelector(BaseSelector):
+    """Gradient address: the gradient of a forward site's OUTPUT.
+
+    ``tl.grad(site)`` is an address, not a computation: it never calls
+    autograd. It names the gradient of the loss with respect to the output of
+    every forward op the inner selector matches, observed at the TorchLens
+    boundary before the gradient enters the op's backward function (the
+    tensor ``trace[site].grad`` stores). A bare selector names the activation
+    and a node selector (``tl.grad_fn``) names an autograd node, so the three
+    universes never share a site.
+
+    Parameters
+    ----------
+    inner:
+        Normalized forward site: a bare label string (kept verbatim, so it
+        means what a bare string means at the door that evaluates it) or an
+        activation-universe selector.
+    """
+
+    def __init__(self, inner: str | BaseSelector) -> None:
+        """Create a gradient address over one forward site."""
+
+        object.__setattr__(self, "selector_kind", "grad")
+        object.__setattr__(self, "selector_value", inner)
+
+    @property
+    def inner(self) -> str | BaseSelector:
+        """Return the forward site whose output gradient this address names.
+
+        Returns
+        -------
+        str | BaseSelector
+            The wrapped forward site.
+        """
+
+        return cast("str | BaseSelector", self.selector_value)
+
+    def __invert__(self) -> GradSelector:
+        """Return the complement inside the gradient universe.
+
+        ``~tl.grad(s)`` normalises to ``tl.grad(~s)``: every forward op's
+        output gradient except those ``s`` names.
+
+        Returns
+        -------
+        GradSelector
+            Gradient address over the complemented forward site.
+        """
+
+        inner = self.inner
+        negated = ~inner if isinstance(inner, BaseSelector) else NotSelector(cast(Any, inner))
+        return GradSelector(negated)
+
+    def __selection__(self) -> Any:
+        """Refuse lifting a gradient address into an activation Selection.
+
+        Raises
+        ------
+        SelectorCompositionError
+            Always, coded ``grad_selection_unsupported``.
+        """
+
+        raise _grad_selection_refusal(self, code="grad_selection_unsupported")
+
+    def to_target_spec(self) -> TargetSpec:
+        """Convert the gradient address to a target spec.
+
+        Returns
+        -------
+        TargetSpec
+            Target spec of kind ``"grad"`` whose value is the inner target
+            (a nested spec, or the bare label string).
+        """
+
+        inner = self.inner
+        nested = inner.to_target_spec() if isinstance(inner, BaseSelector) else inner
+        return TargetSpec(selector_kind="grad", selector_value=nested)
+
+    def __repr__(self) -> str:
+        """Return the constructor-style representation ``tl.grad(...)``."""
+
+        return f"tl.grad({self.inner!r})"
+
+
 SelectorLike: TypeAlias = BaseSelector | TargetSpec
 
 
@@ -1646,6 +1792,167 @@ def in_backward_pass(pass_index: int) -> BackwardPassSelector:
     return BackwardPassSelector(pass_index)
 
 
+#: Node-universe and pass-qualifier kinds a gradient address cannot wrap.
+_NODE_KINDS = frozenset({"grad_fn", "grad_fn_label", "grad_kind", "intervening", "without_op"})
+_QUALIFIER_KINDS = frozenset({"backward_pass"})
+
+
+def _grad_refusal(problem: str, *, code: str, remedy: str) -> Exception:
+    """Build one coded ``tl.grad`` construction refusal."""
+
+    from .errors import SelectorCompositionError
+
+    return SelectorCompositionError(problem, code=code, remedy=remedy)
+
+
+def _grad_selection_refusal(value: Any, *, code: str) -> Exception:
+    """Build the refusal for a gradient address over (or lifted into) a Selection."""
+
+    if isinstance(value, BaseSelector):
+        problem = (
+            f"{value!r} addresses a gradient, and a Selection addresses activations; "
+            "gradient selections are not addressable this release."
+        )
+    else:
+        problem = (
+            f"tl.grad received a {type(value).__name__} (a Selection-algebra value); "
+            "gradient selections are not addressable this release."
+        )
+    return _grad_refusal(
+        problem,
+        code=code,
+        remedy="use tl.grad(selector) with a site selector such as tl.label, tl.func or tl.module",
+    )
+
+
+def _leaf_kind(node: Any) -> str | None:
+    """Return the selector kind of one walked selector-tree node."""
+
+    if isinstance(node, (BaseSelector, TargetSpec)):
+        return str(node.selector_kind)
+    kind = getattr(node, "selector_kind", None)
+    return None if kind is None else str(kind)
+
+
+def _check_grad_inner_tree(inner: str | BaseSelector) -> None:
+    """Refuse a ``tl.grad`` inner that is not a forward-only site address."""
+
+    if isinstance(inner, str):
+        return
+    from .._ir.selector_eval import walk_selector
+
+    kinds = [_leaf_kind(node) for node in walk_selector(inner)]
+    if "grad" in kinds:
+        raise _grad_refusal(
+            f"tl.grad({inner!r}) wraps a gradient address in another one.",
+            code="grad_selector_nested",
+            remedy="tl.grad wraps a forward site once; write tl.grad(x)",
+        )
+    if "facet" in kinds:
+        raise _grad_refusal(
+            f"tl.grad({inner!r}) addresses a facet or head; gradient facets are not "
+            "addressable this release.",
+            code="grad_facet_unsupported",
+            remedy="edit tl.grad(site) and mask inside a callable",
+        )
+    if any(kind in _QUALIFIER_KINDS for kind in kinds):
+        raise _grad_refusal(
+            f"tl.grad({inner!r}) wraps a backward pass qualifier, which filters gradient "
+            "fires and is not part of the forward site.",
+            code="grad_selector_inner_not_forward",
+            remedy="put the pass qualifier outside: tl.grad(s) & tl.in_backward_pass(2)",
+        )
+    if any(kind in _NODE_KINDS for kind in kinds):
+        raise _grad_refusal(
+            f"tl.grad({inner!r}) wraps an autograd-node selector; tl.grad wraps a forward site.",
+            code="grad_selector_inner_not_forward",
+            remedy="the autograd-node selectors already address gradients at node granularity; "
+            "use them unwrapped",
+        )
+
+
+def _normalize_grad_inner(site: Any) -> str | BaseSelector:
+    """Normalize what ``tl.grad`` wraps to a label string or a selector.
+
+    Raises
+    ------
+    SelectorCompositionError
+        Coded refusal for nested, Selection, list/mapping or other non-site
+        inputs (facet and node refusals come from the tree check).
+    """
+
+    from .types import FrozenTargetSpec
+
+    if isinstance(site, (str, BaseSelector)):
+        return site
+    if isinstance(site, (TargetSpec, FrozenTargetSpec)):
+        from .._ir.selector_eval import normalize_selector_like
+
+        return normalize_selector_like(site, lifecycle="site")
+    if type(site).__name__ == "_SiteTable":
+        from .._ir.selector_eval import normalize_selector_like
+
+        return normalize_selector_like(site, lifecycle="site")
+    from .hooks import lower_record_site_target
+
+    lowered = lower_record_site_target(site)
+    if isinstance(lowered, BaseSelector):
+        return lowered
+    if hasattr(site, "__selection__"):
+        raise _grad_selection_refusal(site, code="grad_selection_unsupported")
+    if isinstance(site, (list, tuple, set, frozenset, dict)) or hasattr(site, "keys"):
+        raise _grad_refusal(
+            f"tl.grad received a {type(site).__name__}; it addresses one site.",
+            code="grad_selector_inner_invalid",
+            remedy="pass one site; batch shapes go to the door",
+        )
+    raise _grad_refusal(
+        f"tl.grad received {type(site).__name__} {site!r}, which is not a site.",
+        code="grad_selector_inner_invalid",
+        remedy="pass a label string, a site selector (tl.label, tl.func, tl.module, ...), "
+        "an Op or Layer record, or a find_sites() table",
+    )
+
+
+def grad(site: Any, /) -> GradSelector:
+    """Address the gradient of a forward site's output.
+
+    ``tl.grad("relu_3")`` names the gradient of relu_3's output, a bare
+    ``"relu_3"`` names its activation, and ``tl.grad("relu_3") | "relu_3"``
+    names both. The address never calls autograd; the doors decide when it
+    fires (on the next backward pass of the trace that holds it).
+
+    Parameters
+    ----------
+    site:
+        A label string (pass-qualified on multi-pass layers), an
+        activation-universe selector or composition of them, an ``Op`` or
+        ``Layer`` record, or a ``find_sites()`` table.
+
+    Returns
+    -------
+    GradSelector
+        Immutable, hashable gradient address.
+
+    Raises
+    ------
+    SelectorCompositionError
+        ``grad_selector_nested``, ``grad_selector_inner_not_forward``,
+        ``grad_facet_unsupported``, ``grad_selection_unsupported`` or
+        ``grad_selector_inner_invalid``, each with a ``remedy``.
+    """
+
+    if isinstance(site, GradSelector):
+        raise _grad_refusal(
+            f"tl.grad({site!r}) wraps a gradient address in another one.",
+            code="grad_selector_nested",
+            remedy="tl.grad wraps a forward site once; write tl.grad(x)",
+        )
+    inner = _normalize_grad_inner(site)
+    _check_grad_inner_tree(inner)
+    return GradSelector(inner)
+
+
 def at_step(*steps: int) -> EpisodeStepSelector:
     """Create an episode-step selector (lane F42's step qualifier).
 
@@ -1691,10 +1998,210 @@ def in_module(address: str) -> InModuleSelector:
     return InModuleSelector(str(address))
 
 
+#: Address universes (SPEC 1.4). ``None`` is an agnostic leaf (a label, a
+#: module address, ...), which is an activation whenever it stands outside
+#: ``tl.grad``. ``"mixed"`` is a union whose branches sit in different
+#: universes (``tl.grad(s) | s``); ``resolve_site_plan`` splits it.
+SelectorUniverse: TypeAlias = Literal["activation", "gradient", "node", "qualifier", "mixed"]
+
+#: Leaf selector kinds per universe, for selectors and target specs alike.
+_ACTIVATION_KINDS = frozenset({"func", "func_transform"})
+_AGNOSTIC_KINDS = frozenset(
+    {
+        "label",
+        "module",
+        "output",
+        "output_at",
+        "input_at",
+        "contains",
+        "regex",
+        "predicate",
+        "in_module",
+        "facet",
+        "site",
+        "followed_by",
+        "preceded_by",
+        # Step qualification is a position fact (lane F42): it narrows forward
+        # subjects by episode step, like the other position selectors.
+        "episode_step",
+    }
+)
+_CONNECTIVE_KINDS = frozenset({"and", "or", "not"})
+
+
+def _leaf_universe(kind: str) -> SelectorUniverse | None:
+    """Return the universe of one leaf selector kind."""
+
+    from .errors import UnclassifiedSelectorError
+
+    if kind == "grad":
+        return "gradient"
+    if kind in _NODE_KINDS:
+        return "node"
+    if kind in _QUALIFIER_KINDS:
+        return "qualifier"
+    if kind in _ACTIVATION_KINDS:
+        return "activation"
+    if kind in _AGNOSTIC_KINDS:
+        return None
+    raise UnclassifiedSelectorError(
+        f"selector kind {kind!r} has no universe classification; add an explicit bucket."
+    )
+
+
+def _connective_children(sel: Any) -> tuple[str, tuple[Any, ...]] | None:
+    """Return ``(operator, children)`` for an and/or/not node, else ``None``."""
+
+    from .types import FrozenTargetSpec
+
+    if isinstance(sel, CompositeSelector):
+        return sel.operator, tuple(sel.selectors)
+    if isinstance(sel, NotSelector):
+        return "not", (sel.selector,)
+    if isinstance(sel, (TargetSpec, FrozenTargetSpec)) and sel.selector_kind in _CONNECTIVE_KINDS:
+        value = sel.selector_value
+        if sel.selector_kind == "not":
+            return "not", (value,)
+        children = tuple(value) if isinstance(value, (list, tuple)) else (value,)
+        return str(sel.selector_kind), children
+    return None
+
+
+def classify_selector_universe(sel: Any) -> SelectorUniverse | None:
+    """Return which address universe a selector tree belongs to (SPEC 1.4).
+
+    Parameters
+    ----------
+    sel:
+        Selector, target spec, frozen target spec, or bare label string.
+
+    Returns
+    -------
+    SelectorUniverse | None
+        ``"activation"`` (explicitly forward leaves such as ``tl.func``),
+        ``"gradient"`` (``tl.grad(...)``), ``"node"`` (``tl.grad_fn`` and the
+        other autograd-node selectors), ``"qualifier"``
+        (``tl.in_backward_pass`` alone or joined to qualifiers), ``"mixed"``
+        (a union whose branches sit in different universes), or ``None`` for an
+        agnostic tree (an activation whenever it stands outside ``tl.grad``).
+
+    Raises
+    ------
+    SelectorCompositionError
+        When an ``&`` inside the tree joins operands that never share a site
+        (deserialized trees are checked here; operators check at build time).
+    UnclassifiedSelectorError
+        For a selector type with no universe bucket.
+    """
+
+    from .errors import UnclassifiedSelectorError
+    from .types import FrozenTargetSpec
+
+    if isinstance(sel, str):
+        return None
+    connective = _connective_children(sel)
+    if connective is not None:
+        operator, children = connective
+        if operator == "not":
+            return classify_selector_universe(children[0])
+        # A plain loop keeps one interpreter frame per nesting level, so deep
+        # deserialized trees classify as deep as they evaluate.
+        universes: list[SelectorUniverse | None] = []
+        for child in children:
+            universes.append(classify_selector_universe(child))
+        if operator == "and":
+            if not children:
+                return None
+            combined = universes[0]
+            for index in range(1, len(children)):
+                combined = _and_universe(
+                    combined, universes[index], children[index - 1], children[index]
+                )
+            return combined
+        return _or_universe(universes)
+    if isinstance(sel, (BaseSelector, TargetSpec, FrozenTargetSpec)):
+        return _leaf_universe(str(sel.selector_kind))
+    raise UnclassifiedSelectorError(
+        f"{type(sel).__name__} has no universe classification; add an explicit bucket."
+    )
+
+
+def _or_universe(universes: Sequence[SelectorUniverse | None]) -> SelectorUniverse | None:
+    """Combine the universes of a union's operands."""
+
+    present = {universe for universe in universes if universe is not None}
+    if not present:
+        return None
+    if "mixed" in present:
+        return "mixed"
+    if None in universes:
+        present.add("activation")
+    if present == {"qualifier"}:
+        return "qualifier"
+    # A pass qualifier standing alone in a union is a node branch.
+    if "qualifier" in present:
+        present = (present - {"qualifier"}) | {"node"}
+    return next(iter(present)) if len(present) == 1 else "mixed"
+
+
+def _and_universe(
+    left: SelectorUniverse | None,
+    right: SelectorUniverse | None,
+    left_sel: Any,
+    right_sel: Any,
+) -> SelectorUniverse | None:
+    """Combine two ``&`` operands' universes, refusing pairs that share no site."""
+
+    from .errors import SelectorCompositionError
+
+    if left is None or right is None:
+        other = right if left is None else left
+        if other in (None, "activation"):
+            return other
+        left = left or "activation"
+        right = right or "activation"
+    if left == right and left != "mixed":
+        return left
+    pair = {left, right}
+    if "mixed" not in pair and "qualifier" in pair and pair & {"gradient", "node"}:
+        return "gradient" if "gradient" in pair else "node"
+    if pair == {"activation", "qualifier"}:
+        site, qualifier = (left_sel, right_sel) if left == "activation" else (right_sel, left_sel)
+        raise SelectorCompositionError(
+            f"{left_sel!r} & {right_sel!r} joins a backward pass qualifier to an "
+            "activation address; activations have no backward pass.",
+            code="selector_signal_mismatch",
+            remedy=f"a pass qualifier needs a gradient address: tl.grad({site!r}) & {qualifier!r}",
+        )
+    if "mixed" in pair:
+        remedy = "write & inside each branch of the |, e.g. (tl.grad(a) & q) | (a & b)"
+    elif pair == {"activation", "gradient"}:
+        remedy = "a gradient and an activation address never share a site; use | for both"
+    elif "activation" in pair:
+        remedy = (
+            "spell the node address alone: tl.grad_fn(label=...), or the tensor address tl.grad(s)"
+        )
+    else:
+        remedy = (
+            "the tensor address tl.grad(s) and the node address tl.grad_fn(...) differ in "
+            "payload; use one of them"
+        )
+    raise SelectorCompositionError(
+        f"Cross-universe composition not supported: {left_sel!r} & {right_sel!r} joins a "
+        f"{left} address and a {right} address, which never share a site.",
+        code="selector_cross_universe_and",
+        remedy=remedy,
+    )
+
+
 def _classify_selector_direction(
     sel: SelectorLike,
 ) -> Literal["forward", "backward"] | None:
-    """Return the selector's graph-direction taxonomy bucket.
+    """Return the legacy graph-direction bucket, derived from the universe.
+
+    Kept for the hook and door modules that still read a direction until they
+    take the site's universe plan; new code calls
+    :func:`classify_selector_universe`.
 
     Parameters
     ----------
@@ -1704,82 +2211,15 @@ def _classify_selector_direction(
     Returns
     -------
     Literal["forward", "backward"] | None
-        Explicit graph direction, or None for direction-agnostic selectors.
+        ``"backward"`` for gradient, node and qualifier trees (and unions that
+        contain one), ``"forward"`` for explicitly forward leaves, ``None``
+        for agnostic trees.
     """
 
-    from .errors import UnclassifiedSelectorError
-
-    if isinstance(sel, TargetSpec):
-        kind = sel.selector_kind
-        if kind in {
-            "grad_fn",
-            "grad_fn_label",
-            "grad_kind",
-            "backward_pass",
-            "intervening",
-            "without_op",
-        }:
-            return "backward"
-        if kind in {"func", "func_transform"}:
-            return "forward"
-        if kind in {
-            "label",
-            "module",
-            "output",
-            "output_at",
-            "input_at",
-            "contains",
-            "regex",
-            "predicate",
-            "in_module",
-            "facet",
-            "site",
-            "and",
-            "or",
-            "not",
-        }:
-            return None
-    if isinstance(
-        sel,
-        (
-            GradFnSelector,
-            InterveningSelector,
-            GradFnLabelSelector,
-            GradKindSelector,
-            BackwardPassSelector,
-        ),
-    ):
-        return "backward"
-    if isinstance(sel, (FuncSelector, FuncTransformSelector)):
-        return "forward"
-    if isinstance(
-        sel,
-        (
-            LabelSelector,
-            ModuleSelector,
-            OutputSelector,
-            OutputPathSelector,
-            InputPathSelector,
-            ContainsSelector,
-            RegexSelector,
-            FacetSelector,
-            WhereSelector,
-            InModuleSelector,
-            SiteSelector,
-            FollowedBySelector,
-            PrecededBySelector,
-            CompositeSelector,
-            NotSelector,
-            # Step qualification is a position fact, not a graph direction
-            # (lane F42): it narrows forward subjects by episode step and
-            # composes direction-neutrally like the other position selectors.
-            EpisodeStepSelector,
-        ),
-    ):
+    universe = classify_selector_universe(sel)
+    if universe is None:
         return None
-    raise UnclassifiedSelectorError(
-        f"{type(sel).__name__} has no direction classification; add an explicit bucket."
-    )
+    return "forward" if universe == "activation" else "backward"
 
 
 def _flatten_same_operator(
@@ -1807,15 +2247,27 @@ def _flatten_same_operator(
     return tuple(children)
 
 
-def _check_composition(a: SelectorLike, b: SelectorLike) -> None:
+def _check_composition(
+    a: Any,
+    b: Any,
+    *,
+    operator: Literal["and", "or"] = "and",
+) -> None:
     """Validate that two selectors can be composed.
+
+    ``&`` refuses operands from universes that never share a site
+    (``selector_cross_universe_and``) and a pass qualifier joined to an
+    activation (``selector_signal_mismatch``); ``|`` joins any universes into a
+    multi-branch address.
 
     Parameters
     ----------
     a:
-        Left selector.
+        Left selector (or bare label string).
     b:
-        Right selector.
+        Right selector (or bare label string).
+    operator:
+        Which operator is composing them.
 
     Returns
     -------
@@ -1826,13 +2278,10 @@ def _check_composition(a: SelectorLike, b: SelectorLike) -> None:
     from .._ir.selector_eval import contains_followed_by, flatten_and_conjuncts
     from .errors import SelectorCompositionError
 
-    a_dir = _classify_selector_direction(a)
-    b_dir = _classify_selector_direction(b)
-    if a_dir is not None and b_dir is not None and a_dir != b_dir:
-        raise SelectorCompositionError(
-            "Cross-graph composition not supported: a forward selector and a backward "
-            "selector cannot be combined. Use separate forward and backward hook sites."
-        )
+    a_universe = classify_selector_universe(a)
+    b_universe = classify_selector_universe(b)
+    if operator == "and":
+        _and_universe(a_universe, b_universe, a, b)
     if contains_followed_by(a) or contains_followed_by(b):
         # `&` nests, so validate the FLAT conjunction: `a & fb & b` must pass
         # exactly like `a & b & fb` and the flat three-child spec.
@@ -1863,6 +2312,7 @@ __all__ = [
     "GradKindSelector",
     "GradFnLabelSelector",
     "GradFnSelector",
+    "GradSelector",
     "InModuleSelector",
     "InputPathSelector",
     "InterveningSelector",
@@ -1882,6 +2332,7 @@ __all__ = [
     "func",
     "func_transform",
     "followed_by",
+    "grad",
     "grad_fn",
     "grad_input",
     "grad_output",

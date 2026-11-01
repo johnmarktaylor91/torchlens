@@ -769,6 +769,11 @@ class CaptureSession:
             if selected_grads == "all"
             else set(selected_grads)
         )
+        # A tl.grad(site) edit fires at the boundary the gradient hook owns, so
+        # every op a capture-time gradient rule addresses keeps its hook even
+        # when save_grads selects other ops (placement is a superset; retention
+        # stays exact through _grad_op_nums_to_save).
+        hook_nums.update(_gradient_rule_raw_indices(trace))
         for op in trace.layer_list:
             if op.raw_index in hook_nums and getattr(op, "layer_type", None) == "output":
                 hook_nums.update(
@@ -1105,6 +1110,38 @@ def compile_legacy_capture_plan(
 _BACKWARD_CONTEXT_SELECTOR_KINDS = frozenset(
     {"backward_pass", "grad_kind", "grad_fn", "grad_fn_handle", "grad_fn_label"}
 )
+
+
+def _gradient_rule_raw_indices(trace: Any) -> set[int]:
+    """Return the raw indices of the ops a capture-time ``tl.grad(site)`` rule addresses.
+
+    Parameters
+    ----------
+    trace:
+        Trace finishing its capture, carrying the capture-time intervention spec.
+
+    Returns
+    -------
+    set[int]
+        Raw indices of every op whose output gradient a gradient rule edits.
+    """
+
+    from ..intervention.hooks import gradient_inners, split_site_branches
+    from ..intervention.resolver import _resolve_unchecked
+
+    spec = trace._intervention_spec
+    ops = tuple(getattr(trace, "layer_list", ()))
+    indices: set[int] = set()
+    for hook_spec in getattr(spec, "hook_specs", ()) or ():
+        for universe, branch in split_site_branches(hook_spec.site_target):
+            if universe != "gradient":
+                continue
+            for inner in gradient_inners(branch):
+                for site in _resolve_unchecked(ops, inner, strict=False):
+                    raw_index = getattr(site, "raw_index", None)
+                    if isinstance(raw_index, int):
+                        indices.add(raw_index)
+    return indices
 
 
 def _selector_needs_backward_context(selector: Any) -> bool:
