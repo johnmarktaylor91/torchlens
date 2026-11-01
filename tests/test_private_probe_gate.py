@@ -41,7 +41,7 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
     # Fail-closed CVE-surface / unpickler hardening checks: absence REFUSES the
     # load or shrinks the admitted class set, never degrades silently
     # (b4 R26 census, fable inventory).
-    "torchlens/_io/_safe_unpickle.py": frozenset(
+    "torchlens/_io/_alloc_belt.py": frozenset(
         {
             "torch._C",
             "getattr(torch, '_storage_classes')",

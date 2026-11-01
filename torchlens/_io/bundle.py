@@ -1533,12 +1533,10 @@ def _load_trace_payload(
                     f"the {_MAX_METADATA_PKL_BYTES}-byte ceiling; refusing to load a "
                     "structurally implausible artifact."
                 )
-            scrubbed_state = _RenameAwareUnpickler(
+            scrubbed_state = _metadata_unpickler(
                 handle,
                 trust_custom_callables=trust_custom_callables,
                 allowed_custom_callable_modules=allowed_custom_callable_modules,
-                max_opcodes=_MAX_METADATA_PKL_OPCODES,
-                count_opcodes_above=_METADATA_PKL_PRESCAN_BYTES,
             ).load()
         if not isinstance(scrubbed_state, dict):
             # R65/F10: without this guard a corrupt/hostile payload escapes
@@ -1556,9 +1554,7 @@ def _load_trace_payload(
     except ArtifactError:
         raise
     except OpcodeCeilingExceeded:
-        raise ArtifactError(
-            _opcode_ceiling_text(metadata_path), code="metadata_object_count_exceeded"
-        ) from None
+        raise _opcode_ceiling_error(metadata_path) from None
     except (pickle.UnpicklingError, EOFError) as exc:
         hint = ""
         if python_major_mismatch:
@@ -4044,8 +4040,25 @@ def _eager_verify_blob_payloads(
             )
 
 
-def _opcode_ceiling_text(metadata_path: Path) -> str:
-    """Return the refusal text for a metadata pickle above the opcode allocation ceiling.
+def _metadata_unpickler(
+    handle: Any,
+    *,
+    trust_custom_callables: bool = False,
+    allowed_custom_callable_modules: Collection[str] | None = None,
+) -> _RenameAwareUnpickler:
+    """Return the metadata unpickler with the opcode ceiling the artifact channel enforces."""
+
+    return _RenameAwareUnpickler(
+        handle,
+        trust_custom_callables=trust_custom_callables,
+        allowed_custom_callable_modules=allowed_custom_callable_modules,
+        max_opcodes=_MAX_METADATA_PKL_OPCODES,
+        count_opcodes_above=_METADATA_PKL_PRESCAN_BYTES,
+    )
+
+
+def _opcode_ceiling_error(metadata_path: Path) -> ArtifactError:
+    """Return the refusal for a metadata pickle above the opcode allocation ceiling.
 
     The byte ceiling alone does not bound allocation (R60/F6): a pickle packed
     with tiny values expands many times its byte size into RSS before any
@@ -4053,10 +4066,11 @@ def _opcode_ceiling_text(metadata_path: Path) -> str:
     before anything is built; this names the refusal on the artifact channel.
     """
 
-    return (
+    return ArtifactError(
         f"Bundle metadata {metadata_path} exceeds the "
         f"{_MAX_METADATA_PKL_OPCODES}-opcode allocation ceiling; refusing "
-        "to load a structurally implausible artifact."
+        "to load a structurally implausible artifact.",
+        code="metadata_object_count_exceeded",
     )
 
 

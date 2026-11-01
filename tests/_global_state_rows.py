@@ -1034,6 +1034,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_fast_live_until.py", "__all__"),
         ("torchlens/_input_walk.py", "__all__"),
         ("torchlens/_io/__init__.py", "__all__"),
+        ("torchlens/_io/_alloc_belt.py", "__all__"),
         ("torchlens/_io/_artifact_anchors.py", "__all__"),
         ("torchlens/_io/_canonical_pickle.py", "__all__"),
         ("torchlens/_io/_durability.py", "__all__"),

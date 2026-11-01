@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 from .._data_classes.trace import Trace
 from . import ArtifactError, _json, bundle as _bundle_module
 from ._pickle_prescan import OpcodeCeilingExceeded
-from .bundle import _reject_symlink_path, _RenameAwareUnpickler
+from .bundle import _reject_symlink_path
 from .bundle_metadata import (
     _load_gated_member_relations,
     _load_lineage_sections,
@@ -119,16 +119,9 @@ def _load_unified_bundle(
                     f"the {_bundle_module._MAX_METADATA_PKL_BYTES}-byte ceiling; refusing to load a "
                     "structurally implausible artifact."
                 )
-            bundle = _RenameAwareUnpickler(
-                handle,
-                max_opcodes=_bundle_module._MAX_METADATA_PKL_OPCODES,
-                count_opcodes_above=_bundle_module._METADATA_PKL_PRESCAN_BYTES,
-            ).load()
+            bundle = _bundle_module._metadata_unpickler(handle).load()
     except OpcodeCeilingExceeded:
-        raise ArtifactError(
-            _bundle_module._opcode_ceiling_text(legacy_pickle_path),
-            code="metadata_object_count_exceeded",
-        ) from None
+        raise _bundle_module._opcode_ceiling_error(legacy_pickle_path) from None
     except (
         pickle.UnpicklingError,
         EOFError,
