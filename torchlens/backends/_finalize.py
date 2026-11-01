@@ -22,6 +22,7 @@ from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from .._quantities import Bytes
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from ..capture._nonfinite_prefix import strip_raw_label_suffix
+from ._constants import ConstantLedger, apply_constants_rule
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -53,6 +54,7 @@ def finalize_single_pass_trace(
     compute_input_output_distances: bool | None = None,
     recurrence_detection: bool = False,
     relabel_sidecar_labels: SidecarRelabelHook | None = None,
+    constants: ConstantLedger | None = None,
 ) -> None:
     """Finalize raw single-pass op logs into public trace accessors.
 
@@ -100,6 +102,12 @@ def finalize_single_pass_trace(
         may ignore the hook. Called unconditionally (N5: every op's raw label
         differs from its final label now, not only multi-pass group members),
         not only when ``recurrence_detection`` is on.
+    constants:
+        The capture's :class:`~torchlens.backends._constants.ConstantLedger`
+        when the backend keeps one. The shared constants rule audits the raw
+        graph against it first (closure constants are parentless source ops
+        with payload evidence, literal producers stay parentless); the rule
+        runs with or without a ledger.
 
     Returns
     -------
@@ -107,6 +115,10 @@ def finalize_single_pass_trace(
         The trace is updated in place.
     """
 
+    # The shared constants rule runs first, on raw labels: a constant op
+    # recorded with parents or without payload evidence refuses here, before
+    # any op is finalized or relabelled.
+    apply_constants_rule(trace, backend_name=backend_name, ledger=constants)
     _mint_preview_site_keys(trace)
     assignments: dict[str, RecurrenceAssignment] | None = None
     if recurrence_detection:
