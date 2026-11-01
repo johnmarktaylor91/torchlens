@@ -62,7 +62,7 @@ def _warn_unattributed_tensor_args(self: Trace) -> None:
         append_capture_advisory,
     )
 
-    offenders = _unattributed_op_offenders(getattr(self, "layer_list", ()) or ())
+    offenders = _unattributed_op_offenders(getattr(self, "_layer_list", ()) or ())
     # Orphan pruning (step 3) runs BEFORE this step and strips the pruned ops, so a
     # source-less tensor whose only consumer was pruned (``G.sum().item()``, a
     # control-flow predicate on a global) would lose its witness with the op;
@@ -124,9 +124,9 @@ def _populate_var_names(self: Trace) -> None:
         Trace being postprocessed.
     """
 
-    if not getattr(self, "save_code_context", False):
+    if not getattr(self, "_options_save_source_context", False):
         return
-    for op in getattr(self, "layer_list", ()):
+    for op in getattr(self, "_layer_list", ()):
         if getattr(op, "type", None) == "output":
             op.var_names = []
             continue

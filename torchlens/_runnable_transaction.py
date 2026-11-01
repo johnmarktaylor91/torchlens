@@ -485,7 +485,7 @@ def _resolve_run_save_labels(trace: Any, save: Any, until: Any) -> frozenset[str
         executed_raw = frozenset(until_preview.executed_raw_labels)
         executed_final = {
             layer.layer_label
-            for layer in trace.layer_list
+            for layer in trace._layer_list
             if layer._layer_label_raw in executed_raw
         }
         outside = sorted(run_save_labels - executed_final)

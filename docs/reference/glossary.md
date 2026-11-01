@@ -1676,12 +1676,12 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   | `backward_capture_unsupported`, `fastlog_unsupported`, `interventions_unsupported`, `rng_replay_unsupported`, `streaming_unsupported`, `structure_only_capture_unsupported`, `validation_replay_unsupported`, `payload_materialization_unsupported`, `intermediate_derived_grads_unsupported` | the matching `BackendCapabilities` flag is `False` and the capability was requested; one code per flag |
   | `trace_option_unsupported` | a trace option outside the backend's `trace_options()` |
   | `module_identity_mode_unsupported`, `save_level_unsupported` | the requested mode or level is outside the backend's declared set |
-  | `explicit_seed_unsupported` | `random_seed=` on a preview backend |
+  | `explicit_seed_unsupported` | `seed=` on a preview backend |
   | `runtime_missing`, `runtime_version_unsupported` | the framework is not importable, or its version is outside the supported range |
   | `foreign_tensor_input` | an input leaf belongs to another framework |
   | `constant_unrealizable` | a closure or literal constant has no readable buffer; the message names the constant op |
   | `rng_state_in_graph` | the forward graph carries lazy random-number state that a per-op evaluation would re-evaluate, on a backend without realize-once capture |
-  | `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `capture_verified=False` with this code as `capture_verification_reason` and a warning |
+  | `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `capture_verified=False` with this code as `provenance.verification_reason` and a warning |
 
   Codes the backends already raised before the registry (`value_dependent_branch_unsupported`,
   `followed_by_unsupported`, `torchscript_boundary` and the rest) are members too; the frozenset is
@@ -1766,7 +1766,7 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   `MLXBackend`; `docs/backends/mlx.md`), `tl.backends.paddle` (`GradOptions`, `PaddleBackend`;
   `docs/backends/paddle.md`) and `tl.backends.tinygrad` (`GradOptions`, `TinygradBackend`;
   `docs/backends/tinygrad.md`) are the five preview backends. Each `GradOptions` requests the
-  backend's derived gradients (`trace.derived_grads`, opt-in intermediate derived gradients); each
+  backend's derived gradients (`trace.autograd.derived_grads`, opt-in intermediate derived gradients); each
   `<Name>Backend` is the backend's capture object behind `tl.trace(..., backend="<name>")`.
 
 ## Unstable surfaces (documented-unstable; no deprecation shim owed)

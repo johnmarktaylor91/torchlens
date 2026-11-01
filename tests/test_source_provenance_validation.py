@@ -63,7 +63,7 @@ def _closure_model() -> nn.Module:
 
 
 def _constant_ops(trace: Any) -> list[Any]:
-    return [op for op in trace.layer_list if op.func_name == "constant"]
+    return [op for op in trace._layer_list if op.func_name == "constant"]
 
 
 @pytest.mark.parametrize(

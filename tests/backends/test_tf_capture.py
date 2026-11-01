@@ -99,7 +99,7 @@ def test_tf_capture_hand_built_op_chain_edges_and_saved_values() -> None:
     # only a multi-pass referenced layer gets the pass-qualified ``label``.
     # The closure constant ``[3.0, 4.0]`` is a recorded ``constant`` parent too
     # (shared constants rule), so AddV2 is one of Mul's two parents.
-    constant_ops = [op for op in trace.layer_list if op.func_name == "constant"]
+    constant_ops = [op for op in trace._layer_list if op.func_name == "constant"]
     assert len(constant_ops) == 2
     assert by_func["AddV2"].layer_label in by_func["Mul"].parents
     assert set(by_func["Mul"].parents) <= {by_func["AddV2"].layer_label} | {

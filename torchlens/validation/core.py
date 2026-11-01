@@ -630,7 +630,7 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
     ]
     dropped_args = [
         getattr(layer, "layer_label", "<unknown>")
-        for layer in getattr(self, "layer_list", [])
+        for layer in getattr(self, "_layer_list", [])
         if getattr(layer, "func", None) is not None
         and bool(getattr(layer, "has_saved_args", False))
         and getattr(layer, "saved_args", None) is None
@@ -900,7 +900,7 @@ def _validate_saved_outs_run(
 
     # Initial check: logged outputs must match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
-    if not getattr(self, "halted", False):
+    if not getattr(self, "is_stopped", False):
         failed_status = _check_ground_truth_outputs(
             self, ground_truth_output_tensors, verbose, decision_recorder
         )
@@ -915,7 +915,7 @@ def _validate_saved_outs_run(
     # PASS-QUALIFIED grain. Counting bare layer labels let a phantom extra
     # pass of a legitimate multi-pass layer hide behind its reached siblings
     # whenever the metadata invariants were skipped.
-    expected_ops = {op.label for op in self.layer_list}
+    expected_ops = {op.label for op in self._layer_list}
     if len(validated_op_labels) < len(expected_ops):
         return _fail_bfs_incomplete(
             self, decision_recorder, validated_op_labels, expected_ops, verbose

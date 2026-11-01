@@ -384,7 +384,7 @@ def test_names_reason_oracle_requires_the_op_and_a_registered_reason() -> None:
     # A child list names the consumer by one key; the decision may use another
     # key of the same op, resolved through the trace.
     consumer = _op("add_1:1", np.ones(2), parents=("mul_1",), layer_label="add_1")
-    trace = SimpleNamespace(layer_list=[target, consumer])
+    trace = SimpleNamespace(_layer_list=[target, consumer])
     by_pass_label = _Status(
         "failed",
         "replay of add_1:1 mismatched",
@@ -401,18 +401,18 @@ def test_names_reason_oracle_requires_the_op_and_a_registered_reason() -> None:
 def test_payload_and_intermediate_oracles_compare_arrays_bit_for_bit_or_within_band() -> None:
     """Reload equality is exact including shape; intermediates use the dtype band."""
 
-    live = SimpleNamespace(layer_list=[_op("a", np.arange(4.0)), _op("b", np.ones((2, 2)))])
-    same = SimpleNamespace(layer_list=[_op("a", np.arange(4.0)), _op("b", np.ones((2, 2)))])
+    live = SimpleNamespace(_layer_list=[_op("a", np.arange(4.0)), _op("b", np.ones((2, 2)))])
+    same = SimpleNamespace(_layer_list=[_op("a", np.arange(4.0)), _op("b", np.ones((2, 2)))])
     assert payload_equality_problems(live, same, np.asarray) == ()
-    drifted = SimpleNamespace(layer_list=[_op("a", np.arange(4.0)), _op("b", np.ones((1, 2, 2)))])
+    drifted = SimpleNamespace(_layer_list=[_op("a", np.arange(4.0)), _op("b", np.ones((1, 2, 2)))])
     assert (
         "shape (2, 2) != reloaded (1, 2, 2)"
         in payload_equality_problems(live, drifted, np.asarray)[0]
     )
-    missing = SimpleNamespace(layer_list=[_op("a", np.arange(4.0))])
+    missing = SimpleNamespace(_layer_list=[_op("a", np.arange(4.0))])
     assert "b: missing after reload" in payload_equality_problems(live, missing, np.asarray)
     trace = SimpleNamespace(
-        layer_list=[_op("ones_1", np.ones(3, dtype=np.float32), func_name="ones")]
+        _layer_list=[_op("ones_1", np.ones(3, dtype=np.float32), func_name="ones")]
     )
     assert intermediates_problems(trace, {"ones": np.ones(3)}, np.asarray) == ()
     assert intermediates_problems(trace, {"ones": [np.ones(3), np.ones(3)]}, np.asarray)[
@@ -425,17 +425,17 @@ def test_payload_and_intermediate_oracles_compare_arrays_bit_for_bit_or_within_b
 def test_constant_parents_oracle_needs_payload_and_consumer() -> None:
     """A flagged row needs a constant op with a payload and a consuming op."""
 
-    empty = SimpleNamespace(layer_list=[_op("input_1", np.ones(1), is_input=True)])
+    empty = SimpleNamespace(_layer_list=[_op("input_1", np.ones(1), is_input=True)])
     assert "no constant op recorded" in constant_parents_problems(empty, np.asarray)[0]
     good = SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             _op("input_1", np.ones(1), is_input=True),
             _op("constant_1", np.ones(1), children=("mul_1",)),
             _op("mul_1", np.ones(1), parents=("input_1", "constant_1")),
         ]
     )
     assert constant_parents_problems(good, np.asarray) == ()
-    orphan = SimpleNamespace(layer_list=[_op("constant_1", None)])
+    orphan = SimpleNamespace(_layer_list=[_op("constant_1", None)])
     problems = constant_parents_problems(orphan, np.asarray)
     assert "without a payload" in problems[0]
 

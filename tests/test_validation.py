@@ -801,7 +801,7 @@ def test_trace_clears_forward_global_tensor_labels_between_sessions() -> None:
                     )
                 )
         for trace in traces:
-            assert [op.func_name for op in trace.layer_list].count("constant") == 1
+            assert [op.func_name for op in trace._layer_list].count("constant") == 1
         assert traces[1]._num_ops > 0
     finally:
         _TEST_FORWARD_GLOBAL_TENSOR = None
@@ -851,7 +851,7 @@ def test_trace_clears_forward_global_container_tensor_labels_between_sessions() 
                 capture=tl.options.CaptureOptions(layers_to_save=None, inference_only=True),
             )
         assert last_validation_failure() is None
-        assert [op.func_name for op in second_trace.layer_list].count("constant") == 1
+        assert [op.func_name for op in second_trace._layer_list].count("constant") == 1
         assert second_trace._num_ops > 0
     finally:
         _TEST_FORWARD_GLOBAL_PAYLOAD = None

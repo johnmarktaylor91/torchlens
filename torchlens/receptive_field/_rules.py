@@ -71,7 +71,7 @@ def _loaded_parent_shapes(op: Op) -> tuple[Any, ...]:
     trace = ref() if ref is not None else None
     if trace is None or not trace._loaded_from_bundle:
         raise AttributeError("This Op is detached from its source Trace.")
-    by_label = trace.layer_dict_all_keys
+    by_label = trace._layer_dict_all_keys
     return tuple(getattr(by_label.get(label), "shape", None) for label in tuple(op.parents or ()))
 
 
