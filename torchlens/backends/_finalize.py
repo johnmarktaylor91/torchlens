@@ -11,7 +11,6 @@ from typing import Any, Literal, TypeAlias, cast
 from .._capture._nonfinite_prefix import strip_raw_label_suffix
 from .._data_classes._compaction import compact_op_metadata
 from .._data_classes._site_key import SiteKeyMinter
-from .._data_classes.layer import Layer
 from .._data_classes.module import ModuleAccessor
 from .._data_classes.trace import Trace
 from .._ir.op_record import amend_preview_output_parent_mark
@@ -23,6 +22,7 @@ from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from .._quantities import Bytes
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from ._constants import ConstantLedger, apply_constants_rule
+from ._finalize_layers import _attach_op_to_layer, _count_trace_ops
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -140,24 +140,9 @@ def finalize_single_pass_trace(
             layers_with_params_seen.add(op_log.layer_label)
         if update_param_usage:
             _attach_param_usage(trace, op_log, param_usage_membership)
-        layer_log = trace.layer_logs.get(op_log.layer_label)
-        layer_created = layer_log is None
-        if layer_log is None:
-            layer_log = Layer(op_log)
-        layer_log.ops[op_log.pass_index] = op_log
-        layer_log.call_labels.append(op_log.label)
-        if op_log.num_passes != 1:
-            layer_log.num_passes = op_log.num_passes
-        if layer_created:
-            if enrich_layer is not None:
-                enrich_layer(layer_log, op_log)
-            trace.layer_logs[op_log.layer_label] = layer_log
+        _attach_op_to_layer(trace, op_log, enrich_layer)
 
-    trace.num_ops = sum(
-        1
-        for op_log in trace.layer_list
-        if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
-    )
+    trace.num_ops = _count_trace_ops(trace)
     if compute_input_output_distances is None:
         compute_input_output_distances = bool(getattr(trace, "mark_layer_depths", False))
     trace.mark_layer_depths = bool(compute_input_output_distances)
