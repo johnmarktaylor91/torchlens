@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from .._errors import KeywordConflictError, _actionable_message
+from .._errors import KeywordConflictError, SelectionError, _actionable_message
 from ..errors._base import ConfigurationError, Severity, TorchLensWarning
 
 __all__ = [
@@ -44,16 +44,6 @@ def _message_from_fields(class_name: str, fields: dict[str, object]) -> str:
 
     rendered = ", ".join(f"{key}={value!r}" for key, value in fields.items())
     return f"{class_name}: {rendered}."
-
-
-class SelectionError(ConfigurationError, ValueError):
-    """Carrier class for the closed ``selection_*`` refusal codes.
-
-    Branch on ``exc.fields["code"]`` (``selection_trace_mismatch`` /
-    ``selection_bool_ambiguous`` / ``selection_kind_incompatible`` /
-    ``selection_unresolvable`` / ``selection_apply_invalid`` /
-    ``selection_alignment_invalid``), never on message text.
-    """
 
 
 class BindingPreflightError(ConfigurationError, ValueError):

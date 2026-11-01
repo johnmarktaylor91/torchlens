@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._utils.hashing import sha256_canonical_json
+from ..errors.episode import EpisodeDeclarationError
 
 if TYPE_CHECKING:
     from ._episode_ledger import ResolvedEpisode
@@ -47,8 +48,6 @@ _LEGACY_CAPTURE_DIGEST_SCHEMA = "episode_capture_digest_v1"
 
 def _declaration_error(message: str, *, code: str | None = None) -> Exception:
     """Build the typed entry refusal (import-local to keep the leaf light)."""
-
-    from ..errors.episode import EpisodeDeclarationError
 
     return EpisodeDeclarationError(
         message,
@@ -716,8 +715,6 @@ def rederived_evidence_matches(trace: Any, ledger_payload: Mapping[str, Any]) ->
     ledger). Digests bind content; this check binds the content to the
     product's own values.
     """
-
-    from ..errors.episode import EpisodeDeclarationError
 
     rows = list(ledger_payload.get("rows") or [])
     if not rows or any(

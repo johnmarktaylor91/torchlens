@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar, Literal, TypeAlias
 
-from .._io import FieldPolicy
+from .._io._field_policy import FieldPolicy
 from .._ir.container import (
     ContainerSpec,
     DataclassField,

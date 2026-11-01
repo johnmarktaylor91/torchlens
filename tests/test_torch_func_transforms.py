@@ -856,7 +856,11 @@ def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
 
 
 def test_foreign_operand_warns_with_its_arg_position() -> None:
-    """A genuinely un-provenanced operand is flagged at its own arg position."""
+    """A genuinely un-provenanced operand is flagged at its own arg position.
+
+    A pre-forward closure tensor is a recorded ``constant`` source, so the
+    operand is copied with logging paused: a tensor the capture never sees.
+    """
 
     foreign = torch.rand(4) + 0.5
 
@@ -877,7 +881,9 @@ def test_foreign_operand_warns_with_its_arg_position() -> None:
                 Scalar reduction of the polygamma output.
             """
 
-            return torch.polygamma(2, (x * 3.0) + foreign).sum()
+            with _state.pause_logging():
+                unseen = foreign.clone()
+            return torch.polygamma(2, (x * 3.0) + unseen).sum()
 
     with pytest.warns(UserWarning, match=r"no graph/source provenance.*arg1"):
         trace = tl.trace(_ForeignOperandModel().eval(), torch.rand(4) + 0.5)

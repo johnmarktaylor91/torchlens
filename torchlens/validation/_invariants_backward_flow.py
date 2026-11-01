@@ -518,11 +518,18 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     # with a nulled func_call_id and a rewritten func_name pass the whole
     # suite (deephunt M2).
     func_name = str(getattr(layer, "func_name", "")).lower()
-    return (
+    if (
         func_name == "none"
         and bool(getattr(layer, "is_internal_source", False))
         and getattr(layer, "func", None) is None
-    )
+    ):
+        return True
+    # A closure-constant source (SPEC 2 rule 1) is a functionless source like
+    # a buffer: no torch call, so no ``func_call_id``. The predicate is the
+    # narrow shared one (parentless, internal source, no callable, no call id).
+    from ._constant_source import is_closure_constant_source
+
+    return is_closure_constant_source(layer)
 
 
 def _plain_func_call_group_signature(layer: Op) -> tuple[object, ...]:

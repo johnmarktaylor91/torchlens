@@ -91,7 +91,7 @@ def test_mlx_repeated_block_groups_into_passes() -> None:
     assert all(op.num_passes == 2 for op in (*matmul_ops, *relu_ops))
     assert list(matmul_ops[0].recurrent_ops) == [op.label for op in matmul_ops]
     assert trace.layer_num_calls[matmul_ops[0].layer_label] == 2
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_module_reuse_groups_and_validates() -> None:
@@ -103,7 +103,7 @@ def test_mlx_module_reuse_groups_and_validates() -> None:
     assert [op.pass_index for op in linear_ops] == [1, 2, 3]
     assert {op.num_passes for op in linear_ops} == {3}
     assert len({op.layer_label for op in linear_ops}) == 1
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_distinct_module_sites_do_not_group() -> None:
@@ -145,7 +145,7 @@ def test_mlx_recurrence_detection_off_preserves_single_pass_layout() -> None:
 
     assert trace.recurrence_detection is False
     assert all(op.num_passes == 1 for op in trace.layer_list)
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_tamper_swapped_capture_labels_fail_validation() -> None:
@@ -170,7 +170,7 @@ def test_mlx_tamper_swapped_capture_labels_fail_validation() -> None:
     captures[first] = dataclasses.replace(captures[first], labels_raw=labels_second)
     captures[second] = dataclasses.replace(captures[second], labels_raw=labels_first)
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_tamper_dangling_capture_label_fails_validation() -> None:
@@ -181,7 +181,7 @@ def test_mlx_tamper_dangling_capture_label_fails_validation() -> None:
     target = next(index for index, capture in enumerate(captures) if capture.op_name == "matmul")
     captures[target] = dataclasses.replace(captures[target], labels_raw=("matmul_9_99_raw",))
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_tamper_stale_parent_leaf_label_fails_validation() -> None:
@@ -198,7 +198,7 @@ def test_mlx_tamper_stale_parent_leaf_label_fails_validation() -> None:
         arg_leaf_labels=captures[pass1_index].arg_leaf_labels,
     )
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 @pytest.mark.optional

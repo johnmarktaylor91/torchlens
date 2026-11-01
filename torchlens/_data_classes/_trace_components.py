@@ -431,6 +431,18 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "back with a getattr default by the mlx validation epilogue"
     ),
     "_mlx_perturbation_gaps": "mlx: per-op replay perturbation gaps recorded by mlx validation",
+    "_mlx_param_ids": (
+        "mlx: constants-rule census of the model's parameter identities, taken "
+        "before the forward and read back by the mlx constants rule"
+    ),
+    "_mlx_external_arrays": (
+        "mlx: constants-rule census of every array reachable from the model "
+        "object (closure constants), taken before the forward"
+    ),
+    "_mlx_unwrapped_intermediates": (
+        "mlx: count of unlabeled intermediates an unwrapped op produced, "
+        "bumped during the forward and read by the unwrapped-gap settle"
+    ),
     "_paddle_module_stack": "paddle: module-stack scratch, attached/deleted around the forward",
     "_paddle_intervention_runtime": "paddle: live intervention runtime for the dygraph forward",
     "_tf_static_region_labels": "tf: FuncGraph static-path region captures",

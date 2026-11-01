@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-from .._io import FieldPolicy
+from .._io._field_policy import FieldPolicy
 from .container import ContainerSpec
 
 if TYPE_CHECKING:

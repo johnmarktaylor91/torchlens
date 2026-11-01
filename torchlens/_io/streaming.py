@@ -11,7 +11,6 @@ bundle.
 from __future__ import annotations
 
 import io
-import os
 import pickle
 import platform
 import threading
@@ -28,7 +27,7 @@ from .._state import pause_logging
 from .._utils.hashing import sha256_file
 from . import TLSPEC_VERSION, ArtifactError
 from ._canonical_pickle import dump_canonical_metadata
-from ._durability import fsync_dir, fsync_tree
+from ._durability import _restrict_mode, fsync_dir, fsync_tree
 from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import reject_symlink_path
 from .scrub import BlobSpec
@@ -45,31 +44,6 @@ from .tlspec import _TlSpecWriter
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
 _BLOB_TENSOR_KEY = "data"
-
-
-def _restrict_mode(path: Path, mode: int) -> None:
-    """Best-effort tighten a streamed bundle path's permissions (POSIX only).
-
-    Twin of ``_io/bundle.py::_restrict_mode``: ``mkdir``/``open`` honor the
-    ambient umask, so under umask 002 the streaming bundle dir and its metadata
-    sidecars were left group-writable while the core bundle writer tightens
-    them. Best-effort: a filesystem that ignores mode bits is not a save
-    failure.
-
-    Parameters
-    ----------
-    path:
-        Bundle directory or file to tighten.
-    mode:
-        Target permission bits (``0o700`` for directories, ``0o600`` for files).
-    """
-
-    if os.name != "posix":
-        return
-    try:
-        path.chmod(mode)
-    except OSError:
-        pass
 
 
 def next_blob_id(blob_index: int) -> str:
@@ -235,17 +209,8 @@ class BundleStreamWriter:
         self._blob_counter += 1
         return next_blob_id(self._blob_counter)
 
-    def issued_blob_count(self) -> int:
-        """Return how many blob ids this writer has issued so far.
-
-        Save-time scrubbing numbers its own blobs from this count so a scrub id
-        can never equal an id the stream already wrote.
-
-        Returns
-        -------
-        int
-            Number of ids issued by :meth:`next_blob_id`.
-        """
+    def _issued_blob_count(self) -> int:
+        """Return how many ids :meth:`next_blob_id` issued; save-time scrub ids start past it."""
 
         return self._blob_counter
 

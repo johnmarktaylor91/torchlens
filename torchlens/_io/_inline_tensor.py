@@ -48,6 +48,12 @@ __all__ = [
 INLINE_TENSOR_GLOBAL: tuple[str, str] = ("torchlens._io._inline_tensor", "rebuild_inline_tensor")
 
 
+#: What ``torch.empty`` raises for a dtype it cannot allocate plainly: c10 errors
+#: surface as ``RuntimeError`` (``NotImplementedError`` is one), argument-parser
+#: rejections as ``TypeError`` or ``ValueError``.
+_NOT_ALLOCATABLE_ERRORS: tuple[type[Exception], ...] = (RuntimeError, TypeError, ValueError)
+
+
 @cache
 def _dtypes_by_name() -> dict[str, tuple[torch.dtype, int]]:
     """Map canonical dtype names to ``(dtype, itemsize)`` for plain dense dtypes only.
@@ -89,7 +95,7 @@ def _plain_itemsize(dtype: torch.dtype) -> int | None:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             probe = torch.empty((), dtype=dtype)
-    except Exception:  # noqa: BLE001 -- not a plainly allocatable dtype
+    except _NOT_ALLOCATABLE_ERRORS:
         return None
     if probe.is_quantized:
         return None

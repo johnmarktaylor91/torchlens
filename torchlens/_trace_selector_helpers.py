@@ -11,7 +11,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 from ._capture.arg_positions import _normalize_func_name
-from ._errors import ArgumentTypeError
+from ._errors import AmbiguousOpLookupError, ArgumentConflictError, ArgumentTypeError
 from ._selection.selectors import BaseSelector
 from .backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 from .options import SaveOptions
@@ -133,7 +133,6 @@ def _route_save_label_selection(
         return stats_save_options(), _flatten_stage_names_in_options(capture_options, model)
     if not _is_save_label_selection(save_value):
         return save_value, _flatten_stage_names_in_options(capture_options, model)
-    from ._errors import ArgumentConflictError
     from ._option_receipt import _field_is_explicit
     from .options import merge_capture_options
 
@@ -821,8 +820,6 @@ def _unique_module_for_name(name: str, base: str, addresses: list[str]) -> str |
     AmbiguousOpLookupError
         When ``base`` ends more than one module address.
     """
-
-    from ._errors import AmbiguousOpLookupError
 
     candidates = [address for address in addresses if address.endswith(f".{base}")]
     flattened = base.replace(".", "_")

@@ -61,7 +61,7 @@ from .._selection.selectors import (
     PrecededBySelector,
 )
 from .._selection.target import FrozenTargetSpec, TargetSpec
-from ..backends import TORCH_BACKEND_NAME
+from ..backends._backend_names import TORCH_BACKEND_NAME
 from ._selector_labels import (
     _STRING_LABEL_ATTRS,
     _is_module_scope_alias,

@@ -14,6 +14,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Final, Literal, Protocol, TypeAlias
 
+from .errors import CollectiveBoundaryReplayError, PoisonedRunError
 from .intervention.types import FunctionRegistryKey
 
 RUNNABLE_TLSPEC_SCHEMA_VERSION: Final = "sparse_recorded_taken_path_v2"
@@ -1689,7 +1690,6 @@ def refuse_poisoned_trace(trace: Any, operation: str) -> None:
 
     if not trace._runnable.poisoned:
         return
-    from .errors import PoisonedRunError
 
     status = trace._runnable.path_faithfulness
     mismatch = trace._runnable.first_mismatch
@@ -1741,7 +1741,6 @@ def refuse_collective_boundary_trace(trace: Any, operation: str) -> None:
     boundaries = collective_boundaries_of(trace)
     if not boundaries:
         return
-    from .errors import CollectiveBoundaryReplayError
 
     kinds = sorted({str(entry.get("kind")) for entry in boundaries})
     raise CollectiveBoundaryReplayError(

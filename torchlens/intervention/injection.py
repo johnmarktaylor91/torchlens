@@ -48,6 +48,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._errors import InvalidArgumentError
+
 __all__ = [
     "InjectedOp",
     "InjectionAnchor",
@@ -549,7 +551,6 @@ def refuse_injection_logged_runnable_save(trace: Any, save_level: str) -> None:
     records = state.get("records") or ()
     if not records:
         return
-    from .._errors import InvalidArgumentError
 
     raise InvalidArgumentError(
         f"this trace carries {len(records)} logged injected op(s) "
@@ -586,7 +587,6 @@ def refuse_injection_logged_stream_finalize(trace: Any) -> None:
     records = state.get("records") or ()
     if not records:
         return
-    from .._errors import InvalidArgumentError
 
     raise InvalidArgumentError(
         f"this trace carries {len(records)} logged injected op(s) "

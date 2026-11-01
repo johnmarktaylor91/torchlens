@@ -63,7 +63,7 @@ from typing import Any
 
 import torch
 
-from ..errors._base import TorchLensWarning
+from ..errors._base import TorchLensError, TorchLensWarning
 from .selection import (
     Selection,
     SelectionProvenance,
@@ -190,7 +190,6 @@ class _JoinGuard:
             occurrence_coordinates,
             site_profile,
         )
-        from ..errors._base import TorchLensError
 
         try:
             subject_profile = site_profile(subject)
@@ -309,8 +308,6 @@ def _delta_for_entry(
 
 def _read_reference_value(node: _CompareTerm, entry: Site, reference_op: Any) -> torch.Tensor:
     """Read the reference op's retained activation with the shared typed refusals."""
-
-    from ..errors._base import TorchLensError
 
     if not getattr(reference_op, "has_saved_activation", False):
         raise _unresolvable(
