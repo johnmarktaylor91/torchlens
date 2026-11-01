@@ -374,17 +374,20 @@ def _known_red_cells(
 
 
 def _assert_named_reds(
-    backend: str,
-    version: str,
+    pack: tuple[str, str],
     tmp_path: Path,
     known: dict[tuple[str, str], str],
     rows: int,
     tier: str,
 ) -> None:
-    """The pack's non-passed cells equal ``known`` exactly, each failed with its cause."""
+    """The pack's non-passed cells equal ``known`` exactly, each failed with its cause.
+
+    ``pack`` is the ``(backend, framework version)`` under test.
+    """
 
     from torchlens.conformance import _roster_for
 
+    backend, version = pack
     adapter = resolve_adapter(backend)
     roster = _roster_for(adapter, None)
     report = run_conformance(backend, tiers=("C0", "C1", "C2"), roster=roster, workdir=tmp_path)
@@ -454,7 +457,7 @@ def test_jax_pack_earns_c1_with_its_named_red_cells(
     from torchlens.conformance._rosters import ECOSYSTEM_ENV
 
     monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
-    _assert_named_reds("jax", str(jax.__version__), tmp_path, _jax_known_red_cells(), 9, "C1")
+    _assert_named_reds(("jax", str(jax.__version__)), tmp_path, _jax_known_red_cells(), 9, "C1")
 
 
 @pytest.mark.heavy
@@ -472,7 +475,7 @@ def test_tf_pack_earns_c0_with_its_named_red_cells(
     from torchlens.conformance._rosters import ECOSYSTEM_ENV
 
     monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
-    _assert_named_reds("tf", str(tf.__version__), tmp_path, _tf_known_red_cells(), 9, "C0")
+    _assert_named_reds(("tf", str(tf.__version__)), tmp_path, _tf_known_red_cells(), 9, "C0")
 
 
 @pytest.mark.heavy
