@@ -66,7 +66,7 @@ def _spec(
 def test_trace_capability_gate_raises_the_flag_code(option: str, flag: str) -> None:
     """``tl.trace``'s capability gate refuses with the False flag's registered code."""
 
-    from torchlens._user_funcs import _enforce_capability_option_gates
+    from torchlens._capture.prepare.dispatch import _enforce_capability_option_gates
 
     with pytest.raises(BackendUnsupportedError) as excinfo:
         _enforce_capability_option_gates({option: object()}, _spec(flag))
@@ -86,7 +86,7 @@ def test_trace_capability_gate_raises_the_flag_code(option: str, flag: str) -> N
 def test_trace_option_filter_raises_the_registered_code(option: str, expected: str) -> None:
     """``tl.trace``'s option filter refuses a foreign option with its registered code."""
 
-    from torchlens._user_funcs import _filter_trace_kwargs_for_backend
+    from torchlens._capture.prepare.dispatch import _filter_trace_kwargs_for_backend
 
     with pytest.raises(BackendUnsupportedError) as excinfo:
         _filter_trace_kwargs_for_backend({option: object()}, _spec(None))
@@ -308,7 +308,7 @@ def test_chunk_paths_and_size_pass_the_shared_precondition() -> None:
     import torch
 
     import torchlens as tl
-    from torchlens._user_funcs import _filter_trace_kwargs_for_backend
+    from torchlens._capture.prepare.dispatch import _filter_trace_kwargs_for_backend
     from torchlens.intervention.errors import ChunkedForwardConfigError
 
     with pytest.raises(ChunkedForwardConfigError):
@@ -348,7 +348,7 @@ def test_capture_option_probe_marks_only_its_own_fields(flag: str) -> None:
 def test_capture_option_probe_reaches_the_capability_gate() -> None:
     """The probe's ``capture=`` passes the option filter and refuses with the flag's code."""
 
-    from torchlens._user_funcs import (
+    from torchlens._capture.prepare.dispatch import (
         _enforce_capability_option_gates,
         _filter_trace_kwargs_for_backend,
     )

@@ -1235,6 +1235,8 @@ _COUPLED_WITNESS_EXEC_FILES = (
     "torchlens/_io/runnable.py",
     "torchlens/backends/torch/completeness_witness.py",
     "torchlens/backends/torch/backend.py",
+    "torchlens/backends/torch/_outputs.py",
+    "torchlens/backends/torch/_failed_session.py",
     "torchlens/backends/torch/ops.py",
 )
 

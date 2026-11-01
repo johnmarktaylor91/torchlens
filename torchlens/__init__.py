@@ -511,8 +511,7 @@ def pluck(
         ``activation_not_saved`` if it produced no saved tensor.
     """
 
-    from ._extract_refusals import capture_quiet
-    from .options import CaptureOptions
+    from ._extract_refusals import CaptureOptions, capture_quiet
 
     # an explicit site rides the capture options, where the trace
     # validates it; without one the trace reads the ambient site itself.
@@ -615,9 +614,8 @@ def _extract_layers_with_trace(
         ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
     """
 
-    from ._extract_refusals import capture_quiet, refuse_lookup_not_found
+    from ._extract_refusals import CaptureOptions, capture_quiet, refuse_lookup_not_found
     from ._trace_selector_helpers import canonical_module_site_key
-    from .options import CaptureOptions as _LazyCaptureOptions
 
     facet_plan = _extract_facet_plan(layers)
     if facet_plan:
@@ -625,7 +623,7 @@ def _extract_layers_with_trace(
             model, x, layers, facet_plan, detach_saved_activations=detach_saved_activations
         )
     layer_plan = _normalize_extract_layers(layers)
-    capture = _LazyCaptureOptions(
+    capture = CaptureOptions(
         layers_to_save=list(layer_plan.values()), detach_saved_activations=detach_saved_activations
     )
     with capture_quiet():

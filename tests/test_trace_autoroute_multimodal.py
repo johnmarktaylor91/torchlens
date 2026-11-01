@@ -9,7 +9,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._user_funcs as user_funcs
 import torchlens.bridge.transformers as hf_bridge
 
 
@@ -98,7 +97,7 @@ def test_model_without_auto_processor_gate_fails(monkeypatch: pytest.MonkeyPatch
         raise AssertionError("multimodal bridge should not fire")
 
     monkeypatch.setattr(hf_bridge, "trace_multimodal", fail_trace_multimodal)
-    monkeypatch.setattr(user_funcs, "_can_resolve_hf_processor", lambda model: False)
+    monkeypatch.setattr(hf_bridge, "_can_resolve_hf_processor", lambda model: False)
 
     log = tl.trace(
         _DictModel(),

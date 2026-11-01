@@ -78,7 +78,10 @@ def test_cone_preflight_unarmed_capture_reports_not_replay_ready():
 def test_cache_key_ledgers_never_go_stale():
     """Every curated/neutral ledger name is a REAL CaptureOptions field."""
 
-    from torchlens._user_funcs import CAPTURE_CACHE_KEY_CURATED, CAPTURE_CACHE_KEY_NEUTRAL
+    from torchlens._capture.prepare.cache import (
+        CAPTURE_CACHE_KEY_CURATED,
+        CAPTURE_CACHE_KEY_NEUTRAL,
+    )
 
     option_names = {field.name for field in dataclass_fields(tl.options.CaptureOptions)}
     trace_kwarg_ledger_names = {
@@ -101,7 +104,7 @@ def test_cache_key_ledgers_never_go_stale():
 def test_every_capture_option_is_keyed_or_reviewed():
     """The generated-universe property: no option can silently skip the key."""
 
-    from torchlens._user_funcs import (
+    from torchlens._capture.prepare.cache import (
         CAPTURE_CACHE_KEY_CURATED,
         CAPTURE_CACHE_KEY_NEUTRAL,
         _sweep_option_fields_into_cache_config,
@@ -129,12 +132,12 @@ def test_every_capture_option_is_keyed_or_reviewed():
 def test_swept_option_change_misses_the_cache_key():
     """Two configs differing in ONE swept semantic option produce different keys."""
 
-    from torchlens._capture_state_helpers import _capture_cache_key
-    from torchlens._user_funcs import (
+    from torchlens._capture.prepare.cache import (
         CAPTURE_CACHE_KEY_CURATED,
         CAPTURE_CACHE_KEY_NEUTRAL,
         _sweep_option_fields_into_cache_config,
     )
+    from torchlens._capture_state_helpers import _capture_cache_key
 
     model = torch.nn.Linear(2, 2)
     x = torch.zeros(1, 2)

@@ -18,6 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens.mechinterp  # noqa: F401  (tl.mechinterp is a submodule, not a root name)
 from torchlens._semantic.logit_lens import logit_lens, logit_lens_predictions
 from torchlens.facets import FacetSpec
 

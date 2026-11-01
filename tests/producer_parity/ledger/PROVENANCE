@@ -3243,3 +3243,83 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c2bd98f79218e94cfe3cd94541ed26376559f84c (dirty)
 recorded: 2026-11-01T10:18:32.180829+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture seam: moved read sites and mutators re-keyed to their new modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bffe53c314416ec1562c6acee402a29af661dc39 (dirty)
+recorded: 2026-11-01T11:15:55.578429+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture seam: moved read sites and mutators re-keyed to their new modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bffe53c314416ec1562c6acee402a29af661dc39 (dirty)
+recorded: 2026-11-01T11:16:02.340550+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture seam: moved read sites and mutators re-keyed to their new modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bffe53c314416ec1562c6acee402a29af661dc39 (dirty)
+recorded: 2026-11-01T11:16:02.340550+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture WRAP split: transform wrappers, predicate forward and output collection re-keyed to their new modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c32bb6996547966cbb279706fc23ec29fbecc4ae
+recorded: 2026-11-01T13:18:00+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture seam: moved read sites and mutators re-keyed to their new modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bffe53c314416ec1562c6acee402a29af661dc39 (dirty)
+recorded: 2026-11-01T11:16:02.340550+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture-f: finalize arms, epilogue fold and outcome split moved producer sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2f56dfe96ed248085e08f309dab0736eafe7e04e (dirty)
+recorded: 2026-11-01T13:08:47.758346+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture-f: finalize arms, epilogue fold and outcome split moved producer sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2f56dfe96ed248085e08f309dab0736eafe7e04e (dirty)
+recorded: 2026-11-01T13:08:53.137204+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: PREPARE stage split: the door selective-layer stamp is one shared stage function (two identical layer_type sites became one)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 977cc1afcf8136c3d1b40a1aea0282c7f4d4c45b (dirty)
+recorded: 2026-11-01T13:57:16.024703+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-cap capture batch regen on 0ade93886
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0ade938865ccb3b4aa102395b230002a60ea9055 (clean)
+recorded: 2026-11-01T15:42:28.565202+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-cap capture batch regen on 0ade93886
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0ade938865ccb3b4aa102395b230002a60ea9055 (clean)
+recorded: 2026-11-01T15:42:34.278761+00:00

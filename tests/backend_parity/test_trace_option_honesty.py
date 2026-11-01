@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens._user_funcs import _filter_trace_kwargs_for_backend
+from torchlens._capture.prepare.dispatch import _filter_trace_kwargs_for_backend
 from torchlens.backends import BackendSpec
 from torchlens.backends._options import (
     JAX_PREVIEW_TRACE_OPTION_POLICY,

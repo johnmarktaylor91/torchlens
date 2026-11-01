@@ -205,7 +205,8 @@ def test_pre_forward_failure_resets_capture_runtime_context(monkeypatch):
     _capture_replay_templates=True and the relationship model/input identity
     stale until the next trace() happened to reset at its start.
     """
-    from torchlens import _state, _user_funcs as uf
+    from torchlens import _state
+    from torchlens._capture import _run_setup as uf
 
     real_trace_cls = uf.Trace
 

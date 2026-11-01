@@ -1,4 +1,4 @@
-"""Typed refusals and the quiet capture used by ``extract`` and ``pluck``."""
+"""Typed refusals, capture options and the quiet capture used by ``extract`` and ``pluck``."""
 
 from __future__ import annotations
 
@@ -9,8 +9,10 @@ from typing import NoReturn
 
 from ._errors import InvalidArgumentError
 from .errors._base import TorchLensError
+from .options import CaptureOptions
 
 __all__ = [
+    "CaptureOptions",
     "TorchLensError",
     "capture_quiet",
     "refuse_activation_not_saved",
