@@ -10,7 +10,6 @@ from typing import Any, Literal, TypeAlias, cast
 
 import torch
 
-from .._data_classes.op import Op
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from ..errors import TorchLensWarning
 from ._hooks_support import (
@@ -529,6 +528,7 @@ def _record_site_pass_labels(site_target: Any) -> list[str] | None:
         site_target, "layer_label"
     ):
         return None
+    from .._data_classes.op import Op
 
     # ``Layer.ops`` is an accessor (iterable, not a builtin sequence); an ``Op`` is itself.
     ops = (site_target,) if isinstance(site_target, Op) else getattr(site_target, "ops", None)

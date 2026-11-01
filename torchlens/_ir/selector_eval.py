@@ -48,7 +48,6 @@ from functools import partial
 from typing import Any, Literal, cast
 
 from ..intervention.errors import (
-    LiveModeLabelError,
     SelectorCapabilityError,
     SelectorCompositionError,
     SiteResolutionError,
@@ -990,6 +989,8 @@ def _raise_for_finalized_live_label(selector_kind: str, label_value: str) -> Non
     """Reject finalized-looking label selectors during live capture."""
 
     if looks_like_finalized_label(label_value):
+        from ..intervention.errors import LiveModeLabelError
+
         raise LiveModeLabelError(live_label_error_message(label_value, selector_kind))
 
 
