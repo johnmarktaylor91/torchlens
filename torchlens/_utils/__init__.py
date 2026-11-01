@@ -112,10 +112,20 @@ def capability_snapshot() -> dict[str, bool]:
     Returns
     -------
     dict[str, bool]
-        Capability flag availability, torch plus optional preview backends.
+        Capability flag availability: the torch snapshot from
+        ``_torch_compat.get_torch_capability_snapshot`` plus the tf backend's
+        own snapshot when that backend imports.
     """
 
-    return _runtime_capability_snapshot()
+    from ._torch_compat import get_torch_capability_snapshot
+
+    snapshot = get_torch_capability_snapshot()
+    try:
+        from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
+    except ImportError:
+        return snapshot
+    snapshot.update(get_tf_capability_snapshot())
+    return snapshot
 
 
 def format_capability_summary(snapshot: dict[str, bool]) -> str:
@@ -413,7 +423,7 @@ def _probe_torch_capabilities() -> _EnvironmentCheck:
         Snapshot of probed private integration capabilities.
     """
 
-    snapshot = _runtime_capability_snapshot()
+    snapshot = capability_snapshot()
     missing, unprobed, optional_absent = _classify_capability_absences(snapshot)
     # Grouped absences-first summary; the full name=value dump lives on the
     # detail accessor (report.capability_snapshot()), not in the row cell.
@@ -536,26 +546,6 @@ def _probe_mechanical_belt() -> _EnvironmentCheck:
             f"{ns}.{fn}: {reason}" for ns, fn, reason in report.probe_failure_details
         )
     return _EnvironmentCheck("mechanical belt", "WARN", detail)
-
-
-def _runtime_capability_snapshot() -> dict[str, bool]:
-    """Return all runtime compatibility capability flags.
-
-    Returns
-    -------
-    dict[str, bool]
-        Mapping from capability flag names to availability.
-    """
-
-    from ._torch_compat import get_torch_capability_snapshot
-
-    snapshot = get_torch_capability_snapshot()
-    try:
-        from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
-    except ImportError:
-        return snapshot
-    snapshot.update(get_tf_capability_snapshot())
-    return snapshot
 
 
 def _environment_checks() -> tuple[_EnvironmentCheck, ...]:

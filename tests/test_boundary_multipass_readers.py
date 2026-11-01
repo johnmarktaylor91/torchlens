@@ -31,7 +31,7 @@ import torchlens as tl
 from torchlens._capture.structure_only import StructureOnlyCapabilityError, _input_geometry
 from torchlens._fast_live_steer import fast_live_input_admission
 from torchlens._runnable import RunnableErrorCode
-from torchlens._runnable_execution import _first_failed_live_input_check
+from torchlens._runnable_input_sites import _first_failed_live_input_check
 from torchlens.options import CaptureOptions
 from torchlens.types import ContractCheck
 

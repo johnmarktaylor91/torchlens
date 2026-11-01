@@ -4,7 +4,6 @@ One-time preparation installs persistent forward wrappers and module metadata.
 Per-session preparation populates Trace state, parameter logs, and buffer labels.
 """
 
-import copy
 import inspect
 import itertools
 import threading
@@ -59,6 +58,10 @@ from ._module_boundary_adoption import (
 )
 from ._predicate_forward import _predicate_module_forward
 from ._quantized_flops import estimate_quantized_module_forward_flops
+from ._replacement_op_fields import (
+    _copy_field_value_for_replacement,
+    _next_untagged_tensor_label,
+)
 from ._session_cleanup import (  # noqa: F401  (re-exported for tests and sibling modules)
     _clear_callable_session_tensor_metadata,
     _clear_container_tree_tensor_metadata,
@@ -1186,7 +1189,7 @@ def _record_module_entry_metadata(
     forward_args_template = None
     forward_kwargs_template = None
     if should_capture_template:
-        from .ops import _build_args_template
+        from ._ops_arguments import _build_args_template
 
         captured_template = _build_args_template(module.forward, args, kwargs)
         forward_args_template = captured_template
@@ -1375,59 +1378,6 @@ def _register_module_output_container_snapshot(
     )
 
 
-def _next_untagged_tensor_label(trace: "Trace", layer_type: str) -> tuple[str, int, int]:
-    """Return a fresh raw label for an untagged tensor surfaced mid-forward.
-
-    Two distinct kinds of untagged tensors reach this helper:
-
-    * ``"interventionreplacement"`` -- a genuine raw ``register_forward_hook``
-      output replacement injected by the user; the tensor lacks traceable
-      provenance because the user substituted it for a module's real output.
-    * ``"internalsource"`` -- an internally generated tensor (e.g. an attention
-      mask built inside ``torch.vmap``, whose construction TorchLens cannot
-      trace) that enters a module untagged during plain capture. It is a
-      legitimate graph source, not a user intervention.
-
-    Parameters
-    ----------
-    trace:
-        Active model log whose raw layer counters should be advanced.
-    layer_type:
-        ``"interventionreplacement"`` or ``"internalsource"``.
-
-    Returns
-    -------
-    tuple[str, int, int]
-        Raw label, capture index, and per-type index.
-    """
-
-    trace._raw_graph_ws.layer_counter += 1
-    trace._raw_graph_ws.raw_layer_type_counter[layer_type] += 1
-    raw_index = trace._raw_graph_ws.layer_counter
-    type_index = trace._raw_graph_ws.raw_layer_type_counter[layer_type]
-    return f"{layer_type}_{type_index}_{raw_index}_raw", raw_index, type_index
-
-
-def _copy_field_value_for_replacement(value: Any) -> Any:
-    """Copy mutable Op field values without cloning tensors.
-
-    Parameters
-    ----------
-    value:
-        Field value from a parent layer entry.
-
-    Returns
-    -------
-    Any
-        A structurally independent copy for container fields, or the original
-        immutable/scalar/tensor reference otherwise.
-    """
-
-    if isinstance(value, (list, dict, set, defaultdict)):
-        return copy.copy(value)
-    return value
-
-
 def _note_replacement_event(
     trace: "Trace",
     raw_label: str | None,
@@ -1502,6 +1452,29 @@ def _live_intervention_machinery_armed() -> bool:
     return _state._active_intervention_spec is not None or _state._active_hook_plan is not None
 
 
+def _attach_live_fire_results(
+    trace: "Trace", tensor: torch.Tensor, fields_dict: dict[str, Any], raw_label: str
+) -> None:
+    """Fold an untagged tensor's pending live-fire results into its boundary op fields."""
+
+    from ._ops_interventions import _pop_tensor_live_fire_results
+
+    fire_results = _pop_tensor_live_fire_results(tensor)
+    if fire_results:
+        fields_dict["fire_results"] = fire_results
+        fields_dict["interventions"] = [
+            result.fire_record for result in fire_results if result.fire_record is not None
+        ]
+        fields_dict["intervention_replaced"] = any(result.replaced for result in fire_results)
+        # Fire results only mint replacement-event evidence when the live-fire
+        # machinery is actually armed for THIS capture; a stale
+        # ``_tl_live_fire_results`` attribute leaked from an earlier intervened
+        # trace stays unledgered, so validation refuses the placeholder it
+        # would otherwise launder into a plain capture.
+        if fields_dict["intervention_replaced"] and _live_intervention_machinery_armed():
+            _note_replacement_event(trace, raw_label, origin="live_fire")
+
+
 def _ensure_module_output_tensor_logged(
     trace: "Trace",
     tensor: torch.Tensor,
@@ -1548,7 +1521,7 @@ def _ensure_module_output_tensor_logged(
         module-exit and op logging can continue.
     """
 
-    from .ops import _make_layer_log_entry, _pop_tensor_live_fire_results
+    from ._ops_finalize import _make_layer_log_entry
 
     is_internal_source = kind == "internal_source"
     if is_internal_source:
@@ -1811,20 +1784,7 @@ def _ensure_module_output_tensor_logged(
             "func_config": {},
         }
     )
-    fire_results = _pop_tensor_live_fire_results(tensor)
-    if fire_results:
-        fields_dict["fire_results"] = fire_results
-        fields_dict["interventions"] = [
-            result.fire_record for result in fire_results if result.fire_record is not None
-        ]
-        fields_dict["intervention_replaced"] = any(result.replaced for result in fire_results)
-        # Fire results only mint replacement-event evidence when the live-fire
-        # machinery is actually armed for THIS capture; a stale
-        # ``_tl_live_fire_results`` attribute leaked from an earlier intervened
-        # trace stays unledgered, so validation refuses the placeholder it
-        # would otherwise launder into a plain capture.
-        if fields_dict["intervention_replaced"] and _live_intervention_machinery_armed():
-            _note_replacement_event(trace, raw_label, origin="live_fire")
+    _attach_live_fire_results(trace, tensor, fields_dict, raw_label)
     trace.op_equivalence_classes[raw_label].add(raw_label)
     new_entry = _make_layer_log_entry(
         trace, tensor, fields_dict, (), {}, trace.activation_transform
@@ -1987,7 +1947,7 @@ def _record_module_exit_metadata(
         _record_module_intervention_parent_labels,
         _record_tensor_live_fire_results,
     )
-    from .ops import _walk_output_tensors_with_paths
+    from ._ops_containers import _walk_output_tensors_with_paths
 
     output_entries = list(_walk_output_tensors_with_paths(out))
     output_tensors = [entry[0] for entry in output_entries]
@@ -2075,7 +2035,7 @@ def _record_module_exit_metadata(
         if tensor_label is None:
             continue
         if fire_results:
-            from .ops import _pop_tensor_live_fire_results
+            from ._ops_interventions import _pop_tensor_live_fire_results
 
             remaining_fire_results = _pop_tensor_live_fire_results(t)
             if remaining_fire_results:

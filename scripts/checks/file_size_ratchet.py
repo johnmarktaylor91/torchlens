@@ -455,7 +455,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/_visualization/_render_nodes.py": 2150,
     "torchlens/_visualization/_render_flow.py": 2100,
-    "torchlens/backends/torch/completeness_witness.py": 2100,
 }
 
 

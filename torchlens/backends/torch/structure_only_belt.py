@@ -55,6 +55,7 @@ from ... import _state
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils._torch_symbols import torch_attr
 from ...errors._base import TorchLensError
+from ._completeness_cross_thread import _internal_read_active
 from ._tl import DescriptorCompatProperty, get_tensor_label
 from .completeness_witness import (
     _TORCHLENS_ROOT,
@@ -63,7 +64,6 @@ from .completeness_witness import (
     INVISIBLE_HOST_ESCAPE_FUNCS,
     INVISIBLE_HOST_ESCAPE_PROPERTIES,
     STORAGE_BRIDGE_ESCAPE_FUNCS,
-    _internal_read_active,
 )
 
 _TORCH_ROOT: Final[Path] = Path(torch.__file__).resolve().parent

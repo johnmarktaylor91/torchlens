@@ -9,15 +9,6 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from .invariants import (
-        _EQUIVALENT_OPS_UNAVAILABLE,
-        _RAW_LABEL_BEARING_DICT_FIELDS,
-        _RAW_LABEL_BEARING_LIST_FIELDS,
-        _RAW_LABEL_BEARING_SCALAR_FIELDS,
-        _RAW_LABEL_PATTERN,
-        MetadataInvariantError,
-        _retained_orphan_op_labels,
-    )
 
 __all__ = (
     "_canonical_equivalent_ops",
@@ -740,3 +731,18 @@ def _check_call_site_contract_post_hoc(
     violation = call_site_contract_violation(entries, classes)
     if violation is not None:
         raise MetadataInvariantError("loop_detection", violation)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_topology import (  # noqa: E402
+    _retained_orphan_op_labels,
+)
+from .invariants import (  # noqa: E402
+    _EQUIVALENT_OPS_UNAVAILABLE,
+    _RAW_LABEL_BEARING_DICT_FIELDS,
+    _RAW_LABEL_BEARING_LIST_FIELDS,
+    _RAW_LABEL_BEARING_SCALAR_FIELDS,
+    _RAW_LABEL_PATTERN,
+    MetadataInvariantError,
+)

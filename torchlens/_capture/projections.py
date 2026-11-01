@@ -26,7 +26,7 @@ from .._ir.predicate import EventKind, coerce_deferred_value
 from .._ir.refs import DeviceRef, DtypeRef, TensorRef
 from .._ir.semantics import BackendSemantics, CapturePolicy
 from .._utils._torch_compat import tensor_version_or_none
-from .._utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import torch_dtype_named
 from .._utils.tensor_utils import get_memory_amount_from_metadata
 from ..recording.exceptions import PredicateError
 from ..recording.types import (
@@ -1572,10 +1572,7 @@ def _torch_dtype_from_string(dtype_name: str | None) -> torch.dtype | None:
     if dtype_name is None:
         return None
     if dtype_name.startswith("torch."):
-        dtype_attr = dtype_name.removeprefix("torch.")
-        dtype = torch_attr(dtype_attr)  # r47 secD_1: no lazy ``torch.__getattr__``
-        if isinstance(dtype, torch.dtype):
-            return dtype
+        return torch_dtype_named(dtype_name.removeprefix("torch."))
     return None
 
 

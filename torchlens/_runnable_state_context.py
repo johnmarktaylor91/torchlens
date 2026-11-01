@@ -6,7 +6,7 @@ import sys
 from collections.abc import Mapping
 from contextlib import contextmanager, nullcontext
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import torch
 
@@ -29,13 +29,6 @@ from ._utils._torch_compat import tensor_version_or_none
 from .errors import (
     RunPreconditionError,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _ALLOCATOR_SIGNATURES,
-        _contract_check,
-        _ProjectionCountExceeded,
-    )
 
 __all__ = (
     "_state_contract_checks",
@@ -608,3 +601,14 @@ def _count_bounded_fake_tensor_mode_class() -> type[Any] | None:
             return out
 
     return _CountBoundedFakeTensorMode
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_execution import (  # noqa: E402
+    _ALLOCATOR_SIGNATURES,
+    _ProjectionCountExceeded,
+)
+from ._runnable_verification import (  # noqa: E402
+    _contract_check,
+)

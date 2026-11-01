@@ -42,18 +42,6 @@ from ...recording.types import (
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        ExhaustiveOpDraft,
-        _admit_saved_args_budget,
-        _append_trace_predicate_context,
-        _apply_retroactive_decision,
-        _build_trace_predicate_context,
-        _commit_saved_args_budget,
-        _retain_lookback_candidate,
-        _save_activation_fields,
-        _save_predicate_activation_fields,
-    )
 
 __all__ = (
     "_trace_predicate_context_key",
@@ -505,3 +493,22 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
         dtype=dtype,
         parents=parents,
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_activations import (  # noqa: E402
+    _save_activation_fields,
+)
+from ._ops_retention import (  # noqa: E402
+    _admit_saved_args_budget,
+    _append_trace_predicate_context,
+    _apply_retroactive_decision,
+    _build_trace_predicate_context,
+    _commit_saved_args_budget,
+    _retain_lookback_candidate,
+    _save_predicate_activation_fields,
+)
+from .ops import (  # noqa: E402
+    ExhaustiveOpDraft,
+)

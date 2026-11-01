@@ -112,10 +112,8 @@ def test_unreadable_projected_allocation_refuses_instead_of_charging_zero() -> N
     """grind-r5 b7 R22 (sol HIGH): a tensor whose size reads raise must raise
     the typed sentinel, never contribute an empty charge."""
 
-    from torchlens._runnable_execution import (
-        _new_allocation_bytes,
-        _UnreadableProjectedOutput,
-    )
+    from torchlens._runnable_call_arguments import _new_allocation_bytes
+    from torchlens._runnable_execution import _UnreadableProjectedOutput
 
     class _UnreadableTensor(torch.Tensor):
         @staticmethod

@@ -90,7 +90,7 @@ _SCOPED_CAPTURE_STATE = frozenset(
         ("torchlens/backends/mlx/wrappers.py", "_ACTIVE_TAP_OBSERVER"),
         ("torchlens/backends/paddle/wrappers.py", "_ACTIVE_TAP_OBSERVER"),
         ("torchlens/backends/tinygrad/backend.py", "_ACTIVE_TINYGRAD_MODULE_STACK"),
-        ("torchlens/backends/torch/_completeness_finalize.py", "_ACTIVE_WITNESS_STATE"),
+        ("torchlens/backends/torch/completeness_witness.py", "_ACTIVE_WITNESS_STATE"),
         # Plane-W funcol completion session: published by the capture-scoped
         # distributed_recording_session context (armed captures only) and
         # cleared in its finally -- a survivor past the capture is exactly the

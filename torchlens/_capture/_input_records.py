@@ -421,7 +421,7 @@ def _record_runnable_input_tensor_sites(
 
     if sites:
         runnable_trace_state(trace).input_tensor_sites = sites
-        from ..backends.torch.completeness_witness import record_runnable_input_storage_sites
+        from ..backends.torch._completeness_boundaries import record_runnable_input_storage_sites
 
         record_runnable_input_storage_sites(trace, tensor_leaves)
 

@@ -62,6 +62,29 @@ def torch_attr(name: str) -> Any | None:
     return torch.__dict__.get(name)
 
 
+def torch_dtype_named(name: str) -> torch.dtype | None:
+    """Resolve a bare dtype name (``"float32"``) to a ``torch.dtype``, else ``None``.
+
+    The one dtype-name parser: it reads through :func:`torch_attr` (no lazy
+    ``torch.__getattr__``) and keeps only a real ``torch.dtype``, so an
+    attacker-chosen name such as ``"load"`` never resolves a callable. Callers
+    own any ``torch.`` prefix handling and their refusal error.
+
+    Parameters
+    ----------
+    name:
+        Bare top-level dtype name.
+
+    Returns
+    -------
+    torch.dtype | None
+        The dtype, or ``None`` when ``name`` does not name one.
+    """
+
+    value = torch_attr(name)
+    return value if isinstance(value, torch.dtype) else None
+
+
 def shadowed_torch_submodule(namespace_name: str, resolved: Any) -> types.ModuleType | None:
     """Return the imported submodule that a same-named package attribute shadows.
 

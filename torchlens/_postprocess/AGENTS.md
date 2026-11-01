@@ -13,13 +13,13 @@ eviction plus parameter-reference release. Step order is load-bearing.
 
 | File | Steps | Purpose |
 |------|-------|---------|
-| `__init__.py` | orchestrator | `postprocess()` prologue/epilogue, audit helpers, re-exports |
+| `__init__.py` | orchestrator | `postprocess()` prologue/epilogue and the transient-state drop |
 | `_call_site_contract.py` | 7 support | Call-site grouping side table (call-site class per raw label, never persisted) and the grouping contract checked at step 7 and by validation |
 | `_executor.py` | executor | StepSpec registry (steps 1-20 in run order), `run_pipeline` |
 | `_materialize.py` | 0 | Project capture events into raw `Op` state |
 | `_buffer_addresses.py` | 0 support | Resolve each buffer op's registered buffer address and the initial buffer snapshots |
 | `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances |
-| `ast_branches.py` | 5 support, 11.5 | Conditional AST indexing and source variable names. Hot/cold FileIndex split: parsed ASTs (`_HeavyAst`) are released at the postprocess epilogue (`release_parsed_asts()`); span data + node-free projected calls persist, and unprojected-scope queries re-parse from RETAINED source (never disk), failing closed on anomaly |
+| `ast_branches.py` | 5 support, 11.5 support | Conditional AST indexing and source variable name resolution. Hot/cold FileIndex split: parsed ASTs (`_HeavyAst`) are released at the postprocess epilogue (`release_parsed_asts()`); span data + node-free projected calls persist, and unprojected-scope queries re-parse from RETAINED source (never disk), failing closed on anomaly |
 | `control_flow.py` | 5-6 | Conditional attribution and buffer version merging |
 | `loop_detection.py` | 7 | Call-site grouping (`callsite_v1`, rule in `docs/guides/grouping.md`; keys from `utils/_call_site.py`); falls back to the structural adapter when no op carries call-site evidence |
 | `loop_grouping_adapter.py` | 7 fallback | Backend-neutral structural grouper (`grouper_v1`) for captures without call-site evidence (other backends, predicate-mode `tl.record`) |
@@ -28,7 +28,8 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_ingest_contract.py` | 0 support | Step-0 ingest contract helpers |
 | `_multipass_params.py` | 14 support | Parameter union for a layer whose passes consume different parameters (split from `finalization.py`) |
 | `_lazy_param_geometry.py` | 15 support | Finalize deferred geometry for lazy-at-prep params (R43 split from `finalization.py`) |
-| `saved_summary.py` | 11 support | Saved-output summary refresh helpers |
+| `saved_summary.py` | 11 support | Saved-output summary refresh helpers (`_refresh_fast_saved_summary`) |
+| `source_provenance.py` | 11, 11.5 | Provenance disclosure warning (`_warn_unattributed_tensor_args`) and source variable names (`_populate_var_names`) |
 | `incremental.py` | fastlog enrichment | Adds module paths to sparse recordings; `add_param_addresses` is DEAD on current builds (ActivationRecord carries no `parent_param_addresses` field, so it always raises `RecordingConfigError`) |
 
 ## Step Order
@@ -128,10 +129,10 @@ retained op list.
 
 `postprocess()` keeps the prologue (pre-0 + step-0 materialize block), the
 no-layers early exit, and the freeze epilogue; steps 1-20 run through
-`_executor.run_pipeline` over `STEP_REGISTRY`. Every step body resolves its
-callable through the `torchlens._postprocess` module namespace AT CALL
-TIME, so monkeypatching a step function on the module still works
-(`tests/test_postprocess_executor.py` proves it). Step 18's `should_run` IS the
+`_executor.run_pipeline` over `STEP_REGISTRY`. Every step body calls its
+function through the function's home module (`graph_traversal`, `labeling`,
+`finalization`, ...), so a test that replaces a step replaces it on that home
+module, never on the package (`tests/test_postprocess_executor.py` proves it). Step 18's `should_run` IS the
 streaming snapshot point (context-writing, never trace-writing); step 19
 gates on the snapshot; `should_run` evaluates exactly once per step.
 

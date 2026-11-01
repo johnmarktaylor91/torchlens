@@ -756,7 +756,7 @@ def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> 
         Minimal live-site proxy for pre-execution selector matching.
     """
 
-    from ..backends.torch.ops import _snapshot_exhaustive_module_stack
+    from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
 
     layer_type = _normalize_func_name(func_name)
     modules = tuple(_snapshot_exhaustive_module_stack(trace))

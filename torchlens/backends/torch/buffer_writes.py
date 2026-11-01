@@ -1171,7 +1171,7 @@ class BufferWriteTracker:
         # skip a tensor the verbatim check below would reject anyway, and an
         # unreadable pointer (``None``) falls through to that check rather than being
         # skipped.
-        from .completeness_witness import _raw_storage_ptr_no_observe
+        from ._completeness_escape_state import _raw_storage_ptr_no_observe
 
         written_ptr = _raw_storage_ptr_no_observe(written_tensor)
         written_range = self.storage_range(written_tensor)

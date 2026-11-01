@@ -70,7 +70,7 @@ def _record_predicate_module_boundary_outputs(
     from ...intervention.runtime import _peek_module_intervention_parent_labels
     from ...intervention.selectors import BaseSelector
     from ...recording.types import ActivationRecord
-    from .ops import _walk_output_tensors_with_paths
+    from ._ops_containers import _walk_output_tensors_with_paths
 
     log_predicate_boundary_replacements(trace, state, out)
     predicate = state.options.keep_op

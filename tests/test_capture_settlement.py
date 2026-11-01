@@ -171,7 +171,7 @@ def test_postprocess_failure_settles_failed_postprocess(monkeypatch) -> None:
     def _boom(*args: object, **kwargs: object) -> None:
         raise ValueError("planted step1")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted step1") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
     outcome = tl._partial.from_failed_capture(exc_info.value).trace.outcome
@@ -286,7 +286,7 @@ def test_halted_postprocess_failure_settles_failed_postprocess(monkeypatch) -> N
         captured.append(trace)
         raise ValueError("planted halted-pp")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted halted-pp") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert isinstance(exc_info.value.__context__, StopSignal)

@@ -8,14 +8,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from .invariants import (
-        MetadataInvariantError,
-        _check_backward_event_flow_invariants,
-        _check_backward_pass_domain_invariants,
-        _check_journal_seq_invariants,
-        _layer_feeds_recorded_backward_roots,
-        _layer_postdates_all_backward_triggers,
-    )
 
 __all__ = (
     "_check_backward_graph_invariants",
@@ -573,3 +565,19 @@ def _check_grad_fn_relation_list(
                 f"{source_label} {relation_name} references {related_label!r}, but "
                 f"{related_label!r} does not list {source_label!r} in {reciprocal_name}",
             )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_backward_domain import (  # noqa: E402
+    _check_backward_pass_domain_invariants,
+    _check_journal_seq_invariants,
+    _layer_feeds_recorded_backward_roots,
+    _layer_postdates_all_backward_triggers,
+)
+from ._invariants_backward_flow import (  # noqa: E402
+    _check_backward_event_flow_invariants,
+)
+from .invariants import (  # noqa: E402
+    MetadataInvariantError,
+)

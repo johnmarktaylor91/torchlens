@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence, Set as AbstractSet
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import torch
 
@@ -29,19 +29,6 @@ from .errors import (
     RunPreconditionError,
     RuntimeSignatureDriftError,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _MAX_DECODE_NESTING_DEPTH,
-        _count_bounded_fake_tensor_mode_class,
-        _decode_literal,
-        _is_allocator_death,
-        _mutation_target_slot_id,
-        _op_for_slot,
-        _ProjectionCountExceeded,
-        _UnreadableProjectedOutput,
-        _value_at_path,
-    )
 
 __all__ = (
     "_has_numeric_literal",
@@ -195,7 +182,7 @@ def _input_storage_ids(value: Any) -> frozenset[int]:
 
 
 # NOTE: ``_UnreadableProjectedOutput`` (like ``_ProjectionCountExceeded``) is
-# defined in ``_runnable_execution`` and resolves through the rebound globals.
+# defined in ``_runnable_execution`` and imported at the bottom of this module.
 
 
 def _new_allocation_bytes(
@@ -620,3 +607,24 @@ def _resolve_setter_output(
     if not isinstance(target, torch.Tensor):
         return output
     return target
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_call_outputs import (  # noqa: E402
+    _mutation_target_slot_id,
+)
+from ._runnable_execution import (  # noqa: E402
+    _MAX_DECODE_NESTING_DEPTH,
+    _ProjectionCountExceeded,
+    _UnreadableProjectedOutput,
+)
+from ._runnable_state_context import (  # noqa: E402
+    _count_bounded_fake_tensor_mode_class,
+    _is_allocator_death,
+)
+from ._runnable_verification import (  # noqa: E402
+    _decode_literal,
+    _op_for_slot,
+    _value_at_path,
+)

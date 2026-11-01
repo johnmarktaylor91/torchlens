@@ -26,7 +26,6 @@ Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
-import hashlib
 import io as _io_module
 import json
 import os
@@ -38,6 +37,7 @@ from typing import Any
 import numpy as np
 
 from .._io._json import read_bounded
+from .._utils.hashing import sha256_file
 from ._errors import HistoryArtifactError
 from ._kernels import HistogramDescriptor, HistogramResult, RunningStatsResult
 from ._schema import (
@@ -88,16 +88,6 @@ def _atomic_write_json(path: Path, payload: Any) -> None:
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(tmp, path)
-
-
-def _sha256_file(path: Path) -> str:
-    """Return the hex sha256 of one file's bytes."""
-
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for block in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 @dataclass(frozen=True)
@@ -359,7 +349,7 @@ class HistoryWriter:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_path, chunk_path)
-        digest = _sha256_file(chunk_path)
+        digest = sha256_file(chunk_path)
         index_path = self.path / "index.json"
         index = read_bounded(index_path)
         index["chunks"].append(
@@ -509,7 +499,7 @@ class HistoryReader:
                 chunk=entry["file"],
                 remedy="Restore the artifact from backup; committed chunks are never optional.",
             )
-        digest = _sha256_file(chunk_path)
+        digest = sha256_file(chunk_path)
         if digest != entry["sha256"]:
             raise HistoryArtifactError(
                 f"Chunk {entry['file']} fails its recorded sha256; refusing "
