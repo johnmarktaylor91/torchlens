@@ -144,8 +144,8 @@ def _check_entry(entry: CorpusEntry, tmp_path: Path) -> None:
     labels = [op.label for op in trace.ops]
     assert labels, f"{entry.id}: empty trace"
     recorded_recurrent = "trace:is_recurrent" in entry.features
-    assert trace.is_recurrent == recorded_recurrent, (
-        f"{entry.id}: capture says is_recurrent={trace.is_recurrent}, the manifest records "
+    assert trace.graph.is_recurrent == recorded_recurrent, (
+        f"{entry.id}: capture says is_recurrent={trace.graph.is_recurrent}, the manifest records "
         f"{recorded_recurrent}; re-derive the recurrence tags (classics_corpus/README.md)"
     )
     spec = tmp_path / "entry.tlspec"
