@@ -160,12 +160,17 @@ class BackendRegistryError(ConfigurationError, ValueError):
         message_text = message.rstrip()
         if not message_text.endswith((".", "!", "?", ":", ";")):
             message_text = f"{message_text}."
+        resolved_code = code or type(self).code
         super().__init__(
             f"{message_text} Remedy: {resolved_remedy.rstrip().rstrip('.')}.",
-            code=code or type(self).code,
+            code=resolved_code,
             remedy=resolved_remedy,
             **cast(dict[str, Any], context),
         )
+        # ``exc.code`` is the refusal contract (one code per cause, declared at
+        # the raise site); the class attribute is only the default. Keep the
+        # instance attribute and ``fields["code"]`` saying the same thing.
+        self.code = resolved_code
 
     def __reduce__(
         self,

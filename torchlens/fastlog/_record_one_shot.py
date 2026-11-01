@@ -162,15 +162,21 @@ def record(
     # instead of silently running the Recorder anyway.
     backend_spec = get_backend_spec(str(backend) if backend is not None else "torch")
     if not backend_spec.capabilities.fastlog:
+        from ..backends._backend_protocol import refusal_code_for_capability
+
         if str(backend_spec.name) == TORCH_BACKEND_NAME:
             raise BackendUnsupportedError(
                 "tl.record() refuses: the resolved 'torch' backend declares "
                 "capabilities.fastlog=False, and the registered capability "
-                "table is the load-bearing gate for this surface."
+                "table is the load-bearing gate for this surface.",
+                code=refusal_code_for_capability("fastlog"),
+                backend=TORCH_BACKEND_NAME,
             )
         raise BackendUnsupportedError(
             "tl.record() is torch-only in backend v1. Use tl.trace(..., backend='jax') "
-            "for the JAX full-save preview."
+            "for the JAX full-save preview.",
+            code=refusal_code_for_capability("fastlog"),
+            backend=str(backend_spec.name),
         )
     # The flag alone never opens the gate: the spec must bind the fastlog
     # implementing surface, and this entry only runs the torch Recorder —

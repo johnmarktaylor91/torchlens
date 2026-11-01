@@ -10,7 +10,7 @@ import textwrap
 import threading
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 from torch import nn
@@ -23,6 +23,9 @@ from torchlens._utils._torch_compat import (
     get_fx_graph_module_type,
     get_torch_capability_snapshot,
 )
+
+if TYPE_CHECKING:
+    from torchlens.conformance._scorecard import PreviewScorecard
 
 Status = Literal["pass", "known_broken", "scope", "not_tested"]
 Severity = Literal["ok", "info", "warning", "error"]
@@ -70,12 +73,17 @@ class CompatReport:
     torch_version:
         PyTorch version used for the inspection.
     checks:
-        Truth-table rows for the inspected model/input pair.
+        Truth-table rows for the inspected model/input pair, including one
+        ``backend_scorecard:<name>`` row per registered backend.
+    backend_scorecards:
+        The shipped conformance scorecard record of every registered backend
+        that has one, for programmatic access (the rows summarize them).
     """
 
     model_type: str
     torch_version: str
     checks: tuple[CompatRow, ...]
+    backend_scorecards: tuple[PreviewScorecard, ...] = ()
 
     def check(self, key: str) -> CompatRow:
         """Return one report row by stable key.
@@ -256,6 +264,8 @@ def report(model: nn.Module, input: Any) -> CompatReport:  # noqa: A002
         Structured compatibility report.
     """
 
+    from torchlens.backends._scorecard_rows import backend_scorecard_rows, backend_scorecards
+
     rows = (
         _hf_transformers_row(model),
         _accelerate_dispatch_row(model),
@@ -282,11 +292,13 @@ def report(model: nn.Module, input: Any) -> CompatReport:  # noqa: A002
         _fp8_dtype_row(model, input),
         _device_context_row(),
         _single_thread_row(),
+        *backend_scorecard_rows(),
     )
     return CompatReport(
         model_type=_qualified_type_name(model),
         torch_version=str(torch.__version__),
         checks=rows,
+        backend_scorecards=backend_scorecards(),
     )
 
 

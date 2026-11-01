@@ -15,17 +15,37 @@ Cells (SPEC section 4.2):
 - ``c0_capability_table_complete``: every capability field holds a value of
   its declared kind.
 
-Backend-neutral C1 helpers (graph integrity, shape metadata against the
-payload, no silent gap) are exposed for the C1 pack; the pack wires them in
-the suite-completion packet so slot counts move once.
+The C1 and C2 cells here run for every adapter that exposes a protocol view
+(``adapter.protocol()``): the torch reference, the five previews and the
+reserved ``fake`` substrate, whose view is torch's protocol behind a plant
+layer. Per roster row: graph integrity, shape metadata against the payload, no
+silent gap, intermediates against the row's NumPy oracle, replay validation
+passes, a tampered payload is named with a reason, constants are recorded
+parents, RNG is consumed once (lazy backends); once per backend: a typed
+refusal for every False capability flag and for every public trace option the
+backend does not implement; per row at C2: payloads survive the round trip bit
+for bit and the reloaded trace still validates.
+
+Every request recipe, probe value and plant-to-cell mapping lives in one table
+here so a later change is one edit.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import fields as dataclass_fields
 from typing import Any
 
-from ._cases import CaseResult, _failed, _passed
+from ._adapters import RosterModel
+from ._cases import C2_MODEL_CASES, CaseResult, _failed, _failure_detail, _passed
+from ._validation_cells import (
+    _is_input,
+    capture_for_validation,
+    names_reason_problems,
+    tamper_target,
+    tampered_payload,
+    validation_status_problems,
+)
 
 __tl_layer__ = "L9"
 
@@ -190,11 +210,11 @@ def graph_integrity_problems(trace: Any) -> tuple[str, ...]:
 
 
 def shape_metadata_problems(trace: Any, host_copy: Any) -> tuple[str, ...]:
-    """Ops whose ``tensor_shape`` disagrees with the saved payload's shape."""
+    """Ops whose recorded ``shape`` disagrees with the saved payload's shape."""
 
     problems: list[str] = []
     for op in trace.layer_list:
-        shape = getattr(op, "tensor_shape", None)
+        shape = getattr(op, "shape", getattr(op, "tensor_shape", None))
         payload = getattr(op, "out", None)
         if shape is None or payload is None:
             continue
@@ -203,7 +223,7 @@ def shape_metadata_problems(trace: Any, host_copy: Any) -> tuple[str, ...]:
         except Exception:  # noqa: BLE001 - a non-array payload is outside this check
             continue
         if tuple(shape) != got:
-            problems.append(f"{op.label}: tensor_shape {tuple(shape)} != payload {got}")
+            problems.append(f"{op.label}: recorded shape {tuple(shape)} != payload {got}")
     return tuple(problems)
 
 
@@ -213,3 +233,481 @@ def silent_gap_reason(trace: Any) -> str | None:
     if getattr(trace, "capture_verified", None) is False:
         return str(getattr(trace, "capture_verification_reason", None) or "unrecorded reason")
     return None
+
+
+# ----------------------------------------------------------------------------
+# Case ids (SPEC 4.2) and the protocol view of an adapter.
+
+#: Per-row C1 cells every protocol-bearing adapter defines, in report order
+#: (``c1_intermediates_match`` joins after the first three when the row declares
+#: an oracle; the constants and RNG cells join at the end when the row is flagged).
+C1_PROTOCOL_ROW_CASES: tuple[str, ...] = (
+    "c1_graph_integrity",
+    "c1_shape_metadata_matches_payload",
+    "c1_no_silent_gap",
+    "c1_validation_passes",
+    "c1_validation_names_reason",
+)
+C1_INTERMEDIATES_CASE = "c1_intermediates_match"
+C1_CONSTANTS_CASE = "c1_constant_parents_recorded"
+C1_RNG_CASE = "c1_rng_consumed_once"
+C1_REFUSAL_PREFIX = "c1_refusal_"
+C1_REFUSAL_OPTION_PREFIX = "c1_refusal_trace_option_"
+#: Per-row C2 cells every protocol-bearing adapter defines, after the v1 trio.
+C2_PROTOCOL_ROW_CASES: tuple[str, ...] = ("c2_payload_values_equal", "c2_validation_after_load")
+
+#: The fake provider's protocol-era plants and the one cell each must fail.
+PLANT_INTENDED_CELL: dict[str, str] = {
+    "untyped_refusal": f"{C1_REFUSAL_PREFIX}intermediate_derived_grads",
+    "bare_bool_validation": "c1_validation_names_reason",
+    "missing_constant_payload": C1_CONSTANTS_CASE,
+    "shape_drift_after_load": "c2_payload_values_equal",
+    "flagged_trace": "c1_no_silent_gap",
+    "shape_metadata_drift": "c1_shape_metadata_matches_payload",
+}
+
+
+def adapter_protocol(adapter: Any) -> Any | None:
+    """The adapter's protocol view, or ``None`` when it exposes none.
+
+    Parameters
+    ----------
+    adapter:
+        A resolved conformance adapter.
+
+    Returns
+    -------
+    Any | None
+        The ``BackendProtocol`` object (or the fake's planted view); ``None``
+        for providers without one, whose protocol cells then do not exist.
+    """
+
+    probe = getattr(adapter, "protocol", None)
+    if not callable(probe):
+        return None
+    try:
+        return probe()
+    except Exception:  # noqa: BLE001 - a failing factory is C0's red cell, not a slot here
+        return None
+
+
+def false_capability_flags(protocol: Any) -> tuple[str, ...]:
+    """Refusable capability flags the backend declares False, in table order."""
+
+    from ..backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
+
+    table = protocol.capabilities()
+    return tuple(flag for flag in REFUSABLE_CAPABILITY_FLAGS if getattr(table, flag, None) is False)
+
+
+def foreign_trace_options(protocol: Any) -> tuple[str, ...]:
+    """Public trace options the backend does not implement, in spine order."""
+
+    from ..backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
+
+    implemented = set(protocol.trace_options())
+    return tuple(
+        option for option in PUBLIC_OPTION_SPINE_TRACE_OPTIONS if option not in implemented
+    )
+
+
+def c1_row_case_ids(adapter: Any, model: RosterModel) -> tuple[str, ...]:
+    """Every C1 case id one roster row defines for ``adapter``, in report order."""
+
+    ids = ["c1_capture_completes"]
+    if model.expected_op_kinds is not None:
+        ids.append("c1_op_inventory_complete")
+    ids += ["c1_reference_parity", "c1_deterministic_repeat"]
+    protocol = adapter_protocol(adapter)
+    if protocol is None:
+        return tuple(ids)
+    ids += list(C1_PROTOCOL_ROW_CASES[:3])
+    if model.expected_intermediates:
+        ids.append(C1_INTERMEDIATES_CASE)
+    ids += list(C1_PROTOCOL_ROW_CASES[3:])
+    if model.has_constants:
+        ids.append(C1_CONSTANTS_CASE)
+    if model.random_init and getattr(protocol, "materialization", "eager") == "lazy":
+        ids.append(C1_RNG_CASE)
+    return tuple(ids)
+
+
+def c1_tail_case_ids(adapter: Any) -> tuple[str, ...]:
+    """The once-per-backend C1 case ids (consumption, then every refusal cell)."""
+
+    ids = ["c1_capabilities_consumed"]
+    protocol = adapter_protocol(adapter)
+    if protocol is None:
+        return tuple(ids)
+    ids += [f"{C1_REFUSAL_PREFIX}{flag}" for flag in false_capability_flags(protocol)]
+    ids += [f"{C1_REFUSAL_OPTION_PREFIX}{name}" for name in foreign_trace_options(protocol)]
+    return tuple(ids)
+
+
+def c2_row_case_ids(adapter: Any, model: RosterModel) -> tuple[str, ...]:
+    """Every C2 case id one roster row defines for ``adapter``, in report order."""
+
+    ids = list(C2_MODEL_CASES)
+    if adapter_protocol(adapter) is not None:
+        ids += list(C2_PROTOCOL_ROW_CASES)
+    return tuple(ids)
+
+
+# ----------------------------------------------------------------------------
+# Shared probes.
+
+
+def _as_output_list(reference: Any) -> list[Any]:
+    """Ground-truth outputs as the list ``validate`` takes."""
+
+    if isinstance(reference, (tuple, list)):
+        return list(reference)
+    return [reference]
+
+
+def constant_like_ops(trace: Any) -> list[Any]:
+    """Parentless non-input ops: closure constants, literal producers, buffers.
+
+    The shared constants rule marks them ``is_constant_layer`` (F-E); until
+    that field lands, a parentless non-input op is constant-like by position.
+    This is the one place the test for a constant op lives.
+    """
+
+    rows = []
+    for op in trace.layer_list:
+        if _is_input(op) or tuple(getattr(op, "parents", None) or ()):
+            continue
+        if getattr(op, "is_buffer", getattr(op, "is_buffer_layer", False)):
+            continue
+        rows.append(op)
+    return rows
+
+
+def _is_marked_constant(op: Any) -> bool:
+    """Whether the record itself says the op is a constant (field or ``func_name``)."""
+
+    if getattr(op, "is_constant_layer", getattr(op, "is_constant", None)) is True:
+        return True
+    return str(getattr(op, "func_name", "")) == "constant"
+
+
+def _tolerance_for(array: Any) -> tuple[float, float] | None:
+    """The dtype-honest replay band for a float payload; ``None`` means exact."""
+
+    import numpy as np
+
+    from ..backends._validation_shared import float_replay_tolerances
+
+    kind = np.asarray(array).dtype.kind
+    if kind == "f":
+        return float_replay_tolerances(np.finfo(np.asarray(array).dtype))
+    if kind == "c":
+        component = np.finfo(np.asarray(array).real.dtype)
+        return float_replay_tolerances(component)
+    return None
+
+
+def _arrays_match(got: Any, want: Any) -> str | None:
+    """One-line mismatch description between a captured and an expected array, else ``None``."""
+
+    import numpy as np
+
+    got_arr, want_arr = np.asarray(got), np.asarray(want)
+    if got_arr.shape != want_arr.shape:
+        return f"shape {got_arr.shape} != expected {want_arr.shape}"
+    band = _tolerance_for(got_arr)
+    if band is None:
+        return None if np.array_equal(got_arr, want_arr) else "values differ (exact compare)"
+    rtol, atol = band
+    if np.allclose(got_arr.astype(np.float64), want_arr.astype(np.float64), rtol=rtol, atol=atol):
+        return None
+    gap = float(np.max(np.abs(got_arr.astype(np.float64) - want_arr.astype(np.float64))))
+    return f"max abs difference {gap:.3e} outside rtol {rtol:.3e} atol {atol:.3e}"
+
+
+def intermediates_problems(trace: Any, expected: dict[str, Any], host_copy: Any) -> tuple[str, ...]:
+    """Captured ``out`` values of each declared op kind against the row's NumPy oracle."""
+
+    problems: list[str] = []
+    for kind, want in expected.items():
+        wants = list(want) if isinstance(want, (list, tuple)) else [want]
+        ops = [op for op in trace.layer_list if str(getattr(op, "func_name", "")) == kind]
+        if len(ops) != len(wants):
+            problems.append(f"{kind}: {len(ops)} captured ops, {len(wants)} expected values")
+            continue
+        for op, value in zip(ops, wants, strict=True):
+            payload = getattr(op, "out", None)
+            if payload is None:
+                problems.append(f"{op.label}: no saved payload")
+                continue
+            try:
+                got = host_copy(payload)
+            except Exception as exc:  # noqa: BLE001 - an unreadable payload is a defect
+                problems.append(f"{op.label}: host_copy raised {type(exc).__name__}: {exc}")
+                continue
+            mismatch = _arrays_match(got, value)
+            if mismatch:
+                problems.append(f"{op.label}: {mismatch}")
+    return tuple(problems)
+
+
+def constant_parents_problems(trace: Any, host_copy: Any) -> tuple[str, ...]:
+    """Every constant-like op has a readable payload and a consumer; a flagged row has one."""
+
+    rows = constant_like_ops(trace)
+    if not rows:
+        return ("no constant op recorded although the row declares has_constants",)
+    problems: list[str] = []
+    for op in rows:
+        payload = getattr(op, "out", None)
+        if payload is None:
+            problems.append(f"{op.label}: constant recorded without a payload")
+            continue
+        try:
+            host_copy(payload)
+        except Exception as exc:  # noqa: BLE001 - an unreadable constant is a defect
+            problems.append(f"{op.label}: payload unreadable ({type(exc).__name__}: {exc})")
+        if not tuple(getattr(op, "children", None) or ()):
+            problems.append(f"{op.label}: constant has no consuming op")
+        marked = getattr(op, "is_constant_layer", getattr(op, "is_constant", None))
+        if marked is False and not _is_marked_constant(op):
+            problems.append(f"{op.label}: parentless op not marked is_constant_layer")
+    return tuple(problems)
+
+
+def payload_equality_problems(live: Any, loaded: Any, host_copy: Any) -> tuple[str, ...]:
+    """Saved ``out`` payloads equal the reloaded ones bit for bit, shapes included."""
+
+    import numpy as np
+
+    loaded_by_label = {op.label: op for op in loaded.layer_list}
+    problems: list[str] = []
+    for op in live.layer_list:
+        payload = getattr(op, "out", None)
+        if payload is None:
+            continue
+        twin = loaded_by_label.get(op.label)
+        if twin is None:
+            problems.append(f"{op.label}: missing after reload")
+            continue
+        twin_payload = getattr(twin, "out", None)
+        if twin_payload is None:
+            problems.append(f"{op.label}: payload missing after reload")
+            continue
+        try:
+            left, right = host_copy(payload), host_copy(twin_payload)
+        except Exception as exc:  # noqa: BLE001 - an unreadable payload is a defect
+            problems.append(f"{op.label}: host_copy raised {type(exc).__name__}: {exc}")
+            continue
+        if left.shape != right.shape:
+            problems.append(f"{op.label}: shape {left.shape} != reloaded {right.shape}")
+        elif left.dtype != right.dtype:
+            problems.append(f"{op.label}: dtype {left.dtype} != reloaded {right.dtype}")
+        elif not np.array_equal(left, right, equal_nan=True):
+            problems.append(f"{op.label}: values differ after reload")
+    return tuple(problems)
+
+
+# ----------------------------------------------------------------------------
+# Running the cells.
+
+
+def _cell(case_id: str, tier: str, problems: tuple[str, ...], model: RosterModel) -> CaseResult:
+    """A passed row when ``problems`` is empty, else a failed row with the joined detail."""
+
+    if problems:
+        return _failed(case_id, tier, "; ".join(problems)[:300], model)
+    return _passed(case_id, tier, model)
+
+
+def _guarded(
+    case_id: str, tier: str, model: RosterModel | None, body: Callable[[], tuple[str, ...]]
+) -> CaseResult:
+    """Run one cell body; a typed refusal or any raise becomes a red row, never a crash."""
+
+    try:
+        problems = body()
+    except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
+        return _failed(case_id, tier, _failure_detail(exc), model)
+    if model is None:
+        return (
+            _failed(case_id, tier, "; ".join(problems)[:300])
+            if problems
+            else _passed(case_id, tier)
+        )
+    return _cell(case_id, tier, problems, model)
+
+
+def run_c1_protocol_row_cases(
+    adapter: Any, model: RosterModel, trace: Any, reference: Any
+) -> list[CaseResult]:
+    """The per-row protocol C1 cells for one captured roster row.
+
+    Parameters
+    ----------
+    adapter:
+        The resolved adapter (must expose a protocol view).
+    model:
+        The roster row.
+    trace:
+        The row's captured trace.
+    reference:
+        The direct-run reference output.
+
+    Returns
+    -------
+    list[CaseResult]
+        One row per protocol C1 case id the row defines, in report order.
+    """
+
+    protocol = adapter_protocol(adapter)
+    if protocol is None:
+        return []
+    host_copy = protocol.host_copy
+    results = [
+        _guarded("c1_graph_integrity", "C1", model, lambda: graph_integrity_problems(trace)),
+        _guarded(
+            "c1_shape_metadata_matches_payload",
+            "C1",
+            model,
+            lambda: shape_metadata_problems(trace, host_copy),
+        ),
+        _guarded("c1_no_silent_gap", "C1", model, lambda: _silent_gap_problems(trace)),
+    ]
+    if model.expected_intermediates:
+        expected = model.expected_intermediates
+        results.append(
+            _guarded(
+                C1_INTERMEDIATES_CASE,
+                "C1",
+                model,
+                lambda: intermediates_problems(trace, expected, host_copy),
+            )
+        )
+    results.append(
+        _guarded(
+            "c1_validation_passes",
+            "C1",
+            model,
+            lambda: validation_status_problems(
+                protocol.validate(trace, _as_output_list(reference))
+            ),
+        )
+    )
+    results.append(
+        _guarded(
+            "c1_validation_names_reason",
+            "C1",
+            model,
+            lambda: _names_reason_body(adapter, protocol, model),
+        )
+    )
+    if model.has_constants:
+        results.append(
+            _guarded(
+                C1_CONSTANTS_CASE, "C1", model, lambda: constant_parents_problems(trace, host_copy)
+            )
+        )
+    if model.random_init and getattr(protocol, "materialization", "eager") == "lazy":
+        results.append(_guarded(C1_RNG_CASE, "C1", model, lambda: _rng_once_body(adapter, model)))
+    return results
+
+
+def _silent_gap_problems(trace: Any) -> tuple[str, ...]:
+    """A flagged capture is a failed cell carrying its recorded reason."""
+
+    reason = silent_gap_reason(trace)
+    return (f"capture_verified=False: {reason}",) if reason is not None else ()
+
+
+def _names_reason_body(adapter: Any, protocol: Any, model: RosterModel) -> tuple[str, ...]:
+    """Fresh capture, one tampered payload, the verdict must name it with a reason."""
+
+    import warnings
+
+    net, example = model.builder()
+    trace = capture_for_validation(adapter, net, example)
+    reference = adapter.reference_output(net, example)
+    target = tamper_target(trace)
+    if target is None:
+        return ("no saved payload to tamper",)
+    with warnings.catch_warnings():
+        # The direct payload write is the tamper itself, not a recipe edit.
+        warnings.simplefilter("ignore")
+        target.out = tampered_payload(target.out)
+    status = protocol.validate(trace, _as_output_list(reference))
+    return names_reason_problems(status, target, trace)
+
+
+def _rng_once_body(adapter: Any, model: RosterModel) -> tuple[str, ...]:
+    """Capture equals one eager forward in outputs and in RNG consumption."""
+
+    import warnings
+
+    import numpy as np
+
+    rng_state = getattr(adapter, "rng_state", None)
+    if not callable(rng_state):
+        return ("adapter exposes no rng_state() probe",)
+    as_array = getattr(adapter, "as_array", None)
+    convert = as_array if callable(as_array) else np.asarray
+    net, example = model.builder()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = adapter.trace(net, example)
+    after_capture = rng_state()
+    eager_net, eager_example = model.builder()
+    eager = adapter.reference_output(eager_net, eager_example)
+    after_eager = rng_state()
+    problems: list[str] = []
+    captured = trace.output_ops[0].out if trace.output_ops else None
+    if captured is None or not np.array_equal(convert(captured), convert(eager)):
+        problems.append("captured output differs from the eager forward of the same seed")
+    if not np.array_equal(np.asarray(after_capture), np.asarray(after_eager)):
+        problems.append("RNG state after capture differs from the state after one eager forward")
+    return tuple(problems)
+
+
+def run_c2_protocol_row_cases(
+    adapter: Any, model: RosterModel, trace: Any, loaded: Any, reference: Any
+) -> list[CaseResult]:
+    """The per-row protocol C2 cells: payload equality and validation after load.
+
+    Parameters
+    ----------
+    adapter:
+        The resolved adapter (must expose a protocol view).
+    model:
+        The roster row.
+    trace:
+        The live trace that was saved.
+    loaded:
+        The reloaded trace.
+    reference:
+        The direct-run reference output.
+
+    Returns
+    -------
+    list[CaseResult]
+        One row per :data:`C2_PROTOCOL_ROW_CASES`.
+    """
+
+    protocol = adapter_protocol(adapter)
+    if protocol is None:
+        return []
+    return [
+        _guarded(
+            "c2_payload_values_equal",
+            "C2",
+            model,
+            lambda: payload_equality_problems(trace, loaded, protocol.host_copy),
+        ),
+        _guarded(
+            "c2_validation_after_load",
+            "C2",
+            model,
+            lambda: validation_status_problems(
+                protocol.validate(loaded, _as_output_list(reference))
+            ),
+        ),
+    ]

@@ -129,20 +129,11 @@ def _failure_detail(exc: Exception) -> str:
     return text
 
 
-def model_case_ids(model: RosterModel, tier: str, model_cases: tuple[str, ...]) -> tuple[str, ...]:
-    """The per-model case ids one rung defines for ``model``, in report order."""
-
-    if tier == "C1" and model.expected_op_kinds is not None:
-        return (model_cases[0], C1_INVENTORY_CASE, *model_cases[1:])
-    return model_cases
-
-
 def _unavailable_rows(
     adapter: Any,
     roster: tuple[RosterModel, ...],
     tier: str,
     model_cases: tuple[str, ...],
-    tail_cases: tuple[str, ...] = (),
 ) -> list[CaseResult] | None:
     """Named skips for every case when the adapter's framework cannot run here.
 
@@ -154,6 +145,9 @@ def _unavailable_rows(
     reason = probe() if callable(probe) else None
     if reason is None:
         return None
+    from ._protocol_cases import c1_row_case_ids, c1_tail_case_ids, c2_row_case_ids
+
+    row_ids = c1_row_case_ids if tier == "C1" else c2_row_case_ids
     rows = [
         CaseResult(
             case_id=case_id,
@@ -164,11 +158,11 @@ def _unavailable_rows(
             detail=reason,
         )
         for model in roster
-        for case_id in model_case_ids(model, tier, model_cases)
+        for case_id in row_ids(adapter, model)
     ]
+    tail = c1_tail_case_ids(adapter) if tier == "C1" else ()
     rows.extend(
-        CaseResult(case_id=case_id, tier=tier, outcome="skipped", detail=reason)
-        for case_id in tail_cases
+        CaseResult(case_id=case_id, tier=tier, outcome="skipped", detail=reason) for case_id in tail
     )
     return rows
 
@@ -212,23 +206,39 @@ def run_c0_cases(adapter: Any) -> list[CaseResult]:
 
 
 def _run_capture(adapter: Any, model: RosterModel) -> tuple[Any, Any, Any]:
-    """Build the roster model and capture once; return (net, trace, reference)."""
+    """Build the roster model and capture once (validation-ready); return (net, trace, reference)."""
+
+    from ._validation_cells import capture_for_validation
 
     net, example = model.builder()
-    trace = adapter.trace(net, example)
+    trace = capture_for_validation(adapter, net, example)
     reference = adapter.reference_output(net, example)
     return net, trace, reference
 
 
 def _parity_holds(trace: Any, reference: Any, adapter: Any) -> bool:
-    """Direct-reference parity: the captured output equals the direct run.
+    """Direct-reference parity: every captured output equals the direct run's.
 
+    A tuple (or list) reference compares per output against the trace's
+    output ops in order; a single reference compares against the first.
     Torch outputs compare with ``torch.equal``. An adapter exposing
     ``as_array`` (the preview backends) only converts each arm to a NumPy
     array; the runner compares dtype, shape and every element exactly.
     """
 
-    captured = trace.output_ops[0].out if getattr(trace, "output_ops", None) else None
+    outputs = list(getattr(trace, "output_ops", None) or ())
+    if not outputs:
+        return False
+    if isinstance(reference, (tuple, list)):
+        if len(outputs) != len(reference):
+            return False
+        return all(_output_arm_equal(op.out, arm, adapter) for op, arm in zip(outputs, reference))
+    return _output_arm_equal(outputs[0].out, reference, adapter)
+
+
+def _output_arm_equal(captured: Any, reference: Any, adapter: Any) -> bool:
+    """One captured output against one direct-run output, exactly."""
+
     if captured is None:
         return False
     as_array = getattr(adapter, "as_array", None)
@@ -267,9 +277,10 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
 
     import warnings
 
-    skipped = _unavailable_rows(
-        adapter, roster, "C1", C1_MODEL_CASES, ("c1_capabilities_consumed",)
-    )
+    from ._protocol_cases import run_c1_protocol_row_cases
+    from ._refusal_cases import run_c1_refusal_cases
+
+    skipped = _unavailable_rows(adapter, roster, "C1", C1_MODEL_CASES)
     if skipped is not None:
         return skipped
     results: list[CaseResult] = []
@@ -277,7 +288,9 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                _, trace, reference = _run_capture(adapter, model)
+                # ``net`` stays bound until the row's cells finish: replay
+                # validation rehydrates parameters from the live source model.
+                net, trace, reference = _run_capture(adapter, model)
         except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
             results.append(_failed("c1_capture_completes", "C1", _failure_detail(exc), model))
             continue
@@ -307,7 +320,7 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                _, repeat, _ = _run_capture(adapter, model)
+                repeat_net, repeat, _ = _run_capture(adapter, model)
             if len(repeat.layer_list) == len(trace.layer_list):
                 results.append(_passed("c1_deterministic_repeat", "C1", model))
             else:
@@ -316,7 +329,9 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
                 )
         except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
             results.append(_failed("c1_deterministic_repeat", "C1", _failure_detail(exc), model))
+        results.extend(run_c1_protocol_row_cases(adapter, model, trace, reference))
     results.append(_capability_consumption_case(adapter, roster))
+    results.extend(run_c1_refusal_cases(adapter, roster))
     return results
 
 
@@ -341,8 +356,9 @@ def _capability_consumption_case(adapter: Any, roster: tuple[RosterModel, ...]) 
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            _, trace, _ = _run_capture(adapter, roster[0])
+            net, trace, _ = _run_capture(adapter, roster[0])
         replay_door(trace)
+        del net
     except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
         return _failed(
             "c1_capabilities_consumed",
@@ -377,6 +393,8 @@ def run_c2_cases(
 
     import warnings
 
+    from ._protocol_cases import run_c2_protocol_row_cases
+
     skipped = _unavailable_rows(adapter, roster, "C2", C2_MODEL_CASES)
     if skipped is not None:
         return skipped
@@ -386,7 +404,7 @@ def run_c2_cases(
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                _, trace, _ = _run_capture(adapter, model)
+                _, trace, reference = _run_capture(adapter, model)
                 adapter.save(trace, path)
                 loaded = adapter.load(path)
         except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
@@ -411,6 +429,7 @@ def run_c2_cases(
             results.append(
                 _failed("c2_structure_equal", "C2", "reloaded structure differs from live", model)
             )
-        else:
-            results.append(_passed("c2_structure_equal", "C2", model))
+            continue
+        results.append(_passed("c2_structure_equal", "C2", model))
+        results.extend(run_c2_protocol_row_cases(adapter, model, trace, loaded, reference))
     return results

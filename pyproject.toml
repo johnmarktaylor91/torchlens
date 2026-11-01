@@ -347,6 +347,9 @@ torchlens = [
     # runtime, so the file must ship in BOTH artifacts (the tests/test_mikit_*
     # rows go red on an installed wheel without it).
     "mechinterp/*.json",
+    # Each backend's shipped conformance scorecard, read by tl.compat.report()
+    # (backends/_scorecard_rows.py) without importing the framework.
+    "backends/*/scorecard.json",
     # The bundled open font (Liberation Sans, SIL OFL 1.1, shipped
     # unmodified with its license) every Graphviz render resolves the pinned
     # family to; visualization/_fonts.py falls back to system fonts without it.

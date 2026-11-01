@@ -439,10 +439,12 @@ class SpecBackedProtocol:
 
         return self._spec().validate_trace(trace, ground_truth)
 
-    def is_tensor(self, value: Any) -> bool:  # pragma: no cover - shells override
+    def is_tensor(self, value: Any) -> bool:
         """Shells override with the framework's array type check."""
 
-        raise NotImplementedError(f"{self.name} shell must implement is_tensor")
+        raise NotImplementedError(  # pragma: no cover - shells override
+            f"{self.name} shell must implement is_tensor"
+        )
 
     def host_copy(self, value: Any) -> Any:
         """NumPy copy through the value's ``numpy()`` or ``__array__``; shape kept."""

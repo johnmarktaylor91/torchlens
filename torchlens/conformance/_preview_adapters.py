@@ -189,8 +189,8 @@ def _roster_tf() -> tuple[RosterModel, ...]:
     return _rows(
         build_fn,
         build_module,
-        fn_ops=("input", "MatMul", "Relu"),
-        module_ops=("input", "MatMul", "Relu", "MatMul"),
+        fn_ops=("input", "constant", "MatMul", "Relu"),
+        module_ops=("input", "constant", "MatMul", "Relu", "constant", "MatMul"),
     )
 
 
@@ -470,7 +470,8 @@ def _roster_paddle() -> tuple[RosterModel, ...]:
     return _rows(
         build_fn,
         build_module,
-        fn_ops=("input", "matmul", "functional.relu"),
+        # ``weights`` is a closure tensor, recorded as a constant op (P0c's rule).
+        fn_ops=("input", "constant", "matmul", "functional.relu"),
         module_ops=("input", "functional.linear", "functional.relu", "functional.linear"),
     )
 
@@ -554,23 +555,49 @@ class PreviewBackendAdapter:
 
         return {"capture": True, "durable_save": True, "validation_replay": False}
 
+    def protocol(self) -> Any:
+        """The backend's registered ``BackendProtocol`` object (``BackendSpec.protocol()``)."""
+
+        from ..backends.registry import get_backend_spec
+
+        factory = get_backend_spec(self.name).protocol
+        return factory() if factory is not None else None
+
     def trace(self, model: Any, example_input: Any) -> Any:
         """Capture one forward pass through the public preview door."""
 
+        return self.trace_with(model, example_input)
+
+    def trace_with(self, model: Any, example_input: Any, **options: Any) -> Any:
+        """Capture through the public entry with explicit trace options (refusal cells)."""
+
         import torchlens as tl
 
-        return tl.trace(model, example_input, backend=self.name)
+        return tl.trace(model, example_input, backend=self.name, **options)
 
     def reference_output(self, model: Any, example_input: Any) -> Any:
         """Run the model directly (the parity oracle's independent arm).
 
         A tuple input is positional arguments, the convention ``tl.trace``
-        applies to the same input.
+        applies to the same input. The protocol's ``reference_output`` is the
+        same call; the adapter keeps the tuple convention explicit.
         """
 
         if isinstance(example_input, tuple):
             return model(*example_input)
         return model(example_input)
+
+    def rng_state(self) -> Any:
+        """The framework's RNG state as a host array (``c1_rng_consumed_once``), else ``None``."""
+
+        probe = _RNG_STATE_PROBES.get(self.name)
+        return probe() if probe is not None else None
+
+    def side_effect_snapshot(self) -> Any:
+        """Framework state a refusal must leave untouched (the RNG state when probeable)."""
+
+        state = self.rng_state()
+        return None if state is None else state.tobytes()
 
     def as_array(self, value: Any) -> Any:
         """Convert one framework value to a NumPy array for the runner's comparison."""
@@ -591,6 +618,37 @@ class PreviewBackendAdapter:
         import torchlens as tl
 
         return tl.load(str(path))
+
+
+def _mlx_rng_state() -> Any:
+    """MLX's global PRNG key as a host array."""
+
+    import mlx.core as mx
+    import numpy as np
+
+    key = mx.random.state[0]
+    mx.eval(key)
+    return np.array(key)
+
+
+def _tinygrad_rng_state() -> Any:
+    """tinygrad's seed and per-device RNG counters as one host array."""
+
+    import numpy as np
+    from tinygrad import Tensor
+
+    values = [int(getattr(Tensor, "_seed", 0))]
+    counters = getattr(Tensor, "_device_rng_counters", {}) or {}
+    for device in sorted(counters):
+        values.extend(int(v) for v in np.asarray(counters[device].numpy()).reshape(-1).tolist())
+    return np.asarray(values, dtype=np.int64)
+
+
+#: Backend -> zero-arg probe of the framework RNG state (lazy backends; SPEC 3.4).
+_RNG_STATE_PROBES: dict[str, Callable[[], Any]] = {
+    "mlx": _mlx_rng_state,
+    "tinygrad": _tinygrad_rng_state,
+}
 
 
 def _adapter_factory(backend: str) -> Callable[[str | None], Any]:
