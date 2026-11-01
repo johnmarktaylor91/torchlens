@@ -688,7 +688,7 @@ Computational graph visualization via Graphviz. (64 modules, 42013 lines)
 | `_backward_rows` | Opt-in label rows for backward nodes (''draw_backward'' keywords). | 164 |
 | `_boundary_bundle` | Boundary bundle (collapse ): one node for a flood of like model outputs. | 294 |
 | `_buffer_visibility` | Buffer-node visibility predicates shared across the render pipeline. | 81 |
-| `_bundle_graph` | Graphviz construction helpers for ''tl._visualization.show_bundle_graph''. | 528 |
+| `_bundle_graph` | Graphviz construction helpers for ''torchlens._visualization.show_bundle_graph''. | 528 |
 | `_collapse_disclosures` | Human-facing collapse disclosure warnings (collapse ). | 160 |
 | `_collapse_frontier` | Frontier records and merge algebra for the collapse optimizer. | 216 |
 | `_collapse_runs` | Run-fold legality over indexed flow adjacency, de-quadratic (B2). | 349 |

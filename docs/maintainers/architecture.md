@@ -9,10 +9,11 @@ line; this page names only what you need before editing. Testing is in
 setup and gates in [CONTRIBUTING.md](https://github.com/johnmarktaylor91/torchlens/blob/main/CONTRIBUTING.md) at the repository root.
 
 Two notes on currency. A consolidation into about 12 internal packages behind an
-`import-linter` graph gate is planned, not landed; nothing below describes that target. Two
-moves are pending in the next round: `torchlens.fastlog` becomes `torchlens.recording`, and
-the `capture`, `user_funcs`, `captured_run`, `semantic` and `visualization` packages become
-private; the generated index absorbs both on its next run.
+`import-linter` graph gate is planned, not landed; nothing below describes that target. The
+second-round moves have landed: the former fastlog package is `torchlens.recording`, and the
+capture, user_funcs, captured_run, semantic and visualization packages are private
+(`_capture/`, `_user_funcs/`, `_captured_run/`, `_semantic/`, `_visualization/`); the
+generated index reflects them.
 
 ## Size
 
@@ -52,7 +53,7 @@ model preparation, and they stay installed until `torchlens.backends.torch.wrapp
 tl.trace(model, x)                       __init__.py -> user_funcs.trace
   resolve backend                        backends/registry.py (BackendSpec; eager torch default)
   prepare model, install wrappers        backends/torch/model_prep.py -> wrappers.wrap_torch()
-  run forward under the logging toggle   capture/trace.py (runner), _state.py (toggle)
+  run forward under the logging toggle   _capture/trace.py (runner), _state.py (toggle)
     each torch call hits its wrapper     backends/torch/wrappers.py -> backends/torch/ops.py, _ops_*.py
     barcode nesting keeps bottom ops     backends/torch/_ops_*.py
     op records land on the live Trace    _data_classes/ (Op), _trace_core/ (columns), _ir/ (events)
@@ -70,7 +71,7 @@ tl.validate(model, x)                    validation/consolidated.py -> validatio
 ```
 
 The sparse path shares the front half: `tl.record(model, x, save=...)` runs the same wrappers
-but emits `OpEvent` rows through `capture/projections.py` into a `Recording`
+but emits `OpEvent` rows through `_capture/projections.py` into a `Recording`
 (`fastlog/`); `Recording.to_trace()` materialises a `Trace` through the same postprocess.
 
 Key types crossing layer boundaries: `Trace` (one captured forward pass), `Op` (one executed
@@ -89,9 +90,9 @@ tests; `tests/AGENTS.md` has the full area table.
 | --- | --- | --- | --- |
 | Eager capture | `tl.trace` | `user_funcs.py`, `capture/`, `backends/torch/` | `test_toy_models.py`, `test_capture_*.py`, `capture_oracle/`, `classics_corpus/` |
 | Backend registry and previews | `tl.trace(backend=...)`, `tl.backends` | `backends/` and `backends/<name>/` | `backends/`, `backend_conformance/`, `backend_parity/` |
-| Sparse recording | `tl.record`, `Recording` | `fastlog/`, `capture/projections.py`, `_ir/events.py` | `test_fastlog/`, `test_record_*.py` |
+| Sparse recording | `tl.record`, `Recording` | `recording/`, `_capture/projections.py`, `_ir/events.py` | `test_fastlog/`, `test_record_*.py` |
 | Capture options and predicates | `tl.options.CaptureOptions`, `tl.func`, `tl.when`, `tl.in_module` | `options.py`, `intervention/` (selectors), `_ir/predicate_registry.py` | `test_selection_*.py`, `test_capture_*.py` |
-| Capture outcomes and partial captures | `Trace.outcome`, `tl.partial` | `capture/outcome.py`, `_partial/` | `test_capture_outcomes*.py`, `test_postprocess_*.py` |
+| Capture outcomes and partial captures | `Trace.outcome`, `tl.partial` | `_capture/outcome.py`, `_partial/` | `test_capture_outcomes*.py`, `test_postprocess_*.py` |
 | Graph postprocess | (internal, runs inside `tl.trace`) | `_postprocess/` | `test_postprocess_*.py`, `test_loop_*.py`, `test_conditional_*.py` |
 | Product types and lookup | `tl.Trace`, `tl.Op`, `tl.Layer`, `trace[label]` | `_data_classes/`, `_trace_core/`, `appliances/` | `test_metadata*.py`, `test_layer_log.py`, `godobject_oracle/` |
 | Save and load | `Trace.save`, `tl.load`, `tl.io` | `_io/`, `io/`, `schemas/` | `test_io_*.py`, `test_tlspec_*.py`, `release_goldens/` |
@@ -103,7 +104,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Selection algebra | `tl.Selection`, `tl.units`, `tl.params`, `tl.top_k` | `_selection.py`, `_selection_values.py`, `_selection_graph.py`, `_selection_subspace.py`, `_selection_compare.py` | `test_selection*.py` |
 | Attribution | `tl.attribution` | `attribution/`, `attribution/graph/`, `attribution/onebackward/` | `test_attribution*.py` |
 | Mechanistic interpretability kit | `tl.mechinterp` | `mechinterp/` | `semantic/`, `test_mi_*.py` |
-| Facets | `tl.semantic`, `tl.facets` | `semantic/`, `semantic/recipes/` | `semantic/`, `test_semantic*.py` |
+| Facets | `tl.facets`, `torchlens.mechinterp` | `_semantic/`, `_semantic/recipes/` | `semantic/`, `test_semantic*.py` |
 | Receptive and projective fields | `tl.receptive_field`, `op.receptive_field` | `receptive_field/`, `receptive_field/rules/` | `test_receptive*.py` |
 | Representation geometry and statistics | `tl.repgeom`, `tl.stats` | `repgeom/`, `stats/` | `test_repgeom*.py`, `test_stats*.py` |
 | Activation transforms | `tl.transforms` | `transforms/` | `test_transforms*.py`, `transforms_corpus/` |
@@ -114,10 +115,10 @@ tests; `tests/AGENTS.md` has the full area table.
 | Dataset extraction | `tl.dataset_extraction` | `dataset_extraction.py`, `_extraction/`, `_data_substrate/` | `test_dataset_extraction*.py` |
 | Neuroscience bridges | `tl.neuro`, `torchlens.preprocessing` | `neuro/`, `preprocessing/`, `bridge/` | `test_neuro*.py` |
 | Summary and reports | `tl.summary`, `trace.summary()`, `tl.report` | `report/`, `user_funcs.py` | `test_summary*.py`, `test_report*.py` |
-| Graph rendering | `trace.draw`, `tl.visualization.show_model_graph` | `visualization/`, `visualization/renderers/`, `visualization/lenses/` | `visualization/`, `test_draw*.py`, `test_collapse*.py`, `test_theme*.py` |
+| Graph rendering | `trace.draw`, `torchlens._visualization.show_model_graph` | `_visualization/`, `_visualization/renderers/`, `_visualization/lenses/` | `visualization/`, `test_draw*.py`, `test_collapse*.py`, `test_theme*.py` |
 | Activation plots and transformer pictures | `tl.viz`, `tl.tviz` | `viz/`, `transformer/` | `test_visual*.py`, `test_tviz*.py` |
 | Static exports | `tl.export` | `export/`, `export/_model_explorer/` | `test_export*.py`, `test_modelexplorer_assets/` |
-| Quickstart ladder | `torchlens.user_funcs.render`, `tl.summary(model, input_size=...)`, `torchlens._quickstart.InputSpec` | `_quickstart/` | `test_quickstart*.py` |
+| Quickstart ladder | `torchlens._user_funcs.render`, `tl.summary(model, input_size=...)`, `torchlens._quickstart.InputSpec` | `_quickstart/` | `test_quickstart*.py` |
 | Agent surface | `trace.to_agent_json`, `tl.report.explain`, `tl.bridge.mcp` | `agent/`, `report/`, `bridge/` | `test_agent*.py`, `agent_surface_goldens/` |
 | External tool bridges | `tl.bridge.<tool>`, `tl.callbacks` | `bridge/`, `bridge/lit/`, `callbacks/` | `test_bridges_*.py` |
 | Environment report | `tl.utils.doctor()`, `tl.compat.report()` | `_utils/__init__.py`, `compat/` | `test_doctor*.py`, `test_compat*.py` |
@@ -131,7 +132,7 @@ about 1,300 imports placed inside function bodies. The root facade (`__init__.py
 `_io/__init__.py` are declared facades and defer on purpose; most of the rest exist because
 a lower layer calls upward: `Trace._postprocess` imports `postprocess` inside the method,
 `user_funcs.py` carries about 40 in-function imports, `_data_classes/trace.py` about 45,
-`backends/torch/wrappers.py` and `capture/trace.py` about 25 each. A module-level layer
+`backends/torch/wrappers.py` and `_capture/trace.py` about 25 each. A module-level layer
 diagram therefore understates the coupling; read the in-function imports of any module
 before you move it. `_split_rebind.py` rebinds four split modules' functions back onto the
 old module's globals, and `_postprocess/_executor.py` reads its own package through
@@ -143,7 +144,7 @@ replay and selection is spread across them and across `_runnable_seam.py`. The t
 capture entry is `_trace_torch_model` in `user_funcs.py`, one function of about 1,300
 lines outside the backend package; `torch_func_decorator` and its nested `wrapped_func` in
 `backends/torch/wrappers.py` are about 900 and 760 lines; the forward runner
-`run_and_log_inputs_through_model` in `capture/trace.py` about 860. `validation/core.py` is
+`run_and_log_inputs_through_model` in `_capture/trace.py` about 860. `validation/core.py` is
 5,200 lines and `_utils/rng.py` 5,080. Changes to capture semantics usually touch three of
 these at once.
 
@@ -162,7 +163,7 @@ implementation. `viz/` plots activations, `visualization/` renders graphs, `tran
 transformer pictures. `checks/`, `validation/`, `debug/` and four root `_validation_*.py`
 modules all verify something. `errors/` is the public exception package, `_errors.py` the
 internal helpers, and `intervention/errors.py` the intervention catalogue. `facets.py` at
-the root is an alias that replaces itself in `sys.modules` with `semantic/facets.py`. The
+the root is an alias that replaces itself in `sys.modules` with `_semantic/facets.py`. The
 runnable replay is 18 `_runnable_*.py` root modules rather than a package. Module names in
 `backends/torch/` (`belt.py`, `rescue.py`, `_runnable_seam.py`) do not say what they hold;
 the generated index gives each one's first docstring line.
