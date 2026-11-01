@@ -153,6 +153,18 @@ class ForwardResult:
         Number of operations committed before the arm was taken.
     raw_graph_ws
         Raw graph workspace handed to postprocess.
+    backend
+        The active capture backend object (not its name) the arms call for
+        output extraction and session cleanup.
+    model
+        The model the forward ran, as instrumented (possibly unwrapped).
+    input_tensors
+        The labelled input tensors of the forward pass, as placed on the
+        model's device.
+    input_args
+        Positional forward inputs as placed on the model's device.
+    input_kwargs
+        Keyword forward inputs as placed on the model's device.
     """
 
     trace: Trace
@@ -165,6 +177,11 @@ class ForwardResult:
     exc: BaseException | None = None
     committed_ops: int = 0
     raw_graph_ws: Any = None
+    backend: Any = None
+    model: Any = None
+    input_tensors: tuple[Any, ...] = ()
+    input_args: Any = None
+    input_kwargs: dict[Any, Any] | None = None
 
 
 # The class moved here verbatim from ``torchlens._capture.config``, which re-exports it.
