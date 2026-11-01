@@ -215,7 +215,13 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # 41 -> 40 (2.36.1 integration): rerun.py's fallback read of the retired
     # _retain_layers_to_save_output_parents flag now reads it from the
     # session-only _rerun_save_request through the instance dict.
-    "intervention": 40,
+    # 40 -> 39 (selection package move): resolver.py and its one read of the
+    # optional `_tracing_finished` flag moved to torchlens/_selection/; the
+    # count moved with it (the `_selection` row below), total unchanged.
+    "intervention": 39,
+    # 0 -> 1 (selection package move): the resolver's `_tracing_finished` read
+    # relocated here from intervention/ (see the 40 -> 39 note above).
+    "_selection": 1,
     # 2 -> 3 (aliased output slots, net-f26): _output_occurrences.py reads the
     # runtime-only `_output_container_specs_by_raw_label` map the backend sets
     # at capture end and the writer contract drops; absent on loaded traces,

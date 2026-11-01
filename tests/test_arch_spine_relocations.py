@@ -26,6 +26,7 @@ from __future__ import annotations
 import ast
 import importlib
 import pickle
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -128,6 +129,9 @@ class TestInterventionTripleHandoff:
     def test_closure_still_drags_the_selection_substrate(self) -> None:
         """The blocker is real: types/errors eagerly import torchlens._selection.
 
+        The substrate is a package (``torchlens/_selection/``), so the eager
+        import is spelled per submodule (``from .._selection.selection import``,
+        ``from .._selection.target import``, ``from .._selection.errors import``).
         If this test starts failing, the closure shrank (C03 or a later lane
         broke the selection dependency) and the triple move is unblocked --
         execute it as the C01/F35 amendment instead of deleting this pin.
@@ -135,9 +139,12 @@ class TestInterventionTripleHandoff:
 
         types_source = (REPO / "torchlens/intervention/types.py").read_text()
         errors_source = (REPO / "torchlens/intervention/errors.py").read_text()
-        assert "from .._selection import" in types_source
-        assert "from .._selection import" in errors_source
+        eager = re.compile(r"^from \.\._selection(\.\w+)? import", re.MULTILINE)
+        assert eager.search(types_source)
+        assert eager.search(errors_source)
 
     def test_selectors_depend_on_types(self) -> None:
+        """Selectors take their target vocabulary from the substrate's own target module."""
+
         selectors_source = (REPO / "torchlens/_selection/selectors.py").read_text()
-        assert "from .types import" in selectors_source
+        assert "from .target import" in selectors_source
