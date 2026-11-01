@@ -944,6 +944,7 @@
     "_options_grouping_policy": "keep",
     "_options_inference_only": "keep",
     "_options_input_transform": "keep",
+    "_options_jax_static_argnums": "drop",
     "_options_keep_orphans": "keep",
     "_options_mark_layer_depths": "keep",
     "_options_mode": "keep",
@@ -1019,6 +1020,8 @@
     "_provenance_input_signature_hash": "keep",
     "_provenance_input_structure": "blob_recursive",
     "_provenance_is_appended": "keep",
+    "_provenance_jax_closed_jaxpr": "drop",
+    "_provenance_jax_inlined_call_primitives": "drop",
     "_provenance_model_object_id": "keep",
     "_provenance_observer_spans": "keep",
     "_provenance_output_postprocessor": "keep",
@@ -1259,7 +1262,7 @@
     "_relations": "keep"
    },
    "torchlens.intervention.types.Edit": {
-    "args": "blob_recursive",
+    "args": "keep",
     "direction": "keep",
     "factory": "drop",
     "is_batch_independent": "keep",
@@ -3392,6 +3395,7 @@
      "_options_grouping_policy": "keep",
      "_options_inference_only": "keep",
      "_options_input_transform": "keep",
+     "_options_jax_static_argnums": "drop",
      "_options_keep_orphans": "keep",
      "_options_mark_layer_depths": "keep",
      "_options_mode": "keep",
@@ -3467,6 +3471,8 @@
      "_provenance_input_signature_hash": "keep",
      "_provenance_input_structure": "blob_recursive",
      "_provenance_is_appended": "keep",
+     "_provenance_jax_closed_jaxpr": "drop",
+     "_provenance_jax_inlined_call_primitives": "drop",
      "_provenance_model_object_id": "keep",
      "_provenance_observer_spans": "keep",
      "_provenance_output_postprocessor": "keep",
@@ -4004,5 +4010,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "dac19f21e46c93b85eb6fe3a70a01b4eb36cbe2adbb16f0665fee6cfe245f3fd"
+ "writer_contract_digest": "48ece7cdce18d0ddb6279f40d6d8c47095e85355e2b4d6980ceac22aa3e01732"
 }
