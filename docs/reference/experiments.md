@@ -82,6 +82,50 @@ derived standard-MHA geometry (GQA/MQA refuses
 `head_ablation_equivalence_undeclared`), proven against a hand-written
 pre-projection hook oracle in its own test file.
 
+## Grids
+
+`torchlens.experiment.sweep_grid(baseline, axes=, metric=, retain=, edit=,
+engine="live_hook", model=, inputs=)` is the second face of the SAME engine:
+named axes instead of a flat candidate list, and a labeled N-dimensional
+result instead of the bare Bundle. `axes` is a plain ordered mapping of axis
+name to values, each a list (values named `"0"`, `"1"`, ...) or a mapping of
+value name to value (`axes={"layer": {"L3": tl.module("h.3")},
+"position": {"t7": tl.positions(tl.zero_ablate(), 7)}}`). An axis holds
+sites (selectors, Selections, labels) or edits; at most one axis holds edits,
+and it replaces `edit=` (both at once refuse `grid_edit_conflict`, neither
+`grid_edit_missing`). A cell's site is its site values combined: one value
+as is, a module-free facet plus exactly one module value as
+`facet.in_module(address)`, otherwise the `&` intersection. Cells are named
+by their comma-joined value names in axis order (`"L3,t7"`), which is also
+the retained member's name.
+
+The grid preflights the axes' shape, forms and resolves every cell, checks
+integer `tl.positions` against the recorded shapes
+(`grid_position_out_of_range`) and refuses duplicates
+(`site_sweep_duplicate_candidates`, the edit included in the identity), all
+BEFORE any forward; then the cells run through `sweep_sites`' serial loop
+with retention under the same policies. A hole in the grid is a refused cell,
+never a refused grid (ruled 1 Nov 2026): a cell resolving to no site
+(`grid_cell_unresolved`) or to several without a `multi_site` declaration
+(`grid_cell_multi_site`) lands as a refused effect row, NaN in `values`,
+while every other cell runs. Axis-shape mistakes (`grid_axes_invalid`,
+`grid_axis_mixed`, `grid_site_axis_missing`, `grid_edit_axis_multiple`,
+`grid_cell_uncombinable`, `grid_too_large`) refuse the whole grid.
+
+The result is a `SweepGrid`: `values` is a float64 tensor shaped by the axes
+with NaN for refused or failed cells, `deltas` subtracts `baseline_value`,
+`cells` carries one `GridCell` per cell (`candidate_id`, `coords`, `status`,
+`value`, `error`, `member_name`), `failed` and `refused` list the cell ids,
+`index(**coords)` / `candidate_id(**coords)` / `coords(cell_id)` / `cell(**coords)`
+translate between coordinates, cell ids and tensor indices, `to_pandas()` is
+the long format (one row per cell, `tabular` extra), and `bundle`, `effects`
+and `history_id` are the record. The axes ride in the recorded `site_sweep`
+operation's params (`axes`, `edit_axis`, `cells`; the effect table's
+`edit_repr` is `axis:<name>` for an edit axis), so a saved and loaded bundle
+rebuilds the grid with `bundle.effects().to_grid()`; a table written by
+`sweep_sites` refuses `grid_axes_unavailable`. Plain data: no plotting
+helper, no threshold, no ranking beyond what `effects` already offers.
+
 ## Deliberately not built
 
 No default metric, edit, or retention; no iterated search (ACDC-style

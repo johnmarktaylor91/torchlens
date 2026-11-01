@@ -73,6 +73,11 @@
   engine (edit=/metric=/retain= REQUIRED, undeclared multi-site candidates
   refused, complete effect table persisted incl. released/refused/failed
   rows, `bundle.effects()` reads, `bundle.map(fn)` keys released candidates `"unmeasured"`);
+  `torchlens.experiment.sweep_grid(baseline, axes=, metric=, retain=)` is
+  the same engine over named axes (plain ordered `axes` mapping, at most one
+  axis of edits, cells named `"L3,t7"`, a hole is a refused cell and the
+  rest run) returning a `SweepGrid` (float64 `values` with NaN, axes recorded
+  in the operation's params, `effects().to_grid()` after load);
   `head_ablation_candidates` is the module-scoped v-facet sugar (GQA
   refuses; hand-written-hook oracle in its test file). The experiment
   ledger (the opt-in semantic record) was removed on 1 Nov 2026: the Bundle

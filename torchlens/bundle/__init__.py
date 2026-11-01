@@ -760,7 +760,7 @@ class Bundle:
         id; this read never recomputes it.
         """
 
-        from ..experiment._engine import bundle_effects
+        from ..experiment._effects import bundle_effects
 
         return bundle_effects(self, history_id)
 

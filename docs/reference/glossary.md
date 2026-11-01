@@ -3436,6 +3436,9 @@ describe each surface in depth.
 | `tl.bridge.transformers.trace_text` | Trace a Hugging Face language model with raw text input |
 | `tl.errors.AttributionError` | Error raised for unsupported or invalid attribution requests |
 | `tl.errors.MissingFacetError` | Raised when a declared facet needs a different capture to be available |
+| `tl.experiment.GridCell` | One cell of a `SweepGrid`: coordinates, status, value, error and member name |
+| `tl.experiment.SweepGrid` | The labeled result of `sweep_grid`: float64 `values` shaped by the axes (NaN for refused or failed cells) beside the Bundle |
+| `tl.experiment.sweep_grid` | Sweep the product of named axes (sites, at most one axis of edits); one member per cell, baseline first |
 | `tl.facets.FacetFunction` | Registered facet recipe metadata |
 | `tl.facets.MissingGrad` | Sentinel for a known facet gradient that is not currently saved |
 | `tl.facets.describe` | List registered facet function names and declared facets for a class name |
@@ -3696,6 +3699,7 @@ describe each surface in depth.
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
+| `axes=` | keyword of `tl.experiment.sweep_grid`: axis name -> values (a list or a mapping of value name -> value), in declaration order |
 | `axis_roles=` | field and constructor keyword of `ReceptiveField` |
 | `backward_pass_number=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
 | `bin_edges=` | field and constructor keyword of `HistogramPoint` |
@@ -3727,6 +3731,7 @@ describe each surface in depth.
 | `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
+| `max_cells=` | keyword of `tl.experiment.sweep_grid`: guard on the product of the axis lengths (`grid_too_large`) |
 | `module_pass_number=` | field and constructor keyword of `RecordContext` |
 | `mutation_version=` | keyword of `TensorInputObservation` |
 | `num_components=` | keyword of `tl.repgeom.classical_mds`, `tl.stats.PCA` and `tl.transforms.srp`: the number of components (output dimensions) to return |
@@ -3981,6 +3986,7 @@ The sections above describe each surface in depth.
 | `Edit.name` | The edit's public name (the builder that made it, such as `zero_ablate`) |
 | `Edit.signal` | Pass an edit is bound to: `"forward"` for edits that read recorded activations, `None` for neutral edits |
 | `EffectsView.rank_changes` | Rank candidates by the size of their change from baseline, descending |
+| `EffectsView.to_grid` | Rebuild the `SweepGrid` of a `sweep_grid` operation from its effect table and recorded axes |
 | `EffectsView.to_selection` | Convert the view to a selection: the union of its WHERE regions |
 | `EpisodeOptions.acknowledge_step_cost` | Accept a step declaration beyond the cost ceiling |
 | `EpisodeOptions.crossings` | Declared exogenous crossings: step indices whose inputs come from outside the capture |
@@ -4022,6 +4028,12 @@ The sections above describe each surface in depth.
 | `GradRecordContext.pass_number` | Pass number of the op whose gradient is recorded |
 | `GraduationItem.met` | Whether this graduation check holds |
 | `GraduationReport.met` | Whether all six graduation items hold |
+| `GridCell.candidate_id` | The cell id: the comma-joined value names in axis order, also the retained member's name |
+| `GridCell.coords` | Axis name to value name for this cell |
+| `GridCell.error` | The refusal (`grid_cell_unresolved`, `grid_cell_multi_site`) or failure text; None otherwise |
+| `GridCell.member_name` | The retained member's name, None when the cell holds no member |
+| `GridCell.status` | `completed`, `released`, `refused` or `failed` |
+| `GridCell.value` | The metric value, None for a refused or failed cell |
 | `GuessInputShapeReport.attempts` | Probe diary as `(shape, outcome)` tuples |
 | `GuessInputShapeReport.constraining_module` | Module qualname that constrained the inferred shape, when known |
 | `GuessInputShapeReport.constraining_op` | Operation name that constrained the inferred shape, when known |
@@ -4163,6 +4175,22 @@ The sections above describe each surface in depth.
 | `SummaryTotals.retained_bytes` | Bytes this object holds now |
 | `Super.absent_names` | Return bundle member names not represented by this view |
 | `Super.is_complete` | Return whether every bundle member is represented |
+| `SweepGrid.axes` | Axis name to value names, in declaration order |
+| `SweepGrid.baseline_value` | The metric on the un-edited baseline |
+| `SweepGrid.bundle` | The Bundle (baseline plus retained members) the grid's effect table lives on |
+| `SweepGrid.candidate_id` | The cell id at the given coordinates (every axis by keyword) |
+| `SweepGrid.cell` | The `GridCell` at the given coordinates |
+| `SweepGrid.cells` | Every cell in product order |
+| `SweepGrid.coords` | The coordinates of a cell id (the inverse of `candidate_id`) |
+| `SweepGrid.deltas` | `values - baseline_value`; NaN stays NaN |
+| `SweepGrid.edit_axis` | The axis holding edits, None when edit= served every cell |
+| `SweepGrid.effects` | The `EffectsView` over the grid's effect table |
+| `SweepGrid.failed` | Cell ids whose forward or metric raised |
+| `SweepGrid.history_id` | The recorded `site_sweep` operation's id |
+| `SweepGrid.index` | The integer index tuple into `values` at the given coordinates |
+| `SweepGrid.refused` | Cell ids refused at preflight (never run) |
+| `SweepGrid.to_pandas` | Long format, one row per cell (needs the `tabular` extra) |
+| `SweepGrid.values` | float64 tensor shaped by the axes; NaN for refused or failed cells |
 | `TapRecord.signal` | Pass the tapped value belongs to: `"forward"` or `"backward"` |
 | `TensorInputObservation.mutation_version` | Captured PyTorch version counter of the input tensor (diagnostic, not portable) |
 | `TensorInputObservation.python_object_id` | In-process Python object identity of the input tensor (diagnostic, not portable) |

@@ -356,6 +356,15 @@
   per-candidate `member_effect_table_v1` (released/refused/failed included)
   persists and `bundle.effects()` serves it; `bundle.map(fn)` keys released candidates as `"unmeasured"` (member-axis
   `rank_changes`, explicit session-only tier-c `.to_selection()`).
+  `torchlens.experiment.sweep_grid(baseline, axes=, metric=, retain=, edit=)`
+  runs the SAME engine over named axes (`axes={"layer": {...}, "position":
+  {...}}`, sites or at most one axis of edits, cells named by comma-joined
+  value names) and returns a `SweepGrid`: float64 `values` shaped by the axes
+  with NaN for refused or failed cells; a zero-site or undeclared multi-site
+  cell is a REFUSED cell (`grid_cell_unresolved` / `grid_cell_multi_site`)
+  while the rest run, axis-shape mistakes refuse the whole grid, the axes
+  ride in the operation's params and `bundle.effects().to_grid()` rebuilds
+  the grid after load (ruled 1 Nov 2026).
   `head_ablation_candidates` is the module-scoped v-facet sugar (GQA/MQA
   refuses typed; hand-written-hook oracle beside it). The experiment ledger
   (the opt-in SEMANTIC record and its three MCP reader tools) was REMOVED on

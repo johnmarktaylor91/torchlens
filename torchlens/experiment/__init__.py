@@ -22,13 +22,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ..bundle._bytes import bundle_retained_bytes as retained_bytes
-from ._engine import EffectsView, sweep_sites
+from ._effects import EffectsView
+from ._engine import sweep_sites
+from ._grid import GridCell, SweepGrid, sweep_grid
 from ._head_sugar import head_ablation_candidates
 
 __all__ = [
     "EffectsView",
+    "GridCell",
+    "SweepGrid",
     "head_ablation_candidates",
     "retained_bytes",
+    "sweep_grid",
     "sweep_sites",
 ]
 
