@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1319 modules, 623285 lines, 0 modules without a docstring.
+83 packages, 1319 modules, 623283 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 43 | 24726 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1487 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 7 | 4463 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 38775 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 38773 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
@@ -274,7 +274,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (7 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (77 modules, 38775 lines)
+Core data structures for representing a logged forward pass. (77 modules, 38773 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -313,7 +313,7 @@ Core data structures for representing a logged forward pass. (77 modules, 38775 
 | `_trace_accessors` | Trace accessor helpers. | 658 |
 | `_trace_annotations` | Trace annotation family: user notes and tags on a finished trace (record rebuild destination; empty until its bodies move in). | 5 |
 | `_trace_components` | Declared Trace field-to-component ownership map ( decomposition). | 609 |
-| `_trace_export` | Trace export mixin. | 721 |
+| `_trace_export` | Trace export mixin. | 730 |
 | `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 846 |
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 334 |
 | `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 734 |
@@ -354,7 +354,7 @@ Core data structures for representing a logged forward pass. (77 modules, 38775 
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 4699 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1083 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 189 |
-| `trace` | Trace: the top-level container for a fully logged forward pass. | 3922 |
+| `trace` | Trace: the top-level container for a fully logged forward pass. | 3911 |
 
 ### `torchlens._data_substrate`
 

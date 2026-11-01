@@ -82,7 +82,7 @@ torchlens/_data_classes/_op_transforms.py::validate_train_mode_transform_output	
 torchlens/_data_classes/_schema_bindings.py	1029
 torchlens/_data_classes/_trace_export.py::TraceExportMixin.decode_output	65
 torchlens/_data_classes/_trace_export.py::TraceExportMixin.output_table	61
-torchlens/_data_classes/_trace_export.py::TraceExportMixin.to_pandas	114
+torchlens/_data_classes/_trace_export.py::TraceExportMixin.to_pandas	112
 torchlens/_data_classes/_trace_fork.py	846
 torchlens/_data_classes/_trace_fork.py::_fill_layer_shells	62
 torchlens/_data_classes/_trace_fork.py::build_fork	178
@@ -100,7 +100,7 @@ torchlens/_data_classes/_trace_intervention.py::TraceInterventionMixin.clear_edi
 torchlens/_data_classes/_trace_intervention.py::TraceInterventionMixin.set	111
 torchlens/_data_classes/_trace_inventory.py::build_bill_of_materials	95
 torchlens/_data_classes/_trace_inventory.py::build_sites_table	94
-torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	101
+torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	97
 torchlens/_data_classes/_trace_stack.py::TraceStackMixin.stack	90
 torchlens/_data_classes/_trace_stats.py	1771
 torchlens/_data_classes/_trace_stats.py::TraceStatsMixin.collapse_plan	69
@@ -138,10 +138,10 @@ torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1083
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3916
+torchlens/_data_classes/trace.py	3911
 torchlens/_data_classes/trace.py::Trace.__getstate__	111
 torchlens/_data_classes/trace.py::Trace.__init__	366
-torchlens/_data_classes/trace.py::Trace.__setstate__	337
+torchlens/_data_classes/trace.py::Trace.__setstate__	336
 torchlens/_data_classes/trace.py::Trace._refresh_rerun_op_from	63
 torchlens/_data_classes/trace.py::Trace.replace_state_from	76
 torchlens/_data_classes/trace.py::Trace.save	83

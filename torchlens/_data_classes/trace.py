@@ -2727,17 +2727,6 @@ class Trace(
 
         return f"{format_model_repr(self)}{self._repr_honesty_suffix()}"
 
-    def _attach_dataframe_honesty(self, frame: Any) -> Any:
-        """Stamp ``frame.attrs`` with this trace's capture-honesty facts.
-
-        The accessors' tabular exports call this instead of reaching
-        ``_capture_honesty`` themselves (``_accessor_base.attach_source_honesty``).
-        """
-
-        from .._capture_honesty import attach_dataframe_honesty
-
-        return attach_dataframe_honesty(frame, self)
-
     def _repr_honesty_suffix(self) -> str:
         """Outcome + health suffix tokens for the identity repr (F10)."""
 

@@ -426,6 +426,17 @@ class TraceExportMixin(_TraceMixinBase):
 
         return build_agent_json(self, max_ops=max_ops)
 
+    def _attach_dataframe_honesty(self: "Trace", frame: Any) -> Any:
+        """Stamp ``frame.attrs`` with this trace's capture-honesty facts.
+
+        The one place the records reach ``_capture_honesty`` for tabular exports:
+        ``to_pandas`` here and ``_accessor_base.attach_source_honesty`` both call it.
+        """
+
+        from .._capture_honesty import attach_dataframe_honesty
+
+        return attach_dataframe_honesty(frame, self)
+
     def to_pandas(self: "Trace", include_decoded_output_summary: bool = False) -> "pd.DataFrame":
         """Return a dataframe containing one row per layer pass.
 
@@ -537,9 +548,7 @@ class TraceExportMixin(_TraceMixinBase):
             model_df[column_name] = model_df[column_name].astype(column_type)
         model_df["terminal_conditional_id"] = model_df["terminal_conditional_id"].astype("Int64")
 
-        from .._capture_honesty import attach_dataframe_honesty
-
-        return attach_dataframe_honesty(model_df, self)
+        return self._attach_dataframe_honesty(model_df)
 
     def decode_output(
         self: "Trace",

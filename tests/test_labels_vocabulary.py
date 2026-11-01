@@ -6,7 +6,8 @@ import pytest
 
 from torchlens._data_classes import _labels
 
-pytestmark = pytest.mark.smoke
+# Smoke carries four items (the tier is near its size ceiling): two sweeps over the whole
+# vocabulary and the two table tests. The parametrised cases below run in the mid backstop.
 
 OP_LABELS = [
     "conv2d_1_5:2",
@@ -86,6 +87,28 @@ def test_final_labels_are_not_raw(label: object) -> None:
     assert not _labels.is_raw(label)
 
 
+@pytest.mark.smoke
+def test_smoke_pass_qualified_vocabulary_round_trips() -> None:
+    for op_label, layer_label in zip(OP_LABELS, LAYER_LABELS):
+        assert _labels.is_pass_qualified(op_label), op_label
+        assert not _labels.is_pass_qualified(layer_label), layer_label
+        base, pass_number = _labels.split_pass(op_label)
+        assert (base, pass_number) == (layer_label, int(op_label.rpartition(":")[2]))
+        assert _labels.join_pass(base, pass_number) == op_label
+        assert _labels.split_pass(layer_label) == (layer_label, None)
+
+
+@pytest.mark.smoke
+def test_smoke_short_forms_and_raw_suffix() -> None:
+    assert _labels.strip_step_index("conv2d_1_5") == "conv2d_1"
+    assert _labels.strip_step_index("input_1") == "input_1"
+    assert _labels.short_op_label("conv2d_1_5:2") == "conv2d_1:2"
+    for label in RAW_LABELS:
+        assert _labels.is_raw(label), label
+    for label in OP_LABELS + LAYER_LABELS:
+        assert not _labels.is_raw(label), label
+
+
 class _TraceWithTables:
     """A trace stand-in carrying the three raw-to-final tables postprocess fills."""
 
@@ -104,6 +127,7 @@ class _TraceWithTables:
         }
 
 
+@pytest.mark.smoke
 def test_raw_to_final_tables_round_trip() -> None:
     trace = _TraceWithTables()
     assert _labels.raw_to_final_op(trace, "relu_1_2_raw") == "relu_1_2:1"  # type: ignore[arg-type]
@@ -115,6 +139,7 @@ def test_raw_to_final_tables_round_trip() -> None:
         assert _labels.final_to_raw_layer(trace, final) == raw  # type: ignore[arg-type]
 
 
+@pytest.mark.smoke
 def test_unknown_labels_resolve_to_none() -> None:
     trace = _TraceWithTables()
     assert _labels.raw_to_final_op(trace, "missing_raw") is None  # type: ignore[arg-type]
