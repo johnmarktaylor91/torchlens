@@ -34,10 +34,9 @@ REASON_USER_INTERVENTION = "user_intervention_replacement"
 REASON_EFFECTFUL_REGION = "effectful_region"
 #: No perturbation of a value parent changed the op's replayed output.
 REASON_PERTURBATION_INSENSITIVE = "perturbation_insensitive"
-#: The backend-neutral metadata invariants rejected the trace before replay.
-#: Not yet in ``VALIDATION_REASONS``; registration is requested from the
-#: protocol owner (the list is a superset and grows "as met").
-REASON_METADATA_INVARIANT = "metadata_invariant_violation"
+#: The backend-neutral metadata invariants rejected the trace before replay
+#: (a registered status-level reason, ``validation.status.STATUS_REASONS``).
+REASON_METADATA_INVARIANT = "metadata_invariant_exception"
 
 PADDLE_VALIDATION_REASONS: frozenset[str] = frozenset(
     {
@@ -53,8 +52,8 @@ PADDLE_VALIDATION_REASONS: frozenset[str] = frozenset(
     }
 )
 
-#: Decision outcomes.
-OUTCOME_REPLAYED = "replayed"
+#: Decision kinds, in torch's ``ValidationDecision`` vocabulary.
+OUTCOME_REPLAYED = "validated"
 OUTCOME_FAILED = "failed"
 OUTCOME_EXEMPTED = "exempted"
 
@@ -64,8 +63,10 @@ def decision(
     outcome: str,
     reason: str | None = None,
     detail: str = "",
+    *,
+    func_name: str | None = None,
 ) -> dict[str, Any]:
-    """Build one per-op decision record.
+    """Build one per-op decision row in torch's ``ValidationDecision`` shape.
 
     Parameters
     ----------
@@ -73,20 +74,31 @@ def decision(
         The op's public label (``layer_label`` when resolvable, else the raw
         capture label), or ``None`` when the failure concerns no single op.
     outcome:
-        ``"replayed"``, ``"failed"`` or ``"exempted"``.
+        ``"validated"``, ``"failed"`` or ``"exempted"``.
     reason:
         A reason from :data:`PADDLE_VALIDATION_REASONS`, or ``None`` for a plain
         verified replay.
     detail:
-        Free text for humans; never pinned by tests.
+        Free text for humans (stored as ``justification``); never pinned by tests.
+    func_name:
+        The op's ``func_name`` when known.
 
     Returns
     -------
     dict[str, Any]
-        The decision mapping stored in ``ValidationStatus.decisions``.
+        Keys ``op_label``, ``func_name``, ``decision``, ``reason`` and, when
+        ``detail`` is set, ``justification``.
     """
 
-    return {"label": label, "outcome": outcome, "reason": reason, "detail": detail}
+    row: dict[str, Any] = {
+        "op_label": label,
+        "func_name": func_name,
+        "decision": outcome,
+        "reason": reason,
+    }
+    if detail:
+        row["justification"] = detail
+    return row
 
 
 @dataclass(frozen=True)
@@ -105,27 +117,27 @@ class PaddleReplayOutcome:
     def replayed(self) -> int:
         """Number of ops replay- and perturbation-verified."""
 
-        return sum(1 for item in self.decisions if item["outcome"] == OUTCOME_REPLAYED)
+        return sum(1 for item in self.decisions if item["decision"] == OUTCOME_REPLAYED)
 
     @property
     def failed(self) -> int:
         """Number of ops that failed a check."""
 
-        return sum(1 for item in self.decisions if item["outcome"] == OUTCOME_FAILED)
+        return sum(1 for item in self.decisions if item["decision"] == OUTCOME_FAILED)
 
     @property
     def exempted_reason_counts(self) -> dict[str, int]:
         """Reason counts of ops provably outside the replay contract."""
 
         counts = Counter(
-            str(item["reason"]) for item in self.decisions if item["outcome"] == OUTCOME_EXEMPTED
+            str(item["reason"]) for item in self.decisions if item["decision"] == OUTCOME_EXEMPTED
         )
         return dict(sorted(counts.items()))
 
     def first_failure(self) -> Mapping[str, Any] | None:
         """The first failed decision, or ``None``."""
 
-        return next((item for item in self.decisions if item["outcome"] == OUTCOME_FAILED), None)
+        return next((item for item in self.decisions if item["decision"] == OUTCOME_FAILED), None)
 
 
 def fold_status(
@@ -156,7 +168,8 @@ def fold_status(
     ValidationStatus
         ``failed`` when any decision failed (also when nothing was replayed,
         which is a failure for Paddle), otherwise the status
-        ``from_replay_counts`` derives.
+        ``from_replay_counts`` derives; its failed message names the first
+        failed op and reason.
     """
 
     decisions: list[Mapping[str, Any]] = list(outcome.decisions)
@@ -170,7 +183,7 @@ def fold_status(
             )
         )
     folded = PaddleReplayOutcome(tuple(decisions))
-    status = ValidationStatus.from_replay_counts(
+    return ValidationStatus.from_replay_counts(
         backend=backend,
         source=source,
         num_replayed_ops=folded.replayed,
@@ -180,11 +193,13 @@ def fold_status(
         exempted_reason_counts=folded.exempted_reason_counts,
         decisions=tuple(decisions),
     )
-    return with_failure_message(status)
 
 
 def with_failure_message(status: ValidationStatus) -> ValidationStatus:
     """Name the first failed op and its reason in a failed status's message.
+
+    ``ValidationStatus.from_replay_counts`` already words its failed message
+    this way; this covers statuses built through ``ValidationStatus.result``.
 
     Parameters
     ----------
@@ -202,9 +217,13 @@ def with_failure_message(status: ValidationStatus) -> ValidationStatus:
     first = PaddleReplayOutcome(tuple(status.decisions)).first_failure()
     if first is None:
         return status
-    where = first["label"] if first["label"] is not None else "the trace"
-    detail = f" ({first['detail']})" if first["detail"] else ""
-    message = f"Replay validation failed at {where}: {first['reason']}{detail}."
+    reason = first.get("reason") or "unknown"
+    label = first.get("op_label")
+    message = (
+        f"Replay validation failed at {label} ({reason})."
+        if label
+        else f"Replay validation failed ({reason})."
+    )
     return replace(status, message=message)
 
 

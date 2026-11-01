@@ -117,8 +117,8 @@ def test_conv_layer_corrupted_output_fails_naming_the_op() -> None:
 
     status = _protocol().validate(trace, None)
     assert status.state == "failed"
-    failed = [item for item in status.decisions if item["outcome"] == "failed"]
-    assert failed[0]["label"] == conv.layer_label
+    failed = [item for item in status.decisions if item["decision"] == "failed"]
+    assert failed[0]["op_label"] == conv.layer_label
     assert failed[0]["reason"] == "replay_mismatch"
     assert conv.layer_label in status.message
 
@@ -184,7 +184,7 @@ def test_literal_producer_is_replayed() -> None:
     assert list(ones.parents) == []
     status = _protocol().validate(trace, None)
     assert status.state == "passed", status.message
-    replayed = {item["label"] for item in status.decisions if item["outcome"] == "replayed"}
+    replayed = {item["op_label"] for item in status.decisions if item["decision"] == "validated"}
     assert ones.layer_label in replayed
 
 
@@ -200,7 +200,7 @@ def test_untraced_intermediate_fails_naming_consumer_and_reason() -> None:
     status = _protocol().validate(trace, None)
     relu = _ops(trace, "functional.relu")[0]
     assert status.state == "failed"
-    assert status.decisions[0]["label"] == relu.layer_label
+    assert status.decisions[0]["op_label"] == relu.layer_label
     assert status.decisions[0]["reason"] == "parent_payload_missing"
     assert relu.layer_label in status.message
 
@@ -214,8 +214,8 @@ def test_constant_payload_tamper_fails_the_consumer() -> None:
 
     status = _protocol().validate(trace, None)
     assert status.state == "failed"
-    assert status.decisions[0]["outcome"] in {"exempted", "failed"}
-    first_failed = next(item for item in status.decisions if item["outcome"] == "failed")
+    assert status.decisions[0]["decision"] in {"exempted", "failed"}
+    first_failed = next(item for item in status.decisions if item["decision"] == "failed")
     assert first_failed["reason"] == "replay_mismatch"
 
 
