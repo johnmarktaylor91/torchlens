@@ -88,7 +88,14 @@ def test_sparse_shell_ops_skip_exhaustive_enrichment_work(
 ) -> None:
     """Unselected sparse operations never enter metadata or payload machinery."""
 
-    from torchlens.backends.torch import _ops_predicates, _ops_retention, ops, wrappers
+    from torchlens.backends.torch import (
+        _ops_exhaustive,
+        _ops_predicate_events,
+        _ops_predicates,
+        _ops_retention,
+        ops,
+        wrappers,
+    )
 
     def forbidden(*args: object, **kwargs: object) -> None:
         """Fail if shell-only capture enters an exhaustive enrichment helper."""
@@ -99,6 +106,12 @@ def test_sparse_shell_ops_skip_exhaustive_enrichment_work(
     monkeypatch.setattr(ops, "detect_torch_alias_contract", forbidden)
     monkeypatch.setattr(ops, "detect_torch_output_alias_contract", forbidden)
     monkeypatch.setattr(_ops_predicates, "_record_predicate_output", forbidden)
+    # The real callers hold their own bound copies of these helpers.
+    monkeypatch.setattr(_ops_exhaustive, "detect_torch_alias_contract", forbidden)
+    monkeypatch.setattr(_ops_exhaustive, "detect_torch_output_alias_contract", forbidden)
+    monkeypatch.setattr(_ops_predicates, "detect_torch_alias_contract", forbidden)
+    monkeypatch.setattr(_ops_predicates, "detect_torch_output_alias_contract", forbidden)
+    monkeypatch.setattr(_ops_predicate_events, "_record_predicate_output", forbidden)
     # The saved-argument copy wrappers.py calls (imported at call time).
     monkeypatch.setattr(_ops_retention, "_copy_saved_arg_tree", forbidden)
     monkeypatch.setattr(wrappers, "log_current_rng_states", forbidden)

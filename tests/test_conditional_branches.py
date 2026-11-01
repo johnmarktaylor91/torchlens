@@ -30,6 +30,7 @@ from test_conditional_step5 import ElifLadderModel, SimpleIfElseModel  # noqa: E
 import torchlens._postprocess.ast_branches as ast_branches  # noqa: E402
 import torchlens._postprocess.graph_traversal as graph_traversal  # noqa: E402
 import torchlens._utils.introspection as introspection  # noqa: E402
+import torchlens.backends.torch._ops_shared_fields as _ops_shared_fields  # noqa: E402
 import torchlens.backends.torch.ops as output_tensors  # noqa: E402
 import torchlens.backends.torch.sources as source_tensors  # noqa: E402
 from torchlens import trace as trace_fn  # noqa: E402
@@ -1765,6 +1766,7 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
 
     monkeypatch.setattr(introspection, "_get_code_context", _stack_without_qualname)
     monkeypatch.setattr(output_tensors, "_get_code_context", _stack_without_qualname)
+    monkeypatch.setattr(_ops_shared_fields, "_get_code_context", _stack_without_qualname)
     monkeypatch.setattr(source_tensors, "_get_code_context", _stack_without_qualname)
     monkeypatch.setattr(graph_traversal, "_get_code_context", _stack_without_qualname)
     monkeypatch.setattr(ast_branches, "get_file_index", _ambiguous_file_index)
