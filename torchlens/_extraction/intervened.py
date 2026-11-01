@@ -236,7 +236,7 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
             "rule_id": str(rule.rule_id),
             "where": str(rule.where_repr),
             "action": str(rule.action_repr),
-            "direction": str(rule.direction),
+            "signal": str(rule.signal),
         }
         for rule in intervene.rules
     )
