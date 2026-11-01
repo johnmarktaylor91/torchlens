@@ -349,16 +349,10 @@
   "relu_back_1_9",
   "relu_back_2_11"
  ],
- "live_bwd/conv/bwd_and_nary_flat": [
-  "relu_back_1_9",
-  "relu_back_2_11"
- ],
+ "live_bwd/conv/bwd_and_nary_flat": [],
  "live_bwd/conv/bwd_label_finalized": [],
  "live_bwd/conv/bwd_not": [],
- "live_bwd/conv/func_relu_bridge": [
-  "relu_back_1_9",
-  "relu_back_2_11"
- ],
+ "live_bwd/conv/func_relu_bridge": [],
  "live_bwd/conv/grad_fn_class": [
   "relu_back_1_9",
   "relu_back_2_11"
@@ -631,11 +625,8 @@
   "view_back_1_5"
  ],
  "sites_bwd/conv/backward_pass_2": [],
- "sites_bwd/conv/bwd_and_direction_agnostic": [
-  "relu_back_1_9",
-  "relu_back_2_11"
- ],
- "sites_bwd/conv/bwd_input_at_and_grad_output": [],
+ "sites_bwd/conv/bwd_and_direction_agnostic": "ERROR:SelectorCompositionError",
+ "sites_bwd/conv/bwd_input_at_and_grad_output": "ERROR:SelectorCompositionError",
  "sites_bwd/conv/bwd_not_accumulate": [
   "add_back_1_7",
   "addmm_back_1_3",
@@ -649,8 +640,8 @@
   "t_back_1_6",
   "view_back_1_5"
  ],
- "sites_bwd/conv/bwd_output0_and_grad_input": [],
- "sites_bwd/conv/bwd_output_at_and_grad_input": [],
+ "sites_bwd/conv/bwd_output0_and_grad_input": "ERROR:SelectorCompositionError",
+ "sites_bwd/conv/bwd_output_at_and_grad_input": "ERROR:SelectorCompositionError",
  "sites_bwd/conv/bwd_plain_label": [],
  "sites_bwd/conv/grad_fn_class": [
   "relu_back_1_9",
@@ -722,13 +713,9 @@
  "sites_bwd/dictout/dictout_output_at_logits": [
   "output_1"
  ],
- "sites_bwd/dictout/dictout_output_at_logits_and_grad_input": [
-  "relu_back_1_3"
- ],
- "sites_bwd/split/split_output0_and_grad_input": [
-  "split_back_1_5"
- ],
- "sites_bwd/split/split_output1_and_grad_input": [],
+ "sites_bwd/dictout/dictout_output_at_logits_and_grad_input": "ERROR:SelectorCompositionError",
+ "sites_bwd/split/split_output0_and_grad_input": "ERROR:SelectorCompositionError",
+ "sites_bwd/split/split_output1_and_grad_input": "ERROR:SelectorCompositionError",
  "sites_default_fanout/conv/contains_relu": [
   "relu_1_2",
   "relu_2_4"
@@ -747,11 +734,11 @@
  "sites_default_fanout/conv/not_func_missing": "ERROR:AmbiguousSiteError",
  "spec/and_func_inmodule": {
   "capture_repr": "(tl.func('relu') & tl.in_module('features'))",
-  "direction": null,
-  "hooks_direction": null,
+  "direction": "forward",
+  "hooks_direction": "forward",
   "hooks_repr": "(tl.func('relu') & tl.in_module('features'))",
   "kind": "and",
-  "resolver_direction": null,
+  "resolver_direction": "forward",
   "resolver_labels": [
    "relu_1_2"
   ],
@@ -760,11 +747,11 @@
  },
  "spec/and_nested_three": {
   "capture_repr": "(tl.func('relu') & tl.in_module('features') & tl.label_contains('relu'))",
-  "direction": null,
-  "hooks_direction": null,
+  "direction": "forward",
+  "hooks_direction": "forward",
   "hooks_repr": "(tl.func('relu') & tl.in_module('features') & tl.label_contains('relu'))",
   "kind": "and",
-  "resolver_direction": null,
+  "resolver_direction": "forward",
   "resolver_labels": [
    "relu_1_2"
   ],
@@ -928,7 +915,7 @@
  },
  "spec/followed_by_combo": {
   "capture_repr": "(tl.func('conv2d') & tl.followed_by(tl.func('relu')))",
-  "direction": null,
+  "direction": "forward",
   "hooks_repr": "ERROR:SelectorCapabilityError",
   "kind": "and",
   "resolver_repr": "ERROR:SelectorCapabilityError",
@@ -1168,11 +1155,11 @@
  },
  "spec/not_func": {
   "capture_repr": "(~tl.func('relu'))",
-  "direction": null,
-  "hooks_direction": null,
+  "direction": "forward",
+  "hooks_direction": "forward",
   "hooks_repr": "(~tl.func('relu'))",
   "kind": "not",
-  "resolver_direction": null,
+  "resolver_direction": "forward",
   "resolver_labels": [
    "add_1_5",
    "conv2d_1_1",
@@ -1213,11 +1200,11 @@
  },
  "spec/or_funcs": {
   "capture_repr": "(tl.func('relu') | tl.func('conv2d'))",
-  "direction": null,
-  "hooks_direction": null,
+  "direction": "forward",
+  "hooks_direction": "forward",
   "hooks_repr": "(tl.func('relu') | tl.func('conv2d'))",
   "kind": "or",
-  "resolver_direction": null,
+  "resolver_direction": "forward",
   "resolver_labels": [
    "conv2d_1_1",
    "conv2d_2_3",
@@ -1410,10 +1397,10 @@
   "spec_kind": "predicate"
  },
  "spec_bwd/backward_pass_1": {
-  "capture_repr": "tl.backward_pass(1)",
+  "capture_repr": "tl.in_backward_pass(1)",
   "direction": "backward",
   "hooks_direction": "backward",
-  "hooks_repr": "tl.backward_pass(1)",
+  "hooks_repr": "tl.in_backward_pass(1)",
   "kind": "backward_pass",
   "resolver_direction": "backward",
   "resolver_labels": [
@@ -1436,51 +1423,29 @@
    "t_back_1_6",
    "view_back_1_5"
   ],
-  "resolver_repr": "tl.backward_pass(1)",
+  "resolver_repr": "tl.in_backward_pass(1)",
   "spec_kind": "backward_pass"
  },
  "spec_bwd/backward_pass_2": {
-  "capture_repr": "tl.backward_pass(2)",
+  "capture_repr": "tl.in_backward_pass(2)",
   "direction": "backward",
   "hooks_direction": "backward",
-  "hooks_repr": "tl.backward_pass(2)",
+  "hooks_repr": "tl.in_backward_pass(2)",
   "kind": "backward_pass",
   "resolver_direction": "backward",
   "resolver_labels": [],
-  "resolver_repr": "tl.backward_pass(2)",
+  "resolver_repr": "tl.in_backward_pass(2)",
   "spec_kind": "backward_pass"
  },
- "spec_bwd/bwd_and_direction_agnostic": {
-  "capture_repr": "(tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None}) & tl.label_contains('relu'))",
-  "direction": null,
-  "hooks_direction": null,
-  "hooks_repr": "(tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None}) & tl.label_contains('relu'))",
-  "kind": "and",
-  "resolver_direction": null,
-  "resolver_labels": [
-   "relu_back_1_9",
-   "relu_back_2_11"
-  ],
-  "resolver_repr": "(tl.grad_fn({'type': 'ReluBackward0', 'grad_fn_label_pattern': None, 'is_custom': None}) & tl.label_contains('relu'))",
-  "spec_kind": "and"
- },
- "spec_bwd/bwd_input_at_and_grad_output": {
-  "capture_repr": "(tl.model_input((0,)) & tl.grad_kind('grad_output'))",
-  "direction": null,
-  "hooks_repr": "ERROR:SelectorCapabilityError",
-  "kind": "and",
-  "resolver_direction": null,
-  "resolver_labels": [],
-  "resolver_repr": "(tl.model_input((0,)) & tl.grad_kind('grad_output'))",
-  "spec_kind": "and"
- },
+ "spec_bwd/bwd_and_direction_agnostic": "ERROR:SelectorCompositionError",
+ "spec_bwd/bwd_input_at_and_grad_output": "ERROR:SelectorCompositionError",
  "spec_bwd/bwd_not_accumulate": {
   "capture_repr": "(~tl.grad_fn({'type': 'AccumulateGrad', 'grad_fn_label_pattern': None, 'is_custom': None}))",
-  "direction": null,
-  "hooks_direction": null,
+  "direction": "backward",
+  "hooks_direction": "backward",
   "hooks_repr": "(~tl.grad_fn({'type': 'AccumulateGrad', 'grad_fn_label_pattern': None, 'is_custom': None}))",
   "kind": "not",
-  "resolver_direction": null,
+  "resolver_direction": "backward",
   "resolver_labels": [
    "add_back_1_7",
    "addmm_back_1_3",
@@ -1497,28 +1462,8 @@
   "resolver_repr": "(~tl.grad_fn({'type': 'AccumulateGrad', 'grad_fn_label_pattern': None, 'is_custom': None}))",
   "spec_kind": "not"
  },
- "spec_bwd/bwd_output0_and_grad_input": {
-  "capture_repr": "(tl.model_output(0) & tl.grad_kind('grad_input'))",
-  "direction": null,
-  "hooks_direction": null,
-  "hooks_repr": "(tl.model_output(0) & tl.grad_kind('grad_input'))",
-  "kind": "and",
-  "resolver_direction": null,
-  "resolver_labels": [],
-  "resolver_repr": "(tl.model_output(0) & tl.grad_kind('grad_input'))",
-  "spec_kind": "and"
- },
- "spec_bwd/bwd_output_at_and_grad_input": {
-  "capture_repr": "(tl.intervention.output_at((0,)) & tl.grad_kind('grad_input'))",
-  "direction": null,
-  "hooks_direction": null,
-  "hooks_repr": "(tl.intervention.output_at((0,)) & tl.grad_kind('grad_input'))",
-  "kind": "and",
-  "resolver_direction": null,
-  "resolver_labels": [],
-  "resolver_repr": "(tl.intervention.output_at((0,)) & tl.grad_kind('grad_input'))",
-  "spec_kind": "and"
- },
+ "spec_bwd/bwd_output0_and_grad_input": "ERROR:SelectorCompositionError",
+ "spec_bwd/bwd_output_at_and_grad_input": "ERROR:SelectorCompositionError",
  "spec_bwd/bwd_plain_label": {
   "capture_repr": "tl.label('relu_back_1_9')",
   "direction": null,
