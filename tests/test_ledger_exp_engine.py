@@ -269,7 +269,11 @@ def test_map_reports_released_candidates_as_unmeasured() -> None:
     )
     report = bundle.map(lambda member: len(member.op_labels))
     (retained,) = [name for name in bundle.names if name != "baseline"]
-    (released,) = [c for c in ("relu_1_2", "tanh_1_4") if c != retained]
+    (released,) = [
+        row.candidate_id
+        for row in bundle.effects().rows
+        if row.candidate_id != "__baseline__" and row.member_name != retained
+    ]
     # Live members are measured; the released candidate is keyed by its
     # candidate id and reads "unmeasured", never re-scored, never dropped.
     assert {name: report[name] for name in bundle.names} == {

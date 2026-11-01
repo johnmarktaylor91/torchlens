@@ -392,11 +392,12 @@ def test_walk_methods_resolve_on_an_instance(model: _TinyLM) -> None:
     assert callable(bundle.upstream) and callable(bundle.downstream)
 
 
-def test_dir_lists_the_helper_table_methods(model: _TinyLM) -> None:
+def test_dir_lists_the_real_methods(model: _TinyLM) -> None:
     names = dir(_harness(model))
-    table = ("upstream", "downstream", "delta_map", "norm_delta", "output_delta", "compare")
-    for name in (*table, "show_diff", "aligned_pairs", "store_comparison", "relate"):
+    for name in ("upstream", "downstream", "compare", "draw", "store_comparison", "relate"):
         assert name in names, name
+    for name in ("delta_map", "norm_delta", "output_delta", "show_diff", "aligned_pairs"):
+        assert name not in names, name
 
 
 def test_at_on_a_member_subset_skips_a_foreign_member(model: _TinyLM) -> None:

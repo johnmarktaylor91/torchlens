@@ -42,7 +42,7 @@ def _pair() -> tl.Bundle:
     clean = tl.trace(_TinyRelu(), x)
     changed = tl.trace(_TinyRelu(offset=0.5), x)
     bundle = tl.Bundle({"clean": clean, "changed": changed}, baseline="clean")
-    bundle.relate("forked_from", "changed", "clean")
+    bundle.relate("forked_from", "changed", "clean", at_step=0)
     return bundle
 
 
