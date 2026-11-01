@@ -198,7 +198,7 @@ def _execute_hook(
     HookSignatureError
         If the callable cannot be invoked with the hook signature.
     HookValueError
-        If the callable returns ``None`` or an incompatible value.
+        If the callable returns an incompatible value (``None`` keeps ``out``).
     """
 
     try:
@@ -338,7 +338,7 @@ def validate_hook_output(
     Raises
     ------
     HookValueError
-        If the return value is invalid.
+        If the return value is not ``None`` and not a compatible tensor.
     """
 
     # R67: these are user-payload refusals. Say "intervention replacement" (the
@@ -365,7 +365,9 @@ def validate_hook_output(
         )
 
     if result is None:
-        raise _payload_refusal("returned None", "torch.Tensor", None)
+        # A hook is ``fn(tensor, *, ctx) -> Tensor | None``: None leaves the
+        # value unchanged (an observer, or one callable on a mixed site).
+        return out
     if not isinstance(result, torch.Tensor):
         raise _payload_refusal("returned a non-tensor", "torch.Tensor", type(result).__name__)
     if allow_shape_change:
