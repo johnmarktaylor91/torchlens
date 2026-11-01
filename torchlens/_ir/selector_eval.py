@@ -44,7 +44,7 @@ of the package init avoids an import cycle with ``ir.container``.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Sequence
-from functools import lru_cache, partial
+from functools import partial
 from typing import Any, Literal, cast
 
 from ..intervention.errors import (
@@ -1337,9 +1337,8 @@ def selector_from_spec(
     return selector
 
 
-@lru_cache(maxsize=1)
 def _spec_builders() -> dict[str, _SpecBuilder]:
-    """Return the kind-to-builder table (built once; the factories import lazily)."""
+    """Return the kind-to-builder table (the selector factories import lazily)."""
 
     from ..intervention.selectors import (
         FacetSelector,
@@ -1382,7 +1381,7 @@ def _spec_builders() -> dict[str, _SpecBuilder]:
         "grad_fn": partial(_spec_grad_fn, factory=grad_fn),
         "intervening": partial(_spec_constant, factory=without_op),
         "without_op": partial(_spec_constant, factory=without_op),
-        "grad_kind": partial(_spec_grad_kind, grad_input=grad_input, grad_output=grad_output),
+        "grad_kind": partial(_spec_grad_kind, factory=(grad_input, grad_output)),
         "backward_pass": partial(_spec_backward_pass, factory=in_backward_pass),
         "episode_step": partial(_spec_episode_step, factory=at_step),
         "not": _spec_not,
@@ -1516,16 +1515,11 @@ def _spec_grad_fn(
 
 
 def _spec_grad_kind(
-    kind: str,
-    value: Any,
-    metadata: dict[str, Any],
-    lifecycle: str,
-    *,
-    grad_input: Any,
-    grad_output: Any,
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: tuple[Any, Any]
 ) -> BaseSelector:
-    """Build ``grad_kind``: ``grad_input`` or ``grad_output``."""
+    """Build ``grad_kind`` from the ``(grad_input, grad_output)`` factory pair."""
 
+    grad_input, grad_output = factory
     return cast(BaseSelector, grad_input() if value == "grad_input" else grad_output())
 
 
