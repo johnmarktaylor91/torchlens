@@ -450,7 +450,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # resolution fixes here as on jax; merged tree measures 3375. Next
     # 50-line step above it; conscious raise, not drift.
     "torchlens/backends/tinygrad/backend.py": 3400,
-    "torchlens/backends/mlx/backend.py": 3250,
+    # 3250 -> 2600 (2026-11-01 preview-protocol union): the intermediate-tap
+    # observers moved to _tap_observers.py and the derived-gradient oracle
+    # helpers to _grad_oracle.py (measured 2573); next 50-line step above it.
+    "torchlens/backends/mlx/backend.py": 2600,
     # A07 (2026-08-26): +9 lines -- the step-1 contract gains the
     # flops_forward/flops_backward boundary-reset writes and their pinned-pair
     # carrier rows (alias rows own no compute); conscious raise, not growth debt.
