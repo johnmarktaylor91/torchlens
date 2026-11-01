@@ -421,3 +421,18 @@ def visualization_field_audit(trace: Trace) -> TorchLensRenderAudit:
     from ..experimental.dagua._bridge import build_render_audit as _impl
 
     return _impl(trace)
+
+
+__all__ = [
+    "add_node_overlay",
+    "animate_ops",
+    "draw",
+    "draw_backward",
+    "draw_combined",
+    "last_run_records",
+    "preview_fastlog",
+    "render_dagua_graph",
+    "show",
+    "to_dagua_graph",
+    "visualization_field_audit",
+]

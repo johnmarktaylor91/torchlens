@@ -593,3 +593,6 @@ def _decoded_output_summary(trace: "Trace") -> str | None:
         f"{int(row.get('rank', 0))}. {row.get('label')} ({float(row.get('prob', 0.0)):.1%})"
         for row in item_rows
     )
+
+
+__all__ = ["decode_output", "output_table", "to_pandas"]

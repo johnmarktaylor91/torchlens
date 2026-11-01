@@ -18,3 +18,6 @@ if TYPE_CHECKING:
 def narrate(trace: Trace, last: int | None = None, *, select: Any = None) -> str:
     """Body of ``Trace.narrate``; the method docstring is the contract."""
     return narrate_trace(trace, last=last, select=select)
+
+
+__all__ = ["narrate"]

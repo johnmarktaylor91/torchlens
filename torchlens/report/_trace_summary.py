@@ -162,3 +162,6 @@ def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a nam
         execution_note=_execution_note,
         input_synthesis=_input_synthesis,
     )
+
+
+__all__ = ["first_nonfinite", "repr_html", "summary"]
