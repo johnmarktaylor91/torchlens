@@ -121,7 +121,7 @@ def test_permute_batch_gradients_route_to_permuted_sources() -> None:
         op={"label": "unit", "pass_index": 1},
         run_context=run_ctx,
     )
-    out = hook_fn(x, hook=context)
+    out = hook_fn(x, ctx=context)
     permutation = run_ctx["sampling_records"][-1]["permutation"]  # type: ignore[index]
     weights = torch.tensor([1.0, 10.0, 100.0, 1000.0]).reshape(4, 1)
     (out * weights).sum().backward()
@@ -210,7 +210,7 @@ def test_seed_is_required_and_auto_derives_from_trace_seed() -> None:
     assert edit.factory is not None
     context = make_hook_context(name="p", op={"label": "u", "pass_index": 1})
     with pytest.raises(Exception) as excinfo:
-        edit.factory()(torch.randn(3, 2), hook=context)
+        edit.factory()(torch.randn(3, 2), ctx=context)
     assert excinfo.value.fields["code"] == "sampling_trace_seed_unavailable"
 
 

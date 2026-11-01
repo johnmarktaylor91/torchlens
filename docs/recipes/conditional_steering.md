@@ -81,7 +81,7 @@ RESULT = min(on_scores) > threshold > max(off_scores)
 
 Two rules in one spec. The first reads the condition at `CONDITION_SITE`, keeps
 the score, and leaves the activation untouched. It puts its decision in
-`hook.run_ctx`, a dictionary that every hook of one bound call shares and that
+`ctx.run_ctx`, a dictionary that every hook of one bound call shares and that
 starts empty for the next call, so no decision leaks from one prompt into the
 next. The second rule adds the behaviour direction at `STEER_SITE` only when
 that decision passed; otherwise it returns the activation object unchanged.
@@ -98,15 +98,15 @@ MAGNITUDE = 8.0
 scores = []
 
 
-def read_condition(activation, *, hook):
+def read_condition(activation, *, ctx):
     value = score(activation)
     scores.append(value)
-    hook.run_ctx["condition_passed"] = value > threshold
+    ctx.run_ctx["condition_passed"] = value > threshold
     return activation
 
 
-def gated_steer(activation, *, hook):
-    if not hook.run_ctx.get("condition_passed", False):
+def gated_steer(activation, *, ctx):
+    if not ctx.run_ctx.get("condition_passed", False):
         return activation
     return activation + MAGNITUDE * behaviour
 

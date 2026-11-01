@@ -62,7 +62,7 @@ class _TwoRelu(nn.Module):
         return torch.relu(self.fc2(torch.relu(self.fc1(x))))
 
 
-def _sae_like(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
     """SAE-style injected computation: encode, gate, decode (5 torch calls)."""
 
     z = torch.relu(out @ torch.eye(out.shape[-1]))
@@ -142,7 +142,7 @@ def test_injection_firing_index_advances_per_fire() -> None:
     torch.manual_seed(0)
     model = _TwoRelu().eval()
     x = torch.randn(2, 4)
-    spec = tl.when(tl.func("relu"), lambda out, *, hook: torch.sigmoid(out))
+    spec = tl.when(tl.func("relu"), lambda out, *, ctx: torch.sigmoid(out))
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
     firing_indexes = sorted({r.provenance.firing_index for r in logged.injected_ops})
     assert firing_indexes == [1, 2]
@@ -259,7 +259,7 @@ def test_injection_hook_exception_cleans_recorder(chain) -> None:
 
     model, x = chain
 
-    def _boom(out: torch.Tensor, *, hook) -> torch.Tensor:
+    def _boom(out: torch.Tensor, *, ctx) -> torch.Tensor:
         """Inject one op, then raise."""
 
         torch.sigmoid(out)

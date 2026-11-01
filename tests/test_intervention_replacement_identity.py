@@ -64,10 +64,10 @@ def test_user_hook_shared_object_cannot_steal_labels() -> None:
 
     shared = torch.ones(3)
 
-    def reuse_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def reuse_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Return the same live object at every matched site."""
 
-        del out, hook
+        del out, ctx
         return shared
 
     log = tl.trace(
@@ -93,10 +93,10 @@ def test_inplace_mutating_hook_records_replaced_true() -> None:
     carried the false no-replacement claim.
     """
 
-    def inplace_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def inplace_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Zero the output in place and hand back the same object."""
 
-        del hook
+        del ctx
         out.mul_(0)
         return out
 
@@ -124,10 +124,10 @@ def test_data_alias_mutating_hook_records_replaced_true() -> None:
     mutation.
     """
 
-    def data_alias_hook(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def data_alias_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Zero the output through the autograd-invisible ``.data`` channel."""
 
-        del hook
+        del ctx
         out.data.mul_(0)
         return out
 

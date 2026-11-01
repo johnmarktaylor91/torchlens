@@ -78,7 +78,7 @@ def _relu_label(trace: tl.Trace) -> str:
     return next(str(op.label) for op in trace.layer_list if op.func_name == "relu")
 
 
-def _double(out: torch.Tensor, *, hook) -> torch.Tensor:
+def _double(out: torch.Tensor, *, ctx) -> torch.Tensor:
     return out * 2.0
 
 

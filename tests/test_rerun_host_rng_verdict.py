@@ -67,7 +67,7 @@ def _rerun_with(trace: Trace, model: nn.Module, x: torch.Tensor, edit: Any) -> T
     )
 
 
-def _drawing_hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+def _drawing_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     return out * (2.0 + 0.0 * random.random())
 
 

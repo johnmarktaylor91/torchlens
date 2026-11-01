@@ -407,10 +407,10 @@ def _replacement_hook(value: Any) -> Callable[..., torch.Tensor]:
         Runtime hook callable.
     """
 
-    def _hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Replace ``out`` with ``value`` aligned to ``out`` metadata."""
 
-        del hook
+        del ctx
         replacement = _value_to_tensor(value, out)
         if replacement.shape == torch.Size([]):
             return torch.zeros_like(out) + replacement

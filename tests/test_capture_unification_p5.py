@@ -91,9 +91,9 @@ class _ReluReturnModel(nn.Module):
         return self.latest
 
 
-def _zero_hook(out: torch.Tensor, *, hook: tl.HookContext) -> torch.Tensor:
+def _zero_hook(out: torch.Tensor, *, ctx: tl.HookContext) -> torch.Tensor:
     """Replace a live hook output with zeros."""
-    del hook
+    del ctx
     return out * 0
 
 
@@ -131,9 +131,9 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
     if entrypoint == "trace_when":
         captured: list[torch.Tensor] = []
 
-        def add_marker(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+        def add_marker(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             """Return and retain the marker payload expected by the assertion."""
-            del hook
+            del ctx
             result = out + 7
             captured.append(result.detach().clone())
             return result

@@ -707,7 +707,7 @@ def _evaluate_instance(
         splice_context = make_hook_context(
             name="splice_module",
             timing="post",
-            direction="forward",
+            signal="forward",
             op=graph.ops[instance.exit_labels[0]],
             run_context={"region": region_target.region_digest, "instance": instance.index},
         )
@@ -721,11 +721,11 @@ def _evaluate_instance(
         context = make_hook_context(
             name=helper_name,
             timing="post",
-            direction="forward",
+            signal="forward",
             op=graph.ops[label],
             run_context={"region": region_target.region_digest, "instance": instance.index},
         )
-        replaced = hook_callable(exit_values[label], hook=context)
+        replaced = hook_callable(exit_values[label], ctx=context)
         # The SAME payload gate every other edit door runs (node-level do,
         # intervene=, spec.bind): a region exit value feeds the recorded
         # consumers, so a shape/dtype/device change is a downstream lie, not
@@ -738,19 +738,19 @@ def _evaluate_instance(
             "exit ops; a per-value edit cannot coordinate a multi-exit "
             "replacement (one evaluation per pass, all exits atomic)",
             code="region_edit_multi_exit_unsupported",
-            remedy="pass a region callable fn(exit_values_tuple, *, hook) "
+            remedy="pass a region callable fn(exit_values_tuple, *, ctx) "
             "returning one tensor per exit op, or tl.splice_module(module, "
             "input_route='in') mapping entries to exits",
         )
     context = make_hook_context(
         name=getattr(edit, "__name__", "region_edit"),
         timing="post",
-        direction="forward",
+        signal="forward",
         op=graph.ops[instance.exit_labels[0]],
         run_context={"region": region_target.region_digest, "instance": instance.index},
     )
     ordered = tuple(exit_values[label] for label in instance.exit_labels)
-    result = edit(ordered, hook=context)
+    result = edit(ordered, ctx=context)
     if not isinstance(result, (tuple, list)) or len(result) != len(instance.exit_labels):
         raise RegionError(
             "a multi-exit region callable must return one tensor per exit op "

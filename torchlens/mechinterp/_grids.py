@@ -352,10 +352,10 @@ def _cell_hook(
 ) -> Any:
     """Build the per-cell replacement hook (clean into corrupted)."""
 
-    def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def _hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Replace the cell's slice of ``out`` with the clean activation."""
 
-        del hook
+        del ctx
         patched = out.clone(memory_format=torch.preserve_format)
         target = patched
         source = clean_value

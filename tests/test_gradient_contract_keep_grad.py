@@ -124,12 +124,12 @@ def test_keep_grad_refuses_a_site_with_no_graph_and_trainable_params_run() -> No
 
 
 def test_keep_grad_wraps_a_hook_callable() -> None:
-    def detaching(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
-        del hook
+    def detaching(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
+        del ctx
         return out.detach() * 2.0
 
     _detached_error(lambda: _capture(keep_grad(detaching)))
-    out, _ = _capture(keep_grad(lambda out, *, hook: out * 2.0))
+    out, _ = _capture(keep_grad(lambda out, *, ctx: out * 2.0))
     assert out.requires_grad
 
 

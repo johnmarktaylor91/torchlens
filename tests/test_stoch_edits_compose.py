@@ -66,7 +66,7 @@ def test_construction_refusals() -> None:
         compose()
     assert excinfo.value.fields["code"] == "compose_empty"
     with pytest.raises(Exception) as excinfo:
-        compose(lambda out, *, hook: out)
+        compose(lambda out, *, ctx: out)
     assert excinfo.value.fields["code"] == "compose_leaf_invalid"
     with pytest.raises(Exception) as excinfo:
         compose(tl.scale(2.0), tl.add_noise(0.1))
@@ -135,7 +135,7 @@ def test_leaf_failure_is_atomic_and_named() -> None:
     fork = log.fork()
     chain = compose(exploding, tl.clamp(high=0.5))
     # Sabotage leaf 0's hook after construction to prove fire-time atomicity.
-    object.__setattr__(chain.args[0], "factory", lambda: lambda out, *, hook: _boom())
+    object.__setattr__(chain.args[0], "factory", lambda: lambda out, *, ctx: _boom())
     baseline = fork["relu_1_2"].out.clone()
     with pytest.raises(Exception) as excinfo:
         fork.do(tl.label("relu_1_2"), chain)

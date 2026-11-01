@@ -25,7 +25,7 @@ from torchlens.intervention.types import Edit
 from torchlens.validation import check_metadata_invariants
 
 
-def _good_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+def _good_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
     """Return the out unchanged.
 
     Parameters
@@ -136,7 +136,7 @@ def test_project_onto_uses_batch_independent_feature_axis_projection() -> None:
     direction = torch.tensor([1.0, 1.0, 0.0])
     hook = tl.project_onto(direction, dim=-1)()
 
-    projected = hook(out, hook=_context())
+    projected = hook(out, ctx=_context())
 
     expected = torch.tensor(
         [
@@ -148,7 +148,7 @@ def test_project_onto_uses_batch_independent_feature_axis_projection() -> None:
 
     changed = out.clone()
     changed[1] = torch.tensor([[100.0, 102.0, 0.0], [104.0, 106.0, 108.0]])
-    changed_projected = hook(changed, hook=_context())
+    changed_projected = hook(changed, ctx=_context())
 
     assert torch.allclose(changed_projected[0], expected[0])
     assert not torch.allclose(changed_projected[1], expected[1])
@@ -243,27 +243,27 @@ def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
     out = torch.ones(2, 3)
     context = _context()
 
-    def none_hook(out: torch.Tensor, *, hook: HookContext) -> None:
+    def none_hook(out: torch.Tensor, *, ctx: HookContext) -> None:
         """Return None, which Phase 3 rejects."""
 
         return None
 
-    def list_hook(out: torch.Tensor, *, hook: HookContext) -> list[torch.Tensor]:
+    def list_hook(out: torch.Tensor, *, ctx: HookContext) -> list[torch.Tensor]:
         """Return the wrong type."""
 
         return [out]
 
-    def shape_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def shape_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Return the wrong shape."""
 
         return torch.ones(3, 2)
 
-    def dtype_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def dtype_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Return the wrong dtype."""
 
         return out.to(torch.float64)
 
-    def device_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def device_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Return a tensor on the wrong device."""
 
         return torch.empty(out.shape, dtype=out.dtype, device="meta")
@@ -286,7 +286,7 @@ def test_force_shape_change_allows_metadata_changes() -> None:
 
     out = torch.ones(2, 3)
 
-    def shape_hook(out: torch.Tensor, *, hook: HookContext) -> torch.Tensor:
+    def shape_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Return a shape-changed tensor."""
 
         return torch.ones(3, 2, dtype=torch.float64)
@@ -308,8 +308,8 @@ def test_seeded_noise_is_deterministic_and_unseeded_records_note() -> None:
     seeded_b = tl.add_noise(1.0, seed=123)()
     unseeded = tl.add_noise(1.0)()
 
-    assert torch.equal(seeded_a(out, hook=context), seeded_b(out, hook=context))
-    _ = unseeded(out, hook=context)
+    assert torch.equal(seeded_a(out, ctx=context), seeded_b(out, ctx=context))
+    _ = unseeded(out, ctx=context)
     assert any("noise used unseeded" in note for note in context.run_ctx["ledger_notes"])
 
 
@@ -338,7 +338,7 @@ def test_splice_module_dtype_error_is_specific() -> None:
     hook = tl.splice_module(_DoubleModule())()
 
     with pytest.raises(SpliceModuleDtypeError):
-        hook(torch.ones(2, 3), hook=_context_with_args(torch.ones(2, 3)))
+        hook(torch.ones(2, 3), ctx=_context_with_args(torch.ones(2, 3)))
 
 
 @pytest.mark.smoke
@@ -357,7 +357,7 @@ def test_splice_module_default_replaces_with_module_on_input() -> None:
     original_input = torch.tensor([[1.0, 2.0, 3.0]])
     original_output = 2 * original_input
 
-    result = hook(original_output, hook=_context_with_args(original_input))
+    result = hook(original_output, ctx=_context_with_args(original_input))
 
     assert torch.equal(result, 100 * original_input)
     assert not torch.equal(result, 100 * original_output)
@@ -378,7 +378,7 @@ def test_splice_module_forwards_full_input_signature() -> None:
     a = torch.tensor([[5.0, 7.0]])
     b = torch.tensor([[2.0, 3.0]])
 
-    result = hook(a + b, hook=_context_with_args(a, b))
+    result = hook(a + b, ctx=_context_with_args(a, b))
 
     assert torch.equal(result, a - b)
 

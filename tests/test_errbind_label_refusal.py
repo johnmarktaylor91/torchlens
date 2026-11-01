@@ -22,7 +22,7 @@ from torchlens.intervention.errors import BindingPreflightError, BindingRuntimeE
 from torchlens.intervention.steering import steer_generate
 
 
-def _double(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+def _double(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
     """Double the edited op's output."""
 
     return out * 2.0

@@ -4,7 +4,7 @@ The value-probing ``capture.hooks`` path is public and adds ZERO ops to a
 trace (measured 13/13/13, BatchNorm included), so what was missing is only
 the register: named findings, dedup, severity/action, lifecycle, report
 integration. These probes are implemented 100% over that public seam --
-plain ``fn(out, *, hook)`` callables handed to
+plain ``fn(out, *, ctx)`` callables handed to
 ``CaptureOptions(hooks=probe.hook_plan())`` -- and that implementation IS
 the seam's CI conformance test: if a probe ever needs private capture
 state, the seam is too weak and gets fixed (memo D14).
@@ -95,13 +95,13 @@ class RangeProbe:
         }
 
     def _make_hook(self, site: Any, low: float | None, high: float | None) -> Any:
-        """Build one site's range hook (public ``fn(out, *, hook)`` shape)."""
+        """Build one site's range hook (public ``fn(out, *, ctx)`` shape)."""
 
-        def _range_hook(out: Any, *, hook: Any) -> Any:
+        def _range_hook(out: Any, *, ctx: Any) -> Any:
             """Check one fired value against this site's declared bounds."""
 
             if isinstance(out, torch.Tensor):
-                label = _fired_label(hook, str(site))
+                label = _fired_label(ctx, str(site))
                 with torch.no_grad(), _state.pause_logging():
                     values = out.detach()
                     n_below = int((values < low).sum()) if low is not None else 0
@@ -196,13 +196,13 @@ class LivenessProbe:
         return {site: self._make_hook(site) for site in self._sites}
 
     def _make_hook(self, site: Any) -> Any:
-        """Build one site's liveness hook (public ``fn(out, *, hook)`` shape)."""
+        """Build one site's liveness hook (public ``fn(out, *, ctx)`` shape)."""
 
-        def _liveness_hook(out: Any, *, hook: Any) -> Any:
+        def _liveness_hook(out: Any, *, ctx: Any) -> Any:
             """Record one fired value's zero-fraction and running max."""
 
             if isinstance(out, torch.Tensor) and out.numel():
-                label = _fired_label(hook, str(site))
+                label = _fired_label(ctx, str(site))
                 with torch.no_grad(), _state.pause_logging():
                     values = out.detach()
                     zero_fraction = float((values == 0).sum()) / values.numel()

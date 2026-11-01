@@ -28,7 +28,7 @@ def test_sites_can_expand_to_hook_pairs() -> None:
         capture=tl.options.CaptureOptions(intervention_ready=True),
     )
 
-    def hook_fn(out: torch.Tensor, *, hook: object) -> torch.Tensor:
+    def hook_fn(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Return the out unchanged.
 
         Parameters
@@ -44,7 +44,7 @@ def test_sites_can_expand_to_hook_pairs() -> None:
             Original out.
         """
 
-        del hook
+        del ctx
         return out
 
     handle = log.attach_hooks(

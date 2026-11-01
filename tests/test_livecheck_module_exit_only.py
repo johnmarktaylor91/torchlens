@@ -383,7 +383,7 @@ def _entry(
 
     return NormalizedHookEntry(
         site_target=site_target,
-        normalized_callable=lambda out, *, hook: out,
+        normalized_callable=lambda out, *, ctx: out,
         helper_spec=helper_spec,
         metadata=dict(metadata or {}),
     )

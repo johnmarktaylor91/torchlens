@@ -476,10 +476,10 @@ def _expansion_selector(expansion: _Expansion) -> Any:
 def _head_hook(clean_value: torch.Tensor, heads: tuple[int, ...]) -> Any:
     """Build the hook that copies the clean ``heads`` slices into the expansion output."""
 
-    def _hook(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def _hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Replace the chosen query heads' copies with their clean values."""
 
-        del hook
+        del ctx
         patched = out.clone(memory_format=torch.preserve_format)
         index = list(heads)
         patched[:, index] = clean_value[:, index].to(dtype=patched.dtype, device=patched.device)

@@ -148,10 +148,10 @@ def test_out_of_range_position_refuses_typed() -> None:
 def test_shape_changing_edit_refuses_typed() -> None:
     """Only a same-shape edit can be kept at some positions: ``position_edit_shape_mismatch``."""
 
-    def _narrow(out: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def _narrow(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Return a value of another shape."""
 
-        del hook
+        del ctx
         return out[..., :2]
 
     with pytest.raises(HookValueError) as info:

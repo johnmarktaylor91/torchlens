@@ -55,10 +55,10 @@ def _traced(intervene: Any = None) -> tl.Trace:
 def test_edit_text_rule() -> None:
     """Name alone without arguments; short literals written in; stand-ins otherwise."""
 
-    def named_fn(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def named_fn(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         """Return the gradient unchanged."""
 
-        del hook
+        del ctx
         return grad
 
     assert short_edit_text(tl.zero_ablate()) == "zero_ablate"
@@ -69,7 +69,7 @@ def test_edit_text_rule() -> None:
     # A label argument is written in (built directly: swap_with refuses a bare label at run time).
     assert short_edit_text(Edit("swap_with", args=("relu_2_1",))) == "swap_with(relu_2_1)"
     assert short_edit_text(tl.hook_grad(named_fn)) == "hook_grad(named_fn)"
-    assert short_edit_text(tl.hook_grad(lambda g, *, hook: g)) == "hook_grad(fn)"
+    assert short_edit_text(tl.hook_grad(lambda g, *, ctx: g)) == "hook_grad(fn)"
     assert short_edit_text(tl.zero_grad()) == "zero_grad"
 
 
@@ -369,7 +369,7 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
     the ringed node would read ``edit`` instead of the edit's name.
     """
 
-    def named_backward(grad: torch.Tensor, *, hook: Any) -> torch.Tensor:
+    def named_backward(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         return grad
 
     torch.manual_seed(0)
