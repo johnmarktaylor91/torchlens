@@ -321,6 +321,32 @@ def _rule_facts(recipe: Any) -> list[tuple[str, Any]]:
     ]
 
 
+def _self_hook_outputs(cell: Cell, trace: Any, labels: set[str]) -> set[str]:
+    """Return the ``labels`` that are outputs of a module call the model hooks itself.
+
+    A model's own ``register_forward_hook`` that returns another tensor is
+    recorded as a replaced module output (``intervention_replaced``) by design,
+    the disclosure a runnable save and validation need; those ops, and only
+    those, may carry the stamp without a rule of the recipe selecting them.
+    """
+
+    hooked = {
+        address
+        for address, module in cell.model.named_modules()
+        if getattr(module, "_forward_hooks", None)
+    }
+    if not hooked:
+        return set()
+    return {
+        label
+        for label in labels
+        if any(
+            str(call).rsplit(":", 1)[0] in hooked
+            for call in trace[label].output_of_module_calls or ()
+        )
+    }
+
+
 def _recipe_is_empty(recipe: Any) -> bool:
     """Return whether a frozen recipe carries no targets and no fire records."""
 
@@ -340,8 +366,10 @@ def _after_intervene(cell: Cell) -> None:
     want = _float_target_labels(cell, trace)
     got = {op.label for op in trace.ops if op.intervention_replaced}
     hooked = any(feature.name == "hooks" for feature in cell.features)
+    extra = got - want
+    allowed = extra if hooked else _self_hook_outputs(cell, trace, extra)
     cell.expect(
-        want <= got if hooked else want == got,
+        want <= got and extra <= allowed,
         f"ops recording a replaced value {sorted(got)[:8]} != selected {sorted(want)[:8]}",
     )
     for label in sorted(want):
