@@ -432,7 +432,13 @@ def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
 
     # Streamed payloads live on disk: every saved op carries an ``out_ref``. The output tail is
     # always retained (``torchlens/_user_funcs.py``, "always-retained output tail"): the caller
-    # holds that tensor anyway.
+    # holds that tensor anyway. A partner that changes forward_match reran the trace in the
+    # forward_match oracle, and ``trace.run`` re-captures every payload into RAM (``to_disk``
+    # docstring): then the promise is that each saved op holds its payload in memory.
+    if cell.changes("forward_match"):
+        rerun_unheld = sorted(op.label for op in trace.saved_ops if op.out is None)
+        cell.expect(not rerun_unheld, f"rerun saved ops without a payload: {rerun_unheld[:8]}")
+        return
     unstreamed = sorted(
         op.label for op in trace.saved_ops if op.out_ref is None and not _is_output(op)
     )
@@ -627,7 +633,15 @@ def _after_export(cell: Cell) -> None:
         "to_pandas rows do not name the trace's layer_list entries",
     )
     if cell.loaded is not None:
-        other = cell.loaded.to_pandas()
+        loaded = cell.loaded
+        if [op.label for op in live.ops] != [op.label for op in loaded.ops]:
+            # A rerun feature replaced the graph since the save (a plain forward between
+            # capture and rerun filled a first-call cache, so the rerun lost those ops and
+            # warned ``ControlFlowDivergenceWarning``): the frame promise is about an
+            # artifact of THIS graph, so save and load the live trace again.
+            live.save(cell.tmp / "export.tlspec", level="portable")
+            loaded = tl.load(cell.tmp / "export.tlspec")
+        other = loaded.to_pandas()
         absent = [column for column in FRAME_IDENTITY if column not in frame.columns]
         cell.expect(not absent, f"to_pandas lacks the columns {absent}")
         mine = frame.set_index("label").sort_index()
