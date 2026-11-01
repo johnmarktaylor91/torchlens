@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-81 packages, 1265 modules, 620380 lines, 0 modules without a docstring.
+81 packages, 1265 modules, 620375 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -59,11 +59,11 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 90 | 50838 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8013 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 21 | 7982 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 21 | 7976 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3824 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2017 |
-| `torchlens.conformance` | ''torchlens.conformance'': the capture conformance suite (MEMO 4, B4). | 11 | 4268 |
+| `torchlens.conformance` | ''torchlens.conformance'': the capture conformance suite (MEMO 4, B4). | 11 | 4269 |
 | `torchlens.conformance._rosters` | Per-backend conformance rosters; one module per backend. | 8 | 3623 |
 | `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 22 | 9573 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2214 |
@@ -1257,11 +1257,11 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2700 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (21 modules, 7982 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (21 modules, 7976 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 2015 |
+| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 1997 |
 | `_aligned_sites` | Cross-member site pairing for Bundle site reads. | 85 |
 | `_alternatives` | ''Bundle.add_alternative'': merge a steered re-run of the user's harness. | 357 |
 | `_bytes` | Bundle-level retained-bytes aggregation + retention preflight ( item 5c). | 120 |
@@ -1272,7 +1272,7 @@ Single Bundle type for intervention-ready TorchLens model logs. (21 modules, 798
 | `_fed_by` | The ''fed_by'' relation kind: content provenance between two traced calls. | 531 |
 | `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 190 |
 | `_lineage` | Bundle lineage: bundle_id, member-construction anchors, BundleOperation rows. | 488 |
-| `_measure` | ''Bundle.measure_members'': recompute a metric over the members that still exist. | 83 |
+| `_measure` | ''Bundle.measure_members'': recompute a metric over the members that still exist. | 95 |
 | `_members` | Member-list coercion behind ''Bundle'' construction, ''add'' and ''remove''. | 187 |
 | `_outcome_fold` | Derived worst-of-members capture-outcome fold for ''Bundle'' (foldB ). | 102 |
 | `_provenance` | The provenance join: ''bundle.why'' / ''bundle.provenance'' ( item 4). | 411 |
@@ -1324,7 +1324,7 @@ Compatibility adapters for TorchLens 2.x. (5 modules, 2017 lines)
 
 ### `torchlens.conformance`
 
-''torchlens.conformance'': the capture conformance suite (MEMO 4, B4). (11 modules, 4268 lines)
+''torchlens.conformance'': the capture conformance suite (MEMO 4, B4). (11 modules, 4269 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1337,7 +1337,7 @@ Compatibility adapters for TorchLens 2.x. (5 modules, 2017 lines)
 | `_protocol_cases` | Conformance cells that drive a backend through its ''BackendProtocol''. | 697 |
 | `_refusal_cases` | Refusal cells: every False capability flag and every foreign trace option refuses typed. | 279 |
 | `_scorecard` | Preview scorecards (ecosystem MEMO section 4, build item B4; SPEC 4.5 v2). | 659 |
-| `_validation_cells` | Validation cells of the preview-backend conformance suite. | 176 |
+| `_validation_cells` | Validation cells of the preview-backend conformance suite. | 177 |
 | `scorecard` | ''python -m torchlens.conformance.scorecard'': compute, write, check or grade a scorecard. | 126 |
 
 ### `torchlens.conformance._rosters`

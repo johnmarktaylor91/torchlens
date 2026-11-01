@@ -141,7 +141,8 @@ def _consumer_keys(target: Any, trace: Any | None) -> set[str]:
 
     children = {str(key) for key in (getattr(target, "children", None) or ())}
     keys = set(children)
-    for op in trace._layer_list or ():
+    layer_list = trace._layer_list if trace is not None else None
+    for op in layer_list or ():
         op_keys = _label_keys(op)
         if op_keys & children:
             keys |= op_keys

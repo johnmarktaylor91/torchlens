@@ -17,7 +17,7 @@ from ._lineage import validate_operation_chain
 if TYPE_CHECKING:
     from . import Bundle
 
-__all__ = ["measure_members"]
+__all__ = ["measure_members", "released_candidates"]
 
 
 def measure_members(
@@ -47,7 +47,7 @@ def measure_members(
             code="site_sweep_metric_invalid",
         )
     values = {name: metric(member) for name, member in bundle.members.items()}
-    report: dict[str, Any] = {"values": values, "unmeasured": bundle._released_candidates()}
+    report: dict[str, Any] = {"values": values, "unmeasured": released_candidates(bundle)}
     if order == "chain":
         report.update(_chain_keyed_values(bundle, values))
     report["order"] = order
@@ -81,3 +81,15 @@ def _chain_keyed_values(bundle: Bundle, values: Mapping[str, Any]) -> dict[str, 
         for _seq, _position, name in sorted(chained)
     ]
     return {"chain": chain, "unchained": unchained}
+
+
+def released_candidates(bundle: Bundle) -> list[str]:
+    """Effect-table candidates with no retained member, sorted, each once."""
+    released: set[str] = set()
+    for table in bundle._effect_tables.values():
+        for row in table.rows:
+            if row.candidate_id == "__baseline__":
+                continue
+            if row.member_name is None or row.member_name not in bundle._members:
+                released.add(row.candidate_id)
+    return sorted(released)

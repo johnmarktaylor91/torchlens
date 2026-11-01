@@ -98,13 +98,6 @@ def test_delta_family_is_private_behind_compare(name: str) -> None:
     assert rows and set(dict(rows)) <= set(bundle._delta_map("relative_l2"))
 
 
-def test_bundle_draw_refuses_an_unknown_graph_kind() -> None:
-    with pytest.raises(InvalidArgumentError) as caught:
-        _pair().draw(graph="sideways")
-    assert caught.value.code == "bundle_draw_graph_invalid"
-    assert caught.value.fields.get("argument") == "graph"
-
-
 def test_bundle_draw_refuses_an_unknown_graph_typed() -> None:
     """``graph=`` outside forward/backward/combined/diff refuses before any rendering."""
     bundle = _pair()

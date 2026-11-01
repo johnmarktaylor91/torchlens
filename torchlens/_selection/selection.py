@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import hashlib
 import random as _random_module
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, overload
 
@@ -1270,7 +1270,7 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
     return Selection(trace, "PARAM", [entry])
 
 
-def _multipass_bare_label_refusal(site: str, matches: list[Any]) -> SelectionError:
+def _multipass_bare_label_refusal(site: str, matches: Sequence[Any]) -> SelectionError:
     """Refuse a multi-pass layer's bare spelling: units() addresses ONE op's index space."""
     from .resolver import multipass_bare_label_message
 

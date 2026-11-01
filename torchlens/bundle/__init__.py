@@ -62,6 +62,10 @@ from ._deltas import (
 from ._draw import bundle_draw as _bundle_draw
 from ._labels import label_view
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
+from ._measure import (
+    measure_members as _measure_members,
+    released_candidates as _released_candidates,
+)
 from ._members import (
     coerce_member_name,
     coerce_member_name_list,
@@ -1278,37 +1282,15 @@ class Bundle:
             name: (fn(member, name) if pass_name else fn(member))
             for name, member in self._members.items()
         }
-        for candidate in self._released_candidates():
+        for candidate in _released_candidates(self):
             results.setdefault(candidate, "unmeasured")
         return results
 
     def measure_members(
         self, *, metric: Callable[[Trace], Any], order: str = "member"
     ) -> dict[str, Any]:
-        """Recompute a NEW metric over members that still exist, and say so.
-
-        Released candidates are reported ``unmeasured``, never silently
-        re-scored. ``order="chain"`` also orders the members by the bundle's
-        validated operation chain; members no operation recorded are listed
-        apart as ``unchained``, never placed by a guessed position. The flat
-        per-member form is :meth:`map`.
-        """
-
-        from ._measure import measure_members
-
-        return measure_members(self, metric=metric, order=order)
-
-    def _released_candidates(self) -> list[str]:
-        """Effect-table candidates with no retained member, sorted, each once."""
-
-        released: set[str] = set()
-        for table in self._effect_tables.values():
-            for row in table.rows:
-                if row.candidate_id == "__baseline__":
-                    continue
-                if row.member_name is None or row.member_name not in self._members:
-                    released.add(row.candidate_id)
-        return sorted(released)
+        """Recompute a NEW metric over surviving members; released ones are ``unmeasured``."""
+        return _measure_members(self, metric=metric, order=order)
 
     @staticmethod
     def _accepts_member_name(fn: Callable[..., Any]) -> bool:

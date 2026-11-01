@@ -124,7 +124,7 @@ def _populate_var_names(self: Trace) -> None:
         Trace being postprocessed.
     """
 
-    if not getattr(self, "_options_save_source_context", False):
+    if not self._options_save_source_context:
         return
     for op in self._layer_list:
         if getattr(op, "type", None) == "output":
