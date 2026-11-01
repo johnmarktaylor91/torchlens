@@ -310,6 +310,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: python scripts/check_ci_executed_tests.py --legs "${{ runner.temp }}/junit"
 
+      - name: Recompute and compare the shipped torch scorecard
+        # This row is torch's pinned environment (FrameworkRequirement.pinned),
+        # so the reference backend's shipped scorecard is checked here the way
+        # each backend-protocol leg checks its preview's.
+        if: matrix.scope == 'smoke'
+        run: python -m torchlens.conformance.scorecard --backend torch --check
+
 
   checks:
     name: Repository checks
@@ -382,3 +389,151 @@ jobs:
             "tests/test_packaging_diet.py::test_built_wheel_manifest_is_diet" \
             "tests/test_ci_packaging_gates.py::test_built_sdist_manifest_is_governed" \
             --tb=short -q
+
+  backend-protocol:
+    # The per-change preview backend legs (backend protocol SPEC section 8):
+    # one framework per leg at its pinned version, the backend's marker suite
+    # with an executed-test floor, then the shipped scorecard recomputed and
+    # compared. A leg runs only when the change touches its backend or the
+    # shared backend surface (scripts/backend_ci_changes.py); otherwise every
+    # step after the decision is skipped and the leg reports success. Any
+    # event other than a pull request (ci/** push, dispatch, the release
+    # re-run) runs every leg. nightly.yml runs the full matrix every night.
+    name: Backend protocol (${{ matrix.backend }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # `install` pins the framework to its FrameworkRequirement.pinned (the
+        # declared range while a backend has no pin yet) and `executed_floor`
+        # equals the nightly preview-backends floor for the same marker;
+        # tests/test_backend_framework_pins.py keeps all of these in lockstep
+        # with the protocol shells, the pyproject extras and nightly.yml.
+        include:
+          - backend: tf
+            install: '"tensorflow-cpu>=2.16"'
+            marker: tf_backend
+            import_check: "import tensorflow, keras"
+            executed_floor: 18
+          - backend: jax
+            install: '"jax[cpu]>=0.4.30" equinox flax'
+            marker: backend_jax
+            import_check: "import jax, jax.numpy, equinox, flax"
+            executed_floor: 60
+          - backend: tinygrad
+            # The replay and derived-grad oracles require the PYTHON device.
+            install: '"tinygrad==0.13.0"'
+            marker: backend_tinygrad
+            dev: PYTHON
+            import_check: "import tinygrad"
+            executed_floor: 25
+          - backend: paddle
+            install: '"paddlepaddle>=3.3,<3.4"'
+            marker: backend_paddle
+            import_check: "import paddle"
+            executed_floor: 22
+          - backend: mlx
+            # 0.26.5 is excluded: its manylinux wheel ships without libmlx.so.
+            install: '"mlx==0.26.3"'
+            marker: backend_mlx
+            import_check: "import mlx.core, mlx.nn"
+            executed_floor: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The merge commit and its first parent (the base) for the diff.
+          fetch-depth: 2
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Decide whether the ${{ matrix.backend }} leg runs
+        id: changes
+        env:
+          BACKEND: ${{ matrix.backend }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            python scripts/backend_ci_changes.py --backend "$BACKEND" --base HEAD^1 >> "$GITHUB_OUTPUT"
+          else
+            python scripts/backend_ci_changes.py --backend "$BACKEND" --all >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.changes.outputs.run == 'true'
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install Graphviz
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install TorchLens and the pinned ${{ matrix.backend }} framework
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu"
+          uv pip install --system ${{ matrix.install }}
+
+      - name: Verify the ${{ matrix.backend }} runtime imports
+        # A missing or import-broken framework must fail the leg here, not
+        # dissolve into importorskip-skipped tests downstream.
+        if: steps.changes.outputs.run == 'true'
+        env:
+          IMPORT_CHECK: ${{ matrix.import_check }}
+        run: python -c "$IMPORT_CHECK"
+
+      - name: Run the ${{ matrix.backend }} backend suite
+        if: steps.changes.outputs.run == 'true'
+        env:
+          # MLX's CPU JIT emits _FloatNN typedefs newer g++ rejects; the
+          # uncompiled path is equivalent for capture. No-op for other legs.
+          MLX_DISABLE_COMPILE: "1"
+          TORCHLENS_RUN_UNSTABLE_MLX_TESTS: "1"
+          # tinygrad leg only; empty (unread) elsewhere.
+          DEV: ${{ matrix.dev || '' }}
+          MARKER: ${{ matrix.marker }}
+          BACKEND: ${{ matrix.backend }}
+        run: |
+          pytest tests/ -m "$MARKER and not slow" --tb=short \
+            --junitxml="${{ runner.temp }}/junit/backend-$BACKEND.junit.xml"
+
+      - name: Declare the executed-test floor (${{ matrix.backend }} suite)
+        # Second tripwire: even with the runtime importable, a mostly-skipped
+        # suite (marker drift, collection regression, importorskip cascade)
+        # must not stay green.
+        if: steps.changes.outputs.run == 'true'
+        env:
+          BACKEND: ${{ matrix.backend }}
+          EXECUTED_FLOOR: ${{ matrix.executed_floor }}
+        run: |
+          echo "backend-$BACKEND.junit.xml $EXECUTED_FLOOR" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Check the ${{ matrix.backend }} leg's executed-test floor
+        if: ${{ !cancelled() && steps.changes.outputs.run == 'true' }}
+        run: python scripts/check_ci_executed_tests.py --legs "${{ runner.temp }}/junit"
+
+      - name: Recompute and compare the shipped ${{ matrix.backend }} scorecard
+        # The scorecard is a tested fact, never hand-edited: the leg fails when
+        # torchlens/backends/<backend>/scorecard.json differs from the record
+        # computed here on the pinned framework.
+        if: steps.changes.outputs.run == 'true'
+        env:
+          BACKEND: ${{ matrix.backend }}
+          DEV: ${{ matrix.dev || '' }}
+          MLX_DISABLE_COMPILE: "1"
+        run: python -m torchlens.conformance.scorecard --backend "$BACKEND" --check

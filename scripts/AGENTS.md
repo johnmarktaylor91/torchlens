@@ -5,6 +5,7 @@
 | File | Purpose |
 |------|---------|
 | `build_torchlens_theme_gallery.py` | Generate visualization theme gallery artifacts (dagua renderer) |
+| `backend_ci_changes.py` | Decides whether a preview backend's per-change `backend-protocol` leg runs for a diff (`pr.yml`; rules pinned by `tests/test_backend_framework_pins.py`) |
 | `check_ci_executed_tests.py` | Executed-floor attestation over a junit XML (wired into CI legs) |
 | `check_flops_coverage.py` | Report FLOPs handler coverage (`torchlens/capture/flops.py`) against decorated torch functions |
 | `check_no_breaking_markers.py` | Reject semantic-release major-bump markers (commit-msg / pre-push hooks + the lint release-defenses CI scan) |
