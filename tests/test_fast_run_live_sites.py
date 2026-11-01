@@ -30,7 +30,7 @@ def _fast_matches_full(model: nn.Module, inputs: torch.Tensor) -> None:
     result = trace.run(inputs=inputs.clone(), fast=True)
     got = [result.output] if isinstance(result.output, torch.Tensor) else list(result.output)
     assert len(got) == len(expected)
-    for want, have in zip(expected, got):
+    for want, have in zip(expected, got, strict=True):
         assert torch.equal(want, have.detach())
 
 

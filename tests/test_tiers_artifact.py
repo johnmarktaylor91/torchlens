@@ -71,7 +71,7 @@ def test_artifact_lists_every_tier_with_the_generator_command(artifact, generato
 
 def test_tiers_nest_by_count_and_file(artifact) -> None:
     tiers = artifact["tiers"]
-    for smaller, larger in zip(NESTED, NESTED[1:]):
+    for smaller, larger in zip(NESTED, NESTED[1:], strict=False):
         assert 0 < tiers[smaller]["count"] <= tiers[larger]["count"], (smaller, larger)
         assert 0 < tiers[smaller]["files"] <= tiers[larger]["files"], (smaller, larger)
     # smoke and unmarked are disjoint and both sit inside the mid backstop.

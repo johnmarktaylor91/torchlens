@@ -115,7 +115,7 @@ def _assert_same(left: Any, right: Any) -> None:
 
     left_leaves, right_leaves = _leaves(left), _leaves(right)
     assert left_leaves and len(left_leaves) == len(right_leaves)
-    for want, have in zip(left_leaves, right_leaves):
+    for want, have in zip(left_leaves, right_leaves, strict=True):
         assert torch.equal(want.detach(), have.detach())
 
 
@@ -190,7 +190,7 @@ def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     sites = list(trace.find_sites(tl.module("parent.inner")))
     fresh_sites = list(fresh.find_sites(tl.module("parent.inner")))
     assert sites and len(sites) == len(fresh_sites)
-    for site, fresh_site in zip(sites, fresh_sites):
+    for site, fresh_site in zip(sites, fresh_sites, strict=True):
         assert torch.equal(site.out, fresh_site.out)
     _assert_no_routed_forward(model)
     trace.__dict__["_fast_run_session"].close()
