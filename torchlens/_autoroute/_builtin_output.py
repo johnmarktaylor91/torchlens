@@ -212,11 +212,7 @@ def decode_trace_output(
             available_heads=list(heads),
         )
     meta = _build_output_meta(trace, style=style, head=head, tokenizer=tokenizer)
-    resolved = _resolve_requested_style(meta)
-    if resolved is None:
-        resolved, _detector_name = _resolve_postprocessor_named(view, meta)
-    if resolved is None:
-        refuse_unknown_decode_style(style)
+    resolved = _resolve_read_time_style(view, meta)
     logits_info = _select_logits(view, resolved, meta)
     if logits_info is None:
         raise InvalidArgumentError(
@@ -231,7 +227,7 @@ def decode_trace_output(
     decoded = _decode_selected(logits, resolved, meta, top_n=top_n)
     if decoded is None:
         if resolved.style == "hf_text":
-            raise InvalidArgumentError(
+            raise DecodeStyleUnknownError(
                 f"{STYLE_KW}='hf_text' needs a tokenizer with a decode method and rank-2 or "
                 "rank-3 logits",
                 code="decode_style_unknown",
@@ -270,6 +266,19 @@ def _retained_output_view(trace: Trace) -> tuple[Any | None, tuple[str, ...]]:
     if len(tensors) == 1 and "" in tensors:
         return tensors[""], ("",)
     return tensors, tuple(tensors)
+
+
+def _resolve_read_time_style(view: Any, meta: dict[str, Any]) -> ResolvedPostprocessing:
+    """Resolve the read-time style; a named non-built-in style needs a custom detector."""
+
+    style = meta.get(STYLE_KW)
+    resolved = _resolve_requested_style(meta)
+    if resolved is None:
+        skip = _BUILTIN_DETECTOR_NAMES if style is not None else frozenset()
+        resolved, _detector_name = _resolve_postprocessor_named(view, meta, skip=skip)
+    if resolved is None:
+        refuse_unknown_decode_style(style)
+    return resolved
 
 
 def _resolve_requested_style(meta: dict[str, Any]) -> ResolvedPostprocessing | None:
@@ -449,13 +458,15 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
 
 
 def _resolve_postprocessor_named(
-    outputs: Any, meta: dict[str, Any]
+    outputs: Any, meta: dict[str, Any], *, skip: frozenset[str] = frozenset()
 ) -> tuple[ResolvedPostprocessing | None, str | None]:
-    """Resolve the first matching detector and name the detector that matched."""
+    """Resolve the first matching detector not named in ``skip`` and name the one that matched."""
 
     from . import output as autoroute_output
 
     for detector in autoroute_output.list():
+        if detector.name in skip:
+            continue
         resolved = detector.func(outputs, meta)
         if resolved is not None:
             return resolved, detector.name

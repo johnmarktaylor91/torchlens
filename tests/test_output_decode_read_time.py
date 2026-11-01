@@ -141,6 +141,20 @@ def test_unknown_style_refuses_with_did_you_mean() -> None:
     assert "did you mean 'classification'?" in str(excinfo.value)
 
 
+def test_unknown_style_refuses_even_when_a_builtin_detector_claims_the_output() -> None:
+    """A misspelt style on a labelled model refuses; the labels detector never answers it."""
+
+    trace = tl.trace(
+        _Fixed(torch.tensor([[1.0, 5.0]]), {0: "cold", 1: "hot"}).eval(), torch.ones(1, 2)
+    )
+
+    assert trace.decoded_output is not None  # the labels detector claims this output
+    with pytest.raises(tl.errors.DecodeStyleUnknownError) as excinfo:
+        trace.decode_output(style="clasification")
+    assert excinfo.value.fields["code"] == "decode_style_unknown"
+    assert "did you mean 'classification'?" in str(excinfo.value)
+
+
 def test_hf_text_style_decodes_with_the_passed_tokenizer() -> None:
     logits = torch.tensor([[[0.0, 5.0], [6.0, 1.0]]])
     trace = tl.trace(_Fixed(logits).eval(), torch.ones(1, 2))
@@ -148,7 +162,7 @@ def test_hf_text_style_decodes_with_the_passed_tokenizer() -> None:
     assert trace.decoded_output is None  # no tokenizer attached: no automatic text decode
     decoded = trace.decode_output(style="hf_text", tokenizer=_Tokenizer())
     assert decoded == [{"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}]
-    with pytest.raises(InvalidArgumentError) as excinfo:
+    with pytest.raises(tl.errors.DecodeStyleUnknownError) as excinfo:
         trace.decode_output(style="hf_text")
     assert excinfo.value.fields["code"] == "decode_style_unknown"
 
