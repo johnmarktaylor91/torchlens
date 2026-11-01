@@ -331,12 +331,13 @@ def test_environment_status_mapping(
     """Every environment probe maps uniformly into the merged vocabulary."""
 
     from torchlens import _utils
+    from torchlens.report import _doctor as doctor_module
     from torchlens.report._doctor import _ENVIRONMENT_REMEDIES
 
     raw_checks = tuple(
         _utils._EnvironmentCheck(key, raw_status, "diagnostic") for key in _ENVIRONMENT_REMEDIES
     )
-    monkeypatch.setattr(_utils, "_environment_checks", lambda: raw_checks)
+    monkeypatch.setattr(doctor_module, "_environment_checks", lambda: raw_checks)
     report = tl.report.doctor()
     environment_rows = [
         row for row in report.checks if not row.key.startswith("backend_scorecard:")
