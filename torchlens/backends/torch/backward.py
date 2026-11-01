@@ -29,6 +29,11 @@ from ..._capture.peak_memory import (
     reset_peak_rss,
 )
 from ..._data_classes._fork_lineage import _is_fork_relative
+from ..._data_classes._grad_fn_naming import (
+    _grad_fn_label_parts,
+    _grad_fn_type_from_class_name,
+    _normalize_grad_fn_type,
+)
 from ..._data_classes.backward_pass import BackwardPass
 from ..._data_classes.func_call_location import FuncCallLocation
 from ..._data_classes.grad_fn import GradFn, _paired_pass_op
@@ -57,7 +62,7 @@ from ..._utils._torch_symbols import torch_attr
 from ..._utils.introspection import _get_code_qualname, _get_col_offset
 from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ...errors import ConfigurationError
-from ._backward_dispatch import outside_census
+from ._backward_dispatch import backward_window, outside_census
 from ._backward_markers import begin_grad_fn_marker, end_grad_fn_marker, executing_grad_fn_ref
 from ._backward_roots import _autograd_roots_from_call, _root_tensors, _roots_by_trace
 from ._fire_timing import (
@@ -1202,62 +1207,6 @@ def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
             if inferred_order > 1 and grad_fn_record.order != inferred_order:
                 grad_fn_record.order = inferred_order
                 changed = True
-
-
-def _normalize_grad_fn_type(grad_fn_handle: Any) -> str:
-    """Normalize an autograd grad_fn_handle class name for TorchLens labels.
-
-    Parameters
-    ----------
-    grad_fn_handle:
-        Autograd function object.
-
-    Returns
-    -------
-    str
-        Lowercased class name with a trailing ``Backward<digits>`` suffix removed.
-    """
-    return re.sub(r"Backward\d*$", "", type(grad_fn_handle).__name__).lower()
-
-
-def _grad_fn_label_parts(
-    trace: Any,
-    type: str,
-    _layer_label: str | None,
-    type_counter: dict[str, int],
-    total_num: int,
-) -> tuple[int, int, str]:
-    """Build numeric label fields for one grad_fn_handle.
-
-    Parameters
-    ----------
-    trace:
-        Trace being updated.
-    type:
-        Normalized grad_fn_handle type.
-    _layer_label:
-        Matching forward layer label, or ``None`` for intervening grad_fns.
-    type_counter:
-        Running per-type counter for intervening grad_fns.
-    total_num:
-        One-based discovery index in the backward graph.
-
-    Returns
-    -------
-    tuple[int, int, str]
-        GradFn type index, total index, and user-facing label.
-    """
-    del trace, _layer_label
-    type_counter[type] = type_counter.get(type, 0) + 1
-    type_num = type_counter[type]
-    label = f"{type}_back_{type_num}_{total_num}"
-    return type_num, total_num, label
-
-
-def _grad_fn_type_from_class_name(class_name: str) -> str:
-    """Normalize an autograd class name for native backward labels."""
-
-    return re.sub(r"Backward\d*$", "", class_name).lower()
 
 
 @dataclass
@@ -3306,8 +3255,6 @@ def _run_backward_with_capture(
     result = None
     trace._tl_active_backward_bracket = True
     try:
-        from ._backward_dispatch import backward_window
-
         with backward_window(trace, pass_index):
             result = backward_callable()
     except BaseException:
