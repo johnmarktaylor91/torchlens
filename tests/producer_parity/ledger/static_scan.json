@@ -204,7 +204,7 @@
   "field": "layer_type",
   "file": "torchlens/_capture/prepare/door.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -220,7 +220,7 @@
   "field": "raw_index",
   "file": "torchlens/_capture/prepare/door.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
