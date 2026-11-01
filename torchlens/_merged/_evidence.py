@@ -17,9 +17,11 @@ from typing import Any
 
 from ..distributed._ledger import GroupLifecycleLedger
 
-# The boundary vocabularies and parse rules live in ``_boundary_rules``; the
+# The boundary vocabularies and parse rules live in ``_boundary_rules`` (the
+# group-membership and role rules in ``_boundary_membership``); the
 # reader vocabularies are re-exported here (redundant aliases) beside the
 # extractor that applies them, where the writer-lockstep tests read them.
+from ._boundary_membership import check_group_coherence, check_group_membership, check_roles
 from ._boundary_rules import (
     _COMPLETION_BINDINGS as _COMPLETION_BINDINGS,
     _DISCLOSURE_TOKENS as _DISCLOSURE_TOKENS,
@@ -34,12 +36,9 @@ from ._boundary_rules import (
     check_completion_events,
     check_correlation_key,
     check_disclosures,
-    check_group_coherence,
-    check_group_membership,
     check_kind_class_records,
     check_lifetime_evidence,
     check_op_label_backrefs,
-    check_roles,
     check_scalar_records,
     check_witness_digests,
     check_witness_policy,

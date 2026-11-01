@@ -10,7 +10,7 @@ module never imports the engine and the import graph stays acyclic.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ..distributed._audit import MembershipLineageVerdict, verify_membership_lineages
 from ..distributed._ledger import InstallEpoch, membership_digest_for_ranks
@@ -137,12 +137,7 @@ def check_membership_authority(
                     code=MergedErrorCode.MERGED_SCHEMA_INVALID,
                     rank=rank,
                 )
-            correlation_key = (
-                str(correlation["membership_digest"]),
-                int(correlation["lifetime_ordinal"]),
-                str(correlation["channel"]),
-                int(correlation["seq"]),
-            )
+            correlation_key = _correlation_key(correlation)
             if correlation_key in seen_correlation_keys:
                 raise MergeInputError(
                     f"Rank {rank} presents duplicate correlation key {correlation_key}; "
@@ -151,6 +146,28 @@ def check_membership_authority(
                     rank=rank,
                 )
             seen_correlation_keys.add(correlation_key)
+
+
+def _correlation_key(correlation: Mapping[str, Any]) -> tuple[str, int, str, int]:
+    """Return a boundary's ``(membership_digest, lifetime_ordinal, channel, seq)`` key.
+
+    Parameters
+    ----------
+    correlation:
+        The boundary's shape-checked correlation mapping.
+
+    Returns
+    -------
+    tuple[str, int, str, int]
+        The rank-local correlation key, normalised to ``str``/``int``.
+    """
+
+    return (
+        str(correlation["membership_digest"]),
+        int(correlation["lifetime_ordinal"]),
+        str(correlation["channel"]),
+        int(correlation["seq"]),
+    )
 
 
 def audit_membership_lineages(
@@ -197,6 +214,88 @@ def audit_membership_lineages(
     return audit, conflicted_memberships, findings
 
 
+def _member_order_finding(
+    rank: int,
+    uid: GroupUid,
+    members: tuple[int, ...],
+    recorded: tuple[int, ...],
+    input_ranks: tuple[int, ...],
+) -> MergedFinding:
+    """Build the ``relation_violation`` for a rank whose member order disagrees.
+
+    Parameters
+    ----------
+    rank:
+        The rank whose record disagrees.
+    uid:
+        The group uid both records name.
+    members:
+        This rank's recorded member order.
+    recorded:
+        The member order another rank recorded first.
+    input_ranks:
+        The presented ranks, sorted.
+
+    Returns
+    -------
+    MergedFinding
+        The member-order dispute finding.
+    """
+
+    return MergedFinding(
+        kind="relation_violation",
+        detail=(
+            f"rank {rank} records group {uid} with member order "
+            f"{members} but another rank recorded "
+            f"{recorded}; c10d group rank lists must be "
+            "identical on every member rank."
+        ),
+        membership_digest=uid[0],
+        ranks=input_ranks,
+    )
+
+
+def _backend_dispute_finding(
+    rank: int,
+    uid: GroupUid,
+    backend: str | None,
+    recorded: str | None,
+    input_ranks: tuple[int, ...],
+) -> MergedFinding:
+    """Build the ``relation_violation`` for a rank whose group backend disagrees.
+
+    Parameters
+    ----------
+    rank:
+        The rank whose record disagrees.
+    uid:
+        The group uid both records name.
+    backend:
+        This rank's recorded backend.
+    recorded:
+        The backend another rank recorded first.
+    input_ranks:
+        The presented ranks, sorted.
+
+    Returns
+    -------
+    MergedFinding
+        The backend dispute finding.
+    """
+
+    return MergedFinding(
+        kind="relation_violation",
+        detail=(
+            f"rank {rank} records group {uid} with backend "
+            f"{backend!r} but another rank recorded "
+            f"{recorded!r}; a disputed backend is "
+            "never verdict-grade."
+        ),
+        membership_digest=uid[0],
+        ranks=input_ranks,
+    )
+
+
 def build_group_table(
     evidence: Mapping[int, RankEvidence], input_ranks: tuple[int, ...]
 ) -> tuple[dict[GroupUid, tuple[int, ...]], dict[GroupUid, str | None], list[MergedFinding]]:
@@ -233,17 +332,7 @@ def build_group_table(
             backend = entry["group"].get("backend")
             if uid in group_members and group_members[uid] != members:
                 findings.append(
-                    MergedFinding(
-                        kind="relation_violation",
-                        detail=(
-                            f"rank {rank} records group {uid} with member order "
-                            f"{members} but another rank recorded "
-                            f"{group_members[uid]}; c10d group rank lists must be "
-                            "identical on every member rank."
-                        ),
-                        membership_digest=uid[0],
-                        ranks=input_ranks,
-                    )
+                    _member_order_finding(rank, uid, members, group_members[uid], input_ranks)
                 )
             # Backend disagreement was silent first-writer-wins: one rank
             # claiming "gloo" flipped an unknown-backend group into the
@@ -259,17 +348,7 @@ def build_group_table(
             ):
                 backend_disputed.add(uid)
                 findings.append(
-                    MergedFinding(
-                        kind="relation_violation",
-                        detail=(
-                            f"rank {rank} records group {uid} with backend "
-                            f"{backend!r} but another rank recorded "
-                            f"{group_backend[uid]!r}; a disputed backend is "
-                            "never verdict-grade."
-                        ),
-                        membership_digest=uid[0],
-                        ranks=input_ranks,
-                    )
+                    _backend_dispute_finding(rank, uid, backend, group_backend[uid], input_ranks)
                 )
                 group_backend[uid] = None
             group_members.setdefault(uid, members)

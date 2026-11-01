@@ -2,7 +2,8 @@
 
 ``_evidence._validate_boundary`` runs these rule groups in a fixed order over
 one journal entry; each group raises the typed ``merged_schema_invalid``
-refusal for the first defect it finds. The order is part of the contract:
+refusal for the first defect it finds (the group-membership and role groups
+live in ``_boundary_membership``). The order is part of the contract:
 when an entry carries several defects, the earliest group's refusal is the
 one reported (pinned by ``tests/test_merged_boundary_rules.py``). The closed
 vocabularies the rules read live here too, so the rules have no import back
@@ -14,7 +15,6 @@ from __future__ import annotations
 import re
 from typing import Any, TypeGuard
 
-from ..distributed._ledger import membership_digest_for_ranks
 from ._enums import REDUCE_OP_KINDS, TENSORLESS_KINDS, MergedErrorCode
 from ._errors import MergeInputError
 
@@ -32,12 +32,9 @@ __all__ = (
     "check_completion_events",
     "check_correlation_key",
     "check_disclosures",
-    "check_group_coherence",
-    "check_group_membership",
     "check_kind_class_records",
     "check_lifetime_evidence",
     "check_op_label_backrefs",
-    "check_roles",
     "check_scalar_records",
     "check_witness_digests",
     "check_witness_policy",
@@ -171,231 +168,6 @@ def check_correlation_key(entry: dict[str, Any], where: str, source: str) -> dic
     return correlation
 
 
-def check_group_membership(entry: dict[str, Any], where: str, source: str) -> list[Any]:
-    """Check the group record's rank list and this rank's place in it.
-
-    Returns
-    -------
-    list[Any]
-        The recorded ``global_ranks``: distinct integers containing
-        ``my_global_rank``.
-
-    Raises
-    ------
-    MergeInputError
-        On a missing group record or rank list, a missing ``my_global_rank``,
-        a non-integer or duplicate member, or a rank outside its own group.
-    """
-
-    group = entry.get("group")
-    if not isinstance(group, dict) or not isinstance(group.get("global_ranks"), list):
-        raise _refuse(f"{where} has no group membership record", source=source)
-    if not isinstance(group.get("my_global_rank"), int):
-        raise _refuse(f"{where} has no my_global_rank", source=source)
-    global_ranks: list[Any] = group["global_ranks"]
-    if any(not _is_strict_int(rank) for rank in global_ranks):
-        raise _refuse(f"{where} group membership contains a non-integer rank", source=source)
-    if len(set(global_ranks)) != len(global_ranks):
-        raise _refuse(f"{where} group membership contains duplicate ranks", source=source)
-    if group["my_global_rank"] not in global_ranks:
-        raise _refuse(
-            f"{where} claims rank {group['my_global_rank']} outside its group membership",
-            source=source,
-        )
-    return global_ranks
-
-
-def check_group_coherence(
-    group: dict[str, Any],
-    global_ranks: list[Any],
-    correlation: dict[str, Any],
-    where: str,
-    source: str,
-) -> None:
-    """Check that the group record's redundant fields agree with its rank list.
-
-    ``my_group_rank``, ``size`` and the correlation key's membership digest
-    are each derivable from ``global_ranks``; a value that disagrees is a
-    second, contradictory membership claim.
-
-    Parameters
-    ----------
-    group:
-        The entry's group record, already shape-checked by
-        :func:`check_group_membership`.
-    global_ranks:
-        The recorded member ranks.
-    correlation:
-        The entry's correlation key, already shape-checked.
-
-    Raises
-    ------
-    MergeInputError
-        On a non-integer or mispositioned ``my_group_rank``, a ``size`` other
-        than the member count, a non-string backend, or a membership digest
-        bound to a different rank list.
-    """
-
-    my_group_rank = group.get("my_group_rank")
-    if my_group_rank is not None and not _is_strict_int(my_group_rank):
-        raise _refuse(f"{where} my_group_rank is not an integer or null", source=source)
-    # The group rank is definitionally the position of my_global_rank in the
-    # recorded (c10d-ordered) rank list -- the writer reads it from
-    # ``dist.get_group_rank`` over the same group whose
-    # ``get_process_group_ranks`` list it records. A permuted or out-of-range
-    # value rebinds this rank's slice pairings in the gather/scatter/all_to_all
-    # witness derivation (and used to reach the engine's list indexing as a raw
-    # IndexError), so incoherence is tamper, never honest evidence (R18-2).
-    if my_group_rank is not None and my_group_rank != global_ranks.index(group["my_global_rank"]):
-        raise _refuse(
-            f"{where} my_group_rank {my_group_rank} does not equal the position "
-            f"of my_global_rank {group['my_global_rank']} in its own recorded "
-            f"group membership {global_ranks}",
-            source=source,
-        )
-    # ``size`` is written by the recorder as len(global_ranks) and was never
-    # validated: a forged size is a second, contradictory membership claim.
-    size = group.get("size")
-    if not _is_strict_int(size) or size != len(global_ranks):
-        raise _refuse(
-            f"{where} group size {size!r} does not equal its recorded "
-            f"membership of {len(global_ranks)} rank(s)",
-            source=source,
-        )
-    backend = group.get("backend")
-    if backend is not None and not isinstance(backend, str):
-        raise _refuse(f"{where} group backend is not a string or null", source=source)
-    _check_membership_digest_binding(correlation, global_ranks, where, source)
-
-
-def _check_membership_digest_binding(
-    correlation: dict[str, Any], global_ranks: list[Any], where: str, source: str
-) -> None:
-    """Check that the correlation key's membership digest names this rank list.
-
-    Parameters
-    ----------
-    correlation:
-        The entry's shape-checked correlation key.
-    global_ranks:
-        The recorded member ranks.
-
-    Raises
-    ------
-    MergeInputError
-        When the digest is not ``membership_digest_for_ranks(global_ranks)``.
-    """
-
-    # The membership digest is definitionally sha256(sorted(global_ranks)) and
-    # freely recomputable. A digest bound to a DIFFERENT membership rebinds this
-    # boundary's correlation joins, lifetime ordinals, and pre-join audit row to
-    # another communicator while the presence/relation checks keep reading the
-    # rank list -- the two views are attacker-separable unless tied here.
-    if correlation["membership_digest"] != membership_digest_for_ranks(global_ranks):
-        raise _refuse(
-            f"{where} membership_digest does not equal the digest of its own "
-            f"recorded group membership {sorted(int(r) for r in global_ranks)}",
-            source=source,
-        )
-
-
-def check_roles(entry: dict[str, Any], kind: Any, where: str, source: str) -> None:
-    """Check the tensor-role list: cardinality against the kind, then each role.
-
-    Raises
-    ------
-    MergeInputError
-        On a missing roles list, an empty list on a tensor-carrying kind, or
-        the first malformed role entry (see :func:`_check_role_entry`).
-    """
-
-    roles = entry.get("roles")
-    if not isinstance(roles, list):
-        raise _refuse(f"{where} has no roles list", source=source)
-    # Role cardinality vs boundary kind (b6-opus-R18-1): deleting the roles
-    # record from EVERY member of a join used to vacuously satisfy the
-    # set-of-shapes agreement checks (asymmetric deletion was caught; uniform
-    # corruption -- the merge threat model -- was the escape). Every
-    # tensor-carrying kind records at least one role on a successful call, so
-    # an empty record refuses here, at the one chokepoint merge time and load
-    # rederivation share.
-    if not roles and kind not in TENSORLESS_KINDS:
-        raise _refuse(
-            f"{where} is a tensor-carrying {kind} boundary with zero tensor "
-            "roles; a successful collective of this kind always records at "
-            "least one role, so an empty or deleted roles record is not "
-            "honest evidence",
-            source=source,
-        )
-    seen_role_indexes: dict[str, set[int]] = {}
-    for role_index, role in enumerate(roles):
-        _check_role_entry(role, role_index, seen_role_indexes, where, source)
-
-
-def _check_role_entry(
-    role: Any,
-    role_index: int,
-    seen_role_indexes: dict[str, set[int]],
-    where: str,
-    source: str,
-) -> None:
-    """Check one role entry's name, shape and per-role-unique tensor position.
-
-    Parameters
-    ----------
-    role:
-        One element of the entry's roles list.
-    role_index:
-        Its position in that list (diagnostic).
-    seen_role_indexes:
-        Tensor positions already seen per exact role name; updated in place.
-
-    Raises
-    ------
-    MergeInputError
-        On a non-mapping role, a role name outside the closed vocabulary, a
-        shape that is not a list of non-negative integers, a missing or
-        negative index, or an index repeated within one role name.
-    """
-
-    if not isinstance(role, dict):
-        raise _refuse(f"{where} role entry {role_index} is not a mapping", source=source)
-    if role.get("role") not in _ROLE_NAMES:
-        raise _refuse(
-            f"{where} role entry {role_index} has role {role.get('role')!r} "
-            "outside the closed vocabulary",
-            source=source,
-        )
-    shape = role.get("shape")
-    if not isinstance(shape, list) or any(not _is_strict_int(dim) or dim < 0 for dim in shape):
-        raise _refuse(
-            f"{where} role entry {role_index} has no well-formed shape "
-            "(a list of non-negative integers)",
-            source=source,
-        )
-    # ``index`` is the recorder's tensor POSITION (input position for
-    # contribution/contribution_destination, output position for
-    # destination). Positions are unique per exact role name; they are NOT
-    # required dense 0..n-1 because a tensor serving as both contribution
-    # and destination keeps its input position and leaves a hole in the
-    # destination positions -- an honest recorder shape (R18-1 ii).
-    index_value = role.get("index")
-    if not _is_strict_int(index_value) or index_value < 0:
-        raise _refuse(
-            f"{where} role entry {role_index} has no non-negative integer index",
-            source=source,
-        )
-    used = seen_role_indexes.setdefault(str(role.get("role")), set())
-    if index_value in used:
-        raise _refuse(
-            f"{where} role entry {role_index} duplicates index {index_value} "
-            f"within role {role.get('role')!r}; the recorder emits each "
-            "tensor position at most once per role",
-            source=source,
-        )
-    used.add(index_value)
-
-
 def check_scalar_records(entry: dict[str, Any], kind: Any, where: str, source: str) -> Any:
     """Check the reduce-op record its kind requires and the group-sequence probe.
 
@@ -482,6 +254,9 @@ def check_disclosures(
         The entry's validated completion binding.
     group_seq:
         The entry's validated group-sequence probe value (integer or ``None``).
+    entry, where, source:
+        The boundary journal entry, the diagnostic message prefix and the
+        merge input origin.
 
     Raises
     ------
@@ -558,6 +333,9 @@ def check_witness_policy(
     ----------
     completion_binding:
         The entry's validated completion binding.
+    entry, where, source:
+        The boundary journal entry, the diagnostic message prefix and the
+        merge input origin.
 
     Returns
     -------
@@ -624,6 +402,9 @@ def check_witness_digests(
         The entry's witness record, policy already validated.
     completion_binding:
         The entry's validated completion binding.
+    kind, where, source:
+        The entry's validated kind, the diagnostic message prefix and the
+        merge input origin.
 
     Raises
     ------
@@ -657,6 +438,8 @@ def _check_digest_provenance(
         The witness policy, already in the closed vocabulary.
     completion_binding:
         The entry's validated completion binding.
+    where, source:
+        The diagnostic message prefix and the merge input origin.
 
     Raises
     ------
@@ -690,6 +473,9 @@ def _check_digest_list(digest_field: str, digests: Any, kind: Any, where: str, s
         ``"contribution_digests"`` or ``"destination_digests"``.
     digests:
         The field's non-null value.
+    kind, where, source:
+        The entry's validated kind, the diagnostic message prefix and the
+        merge input origin.
 
     Raises
     ------

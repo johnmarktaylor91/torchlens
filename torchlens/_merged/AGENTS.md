@@ -25,7 +25,8 @@ Both are top-level lazy names routed here. Contract of record:
   c10d and absolute-seq cross-checks, presence gap, witness verdict), declared
   ranks, order check, stored verdicts. The join assembly (anything that builds a
   `PerRankRef`/`JoinRecord`) stays here; the evidence-only stages live in
-  `_derive_steps.py`.
+  `_derive_steps.py`, and the per-kind relation table (`_relation_findings`,
+  `_roles_of`) in `_relation_table.py`, which never imports the engine.
 - `tests/test_merged_derive_steps.py` pins the whole result (digest) or the exact
   refusal of every stage; a change to findings order, messages or codes fails it.
 
@@ -55,15 +56,17 @@ Both are top-level lazy names routed here. Contract of record:
   rank's boundary + ledger evidence into `RankEvidence`; malformed inputs refuse
   typed via `MergeInputError`.
 - `_validate_boundary` is the ordered list of per-boundary rule groups; the rules
-  themselves live in `_boundary_rules.py`.
+  themselves live in `_boundary_rules.py` and `_boundary_membership.py`.
 
 ## _boundary_rules.py
 - Leaf module: the closed boundary vocabularies (`KNOWN_KINDS`, `P2P_KINDS`, the
   reader vocabularies `_evidence` re-exports), the shared `_refuse` constructor,
-  and one `check_*` function per rule group (identity, correlation key, group
-  membership and coherence, roles, scalar records, completion events,
-  disclosures, kind-class records, witness policy and digests, op-label
-  back-references, lifetime evidence).
+  and one `check_*` function per rule group (identity, correlation key, scalar
+  records, completion events, disclosures, kind-class records, witness policy
+  and digests, op-label back-references, lifetime evidence).
+- `_boundary_membership.py` holds the group membership and coherence and the
+  roles rule groups; it imports `_refuse` and the vocabularies from
+  `_boundary_rules.py`, never the reverse.
 - Call order is contract: with several defects the earliest group's refusal
   wins. `tests/test_merged_boundary_rules.py` pins every refusal's class, code
   and message; a new rule appends a row there.
