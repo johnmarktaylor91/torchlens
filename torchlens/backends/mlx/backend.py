@@ -1780,6 +1780,7 @@ class MLXBackend:
                 )
             else:
                 outcome = validate_mlx_captures_detailed(trace)
+                trace._mlx_perturbation_gaps = outcome.perturbation_gaps
                 replayed_count = outcome.replayed_count
                 failed_count = outcome.failed_count
                 decisions = outcome.decisions

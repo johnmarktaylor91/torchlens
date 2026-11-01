@@ -165,6 +165,9 @@ MLX_ARRAY_DUNDER_OPS: dict[str, str] = {
     "__ne__": "not_equal",
 }
 
+#: ``mx.array`` properties that compute a new array, and their op names.
+MLX_ARRAY_PROPERTY_OPS: dict[str, str] = {"T": "transpose"}
+
 #: ``mx.array`` methods logged as ops under their own names.
 MLX_ARRAY_METHOD_OPS: tuple[str, ...] = (
     "sum",
@@ -316,6 +319,8 @@ class _MLXWrapperRegistry:
                 self.wrap_attr(array_type, dunder, backend, op_name)
             for name in MLX_ARRAY_METHOD_OPS:
                 self.wrap_attr(array_type, name, backend, name)
+            for name, op_name in MLX_ARRAY_PROPERTY_OPS.items():
+                self.wrap_attr(array_type, name, backend, op_name)
         for name in ("relu", "gelu", "sigmoid", "tanh", "softmax", "silu"):
             self.wrap_attr(nn, name, backend, name)
         # Most functions of mlx.nn.layers.activations are mx.compile'd. An
@@ -418,13 +423,17 @@ class _MLXWrapperRegistry:
             Optional mapping from wrapped module instance id to primary address.
         """
 
-        original = inspect.getattr_static(owner, name, None)
-        if original is None or isinstance(original, property) or not callable(original):
+        original_attribute = inspect.getattr_static(owner, name, None)
+        as_property = isinstance(original_attribute, property)
+        original = original_attribute.fget if as_property else original_attribute
+        if original is None or not callable(original):
             return
         key = (owner, name)
         if key in self._originals:
             return
-        self._originals[key] = original
+        # The registry keeps the attribute as it was (the property object for
+        # ``T``), so ``unwrap`` restores it with one setattr.
+        self._originals[key] = original_attribute
 
         @functools.wraps(
             original,
@@ -475,7 +484,7 @@ class _MLXWrapperRegistry:
                 if frame is not None:
                     getattr(trace, "_mlx_module_stack").pop()
 
-        setattr(owner, name, wrapper)
+        setattr(owner, name, property(wrapper) if as_property else wrapper)
 
 
 @contextmanager
@@ -722,6 +731,7 @@ def _import_mlx() -> tuple[object, object]:
 __all__ = [
     "MLX_ARRAY_DUNDER_OPS",
     "MLX_ARRAY_METHOD_OPS",
+    "MLX_ARRAY_PROPERTY_OPS",
     "MLX_CORE_FUNCTION_OPS",
     "MLX_FAST_FUNCTION_OPS",
     "MLX_LAYER_CLASS_OPS",

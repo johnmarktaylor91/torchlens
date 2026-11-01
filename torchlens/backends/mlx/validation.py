@@ -120,11 +120,13 @@ def build_capture_template(
         if _is_mlx_array(node):
             label = next(cursor, None)
             return node if label is None else REPLAY_SLOT
-        if isinstance(node, tuple):
+        # Exact container types only: an ``mlx.nn.Module`` is a dict subclass
+        # and must stay the module object (its ``__call__`` reads attributes).
+        if type(node) is tuple:
             return tuple(_slot(item) for item in node)
-        if isinstance(node, list):
+        if type(node) is list:
             return [_slot(item) for item in node]
-        if isinstance(node, dict):
+        if type(node) is dict:
             return {key: _slot(item) for key, item in node.items()}
         return node
 
@@ -554,11 +556,13 @@ def _reconstruct_value(
                     raise ValueError("MLX replay template slot has no recorded parent label.")
                 return node
             return _saved_payload(trace, ops_by_label, label)
-        if isinstance(node, tuple):
+        # Exact container types only (see ``build_capture_template``): a
+        # module instance replays as itself, never as a plain dict.
+        if type(node) is tuple:
             return tuple(_rebuild(item) for item in node)
-        if isinstance(node, list):
+        if type(node) is list:
             return [_rebuild(item) for item in node]
-        if isinstance(node, dict):
+        if type(node) is dict:
             return {key: _rebuild(item) for key, item in node.items()}
         return node
 
