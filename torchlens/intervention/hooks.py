@@ -21,6 +21,7 @@ from .._ir.selector_eval import (
 )
 from .._state import pause_logging
 from .errors import (
+    HelperMountError,
     HookSignatureError,
     HookSiteCoverageError,
     LiveModeLabelError,
@@ -1410,7 +1411,15 @@ def _validate_helper_mount(
         node site.
     """
 
-    if helper_spec is None or universe == "activation" or helper_spec.signal != "forward":
+    if helper_spec is None or universe == "activation":
+        return
+    if universe == "node" and dict(helper_spec.metadata).get("requires_grad_output"):
+        if _targets_accumulate_grad(site_target):
+            raise HelperMountError(
+                f"{helper_spec.name} requires grad_output and cannot mount on "
+                "AccumulateGrad prehooks."
+            )
+    if helper_spec.signal != "forward":
         return
     from .._errors import InvalidArgumentError
 
@@ -1424,6 +1433,27 @@ def _validate_helper_mount(
         verb=helper_spec.name,
         site=repr(site_target),
     )
+
+
+def _targets_accumulate_grad(site_target: Any) -> bool:
+    """Return whether a node selector target names ``AccumulateGrad``.
+
+    Parameters
+    ----------
+    site_target:
+        Selector-like target.
+
+    Returns
+    -------
+    bool
+        Whether the target is an AccumulateGrad selector.
+    """
+
+    value = getattr(site_target, "selector_value", None)
+    if isinstance(value, Mapping):
+        type_value = value.get("type")
+        return type_value is not None and "accumulategrad" in str(type_value).lower()
+    return "accumulategrad" in repr(site_target).lower()
 
 
 #: The one remedy text of ``edit_signal_mismatch`` (SPEC 2.2).
