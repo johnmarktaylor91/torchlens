@@ -1938,6 +1938,18 @@ class SafeBundleUnpickler(pickle._Unpickler):
             )
         return super()._instantiate(klass, args)  # type: ignore[misc]
 
+    def load_ext(self) -> None:
+        """Refuse EXT1 / EXT2 / EXT4 before any extension-registry lookup.
+
+        They resolve a code through the process-wide ``copyreg`` registry and cache the
+        result process-wide. The writer emits one only for a code registered in the
+        writing process, which no other process could load, so metadata never uses them.
+        """
+
+        raise pickle.UnpicklingError(
+            "corrupt or malformed pickle stream: extension codes are not used in bundle metadata"
+        )
+
     # REBUILD the pure-Python opcode dispatch table so the overrides above are actually
     # invoked (proven: ``def load_build`` alone is INERT -- ``pickle._Unpickler.load``
     # reads ``self.dispatch``, a class-level dict of unbound base functions bound at
@@ -1949,3 +1961,6 @@ class SafeBundleUnpickler(pickle._Unpickler):
     dispatch[pickle.REDUCE[0]] = load_reduce
     dispatch[pickle.NEWOBJ[0]] = load_newobj
     dispatch[pickle.NEWOBJ_EX[0]] = load_newobj_ex
+    dispatch[pickle.EXT1[0]] = load_ext
+    dispatch[pickle.EXT2[0]] = load_ext
+    dispatch[pickle.EXT4[0]] = load_ext
