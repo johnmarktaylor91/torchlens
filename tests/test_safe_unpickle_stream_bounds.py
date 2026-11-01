@@ -33,7 +33,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
 from torchlens._io._canonical_pickle import dump_canonical_metadata
-from torchlens._io._safe_unpickle import SafeBundleUnpickler
+from torchlens._io._safe_unpickle import SafeBundleUnpickler, _PurePythonBundleUnpickler
 
 _P2 = pickle.PROTO + b"\x02"
 _P4 = pickle.PROTO + b"\x04"
@@ -136,10 +136,18 @@ def test_extension_opcodes_refuse_before_any_registry_lookup(
 
         lookups.append(ext_code)
 
-    monkeypatch.setattr(SafeBundleUnpickler, "get_extension", _recording_get_extension)
+    # The C machine's registry lookup is not a Python attribute; the pure-Python machine's
+    # is. The reader pass refuses the opcode before either machine runs, so neither the
+    # recorded lookup nor a load path is ever reached.
+    monkeypatch.setattr(_PurePythonBundleUnpickler, "get_extension", _recording_get_extension)
     data = _P2 + _ext(opcode, code) + pickle.MARK + pickle.TUPLE + pickle.REDUCE + pickle.STOP
+    unpickler = SafeBundleUnpickler(io.BytesIO(data))
     with pytest.raises(pickle.UnpicklingError, match=_EXT_REFUSAL):
-        SafeBundleUnpickler(io.BytesIO(data)).load()
+        unpickler.load()
+    assert lookups == []
+    assert unpickler.load_path is None
+    with pytest.raises(pickle.UnpicklingError, match=_EXT_REFUSAL):
+        _PurePythonBundleUnpickler(io.BytesIO(data)).load()
     assert lookups == []
 
 
@@ -210,12 +218,21 @@ def test_a_registered_extension_code_is_refused_and_never_cached() -> None:
 def test_a_frame_declaring_more_than_remains_is_refused_before_it_is_read(declared: int) -> None:
     """The declared length is checked against the bytes left before any read of the frame."""
 
-    stream = _ReadRecordingStream(_P4 + _frame(declared) + _BODY)
+    data = _P4 + _frame(declared) + _BODY
+    stream = _ReadRecordingStream(data)
+    unpickler = SafeBundleUnpickler(stream)
     with pytest.raises(pickle.UnpicklingError, match=_FRAME_REFUSAL):
-        SafeBundleUnpickler(stream).load()
-    assert declared not in stream.read_sizes
-    # The stream still sits right after the FRAME header: no payload byte was consumed.
-    assert stream.tell() == len(_P4) + len(_frame(0))
+        unpickler.load()
+    # The loader reads the stream whole, once, before any opcode runs; no read is ever
+    # sized by the declaration, and neither machine ran.
+    assert stream.read_sizes == [-1]
+    assert unpickler.load_path is None
+    # The pure-Python machine bounds the same declaration at the opcode.
+    pure_stream = _ReadRecordingStream(data)
+    with pytest.raises(pickle.UnpicklingError, match=_FRAME_REFUSAL):
+        _PurePythonBundleUnpickler(pure_stream).load()
+    assert declared not in pure_stream.read_sizes
+    assert pure_stream.tell() == len(_P4) + len(_frame(0))
 
 
 def test_an_overrunning_frame_in_a_real_file_is_refused(tmp_path: Path) -> None:
@@ -250,12 +267,24 @@ def test_an_exact_frame_still_loads() -> None:
         assert SafeBundleUnpickler(io.BytesIO(data)).load() == value
 
 
-def test_a_stream_that_cannot_report_its_length_refuses_a_frame() -> None:
-    """Without a known length a frame cannot be bounded, so it is refused; unframed loads."""
+def test_a_stream_that_cannot_report_its_length_still_bounds_a_frame() -> None:
+    """A frame is bounded by the bytes actually present, with or without a seekable source.
+
+    The loader reads its source whole before any opcode runs, so an unseekable source (a
+    pipe, a socket) gives the same bound as a file: an over-declared frame refuses, an
+    exact one loads. The pure-Python machine, which reads per opcode, cannot bound a frame
+    without a length and refuses the framed stream outright.
+    """
 
     framed = pickle.dumps({"a": [1, 2, 3]}, protocol=4)
+    assert SafeBundleUnpickler(io.BufferedReader(_UnseekableStream(framed))).load() == {
+        "a": [1, 2, 3]
+    }
+    over = _P4 + _frame(len(_BODY) + 1) + _BODY
     with pytest.raises(pickle.UnpicklingError, match=_FRAME_REFUSAL):
-        SafeBundleUnpickler(io.BufferedReader(_UnseekableStream(framed))).load()
+        SafeBundleUnpickler(io.BufferedReader(_UnseekableStream(over))).load()
+    with pytest.raises(pickle.UnpicklingError, match=_FRAME_REFUSAL):
+        _PurePythonBundleUnpickler(io.BufferedReader(_UnseekableStream(framed))).load()
     unframed = pickle.dumps({"a": [1, 2, 3]}, protocol=2)
     assert SafeBundleUnpickler(io.BufferedReader(_UnseekableStream(unframed))).load() == {
         "a": [1, 2, 3]

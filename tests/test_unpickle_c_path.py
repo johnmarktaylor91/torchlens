@@ -29,7 +29,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io._pickle_prescan import GuardedCallable, OpcodeCeilingExceeded
+from torchlens._io._canonical_pickle import dump_canonical_metadata
+from torchlens._io._pickle_prescan import (
+    GuardedCallable,
+    OpcodeCeilingExceeded,
+    StreamNeedsInterpreter,
+    scan_opcodes,
+)
 from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _PurePythonBundleUnpickler,
@@ -157,13 +163,13 @@ def _honest_values() -> dict[str, Any]:
     """Values the TorchLens writer legitimately puts in metadata."""
 
     return {
-        "scalars": {"a": 1, "b": 2.5, "c": "x", "d": None, "e": True, "f": b"\x00\x01"},
+        "scalars": {"a": 1, "b": 2.5, "c": "x", "d": None, "e": True},
+        "bytes_payload": {"f": b"\x00\x01", "g": bytearray(b"\x02")},
         "containers": [1, (2, 3), {4: [5, 6]}, {7, 8}, frozenset({9})],
         "ordered": collections.OrderedDict([("k", 1), ("j", [2, 3])]),
         "counter": collections.Counter("abracadabra"),
         "torch_values": {"dtype": torch.float32, "size": torch.Size((2, 3)), "device": "cpu"},
         "numpy_scalar": np.float64(1.5),
-        "tensor": torch.arange(6, dtype=torch.float32).reshape(2, 3),
         "module_identity": nn.Identity(),
         "module_type": nn.Linear,
         "tensor_method": getattr(torch._C.TensorBase, "sum"),  # noqa: B009 -- the pickled shape
@@ -172,11 +178,26 @@ def _honest_values() -> dict[str, Any]:
     }
 
 
+#: Values whose protocol-2 pickle routes through a stdlib REDUCE (``_codecs.encode`` for
+#: bytes): the policy refuses that global on both machines, so no honest writer emits it.
+_PROTOCOL_3_PLUS_LABELS = frozenset({"bytes_payload", "numpy_scalar"})
+
+
 def _honest_streams() -> dict[str, bytes]:
+    """Honest streams: stock pickles per protocol plus the metadata writer's own output."""
+
     streams: dict[str, bytes] = {}
     for label, value in _honest_values().items():
-        for protocol in (2, 4, 5):
+        protocols = (4, 5) if label in _PROTOCOL_3_PLUS_LABELS else (2, 4, 5)
+        for protocol in protocols:
             streams[f"{label}@p{protocol}"] = pickle.dumps(value, protocol=protocol)
+    # A tensor pickles through the writer's inline reduction; the stock torch reduction
+    # (``torch.storage._load_from_bytes``) is refused by name on both machines.
+    buffer = io.BytesIO()
+    dump_canonical_metadata(
+        {"tensor": torch.arange(6, dtype=torch.float32).reshape(2, 3), "note": "x"}, buffer
+    )
+    streams["tensor@canonical"] = buffer.getvalue()
     return streams
 
 
@@ -271,6 +292,18 @@ def _hostile_streams() -> dict[str, bytes]:
         # persistent ids / extensions / buffers
         "persid": pickle.PROTO + b"\x02" + pickle.BINPERSID + pickle.STOP,
         "ext1": pickle.PROTO + b"\x02" + pickle.EXT1 + b"\x01" + pickle.STOP,
+        "frame_overdeclared": pickle.PROTO
+        + b"\x04"
+        + pickle.FRAME
+        + struct.pack("<Q", 2**40)
+        + pickle.EMPTY_LIST
+        + pickle.STOP,
+        "memo_index_above_count": pickle.PROTO
+        + b"\x02"
+        + pickle.EMPTY_LIST
+        + pickle.LONG_BINPUT
+        + struct.pack("<I", 2**30)
+        + pickle.STOP,
         "next_buffer": pickle.PROTO + b"\x05" + pickle.NEXT_BUFFER + pickle.STOP,
         # corruption facets
         "build_underflow": pickle.BUILD + pickle.STOP,
@@ -407,6 +440,17 @@ def _new_path(data: bytes) -> Any:
 
 
 def _old_path(data: bytes) -> Any:
+    """The per-opcode machine behind the reader pass both machines share.
+
+    The reader pass refuses what neither machine should see (a memo index above the
+    opcode count, an extension code, an over-declared FRAME); a stream it cannot walk is
+    the interpreter's to judge, in opcode order.
+    """
+
+    try:
+        scan_opcodes(data, None)
+    except StreamNeedsInterpreter:
+        pass
     return _PurePythonBundleUnpickler(io.BytesIO(data)).load()
 
 
@@ -536,11 +580,47 @@ def test_absurd_memo_index_is_refused_before_either_machine_runs() -> None:
 def test_application_failures_keep_their_identity() -> None:
     """An exception from admitted application code propagates raw, as before."""
 
-    data = _reduce("collections", "OrderedDict", _int(1), _int(2), _int(3))
+    # ``Counter(1)`` fails inside ``collections`` (Python frames, so an application
+    # failure on both machines); a C-only failure such as ``OrderedDict(1, 2, 3)`` has no
+    # application frame and both machines report it as stream corruption.
+    data = _reduce("collections", "Counter", _int(1))
     with pytest.raises(TypeError):
         _new_path(data)
     with pytest.raises(TypeError):
         _old_path(data)
+    c_only = _reduce("collections", "OrderedDict", _int(1), _int(2), _int(3))
+    assert _outcome(_new_path, c_only) == _outcome(_old_path, c_only)
+    assert _outcome(_new_path, c_only)[:2] == ("refused", "UnpicklingError")
+
+
+def test_a_refusal_fires_in_stream_order_after_an_earlier_failure() -> None:
+    """A blocked global after a failing REDUCE: both machines report the REDUCE failure."""
+
+    data = (
+        pickle.PROTO
+        + b"\x02"
+        + pickle.EMPTY_LIST
+        + _reduce_body("collections", "Counter").replace(
+            pickle.MARK + pickle.TUPLE, pickle.MARK + _int(1) + pickle.TUPLE
+        )
+        + pickle.APPEND
+        + _global("os", "system")
+        + pickle.APPEND
+        + pickle.STOP
+    )
+    assert _outcome(_new_path, data) == _outcome(_old_path, data) == ("raised", "TypeError")
+    refused_first = (
+        pickle.PROTO
+        + b"\x02"
+        + pickle.EMPTY_LIST
+        + _global("os", "system")
+        + pickle.APPEND
+        + _reduce_body("collections", "Counter")
+        + pickle.APPEND
+        + pickle.STOP
+    )
+    assert _outcome(_new_path, refused_first) == _outcome(_old_path, refused_first)
+    assert _outcome(_new_path, refused_first)[:2] == ("refused", "UnpicklingError")
 
 
 class _TwoLayer(nn.Module):

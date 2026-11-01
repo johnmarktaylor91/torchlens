@@ -125,7 +125,10 @@ def _load_unified_bundle(
                 count_opcodes_above=_bundle_module._METADATA_PKL_PRESCAN_BYTES,
             ).load()
     except OpcodeCeilingExceeded:
-        raise _bundle_module._opcode_ceiling_error(legacy_pickle_path) from None
+        raise ArtifactError(
+            _bundle_module._opcode_ceiling_text(legacy_pickle_path),
+            code="metadata_object_count_exceeded",
+        ) from None
     except (
         pickle.UnpicklingError,
         EOFError,
