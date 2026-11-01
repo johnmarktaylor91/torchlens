@@ -135,6 +135,9 @@ def _build_loop3() -> tuple[Any, Any]:
     from torch import nn
 
     class Loop3(nn.Module):
+        weight: Any
+        bias: Any
+
         def __init__(self) -> None:
             super().__init__()
             self.register_buffer("weight", _tensor(W44))

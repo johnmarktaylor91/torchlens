@@ -24,11 +24,17 @@ TORCH_FRAMEWORK = FrameworkRequirement(
 )
 
 
-#: ``CaptureOptions`` fields the protocol's capture sets when the caller passes
-#: no ``capture=``: torch's replay validation re-executes each op from its saved
-#: arguments and RNG state, which a default ``tl.trace`` does not record (the
-#: preview backends record what their replay needs by default).
-REPLAY_READY_CAPTURE: dict[str, bool] = {"save_args": True, "save_rng": True}
+def replay_ready_capture() -> Any:
+    """The ``CaptureOptions`` the protocol's capture uses when the caller passes none.
+
+    Torch's replay validation re-executes each op from its saved arguments
+    and RNG state, which a default ``tl.trace`` does not record (the preview
+    backends record what their replay needs by default).
+    """
+
+    from ...options import CaptureOptions
+
+    return CaptureOptions(save_args=True, save_rng=True)
 
 
 class TorchProtocol(SpecBackedProtocol):
@@ -79,7 +85,7 @@ class TorchProtocol(SpecBackedProtocol):
 
         Forward kwargs travel only in ``kwargs`` (``tl.trace``'s
         ``input_kwargs``). Without a caller ``capture=``, the capture records
-        what :meth:`validate` replays from (:data:`REPLAY_READY_CAPTURE`). ``options`` are trace keywords; one that is not a
+        what :meth:`validate` replays from (:func:`replay_ready_capture`). ``options`` are trace keywords; one that is not a
         named ``tl.trace`` parameter would otherwise fall into ``tl.trace``'s
         forward-kwargs catch-all and reach the model silently, so it refuses
         typed (``trace_option_unsupported``) before anything runs.
@@ -90,7 +96,7 @@ class TorchProtocol(SpecBackedProtocol):
             ``trace_option_unsupported`` for an unknown trace keyword.
         """
 
-        import torchlens as tl
+        from ...user_funcs import trace
 
         unknown = sorted(set(options) - _trace_keyword_names())
         if unknown:
@@ -106,10 +112,8 @@ class TorchProtocol(SpecBackedProtocol):
                 option=unknown[0],
             )
         if "capture" not in options:
-            from ...options import CaptureOptions
-
-            options = {**options, "capture": CaptureOptions(**REPLAY_READY_CAPTURE)}
-        return tl.trace(model, args, input_kwargs=kwargs, backend="torch", **options)
+            options = {**options, "capture": replay_ready_capture()}
+        return trace(model, args, input_kwargs=kwargs, backend="torch", **options)
 
     def validate(self, trace: Any, ground_truth: Any) -> Any:
         """Replay-validate through ``Trace.validate_forward_pass``; return its status.
@@ -169,9 +173,9 @@ class TorchProtocol(SpecBackedProtocol):
 def _trace_keyword_names() -> frozenset[str]:
     """Named ``tl.trace`` parameters other than the model, its inputs and ``backend``."""
 
-    import torchlens as tl
+    from ...user_funcs import trace
 
-    parameters = inspect.signature(tl.trace).parameters.values()
+    parameters = inspect.signature(trace).parameters.values()
     return frozenset(
         parameter.name
         for parameter in parameters

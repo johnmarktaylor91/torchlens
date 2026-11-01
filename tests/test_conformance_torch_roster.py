@@ -17,10 +17,10 @@ import numpy as np
 import pytest
 import torch
 
-import torchlens as tl
 from torchlens.backends.registry import BackendUnsupportedError, get_backend_spec
 from torchlens.conformance._cases import _captured_op_kinds
 from torchlens.conformance._rosters import torch as torch_roster
+from torchlens.options import CaptureOptions
 from torchlens.validation.status import ValidationStatus
 
 ROWS = {row.family: row for row in torch_roster.config_built_roster()}
@@ -33,11 +33,22 @@ def _protocol() -> Any:
     return get_backend_spec("torch").protocol()
 
 
-def _capture_row(family: str) -> tuple[Any, Any, Any]:
+#: Warning torch emits for a tensor argument with no recorded producer.
+UNATTRIBUTED_WARNING = "no graph/source provenance"
+
+
+def _capture_row(family: str) -> tuple[Any, Any, Any, Any]:
+    """Capture one row; the model is returned so it outlives replay validation.
+
+    Replay from saved arguments reads the model's parameters through weak
+    references, so a caller that drops the model before ``validate`` gets
+    ``ParamReleasedError`` instead of a verdict.
+    """
+
     protocol = _protocol()
     model, example = ROWS[family].builder()
     reference = protocol.reference_output(model, example, None)
-    return protocol.capture(model, example, None), reference, protocol
+    return protocol.capture(model, example, None), reference, protocol, model
 
 
 def test_roster_has_the_probe_rows_and_the_two_rule_rows() -> None:
@@ -68,7 +79,7 @@ def test_ecosystem_rows_need_the_switch(monkeypatch: pytest.MonkeyPatch) -> None
 def test_row_inventory_intermediates_and_validation(family: str) -> None:
     """Torch captures the declared ops, matches NumPy, and replay-validates."""
 
-    trace, reference, protocol = _capture_row(family)
+    trace, reference, protocol, _model = _capture_row(family)
     assert _captured_op_kinds(trace) == ROWS[family].expected_op_kinds
     for kind, want in (ROWS[family].expected_intermediates or {}).items():
         ops = [op for op in trace.layer_list if str(op.func_name) == kind]
@@ -90,7 +101,8 @@ def test_closure_constant_gap_fails_validation_by_name() -> None:
     rule, this test flips and is updated with that change.
     """
 
-    trace, reference, protocol = _capture_row(CLOSURE_ROW)
+    with pytest.warns(UserWarning, match=UNATTRIBUTED_WARNING):
+        trace, reference, protocol, _model = _capture_row(CLOSURE_ROW)
     kinds = _captured_op_kinds(trace)
     assert "constant" not in kinds and kinds != ROWS[CLOSURE_ROW].expected_op_kinds
     status = protocol.validate(trace, reference)
@@ -104,8 +116,10 @@ def test_closure_constant_gap_fails_validation_by_name() -> None:
 def test_literal_producers_are_parentless_ops() -> None:
     """Torch records ``ones`` and ``full`` as ops with no parents (rule 2's shape)."""
 
-    for family, kind in (("reshape_transpose", "ones"), (CLOSURE_ROW, "full")):
-        trace, _reference, _protocol = _capture_row(family)
+    ones_trace, _reference, _protocol, _model = _capture_row("reshape_transpose")
+    with pytest.warns(UserWarning, match=UNATTRIBUTED_WARNING):
+        closure_trace, _reference, _protocol, _model = _capture_row(CLOSURE_ROW)
+    for trace, kind in ((ones_trace, "ones"), (closure_trace, "full")):
         producers = [op for op in trace.layer_list if str(op.func_name) == kind]
         assert len(producers) == 1 and not tuple(producers[0].parents or ())
 
@@ -149,7 +163,7 @@ def test_capture_passes_model_kwargs_and_caller_capture_options() -> None:
     protocol = _protocol()
     trace = protocol.capture(Scaled(), torch.ones(2), {"scale": 3.0})
     assert torch.equal(trace.output_ops[0].out, torch.full((2,), 3.0))
-    plain = protocol.capture(Scaled(), torch.ones(2), None, capture=tl.CaptureOptions())
+    plain = protocol.capture(Scaled(), torch.ones(2), None, capture=CaptureOptions())
     assert protocol.validate(plain, torch.ones(2)).state != "passed"
 
 
