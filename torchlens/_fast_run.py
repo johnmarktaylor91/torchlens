@@ -1067,7 +1067,7 @@ class _FastLiveSession:
         # Modules capture entered by a direct ``forward()`` call fire no hook;
         # each run routes exactly those through a per-run ``forward`` wrapper.
         self.direct_routes = build_direct_forward_routes(
-            trace, model, modules, plan_addresses, self.steer_plan.modules
+            model, modules, plan_addresses, self.steer_plan.modules
         )
         _drop_uncollected_payloads(trace, supported_labels)
         self.function_names = frozenset(plan.address_or_name for plan in self.function_plans)
@@ -1280,8 +1280,8 @@ class _FastLiveSession:
                     f"{plan.call_index or 1} exited inside {address!r} without firing a "
                     "forward hook: the model reaches it by a direct forward() call, which "
                     "torch module hooks cannot observe, and the capture recorded no such "
-                    "call to route (its input never made one, the trace kept no capture "
-                    "record, or HAS_MODULE_CALL_DISPATCH_FRAME is False), so the fast run "
+                    "call to route (no capture of this model made one, or "
+                    "HAS_MODULE_CALL_DISPATCH_FRAME is False), so the fast run "
                     "cannot collect that site. The full run captures it.",
                     affected_op_labels=plan.op_labels,
                 )

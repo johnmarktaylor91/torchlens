@@ -16,6 +16,7 @@ from torch.nn import functional as F
 
 import torchlens as tl
 from torchlens._fast_run import _FastLiveSession
+from torchlens.backends.torch._tl import get_module_meta
 from torchlens.errors import RunCapabilityUnavailableError
 
 
@@ -212,15 +213,17 @@ class DirectForwardModel(nn.Module):
 def test_fast_run_names_an_unrecorded_direct_forward_call_as_a_capability_refusal() -> None:
     """A direct forward() call with no capture record is refused as unobservable.
 
-    Capture records the modules it entered by a direct call and the fast run
-    routes those; without the record (here removed by hand, as on a torch where
+    Capture marks the modules it entered by a direct call and the fast run
+    routes those; without the mark (here removed by hand, as on a torch where
     ``HAS_MODULE_CALL_DISPATCH_FRAME`` is False) the call stays hook-invisible
     and is refused as a capability gap, not as a path change.
     """
 
     model = DirectForwardModel()
     trace = tl.trace(model, torch.arange(6.0).view(2, 3))
-    trace._module_capture_ws.direct_forward_addresses.clear()  # noqa: SLF001
+    meta = get_module_meta(model.parent.inner)
+    assert meta is not None and meta.direct_forward_called
+    meta.direct_forward_called = False
     with pytest.raises(RunCapabilityUnavailableError) as info:
         trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
     assert info.value.fields["code"] == "run_capability_unavailable"

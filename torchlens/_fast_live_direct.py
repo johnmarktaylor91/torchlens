@@ -5,8 +5,8 @@ module-entry fingerprint tokens through torch module hooks, which fire only
 inside ``Module.__call__``. A model that reaches a submodule by calling its
 ``forward`` directly (``return self.embedding.forward(indices)``) skips them,
 while capture, whose ``forward`` decoration sees every call, records the module
-call. Capture also records which modules it entered that way
-(``ModuleCaptureWorkspace.direct_forward_addresses``).
+call. Capture also marks each module it entered that way
+(``ModuleMeta.direct_forward_called`` on the live module).
 
 For exactly those modules, and only for the duration of one native forward, the
 session installs an instance ``forward`` wrapper. A call through
@@ -36,6 +36,7 @@ from ._call_fingerprint import module_fingerprint_address
 from ._fast_live_steer import session_is_active
 from ._utils._module_call_dispatch import forward_entered_through_module_call
 from .backends.torch._session_forwards import _NO_INSTANCE_FORWARD, _SessionForward
+from .backends.torch._tl import get_module_meta
 
 
 @dataclass(frozen=True)
@@ -48,31 +49,23 @@ class DirectForwardRoute:
     collect_address: str | None
 
 
-def captured_direct_forward_addresses(trace: Any) -> frozenset[str]:
-    """Return the addresses capture entered by a direct ``forward()`` call.
+def _was_called_directly(module: nn.Module) -> bool:
+    """Return whether a capture marked ``module`` as entered by a direct call."""
 
-    The record lives in the capture's module workspace, which a loaded or
-    cached trace does not keep; such a trace has no record, so nothing is
-    routed and a hook-invisible call is refused as before.
-    """
-
-    workspace = trace.__dict__.get("_module_capture_ws")
-    return frozenset(getattr(workspace, "direct_forward_addresses", ()))
+    meta = get_module_meta(module)
+    return meta is not None and meta.direct_forward_called
 
 
 def build_direct_forward_routes(
-    trace: Any,
     model: nn.Module,
     modules: Mapping[str, nn.Module],
     plan_addresses: tuple[str, ...],
     steer_modules: Mapping[str, nn.Module],
 ) -> tuple[DirectForwardRoute, ...]:
-    """Build one route per live module capture entered by a direct ``forward()`` call.
+    """Build one route per live module a capture entered by a direct ``forward()`` call.
 
     Parameters
     ----------
-    trace:
-        Captured trace holding the direct-call record.
     model:
         Live root model (never routed: capture leaves the root undecorated).
     modules:
@@ -83,17 +76,10 @@ def build_direct_forward_routes(
         Steered address to live module, as the steer plan resolved them.
     """
 
-    recorded = captured_direct_forward_addresses(trace)
-    if not recorded:
-        return ()
-    names = {id(module): name for name, module in model.named_modules()}
     routes: list[DirectForwardRoute] = []
-    routed: set[int] = set()
-    for address in sorted(recorded):
-        module = modules.get(address)
-        if module is None or module is model or id(module) in routed:
+    for name, module in model.named_modules():
+        if module is model or not _was_called_directly(module):
             continue
-        routed.add(id(module))
         collect = [
             planned
             for planned in plan_addresses
@@ -102,9 +88,7 @@ def build_direct_forward_routes(
         routes.append(
             DirectForwardRoute(
                 module_ref=weakref.ref(module),
-                token=_state.module_token(
-                    module_fingerprint_address(module, names.get(id(module), address))
-                ),
+                token=_state.module_token(module_fingerprint_address(module, name)),
                 steer_addresses=tuple(
                     steered for steered, target in steer_modules.items() if target is module
                 ),

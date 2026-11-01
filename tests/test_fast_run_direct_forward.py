@@ -18,6 +18,7 @@ import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
 from torchlens._utils._module_call_dispatch import forward_entered_through_module_call
 from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
+from torchlens.backends.torch._tl import get_module_meta
 
 pytestmark = pytest.mark.skipif(
     not HAS_MODULE_CALL_DISPATCH_FRAME, reason="torch build cannot tell a direct forward() call"
@@ -69,6 +70,16 @@ def _build(parent_type: type[nn.Module]) -> Root:
 
     torch.manual_seed(0)
     return Root(parent_type()).eval()
+
+
+def _marked(model: nn.Module) -> set[str]:
+    """Return the addresses whose module a capture marked as called directly."""
+
+    return {
+        name
+        for name, module in model.named_modules()
+        if (meta := get_module_meta(module)) is not None and meta.direct_forward_called
+    }
 
 
 def _hook_count(model: nn.Module) -> int:
@@ -123,14 +134,16 @@ def test_caller_frame_tells_a_direct_forward_call_apart() -> None:
     assert seen == [True, False]
 
 
-def test_capture_records_only_modules_entered_by_a_direct_forward_call() -> None:
-    """The record holds the directly called module and nothing reached by ``__call__``."""
+def test_capture_marks_only_modules_entered_by_a_direct_forward_call() -> None:
+    """The mark lands on the directly called module and nothing reached by ``__call__``."""
 
     x = torch.randn(2, 3)
-    direct = tl.trace(_build(DirectParent), x)
-    assert direct._module_capture_ws.direct_forward_addresses == {"parent.inner"}  # noqa: SLF001
-    both = tl.trace(_build(BothWaysParent), x)
-    assert both._module_capture_ws.direct_forward_addresses == {"parent.inner"}  # noqa: SLF001
+    direct = _build(DirectParent)
+    tl.trace(direct, x)
+    assert _marked(direct) == {"parent.inner"}
+    both = _build(BothWaysParent)
+    tl.trace(both, x)
+    assert _marked(both) == {"parent.inner"}
 
     class Plain(nn.Module):
         def __init__(self) -> None:
@@ -140,8 +153,9 @@ def test_capture_records_only_modules_entered_by_a_direct_forward_call() -> None
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return self.inner(x)
 
-    plain = tl.trace(_build(Plain), x)
-    assert plain._module_capture_ws.direct_forward_addresses == set()  # noqa: SLF001
+    plain = _build(Plain)
+    tl.trace(plain, x)
+    assert _marked(plain) == set()
 
 
 @pytest.mark.parametrize("parent_type", [DirectParent, BothWaysParent])
@@ -215,7 +229,7 @@ def test_fast_run_reruns_urbandriver() -> None:
     (entry,) = [e for e in corpus_entries() if e.id == "urbandriver"]
     model, inputs = build_entry(entry)
     trace = tl.trace(model, inputs)
-    assert "embedding" in " ".join(trace._module_capture_ws.direct_forward_addresses)  # noqa: SLF001
+    assert any(address.endswith("embedding") for address in _marked(model))
     full_trace = tl.trace(model, inputs)
     fast = trace.run(inputs=inputs, fast=True)
     full = full_trace.run(inputs=inputs)
