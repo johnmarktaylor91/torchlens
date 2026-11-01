@@ -13,7 +13,7 @@ import warnings
 from collections.abc import Callable
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from torch import nn
@@ -39,18 +39,18 @@ from ._trace_fork import (
     build_fork,
 )
 from ._trace_grad_sites import (
-    _ARMING_EVENT_KEY,
-    _ARMING_GROUP_KEY,
+    _SignalDoRequest,
     armed_edits,
     armed_summary_line,
     do_signal_plan,
-    is_gradient_entry,
     live_backward_graph_available,
     refresh_armed_annotation,
     refuse_invalid_do_loss,
     settle_armed_gradient_edits,
     signal_plan,
+    sticky_hook_entry,
 )
+from ._trace_intervention_records import _DoTransaction, do_event_edit_names, do_event_extra
 
 __all__ = [
     "_STREAM_DERIVED_GUARD_FIELDS",
@@ -61,19 +61,43 @@ __all__ = [
 ]
 
 
-class _DoTransaction(NamedTuple):
-    """Identity of one ``do()`` transaction, minted once at the door.
+def _prepare_do(
+    hooks_or_site: Any,
+    value_or_hook: Any,
+    intervention: InterventionOptions | None,
+    loss: Any,
+) -> tuple[Any, InterventionOptions, Any]:
+    """Lower a ``find_sites`` table, merge the options, split the plan, refuse a bad loss.
 
-    ``transaction_start`` is the monotonic bound scoping this transaction's
-    FireRecords; ``audit_rows_before`` detects whether the mutation step
-    already appended its own audit row.
+    Parameters
+    ----------
+    hooks_or_site:
+        The ``do`` input (a ``find_sites`` table is lowered to its site labels).
+    value_or_hook:
+        Optional hook for the ``(site, hook)`` input shape.
+    intervention:
+        The caller's grouped intervention options.
+    loss:
+        The ``loss=`` argument, refused before any mutation when invalid.
+
+    Returns
+    -------
+    tuple[Any, InterventionOptions, Any]
+        The lowered input, the merged options and the gradient-site plan
+        (``None`` when no site addresses the backward pass).
     """
 
-    hooks_or_site: Any
-    value_or_hook: Any
-    engine: str
-    transaction_start: float
-    audit_rows_before: int
+    if type(hooks_or_site).__name__ == "_SiteTable":
+        # find_sites() output is a first-class address (leverage B3/NEW-4):
+        # the zero-match refusal recommends find_sites, so its result must
+        # be accepted here, lowered to the exact resolved site labels.
+        from .._ir.selector_eval import normalize_selector_like
+
+        hooks_or_site = normalize_selector_like(hooks_or_site, lifecycle="live")
+    intervention_options = merge_intervention_options(intervention=intervention)
+    plan = signal_plan(hooks_or_site, value_or_hook)
+    refuse_invalid_do_loss(loss, plan)
+    return hooks_or_site, intervention_options, plan
 
 
 class TraceInterventionMixin(_TraceMixinBase):
@@ -384,27 +408,8 @@ class TraceInterventionMixin(_TraceMixinBase):
         for entry in entries:
             handle_id = f"hook-{uuid.uuid4().hex}"
             handle_ids.append(handle_id)
-            metadata = dict(entry.metadata)
-            if is_gradient_entry(entry):
-                # Settle contract: every gradient rule names the attach batch
-                # that armed it, so the backward pass end writes one settle
-                # row per arming transaction (settle_armed_gradient_edits).
-                metadata[_ARMING_GROUP_KEY] = arming_group
-                metadata.setdefault(_ARMING_EVENT_KEY, None)
-                gradient_entries += 1
-            if metadata.get("facet_write"):
-                # Facet-slice entries MUST store the scatter wrapper built by
-                # expand_facet_hook_entries as the fire-time hook: storing the raw
-                # helper would drop the wrapper, and rerun normalization would then
-                # apply the helper to the whole home tensor instead of the selected
-                # facet slice. The raw helper is kept in ``helper=`` as provenance.
-                stored_hook: Any = entry.normalized_callable
-            else:
-                stored_hook = (
-                    entry.helper_spec
-                    if entry.helper_spec is not None
-                    else entry.normalized_callable
-                )
+            metadata, stored_hook, is_gradient = sticky_hook_entry(entry, arming_group)
+            gradient_entries += int(is_gradient)
             spec.add_hook(
                 self._target_spec_from_site(entry.site_target, strict=strict),
                 stored_hook,
@@ -685,34 +690,14 @@ class TraceInterventionMixin(_TraceMixinBase):
             a gradient plan rerun, the new trace holding the armed edits.
         """
 
-        if type(hooks_or_site).__name__ == "_SiteTable":
-            # find_sites() output is a first-class address (leverage B3/NEW-4):
-            # the zero-match refusal recommends find_sites, so its result must
-            # be accepted here, lowered to the exact resolved site labels.
-            from .._ir.selector_eval import normalize_selector_like
-
-            hooks_or_site = normalize_selector_like(hooks_or_site, lifecycle="live")
-        intervention_options = merge_intervention_options(intervention=intervention)
-        plan = signal_plan(hooks_or_site, value_or_hook)
-        refuse_invalid_do_loss(loss, plan)
+        hooks_or_site, options, plan = _prepare_do(hooks_or_site, value_or_hook, intervention, loss)
         from ..intervention._param_fingerprint import changed_param_scope
 
-        with changed_param_scope(intervention_options.allow_changed_params):
+        with changed_param_scope(options.allow_changed_params):
             if plan is not None:
-                return do_signal_plan(
-                    self,
-                    plan,
-                    model=model,
-                    x=inputs,
-                    intervention_options=intervention_options,
-                    loss=loss,
-                )
+                return do_signal_plan(self, plan, _SignalDoRequest(model, inputs, options, loss))
             return self._do_with_options(
-                hooks_or_site,
-                value_or_hook,
-                model=model,
-                x=inputs,
-                intervention_options=intervention_options,
+                hooks_or_site, value_or_hook, model=model, x=inputs, intervention_options=options
             )
 
     def _do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges the options and enters the changed-parameter scope
@@ -910,55 +895,17 @@ class TraceInterventionMixin(_TraceMixinBase):
                 for rule in rules
                 if str(rule["action"]) not in fired_action_reprs
             )
-        elif self._is_selection_batch(hooks_or_site):
-            # One transactional envelope for the whole batch (D33): per-pair
-            # edits named in order, plus the kind-specific staged-store slots
-            # disclosure so cross-kind completion needs no schema change.
-            rules = ()
-            edit_names = tuple(
-                str(
-                    getattr(
-                        pair_edit,
-                        "helper_name",
-                        getattr(pair_edit, "__name__", type(pair_edit).__name__),
-                    )
-                )
-                for _sel, pair_edit in hooks_or_site
-            )
-            selection_repr = " ; ".join(repr(sel) for sel, _pair_edit in hooks_or_site)
-            zero_fire_rule_ids = ()
         else:
             rules = ()
-            edit_name = getattr(
-                value_or_hook,
-                "helper_name",
-                getattr(value_or_hook, "__name__", type(value_or_hook).__name__),
-            )
-            edit_names = (str(edit_name),)
-            selection_repr = self._history_site_payload(hooks_or_site)
-            if not isinstance(selection_repr, str):
-                selection_repr = repr(selection_repr)
+            edit_names, selection_repr = do_event_edit_names(self, hooks_or_site, value_or_hook)
             zero_fire_rule_ids = ()
         if status is None:
             resolved_status = "fired" if fires else "no_fire"
         else:
             resolved_status = status
-        extra: dict[str, Any] = {}
-        if staged_only:
-            extra["staged_only"] = True
-        if extra_fields:
-            extra.update(extra_fields)
-        if self._is_selection_batch(hooks_or_site):
-            kinds = [self._selection_batch_kind(selection) for selection, _edit in hooks_or_site]
-            extra["selection_batch"] = {
-                "pairs": len(hooks_or_site),
-                "kinds": kinds,
-                # Kind-specific staged-store slots (D33), one count per door.
-                "staged_stores": {
-                    door: sum(kind == door.upper() for kind in kinds)
-                    for door in ("act", "param", "edge")
-                },
-            }
+        extra = do_event_extra(
+            self, hooks_or_site, staged_only=staged_only, extra_fields=extra_fields
+        )
         return record_intervention_event(
             self,
             lane="set_only" if engine == "set_only" else engine,  # type: ignore[arg-type]
