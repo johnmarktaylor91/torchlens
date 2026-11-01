@@ -883,17 +883,15 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
             "_source_model_ref",
             "_optimizer",
         },
-        # A fork never inherits the parent's settled capture outcome: the
-        # fork is the sanctioned MUTATION surface, so carrying the parent's
-        # blessed attestation by identity would let a hand-edited fork save
-        # as a bit-identical attested COMPLETE. ``build_fork`` settles a
+        # A fork never inherits the parent's settled capture outcome: the fork is the sanctioned
+        # MUTATION surface, so carrying the parent's blessed attestation by identity would let a
+        # hand-edited fork save as a bit-identical attested COMPLETE. ``build_fork`` settles a
         # DERIVED outcome via ``capture.outcome.stamp_forked`` instead.
         reconstruct={"parent_run", "_capture_outcome"},
     )
-    # `_trace_core` (the columnar op row store) is not in MODEL_LOG_FIELD_ORDER
-    # (private runtime storage, FieldPolicy.DROP). The generic field pass
-    # reconstructs (drops) it; the M11 COW fork builder installs the forked
-    # core (per-fork store views over the shared sealed base) explicitly
+    # `_trace_core` (the columnar op row store) is not in MODEL_LOG_FIELD_ORDER (private runtime
+    # storage, FieldPolicy.DROP). The generic field pass reconstructs (drops) it; the M11 COW fork
+    # builder installs the forked core (per-fork store views over the shared sealed base) explicitly
     # after the field pass.
     table["_trace_core"] = ForkFieldPolicy.FORK_RECONSTRUCT
     return table
@@ -922,14 +920,13 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
         },
         reconstruct={"source_trace", "_construction_done"},
     )
-    # `_facets_cache` is not part of LAYER_PASS_LOG_FIELD_ORDER (it is a lazily
-    # populated runtime cache, not a portable/user-facing field), so the loop
-    # above never assigns it a policy. Left unset, a forked Op would fall
-    # through to the generic default policy and attempt copy.deepcopy() on the
-    # cached FacetView -- which self-references its owning Op and crashes with
-    # RecursionError. Reconstruct it instead (discarded immediately afterward
-    # by _rebind_fork_owner_refs's `del layer_pass.facets` in any case),
-    # mirroring how Op.__getstate__ already excludes this field for pickling.
+    # `_facets_cache` is not part of LAYER_PASS_LOG_FIELD_ORDER (it is a lazily populated runtime
+    # cache, not a portable/user-facing field), so the loop above never assigns it a policy. Left
+    # unset, a forked Op would fall through to the generic default policy and attempt
+    # copy.deepcopy() on the cached FacetView -- which self-references its owning Op and crashes
+    # with RecursionError. Reconstruct it instead (discarded immediately afterward by
+    # _rebind_fork_owner_refs's `del layer_pass.facets` in any case), mirroring how Op.__getstate__
+    # already excludes this field for pickling.
     table["_facets_cache"] = ForkFieldPolicy.FORK_RECONSTRUCT
     return table
 

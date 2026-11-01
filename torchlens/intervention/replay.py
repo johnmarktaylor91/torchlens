@@ -39,6 +39,12 @@ from ._replay_context import (
     _record_capture_digest,
     _replay_site_key,
 )
+from ._replay_values import (
+    _call_mutates_tensor_args,
+    _clone_tensors_in,
+    _is_inplace_none_return,
+    _looks_like_template_dict,
+)
 from .audit import _hook_name, _replay_fire_record
 from .edge_substitution import require_depth1_arg_path
 from .errors import (
@@ -1770,23 +1776,6 @@ def _index_output_component(output: Any, component: OutputPathComponent) -> Any:
     raise ReplayPreconditionError(f"unsupported output path component {component!r}")
 
 
-def _looks_like_template_dict(component: tuple[Any, ...]) -> bool:
-    """Return whether a tuple encodes a captured dict argument.
-
-    Parameters
-    ----------
-    component:
-        Tuple template component.
-
-    Returns
-    -------
-    bool
-        Whether all items are key/value pairs.
-    """
-
-    return all(isinstance(item, tuple) and len(item) == 2 for item in component)
-
-
 def _warn_if_unexpected_parent(
     pass_log: Op,
     parent: Op,
@@ -1849,79 +1838,6 @@ def _check_edge_expectations(site: Op, *, strict: bool) -> None:
         if strict:
             raise ControlFlowDivergenceError(message)
         warnings.warn(message, ControlFlowDivergenceWarning, stacklevel=3)
-
-
-def _is_inplace_none_return(site: Op) -> bool:
-    """Return whether a None return should be treated as mutated arg zero.
-
-    Parameters
-    ----------
-    site:
-        Replayed site.
-
-    Returns
-    -------
-    bool
-        Whether to use the first positional argument as output.
-    """
-
-    func_name = getattr(site.func, "__name__", "") if site.func is not None else ""
-    return bool(site.is_inplace) or func_name in {"__setitem__", "zero_", "__delitem__"}
-
-
-def _call_mutates_tensor_args(site: Op, kwargs: Mapping[str, Any]) -> bool:
-    """Return whether a replayed call may write into its argument tensors.
-
-    Covers the captured in-place flag, the torch trailing-underscore
-    convention (dunders excluded), the explicit mutator set from
-    :func:`_is_inplace_none_return`, and a tensor ``out=`` destination. A
-    false positive only costs one defensive clone; a false negative lets the
-    replayed call mutate captured payloads by identity.
-
-    Parameters
-    ----------
-    site:
-        Replayed site.
-    kwargs:
-        Reconstructed keyword arguments.
-
-    Returns
-    -------
-    bool
-        Whether argument tensors must be cloned before execution.
-    """
-
-    if _is_inplace_none_return(site):
-        return True
-    func_name = getattr(site.func, "__name__", "") if site.func is not None else ""
-    if func_name.endswith("_") and not func_name.endswith("__"):
-        return True
-    return isinstance(kwargs.get("out"), torch.Tensor)
-
-
-def _clone_tensors_in(value: Any) -> Any:
-    """Return ``value`` with every tensor leaf cloned, containers rebuilt.
-
-    Parameters
-    ----------
-    value:
-        Resolved argument value (tensor, container, or opaque object).
-
-    Returns
-    -------
-    Any
-        Structure with cloned tensor leaves; non-tensor leaves unchanged.
-    """
-
-    if isinstance(value, torch.Tensor):
-        return value.clone()
-    if isinstance(value, tuple):
-        return tuple(_clone_tensors_in(item) for item in value)
-    if isinstance(value, list):
-        return [_clone_tensors_in(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _clone_tensors_in(item) for key, item in value.items()}
-    return value
 
 
 def _threaded_buffer_value(
@@ -2021,23 +1937,6 @@ def _threaded_buffer_value(
         )
         return None
     return recomputed
-
-
-def _is_namedtuple_instance(value: Any) -> bool:
-    """Return whether a value is a namedtuple instance.
-
-    Parameters
-    ----------
-    value:
-        Candidate value.
-
-    Returns
-    -------
-    bool
-        Whether it is a namedtuple instance.
-    """
-
-    return isinstance(value, tuple) and hasattr(value, "_fields")
 
 
 __all__ = [
