@@ -492,7 +492,7 @@ if not TYPE_CHECKING:
 
 
 if TYPE_CHECKING:
-    from ._user_funcs import register_tensor_connection as register_tensor_connection
+    from ._capture.run_entry import register_tensor_connection as register_tensor_connection
 
 __all__ = [
     "TapObserver",

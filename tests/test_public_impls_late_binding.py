@@ -18,6 +18,7 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens._capture.prepare.door as prepare_door
 import torchlens._user_funcs as user_funcs
 import torchlens._user_public_impls as user_public_impls
 from torchlens.validation import validate_forward_pass
@@ -46,6 +47,7 @@ def test_undone_runner_patch_does_not_reach_a_later_direct_validation() -> None:
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(user_funcs, "_run_model_and_save_specified_outs", counting_runner)
+        patch.setattr(prepare_door, "_run_model_and_save_specified_outs", counting_runner)
         assert validate_forward_pass(_AddOne(), torch.randn(2, 3)) is True
     patched_calls = len(calls)
     assert patched_calls > 0

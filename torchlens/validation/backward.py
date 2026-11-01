@@ -353,7 +353,7 @@ def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.
         Detached tensor clones with PyTorch ``state_dict`` metadata preserved.
     """
 
-    from .._user_funcs import _clone_state_dict_with_metadata as clone_state_dict
+    from .._capture_state_helpers import _clone_state_dict_with_metadata as clone_state_dict
 
     return clone_state_dict(model)
 
@@ -374,7 +374,7 @@ def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
         Object with all tensors moved to ``device``.
     """
 
-    from .._user_funcs import _move_tensors_to_device as move_tensors
+    from .._capture_state_helpers import _move_tensors_to_device as move_tensors
 
     return move_tensors(obj, device)
 

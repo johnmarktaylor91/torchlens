@@ -28,6 +28,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._capture.predicates as predicates_mod
+import torchlens._capture.run_entry as capture_run_entry
 import torchlens._ir.selector_eval as selector_eval
 import torchlens._user_funcs as user_funcs_mod
 
@@ -164,13 +165,14 @@ def _fire_counts(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[Any]]:
     """Read ``tl.trace``'s save-selector fire count before capture discards it."""
 
     counts: list[Any] = []
-    real = user_funcs_mod._warn_zero_match_capture_selectors
+    real = capture_run_entry._warn_zero_match_capture_selectors
 
     def spying(trace: Any, **kwargs: Any) -> Any:
         counts.append(trace.__dict__.get("_tl_save_selector_fire_count"))
         return real(trace, **kwargs)
 
     with monkeypatch.context() as patch:
+        patch.setattr(capture_run_entry, "_warn_zero_match_capture_selectors", spying)
         patch.setattr(user_funcs_mod, "_warn_zero_match_capture_selectors", spying)
         yield counts
 

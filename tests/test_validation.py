@@ -5,6 +5,7 @@ specific exemption paths. Perturbation and deep-clone helper unit tests live
 in ``tests/test_validation_perturbation_units.py``.
 """
 
+import copy
 import threading
 import warnings
 from collections import defaultdict, deque, namedtuple
@@ -17,6 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+import torchlens._capture.prepare.door as prepare_door
 
 # No import-order protection is needed here anymore: the historical
 # standalone-collection cycle between torchlens and _user_public_impls was
@@ -1978,7 +1980,7 @@ def test_validate_forward_pass_deepcopy_fallback_restores_plain_attrs(
 ) -> None:
     """Fallback validation restores non-registered attr mutations before logging."""
 
-    original_deepcopy = user_funcs.copy.deepcopy
+    original_deepcopy = copy.deepcopy
 
     def fail_module_deepcopy(
         value: object,
@@ -2007,7 +2009,7 @@ def test_validate_forward_pass_deepcopy_fallback_restores_plain_attrs(
             self.step += 1
             return x + float(self.step)
 
-    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(copy, "deepcopy", fail_module_deepcopy)
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert validate_forward_pass(StepCounterModel(), torch.randn(3)) is True
@@ -2018,7 +2020,7 @@ def test_validate_forward_pass_deepcopy_fallback_tracks_function_attrs_by_identi
 ) -> None:
     """Fallback validation accepts function attrs and detects reassignment by identity."""
 
-    original_deepcopy = user_funcs.copy.deepcopy
+    original_deepcopy = copy.deepcopy
 
     def fail_module_deepcopy(
         value: object,
@@ -2052,7 +2054,7 @@ def test_validate_forward_pass_deepcopy_fallback_tracks_function_attrs_by_identi
 
             return self.forward_impl(self, x)
 
-    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(copy, "deepcopy", fail_module_deepcopy)
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert validate_forward_pass(FunctionAttrModel(), torch.randn(3)) is True
@@ -3074,8 +3076,8 @@ def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
 ) -> None:
     """Fallback plain-attr restore does not hide genuine logged-output breaks."""
 
-    original_deepcopy = user_funcs.copy.deepcopy
-    original_run = user_funcs._run_model_and_save_specified_outs
+    original_deepcopy = copy.deepcopy
+    original_run = prepare_door._run_model_and_save_specified_outs
 
     def fail_module_deepcopy(
         value: object,
@@ -3112,7 +3114,8 @@ def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
             self.step += 1
             return x + float(self.step)
 
-    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(prepare_door, "_run_model_and_save_specified_outs", corrupt_logged_output)
     monkeypatch.setattr(user_funcs, "_run_model_and_save_specified_outs", corrupt_logged_output)
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
@@ -3124,7 +3127,7 @@ def test_validate_forward_pass_deepcopy_fallback_restore_failure_raises(
 ) -> None:
     """Fallback validation fails loudly if plain attr restore itself fails."""
 
-    original_deepcopy = user_funcs.copy.deepcopy
+    original_deepcopy = copy.deepcopy
 
     def fail_module_deepcopy(
         value: object,
@@ -3162,7 +3165,7 @@ def test_validate_forward_pass_deepcopy_fallback_restore_failure_raises(
             object.__setattr__(self, "step", self.step + 1)
             return x + float(self.step)
 
-    monkeypatch.setattr(user_funcs.copy, "deepcopy", fail_module_deepcopy)
+    monkeypatch.setattr(copy, "deepcopy", fail_module_deepcopy)
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         with pytest.raises(RuntimeError, match="could not restore plain attribute"):

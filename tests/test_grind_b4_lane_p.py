@@ -12,6 +12,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.prepare.cache as prepare_cache
 from torchlens import _user_funcs as user_funcs
 from torchlens._capture_state_helpers import (
     _facet_recipe_cache_key,
@@ -155,7 +156,7 @@ def test_static_attr_cache_never_self_retains_its_weak_key() -> None:
 def test_capture_cache_lru_and_clear(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Capture cache enforces its entry cap and exposes bounded clearing."""
 
-    monkeypatch.setattr(user_funcs, "_CAPTURE_CACHE_MAX_ENTRIES", 2)
+    monkeypatch.setattr(prepare_cache, "_CAPTURE_CACHE_MAX_ENTRIES", 2)
     x = torch.ones(1, 1)
     for value in (1.0, 2.0, 3.0):
         model = nn.Linear(1, 1, bias=False)
@@ -394,7 +395,7 @@ def test_over_ceiling_entry_is_refused_at_store_not_wiped_at_evict(
     total_small = sum(path.stat().st_size for path in cache_root.glob("*.pkl"))
 
     # Ceiling above the two valid entries combined, below the big capture.
-    monkeypatch.setattr(user_funcs, "_CAPTURE_CACHE_MAX_BYTES", max(total_small + 4096, 200_000))
+    monkeypatch.setattr(prepare_cache, "_CAPTURE_CACHE_MAX_BYTES", max(total_small + 4096, 200_000))
 
     big = nn.Linear(1, 1, bias=False)
     big.register_buffer("big_buffer", torch.arange(120_000, dtype=torch.float32))

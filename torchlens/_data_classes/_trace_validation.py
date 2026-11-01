@@ -329,8 +329,8 @@ class TraceValidationMixin(_TraceMixinBase):
             Forwarded unchanged to
             :func:`torchlens._capture.trace.save_new_outs`.
         """
+        from .._capture.finalize.settle import save_new_outs as _impl
         from .._capture.outcome import require_capture_capability
-        from .._capture.trace import save_new_outs as _impl
         from .._capture_state_helpers import unwrap_compiled_model
 
         # N3/N5: a live refresh re-drives the FULL native forward against the
@@ -1254,7 +1254,7 @@ class TraceValidationMixin(_TraceMixinBase):
             Continuation token from the caller's own live ``capture_reservation``
             claim (the recorder pass); a bare nested entry without it refuses.
         """
-        from .._capture.trace import run_and_log_inputs_through_model as _impl
+        from .._capture.run import run_and_log_inputs_through_model as _impl
 
         return _impl(
             self,

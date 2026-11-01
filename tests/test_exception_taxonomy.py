@@ -1146,7 +1146,7 @@ def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyP
     predicate.decision = InterventionDecision(  # type: ignore[attr-defined]
         action="transform", hook=lambda out, *, ctx: out
     )
-    from torchlens import _capture_intervention
+    from torchlens._capture.prepare import resolve as _capture_intervention
 
     monkeypatch.setattr(_capture_intervention, "split_site_branches", _raise_typed_refusal)
 

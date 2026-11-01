@@ -27,6 +27,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+import torchlens._capture.prepare.cache as prepare_cache
+import torchlens._capture.prepare.door as prepare_door
 import torchlens._user_funcs as user_funcs
 from torchlens._user_funcs import (
     CAPTURE_CACHE_KEY_CURATED,
@@ -185,7 +187,8 @@ def test_plant_neutralized_semantic_field_reopens_wrong_serve(
 
     planted = dict(CAPTURE_CACHE_KEY_NEUTRAL)
     planted["raise_on_nan"] = "PLANT: pretend this safety knob is session-neutral"
-    monkeypatch.setattr(user_funcs, "CAPTURE_CACHE_KEY_NEUTRAL", planted)
+    monkeypatch.setattr(prepare_door, "CAPTURE_CACHE_KEY_NEUTRAL", planted)
+    monkeypatch.setattr(prepare_cache, "CAPTURE_CACHE_KEY_NEUTRAL", planted)
     model = SmallNet()
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))

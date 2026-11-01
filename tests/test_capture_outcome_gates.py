@@ -16,6 +16,7 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.run as capture_run
 from torchlens._capture.outcome import (
     CaptureOutcomeError,
     CaptureStatus,
@@ -415,7 +416,6 @@ def test_halted_arm_interrupt_settles_failed_interrupted(
     the fail-closed no-sidecar default instead of a settled record. It must
     settle FAILED/INTERRUPT exactly like the outer interrupt arm."""
 
-    import torchlens._capture.trace as trace_module
     from torchlens._capture.outcome import FailureOrigin, outcome_for
 
     seen: list[object] = []
@@ -424,7 +424,7 @@ def test_halted_arm_interrupt_settles_failed_interrupted(
         seen.append(trace_self)
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(trace_module, "_finalize_halted_trace", _interrupt)
+    monkeypatch.setattr(capture_run, "_finalize_halted_trace", _interrupt)
     with pytest.raises(KeyboardInterrupt):
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert len(seen) == 1
