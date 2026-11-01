@@ -112,11 +112,11 @@ def read_bindings(path: Path = BINDINGS) -> dict[str, dict[str, tuple[str, str |
         if node.target.id != "STORAGE_BINDINGS" or not isinstance(node.value, ast.Dict):
             continue
         table: dict[str, dict[str, tuple[str, str | None]]] = {}
-        for record_node, fields_node in zip(node.value.keys, node.value.values):
+        for record_node, fields_node in zip(node.value.keys, node.value.values, strict=True):
             if record_node is None or not isinstance(fields_node, ast.Dict):
                 continue
             fields = {}
-            for field_node, binding_node in zip(fields_node.keys, fields_node.values):
+            for field_node, binding_node in zip(fields_node.keys, fields_node.values, strict=True):
                 if field_node is not None:
                     fields[str(_literal(field_node))] = _binding_fields(binding_node)
             table[str(_literal(record_node))] = fields

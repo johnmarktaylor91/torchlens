@@ -69,7 +69,6 @@ def test_door_restores_exactly_once() -> None:
     assert not torch.equal(first, second)
 
 
-@pytest.mark.smoke
 def test_decorator_restores_around_the_call() -> None:
     @restores_rng_streams
     def consume(n: int) -> int:

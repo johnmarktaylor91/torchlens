@@ -85,7 +85,7 @@ def test_fork_edit_on_input_leaf_fires_on_captured_value_and_propagates() -> Non
     assert torch.allclose(fork.reconstruct_output(), expected, atol=1e-6)
     assert torch.equal(trace["input_1"].out, captured_input), "the edit wrote through"
     assert torch.allclose(trace.reconstruct_output(), model(x).detach(), atol=1e-6)
-    helpers = [getattr(record, "helper_name", None) for record in fork["input_1"].edits]
+    helpers = [getattr(record, "name", None) for record in fork["input_1"].edits]
     assert helpers == ["scale"]
 
 

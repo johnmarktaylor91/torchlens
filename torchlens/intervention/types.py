@@ -343,7 +343,7 @@ class FireRecord:
         # address on edge-substitution FireRecords; persists as of tlspec v8.
         "edge_address": FieldPolicy.KEEP,
         # Structured realized draws of the stochastic verbs, one SamplingRecord per
-        # draw (walk ruling names.6); persists as of tlspec v11.
+        # draw, saved with the record; persists as of tlspec v11.
         "sampling": FieldPolicy.KEEP,
     }
 
