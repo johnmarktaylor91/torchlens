@@ -75,8 +75,10 @@ def _conv(x: np.ndarray, weight: np.ndarray, bias: np.ndarray, padding: int) -> 
     out = np.zeros((x.shape[0], weight.shape[0], *out_shape), dtype=np.float64)
     for raw_index in np.ndindex(*out_shape):
         index: tuple[int, ...] = tuple(int(i) for i in raw_index)
-        window = tuple(slice(i, i + int(k)) for i, k in zip(index, kernel))
-        patch = padded[(slice(None), slice(None), *window)]
+        window: tuple[slice, ...] = (slice(None), slice(None)) + tuple(
+            slice(i, i + int(k)) for i, k in zip(index, kernel)
+        )
+        patch = padded[window]
         out[(slice(None), slice(None), *index)] = np.tensordot(
             patch, weight, axes=(list(range(1, 2 + spatial)), list(range(1, 2 + spatial)))
         )
