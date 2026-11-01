@@ -212,6 +212,13 @@ def flatten_leaves(value: Any) -> Iterator[Any]:
     elif isinstance(value, (list, tuple)):
         for item in value:
             yield from flatten_leaves(item)
+    elif isinstance(value, torch.distributions.Distribution):
+        # Capture records a distribution one output op per recorded attribute,
+        # in its own walk order; compare the same leaves.
+        from torchlens._ir.distribution_container import distribution_children
+
+        for _name, child in distribution_children(value):
+            yield from flatten_leaves(child)
     else:
         yield value
 
