@@ -12,7 +12,7 @@ from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state
-from ..._utils._torch_compat import get_async_collective_tensor_type
+from ._tl_collective import _async_collective_elem
 
 __all__ = [
     "TorchLensMeta",
@@ -218,7 +218,7 @@ class ModuleMeta(TorchLensMeta):
     module_type: str | None = None
     # Set (and kept) once a capture enters the module by a direct
     # ``module.forward(x)`` call, which no torch hook observes; the fast live
-    # run routes exactly these modules around its hooks (``_fast_live_direct``).
+    # run routes exactly these modules around its hooks (``_fast_live_plans``).
     direct_forward_called: bool = False
 
 
@@ -1043,34 +1043,6 @@ def _ensure_tensor_meta(t: Any) -> TensorMeta:
         meta = TensorMeta()
         t._tl = meta
     return meta
-
-
-def _async_collective_elem(t: Any) -> Any | None:
-    """Return an AsyncCollectiveTensor's inner ``.elem``, else ``None``.
-
-    Parameters
-    ----------
-    t : Any
-        Candidate tensor-like object.
-
-    Returns
-    -------
-    Any | None
-        The plain inner tensor when ``t`` is a funcol ACT wrapper; ``None``
-        for every other value or on builds without functional collectives.
-
-    Notes
-    -----
-    The ACT class resolves through the compat chokepoint
-    (``get_async_collective_tensor_type``), which stays ``sys.modules``-
-    deferred: this runs on the per-tensor label hot path and never pays the
-    ``torch.distributed`` import on plain captures.
-    """
-
-    act_cls = get_async_collective_tensor_type()
-    if act_cls is not None and isinstance(t, act_cls):
-        return t.elem
-    return None
 
 
 def set_tensor_label(t: Any, label: str) -> None:

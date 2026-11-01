@@ -199,8 +199,8 @@ torchlens/_extraction/trace_safetensors.py::write_trace_safetensors	90
 torchlens/_extraction/views.py::shuffled_batches	64
 torchlens/_extraction_provenance.py::coerce_input_preprocessing	129
 torchlens/_fast_live_plans.py::build_function_plans	66
-torchlens/_fast_run.py	1780
-torchlens/_fast_run.py::_FastLiveSession.__init__	85
+torchlens/_fast_run.py	1741
+torchlens/_fast_run.py::_FastLiveSession.__init__	74
 torchlens/_fast_run.py::_FastLiveSession._finalize_run	61
 torchlens/_fast_run.py::_FastLiveSession._refresh_boundary_payloads	79
 torchlens/_fast_run.py::_FastSparseSession.__init__	67
@@ -586,7 +586,7 @@ torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
 torchlens/_utils/_rng_channels.py	845
-torchlens/_utils/_torch_compat.py	4692
+torchlens/_utils/_torch_compat.py	4676
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	65
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
@@ -990,7 +990,7 @@ torchlens/backends/torch/_ops_retention.py::_save_predicate_activation_fields	91
 torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	171
 torchlens/backends/torch/_ops_shared_fields.py::_get_parent_output_version_snapshot	75
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	113
-torchlens/backends/torch/_tl.py	1813
+torchlens/backends/torch/_tl.py	1789
 torchlens/backends/torch/_tl.py::set_tensor_label	63
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py	1697

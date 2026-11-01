@@ -1559,18 +1559,7 @@ def torch_func_decorator(
                         raise
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
-                # Capture records a None-returning mutator (``__setitem__``,
-                # ``__delitem__``, a mutating property setter) with its
-                # mutated receiver as the output; the collector sees the same.
-                if (
-                    out is None
-                    and (reconstructs_receiver_output or is_mutating_property_setter)
-                    and len(args) > 0
-                    and isinstance(args[0], torch.Tensor)
-                ):
-                    fast_collector.capture_function(func_name, args[0])
-                else:
-                    fast_collector.capture_function(func_name, out)
+                fast_collector.capture_function(func_name, out, args, property_accessor)
             if is_detached_propagation_func and has_detached_saved_activations():
                 propagate_detached_saved_activation(
                     func_name,

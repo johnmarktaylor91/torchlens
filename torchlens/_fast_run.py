@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 import weakref
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import Any, cast
@@ -18,13 +18,25 @@ from torchlens._runnable import ContractCheck, ReadinessReport
 from . import _state
 from ._call_fingerprint import fingerprinting, install_module_token_hooks
 from ._data_classes._trace_accessors import boundary_label_rows
-from ._fast_live_direct import build_direct_forward_routes, direct_forward_routes_installed
 from ._fast_live_plans import (
+    _admitted_collection_labels,
+    _drop_uncollected_payloads,
     _FastOutputPlan,
+    _is_opaque_output_root,
+    _live_modules_by_address,
+    _module_call_budget,
+    _output_tensor_leaves,
     _pair_output_leaves,
+    build_direct_forward_routes,
     build_function_plans,
     build_module_plans,
-    recorded_module_call_counts,
+    collected_function_output,
+    direct_forward_routes_installed,
+    install_collection_hooks,
+    repeats_last_function_output,
+    require_distinct_plan_modules,
+    save_payload_paused,
+    unobserved_hook_message,
 )
 from ._fast_live_steer import (
     SteerPlan,
@@ -314,97 +326,6 @@ def _fast_input_check(
             "Fast sparse execution accepts only plain dense strided tensor inputs.",
         ),
     )
-
-
-def _module_call_budget(
-    trace: Any, module_plans: Sequence[_FastOutputPlan]
-) -> tuple[dict[str, frozenset[int]], dict[str, int]]:
-    """Return the planned calls per module address and each address's recorded call count.
-
-    Parameters
-    ----------
-    trace:
-        Source trace whose ``module_calls`` the counts come from.
-    module_plans:
-        Module output plans the fast session collects.
-
-    Returns
-    -------
-    tuple[dict[str, frozenset[int]], dict[str, int]]
-        The 1-based call numbers planned per address, and the number of calls
-        the capture recorded per planned address.
-    """
-
-    planned: dict[str, frozenset[int]] = {}
-    for plan in module_plans:
-        planned[plan.address_or_name] = planned.get(plan.address_or_name, frozenset()) | {
-            int(plan.call_index or 1)
-        }
-    return planned, recorded_module_call_counts(trace, frozenset(planned))
-
-
-def _admitted_collection_labels(trace: Any, plans: Sequence[_FastOutputPlan]) -> set[str]:
-    """Return the op labels the fast live session refreshes, refusing uncollectable saves.
-
-    Parameters
-    ----------
-    trace:
-        Source trace whose saved ops the plans must cover.
-    plans:
-        Module and function output plans the session collects.
-
-    Returns
-    -------
-    set[str]
-        Labels the plans collect plus the model's boundary ops.
-
-    Raises
-    ------
-    RunCapabilityUnavailableError
-        When a saved functional op is covered by no plan.
-    """
-
-    boundary_layer_labels = set(getattr(trace, "input_layers", ())) | set(
-        getattr(trace, "output_layers", ())
-    )
-    supported_labels = {label for plan in plans for label in plan.save_labels} | {
-        op.label for op in trace.layer_list if op.layer_label in boundary_layer_labels
-    }
-    unsupported_function_labels = tuple(
-        op.label
-        for op in trace.layer_list
-        if bool(getattr(op, "has_saved_activation", False))
-        and str(getattr(op, "func_name", "none")) not in {"none", "identity"}
-        and op.label not in supported_labels
-    )
-    if unsupported_function_labels:
-        raise RunCapabilityUnavailableError(
-            "fast=True collects functional operations only when they were explicitly "
-            "requested by the capture save predicate. Recapture with save=tl.func(...) "
-            f"for: {', '.join(unsupported_function_labels[:8])}.",
-            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-            detection_stage="fast_live_function_plan",
-        )
-    return supported_labels
-
-
-def _drop_uncollected_payloads(trace: Any, supported_labels: set[str]) -> None:
-    """Clear saved payloads the fast live session will not refresh.
-
-    Parameters
-    ----------
-    trace:
-        Source trace whose ops are updated in place.
-    supported_labels:
-        Op labels the session's module and function plans collect, plus the
-        model's boundary ops.
-    """
-
-    for op in trace.layer_list:
-        if bool(getattr(op, "has_saved_activation", False)) and op.label not in supported_labels:
-            op._internal_set("out", None)
-            op._internal_set("transformed_out", None)
-            op._internal_set("has_saved_activation", False)
 
 
 def _remove_fast_live_hooks(handles: list[Any]) -> None:
@@ -958,50 +879,6 @@ class _FastSparseSession:
         )
 
 
-def _live_modules_by_address(model: nn.Module) -> dict[str, nn.Module]:
-    """Map every registered address of the live model, alias spellings included.
-
-    Capture labels a module registered under several addresses (``self.B =
-    self.A[0]``) with the address its own traversal reaches first, which is
-    not always the one ``named_modules()`` keeps; the plan lookup accepts every
-    registration so such a module is found, not refused as absent.
-    """
-
-    from .backends.torch.model_prep import shared_module_addresses
-
-    modules = dict(model.named_modules())
-    by_id = {id(module): module for module in modules.values()}
-    for module_id, addresses in shared_module_addresses(model).items():
-        module = by_id.get(module_id)
-        if module is None:
-            continue
-        for address in addresses:
-            modules.setdefault(address, module)
-    return modules
-
-
-def _is_opaque_output_root(output: Any) -> bool:
-    """Return whether a model output is a container capture walks only by attribute search."""
-
-    from .backends.torch._ops_container_base import _try_build_container_spec
-
-    return (
-        output is not None
-        and not isinstance(output, torch.Tensor)
-        and _try_build_container_spec(output) is None
-    )
-
-
-def _output_tensor_leaves(output: Any) -> tuple[Any, ...]:
-    """Return the tensor leaves of one live call output (one container level)."""
-
-    if isinstance(output, torch.Tensor):
-        return (output,)
-    if isinstance(output, (tuple, list)):
-        return tuple(item for item in output if isinstance(item, torch.Tensor))
-    return ()
-
-
 class _FastLiveSession:
     """Native-forward collector guarded by selected-site and boundary call plans."""
 
@@ -1041,23 +918,7 @@ class _FastLiveSession:
         plan_addresses = tuple(dict.fromkeys(plan.address_or_name for plan in self.module_plans))
         # Every typed refusal must fire BEFORE the unsupported-activation wipe
         # below: a refused session must never destroy the user's saved payloads.
-        planned_objects: dict[int, str] = {}
-        for address in plan_addresses:
-            module = modules.get("" if address == "self" else address)
-            if module is None:
-                raise RunCapabilityUnavailableError(
-                    f"Captured module address {address!r} is absent from the live model.",
-                    code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                    detection_stage="fast_live_module_plan",
-                )
-            other = planned_objects.setdefault(id(module), address)
-            if other != address:
-                raise RunCapabilityUnavailableError(
-                    f"Captured module addresses {other!r} and {address!r} name one live module "
-                    "object; the fast run collects a shared module under one address only.",
-                    code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                    detection_stage="fast_live_module_plan",
-                )
+        require_distinct_plan_modules(modules, plan_addresses)
         # Steered reruns: the staged spec lowers to module-boundary hooks that
         # must run BEFORE the collection hooks below (torch fires forward hooks
         # in registration order), so the collected site value is the
@@ -1091,24 +952,7 @@ class _FastLiveSession:
         try:
             self.handles.extend(install_steer_hooks(self.steer_plan, session_ref))
             self.handles.extend(install_module_token_hooks(model, session_is_active(session_ref)))
-            for address in plan_addresses:
-                module = modules["" if address == "self" else address]
-
-                def hook(
-                    _module: nn.Module,
-                    _args: tuple[Any, ...],
-                    output: Any,
-                    *,
-                    module_address: str = address,
-                    ref: weakref.ReferenceType[_FastLiveSession] = session_ref,
-                ) -> None:
-                    """Forward one module boundary to the active session."""
-
-                    session = ref()
-                    if session is not None:
-                        session.capture_module(module_address, output)
-
-                self.handles.append(module.register_forward_hook(hook))
+            install_collection_hooks(self.handles, modules, plan_addresses, session_ref)
         except BaseException:
             self._hook_finalizer()
             raise
@@ -1221,18 +1065,7 @@ class _FastLiveSession:
                 )
                 return
             if label in plan.save_labels:
-                op = self.trace.layer_dict_all_keys[label]
-                self.collection_paused = True
-                try:
-                    op.save_activation(
-                        value,
-                        (),
-                        {},
-                        False,
-                        activation_transform=getattr(self.trace, "activation_transform", None),
-                    )
-                finally:
-                    self.collection_paused = False
+                save_payload_paused(self, self.trace.layer_dict_all_keys[label], value)
 
     def capture_module(self, address: str, output: Any) -> None:
         """Collect and guard one atomic-module forward-hook event."""
@@ -1276,13 +1109,7 @@ class _FastLiveSession:
                     "fast_live_module_hook_unobserved",
                     False,
                     RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
-                    f"Captured module call {plan.address_or_name!r} call "
-                    f"{plan.call_index or 1} exited inside {address!r} without firing a "
-                    "forward hook: the model reaches it by a direct forward() call, which "
-                    "torch module hooks cannot observe, and the capture recorded no such "
-                    "call to route (no capture of this model made one, or "
-                    "HAS_MODULE_CALL_DISPATCH_FRAME is False), so the fast run "
-                    "cannot collect that site. The full run captures it.",
+                    unobserved_hook_message(plan, address),
                     affected_op_labels=plan.op_labels,
                 )
                 return
@@ -1301,36 +1128,19 @@ class _FastLiveSession:
         if self.stop_at == ("module", self.module_index - 1) and self.failure is None:
             raise FastUntilReached
 
-    def _repeats_last_function_output(self, func_name: str, output: Any) -> bool:
-        """Return whether a same-name event hands back the last collected output.
-
-        A wrapped torch function that calls another wrapped spelling of itself
-        (``F.relu`` into ``torch.relu``; ``F.adaptive_max_pool1d`` into the
-        ``_with_indices`` tuple it unpacks) fires one event per layer for one
-        captured op, so the outer event is skipped when its output IS the inner
-        output or one of its tensor leaves. Identity is checked on the live
-        objects, which the session keeps alive: comparing ``id()`` values let a
-        later same-name op whose fresh output reused a freed tensor's address
-        be dropped, shifting every later plan by one (a false arm divergence).
-        """
-
-        last = self.last_function_output
-        if last is None or last[0] != func_name or output is None:
-            return False
-        _name, last_output, last_leaves = last
-        if output is last_output:
-            return True
-        if isinstance(output, torch.Tensor):
-            return any(output is leaf for leaf in last_leaves)
-        leaves = _output_tensor_leaves(output)
-        return bool(leaves) and all(any(leaf is kept for kept in last_leaves) for leaf in leaves)
-
-    def capture_function(self, func_name: str, output: Any) -> None:
+    def capture_function(
+        self,
+        func_name: str,
+        output: Any,
+        args: tuple[Any, ...] = (),
+        property_accessor: str | None = None,
+    ) -> None:
         """Collect and guard one explicitly requested functional-op event."""
 
         if not self.wants_function(func_name) or self.failure:
             return
-        if self._repeats_last_function_output(func_name, output):
+        output = collected_function_output(func_name, output, args, property_accessor)
+        if repeats_last_function_output(self.last_function_output, func_name, output):
             return
         self.last_function_output = (func_name, output, _output_tensor_leaves(output))
         if self.function_index >= len(self.function_plans):

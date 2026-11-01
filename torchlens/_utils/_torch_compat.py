@@ -53,6 +53,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
+from ._producer_version import _torch_minor_version
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
 __all__ = [
@@ -546,29 +547,6 @@ def resolve_runnable_torch_alias(
             continue
         return alias.target_namespace, target_qualname, alias.provenance
     return None
-
-
-def _torch_minor_version(version: str | None) -> tuple[int, int] | None:
-    """Parse a torch major/minor prefix without inspecting the live runtime.
-
-    Parameters
-    ----------
-    version:
-        Producer torch version from runnable compatibility metadata.
-
-    Returns
-    -------
-    tuple[int, int] | None
-        Major/minor pair, or ``None`` when producer metadata is absent or not
-        parseable (for example a legacy placeholder).
-    """
-
-    if version is None:
-        return None
-    components = version.split("+", maxsplit=1)[0].split(".")
-    if len(components) < 2 or not components[0].isdigit() or not components[1].isdigit():
-        return None
-    return int(components[0]), int(components[1])
 
 
 def _probe_device_type_arg_supported() -> bool:
