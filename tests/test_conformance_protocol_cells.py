@@ -554,5 +554,5 @@ def test_scorecard_command_writes_checks_and_grades(tmp_path: Path, monkeypatch:
             "",
         )
     )
-    monkeypatch.setattr(_scorecard, "preview_scorecard", lambda backend, **kw: changed)
+    monkeypatch.setattr(_scorecard, "_preview_scorecard", lambda backend, **kw: changed)
     assert scorecard.main(["--backend", "stub", "--check"]) == 1
