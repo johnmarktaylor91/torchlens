@@ -136,6 +136,30 @@ def _single_pass_site(cell: Cell, trace: Any) -> str:
     return _not_applicable("no saved single-pass floating-point op to edit on this capture")
 
 
+def _leaf_site(trace: Any) -> str | None:
+    """Return the first saved floating-point leaf site (an input or buffer, no func to replay)."""
+
+    for op in trace.saved_ops:
+        if not op.parents and _is_float(op.dtype) and isinstance(op.out, torch.Tensor):
+            return op.label
+    return None
+
+
+def _interior_site(cell: Cell, trace: Any) -> str:
+    """Return a saved, single-pass, floating-point op that has parents (a replayable func)."""
+
+    for op in trace.saved_ops:
+        if (
+            op.parents
+            and _is_float(op.dtype)
+            and getattr(op.layer, "num_passes", 1) == 1
+            and isinstance(op.out, torch.Tensor)
+            and op.out.numel() > 0
+        ):
+            return op.label
+    return _single_pass_site(cell, trace)
+
+
 def _multipass_site(trace: Any) -> str | None:
     """Return a saved floating-point op label on a layer that ran more than once, if any."""
 
@@ -264,10 +288,32 @@ def _after_intervene(cell: Cell) -> None:
         return
     before = cell.output_leaves(trace)
     torch.manual_seed(SEED)
-    loaded.run(cell.model, cell.fresh_inputs())
-    cell.expect_same_leaves(
-        before, cell.output_leaves(loaded), "replay of the loaded intervened trace"
-    )
+    trace.run(cell.model, cell.fresh_inputs())
+    cell.expect_same_leaves(before, cell.output_leaves(trace), "replay of the intervened trace")
+    _expect_loaded_replay(cell, loaded, before)
+
+
+def _expect_loaded_replay(cell: Cell, loaded: Any, before: list[Any]) -> None:
+    """A loaded intervened trace replays its output, or refuses by the typed door.
+
+    The door ``run_intervention_spec_not_persisted`` says the artifact carries no
+    intervention spec; an artifact whose loaded recipe still lists the rules while
+    the door refuses is a contradiction, so that case fails instead of refusing.
+    """
+
+    rules = _rule_facts(loaded.recipe)
+    torch.manual_seed(SEED)
+    try:
+        loaded.run(cell.model, cell.fresh_inputs())
+    except TorchLensError as exc:
+        if getattr(exc, "code", "") != "run_intervention_spec_not_persisted":
+            raise
+        cell.expect(
+            not rules,
+            f"the loaded trace carries recipe rules {rules} yet run() refuses as not persisted",
+        )
+        return
+    cell.expect_same_leaves(before, cell.output_leaves(loaded), "replay of the loaded trace")
 
 
 # --- claimed rows: fork_do ----------------------------------------------------
@@ -279,8 +325,8 @@ def _prepare_intervention_ready(cell: Cell) -> None:
     cell.capture_fields["intervention_ready"] = True
 
 
-def _halve_on_fork(cell: Cell, trace: Any, what: str) -> None:
-    label = _single_pass_site(cell, trace)
+def _halve_on_fork(cell: Cell, trace: Any, what: str, label: str | None = None) -> None:
+    label = _interior_site(cell, trace) if label is None else label
     original = trace[label].out.detach().clone()
     fork = trace.fork()
     fork.do(tl.label(label), tl.scale(0.5))
@@ -316,7 +362,7 @@ def _after_bundle(cell: Cell) -> None:
     members = [trace] if cell.loaded is None else [trace, cell.loaded]
     bundle = tl.Bundle(members)
     cell.expect(len(bundle) == len(members), f"bundle has {len(bundle)} members")
-    label = _single_pass_site(cell, trace)
+    label = _interior_site(cell, trace)
     if not _informative(trace[label].out):
         _not_applicable(f"{label} holds no finite non-zero element to ablate")
     fork = trace.fork()
@@ -477,7 +523,7 @@ def _after_mean_ablate(cell: Cell) -> None:
     """``tl.mean_ablate`` matches a hand-computed mean for self, axis and Population sources."""
 
     trace = cell.require_trace()
-    label = _single_pass_site(cell, trace)
+    label = _interior_site(cell, trace)
     out = trace[label].out.detach().clone()
     if not bool(torch.isfinite(out).all()):
         _not_applicable(f"{label} holds non-finite values; a mean is undefined")
@@ -519,7 +565,7 @@ def _after_steer(cell: Cell) -> None:
     trace = cell.require_trace()
     label = _multipass_site(trace) if cell.case.has("recurrent") else None
     if label is None:
-        label = _single_pass_site(cell, trace)
+        label = _interior_site(cell, trace)
     out = trace[label].out.detach().clone()
     direction = torch.ones_like(out)
     fork = _apply_on_fork(trace, label, tl.steer(direction, 2.0))
@@ -540,10 +586,10 @@ def _after_steer(cell: Cell) -> None:
 
 
 def _after_edit_chain(cell: Cell) -> None:
-    """Two edits on one site apply in order; a view-site edit stays in its cone; a seeded edit reproduces."""
+    """Ordered, view-site, seeded and leaf-site edits each keep the fork promise."""
 
     trace = cell.require_trace()
-    label = _single_pass_site(cell, trace)
+    label = _interior_site(cell, trace)
     out = trace[label].out.detach().clone()
     chained = trace.fork()
     chained.do(tl.label(label), tl.scale(0.5))
@@ -581,6 +627,12 @@ def _after_edit_chain(cell: Cell) -> None:
     )
     seeds = [getattr(record, "seed", None) for record in noisy_a[label].interventions or ()]
     cell.expect(3 in seeds, f"the add_noise fire record at {label} does not carry seed 3: {seeds}")
+    leaf = _leaf_site(trace)
+    if leaf is None:
+        return
+    _halve_on_fork(cell, trace, "leaf site", leaf)
+    if cell.loaded is not None:
+        _halve_on_fork(cell, cell.loaded, "loaded leaf site", leaf)
 
 
 # --- registry extension -------------------------------------------------------
