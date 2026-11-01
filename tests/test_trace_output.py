@@ -56,6 +56,18 @@ def test_output_refuses_after_stop_after() -> None:
     assert exc_info.value.fields["code"] == "output_capture_stopped"
 
 
+def test_output_is_independent_of_the_output_transform() -> None:
+    """The exact return survives a transform that keeps only one tensor."""
+
+    trace = tl.trace(
+        _ContainerOutput(),
+        torch.ones(1, 3),
+        output_transform=lambda output: output["logits"],
+    )
+    assert isinstance(trace.output, dict)
+    assert trace.raw_output is trace.output["logits"]
+
+
 @pytest.mark.parametrize("level", ["audit", "portable"])
 def test_output_is_not_stored_with_saved_traces(tmp_path: Path, level: str) -> None:
     """Both bundle save levels omit the live return, preserving the source slot."""
@@ -108,6 +120,19 @@ def test_live_run_keeps_its_own_forward_return(fast: bool) -> None:
     assert result.trace.output is seen[0]
     if not fast:
         assert trace.output is source_output
+
+
+@pytest.mark.parametrize("fast", [False, True])
+def test_truncated_live_run_has_no_forward_return(fast: bool) -> None:
+    """A live run cut at a saved site cannot expose a prior run's return."""
+
+    model = _ContainerOutput()
+    trace = tl.trace(model, torch.ones(1, 3))
+    site = next(layer.layer_label for layer in trace.layer_list if layer.layer_type == "linear")
+    result = trace.run(inputs=torch.full((1, 3), 2.0), fast=fast, until=site)
+    with pytest.raises(PayloadUnavailableError) as exc_info:
+        _ = result.trace.output
+    assert exc_info.value.fields["code"] == "output_capture_stopped"
 
 
 def test_recording_conversion_has_no_live_trace_return() -> None:
