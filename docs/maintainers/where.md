@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-79 packages, 1237 modules, 617276 lines, 0 modules without a docstring.
+80 packages, 1237 modules, 617268 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 90 | 56215 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 71 | 41491 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -30,6 +30,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 28 | 16657 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 2185 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 2 | 473 |
+| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14716 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 10 | 6697 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2940 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2113 |
@@ -95,13 +96,13 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (90 modules, 56215 lines)
+TorchLens - extract outs and metadata from PyTorch models. (71 modules, 41491 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 777 |
 | `__main__` | ''python -m torchlens'': the tiered read-only CLI (torchlens.agent.cli). | 15 |
-| `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 274 |
+| `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 267 |
 | `_call_fingerprint` | Native-forward twin of the capture-time ordered call fingerprint. | 159 |
 | `_capture_attr_observer` | Plain-attribute leg of the capture observer bracket. | 546 |
 | `_capture_fingerprint` | Capture-cache content fingerprints and instance-attribute key fragments. | 423 |
@@ -121,7 +122,7 @@ TorchLens - extract outs and metadata from PyTorch models. (90 modules, 56215 li
 | `_errors` | Shared TorchLens exception types. | 612 |
 | `_extraction_provenance` | Input-preprocessing provenance seam for dataset extraction (tvscope B4/B5). | 358 |
 | `_fast_live_plans` | Collection plans and direct-call routes for the guarded fast live run. | 664 |
-| `_fast_live_steer` | Steered, shape-varying support for the guarded fast live engine. | 645 |
+| `_fast_live_steer` | Steered, shape-varying support for the guarded fast live engine. | 644 |
 | `_fast_live_until` | Early stop (''until='') for the guarded fast live run. | 208 |
 | `_fast_run` | Explicit guarded fast paths for repeated static-model execution. | 1649 |
 | `_fast_sparse_state` | Cached-state safety analysis for the guarded fast sparse engine. | 297 |
@@ -137,26 +138,7 @@ TorchLens - extract outs and metadata from PyTorch models. (90 modules, 56215 li
 | `_plain_attr_fidelity` | Plain-attribute fidelity facts for the validation deepcopy and fallback paths. | 317 |
 | `_quantities` | Numeric quantity types with unit-aware display. | 680 |
 | `_robustness` | Tensor-variant detection and pre-flight guards for ''trace''. | 822 |
-| `_runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 1825 |
-| `_runnable_attestation` | Numeric attestation and nondeterminism checks. | 599 |
-| `_runnable_call_arguments` | Sparse-call argument decoding and binding. | 630 |
-| `_runnable_call_outputs` | Sparse-call output binding and mutation checks. | 613 |
-| `_runnable_execution` | Transactional execution providers for the unified :meth:'Trace.run' surface. | 381 |
-| `_runnable_input_aliases` | Input alias topology and non-tensor tree contracts. | 508 |
-| `_runnable_input_metadata` | Input structure, literal, and metadata witness helpers. | 677 |
-| `_runnable_input_sites` | Live input sites and metadata contract checks. | 628 |
-| `_runnable_output_contracts` | Output reconstruction and post-execution contracts. | 754 |
-| `_runnable_path_faithfulness` | Path-faithfulness and state comparison helpers. | 572 |
-| `_runnable_providers` | Public provider entry points and run finalization. | 326 |
-| `_runnable_retention` | What a loaded-sparse run retains, and the run-prep and bind bounds that follow from it. | 515 |
-| `_runnable_seam` | Narrow ownership seam between ''Trace'' and sparse runnable internals. | 235 |
-| `_runnable_state` | Non-executing state binding and allocation for sparse runnable traces. | 2831 |
-| `_runnable_state_context` | State contracts and captured execution contexts. | 614 |
-| `_runnable_state_live` | Live-model state restore for the run and capture brackets. | 413 |
-| `_runnable_transaction` | Loaded-sparse transaction execution and allocation checks. | 1266 |
 | `_runnable_until` | Stop-frontier and dependency-closure arithmetic for ''run(until=...)''. | 89 |
-| `_runnable_verification` | Seed, RNG, attestation, and fork utilities. | 715 |
-| `_runnable_witness_contracts` | Control, shape, and host-escape witness checks. | 614 |
 | `_save_budget` | Running budget for retained activation bytes, with a typed refusal. | 971 |
 | `_selection` | Selection / intervention algebra: the dual selection types (L6 stage 1). | 1758 |
 | `_selection_align` | Cross-run selection alignment (L6 stage 4a). | 269 |
@@ -602,6 +584,32 @@ Private registry kernel package (architecture ; never public API). (2 modules, 4
 | --- | --- | ---: |
 | `__init__` | Private registry kernel package (architecture ; never public API). | 35 |
 | `kernel` | The ONE private registry kernel behind every typed public domain door. | 438 |
+
+### `torchlens._runnable`
+
+Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14716 lines)
+
+| Module | What it holds | Lines |
+| --- | --- | ---: |
+| `__init__` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 1825 |
+| `attestation` | Numeric attestation and nondeterminism checks. | 599 |
+| `call_arguments` | Sparse-call argument decoding and binding. | 630 |
+| `call_outputs` | Sparse-call output binding and mutation checks. | 613 |
+| `execution` | Transactional execution providers for the unified :meth:'Trace.run' surface. | 381 |
+| `input_aliases` | Input alias topology and non-tensor tree contracts. | 508 |
+| `input_metadata` | Input structure, literal, and metadata witness helpers. | 677 |
+| `input_sites` | Live input sites and metadata contract checks. | 628 |
+| `output_contracts` | Output reconstruction and post-execution contracts. | 754 |
+| `path_faithfulness` | Path-faithfulness and state comparison helpers. | 572 |
+| `providers` | Public provider entry points and run finalization. | 326 |
+| `retention` | What a loaded-sparse run retains, and the run-prep and bind bounds that follow from it. | 515 |
+| `seam` | Narrow ownership seam between ''Trace'' and sparse runnable internals. | 235 |
+| `state` | Non-executing state binding and allocation for sparse runnable traces. | 2831 |
+| `state_context` | State contracts and captured execution contexts. | 614 |
+| `state_live` | Live-model state restore for the run and capture brackets. | 413 |
+| `transaction` | Loaded-sparse transaction execution and allocation checks. | 1266 |
+| `verification` | Seed, RNG, attestation, and fork utilities. | 715 |
+| `witness_contracts` | Control, shape, and host-escape witness checks. | 614 |
 
 ### `torchlens._semantic`
 

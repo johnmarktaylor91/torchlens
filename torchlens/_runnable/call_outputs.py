@@ -9,7 +9,7 @@ import torch
 
 from torchlens._runnable import ContractCheck
 
-from ._ir.container import (
+from .._ir.container import (
     CONTAINER_KIND_CAPABILITIES,
     ContainerReconstructionError,
     ContainerSpec,
@@ -19,20 +19,20 @@ from ._ir.container import (
     reconstruction_is_lossy_by_type,
     resolve_container_type,
 )
-from ._runnable import (
+from .._utils._torch_compat import tensor_version_or_none
+from ..errors import (
+    RunPreconditionError,
+)
+from . import (
     RunnableCallDescriptor,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from ._runnable_retention import _check_unretained_extent
-from ._runnable_state import (
+from .retention import _check_unretained_extent
+from .state import (
     RunResourceCeiling,
-)
-from ._utils._torch_compat import tensor_version_or_none
-from .errors import (
-    RunPreconditionError,
 )
 
 __all__ = (
@@ -592,20 +592,20 @@ def _fresh_bare_tensor_root(trace: Any) -> bool:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._runnable_call_arguments import (  # noqa: E402
+from .call_arguments import (  # noqa: E402
     _resolve_setter_output,
 )
-from ._runnable_output_contracts import (  # noqa: E402
+from .output_contracts import (  # noqa: E402
     _container_from_paths,
     _raw_runtime_output,
 )
-from ._runnable_verification import (  # noqa: E402
+from .verification import (  # noqa: E402
     _contract_check,
     _op_for_label,
     _op_for_slot,
     _value_at_path,
 )
-from ._runnable_witness_contracts import (  # noqa: E402
+from .witness_contracts import (  # noqa: E402
     _canonicalize_structseq_output_paths,
     _recorded_structseq_output_type_matches,
     _tensor_leaf_paths,

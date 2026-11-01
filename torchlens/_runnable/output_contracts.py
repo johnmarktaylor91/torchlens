@@ -10,7 +10,10 @@ import torch
 
 from torchlens._runnable import ContractCheck
 
-from ._runnable import (
+from ..errors import (
+    RunPreconditionError,
+)
+from . import (
     ControlWitness,
     ControlWitnessKind,
     RunnableCallDescriptor,
@@ -18,9 +21,6 @@ from ._runnable import (
     SparseRunDescriptor,
     TensorSlotRole,
     WitnessGapKind,
-)
-from .errors import (
-    RunPreconditionError,
 )
 
 __all__ = (
@@ -152,14 +152,14 @@ def _diagnose_live_output(trace: Any) -> LiveOutputDiagnosis:
     # The REBOUND spellings: the raw ``_runnable_call_outputs`` functions resolve
     # their own helpers (``_op_for_label``) only through the execution module's
     # globals.
-    from ._data_classes.container import container_from_op
-    from ._ir.container import declared_leaf_slots
-    from ._runnable_call_outputs import (
+    from .._data_classes.container import container_from_op
+    from .._ir.container import declared_leaf_slots
+    from .call_outputs import (
         _container_spec_reconstruction_lossy,
         _fresh_bare_tensor_root,
         _output_container_spec,
     )
-    from ._runnable_output_contracts import LiveOutputDiagnosis, _unfaithful_root_diagnosis
+    from .output_contracts import LiveOutputDiagnosis, _unfaithful_root_diagnosis
 
     output_labels = tuple(getattr(trace, "output_layers", ()) or ())
     lossy = _container_spec_reconstruction_lossy(_output_container_spec(trace))
@@ -483,7 +483,7 @@ def _post_execution_contract_checks(
     # r71 A2 belt: every owner-record arm-entry dependency edge must own its witness
     # (parse enforces the equality; a descriptor that somehow reaches execution with
     # an unwitnessed edge fails closed as a check, never a silently skipped arm).
-    from ._runnable import control_dependency_site_label
+    from . import control_dependency_site_label
 
     arm_witness_labels = {
         witness.site_label
@@ -729,24 +729,24 @@ def _codec_component(key: Any) -> str | int | None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._runnable_execution import (  # noqa: E402
+from .execution import (  # noqa: E402
     _INPUT_STRUCTURE_SITE_PREFIX,
     _MODULE_TRAINING_MODE_SITE_PREFIX,
 )
-from ._runnable_input_aliases import (  # noqa: E402
+from .input_aliases import (  # noqa: E402
     _input_site_value,
 )
-from ._runnable_input_sites import (  # noqa: E402
+from .input_sites import (  # noqa: E402
     _inventory_site_positions,
     _is_model_input_literal_witness,
     _is_model_input_metadata_witness,
 )
-from ._runnable_verification import (  # noqa: E402
+from .verification import (  # noqa: E402
     _contract_check,
     _decode_literal,
     _op_for_label,
 )
-from ._runnable_witness_contracts import (  # noqa: E402
+from .witness_contracts import (  # noqa: E402
     _container_kind,
     _container_leaf_paths,
     _is_state_metadata_fact_witness,

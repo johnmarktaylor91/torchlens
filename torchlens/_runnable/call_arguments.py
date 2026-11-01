@@ -8,7 +8,12 @@ from typing import Any, cast
 
 import torch
 
-from ._runnable import (
+from ..errors import (
+    RunCapabilityUnavailableError,
+    RunPreconditionError,
+    RuntimeSignatureDriftError,
+)
+from . import (
     CallableRegistryEntry,
     RunnableCallDescriptor,
     RunnableErrorCode,
@@ -16,18 +21,13 @@ from ._runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from ._runnable_retention import _fail_open_unless_admitted
-from ._runnable_state import (
+from .retention import _fail_open_unless_admitted
+from .state import (
     _OUTPUT_COUNT_FLOOR,
     RunResourceCeiling,
     _allocation_budget_bytes,
     _slot_device,
     _torch_dtype,
-)
-from .errors import (
-    RunCapabilityUnavailableError,
-    RunPreconditionError,
-    RuntimeSignatureDriftError,
 )
 
 __all__ = (
@@ -611,19 +611,19 @@ def _resolve_setter_output(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._runnable_call_outputs import (  # noqa: E402
+from .call_outputs import (  # noqa: E402
     _mutation_target_slot_id,
 )
-from ._runnable_execution import (  # noqa: E402
+from .execution import (  # noqa: E402
     _MAX_DECODE_NESTING_DEPTH,
     _ProjectionCountExceeded,
     _UnreadableProjectedOutput,
 )
-from ._runnable_state_context import (  # noqa: E402
+from .state_context import (  # noqa: E402
     _count_bounded_fake_tensor_mode_class,
     _is_allocator_death,
 )
-from ._runnable_verification import (  # noqa: E402
+from .verification import (  # noqa: E402
     _decode_literal,
     _op_for_slot,
     _value_at_path,

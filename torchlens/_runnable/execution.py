@@ -19,9 +19,9 @@ import torch
 
 from torchlens._runnable import ContractCheck, ReadinessReport, RunnableDiagnostic, RunReport
 
-from . import _state
-from ._io._torch_symbols import torch_attr
-from ._ir.container import (
+from .. import _state
+from .._io._torch_symbols import torch_attr
+from .._ir.container import (
     CONTAINER_KIND_CAPABILITIES,
     ContainerReconstructionError,
     ContainerSpec,
@@ -31,7 +31,29 @@ from ._ir.container import (
     reconstruction_is_lossy_by_type,
     resolve_container_type,
 )
-from ._runnable import (
+from .._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
+from .._utils.alias_footprint import touched_bytes_relation
+from .._utils.rng import (
+    aten_qualname_is_seeded_rng,
+    deterministic_fill_governs,
+    qualname_is_uninit_growth_resize,
+    qualname_is_uninit_size_gated_alloc,
+    qualname_is_uninit_total_writer,
+    qualname_is_uninitialized_alloc,
+    restore_host_rng,
+    snapshot_host_rng,
+    uninit_new_call_is_size_form,
+)
+from ..errors import (
+    PathDivergenceError,
+    ReattachError,
+    ReplayValueMismatchError,
+    RunCapabilityUnavailableError,
+    RunPreconditionError,
+    RuntimeSignatureDriftError,
+)
+from ..intervention.replay import _CallConeNode, _walk_call_cone
+from . import (
     NONDETERMINISTIC_SOURCE_VOCABULARY,
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
@@ -67,8 +89,8 @@ from ._runnable import (
     is_mode_sensitive_qualname,
     mark_trace_path_status,
 )
-from ._runnable_retention import _check_unretained_extent, _fail_open_unless_admitted
-from ._runnable_state import (
+from .retention import _check_unretained_extent, _fail_open_unless_admitted
+from .state import (
     _INPUT_STRUCTURE_SITE_PREFIX,
     _OUTPUT_COUNT_FLOOR,
     _STATE_METADATA_FACT_SITE_PREFIX,
@@ -83,28 +105,6 @@ from ._runnable_state import (
     state_metadata_full_violations,
     validate_run_seed,
 )
-from ._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
-from ._utils.alias_footprint import touched_bytes_relation
-from ._utils.rng import (
-    aten_qualname_is_seeded_rng,
-    deterministic_fill_governs,
-    qualname_is_uninit_growth_resize,
-    qualname_is_uninit_size_gated_alloc,
-    qualname_is_uninit_total_writer,
-    qualname_is_uninitialized_alloc,
-    restore_host_rng,
-    snapshot_host_rng,
-    uninit_new_call_is_size_form,
-)
-from .errors import (
-    PathDivergenceError,
-    ReattachError,
-    ReplayValueMismatchError,
-    RunCapabilityUnavailableError,
-    RunPreconditionError,
-    RuntimeSignatureDriftError,
-)
-from .intervention.replay import _CallConeNode, _walk_call_cone
 
 _RUN_FORK_COUNTER = count(1)
 
@@ -365,17 +365,17 @@ __all__ = ["raise_analysis_run_unavailable", "run_live_trace", "run_loaded_spars
 
 # Late imports (after this module's own definitions): the split modules import this
 # module's classes and constants back, so they must exist before the splits load.
-from ._runnable import (  # noqa: E402
+from . import (  # noqa: E402
     RUN_TRUNCATION_CAUSE_VOCABULARY,
     RUN_TRUNCATION_REGIME_VOCABULARY,
     RunTruncation,
 )
-from ._runnable_input_sites import (  # noqa: E402
+from .input_sites import (  # noqa: E402
     raise_analysis_run_unavailable,
 )
-from ._runnable_providers import (  # noqa: E402
+from .providers import (  # noqa: E402
     run_loaded_sparse_trace,
 )
-from ._runnable_transaction import (  # noqa: E402
+from .transaction import (  # noqa: E402
     run_live_trace,
 )

@@ -1,7 +1,7 @@
 """Frozen type contracts for sparse runnable ``.tlspec`` artifacts.
 
 This module contains schema and API shapes only. Runtime state binding lives in
-``torchlens._runnable_state``; this module intentionally performs no capture,
+``torchlens._runnable.state``; this module intentionally performs no capture,
 serialization, callable resolution, state binding, or execution.
 """
 
@@ -14,8 +14,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Final, Literal, Protocol, TypeAlias
 
-from .errors import CollectiveBoundaryReplayError, PoisonedRunError
-from .intervention.types import FunctionRegistryKey
+from ..errors import CollectiveBoundaryReplayError, PoisonedRunError
+from ..intervention.types import FunctionRegistryKey
 
 RUNNABLE_TLSPEC_SCHEMA_VERSION: Final = "sparse_recorded_taken_path_v2"
 """Frozen sparse runnable descriptor capability/version string.

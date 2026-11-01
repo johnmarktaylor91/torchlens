@@ -8,16 +8,16 @@ from typing import Any
 
 import torch
 
-from ._ir.container import (
+from .._ir.container import (
     ContainerSpec,
 )
-from ._runnable import (
+from . import (
     ControlWitness,
     ControlWitnessKind,
     RunnableCallDescriptor,
     SparseRunDescriptor,
 )
-from ._runnable_state import (
+from .state import (
     runnable_tensor_byte_digest,
 )
 
@@ -81,7 +81,7 @@ def _tensor_leaf_paths(
         # registration's OWN flatten children exactly as capture did -- generic
         # indexing only matches when flatten happens to preserve order. Local
         # import: this function is rebound into _runnable_execution's globals.
-        from torchlens._runnable_witness_contracts import (
+        from torchlens._runnable.witness_contracts import (
             _hybrid_registered_flatten_children,
         )
 
@@ -253,7 +253,7 @@ def _container_leaf_paths(
     if registered_children is None:
         # T11.6: same hybrid registered-first rule (and same rebind-safe local
         # import) as _tensor_leaf_paths.
-        from torchlens._runnable_witness_contracts import (
+        from torchlens._runnable.witness_contracts import (
             _hybrid_registered_flatten_children,
         )
 
@@ -404,7 +404,7 @@ def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
         a fully named ``torch.return_types`` value.
     """
 
-    from ._utils._torch_compat import torch_structseq_field_names
+    from .._utils._torch_compat import torch_structseq_field_names
 
     return torch_structseq_field_names(value)
 
@@ -598,16 +598,16 @@ def _unbound_state_escape_stale(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._runnable_execution import (  # noqa: E402
+from .execution import (  # noqa: E402
     _STATE_METADATA_FACT_SITE_PREFIX,
     _UNBOUND_STATE_ESCAPE_FACT_KEY,
     _UNBOUND_STATE_ESCAPE_SITE_PREFIX,
 )
-from ._runnable_output_contracts import (  # noqa: E402
+from .output_contracts import (  # noqa: E402
     _codec_component,
     _registered_flatten_children,
 )
-from ._runnable_verification import (  # noqa: E402
+from .verification import (  # noqa: E402
     _decode_literal,
     _op_for_label,
     _value_at_path,

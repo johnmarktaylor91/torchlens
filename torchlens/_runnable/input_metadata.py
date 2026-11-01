@@ -9,22 +9,22 @@ import torch
 
 from torchlens._runnable import ContractCheck, RunnableDiagnostic
 
-from . import _state
-from ._runnable import (
+from .. import _state
+from .._utils._torch_compat import tensor_has_named_dims
+from .._utils.alias_footprint import touched_bytes_relation
+from ..errors import (
+    PathDivergenceError,
+)
+from . import (
     PathFaithfulness,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from ._runnable_state import (
+from .state import (
     RunResourceCeiling,
     _guarded_defensive_materialize,
-)
-from ._utils._torch_compat import tensor_has_named_dims
-from ._utils.alias_footprint import touched_bytes_relation
-from .errors import (
-    PathDivergenceError,
 )
 
 __all__ = (
@@ -654,23 +654,23 @@ def _fast_input_check(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._runnable_execution import (  # noqa: E402
+from .execution import (  # noqa: E402
     _VIEW_OP_QUALNAMES,
 )
-from ._runnable_input_aliases import (  # noqa: E402
+from .input_aliases import (  # noqa: E402
     _input_alias_topology_checks,
     _input_nontensor_tree_contract_checks,
     _input_site_value,
     _input_tree_contract_checks,
 )
-from ._runnable_input_sites import (  # noqa: E402
+from .input_sites import (  # noqa: E402
     _fact_path_tuple_or_none,
     _input_metadata_contract_checks,
     _model_input_arity_positions,
     _model_input_literal_facts,
     _runtime_top_level_positions,
 )
-from ._runnable_verification import (  # noqa: E402
+from .verification import (  # noqa: E402
     _contract_check,
     _input_error,
     _value_at_path,

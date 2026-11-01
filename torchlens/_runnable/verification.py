@@ -10,9 +10,17 @@ import torch
 
 from torchlens._runnable import ContractCheck, RunnableDiagnostic
 
-from . import _state
-from ._io._torch_symbols import torch_attr
-from ._runnable import (
+from .. import _state
+from .._io._torch_symbols import torch_attr
+from .._utils.rng import (
+    aten_qualname_is_seeded_rng,
+)
+from ..errors import (
+    PathDivergenceError,
+    ReplayValueMismatchError,
+    RunPreconditionError,
+)
+from . import (
     CallableRegistryEntry,
     DivergencePolicy,
     InputAttestationFingerprint,
@@ -34,17 +42,9 @@ from ._runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from ._runnable_state import (
+from .state import (
     PreparedRunnableState,
     runnable_tensor_byte_digest,
-)
-from ._utils.rng import (
-    aten_qualname_is_seeded_rng,
-)
-from .errors import (
-    PathDivergenceError,
-    ReplayValueMismatchError,
-    RunPreconditionError,
 )
 
 __all__ = (
@@ -705,11 +705,11 @@ def _run_fork_name(trace: Any) -> str:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._runnable_execution import (  # noqa: E402
+from .execution import (  # noqa: E402
     _ALLOWED_TORCH_SYMBOL_TYPES,
     _MAX_DECODE_NESTING_DEPTH,
     _RUN_FORK_COUNTER,
 )
-from ._runnable_witness_contracts import (  # noqa: E402
+from .witness_contracts import (  # noqa: E402
     _container_field_names,
 )

@@ -52,7 +52,7 @@ SAVE_MODES: frozenset[str] = frozenset(get_args(SaveMode))
 #   fp32, a mild tightening of the former 1e-4 literal's ~840 ULP) -- far
 #   below any real corruption (a sign flip, a zeroed value, a stale buffer
 #   all read as many thousands of ULPs) while comfortably above observed
-#   reorder noise (~4 ULP on eval MHA, see _runnable_path_faithfulness.py).
+#   reorder noise (~4 ULP on eval MHA, see _runnable/path_faithfulness.py).
 # * fp16 / bf16 payloads accumulate in fp32 and round ONCE to storage, so the
 #   replay difference is storage-rounding dominated: a few ULPs of the
 #   storage dtype. Headroom 4 ULP -- a MODEL bound (unmeasured), unlike the

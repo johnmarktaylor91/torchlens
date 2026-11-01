@@ -40,7 +40,7 @@ from .. import _state
 from .._capture_state_helpers import CompiledCapturePrep, prepare_compiled_capture
 from .._ir.container_registry import ModelSite, Phase, Role, walk_container
 from .._quantities import Bytes, Duration
-from .._runnable_seam import runnable_trace_state
+from .._runnable.seam import runnable_trace_state
 from ..backends.registry import (
     TORCH_BACKEND_NAME,
     BackendName,
@@ -1806,7 +1806,7 @@ def run_and_log_inputs_through_model(
             _vprint(self, f"Inputs: {len(input_tensors)} tensor(s) on {device_str}")
 
         if bool(getattr(self, "intervention_ready", False)):
-            from .._runnable_state import (
+            from .._runnable.state import (
                 snapshot_capture_state,
                 snapshot_capture_state_signatures,
                 snapshot_persistent_buffer_universe,

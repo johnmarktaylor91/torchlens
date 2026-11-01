@@ -10,8 +10,11 @@ import torch
 
 from torchlens._runnable import ContractCheck, ReadinessReport, RunnableDiagnostic
 
-from . import _state
-from ._runnable import (
+from .. import _state
+from ..errors import (
+    RunPreconditionError,
+)
+from . import (
     ActivationPayloadLayerDescriptor,
     DivergencePolicy,
     NumericAttestationStatus,
@@ -23,13 +26,10 @@ from ._runnable import (
     derived_witness_completeness,
     mark_trace_path_status,
 )
-from ._runnable_state import (
+from .state import (
     RunResourceCeiling,
     prepare_runnable_state,
     validate_run_seed,
-)
-from .errors import (
-    RunPreconditionError,
 )
 
 __all__ = (
@@ -279,7 +279,7 @@ def _finalize_provider_run(
     # raised-and-rolled-back run never scrubs the caller's live trace.
     # Function-local import: layering (the capture annotations travel module
     # imports the runnable package), not a cycle at import.
-    from ._capture._annotations_travel import scrub_fresh_execution_annotations
+    from .._capture._annotations_travel import scrub_fresh_execution_annotations
 
     scrub_fresh_execution_annotations(fork)
     report = _run_report(
@@ -301,25 +301,25 @@ def _finalize_provider_run(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._runnable_input_aliases import (  # noqa: E402
+from .input_aliases import (  # noqa: E402
     _clone_state_values,
     _snapshot_input_byte_digests,
     _snapshot_input_fingerprints,
 )
-from ._runnable_input_metadata import (  # noqa: E402
+from .input_metadata import (  # noqa: E402
     _bind_runtime_inputs,
 )
-from ._runnable_input_sites import (  # noqa: E402
+from .input_sites import (  # noqa: E402
     _require_loaded_sparse_provider,
 )
-from ._runnable_path_faithfulness import (  # noqa: E402
+from .path_faithfulness import (  # noqa: E402
     _run_report,
 )
-from ._runnable_transaction import (  # noqa: E402
+from .transaction import (  # noqa: E402
     _execute_loaded_sparse_transaction,
     _resolve_run_until_plan,
 )
-from ._runnable_verification import (  # noqa: E402
+from .verification import (  # noqa: E402
     _raise_first_divergence,
     _raise_monotonic_divergence,
     _run_fork_name,

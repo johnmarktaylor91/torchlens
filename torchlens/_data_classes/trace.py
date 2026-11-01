@@ -78,7 +78,7 @@ from .._ir.workspaces import (
     WrapperRuntimeWorkspace,
 )
 from .._quantities import Bytes, Duration
-from .._runnable_seam import (
+from .._runnable.seam import (
     RunnableTraceState,
     normalize_runnable_trace_state,
     runnable_trace_state,
@@ -881,7 +881,7 @@ class Trace(
         graph or write tensor values into the sparse descriptor.
         """
 
-        from .._runnable_state import load_trace_state_dict
+        from .._runnable.state import load_trace_state_dict
 
         load_trace_state_dict(self, state_dict)
 

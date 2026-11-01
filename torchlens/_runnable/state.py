@@ -18,8 +18,14 @@ import torch
 
 from torchlens._runnable import RunnableDiagnostic
 
-from . import _state
-from ._runnable import (
+from .. import _state
+from .._transport import digest_byte_view
+from .._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
+from .._utils._torch_symbols import torch_attr
+from .._utils.lazy_state import raise_if_pending_state_slots
+from ..errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
+from ..errors._base import TorchLensWarning
+from . import (
     CANONICAL_INITIALIZER_BY_ROLE,
     RUNNABLE_INITIALIZER_POLICY_VERSION,
     ControlWitnessKind,
@@ -31,12 +37,6 @@ from ._runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
-from ._transport import digest_byte_view
-from ._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
-from ._utils._torch_symbols import torch_attr
-from ._utils.lazy_state import raise_if_pending_state_slots
-from .errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
-from .errors._base import TorchLensWarning
 
 _INPUT_STRUCTURE_SITE_PREFIX = "input_structure:"
 """Canonical site-label prefix for persisted input-boundary structure facts."""
@@ -755,7 +755,7 @@ def snapshot_state_alias_topology(model: object) -> Mapping[str, Any] | None:
     model exposes no named state accessors.
     """
 
-    from ._utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
+    from .._utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
 
     named_parameters = getattr(model, "named_parameters", None)
     named_buffers = getattr(model, "named_buffers", None)
@@ -932,7 +932,7 @@ def snapshot_live_declared_state(model: object) -> LiveDeclaredStateSnapshot:
 def declared_slot_unchanged(original: torch.Tensor, clone: torch.Tensor) -> bool:
     """Return whether a live state slot still holds its snapshot bytes (byte-exact, NaN-safe)."""
 
-    from .backends.torch.rescue import _state_bytes_equal
+    from ..backends.torch.rescue import _state_bytes_equal
 
     try:
         return (
@@ -991,7 +991,7 @@ def load_trace_state_dict(trace: Any, sd: Mapping[str, Any]) -> None:
         allocates, like the staging device failures this stage already types.
     """
 
-    from ._fast_run import close_fast_run_session
+    from .._fast_run import close_fast_run_session
 
     close_fast_run_session(trace)
     staged = _validate_state_mapping(trace, sd)
@@ -1082,7 +1082,7 @@ def recorded_state_metadata_facts(descriptor: SparseRunDescriptor) -> dict[str, 
     nothing (fail closed into "no fact", which stages the detached default).
     """
 
-    from ._runnable_verification import _decode_literal
+    from .verification import _decode_literal
 
     facts: dict[str, dict[str, bool]] = {}
     for witness in descriptor.control_witnesses:
@@ -1266,7 +1266,7 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
     # r55 free_1: bound every recorded op-output allocation BEFORE the DAG runs, on
     # every state source (staged/embedded/random-init), so a tampered self-consistent
     # descriptor cannot drive an out-of-budget op allocation and OOM-kill the host.
-    from ._runnable_retention import (
+    from .retention import (
         _preflight_retention_floor,
         _retained_output_slot_ids,
         _unretained_view_lookup,
@@ -2321,7 +2321,7 @@ def _preflight_run_allocation(
         requested = math.prod(slot.shape) * _torch_dtype(slot.dtype).itemsize
         available = _allocation_budget_bytes(device)
         if requested > available and unretained_view is not None and unretained_view(slot):
-            from ._runnable_retention import _refuse_view_past_logical_ceiling
+            from .retention import _refuse_view_past_logical_ceiling
 
             admitted_elements = _refuse_view_past_logical_ceiling(
                 slot, device, requested, available, admitted_elements

@@ -9,7 +9,7 @@ import torch
 
 from torchlens._runnable import ContractCheck, ReadinessReport, RunnableDiagnostic, RunReport
 
-from ._runnable import (
+from . import (
     NONDETERMINISTIC_SOURCE_VOCABULARY,
     RUN_TRUNCATION_CAUSE_VOCABULARY,
     RUN_TRUNCATION_REGIME_VOCABULARY,
@@ -25,7 +25,7 @@ from ._runnable import (
     WitnessCompleteness,
     derived_witness_completeness,
 )
-from ._runnable_state import (
+from .state import (
     PreparedRunnableState,
     runnable_tensor_byte_digest,
 )
@@ -555,16 +555,16 @@ def _is_benign_layout_nonreproducible(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._runnable_attestation import (  # noqa: E402
+from .attestation import (  # noqa: E402
     _descriptor_has_nondeterministic_rng,
     _has_journaled_buffer_activation_member,
     _has_out_mutated_activation_member,
     _is_benign_downstream_nonreproducible,
 )
-from ._runnable_execution import (  # noqa: E402
+from .execution import (  # noqa: E402
     _LAYOUT_SENSITIVE_BLAS_QUALNAMES,
 )
-from ._runnable_verification import (  # noqa: E402
+from .verification import (  # noqa: E402
     _attestation_inputs_match,
     _attestation_state_matches,
     _contract_check,

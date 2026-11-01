@@ -34,11 +34,10 @@ from torch import nn
 
 from torchlens._runnable import ContractCheck, RunnableDiagnostic
 
-from . import _runnable_transaction as _transaction
 from ._errors import TorchLensWarning
-from ._runnable import RunnableErrorCode
-from ._runnable_input_sites import _INPUT_CHECK_UNAVAILABLE
-from ._runnable_verification import _contract_check
+from ._runnable import RunnableErrorCode, transaction as _transaction
+from ._runnable.input_sites import _INPUT_CHECK_UNAVAILABLE
+from ._runnable.verification import _contract_check
 from .errors import RunCapabilityUnavailableError
 
 #: Op fields a native forward cannot refresh for unsaved ops; after a

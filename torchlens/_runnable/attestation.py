@@ -7,7 +7,15 @@ from typing import Any
 
 import torch
 
-from ._runnable import (
+from .._utils.rng import (
+    deterministic_fill_governs,
+    qualname_is_uninit_growth_resize,
+    qualname_is_uninit_size_gated_alloc,
+    qualname_is_uninit_total_writer,
+    qualname_is_uninitialized_alloc,
+    uninit_new_call_is_size_form,
+)
+from . import (
     ActivationPayloadLayerDescriptor,
     ActivationPayloadMember,
     ControlWitnessKind,
@@ -15,14 +23,6 @@ from ._runnable import (
     SparseRunDescriptor,
     TensorSlotRole,
     is_mode_sensitive_qualname,
-)
-from ._utils.rng import (
-    deterministic_fill_governs,
-    qualname_is_uninit_growth_resize,
-    qualname_is_uninit_size_gated_alloc,
-    qualname_is_uninit_total_writer,
-    qualname_is_uninitialized_alloc,
-    uninit_new_call_is_size_form,
 )
 
 __all__ = (
@@ -580,20 +580,20 @@ def _mode_sensitive_op_unwitnessed(descriptor: SparseRunDescriptor) -> bool:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._runnable_execution import (  # noqa: E402
+from .execution import (  # noqa: E402
     _HOST_RNG_SOURCE_KIND,
     _MODULE_TRAINING_MODE_SITE_PREFIX,
     _SEEDED_SOURCE_KIND,
     _UNINIT_SANITIZER_NAMESPACES,
     _UNINIT_SOURCE_KIND,
 )
-from ._runnable_path_faithfulness import (  # noqa: E402
+from .path_faithfulness import (  # noqa: E402
     _within_layout_reduction_tolerance,
 )
-from ._runnable_verification import (  # noqa: E402
+from .verification import (  # noqa: E402
     _call_consumes_seeded_rng,
     _decode_literal,
 )
-from ._runnable_witness_contracts import (  # noqa: E402
+from .witness_contracts import (  # noqa: E402
     _tensor_derived_scalar_witness_slot_ids,
 )

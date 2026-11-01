@@ -9,18 +9,18 @@ import torch
 
 from torchlens._runnable import ContractCheck, ReadinessReport
 
-from ._runnable import (
+from ..errors import (
+    ReattachError,
+    RunCapabilityUnavailableError,
+    RunPreconditionError,
+)
+from . import (
     ControlWitness,
     ControlWitnessKind,
     ReadinessStatus,
     RunnableErrorCode,
     SparseRunDescriptor,
     TensorSlotRole,
-)
-from .errors import (
-    ReattachError,
-    RunCapabilityUnavailableError,
-    RunPreconditionError,
 )
 
 __all__ = (
@@ -606,22 +606,22 @@ def _runtime_top_level_positions(inputs: Any, positions: set[Any]) -> set[Any] |
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._runnable_execution import (  # noqa: E402
+from .execution import (  # noqa: E402
     _INPUT_DERIVED_LAYOUT_FACT_NAME,
     _MODEL_INPUT_LITERAL_FACT_KEY,
     _MODEL_INPUT_LITERAL_SITE_PREFIX,
     _MODEL_INPUT_METADATA_FACT_KEY,
     _MODEL_INPUT_METADATA_SITE_PREFIX,
 )
-from ._runnable_input_aliases import (  # noqa: E402
+from .input_aliases import (  # noqa: E402
     _input_site_value,
     _positions_are_mixed,
     _split_mixed_inputs,
 )
-from ._runnable_transaction import (  # noqa: E402
+from .transaction import (  # noqa: E402
     _live_runtime_input_leaves,
 )
-from ._runnable_verification import (  # noqa: E402
+from .verification import (  # noqa: E402
     _contract_check,
     _decode_literal,
     _value_at_path,

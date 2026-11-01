@@ -36,8 +36,8 @@ _postprocess._materialize	1
 _postprocess._selective_save	1
 _postprocess.labeling	1
 _runnable	1
-_runnable_execution	2
-_runnable_transaction	2
+_runnable.execution	2
+_runnable.transaction	2
 _trace_selector_helpers	5
 _user_public_impls	1
 _utils	1
