@@ -55,6 +55,8 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "native-torch.md",
         "recipes/lrp_epsilon_litmus.md",
         "guides/grouping.md",
+        # Backend protocol: the reference backend's tutorial (graduation G5).
+        "backends/torch.md",
     ),
     "reference_tooling": (
         "reference/debug.md",

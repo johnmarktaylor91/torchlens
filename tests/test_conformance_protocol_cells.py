@@ -188,18 +188,15 @@ def test_plant_tables_partition_the_closed_plant_set() -> None:
 #: Torch-side gaps the suite reports today, pinned by exact cell id with the detail each
 #: carries (cross-packet requests in the lane's RESULT.md): the tamper verdict names the
 #: consumer with torch's ``arg_logging_mismatch``, a reason the closed list does not spell
-#: yet (a spelling for JMT, never added here); a loaded portable bundle carries no callables
-#: so replay validation refuses it. A fix flips the pin, and the entry must then be removed;
-#: the cells stay strict.
+#: yet (a spelling for JMT, never added here). A fix flips the pin, and the entry must then
+#: be removed; the cells stay strict.
 TORCH_KNOWN_GAPS: dict[str, str] = {
     "c1_validation_names_reason": "not in VALIDATION_REASONS",
-    "c2_validation_after_load": "portable bundles drop them",
 }
 #: The fake refuses its one False flag typed before capture; it validates through torch, so
-#: it inherits the reason-spelling gap and the bundle gap.
+#: it inherits the reason-spelling gap.
 FAKE_KNOWN_GAPS: dict[str, str] = {
     "c1_validation_names_reason": "not in VALIDATION_REASONS",
-    "c2_validation_after_load": "portable bundles drop them",
 }
 
 
@@ -242,12 +239,15 @@ def test_torch_reference_passes_every_protocol_cell(tmp_path: Path) -> None:
     ), card.capabilities
     assert [item.id for item in card.graduation] == ["G1", "G2", "G3", "G4", "G5", "G6"]
     # G1 and G2 read the pinned gaps; they flip with the gaps. G1 names the first red cell
-    # in suite order (a pinned one); the coded grad_options refusal leaves no flag untested.
+    # in suite order (a pinned one); the coded grad_options refusal leaves no flag untested,
+    # and the executable-level reload (P1b) takes c2_validation_after_load out of G2's detail.
     g1 = card.graduation[0]
     assert not g1.met and any(gap in g1.detail for gap in TORCH_KNOWN_GAPS), g1
     assert "c1_refusal_intermediate_derived_grads" not in g1.detail, g1
     assert "capabilities untested" not in g1.detail, g1
-    assert not card.graduation[1].met and "c2_validation_after_load" in card.graduation[1].detail
+    g2 = card.graduation[1]
+    assert not g2.met and "c1_validation_names_reason" in g2.detail, g2
+    assert "c2_validation_after_load" not in g2.detail, g2
     assert card.counts["denominator"] == len(card.cells)
     assert scorecard_from_json(card.to_json()) == card
 

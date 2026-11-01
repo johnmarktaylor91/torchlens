@@ -652,20 +652,44 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
 
     if not bool(getattr(self, "_loaded_from_bundle", False)):
         return
+    from ._constant_source import is_closure_constant_source
+
+    # ``validate_saved_outs`` already resolved what recorded function identities
+    # can resolve for the replay phase; whatever did not is refused by name here.
     unresolved = [
         getattr(layer, "layer_label", "<unknown>")
         for layer in getattr(self, "layer_list", [])
         if getattr(layer, "func", None) is None
         and getattr(layer, "func_name", "none") not in {"none", "input", "output", "buffer"}
+        and not is_closure_constant_source(layer)
+    ]
+    dropped_args = [
+        getattr(layer, "layer_label", "<unknown>")
+        for layer in getattr(self, "layer_list", [])
+        if getattr(layer, "func", None) is not None
+        and bool(getattr(layer, "has_saved_args", False))
+        and getattr(layer, "saved_args", None) is None
     ]
     if unresolved:
-        from .._io import ArtifactError
-
-        raise ArtifactError(
+        message = (
             "validate_forward_pass requires resolved func callables; portable bundles "
             "drop them when functions cannot be represented. This bundle has unresolved "
             f"computational functions, e.g. {unresolved[:3]!r}."
         )
+    elif dropped_args:
+        # The capture saved these ops' arguments, but the bundle's save level
+        # kept no re-execution payloads ("portable" and "audit" drop them), so
+        # replay has nothing to re-execute from: refuse by name, never a verdict.
+        message = (
+            "validate_forward_pass replays each op from its saved arguments, which this "
+            "bundle's save level dropped; save with level='executable_with_callables' "
+            f"to validate after load. Ops without saved arguments, e.g. {dropped_args[:3]!r}."
+        )
+    else:
+        return
+    from .._io import ArtifactError
+
+    raise ArtifactError(message)
 
 
 def _ground_truth_output_matches_saved(
@@ -840,6 +864,44 @@ def validate_saved_outs(
         Aggregate replay-validation status. Fully validated pass/fail results
         remain bool-compatible through callers that unwrap completed statuses.
     """
+    from ._loaded_callables import release_loaded_callables, resolve_loaded_callables
+
+    # Replay is an execution boundary: a loaded op's recorded function identity
+    # (``func_id``) resolves to its callable for the replay phase only; whatever
+    # does not resolve stays functionless and the entry check refuses it by name.
+    resolved = (
+        resolve_loaded_callables(self) if bool(getattr(self, "_loaded_from_bundle", False)) else []
+    )
+    try:
+        return _validate_saved_outs_run(
+            self, ground_truth_output_tensors, verbose, validate_metadata, resolved
+        )
+    finally:
+        # Per-run scratch ends with the run, pass, fail or raise: a cache left in
+        # ``__dict__`` would reach ``save`` as live state with no portability
+        # policy, and a later run on a mutated trace must rebuild it anyway.
+        self.__dict__.pop(_ORPHAN_CANDIDATE_INDEX_KEY, None)
+        # The loaded artifact goes back to its load-time shape (``func`` None).
+        release_loaded_callables(resolved)
+
+
+#: ``Trace.__dict__`` key of the orphan-arg sweep's per-run candidate index.
+_ORPHAN_CANDIDATE_INDEX_KEY = "_validation_orphan_candidate_index"
+
+
+def _validate_saved_outs_run(
+    self: "Trace",
+    ground_truth_output_tensors: list[torch.Tensor],
+    verbose: bool,
+    validate_metadata: bool,
+    resolved_callables: list[Any] | None = None,
+) -> ValidationStatus:
+    """One validation run; :func:`validate_saved_outs` clears its scratch after it.
+
+    ``resolved_callables`` are the loaded ops whose ``func`` the replay phase
+    resolved; they are released before the metadata invariants, which check
+    the loaded artifact's own shape (``func`` never persists).
+    """
     from .._runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
 
     refuse_poisoned_trace(self, "validation")
@@ -875,7 +937,7 @@ def validate_saved_outs(
     reset_validation_diagnostics(self)
     # Per-run cache for the orphan-arg sweep; stale entries from a previous
     # validation of a since-mutated trace must never leak into this run.
-    self.__dict__.pop("_validation_orphan_candidate_index", None)
+    self.__dict__.pop(_ORPHAN_CANDIDATE_INDEX_KEY, None)
     decision_recorder = ValidationDecisionRecorder()
 
     dispatch_count_result = _dispatch_op_count_matches_capture(self)
@@ -1128,7 +1190,11 @@ def validate_saved_outs(
         setattr(self, "_validation_replay_status", status)
         return status
 
-    # Metadata invariant checks (after out validation ops)
+    # Metadata invariant checks (after out validation ops) read the loaded
+    # artifact as loaded: the replay-phase callables are released first.
+    from ._loaded_callables import release_loaded_callables
+
+    release_loaded_callables(resolved_callables or [])
     if validate_metadata:
         from .invariants import check_metadata_invariants
 
@@ -2196,7 +2262,7 @@ def _orphan_candidate_index(self: "Trace") -> dict[tuple[Any, Any], list[Op]]:
         Mapping from ``(shape, dtype)`` to candidate producer ops.
     """
 
-    cached = self.__dict__.get("_validation_orphan_candidate_index")
+    cached = self.__dict__.get(_ORPHAN_CANDIDATE_INDEX_KEY)
     if cached is not None:
         return cast(dict[tuple[Any, Any], list[Op]], cached)
     index: dict[tuple[Any, Any], list[Op]] = {}
@@ -2209,7 +2275,7 @@ def _orphan_candidate_index(self: "Trace") -> dict[tuple[Any, Any], list[Op]]:
         if payload is None:
             continue
         index.setdefault((tuple(payload.shape), payload.dtype), []).append(candidate)
-    self.__dict__["_validation_orphan_candidate_index"] = index
+    self.__dict__[_ORPHAN_CANDIDATE_INDEX_KEY] = index
     return index
 
 

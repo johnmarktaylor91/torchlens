@@ -75,6 +75,31 @@ def collect_pre_forward_tensor_ids(
     return owned, frozenset(callable_only)
 
 
+def is_forward_closure_constant(trace: "Trace", t: torch.Tensor) -> bool:
+    """Return whether ``t`` is a pre-forward tensor reachable only from a forward callable.
+
+    True only for the exact object the pre-forward snapshot pinned (identity,
+    not a recycled ``id``) whose id is in the forward-callable-only subset
+    (closure cells, defaults, referenced globals; never model-held state), and
+    only while it carries no TorchLens label. Disclosed transform and dynamo
+    regions are excluded: their untagged tensors are not proven pre-forward.
+    """
+
+    from ._tl import get_tensor_label
+
+    if (
+        trace._raw_transform_escape_detected
+        or trace._raw_dynamo_region_detected
+        or isinstance(t, nn.Parameter)
+        or get_tensor_label(t) is not None
+    ):
+        return False
+    build_data = trace._module_capture_ws.module_build_data
+    if id(t) not in (build_data.get("forward_outside_tensor_ids_at_entry") or ()):
+        return False
+    return (build_data.get("model_owned_tensor_ids_at_entry") or {}).get(id(t)) is t
+
+
 def record_module_boundary_adoption(
     trace: "Trace", t: torch.Tensor, label: str | None, boundary: str, module_address: str
 ) -> None:

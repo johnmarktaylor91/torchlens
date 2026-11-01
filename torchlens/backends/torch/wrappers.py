@@ -121,7 +121,7 @@ from .param_mutation import (
     parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
     receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
 )
-from .sources import log_source_tensor
+from .sources import log_closure_constant_if_known, log_source_tensor
 
 if TYPE_CHECKING:
     pass
@@ -1732,6 +1732,11 @@ def torch_func_decorator(
             address = resolve_or_late_index_buffer_address(trace, t)
             if address is not None and get_tensor_label(t) is None:
                 log_source_tensor(trace, t, "buffer", address)
+            elif address is None:
+                # A tensor the forward closes over (SPEC 2 rule 1) becomes a
+                # ``constant`` source op on first use; anything not proven
+                # pre-forward stays unattributed.
+                log_closure_constant_if_known(trace, t)
 
         # Intercept print functions to show TorchLens label info in repr.
         if is_print_func and arg_tensorlike:

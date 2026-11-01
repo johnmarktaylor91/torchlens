@@ -8,6 +8,7 @@ cells are that rebuild's acceptance test.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Sequence
 from typing import Any
 
@@ -21,6 +22,19 @@ TORCH_FRAMEWORK = FrameworkRequirement(
     pinned="2.13.0",
     extra="",
 )
+
+
+def replay_ready_capture() -> Any:
+    """The ``CaptureOptions`` the protocol's capture uses when the caller passes none.
+
+    Torch's replay validation re-executes each op from its saved arguments
+    and RNG state, which a default ``tl.trace`` does not record (the preview
+    backends record what their replay needs by default).
+    """
+
+    from ...options import CaptureOptions
+
+    return CaptureOptions(save_args=True, save_rng=True)
 
 
 class TorchProtocol(SpecBackedProtocol):
@@ -66,6 +80,65 @@ class TorchProtocol(SpecBackedProtocol):
 
         return super().runtime_available()
 
+    def capture(self, model: Any, args: Any, kwargs: dict[str, Any] | None, **options: Any) -> Any:
+        """Capture through the public ``tl.trace`` entry with ``backend="torch"``.
+
+        Forward kwargs travel only in ``kwargs`` (``tl.trace``'s
+        ``input_kwargs``). Without a caller ``capture=``, the capture records
+        what :meth:`validate` replays from (:func:`replay_ready_capture`). ``options`` are trace keywords; one that is not a
+        named ``tl.trace`` parameter would otherwise fall into ``tl.trace``'s
+        forward-kwargs catch-all and reach the model silently, so it refuses
+        typed (``trace_option_unsupported``) before anything runs.
+
+        Raises
+        ------
+        BackendUnsupportedError
+            ``trace_option_unsupported`` for an unknown trace keyword.
+        """
+
+        from ...user_funcs import trace
+
+        unknown = sorted(set(options) - _trace_keyword_names())
+        if unknown:
+            from ..registry import BackendUnsupportedError
+
+            raise BackendUnsupportedError(
+                f"The torch backend protocol does not recognise trace option(s) "
+                f"{unknown}: they are not tl.trace parameters, and passing them "
+                "on would forward them to the model.",
+                code="trace_option_unsupported",
+                remedy="put model keyword arguments in kwargs; use documented tl.trace options",
+                backend="torch",
+                option=unknown[0],
+            )
+        if "capture" not in options:
+            options = {**options, "capture": replay_ready_capture()}
+        return trace(model, args, input_kwargs=kwargs, backend="torch", **options)
+
+    def validate(self, trace: Any, ground_truth: Any) -> Any:
+        """Replay-validate through ``Trace.validate_forward_pass``; return its status.
+
+        ``validate_forward_pass`` keeps every entry refusal and the full
+        tripwire; for torch it returns a bool and records the status object,
+        which this method returns (the protocol never returns a bare bool).
+
+        Parameters
+        ----------
+        trace:
+            A torch ``Trace``.
+        ground_truth:
+            The reference outputs (a tensor or a nested container of tensors,
+            as :meth:`reference_output` returns them).
+
+        Returns
+        -------
+        ValidationStatus
+            The replay status from this validation run.
+        """
+
+        trace.validate_forward_pass(_ground_truth_tensors(ground_truth))
+        return trace.validation_replay_status
+
     def reference_output(self, model: Any, args: Any, kwargs: dict[str, Any] | None) -> Any:
         """Run the model on pristine torch: wrappers removed for the call."""
 
@@ -95,6 +168,41 @@ class TorchProtocol(SpecBackedProtocol):
         """Eager framework: no evaluation step."""
 
         return None
+
+
+def _trace_keyword_names() -> frozenset[str]:
+    """Named ``tl.trace`` parameters other than the model, its inputs and ``backend``."""
+
+    from ...user_funcs import trace
+
+    parameters = inspect.signature(trace).parameters.values()
+    return frozenset(
+        parameter.name
+        for parameter in parameters
+        if parameter.kind is not inspect.Parameter.VAR_KEYWORD
+        and parameter.name not in {"model", "input_args", "input_kwargs", "backend"}
+    )
+
+
+def _ground_truth_tensors(ground_truth: Any) -> list[Any]:
+    """Detached clones of the reference outputs' tensor leaves, deduplicated.
+
+    Uses the capture-side output walker (the one ``tl.validate_forward_pass``
+    uses for its own ground truth), so leaf order and deduplication match how
+    the trace recorded its outputs.
+    """
+
+    from ..torch.ops import _walk_output_tensors_with_paths
+
+    tensors: list[Any] = []
+    seen: set[tuple[Any, ...]] = set()
+    for tensor, path, _spec in _walk_output_tensors_with_paths(ground_truth):
+        key = tuple(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        tensors.append(tensor.detach().clone())
+    return tensors
 
 
 def protocol() -> TorchProtocol:

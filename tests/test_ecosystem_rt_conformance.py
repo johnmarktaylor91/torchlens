@@ -65,10 +65,10 @@ def _rows(report: ConformanceReport, case_id: str) -> list[Any]:
 
 #: Torch-side gaps pinned by exact cell id (the same table as
 #: tests/test_conformance_protocol_cells.py; cross-packet requests in the lane's RESULT.md):
-#: the tamper verdict's reason is not in ``VALIDATION_REASONS`` yet, and a loaded portable
-#: bundle has no callables for replay validation. A fix flips the pin; the cells stay strict.
-_TORCH_KNOWN_GAPS = frozenset({"c1_validation_names_reason", "c2_validation_after_load"})
-_FAKE_KNOWN_GAPS = frozenset({"c1_validation_names_reason", "c2_validation_after_load"})
+#: the tamper verdict's reason is not in ``VALIDATION_REASONS`` yet. A fix flips the pin;
+#: the cells stay strict.
+_TORCH_KNOWN_GAPS = frozenset({"c1_validation_names_reason"})
+_FAKE_KNOWN_GAPS = frozenset({"c1_validation_names_reason"})
 _TORCH_GAP_REASON = "torch's tamper verdict reason is not in VALIDATION_REASONS (pinned gap)"
 
 

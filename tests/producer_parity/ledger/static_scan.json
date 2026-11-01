@@ -3768,6 +3768,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/_protocols/torch.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "_edge_uses",
   "file": "torchlens/backends/jax/backend.py",
@@ -6362,9 +6370,41 @@
  {
   "ambiguous": true,
   "field": "parents",
+  "file": "torchlens/conformance/_graduation.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/conformance/_protocol_cases.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
   "file": "torchlens/conformance/_protocol_cases.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/conformance/_protocol_cases.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/conformance/_refusal_cases.py",
+  "has_default": false,
+  "sites": 7,
   "via_getattr": false
  },
  {
@@ -8156,7 +8196,7 @@
   "field": "parents",
   "file": "torchlens/receptive_field/_rules.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -9043,6 +9083,22 @@
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/validation/_completeness_backstop.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "func_call_id",
+  "file": "torchlens/validation/_constant_source.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/validation/_constant_source.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true

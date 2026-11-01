@@ -86,7 +86,7 @@ from .escape_detection import (
     expected_original_call,
     mark_expected_original_accounted,
 )
-from .sources import log_source_tensor
+from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import _append_module_suffix_to_equivalence_class
 
 # Cache class-level module metadata (inspect.getsourcelines, inspect.signature, etc.)
@@ -1234,6 +1234,8 @@ def _record_module_entry_metadata(
         if label is None and buffer_address is not None:
             log_source_tensor(trace, t, "buffer", buffer_address)
             label = get_tensor_label(t)
+        if label is None and log_closure_constant_if_known(trace, t):
+            label = get_tensor_label(t)
         if label is None:
             # An untagged tensor enters a module. A genuine raw
             # ``register_forward_hook`` output replacement is already tagged at
@@ -2052,6 +2054,10 @@ def _record_module_exit_metadata(
                         t, tuple(intervention_parent_labels), trace
                     )
             tensor_label = get_live_tensor_label(t, trace.capture_events.live_index.by_raw_label)
+        if tensor_label is None and not fire_results and log_closure_constant_if_known(trace, t):
+            # A module returning a tensor its forward closes over (SPEC 2 rule 1)
+            # returns a closure constant, recorded as a ``constant`` source op.
+            tensor_label = get_tensor_label(t)
         if tensor_label is None:
             # A live module-boundary intervention deliberately clears copied op
             # labels and leaves typed fire metadata on its fresh output. Preserve

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import fields as dataclass_fields
+from pathlib import Path
 from typing import Any
 
 from ._adapters import RosterModel
@@ -668,8 +669,64 @@ def _rng_once_body(adapter: Any, model: RosterModel) -> tuple[str, ...]:
     return tuple(problems)
 
 
+def load_for_replay(adapter: Any, trace: Any, path: Path, loaded: Any) -> Any:
+    """The reloaded trace ``c2_validation_after_load`` validates.
+
+    An adapter whose replay validation re-executes from saved arguments
+    declares ``replay_save_level`` (torch: ``"executable_with_callables"``, the
+    level that ships re-execution payloads); the live trace is saved again at
+    that level beside ``path`` and reloaded. Other adapters validate the
+    default-level reload. A failure is returned as the exception, so only the
+    after-load cell turns red.
+
+    Parameters
+    ----------
+    adapter:
+        The resolved adapter.
+    trace:
+        The live trace.
+    path:
+        The default-level artifact path (the replay artifact sits beside it).
+    loaded:
+        The default-level reload.
+
+    Returns
+    -------
+    Any
+        The trace to validate, or the exception that prevented producing it.
+    """
+
+    level = getattr(adapter, "replay_save_level", None)
+    if level is None:
+        return loaded
+    import warnings
+
+    replay_path = path.with_name(f"{path.stem}_replay{path.suffix}")
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            adapter.save(trace, replay_path, level=level)
+            return adapter.load(replay_path)
+    except Exception as exc:  # noqa: BLE001 - a provider failure becomes this cell's red row
+        return exc
+
+
+def _validate_after_load_problems(protocol: Any, replay_loaded: Any, reference: Any) -> Any:
+    """Problems of ``c2_validation_after_load``; a failed replay save or load is re-raised."""
+
+    if isinstance(replay_loaded, BaseException):
+        raise replay_loaded
+    return validation_status_problems(protocol.validate(replay_loaded, _as_output_list(reference)))
+
+
 def run_c2_protocol_row_cases(
-    adapter: Any, model: RosterModel, trace: Any, loaded: Any, reference: Any
+    adapter: Any,
+    model: RosterModel,
+    trace: Any,
+    loaded: Any,
+    reference: Any,
+    *,
+    replay_loaded: Any = None,
 ) -> list[CaseResult]:
     """The per-row protocol C2 cells: payload equality and validation after load.
 
@@ -685,6 +742,9 @@ def run_c2_protocol_row_cases(
         The reloaded trace.
     reference:
         The direct-run reference output.
+    replay_loaded:
+        The reload ``c2_validation_after_load`` validates (see
+        :func:`load_for_replay`); ``None`` validates ``loaded``.
 
     Returns
     -------
@@ -706,8 +766,8 @@ def run_c2_protocol_row_cases(
             "c2_validation_after_load",
             "C2",
             model,
-            lambda: validation_status_problems(
-                protocol.validate(loaded, _as_output_list(reference))
+            lambda: _validate_after_load_problems(
+                protocol, loaded if replay_loaded is None else replay_loaded, reference
             ),
         ),
     ]

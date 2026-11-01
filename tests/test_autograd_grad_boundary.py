@@ -26,9 +26,22 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.validation.core as validation_core
+from torchlens._state import pause_logging
 from torchlens.validation import last_validation_failure
 
 _GLOBAL_OFFSET = torch.randn(3)
+
+
+def _unseen(t: torch.Tensor) -> torch.Tensor:
+    """Copy ``t`` with logging paused: a tensor the capture never sees.
+
+    A pre-forward closure or global tensor is recorded as a ``constant`` source
+    op, so a genuine provenance gap is planted with a tensor first built
+    mid-forward while logging is paused.
+    """
+
+    with pause_logging():
+        return t.clone()
 
 
 def _validate(model: nn.Module, *inputs: torch.Tensor) -> bool:
@@ -126,7 +139,7 @@ class _TwoCallsDifferentArity(nn.Module):
 
 
 class _GradWithGlobal(nn.Module):
-    """A recorded grad in a model that also reads an unrecorded module-global tensor."""
+    """A recorded grad in a model that also reads a tensor the capture never saw."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -135,7 +148,7 @@ class _GradWithGlobal(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         loss = (x * self.w).pow(2).sum()
         (g,) = torch.autograd.grad(loss, [self.w], create_graph=True)
-        return (self.w - g) * x + _GLOBAL_OFFSET
+        return (self.w - g) * x + _unseen(_GLOBAL_OFFSET)
 
 
 def test_autograd_grad_in_forward_is_a_recorded_boundary_op() -> None:
