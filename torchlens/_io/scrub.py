@@ -641,38 +641,39 @@ _SCRUB_SPEC_OBJECT = 10
 _SCRUB_VALUE_KINDS: weakref.WeakKeyDictionary[type, int] = weakref.WeakKeyDictionary()
 
 
+#: Container classification order for :func:`_scrub_value_kind`: exactly the
+#: ``isinstance`` chain it replaces. ``torch.Size`` precedes ``tuple`` (it is a
+#: tuple subclass) and ``OrderedDict``/``defaultdict`` precede plain ``dict`` so
+#: their observable ordering and default-factory behavior survive a round trip.
+_SCRUB_KIND_ORDER: tuple[tuple[type | tuple[type, ...], int], ...] = (
+    (_SIMPLE_KEEP_TYPES, _SCRUB_SIMPLE),
+    (torch.Size, _SCRUB_SIZE),
+    (BlobRef, _SCRUB_BLOBREF),
+    (list, _SCRUB_LIST),
+    (tuple, _SCRUB_TUPLE),
+    (set, _SCRUB_SET),
+    (frozenset, _SCRUB_FROZENSET),
+    (OrderedDict, _SCRUB_ORDERED_DICT),
+    (dict, _SCRUB_MAPPING),
+)
+
+
 def _scrub_value_kind(value_type: type) -> int:
     """Classify one node type for :func:`_scrub_value`, memoized per type.
 
-    The branch order below is exactly the ``isinstance`` chain it replaces:
-    ``torch.Size`` before ``tuple`` (it is a tuple subclass), and
-    ``OrderedDict``/``defaultdict`` before plain ``dict`` so their observable
-    ordering and default-factory behavior survive a round trip. A spec owner is
-    only recognized after every container kind, as the old chain did.
+    Containers are matched in :data:`_SCRUB_KIND_ORDER`; a spec owner is only
+    recognized after every container kind, as the old chain did, and anything
+    else is a spec-less leaf.
     """
 
-    if issubclass(value_type, _SIMPLE_KEEP_TYPES):
-        kind = _SCRUB_SIMPLE
-    elif issubclass(value_type, torch.Size):
-        kind = _SCRUB_SIZE
-    elif issubclass(value_type, BlobRef):
-        kind = _SCRUB_BLOBREF
-    elif issubclass(value_type, list):
-        kind = _SCRUB_LIST
-    elif issubclass(value_type, tuple):
-        kind = _SCRUB_TUPLE
-    elif issubclass(value_type, set):
-        kind = _SCRUB_SET
-    elif issubclass(value_type, frozenset):
-        kind = _SCRUB_FROZENSET
-    elif issubclass(value_type, OrderedDict):
-        kind = _SCRUB_ORDERED_DICT
-    elif issubclass(value_type, dict):
-        kind = _SCRUB_MAPPING
-    elif getattr(value_type, "_PORTABLE_STATE_SPEC", None) is not None:
-        kind = _SCRUB_SPEC_OBJECT
+    kind = _SCRUB_OBJECT
+    for base, candidate in _SCRUB_KIND_ORDER:
+        if issubclass(value_type, base):
+            kind = candidate
+            break
     else:
-        kind = _SCRUB_OBJECT
+        if getattr(value_type, "_PORTABLE_STATE_SPEC", None) is not None:
+            kind = _SCRUB_SPEC_OBJECT
     _SCRUB_VALUE_KINDS[value_type] = kind
     return kind
 
@@ -1105,11 +1106,10 @@ def _scrub_object_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
 def _scrub_spec_object(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     """Scrub an object that declares a ``_PORTABLE_STATE_SPEC``, field by field.
 
-    An undeclared live field is refused (:func:`_undeclared_field_error`)
-    unless it is a ``functools.cached_property`` cell (derived state, skipped).
-    DROP/WEAKREF_STRIP and plain KEEP are resolved inline, in ``_scrub_field``'s
-    own branch order, because this loop scrubs hundreds of thousands of fields per ResNet save
-    and one Python call per field was measurable.
+    On the payload walk an encodable spec object is blobbed whole; otherwise
+    its fields follow their declared policies on a plain metadata walk
+    (:meth:`_ScrubWalk.for_fields`). The object is memoized before its fields
+    are scrubbed so self-references resolve to the scrubbed copy.
     """
 
     owner = walk.payload_owner
@@ -1125,28 +1125,46 @@ def _scrub_spec_object(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     obj_id = id(value)
     if obj_id in memo:
         return memo[obj_id]
-    spec: Mapping[str, FieldPolicy] = type(value)._PORTABLE_STATE_SPEC
     scrubbed_obj = state_new(type(value))
     _pin_in_memo(memo, value)
     memo[obj_id] = scrubbed_obj
-    scrubbed_state: dict[str, Any] = {}
     owner_is_trace = isinstance(value, Trace)
+    scrubbed_state = _scrub_spec_fields(value, walk, depth, owner_is_trace=owner_is_trace)
+    if owner_is_trace:
+        _stamp_trace_portable_rows(value, scrubbed_state, walk.options)
+    else:
+        _apply_owner_source_policies(value, scrubbed_state, walk.options)
+    return state_restore(scrubbed_obj, scrubbed_state)
+
+
+def _scrub_spec_fields(
+    value: Any, walk: _ScrubWalk, depth: int, *, owner_is_trace: bool
+) -> dict[str, Any]:
+    """Return the scrubbed state of a ``_PORTABLE_STATE_SPEC`` owner.
+
+    An undeclared live field is refused (:func:`_undeclared_field_error`)
+    unless it is a ``functools.cached_property`` cell (derived state, skipped).
+    DROP/WEAKREF_STRIP and plain KEEP are resolved inline, in ``_scrub_field``'s
+    own branch order, because this loop scrubs hundreds of thousands of fields
+    per ResNet save and one Python call per field was measurable.
+    """
+
+    spec: Mapping[str, FieldPolicy] = type(value)._PORTABLE_STATE_SPEC
+    raw_fields = _TRACE_RAW_FIELDS if owner_is_trace else frozenset[str]()
+    scrubbed_state: dict[str, Any] = {}
     for field_name, field_value in _state_items_for_scrub(value, spec):
         if owner_is_trace and _is_runtime_only_trace_field(field_name):
             continue
         declared = spec.get(field_name)
         if declared is None:
-            if _is_cached_property_cell(type(value), field_name):
-                continue
-            raise _undeclared_field_error(value, field_name, owner_is_trace)
+            _refuse_undeclared_field(value, field_name, owner_is_trace)
+            continue
         if field_name in _NORMALIZED_FIELD_NAMES:
             field_value = _normalize_field_value(field_name, field_value)
         policy = _effective_policy(value, field_name, declared, walk.options)
-        if policy is FieldPolicy.DROP or policy is FieldPolicy.WEAKREF_STRIP:
+        if policy in _NULLED_POLICIES:
             scrubbed_state[field_name] = None
-        elif policy is FieldPolicy.KEEP and not (
-            owner_is_trace and field_name in _TRACE_RAW_FIELDS
-        ):
+        elif policy is FieldPolicy.KEEP and field_name not in raw_fields:
             scrubbed_state[field_name] = _scrub_node(field_value, walk, depth + 1)
         else:
             scrubbed_state[field_name] = _scrub_field(
@@ -1157,11 +1175,7 @@ def _scrub_spec_object(value: Any, walk: _ScrubWalk, depth: int) -> Any:
                 walk=walk,
                 depth=depth + 1,
             )
-    if owner_is_trace:
-        _stamp_trace_portable_rows(value, scrubbed_state, walk.options)
-    else:
-        _apply_owner_source_policies(value, scrubbed_state, walk.options)
-    return state_restore(scrubbed_obj, scrubbed_state)
+    return scrubbed_state
 
 
 #: Per-kind scrub rules, indexed by the :func:`_scrub_value_kind` constants.
@@ -1190,6 +1204,8 @@ _SCRUB_NODE_HANDLERS: tuple[Callable[[Any, _ScrubWalk, int], Any], ...] = (
 
 #: Trace fields whose KEEP policy still routes through the raw-value save policy.
 _TRACE_RAW_FIELDS = frozenset({"raw_input", "raw_output"})
+#: Policies whose field is written back as ``None`` without a walk.
+_NULLED_POLICIES = frozenset({FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP})
 
 #: Fields whose live value is normalized before its policy applies.
 _NORMALIZED_FIELD_NAMES = frozenset({"_is_in_conditional_body", "_capture_outcome"})
@@ -1206,6 +1222,13 @@ def _normalize_field_value(field_name: str, field_value: Any) -> Any:
         # class, and loads parse the payload against closed vocabularies.
         return field_value.to_payload() if hasattr(field_value, "to_payload") else None
     return field_value
+
+
+def _refuse_undeclared_field(owner: Any, field_name: str, owner_is_trace: bool) -> None:
+    """Refuse a live field missing from the spec unless it is a cached_property cell."""
+
+    if not _is_cached_property_cell(type(owner), field_name):
+        raise _undeclared_field_error(owner, field_name, owner_is_trace)
 
 
 def _is_cached_property_cell(owner_type: type, field_name: str) -> bool:

@@ -310,7 +310,7 @@ torchlens/_io/runnable_load.py::attach_sparse_run_readiness	178
 torchlens/_io/runnable_load.py::parse_sparse_run_descriptor	111
 torchlens/_io/runnable_load.py::preflight_sparse_run_descriptor	110
 torchlens/_io/save_policy.py::_resolve_include_flags	101
-torchlens/_io/scrub.py	1923
+torchlens/_io/scrub.py	1946
 torchlens/_io/scrub.py::_effective_policy	79
 torchlens/_io/scrub.py::_is_runtime_only_trace_field	70
 torchlens/_io/scrub.py::_rebuild_tuple_value	67
