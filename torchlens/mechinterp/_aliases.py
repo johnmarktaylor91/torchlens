@@ -305,7 +305,7 @@ def _site_coordinates(module: Any, facet: str) -> tuple[str | None, int | None]:
     value = module.facets.get(facet)
     spec = getattr(value, "spec", None)
     home = getattr(spec, "home", None)
-    return getattr(home, "site_key", None), getattr(home, "pass_index", None)
+    return getattr(home, "site_key", None), getattr(home, "pass_number", None)
 
 
 def _resolve_on(module: Any, query: _Query, facet: str) -> AliasResolution:
