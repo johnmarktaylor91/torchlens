@@ -109,6 +109,14 @@ def _door_name(func: ast.expr) -> str | None:
             return DOORS.get(name.value) if isinstance(name, ast.Constant) else None
     if isinstance(func, ast.Name):
         return DOORS.get(func.id)
+    if (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Call)
+        and isinstance(func.value.func, ast.Name)
+        and func.value.func.id == "_tl"
+        and not func.value.args
+    ):
+        return DOORS.get(func.attr)
     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
         if func.value.id in {"tl", "torchlens", "_tl", "_user_funcs", "tl.bridge.transformers"}:
             return DOORS.get(func.attr)

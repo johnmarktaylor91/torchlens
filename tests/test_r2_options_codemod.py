@@ -20,7 +20,7 @@ def _rewrite(source: str) -> tuple[str, list[str]]:
     return rewritten, reports
 
 
-@pytest.mark.parametrize("prefix", ["tl", "torchlens"])
+@pytest.mark.parametrize("prefix", ["tl", "torchlens", "_tl()"])
 def test_inline_selection_moves_and_drops_empty_capture(prefix: str) -> None:
     source = f'{prefix}.trace(model, x, capture=CaptureOptions(layers_to_save=["relu"], save_preview=False))'
     rewritten, reports = _rewrite(source)
