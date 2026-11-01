@@ -120,7 +120,7 @@ def test_summary_includes_phase13_sections() -> None:
     """The discoverability fields live on provenance() (summary memo 3.6)."""
 
     log = _capture(name="phase13_summary")
-    summary = log.provenance.summary()
+    summary = log.provenance._summary()
 
     assert "TorchLens Discoverability Summary" in summary
     assert "state:" in summary

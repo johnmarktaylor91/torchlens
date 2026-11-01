@@ -164,7 +164,7 @@ def test_provenance_surfaces_output_postprocessing_and_output_table() -> None:
     """provenance() carries output decode provenance; output_table() the labels."""
 
     trace = _trace_batch_classifier()
-    summary = trace.provenance.summary()
+    summary = trace.provenance._summary()
 
     assert "Output postprocessing:" in summary
     assert "style=classification" in summary
@@ -180,7 +180,7 @@ def test_summary_surfaces_undetected_decode_hint() -> None:
     assert trace._decoded_output is None
     assert (
         "undetected; call trace.decode_output(style=..., head=...) to decode."
-        in trace.provenance.summary()
+        in trace.provenance._summary()
     )
 
 

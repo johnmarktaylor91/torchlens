@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-81 packages, 1265 modules, 620375 lines, 0 modules without a docstring.
+81 packages, 1265 modules, 620388 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -16,7 +16,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 36 | 23977 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 67 | 38498 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 67 | 38500 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
@@ -36,7 +36,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2114 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 33 | 21525 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 33 | 21536 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 64 | 42236 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 753 |
@@ -240,7 +240,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (67 modules, 38498 lines)
+Core data structures for representing a logged forward pass. (67 modules, 38500 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -275,7 +275,7 @@ Core data structures for representing a logged forward pass. (67 modules, 38498 
 | `_trace_export` | Trace export mixin. | 721 |
 | `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 846 |
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 334 |
-| `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 732 |
+| `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 734 |
 | `_trace_groups_capture` | Capture-side concern groups of a ''Trace'': ''trace.options'', ''trace.source'', ''trace.health''. | 424 |
 | `_trace_intervention` | Trace intervention mixin. | 1905 |
 | `_trace_intervention_records` | Envelope fields of one ''do'' intervention event. | 127 |
@@ -708,7 +708,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (33 modules, 21525 lines)
+Shared helpers used by two or more TorchLens packages. (33 modules, 21536 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -739,7 +739,7 @@ Shared helpers used by two or more TorchLens packages. (33 modules, 21525 lines)
 | `env_flags` | Closed-vocabulary parsing for torchlens-owned boolean environment knobs. | 269 |
 | `facade` | Shared five-step lazy-facade resolution for TorchLens namespaces. | 294 |
 | `fail_open` | The one audited fail-open chokepoint for degrade-not-raise surfaces. | 42 |
-| `hashing` | Barcode generation and graph hash helpers. | 560 |
+| `hashing` | Barcode generation and graph hash helpers. | 571 |
 | `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1104 |
 | `lazy_state` | Shared detection and enumeration of un-materialized lazy module state. | 167 |
 | `rng` | RNG and autocast state capture/restore for reproducible forward-pass replay. | 5080 |
@@ -834,7 +834,7 @@ Text helpers for ''Trace'' objects: the compact repr and the provenance block. (
 | --- | --- | ---: |
 | `__init__` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 6 |
 | `_builder` | The compact ''repr'' of a ''Trace''. | 75 |
-| `_discoverability` | The capture-provenance block served by ''trace.provenance.summary''. | 672 |
+| `_discoverability` | The capture-provenance block served by ''trace.provenance._summary''. | 672 |
 
 ### `torchlens._visualization.lenses`
 

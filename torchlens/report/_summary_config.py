@@ -64,7 +64,7 @@ REMOVED_SUMMARY_OPTIONS: dict[str, str] = {
     "print_to": "report.print(file=...) on the returned report, or print_to(str(report))",
     "count_fma_as_two": "flop_convention='fma2' (was True) or flop_convention='fma1' (was False)",
     "show_input_preprocessing_details": (
-        "trace.provenance.summary() and trace.input_preprocessor (verified, source, identifier)"
+        "trace.input_preprocessor (verified, source, identifier); the capture-provenance text block is trace.provenance._summary() until its public spelling is decided"
     ),
 }
 

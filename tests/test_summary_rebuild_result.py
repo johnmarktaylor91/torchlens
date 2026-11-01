@@ -3,7 +3,7 @@
 Summary memo 3.8 + composition rows 11/14/16: the result survives model
 and trace teardown; every numeric field is a plain int or None; renderer
 and projection values agree; HTML is escaped and dependency-free;
-``Trace.provenance.summary()`` serves the relocated preamble byte-for-byte.
+``Trace.provenance._summary()`` (interim private spelling) serves the relocated preamble byte-for-byte.
 """
 
 from __future__ import annotations
@@ -165,8 +165,8 @@ def test_provenance_is_the_preamble_byte_for_byte() -> None:
         format_discoverability_summary,
     )
 
-    assert trace.provenance.summary() == format_discoverability_summary(trace)
-    assert "TorchLens Discoverability Summary" in trace.provenance.summary()
+    assert trace.provenance._summary() == format_discoverability_summary(trace)
+    assert "TorchLens Discoverability Summary" in trace.provenance._summary()
 
 
 def test_details_serves_capture_facts() -> None:

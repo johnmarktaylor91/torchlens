@@ -97,7 +97,7 @@ its successor:
 | `mode=` | `level="op"`, or `fold_repeats=False` to unfold repeated runs |
 | `print_to=` | `report.print(file=...)`, or `print_to(str(report))` |
 | `count_fma_as_two=` | `flop_convention="fma2"` (was `True`) / `"fma1"` (was `False`) |
-| `show_input_preprocessing_details=` | `trace.provenance.summary()` and `trace.provenance.input_preprocessor` |
+| `show_input_preprocessing_details=` | `trace.provenance.input_preprocessor`; the capture-provenance text block keeps an interim private spelling (`trace.provenance._summary()`) until its public name is decided |
 | `level="overview"` | `view="overview"` (the default) |
 | `level="compute"`, `level="cost"` | `view="compute"` |
 | `level="graph"` | `trace.to_agent_json()` (op rows, edges, hierarchy) or `trace.draw()` |
@@ -203,8 +203,9 @@ neither the model nor the Trace and survives cleanup and GC:
 - Projections: `to_pandas(scope="display"|"all")`, `to_dict()` (bounded,
   JSON-safe), `to_markdown()`, `to_html()`, `render(style=)`, `print()`.
 - `report.details()` serves the capture facts;
-  `trace.provenance.summary()` returns the full historical provenance preamble
-  byte-for-byte (it no longer opens the table).
+  the full historical provenance preamble is served byte-for-byte by the
+  provenance group's text block (interim private spelling `trace.provenance._summary()`
+  until its public name is decided; it no longer opens the table).
 
 Capture honesty travels with the table: structure-only, unverified,
 partial, rescued, and episode captures banner ABOVE the table via the one
