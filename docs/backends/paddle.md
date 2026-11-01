@@ -4,7 +4,7 @@
 **preview**: its capabilities are measured by the shared conformance suite and shown in
 `tl.compat.report()` as the `backend_scorecard:paddle` row. Install it with
 `pip install "torchlens[paddle]"` (PaddlePaddle `>=3.3,<3.4`; the per-change test leg
-runs the pinned 3.3 release).
+runs the pinned 3.3.1 release).
 
 ## Tutorial
 

@@ -76,8 +76,8 @@ PADDLE_FRAMEWORK = FrameworkRequirement(
     distributions=("paddlepaddle",),
     minimum="3.3",
     below="3.4",
-    tested_through="3.3",
-    pinned=None,
+    tested_through="3.3.1",
+    pinned="3.3.1",
     extra="paddle",
 )
 

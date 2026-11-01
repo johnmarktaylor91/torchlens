@@ -429,7 +429,7 @@ jobs:
             import_check: "import tinygrad"
             executed_floor: 25
           - backend: paddle
-            install: '"paddlepaddle>=3.3,<3.4"'
+            install: '"paddlepaddle==3.3.1"'
             marker: backend_paddle
             import_check: "import paddle"
             executed_floor: 22
