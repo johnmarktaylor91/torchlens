@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from .._deprecations import MISSING
 from .registry import (
     BackendCapabilityConformanceError,
+    BackendRegistryError,
     BackendSpec,
     BackendUnsupportedError,
     require_capability_implementation,
@@ -69,6 +70,53 @@ def _undispatched_capability_error(
         "consume must not admit the option; keep the flag False or implement "
         "real dispatch in the capture path."
     )
+
+
+def _option_refusal_code(option_name: str) -> str:
+    """The contracted refusal code for one trace option a backend refuses (SPEC 1.3).
+
+    An option a capability flag owns (``TRACE_OPTION_CAPABILITY_GATES``) refuses
+    with that flag's code; every other option refuses with
+    ``trace_option_unsupported``.
+
+    Parameters
+    ----------
+    option_name:
+        Public trace option or extra keyword the backend refuses.
+
+    Returns
+    -------
+    str
+        A member of ``REFUSAL_CODES``.
+    """
+
+    from ._backend_protocol import refusal_code_for_capability
+
+    gate = TRACE_OPTION_CAPABILITY_GATES.get(option_name)
+    if gate is None:
+        return "trace_option_unsupported"
+    return refusal_code_for_capability(gate)
+
+
+def _options_refusal_code(option_names: Iterable[str]) -> str:
+    """One code for a refusal naming several options: theirs if shared, else the option code."""
+
+    codes = {_option_refusal_code(name) for name in option_names}
+    return codes.pop() if len(codes) == 1 else "trace_option_unsupported"
+
+
+def _output_device_refusal(policy: PreviewTraceOptionPolicy) -> Exception:
+    """The policy's ``output_device`` refusal, coded when its error type takes a code."""
+
+    message = str(policy.output_device_message)
+    if issubclass(policy.output_device_error, BackendRegistryError):
+        return policy.output_device_error(
+            message,
+            code=_option_refusal_code("output_device"),
+            backend=policy.backend_name,
+            option="output_device",
+        )
+    return policy.output_device_error(message)
 
 
 @dataclass(frozen=True)
@@ -641,9 +689,15 @@ def reject_extra_trace_kwargs(
     if not rejected:
         return
     names = ", ".join(sorted(rejected))
+    code = _options_refusal_code(rejected)
+    options = sorted(rejected)
     if policy.always_runtime or policy.runtime_option_names & set(rejected):
-        raise BackendUnsupportedError(policy.runtime_message.format(names=names))
-    raise BackendUnsupportedError(policy.fallback_message.format(names=names))
+        raise BackendUnsupportedError(
+            policy.runtime_message.format(names=names), code=code, options=options
+        )
+    raise BackendUnsupportedError(
+        policy.fallback_message.format(names=names), code=code, options=options
+    )
 
 
 def reject_unsupported_trace_options(
@@ -675,9 +729,19 @@ def reject_unsupported_trace_options(
     """
 
     if policy.input_kwargs_message is not None and options.get("input_kwargs"):
-        raise BackendUnsupportedError(policy.input_kwargs_message)
+        raise BackendUnsupportedError(
+            policy.input_kwargs_message,
+            code=_option_refusal_code("input_kwargs"),
+            backend=policy.backend_name,
+            option="input_kwargs",
+        )
     if policy.full_save_message is not None and options.get("layers_to_save") not in ("all", None):
-        raise BackendUnsupportedError(policy.full_save_message)
+        raise BackendUnsupportedError(
+            policy.full_save_message,
+            code=_option_refusal_code("layers_to_save"),
+            backend=policy.backend_name,
+            option="layers_to_save",
+        )
     for option_name, message in (policy.rejected_truthy_messages or {}).items():
         if options.get(option_name):
             if spec is not None:
@@ -685,14 +749,29 @@ def reject_unsupported_trace_options(
                 if gate is not None and getattr(spec.capabilities, gate):
                     require_capability_implementation(spec, gate)
                     raise _undispatched_capability_error(spec, gate, option_name)
-            raise BackendUnsupportedError(message)
+            raise BackendUnsupportedError(
+                message,
+                code=_option_refusal_code(option_name),
+                backend=policy.backend_name,
+                option=option_name,
+            )
     if policy.output_device_message is not None and options.get("output_device") != "same":
-        raise policy.output_device_error(policy.output_device_message)
+        raise _output_device_refusal(policy)
     if policy.save_raw_activations_false_message is not None and not options.get(
         "save_raw_activations"
     ):
-        raise BackendUnsupportedError(policy.save_raw_activations_false_message)
+        raise BackendUnsupportedError(
+            policy.save_raw_activations_false_message,
+            code=_option_refusal_code("save_raw_activations"),
+            backend=policy.backend_name,
+            option="save_raw_activations",
+        )
     if policy.save_window_message is not None and (
         options.get("lookback") != 0 or options.get("lookback_payload_policy") != "metadata_only"
     ):
-        raise BackendUnsupportedError(policy.save_window_message)
+        raise BackendUnsupportedError(
+            policy.save_window_message,
+            code=_option_refusal_code("lookback"),
+            backend=policy.backend_name,
+            option="lookback",
+        )

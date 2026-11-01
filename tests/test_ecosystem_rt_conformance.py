@@ -65,18 +65,11 @@ def _rows(report: ConformanceReport, case_id: str) -> list[Any]:
 
 #: Torch-side gaps pinned by exact cell id (the same table as
 #: tests/test_conformance_protocol_cells.py; cross-packet requests in the lane's RESULT.md):
-#: the public entry refuses ``grad_options=`` with the generic code, a failed replay status
-#: does not name the offending op in its message, and a loaded portable bundle has no
-#: callables for replay validation. A fix flips the pin; the cells stay strict.
-_TORCH_KNOWN_GAPS = frozenset(
-    {
-        "c1_refusal_intermediate_derived_grads",
-        "c1_validation_names_reason",
-        "c2_validation_after_load",
-    }
-)
+#: the tamper verdict's reason is not in ``VALIDATION_REASONS`` yet, and a loaded portable
+#: bundle has no callables for replay validation. A fix flips the pin; the cells stay strict.
+_TORCH_KNOWN_GAPS = frozenset({"c1_validation_names_reason", "c2_validation_after_load"})
 _FAKE_KNOWN_GAPS = frozenset({"c1_validation_names_reason", "c2_validation_after_load"})
-_TORCH_GAP_REASON = "torch refuses grad_options with backend_unsupported (pinned gap; P1)"
+_TORCH_GAP_REASON = "torch's tamper verdict reason is not in VALIDATION_REASONS (pinned gap)"
 
 
 def _failed_ids(report: ConformanceReport) -> set[str]:
@@ -93,9 +86,9 @@ def test_torch_reference_passes_the_full_ladder(tmp_path: Path) -> None:
     )
     assert _failed_ids(report) == set(_TORCH_KNOWN_GAPS)
     assert report.funnel["skipped"] == 0
-    assert report.earned_tier == "C0"  # the refusal gap sits in C1
+    assert report.earned_tier == "C0"  # the naming gap sits in C1
     # C0 is the static tier and needs no pretrained rows, so while the pins hold the
-    # hermetic roster earns torch exactly the C0 claim. When P1 lands the refusal code the
+    # hermetic roster earns torch exactly the C0 claim. When the remaining pins close the
     # ladder reaches C2 again and toys earn nothing: restore the unearned-claim asserts.
     assert report.is_claim_eligible is True
     assert claim_string(report) == "TorchLens provider API compatible, C0"

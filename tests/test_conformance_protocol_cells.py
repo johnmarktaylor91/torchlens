@@ -186,14 +186,12 @@ def test_plant_tables_partition_the_closed_plant_set() -> None:
 # The reference and the unplanted fake pass every new cell (harness sanity).
 
 #: Torch-side gaps the suite reports today, pinned by exact cell id with the detail each
-#: carries (cross-packet requests in the lane's RESULT.md): the public entry refuses
-#: ``grad_options=`` with the generic ``backend_unsupported`` code instead of the flag's
-#: code; the tamper verdict names the consumer with torch's ``arg_logging_mismatch``, a
-#: reason the closed list does not spell yet (a spelling for JMT, never added here); a
-#: loaded portable bundle carries no callables so replay validation refuses it. A fix flips
-#: the pin, and the entry must then be removed; the cells stay strict.
+#: carries (cross-packet requests in the lane's RESULT.md): the tamper verdict names the
+#: consumer with torch's ``arg_logging_mismatch``, a reason the closed list does not spell
+#: yet (a spelling for JMT, never added here); a loaded portable bundle carries no callables
+#: so replay validation refuses it. A fix flips the pin, and the entry must then be removed;
+#: the cells stay strict.
 TORCH_KNOWN_GAPS: dict[str, str] = {
-    "c1_refusal_intermediate_derived_grads": "backend_unsupported",
     "c1_validation_names_reason": "not in VALIDATION_REASONS",
     "c2_validation_after_load": "portable bundles drop them",
 }
@@ -232,12 +230,11 @@ def test_torch_reference_passes_every_protocol_cell(tmp_path: Path) -> None:
     assert card.scorecard_version == SCORECARD_VERSION
     assert card.maturity == "stable"
     assert card.framework_requirement["pinned"]
-    # The refusal gap sits in C1, so the ladder stops at C0 until P1 codes the refusal.
+    # The naming gap sits in C1, so the ladder stops at C0 until the status names the op.
     assert card.highest_tier == "C0"
     assert card.roster_groups == {"config_built": 2}
-    # SPEC 4.5: a False flag reads "unsupported" only once its refusal cell passes; while
-    # the refusal pin holds, the card says "untested". Flips with the pin.
-    assert card.capabilities["intermediate_derived_grads"] == "untested"
+    # SPEC 4.5: a False flag reads "unsupported" once its refusal cell passes.
+    assert card.capabilities["intermediate_derived_grads"] == "unsupported"
     assert all(
         state == "supported"
         for flag, state in card.capabilities.items()
@@ -245,10 +242,11 @@ def test_torch_reference_passes_every_protocol_cell(tmp_path: Path) -> None:
     ), card.capabilities
     assert [item.id for item in card.graduation] == ["G1", "G2", "G3", "G4", "G5", "G6"]
     # G1 and G2 read the pinned gaps; they flip with the gaps. G1 names the first red cell
-    # in suite order (a pinned one) and the flag the refusal pin leaves untested.
+    # in suite order (a pinned one); the coded grad_options refusal leaves no flag untested.
     g1 = card.graduation[0]
     assert not g1.met and any(gap in g1.detail for gap in TORCH_KNOWN_GAPS), g1
-    assert "capabilities untested: ['intermediate_derived_grads']" in g1.detail, g1
+    assert "c1_refusal_intermediate_derived_grads" not in g1.detail, g1
+    assert "capabilities untested" not in g1.detail, g1
     assert not card.graduation[1].met and "c2_validation_after_load" in card.graduation[1].detail
     assert card.counts["denominator"] == len(card.cells)
     assert scorecard_from_json(card.to_json()) == card
