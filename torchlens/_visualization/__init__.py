@@ -9,7 +9,6 @@ from typing import Any
 _USER_FUNC_EXPORTS = {
     "draw_backward",
     "draw_combined",
-    "show_bundle_graph",
     "show_model_graph",
 }
 
@@ -65,6 +64,5 @@ __all__ = [
     "draw_backward",
     "draw_combined",
     "render_surgery",
-    "show_bundle_graph",
     "show_model_graph",
 ]

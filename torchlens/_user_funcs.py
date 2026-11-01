@@ -4327,12 +4327,6 @@ def draw_combined(*args: Any, **kwargs: Any) -> str:
     return cast(str, _public_impls_module().draw_combined(*args, **kwargs))
 
 
-def show_bundle_graph(*args: Any, **kwargs: Any) -> str | None:
-    """Forward to the bundle graph rendering implementation."""
-
-    return cast(str | None, _public_impls_module().show_bundle_graph(*args, **kwargs))
-
-
 def validate_forward_pass(*args: Any, **kwargs: Any) -> bool:
     """Forward to the backend-dispatched forward validation implementation."""
 
@@ -4361,7 +4355,6 @@ _PUBLIC_IMPL_WRAPPER_NAMES = (
     "show_model_graph",
     "draw_backward",
     "draw_combined",
-    "show_bundle_graph",
     "validate_forward_pass",
     "validate_backward_pass",
     "validate_batch_of_models_and_inputs",

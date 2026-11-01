@@ -1,9 +1,9 @@
-"""Graphviz construction helpers for ``tl._visualization.show_bundle_graph``.
+"""The merged bundle graph behind ``Bundle.draw``.
 
 These walk a bundle's forward supergraph (and, when present, its backward
-graph) and add nodes, module clusters and edges to a Graphviz digraph. The
-public entry point and its argument checks stay in
-:mod:`torchlens._user_public_impls`.
+graph) and add nodes, module clusters and edges to a Graphviz digraph.
+:func:`draw_bundle` checks ``Bundle.draw``'s keywords (the ``Trace.draw``
+spellings) and translates them to the renderer's options.
 """
 
 from __future__ import annotations
@@ -440,7 +440,7 @@ def bundle_header_label(
 
 @dataclass(frozen=True)
 class BundlePictureOptions:
-    """The checked ``tl._visualization.show_bundle_graph`` arguments the bundle picture needs."""
+    """The checked ``Bundle.draw`` arguments the bundle picture needs."""
 
     outpath: str
     vis_mode: str
@@ -456,15 +456,15 @@ class BundlePictureOptions:
     show_legend: bool
 
 
-def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str | None:
-    """Build and render the bundle picture behind ``tl._visualization.show_bundle_graph``.
+def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str:
+    """Build and render the bundle picture behind ``Bundle.draw``.
 
-    Arguments are documented on :func:`torchlens._visualization.show_bundle_graph`, which
+    Arguments are documented on :meth:`torchlens.Bundle.draw`; :func:`draw_bundle`
     checks them first.
 
     Returns
     -------
-    str | None
+    str
         DOT source.
     """
 
@@ -525,4 +525,97 @@ def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str | Non
         from ._svg_compose import _inline_svg_file_local_images
 
         _inline_svg_file_local_images(f"{outpath}.svg")
+    return source
+
+
+#: Stem a bare ``Bundle.draw()`` (no path) writes under, collision-safe like ``Trace.draw``.
+DEFAULT_BUNDLE_DRAW_STEM = "bundle_modelgraph"
+
+#: ``Bundle.draw(graph=)`` (the ``Trace.draw`` spellings) -> the renderer's content direction.
+_GRAPH_TO_CONTENT = {"forward": "forward", "backward": "backward", "combined": "both"}
+
+
+def require_choice(argument: str, value: object, choices: tuple[object, ...]) -> None:
+    """Refuse ``value`` unless it is one of ``choices``."""
+
+    if value not in choices:
+        allowed = ", ".join(repr(choice) for choice in choices)
+        raise ValueError(f"{argument} must be one of {allowed}; received {value!r}.")
+
+
+def resolve_draw_target(
+    path: str | None, file_format: str | None, default_stem: str
+) -> tuple[str, str]:
+    """Return the output stem and format for a draw call.
+
+    The format is the path's extension when it names a known picture format,
+    else ``file_format``, else ``"pdf"``. A path with no extension writes
+    ``<path>.<format>``; no path writes a collision-safe ``default_stem`` file.
+
+    Raises
+    ------
+    ValueError
+        When the path's extension and ``file_format`` name different formats.
+    """
+
+    from ._render_utils import collision_safe_outpath, strip_known_extension
+
+    stem = None if path is None else strip_known_extension(str(path))
+    extension = None if path is None or stem == str(path) else str(path)[len(stem) + 1 :].lower()
+    if extension is not None and file_format is not None and extension != file_format.lower():
+        raise ValueError(
+            f"path {path!r} names format {extension!r} but file_format={file_format!r}; "
+            "drop one of them."
+        )
+    fileformat = extension or file_format or "pdf"
+    if stem is None:
+        return collision_safe_outpath(default_stem, fileformat), fileformat
+    return stem, fileformat
+
+
+def draw_bundle(  # noqa: PLR0913 - one keyword per Bundle.draw keyword
+    bundle: Any,
+    path: str | None,
+    *,
+    graph: str,
+    rolled: bool,
+    nodes: str,
+    direction: str | None,
+    theme: str,
+    show_legend: bool | None,
+    graph_overrides: dict[str, Any] | None,
+    node_overrides: dict[str, Any] | None,
+    edge_overrides: dict[tuple[str, str], Any] | None,
+    file_format: str | None,
+    open_viewer: bool,
+) -> str:
+    """Check ``Bundle.draw``'s keywords, render the merged graph and return its DOT source.
+
+    Arguments are documented on :meth:`torchlens.Bundle.draw`.
+    """
+
+    from ._render_utils import announce_written_graph, direction_to_rankdir
+
+    require_choice("nodes", nodes, ("ops", "members"))
+    require_choice("graph", graph, tuple(_GRAPH_TO_CONTENT))
+    if nodes == "members" and graph != "forward":
+        raise ValueError("nodes='members' draws the relation graph; leave graph='forward'.")
+    outpath, fileformat = resolve_draw_target(path, file_format, DEFAULT_BUNDLE_DRAW_STEM)
+    options = BundlePictureOptions(
+        outpath=outpath,
+        vis_mode="rolled" if rolled else "unrolled",
+        direction=_GRAPH_TO_CONTENT[graph],
+        rankdir=direction_to_rankdir("bottomup" if direction is None else direction),
+        graph_overrides=graph_overrides,
+        node_overrides=node_overrides,
+        edge_overrides=edge_overrides,
+        save_only=not open_viewer,
+        fileformat=fileformat,
+        nodes=nodes,
+        theme_name=theme,
+        show_legend=show_legend is True,
+    )
+    source = render_bundle_graph(bundle, options)
+    if path is None:
+        announce_written_graph(f"{outpath}.{fileformat}")
     return source

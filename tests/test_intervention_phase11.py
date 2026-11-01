@@ -88,14 +88,14 @@ def test_as_node_inserts_hook_node_between_site_and_consumers(tmp_path: Path) ->
         log.cleanup()
 
 
-def test_bundle_show_accepts_vis_mode_none() -> None:
-    """``Bundle.show`` accepts render kwargs and skips on ``vis_mode='none'``."""
+def test_bundle_show_strip_accepts_vis_mode_none() -> None:
+    """``Bundle.show(kind="strip")`` accepts render kwargs and skips on ``vis_mode='none'``."""
 
     log = _interventions()
     clean = tl.trace(_ReluAdd(), torch.randn(2, 3))
     try:
         bundle = tl.Bundle({"intervened": log, "clean": clean})
-        assert bundle.show(vis_mode="none") == {"intervened": None, "clean": None}
+        assert bundle.show(kind="strip", vis_mode="none") == {"intervened": None, "clean": None}
     finally:
         log.cleanup()
         clean.cleanup()

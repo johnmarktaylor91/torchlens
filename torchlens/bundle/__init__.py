@@ -80,6 +80,7 @@ if TYPE_CHECKING:
     from .._capture.outcome import CaptureOutcome
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
+    from .._literals import VisDirectionLiteral
 
 
 _OP_LABEL_RE = re.compile(r"^.+_\d+_\d+$")
@@ -1526,27 +1527,137 @@ class Bundle:
                 count += 1
         return count >= 2
 
-    def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, str | None]:
-        """Render each bundle member graph as a member-keyed strip.
+    def draw(  # noqa: PLR0913 - the Trace.draw keywords the merged picture honours
+        self,
+        path: str | None = None,
+        *,
+        graph: Literal["forward", "backward", "combined"] = "forward",
+        rolled: bool = False,
+        nodes: Literal["ops", "members"] = "ops",
+        direction: VisDirectionLiteral | None = None,
+        theme: str = "torchlens",
+        show_legend: bool | None = None,
+        graph_overrides: dict[str, Any] | None = None,
+        node_overrides: dict[str, Any] | None = None,
+        edge_overrides: dict[tuple[str, str], Any] | None = None,
+        file_format: str | None = None,
+        open_viewer: bool = False,
+    ) -> str:
+        """Draw the merged bundle graph: the shared model graph, differences highlighted.
+
+        One picture of every member: a node or arrow some members lack names
+        the members that run it. The keywords are ``Trace.draw``'s, except
+        ``nodes=``.
+
+        Parameters
+        ----------
+        path:
+            Output path. Its extension picks the format (``"diff.svg"`` writes
+            SVG); a path with no extension writes ``<path>.<file_format>``.
+            ``None`` (the default) writes a collision-safe
+            ``bundle_modelgraph.<format>`` in the current directory and prints
+            its path, so a bare ``draw()`` never overwrites an earlier picture.
+        graph:
+            ``"forward"`` (the ops), ``"backward"`` (the captured grad_fn
+            graph) or ``"combined"`` (both in one picture).
+        rolled:
+            ``True`` draws each repeated module once; ``False`` (default)
+            draws every pass.
+        nodes:
+            What the picture's nodes are (spelling documented-unstable).
+            ``"ops"`` (default): the bundle's merged op graph. ``"members"``:
+            one node per member and one edge per relation row, from the
+            earlier member to the later one, labelled with the kind, the
+            row's ``label`` and, on ``fed_by``, its basis and coverage; solid
+            edges carry token spans TorchLens checked, every other row is
+            dashed. Node overrides key by member name, edge overrides by
+            ``(earlier, later)``; ``graph`` must stay ``"forward"``.
+        direction:
+            Layout direction: ``"bottomup"`` (default), ``"topdown"``,
+            ``"leftright"`` or ``"rightleft"``.
+        theme:
+            Skin preset, the names ``Trace.draw`` takes: ``"torchlens"``
+            (default), ``"paper"``, ``"dark"``, ``"colorblind"`` or
+            ``"high_contrast"``. Op nodes take ``Trace.draw``'s shapes and
+            fills; a node or arrow every member runs carries no member list.
+        show_legend:
+            ``True`` draws the key under the header, as ``Trace.draw`` does.
+        graph_overrides, node_overrides, edge_overrides:
+            Graphviz attribute overrides for the graph, per node (keyed by op
+            label, or member name under ``nodes="members"``) and per edge
+            (keyed by ``(source, target)``).
+        file_format:
+            Output format when ``path`` has no extension (``"pdf"`` when
+            neither names one). Naming a different format than the path's
+            extension raises ``ValueError``.
+        open_viewer:
+            ``True`` opens the written picture in the system viewer; the
+            default never opens anything.
+
+        Returns
+        -------
+        str
+            The Graphviz DOT source of the picture.
+        """
+
+        from .._visualization._bundle_graph import draw_bundle
+
+        return draw_bundle(
+            self,
+            path,
+            graph=graph,
+            rolled=rolled,
+            nodes=nodes,
+            direction=direction,
+            theme=theme,
+            show_legend=show_legend,
+            graph_overrides=graph_overrides,
+            node_overrides=node_overrides,
+            edge_overrides=edge_overrides,
+            file_format=file_format,
+            open_viewer=open_viewer,
+        )
+
+    def show(self, kind: str | None = None, **kwargs: Any) -> str | dict[str, str | None]:
+        """Show the bundle: by default the merged graph of where its members differ.
 
         Parameters
         ----------
         kind:
-            Picture kind forwarded to each member's :meth:`Trace.show`.
+            ``None`` (default) or ``"graph"``: the merged difference graph,
+            :meth:`draw` with ``**kwargs``. ``"strip"``: each member's own
+            graph, side by side, from each member's ``Trace.draw``.
+            ``"repr"`` / ``"html"``: each member's ``repr`` / HTML text.
         **kwargs:
-            Forwarded to each member's :meth:`Trace.show`. When an output
-            path is supplied, member names are appended to produce one artifact
-            per log. ``vis_mode='none'`` is accepted and returns without
-            rendering, matching ``Trace.show``.
+            Forwarded to :meth:`draw`, or under ``kind="strip"`` to each
+            member's ``Trace.draw``; there, when a ``path`` is supplied, member
+            names are appended to produce one artifact per member, and
+            ``vis_mode='none'`` returns without rendering.
 
         Returns
         -------
-        dict[str, str | None]
-            Member-keyed render results. Values are DOT source strings when
-            rendering occurs, or ``None`` for skipped ``vis_mode='none'`` calls.
+        str | dict[str, str | None]
+            The merged graph's DOT source; for the other kinds, member-keyed
+            results (DOT source, ``None`` for a skipped ``vis_mode='none'``
+            render, or the requested text).
+
+        Raises
+        ------
+        ValueError
+            For any other ``kind``.
         """
 
-        if kwargs.get("vis_mode") == "none":
+        from .._visualization._bundle_graph import require_choice
+
+        require_choice("kind", kind, (None, "graph", "strip", "repr", "html"))
+        if kind in (None, "graph"):
+            return self.draw(**kwargs)
+        return self._show_strip(kind, kwargs)
+
+    def _show_strip(self, kind: str | None, kwargs: dict[str, Any]) -> dict[str, str | None]:
+        """Render each member on its own: the ``strip``, ``repr`` and ``html`` kinds of :meth:`show`."""
+
+        if kind == "strip" and kwargs.get("vis_mode") == "none":
             return dict.fromkeys(self._members)
 
         base_outpath = kwargs.get("path")
