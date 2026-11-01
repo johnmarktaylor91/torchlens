@@ -42,6 +42,7 @@ from ._enums import (
 from ._errors import MergedArtifactError, MergeInputError
 from ._evidence import extract_rank_evidence
 from ._presenter import MergedTrace, _RankHandle
+from ._rules import is_strict_int
 
 __all__ = ["canonical_json_bytes", "load_merged", "save_merged", "tree_hash"]
 
@@ -555,9 +556,7 @@ def _cached_join_refs(join: Any, index: int) -> tuple[dict[str, Any], dict[int, 
         raise refuse("backend is not a string or null")
     for name in ("membership", "presence", "missing"):
         value = join.get(name)
-        if not isinstance(value, list) or any(
-            isinstance(rank, bool) or not isinstance(rank, int) for rank in value
-        ):
+        if not isinstance(value, list) or not all(is_strict_int(rank) for rank in value):
             raise refuse(f"{name} is not a list of integers")
     per_rank_payload = join.get("per_rank")
     if not isinstance(per_rank_payload, dict):
@@ -578,16 +577,14 @@ def _cached_join_refs(join: Any, index: int) -> tuple[dict[str, Any], dict[int, 
             digests[field] = None if value is None else tuple(value)
         for field in ("rank", "boundary_index", "seq_abs"):
             value = ref.get(field)
-            if isinstance(value, bool) or not isinstance(value, int):
+            if not is_strict_int(value):
                 raise refuse(f"per_rank entry {rank_key} {field} is not an integer")
         group_rank = ref.get("group_rank")
-        if group_rank is not None and (
-            isinstance(group_rank, bool) or not isinstance(group_rank, int)
-        ):
+        if group_rank is not None and not is_strict_int(group_rank):
             raise refuse(f"per_rank entry {rank_key} group_rank is not an integer or null")
         for field in ("n_contribution_roles", "n_destination_roles"):
             value = ref.get(field)
-            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            if not is_strict_int(value) or value < 0:
                 raise refuse(f"per_rank entry {rank_key} {field} is not a non-negative integer")
         op_labels = ref.get("op_labels_raw")
         if not isinstance(op_labels, list) or any(
@@ -884,7 +881,7 @@ def load_merged(path: str | Path) -> MergedTrace:
                 f"{sorted(_MEMBER_ENTRY_KEYS)}"
             )
         rank = entry["rank"]
-        if isinstance(rank, bool) or not isinstance(rank, int) or rank < 0:
+        if not is_strict_int(rank) or rank < 0:
             raise _schema_refusal(f"descriptor member rank {rank!r} is not a non-negative integer")
         if rank in validated_members:
             raise _schema_refusal(f"descriptor member rank {rank} is duplicated")
@@ -1012,8 +1009,7 @@ def load_merged(path: str | Path) -> MergedTrace:
     # against the closed shape (null or a list of non-negative ints) first.
     expected = cached.get("expected_ranks")
     if expected is not None and (
-        not isinstance(expected, list)
-        or any(isinstance(r, bool) or not isinstance(r, int) or r < 0 for r in expected)
+        not isinstance(expected, list) or any(not is_strict_int(r) or r < 0 for r in expected)
     ):
         raise _schema_refusal(
             "descriptor derivation cache expected_ranks is not null or a list of "
