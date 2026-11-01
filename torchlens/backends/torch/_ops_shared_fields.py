@@ -67,6 +67,21 @@ __all__ = (
 )
 
 
+def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
+    """Seed the gradient fields every op starts with before any backward pass."""
+    # Grad info
+    fields_dict["grad"] = None
+    fields_dict["transformed_grad"] = None
+    fields_dict["save_grads"] = getattr(self, "save_grads", None) not in (None, False)
+    fields_dict["has_grad"] = False
+    fields_dict["grad_shape"] = None
+    fields_dict["transformed_grad_shape"] = None
+    fields_dict["grad_dtype"] = None
+    fields_dict["transformed_grad_dtype"] = None
+    fields_dict["gradient_memory"] = 0
+    fields_dict["transformed_gradient_memory"] = None
+
+
 def _build_shared_fields_dict(
     self: "Trace",
     func: Callable[..., Any],
@@ -152,17 +167,7 @@ def _build_shared_fields_dict(
     fields_dict["container_spec"] = None
     fields_dict["multi_output_name"] = None
 
-    # Grad info
-    fields_dict["grad"] = None
-    fields_dict["transformed_grad"] = None
-    fields_dict["save_grads"] = getattr(self, "save_grads", None) not in (None, False)
-    fields_dict["has_grad"] = False
-    fields_dict["grad_shape"] = None
-    fields_dict["transformed_grad_shape"] = None
-    fields_dict["grad_dtype"] = None
-    fields_dict["transformed_grad_dtype"] = None
-    fields_dict["gradient_memory"] = 0
-    fields_dict["transformed_gradient_memory"] = None
+    _set_grad_info_fields(self, fields_dict)
 
     # Function call info
     fields_dict["func"] = func
