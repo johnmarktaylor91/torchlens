@@ -34,7 +34,7 @@ def _finish_run_status(
     self: Trace, decision_recorder: ValidationDecisionRecorder
 ) -> ValidationStatus:
     """Freeze the recorder into this run's status and stash it on the trace."""
-    status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
+    status = decision_recorder.as_status(backend=str(self._provenance_backend))
     setattr(self, "_validation_replay_status", status)
     return status
 

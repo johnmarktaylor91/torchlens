@@ -260,7 +260,7 @@ def _warn_module_filter_zero_saved(trace: Trace, module_filter: Any) -> None:
     if (
         module_filter is not None
         and module_filter_suppressed > 0
-        and int(getattr(trace, "num_saved_ops", 0) or 0) == 0
+        and int(trace._num_saved_ops or 0) == 0
     ):
         from ...errors import TorchLensWarning as _TorchLensWarning
 

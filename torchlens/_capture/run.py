@@ -345,13 +345,13 @@ def _attach_sessions(
     if not isinstance(getattr(self, "_stop_directive", None), StopDirective):
         self._stop_directive = StopDirective(
             halt_options=getattr(self, "_predicate_save_options", None),
-            raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
+            raise_on_nan=bool(self._options_on_nonfinite),
             forward_error_mode=getattr(
                 getattr(self, "_predicate_save_options", None),
                 "on_forward_error",
                 "raise",
             ),
-            inference_only=bool(getattr(self, "inference_only", False)),
+            inference_only=bool(self._options_inference_only),
         )
     self._capture_config = InternalCaptureConfig(
         capture_mode=str(self._options_mode),
@@ -414,7 +414,7 @@ def _instrument_model(self: "Trace", run: _RunState) -> None:
         run.compiled_prep = _enter_instrumentation(self, run, run.instrumentation)
     self._provenance_setup_duration = Duration(time.time() - self._provenance_start_time)
     _vprint(self, f"Model prepared ({self._provenance_setup_duration:.2f s})")
-    if getattr(self, "verbose", False):
+    if self._options_verbose:
         devices = set()
         for t in run.input_tensors or ():
             if hasattr(t, "device"):
