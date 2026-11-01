@@ -1116,7 +1116,6 @@ DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
     "test_tlspec_runnable_r65_torch_rng.py::test_cuda_default_get_offset_is_ceiled": _CUDA_DARK,
     "test_tlspec_runnable_r65_torch_rng.py::test_r67_cuda_default_get_offset_ceilings_every_run": _CUDA_DARK,
     "test_tlspec_runnable_r67_storage_metadata.py::test_r67_pinned_state_read_refuses_via_observation": _CUDA_DARK,
-    "test_transport_idiom.py::test_cross_device_channels_last_single_host_copy": _CUDA_DARK,
 }
 
 
