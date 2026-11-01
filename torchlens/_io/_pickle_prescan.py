@@ -490,8 +490,8 @@ def _literal(value: Any, budget: list[int]) -> Any:
     if isinstance(value, dict):
         return {_literal(k, budget): _literal(v, budget) for k, v in value.items()}
     if isinstance(value, (set, frozenset)):
-        members = {_literal(item, budget) for item in value}
-        return members if isinstance(value, set) else frozenset(members)
+        unique = {_literal(item, budget) for item in value}
+        return unique if isinstance(value, set) else frozenset(unique)
     return value
 
 

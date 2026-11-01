@@ -447,7 +447,7 @@ def test_indirect_callable_shapes_decide_alike(label: str, stream: bytes) -> Non
             _P2
             + _global("builtins", "bytearray")
             + pickle.MARK
-            + _int(2**31)
+            + _int(2**30)
             + pickle.TUPLE
             + pickle.REDUCE
             + pickle.STOP,
@@ -457,18 +457,18 @@ def test_indirect_callable_shapes_decide_alike(label: str, stream: bytes) -> Non
             _P2
             + _global("builtins", "bytearray")
             + pickle.MARK
-            + _int(2**31)
+            + _int(2**30)
             + pickle.TUPLE
             + pickle.NEWOBJ
             + pickle.STOP,
         ),
         (
             "sized_bytearray_via_inst",
-            pickle.MARK + _int(2**31) + pickle.INST + b"builtins\nbytearray\n" + pickle.STOP,
+            pickle.MARK + _int(2**30) + pickle.INST + b"builtins\nbytearray\n" + pickle.STOP,
         ),
         (
             "sized_bytearray_via_obj",
-            pickle.MARK + _global("builtins", "bytearray") + _int(2**31) + pickle.OBJ + pickle.STOP,
+            pickle.MARK + _global("builtins", "bytearray") + _int(2**30) + pickle.OBJ + pickle.STOP,
         ),
         (
             "tensor_construction",
@@ -526,3 +526,103 @@ def test_a_global_the_prescan_never_saw_is_refused_by_the_c_phase() -> None:
             unpickler.find_class("collections", "Counter")
     finally:
         unpickler._plan = None
+
+
+# --------------------------------------------------------------------------- #
+# 4. Inherited exposure: a BUILD state the target's C code cannot survive
+# --------------------------------------------------------------------------- #
+
+
+def _dtype_build_with_state(state: bytes) -> bytes:
+    """``numpy.dtype("f8", False, True)`` built by REDUCE, then BUILD with ``state``."""
+
+    return (
+        _P2
+        + _global("numpy", "dtype")
+        + pickle.MARK
+        + _unicode("f8")
+        + pickle.NEWFALSE
+        + pickle.NEWTRUE
+        + pickle.TUPLE
+        + pickle.REDUCE
+        + state
+        + pickle.BUILD
+        + pickle.STOP
+    )
+
+
+def _load_machine_in_child(data: bytes, machine: str) -> int:
+    """Load ``data`` with ``machine`` in a child; return the child's return code."""
+
+    program = textwrap.dedent(
+        """
+        import io, pickle, sys
+        from torchlens._io._safe_unpickle import (
+            SafeBundleUnpickler,
+            _PurePythonBundleUnpickler,
+        )
+        machine = {machine}
+        try:
+            machine(io.BytesIO(sys.stdin.buffer.read())).load()
+        except Exception:
+            pass
+        """
+    ).format(machine=machine)
+    return subprocess.run(  # noqa: S603 -- fixed argv, this interpreter
+        [sys.executable, "-I", "-c", program], input=data, capture_output=True, timeout=180
+    ).returncode
+
+
+_SEVEN_ELEMENT_DTYPE_STATE = (
+    pickle.MARK
+    + _int(3)
+    + _unicode("<")
+    + pickle.NONE
+    + _int(-1)
+    + _int(-1)
+    + _int(0)
+    + pickle.TUPLE
+)
+
+
+@pytest.mark.smoke
+def test_an_honest_numpy_dtype_still_round_trips_through_both_machines() -> None:
+    """The dtype reconstruction legitimate metadata uses is unaffected by the gap below."""
+
+    import numpy as np
+
+    data = pickle.dumps(np.dtype("f8"), protocol=4)
+    assert _new_path(data) == np.dtype("f8")
+    assert _old_path(data) == np.dtype("f8")
+
+
+@pytest.mark.smoke
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Inherited from the pure-Python loader, not introduced by the C path: a BUILD whose "
+        "state is a seven-element tuple reaches numpy's own dtype __setstate__, whose C code "
+        "indexes the tuple without checking its arity and crashes the process. Both machines "
+        "crash identically, so it is not a divergence. Closing it inside the loader needs the "
+        "BUILD state at the guard, which runs one opcode earlier at the REDUCE and cannot see "
+        "it; refusing every BUILD on a numpy dtype would refuse honest metadata, and routing "
+        "them to the interpreter would put every ndarray-bearing bundle on the slow path. The "
+        "load site's artifact-size and opcode ceilings still bound what reaches it."
+    ),
+)
+def test_a_malformed_dtype_build_state_does_not_crash_the_process() -> None:
+    """A hostile BUILD state must be refused, never executed into a segmentation fault."""
+
+    data = _dtype_build_with_state(_SEVEN_ELEMENT_DTYPE_STATE)
+    assert _load_machine_in_child(data, "SafeBundleUnpickler") == 0
+    assert _load_machine_in_child(data, "_PurePythonBundleUnpickler") == 0
+
+
+@pytest.mark.smoke
+def test_the_malformed_dtype_build_state_treats_both_machines_alike() -> None:
+    """Whatever the gap above does, it does to both machines; neither is the weaker path."""
+
+    data = _dtype_build_with_state(_SEVEN_ELEMENT_DTYPE_STATE)
+    assert _load_machine_in_child(data, "SafeBundleUnpickler") == _load_machine_in_child(
+        data, "_PurePythonBundleUnpickler"
+    )
