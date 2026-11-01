@@ -8,6 +8,7 @@ from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
 from ._render_nodes import *
+from ._typography import DEFAULT_TYPOGRAPHY
 
 
 def _decode_graphviz_stderr(error: subprocess.CalledProcessError) -> str:
@@ -63,50 +64,6 @@ def _code_panel_composition_available(file_format: str, engine: str) -> bool:
     return True
 
 
-def _svg_attrs_to_dict(attrs_text: str) -> dict[str, str]:
-    """Parse simple SVG tag attributes into a dictionary.
-
-    Parameters
-    ----------
-    attrs_text:
-        Raw attribute text from an SVG tag.
-
-    Returns
-    -------
-    dict[str, str]
-        Attribute values keyed by attribute name.
-    """
-
-    return {
-        match.group("name"): html.unescape(match.group("value"))
-        for match in _SVG_ATTR_RE.finditer(attrs_text)
-    }
-
-
-def _is_non_file_svg_href(href: str) -> bool:
-    """Return whether an SVG href should not be treated as a local file.
-
-    Parameters
-    ----------
-    href:
-        SVG image href value.
-
-    Returns
-    -------
-    bool
-        True for data URIs, fragments, and network URLs.
-    """
-
-    lowered = href.lower()
-    return (
-        lowered.startswith("data:")
-        or lowered.startswith("#")
-        or lowered.startswith("http://")
-        or lowered.startswith("https://")
-        or lowered.startswith("file:")
-    )
-
-
 def _resolve_svg_image_path(href: str, image_root: Path | None = None) -> Path:
     """Resolve an SVG href to a local path.
 
@@ -135,104 +92,6 @@ def _resolve_svg_image_path(href: str, image_root: Path | None = None) -> Path:
         if rooted.exists():
             return rooted
     return Path.cwd() / candidate
-
-
-def _replace_svg_attr_value(tag: str, attr_name: str, value: str) -> str:
-    """Replace an attribute value in an SVG tag.
-
-    Parameters
-    ----------
-    tag:
-        SVG tag text.
-    attr_name:
-        Attribute name to replace.
-    value:
-        Replacement attribute value.
-
-    Returns
-    -------
-    str
-        Updated SVG tag.
-    """
-
-    escaped_value = html.escape(value, quote=True)
-    pattern = re.compile(
-        rf"""(?P<prefix>\b{re.escape(attr_name)}\s*=\s*)(?P<quote>["']).*?(?P=quote)"""
-    )
-    return pattern.sub(rf"\g<prefix>\g<quote>{escaped_value}\g<quote>", tag, count=1)
-
-
-def _svg_image_mime_type(path: Path) -> str:
-    """Return the data-URI MIME type for an SVG image file.
-
-    Parameters
-    ----------
-    path:
-        Local image path.
-
-    Returns
-    -------
-    str
-        MIME type for the data URI.
-    """
-
-    suffix = path.suffix.lower()
-    if suffix in {".jpg", ".jpeg"}:
-        return "image/jpeg"
-    if suffix == ".gif":
-        return "image/gif"
-    if suffix == ".svg":
-        return "image/svg+xml"
-    return "image/png"
-
-
-def _svg_image_placeholder(attrs: Mapping[str, str]) -> str:
-    """Return SVG text for an unreadable image placeholder.
-
-    Parameters
-    ----------
-    attrs:
-        Parsed attributes from the original SVG image tag.
-
-    Returns
-    -------
-    str
-        Replacement SVG text element.
-    """
-
-    x = _svg_numeric_attr(attrs, "x")
-    y = _svg_numeric_attr(attrs, "y")
-    width = _svg_numeric_attr(attrs, "width")
-    height = _svg_numeric_attr(attrs, "height")
-    text_x = x + (width / 2.0)
-    text_y = y + (height / 2.0)
-    return (
-        f'<text text-anchor="middle" x="{text_x:.2f}" y="{text_y:.2f}" '
-        'font-family="Times,serif" font-size="10.00">preview unavailable</text>'
-    )
-
-
-def _svg_numeric_attr(attrs: Mapping[str, str], name: str) -> float:
-    """Read a numeric SVG attribute, defaulting to zero.
-
-    Parameters
-    ----------
-    attrs:
-        Parsed SVG attributes.
-    name:
-        Attribute name to parse.
-
-    Returns
-    -------
-    float
-        Parsed number, or zero when absent/unparseable.
-    """
-
-    value = attrs.get(name, "0")
-    match = re.match(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", value)
-    if match is None:
-        return 0.0
-    return float(match.group(0))
 
 
 def _format_backward_filter_caption(pass_filter: BackwardPassFilter) -> str:
@@ -852,14 +711,7 @@ def _container_nodes_and_overlay_edges(
     for record in records.values():
         if not isinstance(record, ContainerRecord):
             continue
-        boundary = [
-            snapshot
-            for snapshot in record.snapshots
-            if snapshot.role in {Role.MODEL_INPUT, Role.MODEL_OUTPUT}
-        ]
-        drawn = boundary or [
-            snapshot for snapshot in record.snapshots if snapshot.role == Role.CALL_OUTPUT
-        ]
+        boundary, drawn = _record_drawn_snapshots(record)
         if not drawn:
             continue
         summary = _record_summary_node(trace, drawn[0], collapsed_container_nodes, summary_nodes)
@@ -885,6 +737,34 @@ def _container_nodes_and_overlay_edges(
         for snapshot in drawn:
             append_edges(trace, snapshot, node_name, collapsed_container_nodes, edge_keys, edges)
     return list(nodes_by_name.values()), edges, summary_roles
+
+
+def _record_drawn_snapshots(
+    record: ContainerRecord,
+) -> tuple[list[ContainerSnapshot], list[ContainerSnapshot]]:
+    """Return a record's boundary snapshots and the snapshots drawn for it.
+
+    Parameters
+    ----------
+    record:
+        Container registry record.
+
+    Returns
+    -------
+    tuple[list[ContainerSnapshot], list[ContainerSnapshot]]
+        The model-input and model-output snapshots, and the drawn snapshots:
+        those boundary snapshots when there are any, else the call outputs.
+    """
+
+    boundary = [
+        snapshot
+        for snapshot in record.snapshots
+        if snapshot.role in {Role.MODEL_INPUT, Role.MODEL_OUTPUT}
+    ]
+    drawn = boundary or [
+        snapshot for snapshot in record.snapshots if snapshot.role == Role.CALL_OUTPUT
+    ]
+    return boundary, drawn
 
 
 def _record_summary_node(
@@ -981,6 +861,37 @@ def _container_record_owner_key(
         return None
     owner = next(iter(owners))
     return cast(str, owner) if owner != -1 else None
+
+
+def _container_boundary_edge_attrs(label: str | None) -> dict[str, str]:
+    """Return Graphviz attrs for source/sink container-node edges.
+
+    Parameters
+    ----------
+    label:
+        Optional key/index label for the pulled-out field.
+
+    Returns
+    -------
+    dict[str, str]
+        Edge attributes for a boundary container overlay edge.
+    """
+
+    attrs = {
+        "color": "#777777",
+        "fontcolor": "#555555",
+        "style": "solid",
+        "arrowsize": ".6",
+        "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
+        "constraint": "false",
+    }
+    if label is not None:
+        # ``xlabel``, not ``label``: these edges are constraint=false, and dot
+        # 2.43 silently drops the midpoint ``label`` of many such edges (the key
+        # vanished from the picture while the DOT still carried it). An external
+        # label is placed after layout and is always drawn (forcelabels=true).
+        attrs["xlabel"] = _html_container_edge_label(label)
+    return attrs
 
 
 def _append_boundary_container_edges(
@@ -2111,6 +2022,7 @@ __all__ = [
     "_code_panel_composition_available",
     "_collapsed_container_leaf_nodes",
     "_collapsed_endpoint_for_emission",
+    "_container_boundary_edge_attrs",
     "_container_clusters_for_graphviz",
     "_container_leaf_groups",
     "_container_leaf_shapes_identical",
@@ -2140,20 +2052,14 @@ __all__ = [
     "_inject_sibling_rank_groups",
     "_insert_before_final_brace",
     "_insert_into_cluster",
-    "_is_non_file_svg_href",
     "_is_hidden_buffer_update_node",
     "_node_is_inside_module",
     "_owner_module_key_for_node",
     "_rank_group_lines",
     "_render_edge_occurrences",
-    "_replace_svg_attr_value",
     "_resolve_svg_image_path",
     "_sibling_chain_lca_key",
     "_simplify_boundary_labels",
     "_single_container_owner",
-    "_svg_attrs_to_dict",
-    "_svg_image_mime_type",
-    "_svg_image_placeholder",
-    "_svg_numeric_attr",
     "_walk_skipped_successors",
 ]

@@ -9,7 +9,6 @@ from ._label_format import compute_selected_node_lines as _compute_selected_node
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
-from ._typography import DEFAULT_TYPOGRAPHY
 from .modes import CollapsedModeScope
 
 # Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this
@@ -239,37 +238,6 @@ def _append_container_overlay_edge(
         return
     edge_keys.add(key)
     edges.append(ContainerOverlayEdge(tail_name=tail_name, head_name=head_name, attrs=attrs))
-
-
-def _container_boundary_edge_attrs(label: str | None) -> dict[str, str]:
-    """Return Graphviz attrs for source/sink container-node edges.
-
-    Parameters
-    ----------
-    label:
-        Optional key/index label for the pulled-out field.
-
-    Returns
-    -------
-    dict[str, str]
-        Edge attributes for a boundary container overlay edge.
-    """
-
-    attrs = {
-        "color": "#777777",
-        "fontcolor": "#555555",
-        "style": "solid",
-        "arrowsize": ".6",
-        "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
-        "constraint": "false",
-    }
-    if label is not None:
-        # ``xlabel``, not ``label``: these edges are constraint=false, and dot
-        # 2.43 silently drops the midpoint ``label`` of many such edges (the key
-        # vanished from the picture while the DOT still carried it). An external
-        # label is placed after layout and is always drawn (forcelabels=true).
-        attrs["xlabel"] = _html_container_edge_label(label)
-    return attrs
 
 
 def _render_node_name_for_occurrence(trace: "Trace", label: str | None) -> str | None:
@@ -2098,7 +2066,6 @@ __all__ = [
     "_buffer_versions_for_layer",
     "_build_collapsed_module_node",
     "_build_layer_node",
-    "_container_boundary_edge_attrs",
     "_container_path_leaf_label",
     "_format_batch_topk_output_lines",
     "_format_label_score_row",

@@ -9,26 +9,22 @@ and compose the optional code panel beside the rendered graph.
 from __future__ import annotations
 
 import base64
+import html
 import os
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 from .._utils.display import atomic_write_text
 from . import _render_utils
 from ._edit_highlighter import HighlighterStyle, highlight_svg
 from ._render_common import (
+    _SVG_ATTR_RE,
     _SVG_IMAGE_TAG_RE,
     _SVG_ROOT_RE,
     _SVG_VIEWBOX_RE,
 )
-from ._render_flow import (
-    _is_non_file_svg_href,
-    _replace_svg_attr_value,
-    _resolve_svg_image_path,
-    _svg_attrs_to_dict,
-    _svg_image_mime_type,
-    _svg_image_placeholder,
-)
+from ._render_flow import _resolve_svg_image_path
 from .code_panel import compose_graph_with_code_panel
 
 
@@ -197,6 +193,148 @@ def _write_composed_code_panel(
         cairosvg.svg2pdf(bytestring=svg_bytes, write_to=rendered_path)
     else:  # png, rendered at 2x for crispness
         cairosvg.svg2png(bytestring=svg_bytes, write_to=rendered_path, scale=2.0)
+
+
+def _svg_attrs_to_dict(attrs_text: str) -> dict[str, str]:
+    """Parse simple SVG tag attributes into a dictionary.
+
+    Parameters
+    ----------
+    attrs_text:
+        Raw attribute text from an SVG tag.
+
+    Returns
+    -------
+    dict[str, str]
+        Attribute values keyed by attribute name.
+    """
+
+    return {
+        match.group("name"): html.unescape(match.group("value"))
+        for match in _SVG_ATTR_RE.finditer(attrs_text)
+    }
+
+
+def _is_non_file_svg_href(href: str) -> bool:
+    """Return whether an SVG href should not be treated as a local file.
+
+    Parameters
+    ----------
+    href:
+        SVG image href value.
+
+    Returns
+    -------
+    bool
+        True for data URIs, fragments, and network URLs.
+    """
+
+    lowered = href.lower()
+    return (
+        lowered.startswith("data:")
+        or lowered.startswith("#")
+        or lowered.startswith("http://")
+        or lowered.startswith("https://")
+        or lowered.startswith("file:")
+    )
+
+
+def _replace_svg_attr_value(tag: str, attr_name: str, value: str) -> str:
+    """Replace an attribute value in an SVG tag.
+
+    Parameters
+    ----------
+    tag:
+        SVG tag text.
+    attr_name:
+        Attribute name to replace.
+    value:
+        Replacement attribute value.
+
+    Returns
+    -------
+    str
+        Updated SVG tag.
+    """
+
+    escaped_value = html.escape(value, quote=True)
+    pattern = re.compile(
+        rf"""(?P<prefix>\b{re.escape(attr_name)}\s*=\s*)(?P<quote>["']).*?(?P=quote)"""
+    )
+    return pattern.sub(rf"\g<prefix>\g<quote>{escaped_value}\g<quote>", tag, count=1)
+
+
+def _svg_image_mime_type(path: Path) -> str:
+    """Return the data-URI MIME type for an SVG image file.
+
+    Parameters
+    ----------
+    path:
+        Local image path.
+
+    Returns
+    -------
+    str
+        MIME type for the data URI.
+    """
+
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    if suffix == ".gif":
+        return "image/gif"
+    if suffix == ".svg":
+        return "image/svg+xml"
+    return "image/png"
+
+
+def _svg_image_placeholder(attrs: Mapping[str, str]) -> str:
+    """Return SVG text for an unreadable image placeholder.
+
+    Parameters
+    ----------
+    attrs:
+        Parsed attributes from the original SVG image tag.
+
+    Returns
+    -------
+    str
+        Replacement SVG text element.
+    """
+
+    x = _svg_numeric_attr(attrs, "x")
+    y = _svg_numeric_attr(attrs, "y")
+    width = _svg_numeric_attr(attrs, "width")
+    height = _svg_numeric_attr(attrs, "height")
+    text_x = x + (width / 2.0)
+    text_y = y + (height / 2.0)
+    return (
+        f'<text text-anchor="middle" x="{text_x:.2f}" y="{text_y:.2f}" '
+        'font-family="Times,serif" font-size="10.00">preview unavailable</text>'
+    )
+
+
+def _svg_numeric_attr(attrs: Mapping[str, str], name: str) -> float:
+    """Read a numeric SVG attribute, defaulting to zero.
+
+    Parameters
+    ----------
+    attrs:
+        Parsed SVG attributes.
+    name:
+        Attribute name to parse.
+
+    Returns
+    -------
+    float
+        Parsed number, or zero when absent/unparseable.
+    """
+
+    value = attrs.get(name, "0")
+    match = re.match(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", value)
+    if match is None:
+        return 0.0
+    return float(match.group(0))
 
 
 __all__ = [
