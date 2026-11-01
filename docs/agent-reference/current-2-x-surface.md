@@ -62,6 +62,9 @@
   TorchLens). The old `tl.bridge.steering_vectors.vector`, `tl.bridge.repeng.control_vector`
   and `tl.bridge.dialz.vector` trainers are removed.
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
+  `recording.options` is a read-only `tl.types.RecordingSettings` of the settings it was made
+  with (live values, for example `recording.options.save_grads`), and `recording.output` is the
+  model's return value (memory only; a loaded recording refuses with `output_not_stored`).
   `tl.record(model, ids, save=..., generate_kwargs={...})` (DOCUMENTED-UNSTABLE) runs one real
   cached HF `generate()` and records the sites at every forward it issues (one Recorder pass
   per forward, so each decode step records only its new position and cost is linear in
@@ -76,7 +79,7 @@
   the historical `on_forward_error="raise"` behavior; opt into
   `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
   `on_forward_error="return_partial"` to return a failed partial `Recording`. Failed partials
-  set `status="partial_error"`, `is_failed=True`, string-only error metadata, `num_committed_ops`,
+  set `status="partial_error"` and `is_failed` `True`, string-only error metadata, `num_committed_ops`,
   and best-effort `last_event_*` fields. user-op failures exclude the failing call; TL-side
   capture failures may include a skipped/partial current-call event. Failed partials cannot be
   converted with `Recording.to_trace()` or used with `Recording.backward()`.

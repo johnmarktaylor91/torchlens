@@ -89,7 +89,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   silently treated as complete.
 
 **Failed partial Recording**
-: A `Recording` with `status="partial_error"` and `is_failed=True`. Use
+: A `Recording` with `status="partial_error"` and `is_failed` `True`. Use
   `on_forward_error="attach_partial"` to attach it as `exc.partial_recording`, or
   `on_forward_error="return_partial"` to return it. It carries string-only error metadata,
   `num_committed_ops`, and best-effort `last_event_*` fields. It cannot be passed to
