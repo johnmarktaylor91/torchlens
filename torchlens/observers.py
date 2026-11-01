@@ -211,13 +211,9 @@ class TapObserver:
             return self(grad_input, ctx=ctx)
         if self.signal == "forward":
             return None
-        grad_value, grad_kind = _first_tensor_grad(grad_output, "grad_output")
-        if grad_value is None:
-            grad_value, grad_kind = _first_tensor_grad(grad_input, "grad_input")
-        if grad_value is None:
+        value, grad_kind = _cloned_node_gradient(grad_input, grad_output)
+        if value is None:
             return None
-        with _state.pause_logging():
-            value = grad_value.detach().clone()
         self.records.append(
             TapRecord(
                 value=value,
@@ -270,6 +266,25 @@ class TapObserver:
         """
 
         self.records.clear()
+
+
+def _cloned_node_gradient(
+    grad_input: Any,
+    grad_output: tuple[torch.Tensor | None, ...] | None,
+) -> tuple[torch.Tensor | None, Literal["grad_input", "grad_output"] | None]:
+    """Return a detached clone of the first tensor gradient of a node fire.
+
+    Prefers ``grad_output``, falls back to ``grad_input``; ``(None, None)``
+    when neither carries a tensor.
+    """
+
+    grad_value, grad_kind = _first_tensor_grad(grad_output, "grad_output")
+    if grad_value is None:
+        grad_value, grad_kind = _first_tensor_grad(grad_input, "grad_input")
+    if grad_value is None:
+        return None, None
+    with _state.pause_logging():
+        return grad_value.detach().clone(), grad_kind
 
 
 def _first_tensor_grad(
