@@ -11,14 +11,10 @@ file-size ratchet; the names are the same.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 from torch import nn
-
-if TYPE_CHECKING:
-    from ..._data_classes.trace import Trace
-
 
 _HELD_SCAN_MAX_DEPTH = 4
 """Container levels below a module attribute that the held-tensor scan descends.
@@ -317,42 +313,3 @@ def iter_module_held_plain_tensors(
                 elif _is_enterable(item) and id(item) not in scan.entered:
                     yield from scan.walk(item, name, 2)
     scan.finish()
-
-
-def warn_held_scan_truncated(truncations: list[str], trace: Trace | None = None) -> None:
-    """Disclose, once per capture, held-tensor scans cut by their bounds.
-
-    Parameters
-    ----------
-    truncations:
-        Descriptions collected by ``iter_module_held_plain_tensors``.
-    trace:
-        Capture trace; when given, the cut is persisted as a
-        ``held_tensor_scan_truncated`` capture advisory BEFORE warning, which
-        forward validation reads as a source-provenance failure.
-    """
-
-    if not truncations:
-        return
-    import warnings
-
-    from ..._capture_honesty import ADVISORY_HELD_SCAN_TRUNCATED, append_capture_advisory
-    from ..._errors import TorchLensWarning
-
-    if trace is not None:
-        append_capture_advisory(trace, ADVISORY_HELD_SCAN_TRUNCATED, truncations)
-
-    shown = "; ".join(truncations[:5])
-    suffix = "" if len(truncations) <= 5 else f" (+{len(truncations) - 5} more)"
-    warnings.warn(
-        TorchLensWarning(
-            f"TorchLens stopped scanning module-held containers for plain tensors at "
-            f"{len(truncations)} place(s): {shown}{suffix}. A tensor past a cut that "
-            "the forward reads gets no buffer source: the capture warns about an input "
-            "with no provenance and the graph shows the read without the held tensor; "
-            "forward validation of this capture fails. Remedy: register tensors the forward "
-            "reads with register_buffer, or hold them in shallower or smaller containers",
-            code="held_tensor_scan_truncated",
-        ),
-        stacklevel=3,
-    )

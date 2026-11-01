@@ -19,7 +19,8 @@ from .._storage_bindings import (
     copy_with_storage_context,
     views_part_of_its_storage,
 )
-from ._replay_grad_fidelity import _mirror_captured_requires_grad, _snapshot_grad_flags
+from .._utils.collections import assign_to_sequence_or_dict
+from ._grad_flags import _mirror_captured_requires_grad, _snapshot_grad_flags
 
 
 def restore_receiver_storage_context(layer: Any, input_args: dict[str, Any]) -> None:
@@ -70,3 +71,48 @@ def write_into_receiver_storage_context(
     with torch.no_grad():
         current.copy_(values)
     return True
+
+
+def _write_nested_replay_arg_value(
+    container: Any,
+    key_path: tuple[Any, ...],
+    value: torch.Tensor,
+) -> Any:
+    """Write a nested replay argument by key path.
+
+    Parameters
+    ----------
+    container:
+        Nested list, tuple, or dict containing the value to replace.
+    key_path:
+        One or more nested keys beneath the replay arg root.
+    value:
+        Replacement tensor.
+
+    Returns
+    -------
+    Any
+        Updated container, rebuilding tuple levels as needed.
+    """
+
+    if len(key_path) == 1:
+        return assign_to_sequence_or_dict(container, key_path[0], value)
+    child = _write_nested_replay_arg_value(container[key_path[0]], key_path[1:], value)
+    return assign_to_sequence_or_dict(container, key_path[0], child)
+
+
+def write_replay_slot(
+    layer: Any, input_args: dict[str, Any], arg_type: str, key: Any, value: Any
+) -> None:
+    """Write one parent's replay value into its slot of ``input_args``.
+
+    A storage-geometry receiver slot is written through its saved storage
+    context; a nested key path rebuilds the containers above the slot.
+    """
+    if not isinstance(key, tuple):
+        if not write_into_receiver_storage_context(layer, input_args, arg_type, key, value):
+            input_args[arg_type][key] = value
+    else:
+        input_args[arg_type][key[0]] = _write_nested_replay_arg_value(
+            input_args[arg_type][key[0]], key[1:], value
+        )

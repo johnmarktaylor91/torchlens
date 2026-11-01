@@ -63,7 +63,13 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ._callable_location import _callable_source_location
-from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
+from ._function_boundary import (
+    _BARCODE_TRANSPARENT_FUNCS,
+    EXPORT_FUNC_NAMES,
+    funcs_not_to_log,
+    note_function_export,
+    print_funcs,
+)
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
@@ -666,26 +672,6 @@ def _decorate_direct_transforms() -> None:
         except (AttributeError, TypeError):
             pass
 
-
-# Functions that should never be logged — they are metadata queries, not
-# computational operations, and logging them would cause infinite recursion
-# (e.g. size() is called internally by logging code).
-funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
-
-# Wrapped calls that never demote the call enclosing them to non-bottom-level
-# (see the barcode-transparency note inside ``wrapped_func``). ``as_subclass``
-# is torch's ``__torch_function__`` return conversion. The storage accessors
-# return a storage, never a tensor, so they log no value flow of their own; a
-# Python-level tensor method that reads its storage through them
-# (``Tensor.share_memory_`` calls ``_typed_storage()``) would otherwise lose its
-# bottom-level barcode and go uncaptured.
-_BARCODE_TRANSPARENT_FUNCS = frozenset(
-    {"as_subclass", "untyped_storage", "_typed_storage", "storage"}
-)
-
-# Print functions get special handling: intercepted to add TorchLens label
-# info to the repr without creating a new logged operation.
-print_funcs = ["__repr__", "__str__", "_str"]
 
 # Names of torch factory functions that accept a ``device`` kwarg.
 # When a ``torch.device`` context manager is active (TorchFunctionMode),
@@ -1767,7 +1753,7 @@ def torch_func_decorator(
 
         # Snapshot args before the call in case in-place ops mutate them.
         if trace.save_arg_values:
-            from ._ops_retention import _copy_saved_call_args
+            from ._ops_arguments import _copy_saved_call_args
 
             arg_copies, kwarg_copies = _copy_saved_call_args(func_name, args, kwargs)
         else:

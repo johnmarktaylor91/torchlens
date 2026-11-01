@@ -33,7 +33,6 @@ or any other drop of the last live reference — credits its storage back.
 from __future__ import annotations
 
 import contextlib
-import os
 import warnings
 import weakref
 from dataclasses import dataclass, field
@@ -42,6 +41,11 @@ from typing import Any, TypeGuard
 import torch
 
 from ._errors import InvalidArgumentError
+from ._memory_probes import (  # noqa: F401  (``_available_host_bytes`` is read by diagnostics)
+    _available_host_bytes,
+    available_device_bytes,
+)
+from ._state import pause_logging
 from .errors._base import CaptureError
 
 #: A retained payload the accountant charges: a tensor, or a storage kept as a
@@ -104,80 +108,6 @@ def format_bytes(num_bytes: float) -> str:
                 return f"{int(num_bytes)} B"
             return f"{num_bytes / scale:.2f} {unit}"
     return f"{int(num_bytes)} B"
-
-
-def _available_host_bytes() -> int | None:
-    """Return available host RAM in bytes, or ``None`` when unmeasurable.
-
-    Returns
-    -------
-    int | None
-        Available bytes. Prefers ``MemAvailable`` from ``/proc/meminfo`` because
-        it accounts for reclaimable cache, then the POSIX available-pages count,
-        then ``psutil`` when installed. macOS has neither procfs nor
-        ``SC_AVPHYS_PAGES``, so without the ``psutil`` fallback every default
-        ``save_budget="auto"`` capture there warned that CPU budgeting was off.
-    """
-
-    try:
-        with open("/proc/meminfo", encoding="ascii") as meminfo:
-            for line in meminfo:
-                if line.startswith("MemAvailable:"):
-                    return int(line.split()[1]) * 1024
-    except Exception:
-        pass
-    try:
-        pages = os.sysconf("SC_AVPHYS_PAGES")
-        page_size = os.sysconf("SC_PAGE_SIZE")
-        if pages > 0 and page_size > 0:
-            return int(pages) * int(page_size)
-    except Exception:
-        pass
-    try:
-        import psutil
-    except ImportError:
-        return None
-    try:
-        available = int(psutil.virtual_memory().available)
-    except Exception:
-        return None
-    return available if available > 0 else None
-
-
-def available_device_bytes(device: torch.device) -> int | None:
-    """Return the memory headroom for one device, or ``None`` when unmeasurable.
-
-    Parameters
-    ----------
-    device:
-        Device whose free memory is queried.
-
-    Returns
-    -------
-    int | None
-        Free bytes, or ``None`` when this device type exposes no headroom query.
-        ``None`` means *unbudgeted and reported as such*, never "assume
-        infinite silently".
-    """
-
-    device_type = device.type
-    if device_type == "cpu":
-        return _available_host_bytes()
-    if device_type == "cuda":
-        try:
-            # Pin the query to THIS device explicitly (R36-7b): mem_get_info
-            # resolves an index-less device to the CURRENT device, so a
-            # capture saving to cuda:1 while cuda:0 is current read the wrong
-            # card's headroom.
-            with torch.cuda.device(device):
-                free_bytes, _total = torch.cuda.mem_get_info(device)
-            return int(free_bytes)
-        except Exception:
-            return None
-    if device_type == "meta":
-        # Meta tensors have no storage, so nothing is ever really committed.
-        return None
-    return None
 
 
 @dataclass(frozen=True)
@@ -893,8 +823,6 @@ def _storage_payload_identities(
 
     if storage.device.type == "meta":
         return []
-    from ._state import pause_logging
-
     with pause_logging():
         untyped = storage.untyped() if isinstance(storage, torch.TypedStorage) else storage
         num_bytes = int(untyped.nbytes())
@@ -940,8 +868,6 @@ def _retained_storage_identities(tensor: RetainedPayload) -> list[tuple[tuple[An
         return _storage_payload_identities(tensor)
     if tensor.is_meta:
         return []
-
-    from ._state import pause_logging
 
     with pause_logging():
         try:

@@ -48,9 +48,7 @@ if TYPE_CHECKING:
     from .ops import (
         _SETTER_MUTATION_FUNC_NAMES,
         _admit_save_budget,
-        _admit_saved_args_budget,
         _commit_save_budget,
-        _commit_saved_args_budget,
         _is_inplace_augmented_assignment_dunder,
         _label_version_baseline,
         _should_keep_alias_mutation_contract,
@@ -487,6 +485,29 @@ def _log_output_tensor_info(
         fields_dict["internal_source_ancestors"] = {_label_raw}
 
 
+def _save_call_args_fields(
+    trace: "Trace", fields_dict: dict[str, Any], t_args: Any, t_kwargs: Any
+) -> None:
+    """Snapshot the call's arguments into ``fields_dict`` under the save budget."""
+    if trace.save_arg_values:
+        # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
+        # used to clone every tensor argument first and charge after.
+        from ._ops_arguments import _copy_saved_call_args
+        from .ops import _admit_saved_args_budget, _commit_saved_args_budget
+
+        arg_reservations = _admit_saved_args_budget(trace, fields_dict, t_args, t_kwargs)
+        fields_dict["has_saved_args"] = True
+        saved_args, saved_kwargs = _copy_saved_call_args(
+            fields_dict["func_name"], tuple(t_args), dict(t_kwargs), True
+        )
+        fields_dict["saved_args"] = list(saved_args)
+        fields_dict["saved_kwargs"] = saved_kwargs
+        _commit_saved_args_budget(trace, fields_dict, arg_reservations)
+    else:
+        fields_dict["saved_args"] = None
+        fields_dict["saved_kwargs"] = None
+
+
 def _save_activation_fields(
     trace: "Trace",
     fields_dict: dict[str, Any],
@@ -679,22 +700,9 @@ def _save_activation_fields(
         if out_sink is not None and isinstance(fields_dict["out"], torch.Tensor):
             out_sink(fields_dict["_label_raw"], fields_dict["out"])
 
-        if trace.save_arg_values:
-            # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
-            # used to clone every tensor argument first and charge after.
-            from ._ops_retention import _copy_saved_call_args
+        from ._ops_activations import _save_call_args_fields
 
-            arg_reservations = _admit_saved_args_budget(trace, fields_dict, t_args, t_kwargs)
-            fields_dict["has_saved_args"] = True
-            saved_args, saved_kwargs = _copy_saved_call_args(
-                fields_dict["func_name"], tuple(t_args), dict(t_kwargs), True
-            )
-            fields_dict["saved_args"] = list(saved_args)
-            fields_dict["saved_kwargs"] = saved_kwargs
-            _commit_saved_args_budget(trace, fields_dict, arg_reservations)
-        else:
-            fields_dict["saved_args"] = None
-            fields_dict["saved_kwargs"] = None
+        _save_call_args_fields(trace, fields_dict, t_args, t_kwargs)
     except Exception as exc:
         if writer is not None:
             writer.abort(f"Failed while saving out for {fields_dict['_label_raw']}: {exc}")

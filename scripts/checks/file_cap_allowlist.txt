@@ -508,7 +508,7 @@ torchlens/_runnable_verification.py::_attestation_state_matches	61
 torchlens/_runnable_verification.py::_value_at_path	78
 torchlens/_runnable_witness_contracts.py::_tensor_derived_scalar_stale	69
 torchlens/_runnable_witness_contracts.py::_unbound_state_escape_stale	63
-torchlens/_save_budget.py	1010
+torchlens/_save_budget.py	971
 torchlens/_save_budget.py::SaveBudget._message	69
 torchlens/_save_budget.py::_retained_storage_identities	68
 torchlens/_save_budget.py::resolve_save_budget	83
@@ -956,7 +956,7 @@ torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	74
 torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	322
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
-torchlens/backends/torch/_ops_activations.py::_save_activation_fields	211
+torchlens/backends/torch/_ops_activations.py::_save_activation_fields	199
 torchlens/backends/torch/_ops_arguments.py::_build_edge_use_records	68
 torchlens/backends/torch/_ops_arguments.py::_tensor_has_known_provenance	107
 torchlens/backends/torch/_ops_autograd.py::_partition_output_entries_with_autograd_stats	98
@@ -984,7 +984,6 @@ torchlens/backends/torch/_ops_predicate_events.py::_build_graph_relationship_fie
 torchlens/backends/torch/_ops_predicate_events.py::_build_param_fields	64
 torchlens/backends/torch/_ops_predicate_events.py::_emit_predicate_operation_events	178
 torchlens/backends/torch/_ops_predicates.py::_predicate_backend_semantics	98
-torchlens/backends/torch/_ops_retention.py	873
 torchlens/backends/torch/_ops_retention.py::_build_trace_predicate_context	80
 torchlens/backends/torch/_ops_retention.py::_copy_lookback_payload	78
 torchlens/backends/torch/_ops_retention.py::_save_predicate_activation_fields	91
@@ -1018,10 +1017,9 @@ torchlens/backends/torch/backward.py::install_autograd_wrappers	103
 torchlens/backends/torch/backward.py::log_recording_backward	84
 torchlens/backends/torch/belt.py::_derive	72
 torchlens/backends/torch/belt.py::sweep_stale_belt_references	72
-torchlens/backends/torch/buffer_writes.py	1813
+torchlens/backends/torch/buffer_writes.py	1802
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_param_index	68
-torchlens/backends/torch/buffer_writes.py::BufferWriteTracker.reconcile	68
 torchlens/backends/torch/buffer_writes.py::session_validated_buffer_address	61
 torchlens/backends/torch/collectives.py	842
 torchlens/backends/torch/collectives.py::_build_payload	102
@@ -1041,7 +1039,7 @@ torchlens/backends/torch/identity_shims.py	1043
 torchlens/backends/torch/identity_shims.py::_install_causal_bias_shim	81
 torchlens/backends/torch/identity_shims.py::_install_expanded_weights_shims	70
 torchlens/backends/torch/identity_shims.py::_install_overrides_membership_shims	70
-torchlens/backends/torch/model_prep.py	3142
+torchlens/backends/torch/model_prep.py	3103
 torchlens/backends/torch/model_prep.py::_capture_module_metadata	88
 torchlens/backends/torch/model_prep.py::_clear_callable_session_tensor_metadata	70
 torchlens/backends/torch/model_prep.py::_clear_session_tensor_metadata	119
@@ -1079,7 +1077,7 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	142
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	79
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	3368
+torchlens/backends/torch/wrappers.py	3364
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	115
 torchlens/backends/torch/wrappers.py::_propagate_mutation_label_to_storage_aliases	98
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	129
@@ -1595,7 +1593,7 @@ torchlens/validation/backward.py::_sum_tensors	74
 torchlens/validation/backward.py::validate_backward_pass	288
 torchlens/validation/consolidated.py::_intervention_report	69
 torchlens/validation/consolidated.py::validate	248
-torchlens/validation/core.py	5156
+torchlens/validation/core.py	5127
 torchlens/validation/core.py::_check_arglocs_correct_for_arg	127
 torchlens/validation/core.py::_check_layer_arguments_logged_correctly	80
 torchlens/validation/core.py::_check_unattributed_arg_slots	193
@@ -1608,11 +1606,11 @@ torchlens/validation/core.py::_ground_truth_output_matches_saved	68
 torchlens/validation/core.py::_op_reduction_depth	158
 torchlens/validation/core.py::_perturb_domain_sensitive_parent_values	62
 torchlens/validation/core.py::_perturb_layer_outs	169
-torchlens/validation/core.py::_prepare_input_args_for_validating_layer	126
+torchlens/validation/core.py::_prepare_input_args_for_validating_layer	122
 torchlens/validation/core.py::validate_parents_of_saved_layer	255
 torchlens/validation/core.py::validate_saved_outs	360
 torchlens/validation/diagnostics.py::describe_tensor_mismatch	97
-torchlens/validation/exemptions.py	2988
+torchlens/validation/exemptions.py	2980
 torchlens/validation/exemptions.py::_addcmul_zero_annihilator_decision	70
 torchlens/validation/exemptions.py::_bool_comparison_straddle_probe	83
 torchlens/validation/exemptions.py::_bool_predicate_influence_probe	78

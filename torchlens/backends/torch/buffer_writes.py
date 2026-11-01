@@ -16,6 +16,7 @@ from ..._ir import BufferWriteEvent
 from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils.tensor_utils import safe_copy
 from ._identity_cache import IdentityCache, identity_cached
+from ._storage_overlap import _ranges_overlap, _storage_range
 from ._tl import (
     clear_tensor_label,
     get_buffer_address,
@@ -868,9 +869,6 @@ class BufferWriteTracker:
         an opaque host write-back so the run reports UNVERIFIABLE, never crashing capture.
         """
 
-        # Imported lazily to avoid an import cycle with the completeness-witness dispatcher.
-        from .completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
-
         model = self.model_ref()
         if model is None:
             return
@@ -880,57 +878,64 @@ class BufferWriteTracker:
                 if tensor is None or isinstance(tensor, nn.Parameter):
                     continue
                 address = f"{module_address}.{name}" if module_address else name
-                expected = self.address_to_snapshot.get(address)
-                if expected is None:
-                    continue
-                current_value = _copy_tensor_value(tensor)
-                object_changed = id(tensor) != self.address_to_object_id.get(address)
-                storage_changed = storage_key(tensor) != self.address_to_storage_key.get(address)
-                rebound = address in self.storage_rebound_addresses
-                values_equal = _tensor_equal_tristate(expected, current_value)
-                value_changed = None if values_equal is None else not values_equal
-                # W1-FAB: an UNKNOWN value verdict (weights-free) never
-                # journals a write on its own; identity/storage rebinds are
-                # real observations and still record below.
-                if not (object_changed or storage_changed or rebound or value_changed is True):
-                    continue
-                # Classify the STORAGE rebind first. The live buffer object keeping its
-                # identity while its storage changed is definitionally a ``.data =``/
-                # ``set_`` swap, never an attribute rebind: rebinding the attribute
-                # (``self.b = x + 1``) installs a NEW tensor object, so it always shows
-                # ``object_changed``. Reading the producer label first mis-sorted this
-                # case as ``reassign`` once the ``Tensor.data`` surface began stamping
-                # the rebound buffer with the ``data`` op's own label -- the two kinds
-                # replay differently (``.data =`` detaches; an attribute rebind keeps the
-                # graph), so the distinction has to key on identity, not on the label.
-                # A ``set_`` on the buffer is the same rebind even when its storage key
-                # came out unchanged (an empty buffer emptied again, a view re-applied).
-                if not object_changed and (storage_changed or rebound):
-                    self._record_write(address, tensor, "data_reassign", None, value_changed, None)
-                    continue
-                producer = get_tensor_label(tensor)
-                if producer is not None and not producer.startswith("buffer_"):
-                    self._record_write(
-                        address,
-                        tensor,
-                        "reassign",
-                        producer,
-                        True if value_changed is not None else None,
-                        None,
-                    )
-                    continue
-                # Same object, same storage, changed value, no journal entry (r15-C2): a zero-copy
-                # HOST write-back into the buffer's existing storage -- ``self.b.detach().numpy()[0]
-                # = 99`` / a raw ``data_ptr`` / storage ``__setitem__`` write. The mutation bypassed
-                # every aten dispatch and version bump, so the sparse DAG cannot model it and the
-                # replay recomputes the pre-write value. This is an opaque host write-back exactly
-                # like the activation-alias case: flag it so the run reports UNVERIFIABLE, and do
-                # NOT crash capture. Recording it as ``data_reassign`` keeps the buffer journal's
-                # expected-final snapshot consistent for any downstream buffer.
-                _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
-                self._record_write(address, tensor, "data_reassign", None, value_changed, None)
-                continue
+                self._reconcile_registered_buffer(address, tensor)
         self.storage_rebound_addresses.clear()
+
+    def _reconcile_registered_buffer(self, address: str, tensor: torch.Tensor) -> None:
+        """Record what changed about one registered buffer since its pre-forward snapshot."""
+        # Imported lazily to avoid an import cycle with the completeness-witness dispatcher.
+        from .completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
+
+        expected = self.address_to_snapshot.get(address)
+        if expected is None:
+            return
+        current_value = _copy_tensor_value(tensor)
+        object_changed = id(tensor) != self.address_to_object_id.get(address)
+        storage_changed = storage_key(tensor) != self.address_to_storage_key.get(address)
+        rebound = address in self.storage_rebound_addresses
+        values_equal = _tensor_equal_tristate(expected, current_value)
+        value_changed = None if values_equal is None else not values_equal
+        # W1-FAB: an UNKNOWN value verdict (weights-free) never
+        # journals a write on its own; identity/storage rebinds are
+        # real observations and still record below.
+        if not (object_changed or storage_changed or rebound or value_changed is True):
+            return
+        # Classify the STORAGE rebind first. The live buffer object keeping its
+        # identity while its storage changed is definitionally a ``.data =``/
+        # ``set_`` swap, never an attribute rebind: rebinding the attribute
+        # (``self.b = x + 1``) installs a NEW tensor object, so it always shows
+        # ``object_changed``. Reading the producer label first mis-sorted this
+        # case as ``reassign`` once the ``Tensor.data`` surface began stamping
+        # the rebound buffer with the ``data`` op's own label -- the two kinds
+        # replay differently (``.data =`` detaches; an attribute rebind keeps the
+        # graph), so the distinction has to key on identity, not on the label.
+        # A ``set_`` on the buffer is the same rebind even when its storage key
+        # came out unchanged (an empty buffer emptied again, a view re-applied).
+        if not object_changed and (storage_changed or rebound):
+            self._record_write(address, tensor, "data_reassign", None, value_changed, None)
+            return
+        producer = get_tensor_label(tensor)
+        if producer is not None and not producer.startswith("buffer_"):
+            self._record_write(
+                address,
+                tensor,
+                "reassign",
+                producer,
+                True if value_changed is not None else None,
+                None,
+            )
+            return
+        # Same object, same storage, changed value, no journal entry (r15-C2): a zero-copy
+        # HOST write-back into the buffer's existing storage -- ``self.b.detach().numpy()[0]
+        # = 99`` / a raw ``data_ptr`` / storage ``__setitem__`` write. The mutation bypassed
+        # every aten dispatch and version bump, so the sparse DAG cannot model it and the
+        # replay recomputes the pre-write value. This is an opaque host write-back exactly
+        # like the activation-alias case: flag it so the run reports UNVERIFIABLE, and do
+        # NOT crash capture. Recording it as ``data_reassign`` keeps the buffer journal's
+        # expected-final snapshot consistent for any downstream buffer.
+        _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
+        self._record_write(address, tensor, "data_reassign", None, value_changed, None)
+        return
 
     def _reconcile_params(self, model: nn.Module) -> None:
         """Flag ANY within-forward PARAMETER storage-byte change (r18 + r19-A, fail closed).
@@ -1729,22 +1734,6 @@ def _resolve_buffer_address(
         if tensor_start >= reg_start and tensor_end <= reg_end:
             return address
     return None
-
-
-def _storage_range(tensor: torch.Tensor) -> tuple[int, int]:
-    """Return byte range occupied by a tensor inside its storage."""
-
-    with _state.pause_logging():
-        element_size = tensor.element_size()
-        start = int(tensor.storage_offset()) * element_size
-        end = start + int(tensor.numel()) * element_size
-    return start, end
-
-
-def _ranges_overlap(left: tuple[int, int], right: tuple[int, int]) -> bool:
-    """Return whether two half-open byte ranges overlap."""
-
-    return left[0] < right[1] and right[0] < left[1]
 
 
 def _could_mutate(func_name: str, kwargs: dict[str, Any] | None = None) -> bool:

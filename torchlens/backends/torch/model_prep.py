@@ -24,6 +24,7 @@ from torch import nn
 from torchlens._ir.capture_events import CaptureEvents
 
 from ... import _state
+from ..._capture_honesty import warn_held_scan_truncated
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..._data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
@@ -53,7 +54,7 @@ from ..._utils.tensor_utils import (
 from ...recording._halt import StopSignal
 from . import module_stack as _mstack
 from ._held_refs import normalize_held_torch_function_refs, register_released_model
-from ._held_tensor_scan import iter_module_held_plain_tensors, warn_held_scan_truncated
+from ._held_tensor_scan import iter_module_held_plain_tensors
 from ._module_arg_stubs import stub_module_arg_payloads
 from ._module_boundary_adoption import (
     collect_pre_forward_tensor_ids,
@@ -2807,7 +2808,7 @@ def _clear_session_tensor_metadata(
     visit
         Optional action applied to each reachable non-Parameter tensor instead
         of the default ``clear_meta`` -- the pre-forward ownership snapshot
-        (:func:`_collect_model_owned_tensor_ids`) reuses this exact traversal
+        (:func:`_module_boundary_adoption._collect_model_owned_tensor_ids`) reuses this exact traversal
         so the "model-owned" surfaces of the snapshot and the session-end
         clear can never drift apart.
 
@@ -3036,46 +3037,6 @@ def _clear_callable_session_tensor_metadata(
     for name in code.co_names:
         if name in globals_dict:
             _clear_session_tensor_metadata(globals_dict[name], seen, visit=visit)
-
-
-def _collect_model_owned_tensor_ids(model: nn.Module) -> dict[int, torch.Tensor]:
-    """Snapshot tensors reachable from the model's PRE-FORWARD state, PINNED.
-
-    Walks exactly the surfaces the session-end clear walks -- submodule
-    ``__dict__`` object graphs plus each forward callable's defaults, keyword
-    defaults, closure cells, and referenced globals -- via the shared ``visit``
-    traversal, so a tensor the previous session's cleanup could reach (a
-    nested model-owned cache, a forward-global mask) is recognized as
-    model-owned by the next capture. The R16 module-entry adoption disclosure
-    consults this snapshot: a pre-forward model-owned tensor is a KNOWN
-    internal source (its stale labels were legitimately cleared between
-    sessions), while a tensor first appearing MID-forward is absent from the
-    snapshot and keeps the escape disclosure.
-
-    The mapping VALUES are strong references, deliberately (round-3 b1/b3/b4
-    merged finding): a bare ``set[int]`` of recyclable ids had no liveness
-    pinning, so a model that dropped a snapshotted cache tensor mid-forward
-    freed the object and a later stale-pre-wrap escape product could reuse the
-    exact id -- classified "model-owned known source", silently suppressing
-    the adoption disclosure (the exact laundering 3c721316 closed). Pinning
-    every snapshot member for the session makes id reuse impossible; the
-    workspace drop at the transient-state cleanup seam releases the pins.
-
-    Parameters
-    ----------
-    model
-        The prepared root model.
-
-    Returns
-    -------
-    dict[int, torch.Tensor]
-        ``id() -> tensor`` for every reachable non-Parameter tensor. Consumers
-        test membership (``id(t) in snapshot``), identical to the historical
-        set semantics; the values exist only to pin the ids.
-    """
-
-    owned, _ = collect_pre_forward_tensor_ids(model)
-    return owned
 
 
 def _undecorate_model_tensors(trace: "Trace", model: nn.Module) -> None:

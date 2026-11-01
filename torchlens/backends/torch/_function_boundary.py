@@ -621,3 +621,24 @@ def record_function_apply(
     if close_boundary_call(trace, marks, spec, (args, kwargs, out)):
         _warn_foreign_boundary(trace, cls, exits)
     return out
+
+
+# Functions that should never be logged — they are metadata queries, not
+# computational operations, and logging them would cause infinite recursion
+# (e.g. size() is called internally by logging code).
+funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
+
+# Wrapped calls that never demote the call enclosing them to non-bottom-level
+# (see the barcode-transparency note inside ``wrapped_func``). ``as_subclass``
+# is torch's ``__torch_function__`` return conversion. The storage accessors
+# return a storage, never a tensor, so they log no value flow of their own; a
+# Python-level tensor method that reads its storage through them
+# (``Tensor.share_memory_`` calls ``_typed_storage()``) would otherwise lose its
+# bottom-level barcode and go uncaptured.
+_BARCODE_TRANSPARENT_FUNCS = frozenset(
+    {"as_subclass", "untyped_storage", "_typed_storage", "storage"}
+)
+
+# Print functions get special handling: intercepted to add TorchLens label
+# info to the repr without creating a new logged operation.
+print_funcs = ["__repr__", "__str__", "_str"]

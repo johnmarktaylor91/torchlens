@@ -22,7 +22,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._save_budget import SaveBudget
 from torchlens._storage_bindings import copy_with_storage_context, views_part_of_its_storage
-from torchlens.backends.torch import _ops_retention
+from torchlens.backends.torch import _ops_arguments, _ops_retention
 from torchlens.options import CaptureOptions
 
 _SRC_BYTES = 16 * 4  # torch.arange(16, dtype=float32)
@@ -94,7 +94,7 @@ def test_copy_with_storage_context_replays_a_grow_and_a_restride() -> None:
 @pytest.mark.parametrize("func_name", ["as_strided_", "resize_", "resize_as_"])
 def test_saved_receiver_of_a_storage_geometry_call_keeps_its_storage(func_name: str) -> None:
     view, src = _view_into_source()
-    (receiver, other), _ = _ops_retention._copy_saved_call_args(
+    (receiver, other), _ = _ops_arguments._copy_saved_call_args(
         func_name, (view, torch.zeros(2)), {}, True
     )
     assert receiver.storage_offset() == 1
@@ -105,7 +105,7 @@ def test_saved_receiver_of_a_storage_geometry_call_keeps_its_storage(func_name: 
 
 def test_saved_receiver_of_another_call_stays_compact() -> None:
     view, _ = _view_into_source()
-    (receiver,), _ = _ops_retention._copy_saved_call_args("add_", (view,), {}, True)
+    (receiver,), _ = _ops_arguments._copy_saved_call_args("add_", (view,), {}, True)
     assert receiver.storage_offset() == 0
     assert receiver.untyped_storage().nbytes() == 4 * 4
 
@@ -117,7 +117,7 @@ def test_storage_context_copy_is_charged_to_the_save_budget() -> None:
     trace = _BudgetTrace(1 << 20)
     fields: dict[str, Any] = {"_label_raw": "as_strided_"}
     reservations = _ops_retention._admit_saved_args_budget(trace, fields, (view,), {})
-    saved_args, saved_kwargs = _ops_retention._copy_saved_call_args(
+    saved_args, saved_kwargs = _ops_arguments._copy_saved_call_args(
         "as_strided_", (view,), {}, True
     )
     fields["saved_args"], fields["saved_kwargs"] = list(saved_args), saved_kwargs
