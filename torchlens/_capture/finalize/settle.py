@@ -101,8 +101,8 @@ def save_new_outs(
                 layer_log_entry.detach_saved_activations = detach_saved_activations
         return
 
+    from ..._user_funcs import _run_model_and_save_specified_outs
     from ..projectors import RefreshProjector
-    from ..run_entry import _run_model_and_save_specified_outs
 
     save_grads_policy = getattr(self, "save_grads", None)
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
