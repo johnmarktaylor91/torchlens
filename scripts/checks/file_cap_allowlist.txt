@@ -88,11 +88,8 @@ torchlens/_data_classes/_trace_inventory.py::build_sites_table	92
 torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	97
 torchlens/_data_classes/_trace_stack.py::stack_traces	68
 torchlens/_data_classes/_trace_stats.py	1312
-torchlens/_data_classes/_trace_validation.py	1425
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin._batch_remove_log_entries	67
-torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	525
-torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.validate_forward_pass	65
-torchlens/_data_classes/_trace_validation.py::_warn_pending_value_edits_on_new_input_run	64
+torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	133
 torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.draw	240
 torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.draw_backward	71
 torchlens/_data_classes/_trace_viz.py::TraceVisualizationMixin.summary	102
@@ -1172,6 +1169,7 @@ torchlens/intervention/_trace_edits.py::record_do_intervention_event	78
 torchlens/intervention/_trace_edits.py::set_site	89
 torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	79
 torchlens/intervention/_trace_hooks.py::attach_hooks	83
+torchlens/intervention/_trace_run.py::run	377
 torchlens/intervention/_trace_selection_edits.py::apply_cross_kind_batch_do	62
 torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
 torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71

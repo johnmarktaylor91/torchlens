@@ -7797,6 +7797,9 @@
   "file": "torchlens/intervention/_trace_selection_edits.py",
   "has_default": false,
   "sites": 3,
+  "file": "torchlens/intervention/_trace_run.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
