@@ -51,12 +51,11 @@ pass, step, and site. The fix is one stateless mechanism:
   across sites via one plan identity). The shipped ``noise`` /
   ``scramble_elements`` keep their frozen ``per_rule`` behavior forever.
 
-Every firing routes its audit through C03's ONE FireRecord builder: realized
-draws land as ``ledger_notes`` (lifted into ``FireRecord.determinism_note`` by
-``build_fire_record``) plus a structured session-side record served by
-:func:`sampling_records`. No new persisted field is introduced (the C07 field
-census is frozen; a structured ``sampling`` FireRecord field would need its
-own adjudicated the field-intent ledger row first).
+Every firing routes its audit through C03's ONE FireRecord builder: each realized
+draw lands as a typed :class:`~torchlens.intervention.types.SamplingRecord` that
+``build_fire_record`` lifts into the persisted ``FireRecord.sampling``, and as a
+``ledger_notes`` line lifted into ``FireRecord.determinism_note`` (the readable
+rendering). Nothing about a draw is session-only.
 
 Axis law (D24/D25): axes are NEVER inferred from rank. The ladder is explicit
 ``axis=`` > facet/recipe-declared semantic role > registered model/site
@@ -85,14 +84,13 @@ from .._errors import InvalidArgumentError
 from ..errors._base import TorchLensWarning
 from .hooks import HookContext
 from .population import OneDatum, PerRowDatums, Population
-from .types import Edit
+from .types import Edit, SamplingRecord
 
 __all__ = [
     "SamplingPlan",
     "permute_batch",
     "resample_rows_from",
     "sample_from",
-    "sampling_records",
     "set_direction_mean",
 ]
 
@@ -321,16 +319,36 @@ def _leaf_path(ctx: HookContext) -> tuple[int, ...]:
 
 
 def _record_sampling(ctx: HookContext, verb: str, record: dict[str, Any]) -> None:
-    """Land one realized-draw record on the session and the note stream.
+    """Land one realized draw on the pending FireRecord and the note stream.
 
-    The structured dict rides ``run_ctx["sampling_records"]`` (session-time;
-    served by :func:`sampling_records`); the compact rendering is enqueued as
-    a ``ledger_notes`` entry so C03's ONE FireRecord builder lifts it into the
-    persisted ``FireRecord.determinism_note`` -- no parallel audit path.
+    The typed :class:`SamplingRecord` waits in ``run_state["sampling_draws"]`` until
+    C03's ONE FireRecord builder pops the pending draws into the persisted
+    ``FireRecord.sampling``; the compact rendering is enqueued as a ``ledger_notes``
+    entry the same builder lifts into ``FireRecord.determinism_note`` -- no
+    parallel audit path, nothing session-only.
     """
 
-    ctx.run_state.setdefault("sampling_records", []).append(dict(record))
     draw = record.get("donor_ids", record.get("permutation"))
+    coordinate = record.get("logical_firing_coordinate")
+    ctx.run_state.setdefault("sampling_draws", []).append(
+        SamplingRecord(
+            verb=verb,
+            base_seed=record.get("base_seed"),
+            derived_seed=record.get("derived_seed"),
+            share_draw=record.get("share_draw"),
+            logical_firing_coordinate=(
+                tuple(coordinate) if isinstance(coordinate, (list, tuple)) else coordinate
+            ),
+            eligible_count=record.get("eligible_count"),
+            population_count=record.get("population_count"),
+            population_identity=record.get("population_identity"),
+            donor_group_id=record.get("donor_group_id"),
+            draw_indices=(
+                tuple(int(index) for index in draw) if isinstance(draw, (list, tuple)) else ()
+            ),
+            realized_draw_digest=record.get("realized_draw_digest"),
+        )
+    )
     draw_repr = repr(list(draw)[:16]) if isinstance(draw, (list, tuple)) else repr(draw)
     note = (
         f"sampling[{verb}] base_seed={record.get('base_seed')} "
@@ -350,21 +368,6 @@ def _draw_digest(indices: Sequence[int]) -> str:
     """Hash the realized index vector (cheap; never the tensor payload)."""
 
     return hashlib.sha256(",".join(str(i) for i in indices).encode()).hexdigest()[:16]
-
-
-def sampling_records(trace: Any) -> tuple[dict[str, Any], ...]:
-    """Return the session-time realized-draw records of a trace's last run.
-
-    Session-only by design: the persisted carriers are the FireRecord's
-    ``determinism_note`` (via the ONE builder's note lift) and the helper's
-    KEEP-persisted identity kwargs; the structured per-draw record family is
-    a declared C07-amendment follow-up, never smuggled through free kwargs.
-    """
-
-    run_ctx = getattr(trace, "last_run", None)
-    if not isinstance(run_ctx, dict):
-        return ()
-    return tuple(run_ctx.get("sampling_records", ()))
 
 
 # ----------------------------------------------------------------------

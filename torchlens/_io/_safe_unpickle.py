@@ -938,6 +938,7 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens.intervention.types", "FrozenTargetSpec"),
         ("torchlens.intervention.types", "FrozenTargetValueSpec"),
         ("torchlens.intervention.types", "FunctionRegistryKey"),
+        ("torchlens.intervention.types", "SamplingRecord"),
         ("torchlens.intervention.types", "Edit"),
         ("torchlens.intervention.types", "HookSpec"),
         ("torchlens.intervention.types", "InterventionDecision"),

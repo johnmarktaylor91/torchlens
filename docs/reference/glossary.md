@@ -3717,6 +3717,7 @@ describe each surface in depth.
 | `query_slice=` | keyword of `AttentionView.crop_to`: which query positions to keep, as a slice |
 | `rank_handles=` | keyword of `tl.types.MergedTrace`: mapping from rank to its handle |
 | `run_record=` | keyword of `tl.trackers.HistoryView` |
+| `sampling=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
 | `signal=` | keyword of `tl.stats.NarrationObserver` |
 | `std_evidence=` | keyword of `tl.stats.TensorStats` |
 | `std_se=` | keyword of `tl.stats.TensorStats` |
@@ -3910,8 +3911,8 @@ The sections above describe each surface in depth.
 | `BisectPrecisionReport.max_rel_err` | First divergent op's maximum relative error, or `None` |
 | `BisectPrecisionReport.message` | Human-readable summary |
 | `Bundle.comparability` | Return the derived relationship for a pair of members (`tl.types.Relationship`) |
-| `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=` |
 | `Bundle.comparability_table` | Return pairwise relationships for all member pairs |
+| `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=` |
 | `Bundle.map` | Apply a function independently to each member |
 | `Bundle.rank_changes` | Rank sites by their distance from a baseline member |
 | `BundleComparisonError.severity` | The error's severity class |
@@ -3925,26 +3926,26 @@ The sections above describe each surface in depth.
 | `ClipLedgerSnapshot.has_constancy_hint` | Whether the clip ledger saw a constant clipping pattern worth hinting |
 | `CloseReport.is_disabled` | Whether the watcher was disabled |
 | `CloseReport.is_final_sample_forced` | Whether close forced a final sample |
-| `DoctorReport.check` | Return one diagnostic row by stable key; raises KeyError for an unknown key |
-| `DoctorReport.checks` | Ordered tuple of environment and optional model checks |
-| `DoctorReport.torch_version` | Installed PyTorch version, always set |
-| `DoctorReport.model_type` | Qualified model type, or None for an environment-only report |
-| `DoctorReport.capability_snapshot` | Full named runtime capability mapping |
-| `DoctorReport.to_markdown` | Return the diagnostic table as Markdown |
-| `DoctorReport.show` | Print and return the fixed-width table; str(report) returns the same text |
-| `DoctorCheck.key` | Stable row key; environment keys retain probe names except torch_capabilities |
-| `DoctorCheck.label` | Readable diagnostic title |
-| `DoctorCheck.status` | pass, known_broken, scope, or not_tested |
-| `DoctorCheck.severity` | ok, info, warning, or error |
-| `DoctorCheck.is_detected` | Detected condition; environment rows use status other than pass |
-| `DoctorCheck.details` | Diagnostic explanation |
-| `DoctorCheck.suggestion` | Remedy text or an empty string |
 | `ConformanceReport.is_claim_eligible` | `True` only when the pretrained-family floor is met; toys earn nothing regardless of pass rate |
 | `CostTreeRow.num_unknown_ops` | Directly-owned ops with no cost rule |
 | `DeterminismReport.first_problem` | Project the first divergence into the shared vocabulary |
 | `DiagnosticFinding.check_name` | Check name (`"nonfinite"`, `"dtype_regime"`, `"layout"` or `"confinement"`) |
 | `DiffReport.rows_with_status` | Return the rows carrying one closed-vocabulary status |
 | `DiffRow.pass_number` | Pass number of the compared op |
+| `DoctorCheck.details` | Diagnostic explanation |
+| `DoctorCheck.is_detected` | Detected condition; environment rows use status other than pass |
+| `DoctorCheck.key` | Stable row key; environment keys retain probe names except torch_capabilities |
+| `DoctorCheck.label` | Readable diagnostic title |
+| `DoctorCheck.severity` | ok, info, warning, or error |
+| `DoctorCheck.status` | pass, known_broken, scope, or not_tested |
+| `DoctorCheck.suggestion` | Remedy text or an empty string |
+| `DoctorReport.capability_snapshot` | Full named runtime capability mapping |
+| `DoctorReport.check` | Return one diagnostic row by stable key; raises KeyError for an unknown key |
+| `DoctorReport.checks` | Ordered tuple of environment and optional model checks |
+| `DoctorReport.model_type` | Qualified model type, or None for an environment-only report |
+| `DoctorReport.show` | Print and return the fixed-width table; str(report) returns the same text |
+| `DoctorReport.to_markdown` | Return the diagnostic table as Markdown |
+| `DoctorReport.torch_version` | Installed PyTorch version, always set |
 | `DryRun.filter` | Return a new trace with decisions from a new op predicate |
 | `Edit.is_compatible_with_append` | Whether the edit keeps the output shape, so an append rerun may stack it with other edits |
 | `Edit.name` | The edit's public name (the builder that made it, such as `zero_ablate`) |
@@ -3971,6 +3972,7 @@ The sections above describe each surface in depth.
 | `FireRecord.backward_pass_number` | Backward pass the edit fired in, or `None` for a forward fire |
 | `FireRecord.edit` | The `Edit` that fired, or `None` for a raw hook |
 | `FireRecord.edit_name` | Name of the edit or hook that fired |
+| `FireRecord.sampling` | Realized draws of the stochastic verbs during this fire: a tuple of `SamplingRecord`, saved with the trace (`determinism_note` keeps the readable line) |
 | `FireRecord.signal` | Pass the fire happened in: `"forward"` or `"backward"` |
 | `GqaInfo.num_query_heads` | Number of query heads |
 | `GradFnCall.fire_record` | The fire record of the edit that produced this grad-fn call, or `None` |
@@ -4045,11 +4047,11 @@ The sections above describe each surface in depth.
 | `MergedTrace.degradations` | Environment degradations recorded at load (empty on a live merge) |
 | `ModuleCall.has_pre_hook_input_change` | Whether a user forward pre-hook changed the call's effective inputs (`None` when evidence is incomplete) |
 | `ModuleCall.label` | Pass-qualified module call label (`address:call_index`) |
-| `ModuleInputSnapshot.is_capture_complete` | Whether all supported mutation evidence was available for the snapshot |
 | `ModuleCall.parent_label` | Label of the parent ModuleCall in the dynamic call tree |
+| `ModuleInputSnapshot.is_capture_complete` | Whether all supported mutation evidence was available for the snapshot |
 | `ModuleStackFrame.pass_number` | Call number of this module in the stack |
-| `NarrationEvent.stats` | `tl.stats.TensorStats` for this tensor, or `None` when no statistics were requested or available |
 | `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
+| `NarrationEvent.stats` | `tl.stats.TensorStats` for this tensor, or `None` when no statistics were requested or available |
 | `Op.edits` | The FireRecords of every edit that fired at this op, in fire order (was `interventions`) |
 | `Op.is_edited` | Whether a user edit replaced this op's output |
 | `Op.pass_number` | 1-based pass of this op within its layer |
@@ -4098,6 +4100,17 @@ The sections above describe each surface in depth.
 | `RunReport.has_carried_state` | Whether mutations were deliberately left on the live model; the default run restores declared state and reports `False` |
 | `RunReport.is_poisoned` | Whether the run left the provider unusable for further runs |
 | `RunnableDiagnostic.is_analysis_load_available` | Whether the artifact can still load for analysis only |
+| `SamplingRecord.base_seed` | The plan's declared or capture-derived base seed; `None` for an averaging verb |
+| `SamplingRecord.derived_seed` | The stateless per-firing seed derived from the base seed, population identity, donor group and coordinate |
+| `SamplingRecord.donor_group_id` | Donor-sharing group of the firing (`per_group` plans share one draw across sites) |
+| `SamplingRecord.draw_indices` | The full realized index vector: donor member ids, or the row permutation of `permute_batch`; empty when nothing was drawn |
+| `SamplingRecord.eligible_count` | Members eligible for the draw after agreement-class filtering |
+| `SamplingRecord.logical_firing_coordinate` | Where the draw fired: the logical site, pass and row coordinate the seed derivation used |
+| `SamplingRecord.population_count` | Size of the population drawn from |
+| `SamplingRecord.population_identity` | Digest identity of the population |
+| `SamplingRecord.realized_draw_digest` | Short SHA-256 of the realized index vector |
+| `SamplingRecord.share_draw` | Sharing rule of the plan: `per_firing`, `per_rule` or `per_group` |
+| `SamplingRecord.verb` | The stochastic verb that drew: `patch_from`, `resample_rows_from`, `permute_batch`, `set_direction_mean` or `mean_ablate` |
 | `SavedFigure.disclosure_lines` | Every honesty line the artifact rendered, in order |
 | `SavedFigure.num_pages` | Total page count (equals `len(paths)` for file output) |
 | `SavedFigure.svg_fonttype` | The matplotlib `svg.fonttype` used (`"path"` by default) |
