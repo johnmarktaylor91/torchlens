@@ -68,6 +68,9 @@ EXPECTED_WRAPPED = (
     "mm",
     "multiply",
     "negative",
+    "nn.Conv1D.forward",
+    "nn.Conv2D.forward",
+    "nn.Conv3D.forward",
     "ones",
     "ones_like",
     "pow",
@@ -497,6 +500,7 @@ def test_paddle_wrapper_inventory_load_bearing_membership() -> None:
     assert denied >= RNG_APIS
     assert denied >= TENSOR_ESCAPE_APIS
     assert wrapped >= COARSE_COMPOSITE_APIS
+    assert {"nn.Conv1D.forward", "nn.Conv2D.forward", "nn.Conv3D.forward"} <= wrapped
     assert wrapped >= STOCHASTIC_COMPOSITE_DENY_APIS
     for op_name in (
         "functional.dropout",
