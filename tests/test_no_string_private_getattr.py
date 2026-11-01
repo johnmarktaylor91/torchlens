@@ -43,6 +43,7 @@ from _source_corpus import package_ast, package_files
 
 from torchlens._constants import MODEL_LOG_FIELD_ORDER
 from torchlens._data_classes._trace_groups import _TraceGroup
+from torchlens._data_classes.trace import Trace
 from torchlens._merged._errors import MergeInputError
 from torchlens._merged._presenter import MergedTrace, _rank_raw_to_final_op_labels
 
@@ -392,6 +393,46 @@ def _trace_reachins(tree: ast.AST) -> list[tuple[int, str, str]]:
     return found
 
 
+def _retired_public_stores() -> frozenset[str]:
+    """The public spellings the v11-rest stores retired (``_param_logs`` -> ``param_logs``).
+
+    A spelling that ``Trace`` still exposes (a property or group view) is not
+    retired and is left out.
+    """
+
+    return frozenset(name[1:] for name in _TRACE_REST_STORES if not hasattr(Trace, name[1:]))
+
+
+def _retired_store_reachins(tree: ast.AST, retired: frozenset[str]) -> list[tuple[int, str, str]]:
+    """Collect ``(lineno, builtin, attr)`` string reads of a retired public store.
+
+    ``getattr(log, "param_logs", {})`` on a trace-shaped base names a field
+    that no longer exists, so the default always answers: the fork's gradient
+    reset once looped over an empty dict this way. Counted on trace-shaped
+    bases only; ``self``/``cls`` carry their own fields.
+    """
+
+    found: list[tuple[int, str, str]] = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _REACHIN_BUILTINS
+            and len(node.args) >= 2
+        ):
+            continue
+        name_arg = node.args[1]
+        if not (isinstance(name_arg, ast.Constant) and name_arg.value in retired):
+            continue
+        base = ast.unparse(node.args[0])
+        if base in {"self", "cls"}:
+            continue
+        tail = base.split(".")[-1].split("[")[0]
+        if tail in _TRACE_IDENTIFIERS:
+            found.append((node.lineno, node.func.id, name_arg.value))
+    return found
+
+
 @lru_cache(maxsize=1)
 def _scan_package() -> dict[str, list[str]]:
     """Package -> sorted ``file:line builtin attr`` reach-in sites."""
@@ -486,6 +527,44 @@ def test_gate_scanner_detects_planted_offenders() -> None:
             "_provenance_backend",
         ]
     )
+
+
+def test_no_string_read_of_a_retired_public_trace_store() -> None:
+    """No ``getattr(trace, "<retired public store>", default)`` survives in the package.
+
+    The v11 stores dropped their public names; a string read with a default
+    keeps working and silently answers the default, so this holds the package
+    at zero (the private spelling is counted by the ledger above).
+    """
+
+    retired = _retired_public_stores()
+    assert {"param_logs", "layer_list", "layer_dict_all_keys"} <= retired
+    offenders: list[str] = []
+    for path in package_files():
+        rel = path.relative_to(_PACKAGE_ROOT.parent).as_posix()
+        for lineno, builtin, attr in _retired_store_reachins(package_ast(path), retired):
+            offenders.append(f"{rel}:{lineno} {builtin}(..., {attr!r})")
+    assert not offenders, (
+        "String reads of a retired public Trace store (the default always answers; "
+        f"read the private store directly): {sorted(offenders)}"
+    )
+
+
+def test_retired_store_scanner_detects_planted_offenders() -> None:
+    """Planted positives and negatives for the retired-public-store scanner."""
+
+    retired = frozenset({"param_logs", "layer_list"})
+    planted = ast.parse(
+        "a = getattr(log, 'param_logs', {})\n"
+        "b = hasattr(state.trace, 'layer_list')\n"
+        # Negatives: own state, the private store, a live public name, a non-trace base.
+        "c = getattr(self, 'param_logs', {})\n"
+        "d = getattr(trace, '_param_logs', {})\n"
+        "e = getattr(trace, 'ops', None)\n"
+        "f = getattr(session, 'layer_list', [])\n"
+    )
+    attrs = sorted(attr for _, _, attr in _retired_store_reachins(planted, retired))
+    assert attrs == ["layer_list", "param_logs"]
 
 
 def test_trace_store_names_come_from_field_order() -> None:

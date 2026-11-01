@@ -13,10 +13,10 @@ from pathlib import Path
 
 import pytest
 import torch
+from support.collapse_models import AlternatingSiblings, ParentOpConnectors
 from torch import nn
 
 import torchlens as tl
-from tests.test_collapse_segment_adjacency import AlternatingSiblings, ParentOpConnectors
 from torchlens._visualization.collapse_optimizer import select_collapse_plan
 from torchlens._visualization.collapse_plan import RenderContext
 
