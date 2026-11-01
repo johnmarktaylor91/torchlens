@@ -1,0 +1,295 @@
+"""Site-level replay decisions: source records, stochastic draws, buffer threading.
+
+Split from :mod:`torchlens.intervention.replay`. Each helper classifies one site or
+answers one pure question about it (is it a source record, does a random draw keep
+its captured value, what value threads through a buffer version record); the replay
+loop in :mod:`~torchlens.intervention.replay` acts on the answers and raises the
+typed refusals.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING
+
+import torch
+
+from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
+from ._replay_context import _replay_site_key
+
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
+
+
+def _is_source_record(site: Op) -> bool:
+    """Whether a site is a source record with nothing to re-execute.
+
+    A buffer version record and a model-input leaf carry no callable: their
+    replay value is threaded or captured, never recomputed, and a hook aimed
+    at one fires on that value.
+
+    Parameters
+    ----------
+    site:
+        Site to classify.
+
+    Returns
+    -------
+    bool
+        True for buffer records and input leaves.
+    """
+
+    if getattr(site, "is_buffer", False):
+        return True
+    return bool(getattr(site, "is_input", False)) and site.func is None and not site.parents
+
+
+def _no_func_message(site: Op, *, loaded: bool) -> str:
+    """Return the refusal text for a site with no callable to replay.
+
+    Parameters
+    ----------
+    site:
+        Site that cannot be replayed.
+    loaded:
+        Whether the trace came from a saved file.
+
+    Returns
+    -------
+    str
+        Refusal message, naming the loaded-trace condition when that is the cause.
+    """
+
+    if not loaded:
+        return f"{site.layer_label!r} has no func for replay"
+    return (
+        f"{site.layer_label!r} has no func for replay: this trace was loaded from a saved "
+        "file, and a save keeps no capture-time callables or argument templates, so edits "
+        "cannot be replayed on it. Edit a trace captured in this process with "
+        "CaptureOptions(intervention_ready=True), or rerun the model with the edit staged: "
+        "trace.run(model, inputs)"
+    )
+
+
+def _keeps_captured_draw(
+    representative: Op,
+    replay_group: Sequence[Op],
+    *,
+    pending_updates: Mapping[str, torch.Tensor],
+    label_keys: Mapping[str, tuple[str, ...]],
+) -> bool:
+    """Whether a stochastic call keeps its captured output instead of re-executing.
+
+    Re-executing a random-source op (``randn_like``, ``dropout``, ...) with no
+    recorded RNG state draws fresh numbers: the replay would replace the
+    captured value with an unrelated one before any hook fires, so an edit
+    aimed at the site would edit a value the trace never held. When no
+    argument of the call changed in this replay there is nothing to
+    recompute and the captured draw stands. With RNG states recorded
+    (``save_rng_states``) the call re-executes and reproduces its draw; a
+    call whose arguments did change re-executes as well (its new draw is the
+    disclosed stochastic-propagation behaviour).
+
+    Parameters
+    ----------
+    representative:
+        Representative site of the function-call group.
+    replay_group:
+        Sites the call produced.
+    pending_updates:
+        Values this replay has recomputed so far, by replay site key.
+    label_keys:
+        Label spelling to replay site keys.
+
+    Returns
+    -------
+    bool
+        True when the captured output is the correct replay value.
+    """
+
+    if not _is_unseeded_single_draw(representative, replay_group):
+        return False
+    if getattr(representative, "edge_substitutions", None):
+        return False
+    if _edited_at_capture(representative):
+        # The captured out already carries the capture-time edit, and the
+        # replay composes that edit again at the site: keeping the value
+        # would apply it twice. The raw draw is only recoverable by
+        # re-execution (seeded when RNG states were saved).
+        return False
+    return not _any_parent_updated(representative, pending_updates, label_keys)
+
+
+def _edited_at_capture(site: Op) -> bool:
+    """Whether ``site`` carries a capture-time fire record or replaced-op mark.
+
+    Parameters
+    ----------
+    site:
+        Op record to inspect.
+
+    Returns
+    -------
+    bool
+        True when a capture-time hook already shaped the recorded out.
+    """
+
+    if getattr(site, "intervention_replaced", False):
+        return True
+    return bool(getattr(site, "interventions", None))
+
+
+def _is_unseeded_single_draw(representative: Op, replay_group: Sequence[Op]) -> bool:
+    """Whether a group is one tensor-valued random draw with no recorded RNG state.
+
+    Parameters
+    ----------
+    representative:
+        Representative site of the function-call group.
+    replay_group:
+        Sites the call produced.
+
+    Returns
+    -------
+    bool
+        True for a single-output stochastic op whose ``func_rng_states`` is empty.
+    """
+
+    func_name = str(getattr(representative, "func_name", "") or "").rstrip("_")
+    if func_name not in _STOCHASTIC_FUNC_NAMES:
+        return False
+    if getattr(representative, "func_rng_states", None):
+        return False
+    if len(replay_group) != 1 or tuple(representative.container_path or ()):
+        return False
+    return isinstance(representative.out, torch.Tensor)
+
+
+def _any_parent_updated(
+    site: Op,
+    pending_updates: Mapping[str, torch.Tensor],
+    label_keys: Mapping[str, tuple[str, ...]],
+) -> bool:
+    """Whether any parent of ``site`` was recomputed earlier in this replay.
+
+    Parameters
+    ----------
+    site:
+        Site whose parents are checked.
+    pending_updates:
+        Values this replay has recomputed so far, by replay site key.
+    label_keys:
+        Label spelling to replay site keys.
+
+    Returns
+    -------
+    bool
+        True when a parent's replay key carries a pending update.
+    """
+
+    for parent in site.parents or ():
+        for key in label_keys.get(parent, (parent,)):
+            if key in pending_updates:
+                return True
+    return False
+
+
+def _frontier_leaf(
+    frontier: dict[str, torch.Tensor],
+    label: str,
+    tensor: torch.Tensor,
+) -> torch.Tensor:
+    """Return a fresh replay-frontier leaf for a saved tensor.
+
+    Parameters
+    ----------
+    frontier:
+        Mutable frontier cache keyed by source label.
+    label:
+        Source label for the boundary tensor.
+    tensor:
+        Saved tensor entering the replay cone.
+
+    Returns
+    -------
+    torch.Tensor
+        Detached cloned leaf requiring grad.
+    """
+
+    if label not in frontier:
+        frontier[label] = tensor.detach().clone().requires_grad_()
+    return frontier[label]
+
+
+def _buffer_thread_candidate(
+    site: Op,
+    trace: Trace,
+    overlay: Mapping[str, torch.Tensor],
+) -> tuple[torch.Tensor | None, str | None]:
+    """Return the value to thread through one buffer record and the gap reason, if any.
+
+    A written-buffer version record's single parent is the op that performed
+    the write, and for ``inplace``/``reassign`` write kinds that op's output
+    IS the post-write buffer state. Threading is self-certifying: the
+    capture-time buffer value must equal the capture-time producer out, or
+    the record keeps its captured value and the returned reason discloses
+    the gap (the caller warns or raises on it).
+
+    Parameters
+    ----------
+    site:
+        Buffer record inside the replay cone.
+    trace:
+        Model log being replayed.
+    overlay:
+        Current replay outs keyed by pass-qualified replay key.
+
+    Returns
+    -------
+    tuple[torch.Tensor | None, str | None]
+        ``(recomputed producer out, None)`` when the value threads;
+        ``(None, reason)`` for a disclosed gap; ``(None, None)`` when the
+        record simply keeps its captured value (no parent, or a producer not
+        recomputed in this replay).
+    """
+
+    parents = tuple(getattr(site, "parents", ()) or ())
+    if not parents:
+        return None, None
+    if len(parents) != 1:
+        return None, f"record has {len(parents)} parents, not one writing op"
+    producer_key = parents[0]
+    producer = trace.layer_dict_all_keys.get(producer_key)
+    recomputed = overlay.get(_replay_site_key(producer)) if producer is not None else None
+    if producer is None or recomputed is None:
+        return None, None
+    write_kind = getattr(site, "buffer_write_kind", None)
+    if write_kind not in {"inplace", "reassign"}:
+        if getattr(site, "buffer_value_changed", None) is not False:
+            return None, (
+                f"write kind {write_kind!r} does not prove the writing op's output equals "
+                "the post-write buffer state"
+            )
+        return None, None
+    if not _buffer_write_corroborated(site.out, producer.out):
+        return None, (
+            f"capture-time corroboration failed: the buffer value does not equal the "
+            f"writing op {producer_key!r}'s captured output"
+        )
+    return recomputed, None
+
+
+def _buffer_write_corroborated(captured_site: object, captured_producer: object) -> bool:
+    """Whether the captured buffer value equals the writing op's captured output.
+
+    Both must be tensors of one shape with equal values; anything else leaves
+    the threading unproven.
+    """
+
+    return (
+        isinstance(captured_site, torch.Tensor)
+        and isinstance(captured_producer, torch.Tensor)
+        and captured_site.shape == captured_producer.shape
+        and bool(torch.equal(captured_site, captured_producer))
+    )

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-79 packages, 1237 modules, 617276 lines, 0 modules without a docstring.
+79 packages, 1240 modules, 617696 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -34,7 +34,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2940 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2113 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
-| `torchlens._utils` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. | 33 | 22362 |
+| `torchlens._utils` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. | 34 | 22401 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 64 | 42241 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 749 |
@@ -63,7 +63,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2017 |
 | `torchlens.conformance` | ''torchlens.conformance'': the capture conformance suite (MEMO 4, B4). | 11 | 4268 |
 | `torchlens.conformance._rosters` | Per-backend conformance rosters; one module per backend. | 8 | 3623 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 21 | 9436 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 21 | 9405 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2214 |
 | `torchlens.errors` | Public TorchLens exception classes. | 4 | 1029 |
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 73 |
@@ -72,7 +72,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 951 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 13 | 5202 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 2999 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 63 | 35140 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 65 | 35552 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 682 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 328 |
@@ -674,7 +674,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 
 
 ### `torchlens._utils`
 
-Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. (33 modules, 22362 lines)
+Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. (34 modules, 22401 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -690,6 +690,7 @@ Focused utility modules: RNG, tensor ops, argument handling, introspection, coll
 | `_producer_version` | Parse the torch version a saved artifact recorded (never the live runtime). | 31 |
 | `_rng_channels` | Thread routing, owner-join settlement, and global-engine state rows for the monitor. | 845 |
 | `_script_call_slot` | Probe for the TorchScript call boundary: can ''ScriptFunction.__call__'' be replaced. | 35 |
+| `_stochastic_funcs` | Names of torch functions whose outputs depend on random draws. | 39 |
 | `_subprocess` | The ONE bounded-subprocess spawn discipline for every TorchLens child. | 205 |
 | `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4658 |
 | `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 246 |
@@ -1317,7 +1318,7 @@ Per-backend conformance rosters; one module per backend. (8 modules, 3623 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (21 modules, 9436 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (21 modules, 9405 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1339,7 +1340,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_nan` | NaN and Inf bisection helpers for TorchLens traces. | 832 |
 | `_nan_backward` | Backward NaN bisector: a fire-order transition ledger with healing. | 574 |
 | `_params` | Parameter-level comparison between two models. | 269 |
-| `_precision` | Precision bisector: locate where reduced-precision numerics first diverge. | 407 |
+| `_precision` | Precision bisector: locate where reduced-precision numerics first diverge. | 376 |
 | `_recompute` | Activation recomputation candidate ranking helpers. | 89 |
 | `_rerun` | Isolated reruns: run the same forward more than once under controlled state. | 224 |
 
@@ -1450,7 +1451,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 2999 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (63 modules, 35140 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (65 modules, 35552 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1472,7 +1473,9 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_param_fingerprint` | Capture-time parameter fingerprints: replay refuses a parameter changed since capture. | 186 |
 | `_patch_mapping` | Source-site to target-site mapping for ''patch_from'' (Patchscopes, SelfIE). | 211 |
 | `_position_edits` | Token-position editing. | 188 |
+| `_replay_cone` | Cone-of-effect membership and site labelling for saved-DAG replay. | 193 |
 | `_replay_context` | Replay run-context store: pass-qualified site keys and the capture-truth digest ledger. | 332 |
+| `_replay_sites` | Site-level replay decisions: source records, stochastic draws, buffer threading. | 295 |
 | `_replay_values` | Value-shape helpers for replay: in-place mutation detection, tensor cloning and template checks. | 138 |
 | `_rerun_ledger` | Ledger-record assembly for rerun captures. | 77 |
 | `_rerun_predicate` | Rerun support for interventions staged through the capture predicate door. | 275 |
@@ -1504,7 +1507,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `population` | The public population noun for stochastic/population edits (edits ). | 636 |
 | `predicates` | Predicate-time intervention decisions and sugar. | 156 |
 | `regions` | Regions: derived admissibility on the existing verbs (surgery ). | 1053 |
-| `replay` | Saved-DAG replay engine for TorchLens interventions. | 1890 |
+| `replay` | Saved-DAG replay engine for TorchLens interventions. | 1814 |
 | `rerun` | Full-forward rerun engine for TorchLens interventions. | 1695 |
 | `resolver` | Resolve TorchLens intervention selectors against model logs. | 1128 |
 | `runtime` | Runtime context ownership for TorchLens intervention execution. | 1668 |
