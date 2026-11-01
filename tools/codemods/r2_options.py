@@ -118,9 +118,12 @@ def _door_name(func: ast.expr) -> str | None:
         and not func.value.args
     ):
         return DOORS.get(func.attr)
-    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-        if func.value.id in {"tl", "torchlens", "_tl", "_user_funcs", "tl.bridge.transformers"}:
-            return DOORS.get(func.attr)
+    if (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id in {"tl", "torchlens", "_tl", "_user_funcs", "tl.bridge.transformers"}
+    ):
+        return DOORS.get(func.attr)
     return None
 
 
@@ -575,13 +578,16 @@ def rewrite_source(
     if not ed.edits:
         return False
     new = ed.apply()
-    if "CaptureOptions(" in new and "CaptureOptions" not in source:
-        if "import torchlens as tl" not in new:
-            new = new.replace(
-                "\nimport torch\n",
-                "\nimport torch\n\nfrom torchlens.options import CaptureOptions\n",
-                1,
-            )
+    if (
+        "CaptureOptions(" in new
+        and "CaptureOptions" not in source
+        and "import torchlens as tl" not in new
+    ):
+        new = new.replace(
+            "\nimport torch\n",
+            "\nimport torch\n\nfrom torchlens.options import CaptureOptions\n",
+            1,
+        )
     if (
         "RecordingOptions(" in new
         and "RecordingOptions" not in source
