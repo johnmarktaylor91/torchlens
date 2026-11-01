@@ -1062,12 +1062,6 @@ class PaddleBackend:
     ) -> dict[str, Any]:
         """Replay, compare and perturb one capture; return its decision."""
 
-        from .validation import (
-            _parent_perturbations_change_output,
-            _payloads_close,
-            _rebuild_inputs,
-        )
-
         label = public_label(getattr(capture, "label_raw", None), ops_by_label)
         op = ops_by_label.get(getattr(capture, "label_raw", ""))
         if op is None or bool(getattr(op, "is_input", False)):
@@ -1075,57 +1069,87 @@ class PaddleBackend:
                 label, OUTCOME_FAILED, REASON_PARENT_PAYLOAD_MISSING, "no recorded op"
             )
         if is_constant_capture(capture):
-            # SPEC 2 rule 3 / FORKS F-L: a closure constant has no function and
-            # nothing upstream to replay from; it is a leaf whose saved payload
-            # feeds its consumers' replays. A missing payload still fails.
-            if not bool(getattr(op, "has_saved_activation", False)) or op.out is None:
-                return validation_decision(
-                    label, OUTCOME_FAILED, REASON_PARENT_PAYLOAD_MISSING, "constant has no payload"
-                )
-            return validation_decision(label, OUTCOME_EXEMPTED, REASON_CONSTANT_PRODUCER_LEAF)
+            return _constant_capture_decision(label, op)
         try:
-            expected_output = op.out
-            intervention = getattr(capture, "intervention", None)
-            if intervention is not None:
-                # Narrow user-intervention carve-out (tripwire doctrine):
-                # the replay target switches to the pre-hook value ONLY
-                # when trace-level evidence corroborates a genuine live
-                # fire. A capture-side record without corroboration is a
-                # forged/mispresented stamp and fails outright.
-                if not _paddle_intervention_corroborated(trace, capture, op):
-                    return validation_decision(
-                        label, OUTCOME_FAILED, REASON_USER_INTERVENTION, "fire not corroborated"
-                    )
-                if intervention.raw_first_output is not None:
-                    expected_output = intervention.raw_first_output
-            rebuilt = _rebuild_inputs(capture, ops_by_label)
-            if not rebuilt.ok:
-                return validation_decision(
-                    label, OUTCOME_FAILED, REASON_PARENT_PAYLOAD_MISSING, str(rebuilt.reason)
-                )
-            with _state.pause_logging(), self.paddle.no_grad():
-                replayed = cast(Callable[..., Any], capture.func)(*rebuilt.args, **rebuilt.kwargs)
-            replayed_output = _value_at_path(replayed, _first_output_path(capture))
-            if expected_output is None or not _payloads_close(replayed_output, expected_output):
-                return validation_decision(label, OUTCOME_FAILED, REASON_REPLAY_MISMATCH)
-            if is_literal_producer_capture(capture):
-                return validation_decision(label, OUTCOME_REPLAYED)
-            if not _parent_perturbations_change_output(
-                self,
-                capture,
-                ops_by_label,
-                baseline_output=expected_output,
-                constant_labels=constants,
-            ):
-                return validation_decision(label, OUTCOME_FAILED, REASON_PERTURBATION_INSENSITIVE)
+            verdict, rebuilt, intervention = self._replay_and_compare(
+                trace, capture, op, ops_by_label, constants
+            )
         except Exception as exc:  # noqa: BLE001 - a replay crash fails this op
             return validation_decision(
                 label, OUTCOME_FAILED, REASON_NO_REPLAYABLE_FUNCTION, type(exc).__name__
             )
+        if verdict is not None:
+            return verdict
         if rebuilt.parent_values and set(rebuilt.parent_values) <= constants:
             return validation_decision(label, OUTCOME_REPLAYED, REASON_CONSTANT_PARENT_PAYLOAD)
         reason = REASON_USER_INTERVENTION if intervention is not None else None
         return validation_decision(label, OUTCOME_REPLAYED, reason)
+
+    def _replay_and_compare(
+        self,
+        trace: Trace,
+        capture: PaddleOpCapture,
+        op: Any,
+        ops_by_label: Mapping[str, Any],
+        constants: frozenset[str],
+    ) -> tuple[dict[str, Any] | None, Any, Any]:
+        """Replay one capture and compare it with the saved payload.
+
+        Returns
+        -------
+        tuple[dict[str, Any] | None, Any, Any]
+            The decision when the replay settles the op (a failure, or a
+            replayed literal producer), else ``None``; the rebuilt inputs
+            (``None`` when the replay settled before rebuilding them); and
+            the capture's intervention record.
+        """
+
+        from .validation import (
+            _parent_perturbations_change_output,
+            _payloads_close,
+            _rebuild_inputs,
+        )
+
+        label = public_label(getattr(capture, "label_raw", None), ops_by_label)
+        expected_output = op.out
+        intervention = getattr(capture, "intervention", None)
+        if intervention is not None:
+            # Narrow user-intervention carve-out (tripwire doctrine):
+            # the replay target switches to the pre-hook value ONLY
+            # when trace-level evidence corroborates a genuine live
+            # fire. A capture-side record without corroboration is a
+            # forged/mispresented stamp and fails outright.
+            if not _paddle_intervention_corroborated(trace, capture, op):
+                failed = validation_decision(
+                    label, OUTCOME_FAILED, REASON_USER_INTERVENTION, "fire not corroborated"
+                )
+                return failed, None, intervention
+            if intervention.raw_first_output is not None:
+                expected_output = intervention.raw_first_output
+        rebuilt = _rebuild_inputs(capture, ops_by_label)
+        if not rebuilt.ok:
+            failed = validation_decision(
+                label, OUTCOME_FAILED, REASON_PARENT_PAYLOAD_MISSING, str(rebuilt.reason)
+            )
+            return failed, rebuilt, intervention
+        with _state.pause_logging(), self.paddle.no_grad():
+            replayed = cast(Callable[..., Any], capture.func)(*rebuilt.args, **rebuilt.kwargs)
+        replayed_output = _value_at_path(replayed, _first_output_path(capture))
+        if expected_output is None or not _payloads_close(replayed_output, expected_output):
+            failed = validation_decision(label, OUTCOME_FAILED, REASON_REPLAY_MISMATCH)
+            return failed, rebuilt, intervention
+        if is_literal_producer_capture(capture):
+            return validation_decision(label, OUTCOME_REPLAYED), rebuilt, intervention
+        if not _parent_perturbations_change_output(
+            self,
+            capture,
+            ops_by_label,
+            baseline_output=expected_output,
+            constant_labels=constants,
+        ):
+            failed = validation_decision(label, OUTCOME_FAILED, REASON_PERTURBATION_INSENSITIVE)
+            return failed, rebuilt, intervention
+        return None, rebuilt, intervention
 
     def emit_paddle_operation(
         self,
@@ -2153,6 +2177,21 @@ def _alias_to_primary(tree: PaddleModuleTree) -> dict[str, str]:
         for alias in metadata.get("all_addresses", [primary]):
             aliases[str(alias)] = primary
     return aliases
+
+
+def _constant_capture_decision(label: str, op: Any) -> dict[str, Any]:
+    """The decision for a closure-constant capture: an exempted leaf with a saved payload.
+
+    SPEC 2 rule 3 / FORKS F-L: a closure constant has no function and nothing
+    upstream to replay from; it is a leaf whose saved payload feeds its
+    consumers' replays. A missing payload still fails.
+    """
+
+    if not bool(getattr(op, "has_saved_activation", False)) or op.out is None:
+        return validation_decision(
+            label, OUTCOME_FAILED, REASON_PARENT_PAYLOAD_MISSING, "constant has no payload"
+        )
+    return validation_decision(label, OUTCOME_EXEMPTED, REASON_CONSTANT_PRODUCER_LEAF)
 
 
 def _paddle_intervention_corroborated(trace: Trace, capture: Any, op: Any) -> bool:

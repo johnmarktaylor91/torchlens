@@ -19,6 +19,10 @@ import argparse
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ._scorecard import PreviewScorecard
 
 __tl_layer__ = "L9"
 
@@ -64,12 +68,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
 
     from ._graduation import graduation_report
-    from ._scorecard import (
-        preview_scorecard,
-        scorecards_differ,
-        shipped_scorecard,
-        shipped_scorecard_path,
-    )
+    from ._scorecard import preview_scorecard, shipped_scorecard, shipped_scorecard_path
 
     args = _parser().parse_args(argv)
     if args.graduation:
@@ -88,20 +87,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"wrote {path} ({card.counts['passed']}/{card.counts['denominator']} cells passed)")
         return 0
     if args.check:
-        shipped = shipped_scorecard(args.backend)
-        if shipped is None:
-            print(
-                f"no shipped scorecard for {args.backend}: {shipped_scorecard_path(args.backend)}"
-            )
-            return 2
-        differences = scorecards_differ(shipped, card)
-        if differences:
-            print(f"shipped scorecard for {args.backend} differs from the computed one:")
-            print("\n".join(f"  {line}" for line in differences))
-            return 1
-        print(f"shipped scorecard for {args.backend} matches ({card.counts['denominator']} cells)")
-        return 0
+        return _check_shipped(args.backend, card)
     print(card.to_json())
+    return 0
+
+
+def _check_shipped(backend: str, card: PreviewScorecard) -> int:
+    """Compare the shipped record with ``card``: ``0`` equal, ``1`` differs, ``2`` none ships."""
+
+    from ._scorecard import scorecards_differ, shipped_scorecard, shipped_scorecard_path
+
+    shipped = shipped_scorecard(backend)
+    if shipped is None:
+        print(f"no shipped scorecard for {backend}: {shipped_scorecard_path(backend)}")
+        return 2
+    differences = scorecards_differ(shipped, card)
+    if differences:
+        print(f"shipped scorecard for {backend} differs from the computed one:")
+        print("\n".join(f"  {line}" for line in differences))
+        return 1
+    print(f"shipped scorecard for {backend} matches ({card.counts['denominator']} cells)")
     return 0
 
 

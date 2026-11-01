@@ -832,9 +832,18 @@ def _replay_one(
     evidence, perturbed_constant = _perturbation_evidence(
         perturb_capture, replayed, constant_labels
     )
+    return _perturbation_decision(_DecisionSite(label, name), evidence, perturbed_constant)
+
+
+def _perturbation_decision(
+    site: _DecisionSite, evidence: str, perturbed_constant: bool
+) -> dict[str, Any]:
+    """The perturbation-step decision for a replayed-equal call (FORKS F-L for literals)."""
+
+    name = site.op_name
     if evidence == PERTURBATION_UNPROVED:
         return _decision(
-            _DecisionSite(label, name),
+            site,
             "perturbation",
             "failed",
             "perturbation_unproved",
@@ -848,21 +857,21 @@ def _replay_one(
             # its saved literal arguments and compared equal; it has no
             # tensor parent to perturb (FORKS F-L).
             return _decision(
-                _DecisionSite(label, name),
+                site,
                 "perturbation",
                 "exempted",
                 "literal_producer",
                 "literal producer replayed equal; no tensor parent to perturb",
             )
         return _decision(
-            _DecisionSite(label, name),
+            site,
             "perturbation",
             "unverified",
             "perturbation_gap",
             "no tensor argument to perturb",
         )
     return _decision(
-        _DecisionSite(label, name),
+        site,
         "perturbation",
         "passed",
         "constant_parent" if perturbed_constant else None,

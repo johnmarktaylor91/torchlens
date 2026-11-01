@@ -27,13 +27,11 @@ RESOLVABLE_NAMESPACES: frozenset[str] = frozenset(
 STRUCTURAL_FUNC_NAMES: frozenset[str] = frozenset({"none", "input", "output", "buffer", "constant"})
 
 
-def _resolution_candidate(layer: Any) -> Any:
-    """The op's resolvable key, or ``None`` when the op must not be resolved."""
-
-    from ..intervention.types import FunctionRegistryKey
+def _is_resolution_exempt(layer: Any) -> bool:
+    """Whether the op must never be resolved: it has a live function or is structural."""
 
     if getattr(layer, "func", None) is not None:
-        return None
+        return True
     # A parentless literal producer (``ones``, ``full``) is an internal source
     # that still has a function: SPEC 2 rule 3 replays it. Functionless sources
     # carry a structural ``func_name`` and are excluded by name below.
@@ -42,10 +40,18 @@ def _resolution_candidate(layer: Any) -> Any:
         or getattr(layer, "is_output", False)
         or getattr(layer, "is_buffer", False)
     ):
+        return True
+    return str(getattr(layer, "func_name", "none")) in STRUCTURAL_FUNC_NAMES
+
+
+def _resolution_candidate(layer: Any) -> Any:
+    """The op's resolvable key, or ``None`` when the op must not be resolved."""
+
+    from ..intervention.types import FunctionRegistryKey
+
+    if _is_resolution_exempt(layer):
         return None
     func_name = str(getattr(layer, "func_name", "none"))
-    if func_name in STRUCTURAL_FUNC_NAMES:
-        return None
     key = getattr(layer, "func_id", None)
     if not isinstance(key, FunctionRegistryKey):
         return None
