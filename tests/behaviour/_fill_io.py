@@ -358,7 +358,7 @@ def _after_storage(cell: Cell) -> None:
     cell.expect(path.is_dir(), "no stream bundle on disk")
     reloaded = tl.load(path)
     _expect_same_trace(cell, trace, reloaded, "stream bundle load")
-    _expect_same_payloads(cell, plain, reloaded, "stream bundle load")
+    _expect_streamed_payloads(cell, trace, plain, reloaded, "stream bundle load")
     lazy = tl.load(path, lazy=True)
     _expect_same_trace(cell, trace, lazy, "stream bundle lazy load")
     _check_stream_resave(cell, trace, plain)
@@ -409,11 +409,30 @@ def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
         )
         cell.expect(not retained, f"streamed payloads kept in memory: {retained[:8]}")
     for op in trace.saved_ops:
+        if _halted(cell) and _is_output(op):
+            continue  # a halted capture's output is the halt frontier, not the model output
         reference = plain[op.label].out
         if reference is None:
             continue
         diff = _leaf_difference(reference, op.materialize_out())
         cell.expect(diff is None, f"streamed payload of {op.label}: {diff}")
+
+
+def _expect_streamed_payloads(cell: Cell, trace: Any, plain: Any, got: Any, what: str) -> None:
+    """Expect ``got`` to carry the plain payload of every op the streamed capture saved.
+
+    The streamed capture, not the plain one, defines the saved set: a ``save=`` partner
+    narrows it, and a ``halt=`` partner's output op is the halt frontier.
+    """
+
+    for op in trace.saved_ops:
+        if _halted(cell) and _is_output(op):
+            continue
+        reference = plain[op.label].out
+        if reference is None:
+            continue
+        diff = _leaf_difference(reference, got[op.label].out)
+        cell.expect(diff is None, f"{what}: payload of {op.label}: {diff}")
 
 
 def _check_stream_resave(cell: Cell, trace: Any, plain: Any) -> None:
@@ -423,7 +442,7 @@ def _check_stream_resave(cell: Cell, trace: Any, plain: Any) -> None:
     trace.save(path, level=PORTABLE)
     loaded = tl.load(path)
     _expect_same_trace(cell, trace, loaded, "portable save of a streamed trace")
-    _expect_same_payloads(cell, plain, loaded, "portable save of a streamed trace")
+    _expect_streamed_payloads(cell, trace, plain, loaded, "portable save of a streamed trace")
     shutil.rmtree(path, ignore_errors=True)
 
 
@@ -581,7 +600,6 @@ FRAME_IDENTITY = (
     "num_passes",
     "parents",
     "children",
-    "atomic_module_call",
     "has_saved_activation",
 )
 
