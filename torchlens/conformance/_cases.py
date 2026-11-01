@@ -206,10 +206,12 @@ def run_c0_cases(adapter: Any) -> list[CaseResult]:
 
 
 def _run_capture(adapter: Any, model: RosterModel) -> tuple[Any, Any, Any]:
-    """Build the roster model and capture once; return (net, trace, reference)."""
+    """Build the roster model and capture once (validation-ready); return (net, trace, reference)."""
+
+    from ._validation_cells import capture_for_validation
 
     net, example = model.builder()
-    trace = adapter.trace(net, example)
+    trace = capture_for_validation(adapter, net, example)
     reference = adapter.reference_output(net, example)
     return net, trace, reference
 

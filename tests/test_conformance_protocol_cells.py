@@ -36,9 +36,7 @@ from torchlens.conformance._protocol_cases import (
     c2_row_case_ids,
     constant_parents_problems,
     intermediates_problems,
-    names_reason_problems,
     payload_equality_problems,
-    validation_status_problems,
 )
 from torchlens.conformance._refusal_cases import CAPABILITY_REQUESTS, refusal_code_of
 from torchlens.conformance._scorecard import (
@@ -47,6 +45,10 @@ from torchlens.conformance._scorecard import (
     scorecard_from_json,
     scorecard_from_report,
     scorecards_differ,
+)
+from torchlens.conformance._validation_cells import (
+    names_reason_problems,
+    validation_status_problems,
 )
 
 #: The six v1 plants, whose intended cells ``tests/test_ecosystem_rt_conformance.py`` pins.
@@ -86,7 +88,12 @@ def _build_with_constants() -> tuple[Any, Any]:
     import torch
 
     class WithConstants(torch.nn.Module):
-        """Linear, scaled by a plain tensor attribute, plus ``torch.ones``."""
+        """Linear over a plain tensor attribute, plus a doubled ``torch.ones``.
+
+        The literal producer ``ones`` is the row's only constant; ``mul``
+        (its doubling) is the input-free intermediate the NumPy oracle pins,
+        so a dropped constant payload trips the constants cell alone.
+        """
 
         def __init__(self) -> None:
             super().__init__()
@@ -95,7 +102,7 @@ def _build_with_constants() -> tuple[Any, Any]:
             self.scale = torch.tensor([2.0, 0.5, -1.0])
 
         def forward(self, x: Any) -> Any:
-            return self.lin(x) * self.scale + torch.ones(3)
+            return self.lin(x) / self.scale + torch.ones(3) * 2
 
     torch.manual_seed(1)
     return WithConstants().eval(), torch.randn(2, 4)
@@ -111,7 +118,7 @@ def _roster() -> tuple[RosterModel, ...]:
             realism="config_built",
             builder=_build_with_constants,
             has_constants=True,
-            expected_intermediates={"ones": np.ones(3, dtype=np.float32)},
+            expected_intermediates={"__mul__": np.full(3, 2.0, dtype=np.float32)},
         ),
     )
 
