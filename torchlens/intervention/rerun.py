@@ -231,6 +231,12 @@ def _adopt_rerun_backward_graph(trace: Trace, new_log: Trace) -> None:
 
     new_log._refresh_projection_target_ref = weakref.ref(trace)
     _RERUN_GRAPH_SOURCES[trace] = new_log
+    # The redirected hooks pass the one-owner-per-label check against the
+    # result's map, so the result adopts the rerun capture's hook ownership
+    # (the map the state swap left names the previous capture's tensors).
+    for key in ("_tl_grad_hook_owner_by_label", "_tl_backward_hooked_tensor_keys"):
+        if key in new_log.__dict__:
+            trace.__dict__[key] = new_log.__dict__[key]
     for layer in trace.layer_list:
         _register_forward_grad_fn(
             trace, getattr(layer, "grad_fn_handle", None), layer._layer_label_raw
