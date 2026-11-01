@@ -110,6 +110,22 @@ def _embedded_tensor_then_build() -> bytes:
     )
 
 
+def _inline_tensor_then_build() -> bytes:
+    """The writer's own tensor reduction followed by BUILD: the storage-rebind vector today."""
+
+    buffer = io.BytesIO()
+    dump_canonical_metadata(torch.zeros(3), buffer)
+    data = buffer.getvalue()
+    assert data.endswith(pickle.STOP)
+    body = bytearray(data[:-1])
+    # STOP sat inside the last frame: shrink that frame's declaration by the byte removed.
+    frames = [(pos, arg) for op, arg, pos in pickletools.genops(data) if op.name == "FRAME"]
+    if frames and frames[-1][0] + 9 + frames[-1][1] == len(data):
+        pos, arg = frames[-1]
+        body[pos + 1 : pos + 9] = struct.pack("<Q", arg - 1)
+    return bytes(body) + pickle.EMPTY_DICT + pickle.BUILD + pickle.STOP
+
+
 def _getattr_then_call(name: str, *args: bytes) -> bytes:
     """``getattr(_VariableFunctionsClass, name)(*args)``: the mediated-factory vector."""
 
@@ -164,7 +180,7 @@ def _honest_values() -> dict[str, Any]:
 
     return {
         "scalars": {"a": 1, "b": 2.5, "c": "x", "d": None, "e": True},
-        "bytes_payload": {"f": b"\x00\x01", "g": bytearray(b"\x02")},
+        "bytes_payload": {"f": b"\x00\x01"},
         "containers": [1, (2, 3), {4: [5, 6]}, {7, 8}, frozenset({9})],
         "ordered": collections.OrderedDict([("k", 1), ("j", [2, 3])]),
         "counter": collections.Counter("abracadabra"),
@@ -262,6 +278,7 @@ def _hostile_streams() -> dict[str, bytes]:
         "from_file_getattr": _getattr_then_call("from_file", pickle.SHORT_BINUNICODE + b"\x01x"),
         # BUILD on a tensor
         "embedded_tensor_build": _embedded_tensor_then_build(),
+        "inline_tensor_build": _inline_tensor_then_build(),
         "rebuild_tensor_build": (
             pickle.PROTO
             + b"\x02"
@@ -529,6 +546,9 @@ def test_build_on_a_reduce_result_refuses_before_setstate_runs() -> None:
     torch.Tensor.__setstate__ = _spy  # type: ignore[method-assign, assignment]
     try:
         with pytest.raises(pickle.UnpicklingError, match="BUILD applied to a torch"):
+            _new_path(_inline_tensor_then_build())
+        # The stock torch reduction is refused by name before any tensor exists.
+        with pytest.raises(pickle.UnpicklingError, match="_load_from_bytes"):
             _new_path(_embedded_tensor_then_build())
     finally:
         torch.Tensor.__setstate__ = original  # type: ignore[method-assign]

@@ -50,6 +50,7 @@ __all__ = [
     "PrescanPlan",
     "ReduceSite",
     "StreamNeedsInterpreter",
+    "declared_protocol",
     "scan_opcodes",
     "prescan_stream",
 ]
@@ -366,17 +367,49 @@ class _ProbeBase(metaclass=_ProbeMeta):
         return cls._planner.on_construct(cls, args, kwargs)
 
 
+class _InterpreterImporter:
+    """The pure-Python machine's ``find_class``, at the protocol the stream declared.
+
+    The C machine's importer rebuilds a failed attribute lookup as its own
+    ``AttributeError`` (no Python frame), where the pure-Python machine lets the module's
+    own ``__getattr__`` failure through (an application frame). The load boundary
+    classifies by frame locus, so the dry run resolves through the very code the
+    pure-Python machine runs: same ``fix_imports`` mapping, same dotted walk at protocol
+    4 and above, same exception identity.
+    """
+
+    __slots__ = ("fix_imports", "proto")
+
+    def __init__(self, proto: int) -> None:
+        self.proto = proto
+        self.fix_imports = True
+
+    def __call__(self, module: str, name: str) -> Any:
+        """Import and resolve ``module.name`` as ``pickle._Unpickler.find_class`` does."""
+
+        return pickle._Unpickler.find_class(self, module, name)  # type: ignore[arg-type]
+
+
+def declared_protocol(data: bytes) -> int:
+    """Return the protocol a leading PROTO opcode declares (0 when the stream has none)."""
+
+    if data[:1] == pickle.PROTO and len(data) > 1:
+        return data[1]
+    return 0
+
+
 class _DryRunUnpickler(pickle.Unpickler):
     """C machine whose globals are recording probes; it builds the skeleton, nothing real."""
 
     def __init__(self, data: bytes, planner: _DryRunPlanner) -> None:
         super().__init__(io.BytesIO(data))
         self._planner = planner
+        self._importer = _InterpreterImporter(declared_protocol(data))
 
     def find_class(self, module: str, name: str) -> Any:
-        """Hand the planner a probe; the base importer carries this machine's protocol."""
+        """Hand the planner a probe, resolved through the interpreter's importer."""
 
-        return self._planner.probe_for(module, name, super().find_class)
+        return self._planner.probe_for(module, name, self._importer)
 
 
 class _DryRunPlanner:
@@ -413,9 +446,9 @@ class _DryRunPlanner:
     def probe_for(self, module: str, name: str, import_global: Importer) -> type:
         """Return the recording probe for ``(module, name)``, resolving it once.
 
-        ``import_global`` is the dry-run machine's own ``find_class``: it carries the
-        protocol the stream declared, so a dotted name attribute-walks exactly when the
-        real machine would (protocol 4 and above) and the policy judges the same object.
+        ``import_global`` is the pure-Python machine's importer at the protocol the stream
+        declared, so a dotted name attribute-walks exactly when that machine would
+        (protocol 4 and above) and the policy judges the same object.
         """
 
         pair = (module, name)
@@ -621,10 +654,16 @@ def scan_opcodes(data: bytes, max_opcodes: int | None) -> int:
 
     count = 0
     end = len(data)
+    mid_stream_proto = False
     ops = _iter_opcodes(data)
     while True:
         name, arg, pos = _next_opcode(ops, max_opcodes is not None)
         count += 1
+        if name == "PROTO" and pos != 0:
+            # The dry run resolves globals at the protocol the stream declared up front;
+            # a later PROTO would change the walk rules under it, so the interpreter
+            # (which tracks the protocol per opcode) runs that stream, once counted.
+            mid_stream_proto = True
         if max_opcodes is not None and count > max_opcodes:
             raise OpcodeCeilingExceeded(_CORRUPT + "opcode count exceeds the allocation ceiling")
         if name in _PUT_OPCODES and (arg < 0 or arg > count):
@@ -638,6 +677,8 @@ def scan_opcodes(data: bytes, max_opcodes: int | None) -> int:
             # reading it; a declaration beyond the bytes that remain is refused first.
             raise _corrupt(_FRAME_REFUSAL)
         if name == "STOP":
+            if mid_stream_proto:
+                raise StreamNeedsInterpreter("the protocol changes after the first opcode")
             return count
 
 
