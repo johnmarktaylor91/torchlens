@@ -70,12 +70,12 @@ def _conv(x: np.ndarray, weight: np.ndarray, bias: np.ndarray, padding: int) -> 
 
     spatial = x.ndim - 2
     padded = np.pad(x, [(0, 0), (0, 0)] + [(padding, padding)] * spatial)
-    windows = np.lib.stride_tricks.sliding_window_view(
-        padded, weight.shape[2:], axis=tuple(range(2, 2 + spatial))
-    )
+    window_shape: tuple[int, ...] = (1, 1, *(int(k) for k in weight.shape[2:]))
+    # windows: (N, C, *out_positions, 1, 1, *kernel); the two unit window axes are summed away.
+    windows = np.lib.stride_tricks.sliding_window_view(padded, window_shape)
     positions, offsets = "pqr"[:spatial], "xyz"[:spatial]
     out = np.einsum(
-        f"nc{positions}{offsets},oc{offsets}->no{positions}",
+        f"nc{positions}uv{offsets},oc{offsets}->no{positions}",
         windows.astype(np.float64),
         weight.astype(np.float64),
     )
