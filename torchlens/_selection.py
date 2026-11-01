@@ -47,7 +47,6 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
-from ._data_classes._trace_intervention_records import _edit_identity as _edit_identity
 from ._selection_align import align_resolved_selection
 from ._selection_mask import (
     _Mask,

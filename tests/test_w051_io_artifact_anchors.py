@@ -375,7 +375,7 @@ def test_absent_root_entry_point_refuses_from_v10(source_bundle: Path, tmp_path:
 
     from torchlens._io._forgery_identity_facts import _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC
 
-    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == tl._io.TLSPEC_VERSION == 10
+    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == 10 <= tl._io.TLSPEC_VERSION
     path = _tampered(
         source_bundle,
         tmp_path / "rep.tlspec",

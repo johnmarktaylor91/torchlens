@@ -10,7 +10,7 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
-from torchlens._selection import _edit_identity
+from torchlens._data_classes._trace_intervention_records import _edit_identity
 
 
 def test_value_edit_falls_back_to_the_given_identity() -> None:
