@@ -224,7 +224,6 @@ class BufRead(nn.Module):
         return torch.relu(self.cell(x) * self.mask)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("registered", [True, False], ids=["registered", "attribute"])
 def test_hook_edit_on_initial_buffer_read_applies_and_records(registered: bool) -> None:
     """A hook-style edit on an unwritten buffer read fires at that site and threads.
