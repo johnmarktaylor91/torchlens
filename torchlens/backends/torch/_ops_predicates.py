@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "_replace_output_value",
+    "_replace_output_tensors_by_path",
     "_record_predicate_output",
     "_is_default_ram_payload",
     "_predicate_function_ref",
@@ -111,6 +112,30 @@ def _replace_output_value(
             for key, item in value.items()
         }
     return value
+
+
+def _replace_output_tensors_by_path(
+    out_orig: Any,
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
+) -> Any:
+    """Return an output object with selected tensor paths replaced.
+
+    Parameters
+    ----------
+    out_orig
+        Original output container.
+    replacements
+        Replacement tensors keyed by output path.
+
+    Returns
+    -------
+    Any
+        Rebuilt output object when supported, otherwise the original object.
+    """
+
+    if () in replacements:
+        return replacements[()]
+    return _replace_output_value(out_orig, (), replacements)
 
 
 def _record_predicate_output(
