@@ -122,7 +122,9 @@ construction is denied).
 
 from __future__ import annotations
 
+import io
 import pickle
+import struct
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from types import ModuleType
@@ -1196,6 +1198,20 @@ _VM_INTERNAL_CODE_FILES: frozenset[str] = frozenset(
 )
 
 
+def _stream_bytes_left(stream: Any) -> int | None:
+    """Return the bytes after ``stream``'s position, or ``None`` when it cannot tell."""
+
+    try:
+        if not stream.seekable():
+            return None
+        position = stream.tell()
+        end = stream.seek(0, io.SEEK_END)
+        stream.seek(position)
+    except (AttributeError, OSError, ValueError):
+        return None
+    return int(end - position)
+
+
 class _DenyMissingDispatch(dict):
     """Opcode dispatch table that raises ``UnpicklingError`` on an unknown opcode.
 
@@ -1268,6 +1284,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
         """
 
         super().__init__(file)
+        self._stream = file
         self._rename_map: Mapping[tuple[str, str], tuple[str, str]] = rename_map or {}
         self._trust_custom_callables = trust_custom_callables
         self._allowed_custom_callable_modules = (
@@ -1950,6 +1967,21 @@ class SafeBundleUnpickler(pickle._Unpickler):
             "corrupt or malformed pickle stream: extension codes are not used in bundle metadata"
         )
 
+    def load_frame(self) -> None:
+        """Refuse a FRAME declaring more bytes than remain in the stream, before reading it.
+
+        The base VM passes the declared size to ``file.read``, which a buffered file
+        allocates up front. A stream that cannot report its length is refused.
+        """
+
+        (frame_size,) = struct.unpack("<Q", self.read(8))  # type: ignore[attr-defined]
+        left = _stream_bytes_left(self._stream)
+        if left is None or frame_size > left:
+            raise pickle.UnpicklingError(
+                "corrupt or malformed pickle stream: FRAME declares more bytes than remain"
+            )
+        self._unframer.load_frame(frame_size)  # type: ignore[attr-defined]
+
     # REBUILD the pure-Python opcode dispatch table so the overrides above are actually
     # invoked (proven: ``def load_build`` alone is INERT -- ``pickle._Unpickler.load``
     # reads ``self.dispatch``, a class-level dict of unbound base functions bound at
@@ -1964,3 +1996,4 @@ class SafeBundleUnpickler(pickle._Unpickler):
     dispatch[pickle.EXT1[0]] = load_ext
     dispatch[pickle.EXT2[0]] = load_ext
     dispatch[pickle.EXT4[0]] = load_ext
+    dispatch[pickle.FRAME[0]] = load_frame
