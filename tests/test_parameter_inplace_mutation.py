@@ -22,6 +22,8 @@ import torchlens as tl
 from torchlens.backends.torch import param_mutation, wrappers
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
+from torchlens.validation import last_validation_failure
+from torchlens.validation.diagnostics import CHECK_BACKWARD
 from torchlens.validation.invariants import MetadataInvariantError
 
 
@@ -660,6 +662,9 @@ def test_backward_validation_refuses_an_already_run_model_loudly() -> None:
         assert tl.validate(model, x, scope="backward") is False
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert "backward_validation_non_leaf_parameter" in codes
+    failure = last_validation_failure()
+    assert failure is not None and failure.check_name == CHECK_BACKWARD
+    assert failure.extra["reason"] == "non_leaf_parameter"
     assert model.temp.is_leaf is False
 
 

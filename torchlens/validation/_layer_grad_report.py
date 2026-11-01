@@ -25,6 +25,11 @@ class LayerGradReport:
     ``module:call[index]`` for multi-output calls. The classifier buckets are:
 
     - ``covered`` / ``mismatched``: eligible outputs that were compared;
+    - ``compared_no_grad``: an output the stock forward reached that received
+      no gradient in stock autograd AND none in the capture (an output the loss
+      does not depend on). The two sides agree, so it never sinks the verdict,
+      but it is not evidence either: it does not count toward ``covered_count``,
+      so a run with only such outputs still fails as unverifiable;
     - classified LEGITIMATE exclusions (never block passing):
       ``skipped_root_module``, ``skipped_identity_output``,
       ``skipped_no_tensor_output`` (PROVEN: the module call's
@@ -59,6 +64,7 @@ class LayerGradReport:
     skipped_module_less_count: int
     skipped_no_grad_count: int
     skipped_identity_output_count: int
+    compared_no_grad_count: int
     skipped_root_module_count: int
     mismatched_count: int
     unexpected_count: int
@@ -84,6 +90,24 @@ class LayerGradReport:
         return self.overall_passed
 
 
+def _module_exit_leaf_counts(trace: Trace) -> dict[tuple[str, int], int]:
+    """Read module-exit evidence of the real output walk's tensor-leaf counts."""
+    # Exit-event proof source: the ModuleExitEvent leaf count is recorded from
+    # the real output walk at module exit, independent of whether labeling or
+    # boundary minting succeeded, so it can PROVE a no-tensor-output exclusion.
+    events = getattr(trace, "_capture_events", None)
+    if events is None:
+        events = getattr(trace, "capture_events", None)
+    exit_leaf_counts: dict[tuple[str, int], int] = {}
+    for exit_event in getattr(events, "module_exit_events", ()) or ():
+        exit_key = (
+            str(getattr(exit_event, "address", "")),
+            int(getattr(exit_event, "call_index", 0) or 0),
+        )
+        exit_leaf_counts[exit_key] = int(getattr(exit_event, "output_tensor_leaf_count", -1))
+    return exit_leaf_counts
+
+
 def _compare_module_output_grads(
     trace: Trace,
     stock_module_grads: Mapping[ModuleOutputGradKey, torch.Tensor],
@@ -91,6 +115,7 @@ def _compare_module_output_grads(
     *,
     atol: float | None = None,
     rtol: float | None = None,
+    stock_reached_keys: set[ModuleOutputGradKey] | None = None,
 ) -> LayerGradReport:
     """Compare candidate module-call output grads to stock module-output grads.
 
@@ -111,6 +136,11 @@ def _compare_module_output_grads(
         An explicit float applies to every dtype unchanged.
     rtol:
         Relative allclose tolerance. ``None`` derives per dtype likewise.
+    stock_reached_keys:
+        Every module-output key the stock forward enumerated in the same run
+        that produced ``stock_module_grads``. A key here with no stock gradient
+        and no candidate gradient is ``compared_no_grad``; without this set a
+        missing gradient on both sides stays ``skipped_no_grad`` (fail-closed).
 
     Returns
     -------
@@ -125,19 +155,7 @@ def _compare_module_output_grads(
     candidate_grad_count = 0
     skipped_module_less_count = 0
 
-    # Exit-event proof source: the ModuleExitEvent leaf count is recorded from
-    # the real output walk at module exit, independent of whether labeling or
-    # boundary minting succeeded, so it can PROVE a no-tensor-output exclusion.
-    events = getattr(trace, "_capture_events", None)
-    if events is None:
-        events = getattr(trace, "capture_events", None)
-    exit_leaf_counts: dict[tuple[str, int], int] = {}
-    for exit_event in getattr(events, "module_exit_events", ()) or ():
-        exit_key = (
-            str(getattr(exit_event, "address", "")),
-            int(getattr(exit_event, "call_index", 0) or 0),
-        )
-        exit_leaf_counts[exit_key] = int(getattr(exit_event, "output_tensor_leaf_count", -1))
+    exit_leaf_counts = _module_exit_leaf_counts(trace)
     stock_observed_calls = {(addr, call_index) for addr, call_index, _ in stock_module_grads}
     stock_observed_calls.update(
         (addr, call_index) for addr, call_index, _ in stock_identity_addresses
@@ -189,11 +207,14 @@ def _compare_module_output_grads(
                 coverage[coverage_label] = "skipped_identity_output"
                 continue
             cand_grad = getattr(cand_layer, "grad", None)
-            if cand_grad is None:
-                coverage[coverage_label] = "skipped_no_grad"
-                continue
             stock_grad = stock_module_grads.get(key)
-            if stock_grad is None:
+            if cand_grad is None and stock_grad is None:
+                # Agreement, not evidence: only when stock provably reached the
+                # output in this run; an asymmetric None still fails below.
+                reached = stock_reached_keys is not None and key in stock_reached_keys
+                coverage[coverage_label] = "compared_no_grad" if reached else "skipped_no_grad"
+                continue
+            if cand_grad is None or stock_grad is None:
                 coverage[coverage_label] = "skipped_no_grad"
                 continue
             if cand_grad.shape != stock_grad.shape:
@@ -257,6 +278,7 @@ def _compare_module_output_grads(
         value == "skipped_identity_output" for value in coverage.values()
     )
     skipped_root_module_count = sum(value == "skipped_root_module" for value in coverage.values())
+    compared_no_grad_count = sum(value == "compared_no_grad" for value in coverage.values())
     unexpected_count = sum(value == "unexpected" for value in coverage.values())
 
     # Eligibility-classifier acceptance (replaces the former 0.80 coverage
@@ -288,6 +310,7 @@ def _compare_module_output_grads(
         skipped_no_grad_count=skipped_no_grad_count,
         skipped_identity_output_count=skipped_identity_output_count,
         skipped_root_module_count=skipped_root_module_count,
+        compared_no_grad_count=compared_no_grad_count,
         mismatched_count=mismatched_count,
         unexpected_count=unexpected_count,
         candidate_grad_count=candidate_grad_count,

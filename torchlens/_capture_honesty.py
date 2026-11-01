@@ -20,7 +20,10 @@ resolved absolute-path URIs (returned text is publishable data).
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ._data_classes.trace import Trace
 
 from ._data_classes._trace_missing_attrs import is_live_trace
 
@@ -43,7 +46,7 @@ HOST_TENSOR_SOURCE_FUNCS: tuple[str, ...] = ("from_numpy", "from_dlpack", "fromb
 #: ``_warn_unattributed_tensor_args``).
 ADVISORY_MODULE_BOUNDARY_ADOPTION = "module_boundary_adoption"
 #: Advisory kind recorded when the module-held plain-tensor scan was cut
-#: (``backends/torch/buffer_writes.warn_held_scan_truncated``).
+#: (``warn_held_scan_truncated`` below).
 ADVISORY_HELD_SCAN_TRUNCATED = "held_tensor_scan_truncated"
 #: Advisory kind recorded when an orphan-pruned op had source-less tensor arguments
 #: (``G.sum().item()``, a control-flow predicate on a closure tensor): the pruned op
@@ -720,6 +723,44 @@ def _bounded_text(value: Any, limit: int = 500) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 3] + "..."
+
+
+def warn_held_scan_truncated(truncations: list[str], trace: Trace | None = None) -> None:
+    """Disclose, once per capture, held-tensor scans cut by their bounds.
+
+    Parameters
+    ----------
+    truncations:
+        Descriptions collected by ``iter_module_held_plain_tensors``.
+    trace:
+        Capture trace; when given, the cut is persisted as a
+        ``held_tensor_scan_truncated`` capture advisory BEFORE warning, which
+        forward validation reads as a source-provenance failure.
+    """
+
+    if not truncations:
+        return
+    import warnings
+
+    from ._errors import TorchLensWarning
+
+    if trace is not None:
+        append_capture_advisory(trace, ADVISORY_HELD_SCAN_TRUNCATED, truncations)
+
+    shown = "; ".join(truncations[:5])
+    suffix = "" if len(truncations) <= 5 else f" (+{len(truncations) - 5} more)"
+    warnings.warn(
+        TorchLensWarning(
+            f"TorchLens stopped scanning module-held containers for plain tensors at "
+            f"{len(truncations)} place(s): {shown}{suffix}. A tensor past a cut that "
+            "the forward reads gets no buffer source: the capture warns about an input "
+            "with no provenance and the graph shows the read without the held tensor; "
+            "forward validation of this capture fails. Remedy: register tensors the forward "
+            "reads with register_buffer, or hold them in shallower or smaller containers",
+            code="held_tensor_scan_truncated",
+        ),
+        stacklevel=3,
+    )
 
 
 __all__ = [

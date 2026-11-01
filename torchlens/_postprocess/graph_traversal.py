@@ -1,21 +1,21 @@
-"""Steps 1-4: Output nodes, ancestry tracing, orphan removal, distance marking.
+"""Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ``_layer_depths``).
 
 Step 1 (_add_output_layers): Creates dedicated output Op nodes, copying
     metadata from the original output tensors but stripping params and module info.
 Step 2 (_find_output_ancestors): DFS backward from outputs marking has_output_descendant.
 Step 3 (_remove_orphan_nodes): Bidirectional flood from inputs AND outputs to find
     connected nodes; any node unreachable from both is removed as an orphan.
-Step 4 (_mark_layer_depths): Optional forward/backward BFS recording
-    min/max hop counts from input and output nodes.
+Step 4 (_mark_layer_depths, in the sibling module ``_layer_depths``): Optional
+    forward/backward BFS recording min/max hop counts from input and output nodes.
 """
 
 from collections import OrderedDict
-from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
 from .._data_classes.op import Op, _dtype_or_none, _memory_or_none, _shape_or_none
+from .._ir._output_occurrences import output_container_path_meta
 from .._ir.op_record import amend_late_buffer_output_parent
 from .._quantities import Bytes, Duration
 from .._utils.display import identity
@@ -28,6 +28,7 @@ from .._utils.tensor_utils import (
     tensor_nanequal,
 )
 from ._buffer_addresses import _recorded_buffer_address
+from ._orphan_seeds import _orphan_flood_seeds
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -292,12 +293,9 @@ def _add_output_layers(
         if output_address_suffix != "":
             output_address += f".{output_address_suffix}"
         new_output_node.io_role = output_address
-        container_path_meta = getattr(self, "_output_container_specs_by_raw_label", {}).get(
-            output_node._label_raw
-        )
-        if container_path_meta is not None:
-            new_output_node.container_path = container_path_meta[0]
-            new_output_node.container_spec = container_path_meta[1]
+        path_meta = output_container_path_meta(self, output_node._label_raw, output_address_suffix)
+        if path_meta is not None:
+            new_output_node.container_path, new_output_node.container_spec = path_meta
 
         # Tensor metadata must describe the tensor the model actually returned,
         # not the parent op's recorded output: after an in-place mutation
@@ -586,15 +584,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     _remove_foreign_kernel_interiors(self)
     orig_nodes = set(self._raw_graph_ws.raw_layer_labels_list)
     nodes_seen = set()
-    # Seed with inputs, outputs, and written buffer-version nodes. Written
-    # buffers such as BatchNorm.num_batches_tracked are state transitions even
-    # when the updated value is not read later in the forward graph.
-    written_buffer_layers = [
-        label
-        for label in self.buffer_layers
-        if getattr(self._raw_graph_ws.raw_layer_dict[label], "buffer_write_kind", None) is not None
-    ]
-    node_stack = self.input_layers + self.output_layers + written_buffer_layers
+    node_stack = _orphan_flood_seeds(self)
     # Shadow sets over the two trace-level list[str] sink ledgers: the former
     # per-node `label not in <list>` scans were O(k^2) in sink count
     # (hunt-6 R52-2). The lists stay the portable source of truth.
@@ -939,108 +929,6 @@ def _expand_seen_nodes_to_complete_func_call_groups(
                 expanded_seen.update(raw_labels)
                 changed = True
     return expanded_seen
-
-
-def _mark_layer_depths(self: "Trace") -> None:
-    """Step 4: Compute min/max hop distances from inputs and outputs.
-
-    Runs two unidirectional floods: forward from inputs (following children)
-    and backward from outputs (following parents). Each flood records
-    min_distance_from_{input,output} and max_distance_from_{input,output} on
-    every reachable node.
-
-    This step is CONDITIONAL on ``self._options_mark_layer_depths`` — it is
-    skipped when the user doesn't need distance metadata.
-    """
-    _flood_graph_from_input_or_output_nodes(self, "input")
-    _flood_graph_from_input_or_output_nodes(self, "output")
-
-
-def _flood_graph_from_input_or_output_nodes(self: "Trace", mode: str) -> None:
-    """Flood the graph from input or output nodes, tracking min/max distance.
-
-    Traverses unidirectionally from starting nodes (input or output), recording
-    each node's min and max hop count from the start. Also marks each node's
-    ancestry (input_ancestors or output_descendants).
-
-    Unlike the bidirectional flood in Step 3, this flood is UNIDIRECTIONAL:
-    from inputs it follows children (forward), from outputs it follows
-    parents (backward). This ensures hop counts reflect actual data-flow
-    distance, not arbitrary graph traversal paths.
-
-    Nodes are processed once in topological order: forward from inputs, or
-    backward from outputs. Each visited node propagates finalized distance and
-    lineage state to its data-flow successors.
-
-    Args:
-        mode: 'input' to flood forward from inputs, 'output' to flood backward from outputs.
-    """
-    traversal_order: Iterable[str]
-    if mode == "input":
-        starting_nodes = self.input_layers[:]
-        min_field = "min_distance_from_input"
-        max_field = "max_distance_from_input"
-        marker_field = "has_input_ancestor"
-        layer_logging_field = "input_ancestors"
-        forward_field = "children"
-        traversal_order = self._raw_graph_ws.raw_layer_labels_list
-    elif mode == "output":
-        starting_nodes = self.output_layers[:]
-        min_field = "min_distance_to_output"
-        max_field = "max_distance_to_output"
-        marker_field = "has_output_descendant"
-        layer_logging_field = "output_descendants"
-        forward_field = "parents"
-        traversal_order = reversed(self._raw_graph_ws.raw_layer_labels_list)
-    else:
-        raise ValueError("Mode must be either 'input' or 'output'")
-
-    for starting_node_label in starting_nodes:
-        starting_node = self[starting_node_label]
-        _update_node_distance_vals(starting_node, min_field, max_field, 0)
-        setattr(starting_node, marker_field, True)
-        getattr(starting_node, layer_logging_field).add(starting_node_label)
-
-    for current_node_label in traversal_order:
-        current_node = self[current_node_label]
-        current_min = getattr(current_node, min_field)
-        current_max = getattr(current_node, max_field)
-        if current_min is None or current_max is None:
-            continue
-
-        current_lineage = getattr(current_node, layer_logging_field)
-        for next_node_label in getattr(current_node, forward_field):
-            next_node = self[next_node_label]
-            _update_node_distance_vals(next_node, min_field, max_field, current_min + 1)
-            _update_node_distance_vals(next_node, min_field, max_field, current_max + 1)
-            setattr(next_node, marker_field, True)
-            getattr(next_node, layer_logging_field).update(current_lineage)
-
-
-def _update_node_distance_vals(
-    current_node: Op,
-    min_field: str,
-    max_field: str,
-    nodes_since_start: int,
-) -> None:
-    """Update a node's min/max distance fields if the current hop count is a new extreme."""
-    if getattr(current_node, min_field) is None:
-        setattr(current_node, min_field, nodes_since_start)
-    else:
-        setattr(
-            current_node,
-            min_field,
-            min(nodes_since_start, getattr(current_node, min_field)),
-        )
-
-    if getattr(current_node, max_field) is None:
-        setattr(current_node, max_field, nodes_since_start)
-    else:
-        setattr(
-            current_node,
-            max_field,
-            max(nodes_since_start, getattr(current_node, max_field)),
-        )
 
 
 def _log_internally_terminated_tensor(

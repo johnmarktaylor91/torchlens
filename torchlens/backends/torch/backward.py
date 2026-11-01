@@ -15,7 +15,7 @@ import time
 import warnings
 import weakref
 from collections import OrderedDict, deque
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal, cast
 
@@ -70,6 +70,13 @@ from ._fire_timing import (
     _fire_timing_stamp_list,
     _pop_matching_fire_start,
     _register_fire_timing_prehook,
+)
+from ._grad_fn_orders import (
+    _assign_grad_fn_orders,
+    _max_call_order,
+    _order_attribution_coverage,
+    _pass_order_from_roots,
+    _resolved_order_for_creator,
 )
 from ._grad_fn_source import _grad_fn_is_custom, _grad_fn_source_metadata
 from ._gradfn_markers import (
@@ -1069,144 +1076,6 @@ def _prefer_direct_pairing_source_for_paired_ops(trace: Any) -> None:
             and grad_fn_record.module_membership_source == "inferred"
         ):
             grad_fn_record.module_membership_source = "paired"
-
-
-def _resolved_order_for_creator(
-    creator_object_id: int | None,
-    grad_fn_logs: dict[int, GradFn],
-) -> int | None:
-    """Return the derived order for a creator-attributed grad-fn node."""
-
-    if creator_object_id is None:
-        return 1
-    creator = grad_fn_logs.get(creator_object_id)
-    creator_order = None if creator is None else creator.order
-    if creator_order is None:
-        return None
-    return creator_order + 1
-
-
-def _pass_order_from_roots(
-    root_grad_fn_ids: Sequence[int],
-    grad_fn_logs: dict[int, GradFn],
-    pass_orders: dict[int, int],
-) -> int | None:
-    """Derive a backward pass order from its root grad-fn nodes."""
-
-    root_orders = [
-        _root_based_order(grad_fn_logs[root_id], pass_orders)
-        for root_id in root_grad_fn_ids
-        if root_id in grad_fn_logs
-    ]
-    if not root_orders:
-        return None
-    if any(root_order is None for root_order in root_orders):
-        return None
-    if len(root_orders) != len(root_grad_fn_ids):
-        return None
-    unique_orders = set(root_orders)
-    if len(unique_orders) != 1:
-        return None
-    return cast(int, root_orders[0])
-
-
-def _root_based_order(root_grad_fn: GradFn, pass_orders: dict[int, int]) -> int | None:
-    """Return the ROOT-based pass order for one root grad-fn.
-
-    Parameters
-    ----------
-    root_grad_fn:
-        Root autograd node for the backward pass.
-    pass_orders:
-        Already materialized pass orders keyed by pass index.
-
-    Returns
-    -------
-    int | None
-        Root-based order, or ``None`` when the root cannot be attributed.
-    """
-
-    origin_backward_pass = root_grad_fn.origin_backward_pass
-    if origin_backward_pass is None:
-        return root_grad_fn.order
-    origin_order = pass_orders.get(origin_backward_pass)
-    if origin_order is None:
-        return root_grad_fn.order
-    return origin_order + 1
-
-
-def _order_attribution_coverage(
-    calls: Sequence[GradFnCall],
-    grad_fn_logs: dict[int, GradFn],
-) -> float | None:
-    """Return the fraction of calls with resolved grad-fn order metadata."""
-
-    if not calls:
-        return None
-    labels_with_order = {
-        grad_fn.label for grad_fn in grad_fn_logs.values() if grad_fn.order is not None
-    }
-    covered = sum(1 for call in calls if call.grad_fn_label in labels_with_order)
-    return covered / len(calls)
-
-
-def _max_call_order(
-    calls: Sequence[GradFnCall],
-    grad_fn_logs: dict[int, GradFn],
-) -> int | None:
-    """Return the maximum resolved GradFn order among calls in one pass.
-
-    Parameters
-    ----------
-    calls:
-        Materialized GradFn calls for a backward pass.
-    grad_fn_logs:
-        GradFn records keyed by object id.
-
-    Returns
-    -------
-    int | None
-        Highest order observed among the pass calls, or ``None`` when no call has
-        resolved order metadata.
-    """
-
-    label_to_order = {
-        grad_fn.label: grad_fn.order
-        for grad_fn in grad_fn_logs.values()
-        if grad_fn.order is not None
-    }
-    call_orders = [
-        label_to_order[call.grad_fn_label] for call in calls if call.grad_fn_label in label_to_order
-    ]
-    return max(call_orders) if call_orders else None
-
-
-def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
-    """Populate resolved GradFn order values from creators and known topology."""
-
-    for grad_fn_record in grad_fn_logs.values():
-        grad_fn_record.order = _resolved_order_for_creator(
-            grad_fn_record.creator_object_id,
-            grad_fn_logs,
-        )
-
-    changed = True
-    while changed:
-        changed = False
-        for grad_fn_record in grad_fn_logs.values():
-            if grad_fn_record.creator_object_id is not None or grad_fn_record.has_op:
-                continue
-            child_orders: list[int] = []
-            for child_id in grad_fn_record.next_grad_fn_ids:
-                child = grad_fn_logs.get(child_id)
-                if child is not None and child.order is not None:
-                    child_orders.append(child.order)
-            if not child_orders:
-                continue
-            inferred_order = max(child_orders)
-            if inferred_order > 1 and grad_fn_record.order != inferred_order:
-                grad_fn_record.order = inferred_order
-                changed = True
 
 
 @dataclass

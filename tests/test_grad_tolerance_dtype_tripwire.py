@@ -267,10 +267,11 @@ def test_fp64_layer_grad_corruption_fails_the_backward_verdict(
     real_stock_layer_grads = stock_module._stock_layer_grads
 
     def _perturbed(*args: object, **kwargs: object) -> object:
-        stock_grads, identity_addresses = real_stock_layer_grads(*args, **kwargs)
+        stock_grads, identity_addresses, reached_keys = real_stock_layer_grads(*args, **kwargs)
         return (
             {key: grad * (1.0 + 1e-6) for key, grad in stock_grads.items()},
             identity_addresses,
+            reached_keys,
         )
 
     monkeypatch.setattr(stock_module, "_stock_layer_grads", _perturbed)

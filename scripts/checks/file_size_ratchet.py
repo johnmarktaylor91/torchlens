@@ -288,7 +288,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # lanes landed reviewed fix mass on the merged tree (measures 4457);
     # next 50-line step above it. PRE-SPRINT BASELINE 3800 unchanged; the
     # post-features debloat pass keeps it as the target.
-    "torchlens/backends/torch/backward.py": 4500,
+    # 4500 -> 4300: the GradFn order-resolution helpers moved to
+    # _grad_fn_orders.py (4297 measured); the ceiling follows the file down.
+    "torchlens/backends/torch/backward.py": 4300,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
     # 3850 -> 3900: L9 adds the two DROP-gated backward-residuals fields
@@ -547,32 +549,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # the complexity ratchet; save.py re-exports the public names. Ceilings
     # follow files down (R43-F2); save.py stays on the debloat-pass list.
     "torchlens/intervention/save.py": 2300,
-    # Raised 2400 -> 2425 at the facet-cache persistence fix (2026-08-17): the
-    # +22 lines are the TEACHING half of the completeness refusal -- for an
-    # undeclared `_<name>_cache` cell backed by a public property it now names
-    # the accessor that populated it and states the DROP remedy, instead of
-    # naming an internal field the user never touched. The refusal itself was
-    # not weakened; only its message got smarter. Reviewed raise with a stated
-    # reason (the ratchet working as intended), NOT silent god-file regrowth --
-    # and scrub.py remains on the debloat-pass list as a genuine god file.
-    # Raised 2425 -> 2445 at the draw()-poisons-save fix (2026-08-17): the
-    # +20 lines enroll `_last_encoding_state` in the Trace runtime-only set
-    # and extend the same teaching refusal to LEDGERED-but-undeclared Trace
-    # transients (it now quotes the TRACE_EXTERNAL_WRITE_EXEMPTIONS row and
-    # states that a ledger row is documentation, not a scrub policy). Same
-    # reviewed-raise class as the row above; scrub.py stays on the
-    # debloat-pass list.
-    # Raised 2445 -> 2500 at the A08 persistence-honesty lane (2026-08-26): the
-    # +30 lines are the W3 weightsfree fix -- the structure-only buffer-payload
-    # strip (BN running stats are training-derived state a weights-free
-    # artifact must not carry; every structure-only save of a buffer-holding
-    # model was save-then-cannot-load at the M-C2 gate). Reviewed raise with a
-    # stated reason; scrub.py stays on the debloat-pass list.
-    # 2026-08-26 A09 fix cycle: source-embedding privacy policy family split
-    # out to _io/_source_privacy.py. Re-keyed ONCE at the T12 rebase for the
-    # final shape carrying both the A08 W3 raise and the A09 split (measured
-    # 2069; next 50-step). Shrink freely, raise consciously.
-    "torchlens/_io/scrub.py": 2100,
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/_visualization/_render_nodes.py": 2150,

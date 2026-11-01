@@ -519,6 +519,25 @@ def session_is_active(session_ref: weakref.ReferenceType[Any]) -> Callable[[], b
     return active
 
 
+def apply_steer_paused(
+    session: Any, address: str, module: nn.Module, args: tuple[Any, ...], output: Any
+) -> Any:
+    """Apply the staged steer at one module exit with function collection paused.
+
+    The steer's own torch calls (its arithmetic) are recorded by capture as one
+    intervention-replacement op, never as model function events, so the live
+    session must not read them as such: a model op of the same name
+    (``__add__``) would otherwise be matched against the steer's.
+    """
+
+    prior = session.collection_paused
+    session.collection_paused = True
+    try:
+        return session.steer_plan.apply(address, module, args, output)
+    finally:
+        session.collection_paused = prior
+
+
 def install_steer_hooks(plan: SteerPlan, session_ref: weakref.ReferenceType[Any]) -> list[Any]:
     """Register one persistent forward hook per steered module.
 
@@ -545,7 +564,7 @@ def install_steer_hooks(plan: SteerPlan, session_ref: weakref.ReferenceType[Any]
             session = ref()
             if session is None or not active():
                 return None
-            return session.steer_plan.apply(address, module, args, output)
+            return apply_steer_paused(session, address, module, args, output)
 
         handles.append(module.register_forward_hook(hook))
     return handles

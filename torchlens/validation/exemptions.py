@@ -52,7 +52,10 @@ from ._index_domain import (
 )
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
 from ._norm_running_var_proof import batch_norm_input_at_running_mean
-from ._norm_zero_weight_proof import norm_input_annihilated_by_zero_weight
+from ._norm_zero_weight_proof import (
+    _batch_norm_weight_operand,
+    norm_input_annihilated_by_zero_weight,
+)
 from ._operand_value_proofs import operand_value_proof_decision
 from ._replay_warnings import replay_warnings_ignored
 from ._sdpa_value_proofs import sdpa_value_proof_decision
@@ -165,6 +168,11 @@ STRUCTURAL_ARG_POSITIONS: dict[str, set[int]] = {
     "reshapeas": {1},  # canonicalized spelling
     "view_as": {1},
     "viewas": {1},  # canonicalized spelling
+    # ``Tensor.resize_as_(the_template)`` is ``self.resize_(the_template.size())``:
+    # arg 1 is read for its SHAPE only, never its elements (the same contract as
+    # ``view_as``/``reshape_as``). Arg 0, the receiver, keeps the element prefix
+    # it carries into the output and stays perturbation-tested.
+    "resize_as_": {1},
     # F2 tightening: the legacy OOB-justified index/target/mask blankets
     # (``cross_entropy`` target, ``embedding`` indices, ``gather``/
     # ``index_select``/``scatter*`` index tensors, ``masked_fill`` masks) were
@@ -214,6 +222,7 @@ STRUCTURAL_ARG_KWARG_ALIASES: dict[str, dict[int, set[str]]] = {
     "reshapeas": {1: {"other"}},
     "view_as": {1: {"other"}},
     "viewas": {1: {"other"}},
+    "resize_as_": {1: {"the_template"}},
     "nms": {0: {"boxes"}},
     "deform_conv2d": {1: {"offset"}},
     "roi_align": {1: {"boxes", "rois"}},
@@ -1035,23 +1044,6 @@ def _check_masked_fill_exempt(self: "Trace", layer: Op, layers_to_perturb: list[
     if 2 in perturbed_positions:
         return fill_selected == 0
     return False
-
-
-def _batch_norm_weight_operand(layer: Op) -> Any:
-    """Return the saved ``weight`` (gamma) operand of a batch_norm/instance_norm op.
-
-    Positional layout matches torch's real ATen call signature:
-    ``(input, weight, bias, running_mean, running_var, training, momentum,
-    eps, cudnn_enabled)`` -- NOT ``F.batch_norm``'s Python-level
-    ``(input, running_mean, running_var, weight, bias, ...)`` ordering, which
-    is why ``_check_norm_running_stat_exempt`` reads running_mean/running_var
-    from positions 3/4, not 1/2.
-    """
-
-    args = layer.saved_args
-    if args is None or len(args) <= 1:
-        return None
-    return args[1]
 
 
 def _check_norm_zero_weight_annihilates(layer: Op, layers_to_perturb: list[str]) -> bool:

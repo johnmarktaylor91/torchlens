@@ -211,7 +211,7 @@ class _SameRepr:
 
 
 def test_iter_module_held_plain_tensors_holder_shapes_and_unique_names() -> None:
-    from torchlens.backends.torch.buffer_writes import iter_module_held_plain_tensors
+    from torchlens.backends.torch._held_tensor_scan import iter_module_held_plain_tensors
 
     module = nn.Linear(2, 2)
     plain = torch.zeros(1)
@@ -261,7 +261,7 @@ def test_iter_module_held_plain_tensors_holder_shapes_and_unique_names() -> None
 
 
 def test_held_key_rendering_is_dot_and_colon_free() -> None:
-    from torchlens.backends.torch.buffer_writes import iter_module_held_plain_tensors
+    from torchlens.backends.torch._held_tensor_scan import iter_module_held_plain_tensors
 
     module = nn.Module()
     module.cache = {"sub.cpu": torch.zeros(1), "a:b": torch.zeros(1), 1.5: torch.zeros(1)}
@@ -272,7 +272,7 @@ def test_held_key_rendering_is_dot_and_colon_free() -> None:
 
 
 def test_iter_module_held_plain_tensors_walks_nested_containers() -> None:
-    from torchlens.backends.torch.buffer_writes import iter_module_held_plain_tensors
+    from torchlens.backends.torch._held_tensor_scan import iter_module_held_plain_tensors
 
     module = nn.Module()
     deep = torch.zeros(1)
@@ -293,7 +293,7 @@ def test_iter_module_held_plain_tensors_walks_nested_containers() -> None:
 
 
 def test_held_scan_depth_and_object_bounds_are_disclosed() -> None:
-    from torchlens.backends.torch.buffer_writes import (
+    from torchlens.backends.torch._held_tensor_scan import (
         _HELD_SCAN_MAX_DEPTH,
         _HELD_SCAN_MAX_OBJECTS,
         iter_module_held_plain_tensors,
@@ -338,7 +338,7 @@ def _tensor_free_holders() -> dict[str, Any]:
 
 
 def test_held_scan_never_cuts_tensor_free_containers() -> None:
-    from torchlens.backends.torch.buffer_writes import iter_module_held_plain_tensors
+    from torchlens.backends.torch._held_tensor_scan import iter_module_held_plain_tensors
 
     for attr, value in _tensor_free_holders().items():
         module = nn.Module()
@@ -351,7 +351,7 @@ def test_held_scan_never_cuts_tensor_free_containers() -> None:
 
 
 def test_held_scan_cuts_only_where_a_tensor_lies_past_the_bound() -> None:
-    from torchlens.backends.torch.buffer_writes import (
+    from torchlens.backends.torch._held_tensor_scan import (
         _HELD_SCAN_MAX_OBJECTS,
         iter_module_held_plain_tensors,
     )
@@ -400,7 +400,7 @@ class _CountingList(list):
 
 
 def test_held_scan_cost_on_a_200k_scalar_container_is_capped() -> None:
-    from torchlens.backends.torch.buffer_writes import (
+    from torchlens.backends.torch._held_tensor_scan import (
         _HELD_SCAN_MAX_VISITS,
         iter_module_held_plain_tensors,
     )
@@ -418,7 +418,7 @@ def test_held_scan_cost_on_a_200k_scalar_container_is_capped() -> None:
 
 
 def test_held_scan_discloses_the_visit_cap_only_when_items_are_left() -> None:
-    from torchlens.backends.torch.buffer_writes import (
+    from torchlens.backends.torch._held_tensor_scan import (
         _HELD_SCAN_MAX_VISITS,
         iter_module_held_plain_tensors,
     )
@@ -456,7 +456,7 @@ def test_held_scan_discloses_the_visit_cap_only_when_items_are_left() -> None:
 
 
 def test_depth_cut_ignores_tensors_stamped_elsewhere_in_the_module() -> None:
-    from torchlens.backends.torch.buffer_writes import iter_module_held_plain_tensors
+    from torchlens.backends.torch._held_tensor_scan import iter_module_held_plain_tensors
 
     shared = torch.zeros(1)
     for order in ("shallow_first", "deep_first"):
@@ -525,7 +525,7 @@ def test_tensor_free_holders_capture_without_a_scan_warning() -> None:
 
 
 def test_object_bound_cut_is_disclosed_at_capture() -> None:
-    from torchlens.backends.torch.buffer_writes import _HELD_SCAN_MAX_OBJECTS
+    from torchlens.backends.torch._held_tensor_scan import _HELD_SCAN_MAX_OBJECTS
 
     trace, fired = _held_scan_warnings(_TooWide(_HELD_SCAN_MAX_OBJECTS + 1), torch.randn(5))
     assert len(fired) == 1

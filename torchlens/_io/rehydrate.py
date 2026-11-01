@@ -27,18 +27,18 @@ from .._data_classes._state_adapter import state_items
 from .._data_classes.trace import Trace
 from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
 from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
+from ._small_raw import (
+    _RAW_IMAGE_SENTINEL,
+    _RAW_INPUT_IMAGE_BYTES_LIMIT,
+    _RAW_INPUT_IMAGE_MAX_EDGE,
+)
 from ._torch_symbols import torch_attr
 from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef, _file_identity
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .paths import resolve_bundle_blob_path, resolve_bundle_blobs_dir
 from .payload_codec import materialize_transport_tensor
-from .scrub import (
-    _RAW_IMAGE_SENTINEL,
-    _RAW_INPUT_IMAGE_BYTES_LIMIT,
-    _RAW_INPUT_IMAGE_MAX_EDGE,
-    _pin_in_memo,
-)
+from .scrub import _pin_in_memo
 from .state_contract import governed_artifact_load
 from .state_keys import invalidate_static_class_attr_cache, static_class_attr
 

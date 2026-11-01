@@ -1225,6 +1225,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_fast_run.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_input_walk.py",
   "has_default": false,
@@ -2689,6 +2697,14 @@
  },
  {
   "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_postprocess/_conditional_records.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_postprocess/_executor.py",
   "has_default": false,
@@ -2880,6 +2896,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_postprocess/_orphan_seeds.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/_postprocess/_primitive_profile.py",
@@ -3069,14 +3093,6 @@
   "file": "torchlens/_postprocess/finalization.py",
   "has_default": false,
   "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/_postprocess/finalization.py",
-  "has_default": false,
-  "sites": 2,
   "via_getattr": false
  },
  {
@@ -5906,6 +5922,14 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/backends/torch/_module_aliases.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
   "file": "torchlens/backends/torch/_module_boundary_adoption.py",
   "has_default": false,
   "sites": 1,
@@ -7377,6 +7401,14 @@
  },
  {
   "ambiguous": false,
+  "field": "func_call_id",
+  "file": "torchlens/intervention/_replay_context.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "capture_spec",
   "file": "torchlens/intervention/_rerun_predicate.py",
   "has_default": false,
@@ -7580,7 +7612,7 @@
   "field": "func_call_id",
   "file": "torchlens/intervention/replay.py",
   "has_default": false,
-  "sites": 11,
+  "sites": 7,
   "via_getattr": false
  },
  {

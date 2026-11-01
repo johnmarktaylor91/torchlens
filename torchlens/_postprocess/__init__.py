@@ -43,6 +43,7 @@ from .._utils.tensor_utils import _is_cuda_available
 from ..backends.torch.ops import _compact_ancestor_sets
 from . import ast_branches
 from ._executor import StepContext, run_pipeline
+from ._layer_depths import _mark_layer_depths
 from ._materialize import materialize_from_events
 from ._primitive_profile import _finalize_forward_primitive_profile
 from .ast_branches import resolve_var_names
@@ -63,7 +64,6 @@ from .finalization import (
 from .graph_traversal import (
     _add_output_layers,
     _find_output_ancestors,
-    _mark_layer_depths,
     _remove_orphan_nodes,
     _resolve_output_parent_labels,
 )
