@@ -36,6 +36,10 @@ _INIT_OP_TYPES = frozenset(
 )
 _MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 
+#: Source kinds materialized as source ops with a saved payload: model inputs
+#: and (SPEC section 2, rule 1) array-valued closure constants.
+_MATERIALIZED_SOURCE_KINDS = frozenset({"input", "constant"})
+
 
 @dataclass(frozen=True)
 class TFSourceRecord:
@@ -755,7 +759,9 @@ class TFEagerCaptureSession:
         if existing is not None:
             return existing
         kind = _classify_source_tensor(tensor, consumer_op_type)
-        label_raw = self._emit_source_event(kind, tensor) if kind in {"input"} else None
+        label_raw = (
+            self._emit_source_event(kind, tensor) if kind in _MATERIALIZED_SOURCE_KINDS else None
+        )
         record = TFSourceRecord(kind=kind, ref_key=ref_key, tensor=tensor, label_raw=label_raw)
         self.source_by_ref[ref_key] = record
         self.source_records.append(record)
@@ -778,7 +784,16 @@ class TFEagerCaptureSession:
         """
 
         label = self.events.reserve_label(kind)
-        tensor_ref = self._tensor_ref(tensor=tensor, label_raw=label.label_raw, save_payload=True)
+        # Constants rule item 5: a constant payload obeys ``save=`` like any
+        # saved activation; model inputs are always kept.
+        save_payload = kind != "constant" or self._should_save_payload(
+            self._record_context(
+                label=label, op_type_text=kind, output=tensor, output_index=0, parents=()
+            )
+        )
+        tensor_ref = self._tensor_ref(
+            tensor=tensor, label_raw=label.label_raw, save_payload=save_payload
+        )
         event = OpEvent(
             kind="source",
             label_raw=label.label_raw,
@@ -815,7 +830,7 @@ class TFEagerCaptureSession:
             output=OutputRef(
                 tensor=tensor_ref,
                 transformed_tensor=None,
-                has_saved_activation=True,
+                has_saved_activation=save_payload,
                 output_device="same",
                 activation_transform=None,
                 detach_saved_activations=False,
@@ -833,7 +848,13 @@ class TFEagerCaptureSession:
             params=(),
             parent_params=(),
             module_stack=tuple(self.module_stack),
-            modules=(),
+            # A constant read inside a module call is attributed to that call,
+            # like the ops around it; model inputs keep no attribution.
+            modules=(
+                tuple((frame.address, frame.call_index) for frame in self.module_stack)
+                if kind == "constant"
+                else ()
+            ),
             backend_semantics=BackendSemantics(
                 backend_grad_handle=None,
                 grad_fn_class_name=None,
@@ -846,10 +867,10 @@ class TFEagerCaptureSession:
                 bytes_peak_at_call=None,
             ),
             policy=CapturePolicy(
-                save_payload=True,
+                save_payload=save_payload,
                 save_grad=False,
             ),
-            predicate_matched=True,
+            predicate_matched=save_payload,
             pass_index=1,
             grad_fn_class_qualname=None,
             grad_fn_handle=None,
@@ -1207,7 +1228,38 @@ def _classify_source_tensor(tensor: Any, consumer_op_type: str) -> str:
         return "resource"
     if consumer_op_type in {"Reshape", "Shape", "StridedSlice", "Pack", "ConcatV2"}:
         return "shape/axis"
+    if _is_closure_constant(tensor):
+        return "constant"
     return "constant/factory"
+
+
+def _is_closure_constant(tensor: Any) -> bool:
+    """Whether a non-produced input is recorded as a ``constant`` source op.
+
+    The shared constants rule (SPEC section 2, rule 1) records every tensor
+    the forward used that is neither an input, a parameter nor a captured
+    output as a source op with a saved payload. TensorFlow converts Python
+    scalars, axes, permutations and shapes to tensors before the callback
+    sees them, so the rule is applied to floating or complex array-valued
+    constants (rank one and above: closure weights and ``tf.constant([...])``
+    literals). Rank-zero scalars and integer or boolean vectors (reduction
+    axes, ``perm``, ``dims``, paddings) stay replayable ``constant/factory``
+    values recorded on the consuming op's capture record.
+    """
+
+    dtype = getattr(tensor, "dtype", None)
+    if dtype is None or not (
+        bool(getattr(dtype, "is_floating", False)) or bool(getattr(dtype, "is_complex", False))
+    ):
+        return False
+    shape = getattr(tensor, "shape", None)
+    rank = getattr(shape, "rank", None)
+    if rank is None:
+        try:
+            rank = len(shape) if shape is not None else None
+        except TypeError:
+            rank = None
+    return rank is not None and rank >= 1
 
 
 def _is_scalar_bool_tensor_ref(tensor_ref: TensorRef) -> bool:

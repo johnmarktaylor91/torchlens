@@ -323,23 +323,166 @@ def _assert_full_ladder(card: PreviewScorecard, backend: str) -> None:
     assert "conformant" not in card.to_json().lower()
 
 
+def _option_policy_reds(capabilities: tuple[str, ...], options: tuple[str, ...]) -> dict[str, str]:
+    """Refusal cells the shared preview option policy fails, with the cause substring.
+
+    The shared policy raises ``BackendUnsupportedError`` without the per-cause
+    code SPEC 1.3 contracts, and ``chunk_paths`` without ``chunk_size`` raises
+    an untyped ``ChunkedForwardConfigError`` before any backend refusal.
+    """
+
+    reds = {f"c1_refusal_{flag}": f"contract is '{flag}_unsupported'" for flag in capabilities}
+    reds.update(
+        {
+            f"c1_refusal_trace_option_{name}": "contract is 'trace_option_unsupported'"
+            for name in options
+        }
+    )
+    reds["c1_refusal_trace_option_chunk_paths"] = "untyped ChunkedForwardConfigError"
+    return reds
+
+
+_SHARED_FOREIGN_OPTIONS: tuple[str, ...] = (
+    "payload_policy",
+    "save_preview",
+    "capture_container_structure",
+    "inference_only",
+    "output_style",
+    "output_head",
+    "chunk_size",
+)
+_SHARED_REFUSED_CAPABILITIES: tuple[str, ...] = (
+    "backward_capture",
+    "fastlog",
+    "rng_replay",
+    "has_streaming",
+    "structure_only_capture",
+)
+
+
+def _after_load_reds(families: tuple[str, ...]) -> dict[tuple[str, str], str]:
+    """Loaded non-torch traces drop the runtime capture replay needs (a format gap)."""
+
+    return {
+        ("c2_validation_after_load", family): "runtime capture data was stripped"
+        for family in families
+    }
+
+
+def _known_red_cells(
+    refusals: dict[str, str], families: tuple[str, ...], extra: dict[tuple[str, str], str]
+) -> dict[tuple[str, str], str]:
+    """One backend's red cells keyed ``(case_id, family)`` with each cause substring."""
+
+    return {
+        **{(case_id, ""): cause for case_id, cause in refusals.items()},
+        **_after_load_reds(families),
+        **extra,
+    }
+
+
+def _assert_named_reds(
+    backend: str, version: str, tmp_path: Path, known: dict[tuple[str, str], str], rows: int
+) -> None:
+    """The pack's non-passed cells equal ``known`` exactly, each failed with its cause."""
+
+    from torchlens.conformance import _roster_for
+
+    adapter = resolve_adapter(backend)
+    roster = _roster_for(adapter, None)
+    report = run_conformance(backend, tiers=("C0", "C1", "C2"), roster=roster, workdir=tmp_path)
+    card = scorecard_from_report(report, roster, framework_version=version, adapter=adapter)
+    assert card.backend == backend
+    assert card.roster_groups == {"config_built": rows}
+    red = {(cell.case_id, cell.family): cell for cell in card.cells if cell.state != "passed"}
+    assert set(red) == set(known), sorted(set(red) ^ set(known))
+    for key, cause in known.items():
+        assert red[key].state == "failed", red[key]
+        assert cause in red[key].detail, (key, red[key].detail)
+    assert card.counts["denominator"] == _preview_denominator(backend)
+    # The refusal-code reds sit in C1, so the ladder stops at C0.
+    assert card.highest_tier == "C0"
+    assert "conformant" not in card.to_json().lower()
+
+
+#: JAX's red cells on its packet roster (switch off). Two causes, neither a JAX
+#: capture gap: the shared option policy's uncoded refusals, and loaded traces
+#: without the runtime capture replay needs.
+def _jax_known_red_cells() -> dict[tuple[str, str], str]:
+    """JAX's named red cells, built from the roster module's family list."""
+
+    from torchlens.conformance._rosters import jax as jax_roster
+
+    refusals = _option_policy_reds(
+        (*_SHARED_REFUSED_CAPABILITIES, "interventions"), _SHARED_FOREIGN_OPTIONS
+    )
+    return _known_red_cells(refusals, jax_roster.CONFIG_BUILT_FAMILIES, {})
+
+
+#: TensorFlow's red cells on its packet roster (switch off). The two JAX causes,
+#: plus the jax-only trace options TF refuses, plus the Keras module rows: their
+#: parameter reads (``ReadVariableOp``) are effect regions validation reports
+#: ``unverified`` (a ruled honest state, never exempted).
+_TF_KERAS_MODULE_ROWS: tuple[str, ...] = (
+    "mlp_module",
+    "shared_weight_module",
+    "cnn_module",
+    "nested_residual_module",
+)
+
+
+def _tf_known_red_cells() -> dict[tuple[str, str], str]:
+    """TensorFlow's named red cells, built from the roster module's family list."""
+
+    from torchlens.conformance._rosters import tf as tf_roster
+
+    refusals = _option_policy_reds(
+        _SHARED_REFUSED_CAPABILITIES,
+        ("jax_control_flow", "jax_max_control_flow_unroll", *_SHARED_FOREIGN_OPTIONS),
+    )
+    keras = {
+        ("c1_validation_passes", family): "effect regions unverified"
+        for family in _TF_KERAS_MODULE_ROWS
+    }
+    return _known_red_cells(refusals, tf_roster.CONFIG_BUILT_FAMILIES, keras)
+
+
 @pytest.mark.heavy
 @pytest.mark.backend_jax
-def test_jax_pack_full_ladder(tmp_path: Path) -> None:
-    """The jax pack passes C0-C2 on its config-built roster."""
+def test_jax_pack_earns_c0_with_its_named_red_cells(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The jax pack on its nine-row packet roster earns C0; every red cell is named.
 
-    pytest.importorskip("jax")
+    A new red or a fixed one both fail here; the fix removes its entry (and
+    rewrites the shipped scorecard) in the same change.
+    """
+
+    jax = pytest.importorskip("jax")
     pytest.importorskip("equinox")
-    _assert_full_ladder(preview_scorecard("jax", workdir=tmp_path), "jax")
+    pytest.importorskip("flax")
+    from torchlens.conformance._rosters import ECOSYSTEM_ENV
+
+    monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
+    _assert_named_reds("jax", str(jax.__version__), tmp_path, _jax_known_red_cells(), 9)
 
 
 @pytest.mark.heavy
 @pytest.mark.tf_backend
-def test_tf_pack_full_ladder(tmp_path: Path) -> None:
-    """The tf pack passes C0-C2 on its config-built roster."""
+def test_tf_pack_earns_c0_with_its_named_red_cells(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The tf pack on its nine-row packet roster earns C0; every red cell is named.
 
-    pytest.importorskip("tensorflow")
-    _assert_full_ladder(preview_scorecard("tf", workdir=tmp_path), "tf")
+    A new red or a fixed one both fail here; the fix removes its entry (and
+    rewrites the shipped scorecard) in the same change.
+    """
+
+    tf = pytest.importorskip("tensorflow")
+    from torchlens.conformance._rosters import ECOSYSTEM_ENV
+
+    monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
+    _assert_named_reds("tf", str(tf.__version__), tmp_path, _tf_known_red_cells(), 9)
 
 
 @pytest.mark.heavy

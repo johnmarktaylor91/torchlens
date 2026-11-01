@@ -102,96 +102,19 @@ def framework_unavailable_reason(framework: PreviewFramework) -> str | None:
 
 
 def _roster_jax() -> tuple[RosterModel, ...]:
-    """Function root plus an equinox MLP for the jax pack."""
+    """The JAX packet's roster (``torchlens.conformance._rosters.jax``)."""
 
-    def build_fn() -> tuple[Any, Any]:
-        """Build the function root and its example input."""
+    from ._rosters.jax import roster
 
-        import jax.numpy as jnp
-
-        # The jax preview contract is fn(params, *inputs): weights travel as
-        # explicit pytree leaves, never as closed-over constants.
-        params = {"w": jnp.asarray(_WEIGHTS, dtype=jnp.float32)}
-
-        def matmul_relu(params: Any, x: Any) -> Any:
-            """Matmul then relu, the function root's whole computation."""
-
-            return jnp.maximum(jnp.matmul(x, params["w"]), 0.0)
-
-        return matmul_relu, (params, jnp.asarray(_INPUT, dtype=jnp.float32))
-
-    def build_module() -> tuple[Any, Any]:
-        """Build the module root and its example input."""
-
-        import equinox as eqx
-        import jax
-        import jax.numpy as jnp
-
-        class ConformanceMlp(eqx.Module):
-            """Two-layer equinox MLP."""
-
-            fc1: eqx.nn.Linear
-            fc2: eqx.nn.Linear
-
-            def __init__(self) -> None:
-                key1, key2 = jax.random.split(jax.random.PRNGKey(0))
-                self.fc1 = eqx.nn.Linear(4, 3, key=key1)
-                self.fc2 = eqx.nn.Linear(3, 2, key=key2)
-
-            def __call__(self, x: Any) -> Any:
-                return self.fc2(jax.nn.relu(self.fc1(x)))
-
-        return ConformanceMlp(), jnp.asarray(_INPUT[0], dtype=jnp.float32)
-
-    return _rows(
-        build_fn,
-        build_module,
-        fn_ops=("input", "input", "dot_general", "max"),
-        module_ops=("input", "dot_general", "add", "max", "dot_general", "add"),
-    )
+    return roster()
 
 
 def _roster_tf() -> tuple[RosterModel, ...]:
-    """Function root plus a tf.Module for the tf pack."""
+    """The TensorFlow packet's roster (``torchlens.conformance._rosters.tf``)."""
 
-    def build_fn() -> tuple[Any, Any]:
-        """Build the function root and its example input."""
+    from ._rosters.tf import roster
 
-        import tensorflow as tf
-
-        weights = tf.constant(_WEIGHTS, dtype=tf.float32)
-
-        def matmul_relu(x: Any) -> Any:
-            """Matmul then relu, the function root's whole computation."""
-
-            return tf.nn.relu(tf.matmul(x, weights))
-
-        return matmul_relu, tf.constant(_INPUT, dtype=tf.float32)
-
-    def build_module() -> tuple[Any, Any]:
-        """Build the module root and its example input."""
-
-        import tensorflow as tf
-
-        class ConformanceMlp(tf.Module):
-            """Two-layer tf.Module MLP with fixed weights."""
-
-            def __init__(self) -> None:
-                super().__init__()
-                self.w1 = tf.constant(_WEIGHTS, dtype=tf.float32)
-                self.w2 = tf.constant([[1.0, -1.0], [0.5, 0.5], [-0.25, 2.0]], dtype=tf.float32)
-
-            def __call__(self, x: Any) -> Any:
-                return tf.matmul(tf.nn.relu(tf.matmul(x, self.w1)), self.w2)
-
-        return ConformanceMlp(), tf.constant(_INPUT, dtype=tf.float32)
-
-    return _rows(
-        build_fn,
-        build_module,
-        fn_ops=("input", "constant", "MatMul", "Relu"),
-        module_ops=("input", "constant", "MatMul", "Relu", "constant", "MatMul"),
-    )
+    return roster()
 
 
 def _roster_mlx() -> tuple[RosterModel, ...]:

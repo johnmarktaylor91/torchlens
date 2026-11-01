@@ -22,7 +22,7 @@ import torchlens as tl
 from torchlens._state import pause_logging
 from torchlens.backends.registry import BackendUnsupportedError, get_backend_spec
 from torchlens.conformance._cases import _captured_op_kinds
-from torchlens.conformance._rosters import torch as torch_roster
+from torchlens.conformance._rosters import ECOSYSTEM_ENV, torch as torch_roster
 from torchlens.options import CaptureOptions
 from torchlens.validation.status import ValidationStatus
 
@@ -70,9 +70,9 @@ def test_roster_has_the_probe_rows_and_the_two_rule_rows() -> None:
 def test_ecosystem_rows_need_the_switch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pretrained rows join only under the ecosystem switch, with checkpoint evidence."""
 
-    monkeypatch.delenv(torch_roster.ECOSYSTEM_ENV, raising=False)
+    monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
     assert all(row.group == "config_built" for row in torch_roster.roster())
-    monkeypatch.setenv(torch_roster.ECOSYSTEM_ENV, "1")
+    monkeypatch.setenv(ECOSYSTEM_ENV, "1")
     pretrained = [row for row in torch_roster.roster() if row.realism == "pretrained"]
     assert len({row.family for row in pretrained}) >= 2
     assert all(row.checkpoint_evidence and row.group == "ecosystem" for row in pretrained)

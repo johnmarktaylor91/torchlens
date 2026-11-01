@@ -20,18 +20,15 @@ The ``ecosystem`` rows are pinned pretrained checkpoints; they run only when
 from __future__ import annotations
 
 import math
-import os
 from collections.abc import Callable
 from typing import Any
 
 import numpy as np
 
 from .._adapters import RosterModel
+from . import ecosystem_enabled
 
 __tl_layer__ = "L9"
-
-#: Environment switch for the ecosystem rows (pretrained weights).
-ECOSYSTEM_ENV = "TORCHLENS_CONFORMANCE_ECOSYSTEM"
 
 _RNG = np.random.default_rng(0)
 X24 = _RNG.standard_normal((2, 4)).astype(np.float32)
@@ -427,12 +424,6 @@ _ECOSYSTEM: tuple[tuple[str, Callable[[], tuple[Any, Any]], str], ...] = (
 
 
 # ------------------------------------------------------------------ assembly
-def ecosystem_enabled() -> bool:
-    """Whether the ecosystem rows are switched on in this environment."""
-
-    return os.environ.get(ECOSYSTEM_ENV, "") == "1"
-
-
 def config_built_roster() -> tuple[RosterModel, ...]:
     """Torch's per-change rows (no network, no claim)."""
 

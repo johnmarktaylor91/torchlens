@@ -9,7 +9,7 @@ import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Final, cast
 
 from ..._data_classes._compaction import compact_op_metadata
@@ -78,6 +78,7 @@ from ...validation.status import (
     ValidationStatus,
     count_importer_region_annotations,
 )
+from .._constants import CONSTANT_PARENT_PAYLOAD_REASON, CONSTANT_PRODUCER_LEAF_REASON
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
     JAX_PREVIEW_TRACE_OPTION_POLICY,
@@ -560,6 +561,7 @@ class JAXBackend:
                 _raise_nnx_trace_context_error(module_tree, exc)
                 raise
             reject_attributed_module_strict_control_flow(closed_jaxpr)
+            closure_consts = ()
             module_tree.call_counts.clear()
             module_tree.forward_args_by_call.clear()
             try:
@@ -570,7 +572,7 @@ class JAXBackend:
                 raise
         else:
             closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
-            reject_undeclared_consts(closed_jaxpr)
+            closure_consts = _readable_closure_consts(closed_jaxpr)
             output = model(*args)
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         result = interpret_closed_jaxpr_with_inlining(
@@ -584,6 +586,7 @@ class JAXBackend:
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
         trace.raw_output = output_transform(output) if callable(output_transform) else None
         self._emit_arg_sources(trace, args)
+        self._emit_const_sources(trace, closure_consts)
         self._emit_equations(trace, result)
         trace.jax_outvar_key_to_capture_index = dict(result.outvar_key_to_capture_index)
         self._mark_output_events(trace, result.outputs, output_leaf_paths, output_container_spec)
@@ -655,34 +658,80 @@ class JAXBackend:
         if not status.is_available:
             setattr(trace, "_validation_replay_status", status)
             return status
+        status_result = self.validation_status(
+            trace, validate_metadata=bool(kwargs.get("validate_metadata", True))
+        )
+        return status_result if status_result.state == "unverified" else status_result.passed
+
+    def validation_status(
+        self, trace: Trace, *, validate_metadata: bool = True
+    ) -> ValidationStatus:
+        """The protocol's ``validate``: always a ``ValidationStatus``, never a bool.
+
+        Parameters
+        ----------
+        trace
+            Trace produced by this backend.
+        validate_metadata
+            Whether backend-neutral invariant checks run first.
+
+        Returns
+        -------
+        ValidationStatus
+            ``unavailable`` when runtime captures were stripped; otherwise the
+            replay result with per-op ``decisions`` and, on failure, a message
+            naming the first offending op.
+        """
+
+        status = trace.validation_replay_status
+        if not status.is_available:
+            setattr(trace, "_validation_replay_status", status)
+            return status
+        log = _JaxValidationLog()
         try:
-            if kwargs.get("validate_metadata", True):
+            if validate_metadata:
                 from ...validation.invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
-            passed = self._validate_jax_equations(trace) and self._validate_jax_regions(trace)
-            status_result = self._validation_status_from_counts(trace, passed=passed)
-        except Exception:
-            passed = False
+            passed = self._validate_jax_equations(trace, log)
+            _record_jax_constant_leaves(trace, log)
+            if passed and not self._validate_jax_regions(trace):
+                passed = False
+                _record_jax_decision(
+                    log,
+                    "<trace>",
+                    "",
+                    "metadata",
+                    "failed",
+                    "capture_inconsistent",
+                    "importer-owned region boundary or seam check failed",
+                )
+            status_result = self._validation_status_from_counts(trace, passed=passed, log=log)
+        except Exception as exc:  # noqa: BLE001 - the tripwire reports, never raises
+            _record_jax_decision(
+                log, "<trace>", "", "metadata", "failed", "metadata_invariant_exception"
+            )
             status_result = ValidationStatus.result(
                 passed=False,
                 backend="jax",
                 source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
                 payload_load_status=getattr(trace, "payload_load_status", None),
                 num_failed_ops=1,
+                decisions=tuple(log.decisions),
             )
-        setattr(
-            trace,
-            "_validation_replay_status",
-            status_result,
-        )
-        return status_result if status_result.state == "unverified" else passed
+            status_result = replace(
+                status_result,
+                message=f"Replay validation failed before replay: {type(exc).__name__}: {exc}",
+            )
+        setattr(trace, "_validation_replay_status", status_result)
+        return status_result
 
     def _validation_status_from_counts(
         self,
         trace: Trace,
         *,
         passed: bool,
+        log: _JaxValidationLog | None = None,
     ) -> ValidationStatus:
         """Build aggregate replay status from JAX replay and region counts.
 
@@ -707,16 +756,33 @@ class JAXBackend:
         payload_load_status = getattr(trace, "payload_load_status", None)
         replayed_node_count = len(_jax_equation_ops(trace)) if passed else 0
         unverified_node_count = count_importer_region_annotations(trace) if passed else 0
-        return ValidationStatus.from_replay_counts(
+        decisions = tuple(log.decisions) if log is not None else ()
+        status = ValidationStatus.from_replay_counts(
             backend="jax",
             source=source,
             num_replayed_ops=replayed_node_count,
             num_unverified_ops=unverified_node_count,
             num_failed_ops=0 if passed else 1,
             payload_load_status=payload_load_status,
+            unverified_reason_counts=(
+                {"effectful_region": unverified_node_count} if unverified_node_count else {}
+            ),
+            exempted_reason_counts=dict(log.exempted_reason_counts) if log is not None else {},
+            decisions=decisions,
         )
+        first_failure = log.first_failure if log is not None else None
+        if status.state == "failed" and first_failure is not None:
+            label, func_name, reason = first_failure
+            status = replace(
+                status,
+                message=(
+                    f"Replay validation failed at {label} ({func_name}): {reason}; "
+                    f"{len(_jax_equation_ops(trace))} equation op(s) in the trace."
+                ),
+            )
+        return status
 
-    def _validate_jax_equations(self, trace: Trace) -> bool:
+    def _validate_jax_equations(self, trace: Trace, log: _JaxValidationLog | None = None) -> bool:
         """Validate JAX equation captures against materialized trace payloads.
 
         Parameters
@@ -732,13 +798,33 @@ class JAXBackend:
 
         import jax
 
+        if log is None:
+            log = _JaxValidationLog()
         captures = tuple(getattr(trace, "jax_equation_captures", ()))
         equation_ops = _jax_equation_ops(trace)
         if len(captures) != len(equation_ops):
+            _record_jax_decision(
+                log,
+                "<trace>",
+                "",
+                "metadata",
+                "failed",
+                "capture_inconsistent",
+                f"{len(captures)} equation captures for {len(equation_ops)} equation ops",
+            )
             return False
         capture_kind_counts = Counter(capture.kind for capture in captures)
         op_kind_counts = Counter(_jax_op_capture_kind(op) for op in equation_ops)
         if capture_kind_counts != op_kind_counts:
+            _record_jax_decision(
+                log,
+                "<trace>",
+                "",
+                "metadata",
+                "failed",
+                "capture_inconsistent",
+                "equation capture kinds differ from op capture kinds",
+            )
             return False
         # TORCH PARITY: ``parent_arg_positions`` (and ``parents``/``children``)
         # resolve through the CONDITIONAL label map -- a single-pass op's bare
@@ -761,19 +847,50 @@ class JAXBackend:
         # The len(captures) != len(equation_ops) guard above already returned
         # False, so these pair exactly.
         for capture, op in zip(captures, equation_ops, strict=True):
+            op_label = str(getattr(op, "label", getattr(op, "_label_raw", "")))
+            func_name = str(getattr(op, "func_name", capture.primitive))
             if capture.kind != _jax_op_capture_kind(op):
+                _record_jax_decision(
+                    log, op_label, func_name, "metadata", "failed", "capture_inconsistent"
+                )
                 return False
-            inputs = _inputs_from_trace_graph(capture, op, ops_by_label, hidden_outputs_by_label)
-            replayed = replay_equation(capture, inputs)
-            saved_outputs = _saved_op_outputs(
-                op,
-                len(replayed),
-                hidden_outputs_by_label=hidden_outputs_by_label,
-            )
+            try:
+                inputs = _inputs_from_trace_graph(
+                    capture, op, ops_by_label, hidden_outputs_by_label
+                )
+                replayed = replay_equation(capture, inputs)
+                saved_outputs = _saved_op_outputs(
+                    op,
+                    len(replayed),
+                    hidden_outputs_by_label=hidden_outputs_by_label,
+                )
+            except Exception as exc:  # noqa: BLE001 - name the op, then fail closed
+                _record_jax_decision(
+                    log,
+                    op_label,
+                    func_name,
+                    "replay",
+                    "failed",
+                    "replay_mismatch",
+                    f"{type(exc).__name__}: {exc}",
+                )
+                return False
             if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
+                _record_jax_decision(
+                    log, op_label, func_name, "replay", "failed", "replay_mismatch"
+                )
                 return False
             if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
+                _record_jax_decision(
+                    log,
+                    op_label,
+                    func_name,
+                    "perturbation",
+                    "failed",
+                    "perturbation_insensitive",
+                )
                 return False
+            _record_jax_decision(log, op_label, func_name, "replay", "validated", "replay_match")
         return True
 
     def _validate_jax_regions(self, trace: Trace) -> bool:
@@ -958,6 +1075,36 @@ class JAXBackend:
                 parent_arg_positions={"args": {}, "kwargs": {}},
                 container_path=tuple(path.split(".")),
                 annotations={"jax_container_path": path},
+            )
+
+    def _emit_const_sources(self, trace: Trace, consts: Sequence[Any]) -> None:
+        """Emit ``constant`` source events for closed-jaxpr closure constants.
+
+        The shared constants rule (SPEC section 2, rule 1): a closure array
+        the forward used is a source op ``constant`` with a saved payload, and
+        the equations that read it list it as a parent. Parent resolution is
+        by value identity, the same mechanism input leaves use, because the
+        interpreter binds the very ``closed_jaxpr.consts`` objects.
+
+        Parameters
+        ----------
+        trace
+            Trace receiving events.
+        consts
+            Readable closure constants in ``closed_jaxpr.consts`` order.
+        """
+
+        for index, value in enumerate(consts):
+            self._append_event(
+                trace=trace,
+                kind="source",
+                layer_type="constant",
+                func_name="constant",
+                output=value,
+                parents=(),
+                parent_arg_positions={"args": {}, "kwargs": {}},
+                container_path=(),
+                annotations={"jax_closure_const_index": index},
             )
 
     def _emit_equations(self, trace: Trace, result: JaxCaptureResult) -> None:
@@ -3744,6 +3891,115 @@ def _grad_path_for_argnum(argnum: int, local_path: str) -> str:
     return f"inputs.{argnum - 1}{suffix}"
 
 
+@dataclass
+class _JaxValidationLog:
+    """Per-run validation decisions (never stored on the trace: it is not portable state)."""
+
+    decisions: list[dict[str, Any]] = field(default_factory=list)
+    first_failure: tuple[str, str, str] | None = None
+    exempted_reason_counts: dict[str, int] = field(default_factory=dict)
+
+
+def _record_jax_decision(
+    log: _JaxValidationLog,
+    op_label: str,
+    func_name: str,
+    phase: str,
+    decision: str,
+    reason: str,
+    justification: str | None = None,
+) -> None:
+    """Append one per-op validation decision (torch record shape) to the log.
+
+    The first ``failed`` decision is also kept so the status message can name
+    the offending op.
+    """
+
+    record: dict[str, Any] = {
+        "op_label": op_label,
+        "func_name": func_name,
+        "phase": phase,
+        "decision": decision,
+        "reason": reason,
+    }
+    if justification is not None:
+        record["justification"] = justification
+    log.decisions.append(record)
+    if decision == "failed" and log.first_failure is None:
+        log.first_failure = (op_label, func_name, reason)
+
+
+def _record_jax_constant_leaves(trace: Trace, log: _JaxValidationLog) -> None:
+    """Record the constants rule's named leaf decisions for ``constant`` source ops.
+
+    A closure constant has no equation to replay (its saved payload is the
+    record) and nothing upstream to perturb, so it is exempted under the two
+    reasons the constants rule names (item 3).
+    """
+
+    for op in trace.layer_list:
+        if str(getattr(op, "func_name", "")) != "constant":
+            continue
+        label = str(getattr(op, "label", ""))
+        _record_jax_decision(
+            log,
+            label,
+            "constant",
+            "replay",
+            "exempted",
+            CONSTANT_PRODUCER_LEAF_REASON,
+            "closure constant: its saved payload is the record",
+        )
+        _record_jax_decision(
+            log,
+            label,
+            "constant",
+            "perturbation",
+            "exempted",
+            CONSTANT_PARENT_PAYLOAD_REASON,
+            "closure constant: no upstream op to perturb",
+        )
+        for reason in (CONSTANT_PRODUCER_LEAF_REASON, CONSTANT_PARENT_PAYLOAD_REASON):
+            log.exempted_reason_counts[reason] = log.exempted_reason_counts.get(reason, 0) + 1
+
+
+def _readable_closure_consts(closed_jaxpr: Any) -> tuple[Any, ...]:
+    """Closure constants of a function-root jaxpr, each with a readable buffer.
+
+    Parameters
+    ----------
+    closed_jaxpr
+        The derived closed jaxpr.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        ``closed_jaxpr.consts`` in order (possibly empty).
+
+    Raises
+    ------
+    BackendUnsupportedError
+        ``constant_unrealizable`` when a constant is not a concrete array
+        (a tracer or a deleted buffer): it could not be recorded with a
+        payload, and the rule never records a parentless op without one.
+    """
+
+    import jax
+    import numpy as np
+
+    consts = tuple(getattr(closed_jaxpr, "consts", ()))
+    tracer_type = getattr(getattr(jax, "core", None), "Tracer", ())
+    for index, value in enumerate(consts):
+        if isinstance(value, tracer_type) or not isinstance(value, (jax.Array, np.ndarray)):
+            raise BackendUnsupportedError(
+                f"JAX closure constant {index} of type {type(value).__name__} has no readable "
+                "buffer, so it cannot be recorded as a constant op with a payload.",
+                code="constant_unrealizable",
+                remedy="pass the value as an explicit pytree leaf of fn(params, *inputs)",
+            )
+    return consts
+
+
 def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:
     """Return materialized operation logs that correspond to JAX replay captures.
 
@@ -4497,7 +4753,12 @@ def _perturb_candidates(value: Any) -> tuple[Any, ...]:
         )
     if jnp.issubdtype(array.dtype, jnp.floating):
         magnitude = jnp.max(jnp.abs(array)) + jnp.asarray(1.0, dtype=array.dtype)
-        return (array + magnitude, array - magnitude)
+        candidates: tuple[Any, ...] = (array + magnitude, array - magnitude)
+        if not bool(jnp.all(jnp.isfinite(array))):
+            # A NaN or inf parent absorbs any additive perturbation; finite
+            # replacements are the only candidates that can move the child.
+            candidates = (*candidates, jnp.zeros_like(array), jnp.ones_like(array))
+        return candidates
     return (array,)
 
 
