@@ -320,6 +320,16 @@ def _check_process_boundary(cell: Cell, bundle: Path) -> None:
 # --- storage ------------------------------------------------------------------
 
 
+def _halted(cell: Cell) -> bool:
+    """Whether the cell's other features stop the capture early (fewer ops by design)."""
+
+    return any(feature.name == "halt" for feature in cell.features)
+
+
+def _is_output(op: Any) -> bool:
+    return bool(getattr(op, "is_output", False))
+
+
 def _stream_path(cell: Cell) -> Path:
     return cell.tmp / "stream.tlspec"
 
@@ -331,7 +341,10 @@ def _prepare_storage(cell: Cell) -> None:
 def _after_storage(cell: Cell) -> None:
     trace = cell.require_trace()
     plain = cell.facts.plain
-    cell.expect(len(trace.ops) == len(cell.facts.labels), "streamed capture changed the op count")
+    if not _halted(cell):
+        cell.expect(
+            len(trace.ops) == len(cell.facts.labels), "streamed capture changed the op count"
+        )
     _check_streamed_payloads(cell, trace, plain)
     path = _stream_path(cell)
     cell.expect(path.is_dir(), "no stream bundle on disk")
@@ -372,7 +385,11 @@ def _check_chunked_capture(cell: Cell, plain: Any) -> None:
 def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
     """Every streamed payload is the plain capture's tensor for that op."""
 
-    retained = sorted(op.label for op in trace.saved_ops if op.out is not None)
+    # The output tail is always retained (``torchlens/_user_funcs.py``, "always-retained
+    # output tail"): the caller holds that tensor anyway. Everything else must be on disk.
+    retained = sorted(
+        op.label for op in trace.saved_ops if op.out is not None and not _is_output(op)
+    )
     cell.expect(not retained, f"streamed payloads kept in memory: {retained[:8]}")
     for op in trace.saved_ops:
         reference = plain[op.label].out
@@ -520,10 +537,10 @@ def _after_export(cell: Cell) -> None:
     live = cell.require_trace()
     frame = live.to_pandas()
     cell.expect(len(frame) == len(live), f"to_pandas has {len(frame)} rows for {len(live)} ops")
-    labels = list(frame["label"]) if "label" in frame.columns else list(frame.index)
+    # One row per ``trace.layer_list`` entry: the ops plus the input and output boundary rows.
     cell.expect(
-        sorted(labels) == sorted(op.label for op in live.ops),
-        "to_pandas rows do not name the trace's ops",
+        sorted(frame["label"]) == sorted(entry.label for entry in live.layer_list),
+        "to_pandas rows do not name the trace's layer_list entries",
     )
     if cell.loaded is not None:
         other = cell.loaded.to_pandas()
