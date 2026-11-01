@@ -516,7 +516,11 @@ def test_the_fast_path_unpickler_retains_nothing_after_load() -> None:
 
 @pytest.mark.smoke
 def test_corpus_decisions_match_the_interpreter_in_one_pass() -> None:
-    """The whole corpus, as one smoke item: every mismatch in one report."""
+    """The whole corpus, as the file's one smoke item: every mismatch in one report.
+
+    The hostile half is also checked for vacuity here, so the smoke tier carries the
+    C-path proof as a single item (``SMOKE_TIER_SIZE_CEILING`` in ``tests/conftest.py``).
+    """
 
     mismatches = {
         label: (_outcome(_new_path, data), _outcome(_old_path, data))
@@ -524,6 +528,12 @@ def test_corpus_decisions_match_the_interpreter_in_one_pass() -> None:
         if _outcome(_new_path, data) != _outcome(_old_path, data)
     }
     assert not mismatches, f"{len(mismatches)} streams differ: {mismatches}"
+    admitted = {
+        label: _outcome(_new_path, data)
+        for label, data in _HOSTILE.items()
+        if _outcome(_new_path, data)[0] not in ("refused", "raised")
+    }
+    assert not admitted, f"hostile streams the fast path admitted: {admitted}"
 
 
 def test_generated_variants_match_the_interpreter() -> None:
@@ -538,9 +548,12 @@ def test_generated_variants_match_the_interpreter() -> None:
     assert not mismatches, f"{len(mismatches)} of {len(variants)} variants differ: {mismatches}"
 
 
-@pytest.mark.smoke
 def test_hostile_corpus_is_refused_by_both_machines() -> None:
-    """The hostile corpus is not vacuous: every entry refuses (or raises) on both paths."""
+    """The hostile corpus is not vacuous: every entry refuses (or raises) on both paths.
+
+    Per entry and per machine for the targeted run; the one-pass smoke item above
+    carries the same check for the fast path.
+    """
 
     for label, data in _HOSTILE.items():
         for factory in (_new_path, _old_path):

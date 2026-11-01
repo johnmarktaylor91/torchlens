@@ -162,9 +162,13 @@ def test_newobj_ex_construction_of_tensor_ndarray_refused(
         SafeBundleUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_white_box_belts_refuse_tensor_and_ndarray() -> None:
-    """The three belts refuse a Tensor/ndarray type placed directly on the stack."""
+    """The three belts refuse a Tensor/ndarray type placed directly on the stack.
+
+    Not a smoke item: ``tests/test_unpickle_c_path.py`` runs the same three refusals
+    end to end (``tensor_reduce``, ``tensor_newobj``, ``tensor_newobj_ex`` and the
+    ndarray twins) through both machines in its one-pass smoke item.
+    """
 
     for target in (torch.Tensor, torch.FloatTensor, np.ndarray):
         u = _PurePythonBundleUnpickler(io.BytesIO(b""))
