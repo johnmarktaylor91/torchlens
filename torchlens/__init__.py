@@ -14,7 +14,9 @@ For AI agents: ``trace.to_agent_json()``, ``trace.explain(max_tokens=N)``,
 
 from __future__ import annotations
 
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+import contextlib as _contextlib
+import warnings as _warnings
+from collections.abc import Iterable as _Iterable, Iterator as _Iterator, Mapping as _Mapping
 from typing import TYPE_CHECKING as _TYPE_CHECKING, Any as _Any
 
 if _TYPE_CHECKING:
@@ -396,8 +398,9 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
         ``activation_not_saved`` if it resolved but kept no out.
     """
 
-    from ._errors import InvalidArgumentError, TorchLensError
+    from ._errors import InvalidArgumentError
     from ._trace_selector_helpers import canonical_module_site_key
+    from .errors._base import TorchLensError
 
     try:
         layer_log = trace[canonical_module_site_key(trace, layer) or layer]
@@ -533,8 +536,25 @@ def pluck(
         if stop_after is None
         else CaptureOptions(layers_to_save=[layer], stop_after=stop_after)
     )
-    trace = _resolve_top_level("trace")(model, inputs, capture=capture)
+    with _extract_capture_quiet():
+        trace = _resolve_top_level("trace")(model, inputs, capture=capture)
     return _out_from_log(trace, layer)
+
+
+@_contextlib.contextmanager
+def _extract_capture_quiet() -> _Iterator[None]:
+    """Silence the capture-time ``layers_to_save`` zero-match warning during an extract capture.
+
+    ``extract`` and ``pluck`` resolve every requested layer right after the capture and refuse
+    typed (``op_lookup_not_found`` / ``activation_not_saved``) when nothing was saved, so the
+    capture's zero-match disclosure would double-report ahead of that refusal.
+    """
+
+    with _warnings.catch_warnings():
+        _warnings.filterwarnings(
+            "ignore", message=r"layers_to_save=.* matched zero layers", category=UserWarning
+        )
+        yield
 
 
 def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
@@ -637,14 +657,15 @@ def _extract_layers_with_trace(
             model, x, layers, facet_plan, detach_saved_activations=detach_saved_activations
         )
     layer_plan = _normalize_extract_layers(layers)
-    trace = _resolve_top_level("trace")(
-        model,
-        x,
-        capture=_LazyCaptureOptions(
-            layers_to_save=list(layer_plan.values()),
-            detach_saved_activations=detach_saved_activations,
-        ),
-    )
+    with _extract_capture_quiet():
+        trace = _resolve_top_level("trace")(
+            model,
+            x,
+            capture=_LazyCaptureOptions(
+                layers_to_save=list(layer_plan.values()),
+                detach_saved_activations=detach_saved_activations,
+            ),
+        )
     outputs: dict[str, _torch.Tensor] = {}
     views: dict[str, _Any] = {}
     if isinstance(layers, _Mapping):
