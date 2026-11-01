@@ -62,7 +62,7 @@ def test_output_is_independent_of_the_output_transform() -> None:
     trace = tl.trace(
         _ContainerOutput(),
         torch.ones(1, 3),
-        output_transform=lambda output: output["logits"],
+        capture=tl.options.CaptureOptions(output_transform=lambda output: output["logits"]),
     )
     assert isinstance(trace.output, dict)
     assert trace.raw_output is trace.output["logits"]
@@ -108,7 +108,11 @@ def test_live_run_keeps_its_own_forward_return(fast: bool) -> None:
     """Ordinary refresh and native fast runs expose their actual return object."""
 
     model = _ContainerOutput()
-    trace = tl.trace(model, torch.ones(1, 3))
+    trace = tl.trace(
+        model,
+        torch.ones(1, 3),
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
+    )
     source_output = trace.output
     seen: list[Any] = []
     handle = model.register_forward_hook(lambda _module, _args, output: seen.append(output))
@@ -127,7 +131,11 @@ def test_truncated_live_run_has_no_forward_return(fast: bool) -> None:
     """A live run cut at a saved site cannot expose a prior run's return."""
 
     model = _ContainerOutput()
-    trace = tl.trace(model, torch.ones(1, 3))
+    trace = tl.trace(
+        model,
+        torch.ones(1, 3),
+        capture=tl.options.CaptureOptions(capture_container_structure=True),
+    )
     site = next(layer.layer_label for layer in trace.layer_list if layer.layer_type == "linear")
     result = trace.run(inputs=torch.full((1, 3), 2.0), fast=fast, until=site)
     with pytest.raises(PayloadUnavailableError) as exc_info:
