@@ -25,8 +25,21 @@ def _assert_layer_present(trace: tl.Trace, layer_label: str) -> None:
     assert layer_label in [layer.layer_label for layer in trace.layer_list]
 
 
-def test_two_pass_succeeds_with_inplace_relu_module() -> None:
-    """Two-pass logging should handle modules with in-place ReLU.
+@pytest.mark.parametrize(
+    "inplace",
+    [True, False],
+    ids=[
+        "two_pass_succeeds_with_inplace_relu_module",
+        "two_pass_succeeds_with_non_inplace_relu_module",
+    ],
+)
+def test_two_pass_succeeds_with_relu_module(inplace: bool) -> None:
+    """Two-pass logging should handle modules with in-place and non-in-place ReLU.
+
+    Parameters
+    ----------
+    inplace
+        The ``inplace`` flag of the ``nn.ReLU`` module between the two convolutions.
 
     Returns
     -------
@@ -35,30 +48,7 @@ def test_two_pass_succeeds_with_inplace_relu_module() -> None:
     """
     model = nn.Sequential(
         nn.Conv2d(3, 16, 3, padding=1),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(16, 32, 3, padding=1),
-        nn.Flatten(),
-        nn.Linear(32 * 8 * 8, 10),
-    )
-    x = torch.randn(2, 3, 8, 8)
-
-    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=["conv2d_1_1"]))
-
-    _assert_layer_present(trace, "conv2d_1_1")
-    trace.cleanup()
-
-
-def test_two_pass_succeeds_with_non_inplace_relu_module() -> None:
-    """Two-pass logging should still handle non-in-place ReLU modules.
-
-    Returns
-    -------
-    None
-        This test only asserts that logging succeeds and expected labels exist.
-    """
-    model = nn.Sequential(
-        nn.Conv2d(3, 16, 3, padding=1),
-        nn.ReLU(inplace=False),
+        nn.ReLU(inplace=inplace),
         nn.Conv2d(16, 32, 3, padding=1),
         nn.Flatten(),
         nn.Linear(32 * 8 * 8, 10),

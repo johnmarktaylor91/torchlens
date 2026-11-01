@@ -109,30 +109,32 @@ def test_declared_extra_probes_track_packaging_metadata() -> None:
     assert {"jax", "mlx", "paddle", "sae", "tensorflow", "tf", "tinygrad"} <= set(probes)
 
 
-def test_capability_row_optional_absences_do_not_warn(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ("HAS_CODE_POSITIONS", "HAS_CODE_QUALNAME", "HAS_NAMED_TENSOR_API"),
+        (
+            "HAS_GENERATOR_CLONE_STATE",
+            "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
+            "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
+        ),
+    ],
+    ids=[
+        "capability_row_optional_absences_do_not_warn",
+        "capability_row_pre_graphsafe_generator_flags_stay_pass",
+    ],
+)
+def test_capability_row_optional_absences_stay_pass(
+    monkeypatch: pytest.MonkeyPatch, flags: tuple[str, ...]
+) -> None:
     """r-b4 R26-4: absent OPTIONAL features keep a healthy install at PASS.
 
     Interpreter-version surfaces (PEP 657), upstream-removed APIs, and
     not-installed optional backends are reported with their true value under
     ``optional_absent=`` but never drive WARN -- a permanent false alarm
     trains users to ignore the row.
-    """
 
-    from torchlens._utils import _probe_torch_capabilities, _torch_compat as tc
-
-    for flag in ("HAS_CODE_POSITIONS", "HAS_CODE_QUALNAME", "HAS_NAMED_TENSOR_API"):
-        monkeypatch.setattr(tc, flag, False)
-    row = _probe_torch_capabilities()
-    assert row.status == "PASS"
-    assert "optional_absent=" in row.detail
-    assert "missing=" not in row.detail
-
-
-def test_capability_row_pre_graphsafe_generator_flags_stay_pass(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """r7 R26 (opus b4 LM): a pre-graph-safe torch install is healthy, not degraded.
-
+    r7 R26 (opus b4 LM): a pre-graph-safe torch install is healthy, not degraded.
     The three ``torch.Generator`` method probes gate rows of the RNG
     ``GENERATOR_METHOD_TABLE``: a ``False`` DROPS the row, so there is no
     method left to monitor and nothing degrades. On the older half of the
@@ -143,11 +145,7 @@ def test_capability_row_pre_graphsafe_generator_flags_stay_pass(
 
     from torchlens._utils import _probe_torch_capabilities, _torch_compat as tc
 
-    for flag in (
-        "HAS_GENERATOR_CLONE_STATE",
-        "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
-        "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
-    ):
+    for flag in flags:
         monkeypatch.setattr(tc, flag, False)
     row = _probe_torch_capabilities()
     assert row.status == "PASS"

@@ -380,28 +380,27 @@ def _pickle_roundtrip(log):
     return pickle.loads(pickle.dumps(log))
 
 
-def test_episode_ledger_without_declaration_refuses_typed():
+@pytest.mark.parametrize(
+    ("header_key", "header_value", "code"),
+    [
+        ("capture_kind", "plain", "episode_ledger_without_declaration"),
+        ("structure_only", True, "episode_ledger_payload_in_structure_only"),
+    ],
+    ids=[
+        "episode_ledger_without_declaration_refuses_typed",
+        "structure_only_token_payload_refuses_typed",
+    ],
+)
+def test_tampered_episode_header_refuses_typed(header_key, header_value, code):
     log = _capture_episode(n_steps=2)
     payload = dict(log.annotations["episode"])
     header = dict(payload["header"])
-    header["capture_kind"] = "plain"
+    header[header_key] = header_value
     payload["header"] = header
     log.annotations["episode"] = payload
     with pytest.raises(EpisodeLedgerError) as excinfo:
         _pickle_roundtrip(log)
-    assert excinfo.value.fields["code"] == "episode_ledger_without_declaration"
-
-
-def test_structure_only_token_payload_refuses_typed():
-    log = _capture_episode(n_steps=2)
-    payload = dict(log.annotations["episode"])
-    header = dict(payload["header"])
-    header["structure_only"] = True
-    payload["header"] = header
-    log.annotations["episode"] = payload
-    with pytest.raises(EpisodeLedgerError) as excinfo:
-        _pickle_roundtrip(log)
-    assert excinfo.value.fields["code"] == "episode_ledger_payload_in_structure_only"
+    assert excinfo.value.fields["code"] == code
 
 
 def test_monotone_prefix_tamper_quarantines_fail_closed():

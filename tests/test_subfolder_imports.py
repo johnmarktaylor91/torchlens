@@ -57,13 +57,26 @@ def test_notebook_attribute_access_reports_missing_dependency() -> None:
             module.anything
 
 
-def test_notebook_attribute_access_when_deps_present() -> None:
+@pytest.mark.parametrize(
+    ("first_dep", "second_dep", "module_name"),
+    [
+        ("IPython", "jupyter_client", "torchlens._notebook"),
+        ("rsatoolbox", "brainscore_core", "torchlens.neuro"),
+    ],
+    ids=[
+        "notebook_attribute_access_when_deps_present",
+        "neuro_attribute_access_when_deps_present",
+    ],
+)
+def test_attribute_access_when_deps_present(
+    first_dep: str, second_dep: str, module_name: str
+) -> None:
     """When deps are installed, attribute access raises AttributeError, not ImportError."""
-    pytest.importorskip("IPython")
-    pytest.importorskip("jupyter_client")
-    _drop_module("torchlens._notebook")
+    pytest.importorskip(first_dep)
+    pytest.importorskip(second_dep)
+    _drop_module(module_name)
 
-    module = importlib.import_module("torchlens._notebook")
+    module = importlib.import_module(module_name)
 
     with pytest.raises(AttributeError):
         module.anything
@@ -116,15 +129,3 @@ def test_neuro_attribute_access_reports_missing_dependency() -> None:
         # pre-F22 contract).
         with pytest.raises(MissingDependencyError, match="rsatoolbox"):
             module.datasets
-
-
-def test_neuro_attribute_access_when_deps_present() -> None:
-    """When deps are installed, attribute access raises AttributeError, not ImportError."""
-    pytest.importorskip("rsatoolbox")
-    pytest.importorskip("brainscore_core")
-    _drop_module("torchlens.neuro")
-
-    module = importlib.import_module("torchlens.neuro")
-
-    with pytest.raises(AttributeError):
-        module.anything

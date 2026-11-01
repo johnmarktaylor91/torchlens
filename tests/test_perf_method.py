@@ -168,41 +168,36 @@ def test_select_fastlog_names_returns_nonempty_selection() -> None:
     assert all(isinstance(name, str) and name for name in names)
 
 
-def test_gate_fails_when_baseline_row_disappears_from_current() -> None:
-    """A TorchLens baseline row absent from the current run blocks the gate."""
+@pytest.mark.parametrize(
+    ("operation", "expected_passed", "report_key"),
+    [
+        ("fastlog_op_10", False, "missing_current_rows"),
+        ("peer_baukit", True, "unmatched_baseline_rows"),
+    ],
+    ids=[
+        "gate_fails_when_baseline_row_disappears_from_current",
+        "gate_reports_non_torchlens_disappearance_without_blocking",
+    ],
+)
+def test_gate_handles_baseline_row_disappearance(
+    operation: str, expected_passed: bool, report_key: str
+) -> None:
+    """A TorchLens baseline row absent from the current run blocks the gate;
+    a vanished peer row is disclosed but does not block the gate."""
 
     baseline = _payload(
         [
             _row("resnet18", "cpu", "tl_trace", 100.0),
-            _row("resnet18", "cpu", "fastlog_op_10", 40.0),
+            _row("resnet18", "cpu", operation, 40.0),
         ]
     )
     current = _payload([_row("resnet18", "cpu", "tl_trace", 100.0)])
 
     comparison = compare_gate_payloads(baseline, current)
 
-    assert comparison["passed"] is False
-    assert comparison["missing_current_rows"] == [
-        {"model": "resnet18", "device": "cpu", "operation": "fastlog_op_10"}
-    ]
-
-
-def test_gate_reports_non_torchlens_disappearance_without_blocking() -> None:
-    """A vanished peer row is disclosed but does not block the gate."""
-
-    baseline = _payload(
-        [
-            _row("resnet18", "cpu", "tl_trace", 100.0),
-            _row("resnet18", "cpu", "peer_baukit", 40.0),
-        ]
-    )
-    current = _payload([_row("resnet18", "cpu", "tl_trace", 100.0)])
-
-    comparison = compare_gate_payloads(baseline, current)
-
-    assert comparison["passed"] is True
-    assert comparison["unmatched_baseline_rows"] == [
-        {"model": "resnet18", "device": "cpu", "operation": "peer_baukit"}
+    assert comparison["passed"] is expected_passed
+    assert comparison[report_key] == [
+        {"model": "resnet18", "device": "cpu", "operation": operation}
     ]
 
 

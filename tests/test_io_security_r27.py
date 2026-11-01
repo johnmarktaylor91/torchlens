@@ -273,37 +273,33 @@ def test_intervention_sidecar_rejects_symlinked_tensors_dir(tmp_path: Path) -> N
 # ---------------------------------------------------------------------------
 
 
-def test_load_intervention_spec_rejects_symlinked_spec_json(tmp_path: Path) -> None:
-    """``load_intervention_spec`` rejects a symlinked ``spec.json`` child."""
+@pytest.mark.parametrize(
+    ("child", "outside_name"),
+    [
+        ("spec.json", "evil_spec.json"),
+        ("manifest.json", "evil_manifest.json"),
+    ],
+    ids=[
+        "load_intervention_spec_rejects_symlinked_spec_json",
+        "load_intervention_spec_rejects_symlinked_manifest_json",
+    ],
+)
+def test_load_intervention_spec_rejects_symlinked_child_json(
+    tmp_path: Path, child: str, outside_name: str
+) -> None:
+    """``load_intervention_spec`` rejects a symlinked ``spec.json`` or ``manifest.json`` child."""
 
     if not _supports_symlinks(tmp_path):
         pytest.skip("filesystem does not support symlinks")
 
     spec_path = _build_intervention_spec(tmp_path)
-    real = (spec_path / "spec.json").read_text(encoding="utf-8")
-    outside = tmp_path / "evil_spec.json"
+    real = (spec_path / child).read_text(encoding="utf-8")
+    outside = tmp_path / outside_name
     outside.write_text(real, encoding="utf-8")
-    (spec_path / "spec.json").unlink()
-    (spec_path / "spec.json").symlink_to(outside)
+    (spec_path / child).unlink()
+    (spec_path / child).symlink_to(outside)
 
-    with pytest.raises(ReplayPreconditionError, match="spec.json"):
-        load_intervention_spec(spec_path)
-
-
-def test_load_intervention_spec_rejects_symlinked_manifest_json(tmp_path: Path) -> None:
-    """``load_intervention_spec`` rejects a symlinked ``manifest.json`` child."""
-
-    if not _supports_symlinks(tmp_path):
-        pytest.skip("filesystem does not support symlinks")
-
-    spec_path = _build_intervention_spec(tmp_path)
-    real = (spec_path / "manifest.json").read_text(encoding="utf-8")
-    outside = tmp_path / "evil_manifest.json"
-    outside.write_text(real, encoding="utf-8")
-    (spec_path / "manifest.json").unlink()
-    (spec_path / "manifest.json").symlink_to(outside)
-
-    with pytest.raises(ReplayPreconditionError, match="manifest.json"):
+    with pytest.raises(ReplayPreconditionError, match=child):
         load_intervention_spec(spec_path)
 
 
