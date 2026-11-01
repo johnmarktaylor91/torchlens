@@ -151,5 +151,5 @@ def test_swept_option_change_misses_the_cache_key():
         return _capture_cache_key(model, (x,), {}, config)
 
     baseline = key_for(tl.options.CaptureOptions())
-    changed = key_for(tl.options.CaptureOptions(track_nonfinite=True))
+    changed = key_for(tl.options.CaptureOptions(on_nonfinite="track"))
     assert baseline != changed

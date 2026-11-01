@@ -160,8 +160,7 @@ def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: 
     trace = trace_fn(
         _TinyIOModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        save=tl.options.SaveOptions(activation_transform=transform),
+        capture=tl.options.CaptureOptions(layers_to_save="all", activation_transform=transform),
     )
     spec = tmp_path / "partial.tlspec"
     trace.save(str(spec))

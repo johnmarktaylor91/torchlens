@@ -14,7 +14,7 @@ import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.report._health import TRACK_NONFINITE_HINT
 
-_OPTION = "CaptureOptions(track_nonfinite=True)"
+_OPTION = "CaptureOptions(on_nonfinite='track')"
 
 
 def _model() -> nn.Module:
@@ -37,7 +37,7 @@ def test_the_option_on_drops_the_hint() -> None:
         _model(),
         torch.randn(2, 4),
         save=tl.func("relu"),
-        capture=CaptureOptions(track_nonfinite=True),
+        capture=CaptureOptions(on_nonfinite="track"),
     )
 
     assert _OPTION not in str(trace.summary())

@@ -91,7 +91,7 @@ def test_halted_capture_drops_the_semantic_output_scratch() -> None:
     trace = tl.trace(
         _model_with_tokenizer(),
         torch.ones(1, 3),
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
         capture=tl.options.CaptureOptions(output_style="classification"),
     )
     assert trace.halted is True
@@ -236,13 +236,13 @@ def test_pickle_of_a_halted_trace_stays_tokenizer_free_by_size() -> None:
     plain = tl.trace(
         _HaltableClassifier().eval(),
         torch.ones(1, 3),
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
         capture=tl.options.CaptureOptions(output_style="classification"),
     )
     with_tok = tl.trace(
         _model_with_tokenizer(),
         torch.ones(1, 3),
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
         capture=tl.options.CaptureOptions(output_style="classification"),
     )
     tokenizer_bytes = len(pickle.dumps(_Tokenizer()))
@@ -259,7 +259,7 @@ def test_halted_trace_with_tokenizer_saves_and_reloads(tmp_path) -> None:
     trace = tl.trace(
         _model_with_tokenizer(),
         torch.ones(1, 3),
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
         capture=tl.options.CaptureOptions(output_style="classification"),
     )
     path = tmp_path / "halted_semantic.tlspec"

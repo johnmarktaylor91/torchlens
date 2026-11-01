@@ -170,9 +170,9 @@ def _retro_trace(model: nn.Module, x: torch.Tensor, successor: object) -> tl.Tra
         model,
         x,
         save=tl.func("conv2d") & tl.followed_by(successor),
-        lookback=4,
-        lookback_payload_policy="detached_raw",
-        capture=tl.options.CaptureOptions(seed=123),
+        capture=tl.options.CaptureOptions(
+            seed=123, lookback=4, lookback_payload_policy="detached_raw"
+        ),
     )
 
 
@@ -393,9 +393,9 @@ def test_followed_by_out_of_window_parent_warns() -> None:
             EvictedParentRelu(),
             torch.randn(1, 1, 4, 4),
             save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-            lookback=1,
-            lookback_payload_policy="detached_raw",
-            capture=tl.options.CaptureOptions(seed=123),
+            capture=tl.options.CaptureOptions(
+                seed=123, lookback=1, lookback_payload_policy="detached_raw"
+            ),
         )
     assert _saved_conv_ops(log) == []
 
@@ -420,9 +420,9 @@ def test_lookback_payload_window_is_bounded_and_evicts_candidates() -> None:
                 CandidateEvictionModel(),
                 torch.randn(1, 1, 4, 4),
                 save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-                lookback=1,
-                lookback_payload_policy="detached_raw",
-                capture=tl.options.CaptureOptions(seed=123),
+                capture=tl.options.CaptureOptions(
+                    seed=123, lookback=1, lookback_payload_policy="detached_raw"
+                ),
             )
     candidates = getattr(log, "_predicate_lookback_candidates")
     assert len(candidates) <= 1

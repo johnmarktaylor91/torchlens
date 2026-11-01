@@ -159,7 +159,7 @@ def test_op_accessor_repr_teaches_real_basis(loop_trace) -> None:
 
 
 def test_four_option_classes_ride_the_options_namespace() -> None:
-    """CaptureOptions/SaveOptions/ReplayOptions/InterventionOptions (bug 25).
+    """CaptureOptions/ReplayOptions/InterventionOptions (bug 25).
 
     Bug 25 wanted the four option dataclasses importable from a documented
     public spelling. That spelling is the ``tl.options`` namespace -- the
@@ -171,7 +171,7 @@ def test_four_option_classes_ride_the_options_namespace() -> None:
 
     from torchlens import options
 
-    for name in ("CaptureOptions", "SaveOptions", "ReplayOptions", "InterventionOptions"):
+    for name in ("CaptureOptions", "ReplayOptions", "InterventionOptions"):
         assert hasattr(options, name), name
         assert name not in tl.__all__, f"{name} widened the frozen root budget"
         assert name not in tl._LAZY_ATTRS, f"{name} widened the frozen root budget"

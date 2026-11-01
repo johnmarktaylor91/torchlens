@@ -221,4 +221,4 @@ def isolated_capture(
         except ImportError:
             pass
         torch.manual_seed(seed)
-        return trace(run_model, cloned_args, cloned_kwargs, **run_trace_kwargs)
+        return trace(run_model, cloned_args, input_kwargs=cloned_kwargs, **run_trace_kwargs)

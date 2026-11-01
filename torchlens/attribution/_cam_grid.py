@@ -308,7 +308,7 @@ def _metadata_trace(model: Module, inputs: Any, input_kwargs: Any) -> Any:
     options = tl.options.CaptureOptions(layers_to_save=None)
     args = inputs if inputs is not None else ()
     with _temporarily_eval(model):
-        return tl.trace(model, args, input_kwargs, capture=options)
+        return tl.trace(model, args, input_kwargs=input_kwargs, capture=options)
 
 
 def _module_outputs(graph: _TraceGraph) -> dict[str, tuple[int, str]]:

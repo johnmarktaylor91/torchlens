@@ -379,8 +379,9 @@ def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None
     log = tl.trace(
         ReluAdd(),
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
-        save=tl.options.SaveOptions(activation_transform=lambda t: t * 2),
+        capture=tl.options.CaptureOptions(
+            intervention_ready=True, activation_transform=lambda t: t * 2
+        ),
     )
     relu_site = next(layer for layer in log.layer_list if layer.func_name == "relu")
     original_relu_site_id = id(relu_site)

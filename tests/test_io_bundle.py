@@ -124,8 +124,9 @@ def _build_transform_log(transform: Callable[[torch.Tensor], Any]) -> Trace:
     return trace_fn(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
-        save=tl.options.SaveOptions(activation_transform=transform),
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all", seed=0, activation_transform=transform
+        ),
     )
 
 

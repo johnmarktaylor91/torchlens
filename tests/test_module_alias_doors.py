@@ -369,13 +369,13 @@ def _record_save(model: nn.Module, selector: Any) -> Any:
 def _trace_halt(model: nn.Module, selector: Any) -> Any:
     """Halt the capture with ``tl.trace(halt=)``."""
 
-    return tl.trace(model, _X, halt=selector)
+    return tl.trace(model, _X, stop_after=selector)
 
 
 def _record_halt(model: nn.Module, selector: Any) -> Any:
     """Halt the recording with ``tl.record(halt=)``."""
 
-    return tl.record(model, _X, save=lambda ctx: True, halt=selector, return_output=True)
+    return tl.record(model, _X, save=lambda ctx: True, stop_after=selector, return_output=True)
 
 
 #: Every door that reads a module selector. The first five carry an edit; the

@@ -120,10 +120,10 @@ def test_raise_on_nan_conflicts_at_entry() -> None:
         tl.trace(
             TwoLayer(),
             torch.randn(2, 4),
-            capture=CaptureOptions(structure_only=True, raise_on_nan=True),
+            capture=CaptureOptions(structure_only=True, on_nonfinite="raise"),
         )
     assert excinfo.value.fields["code"] == "structure_only_option_conflict"
-    assert "raise_on_nan" in excinfo.value.fields["arguments"]
+    assert "on_nonfinite" in excinfo.value.fields["arguments"]
 
 
 def test_intervention_ready_conflicts_at_entry() -> None:
@@ -143,18 +143,18 @@ def test_intervention_ready_conflicts_at_entry() -> None:
 def test_value_touching_halt_predicates_conflict_at_entry() -> None:
     # A bare callable's value use is unprovable: fail closed.
     with pytest.raises(StructureOnlyOptionConflictError) as excinfo:
-        _structure_capture(halt=lambda ctx: False)
+        _structure_capture(stop_after=lambda ctx: False)
     assert excinfo.value.fields["code"] == "structure_only_option_conflict"
     # tl.where escapes the static-kind allowlist: fail closed too.
     with pytest.raises(StructureOnlyOptionConflictError):
-        _structure_capture(halt=tl.where(lambda ctx: False))
+        _structure_capture(stop_after=tl.where(lambda ctx: False))
 
 
 def test_value_free_structured_halt_stays_legal() -> None:
     """Memo 4.2: truncation composes when the predicate is provably
     value-free (structured selectors)."""
 
-    log = _structure_capture(halt=tl.func("relu"))
+    log = _structure_capture(stop_after=tl.func("relu"))
     assert log.structure_only is True
 
 
@@ -173,7 +173,7 @@ def test_value_free_structured_halt_stays_legal() -> None:
         ("save_raw_input", {}, {"save_raw_input": True}),
         ("save_transformed_output", {}, {"save_transformed_output": True}),
         ("output_style", {}, {"output_style": "classification"}),
-        ("lookback payloads", {"lookback": 4, "lookback_payload_policy": "detached_raw"}, {}),
+        ("lookback payloads", {}, {"lookback": 4, "lookback_payload_policy": "detached_raw"}),
     ],
 )
 def test_explicit_value_payload_requests_refuse_typed(

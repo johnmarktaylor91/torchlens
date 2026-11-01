@@ -55,7 +55,9 @@ def test_hash_reads_through_the_reducer(monkeypatch: pytest.MonkeyPatch) -> None
 def test_live_view_handle_reads_route_through_index() -> None:
     """LiveOpView grad_fn reads come from the single-owner side index."""
 
-    trace = tl.trace(SmallCNN(), _cnn_input(), save_mode="reference")
+    trace = tl.trace(
+        SmallCNN(), _cnn_input(), capture=tl.options.CaptureOptions(save_mode="reference")
+    )
     events = getattr(trace, "_capture_events", None)
     assert events is not None
     # after postprocess the index may be cleared by the working-projection

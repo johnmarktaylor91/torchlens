@@ -19,7 +19,6 @@ from torchlens._utils.hashing import make_short_barcode_from_input
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens._visualization._render_common import GRADIENT_ARROW_COLOR
 from torchlens.errors import MetadataInvariantError
-from torchlens.options import SaveOptions
 from torchlens.validation import (
     check_metadata_invariants,
     validate_forward_pass,
@@ -361,9 +360,8 @@ def test_view_mutation_output_recomputes_transformed_payload_metadata(
     trace = tl.trace(
         _ViewMutationOutputTransformModel(),
         input_value,
-        save=SaveOptions(
-            activation_transform=lambda value: value + 10,
-            save_raw_activations=save_raw_activations,
+        capture=tl.options.CaptureOptions(
+            activation_transform=lambda value: value + 10, save_raw_activations=save_raw_activations
         ),
     )
     output_op = trace[trace.output_layers[0]]

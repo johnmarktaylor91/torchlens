@@ -117,7 +117,12 @@ def test_chunked_forward_with_echo_refuses() -> None:
     """Chunk fan-out runs several forwards into one Trace: refused typed."""
 
     with pytest.raises(NarrationConfigError) as excinfo:
-        tl.trace(OneOp(), torch.randn(4, 4), narrate=True, chunk_size=2)
+        tl.trace(
+            OneOp(),
+            torch.randn(4, 4),
+            narrate=True,
+            capture=tl.options.CaptureOptions(chunk_size=2),
+        )
     assert _code(excinfo) == "echo_chunked_unsupported"
 
 

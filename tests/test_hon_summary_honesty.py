@@ -93,7 +93,7 @@ def test_the_named_option_records_every_op_and_drops_the_hint() -> None:
         model,
         x,
         save=tl.func("relu"),
-        capture=tl.options.CaptureOptions(track_nonfinite=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="track"),
     )
     coverage = trace.nonfinite_coverage
     assert coverage.basis == "capture"

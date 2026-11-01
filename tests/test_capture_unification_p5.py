@@ -234,7 +234,7 @@ def test_conditional_intervention_uses_live_index_lookback() -> None:
         torch.ones(1, 4),
         intervene=tl.when(tl.func("relu") & tl.preceded_by(tl.in_module("layer4")), tl.scale(0.5)),
         save=tl.func("linear") | tl.func("relu"),
-        lookback=4,
+        capture=tl.options.CaptureOptions(lookback=4),
     )
 
     linear = _linear_op(log)

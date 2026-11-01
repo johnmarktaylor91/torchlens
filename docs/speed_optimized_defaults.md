@@ -50,8 +50,7 @@ windowed = tl.trace(
     model,
     x,
     save=conv_before_relu,
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 
 streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))

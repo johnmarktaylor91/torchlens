@@ -87,7 +87,7 @@ def edit_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         "trace_structure_only": tl.trace(
             model, example, capture=tl.options.CaptureOptions(structure_only=True)
         ),
-        "trace_halted": tl.trace(model, example, halt=tl.func("relu")),
+        "trace_halted": tl.trace(model, example, stop_after=tl.func("relu")),
         "trace_not_intervention_ready": tl.trace(model, example),
     }
     try:

@@ -168,7 +168,7 @@ def test_resnet18_incompatible_add_crash_trio() -> None:
                 torch.randn(1, 3, 224, 224),
                 save=tl.func("linear"),
                 narrate=NarrationOptions(sites=True, sink=sink),
-                on_forward_error="attach_partial",
+                recording=tl.options.RecordingOptions(on_forward_error="attach_partial"),
             )
     transcript = sink.getvalue()
     assert "!! forward failed: RuntimeError" in transcript

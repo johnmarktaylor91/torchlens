@@ -49,7 +49,9 @@ def _capture(family: str, impl: str, **trace_kwargs: Any) -> tuple[Any, Any]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             model = spec.build(impl)
-            trace = tl.trace(model, spec.input_args(), spec.input_kwargs(), **trace_kwargs)
+            trace = tl.trace(
+                model, spec.input_args(), input_kwargs=spec.input_kwargs(), **trace_kwargs
+            )
         if trace_kwargs:
             return model, trace
         _CAPTURES[key] = (model, trace)
@@ -113,7 +115,7 @@ def test_qwen2_eager_attention_facets_equal_an_independent_computation() -> None
                 linear.bias.copy_(torch.randn(linear.bias.shape, generator=generator))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace = tl.trace(model, spec.input_args(), spec.input_kwargs())
+        trace = tl.trace(model, spec.input_args(), input_kwargs=spec.input_kwargs())
     attn = model.model.layers[0].self_attn
     view = trace.modules["model.layers.0.self_attn"].facets
     config = model.config

@@ -674,8 +674,7 @@ def test_gradient_rf_lift():
     armed = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     armed_op = armed["relu_2_4"]
     unit = armed_op.receptive_field.center_unit(batch_index=0)

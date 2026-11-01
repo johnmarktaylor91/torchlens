@@ -116,6 +116,6 @@ def test_fastlog_record_unwraps_torch_compile(
         recording = tl.record(
             compiled_model,
             torch.randn(3, 4, requires_grad=True),
-            backward_ready=True,
+            capture=tl.options.CaptureOptions(backward_ready=True),
         )
     assert recording.to_trace().layer_list

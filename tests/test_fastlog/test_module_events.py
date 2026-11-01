@@ -62,7 +62,7 @@ def test_root_only_linear_emits_root_enter_exit() -> None:
     recording = tl.record(
         RootLinear(3, 2),
         torch.ones(1, 3),
-        default_module=True,
+        recording=tl.options.RecordingOptions(default_module=True),
     )
 
     assert [record.ctx.kind for record in recording] == ["module_enter", "module_exit"]
@@ -74,7 +74,7 @@ def test_shared_module_pass_counter_increments_for_two_calls() -> None:
     recording = tl.record(
         SharedModule(),
         torch.ones(1, 3),
-        default_module=True,
+        recording=tl.options.RecordingOptions(default_module=True),
     )
     child_events = [record.ctx for record in recording if record.ctx.address == "shared"]
 
@@ -93,8 +93,7 @@ def test_identity_sequence_pass_through_tensor_is_visible() -> None:
     recording = tl.record(
         IdentitySequence(),
         torch.ones(1, 3),
-        default_module=True,
-        default_op=False,
+        recording=tl.options.RecordingOptions(default_module=True, default_op=False),
     )
 
     assert any(record.ctx.module_type == "Identity" for record in recording)
@@ -104,7 +103,11 @@ def test_forward_exception_cleans_recording_stack() -> None:
     """Forward exceptions clean global TorchLens and fastlog state."""
 
     with pytest.raises(RuntimeError, match="forward exploded"):
-        tl.record(RaisingModel(), torch.ones(1), default_module=True)
+        tl.record(
+            RaisingModel(),
+            torch.ones(1),
+            recording=tl.options.RecordingOptions(default_module=True),
+        )
 
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None
@@ -124,7 +127,7 @@ def test_predicate_exception_cleans_stack_and_respects_fail_fast() -> None:
             SharedModule(),
             torch.ones(1, 3),
             save=keep_op,
-            on_predicate_error="fail-fast",
+            recording=tl.options.RecordingOptions(on_predicate_error="fail-fast"),
         )
 
     assert torchlens_state._logging_enabled is False

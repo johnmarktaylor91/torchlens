@@ -33,8 +33,7 @@ def _backward_trace() -> tl.Trace:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.log_backward(trace.output_ops[0].out.sum())
     return trace
@@ -48,8 +47,7 @@ def _double_backprop_trace() -> tl.Trace:
     trace = tl.trace(
         critic,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     score = trace.output_ops[0].out.sum()
     (grad_input,) = torch.autograd.grad(score, x, create_graph=True)

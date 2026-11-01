@@ -130,8 +130,7 @@ def test_reachable_but_none_layer_source_gradient_raises_typed_error() -> None:
     trace = tl.trace(
         _DetachedPath(),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     source = next(op for op in trace.layer_list if op.is_input)
     target = next(op for op in reversed(trace.layer_list) if not op.is_output)

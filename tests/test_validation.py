@@ -33,7 +33,7 @@ from torchlens.errors import (
     TraceNotReproducibleWarning,
 )
 from torchlens.intervention.types import DictKey
-from torchlens.options import SaveOptions
+from torchlens.options import CaptureOptions
 from torchlens.recording import RecordContext
 from torchlens.report import ValidationDiagnostic
 from torchlens.validation import (
@@ -5986,8 +5986,7 @@ def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None
     log = trace_fn(
         _SimpleFF(),
         torch.randn(2, 5),
-        save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
-        capture=tl.options.CaptureOptions(seed=42),
+        capture=CaptureOptions(activation_transform=lambda tensor: tensor.mean(), seed=42),
     )
     try:
         victim = next(layer for layer in log.layer_list if layer.transformed_out is not None)
@@ -6023,8 +6022,7 @@ def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None
     log = trace_fn(
         _SimpleFF(),
         torch.randn(2, 5),
-        save=SaveOptions(activation_transform=lambda tensor: tensor.mean()),
-        capture=tl.options.CaptureOptions(seed=42),
+        capture=CaptureOptions(activation_transform=lambda tensor: tensor.mean(), seed=42),
     )
     try:
         assert any(layer.out is not None for layer in log.layer_list)
@@ -6290,8 +6288,9 @@ def test_backward_invariants_exempt_dead_branch_layers() -> None:
         log = tl.trace(
             model_cls(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(backward_ready=True, layers_to_save="all"),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(
+                backward_ready=True, layers_to_save="all", save_mode="reference"
+            ),
         )
         try:
             log.log_backward(log.output_ops[0].out.sum())
@@ -6325,8 +6324,9 @@ def test_dead_branch_exemption_does_not_disarm_contributing_backpointers() -> No
     log = tl.trace(
         DeadBranch(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(backward_ready=True, layers_to_save="all"),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, layers_to_save="all", save_mode="reference"
+        ),
     )
     try:
         log.log_backward(log.output_ops[0].out.sum())
@@ -7885,7 +7885,7 @@ def test_plain_trace_vmap_mask_has_no_functionless_replacement() -> None:
 
     model = _VmapMaskModel().eval()
     x = torch.randn(4, 4)
-    log = trace_fn(model, [x], {})
+    log = trace_fn(model, [x], input_kwargs={})
 
     # No genuine user intervention happened, so there must be zero functionless
     # intervention placeholders.
@@ -7928,7 +7928,7 @@ def test_plain_trace_mistral_has_no_functionless_replacement():
         sliding_window=16,
     )
     model = transformers.MistralForCausalLM(cfg).eval()
-    log = trace_fn(model, [], {"input_ids": torch.randint(0, 100, (1, 16))})
+    log = trace_fn(model, [], input_kwargs={"input_ids": torch.randint(0, 100, (1, 16))})
 
     assert _functionless_replacement_ops(log) == []
     assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
@@ -8047,7 +8047,7 @@ def test_plain_trace_internal_source_final_output_is_exempted() -> None:
 
     model = _ArangeInternalSourceOutputModel().eval()
     x = torch.randn(4, 4)
-    log = trace_fn(model, [x], {})
+    log = trace_fn(model, [x], input_kwargs={})
     try:
         assert log.output_layers == ["output_1"]
         output_parent = log[log["output_1"].parents[0]]
@@ -8111,7 +8111,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates() -> None:
     model = _Mlp().eval()
     model.relu.register_forward_hook(_untraceable_replacement_hook)
     x = torch.randn(3, 4)
-    log = trace_fn(model, [x], {})
+    log = trace_fn(model, [x], input_kwargs={})
     try:
         # A genuine functionless replacement placeholder IS present here...
         placeholders = _functionless_replacement_ops(log)
@@ -8177,7 +8177,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates_nested_depth() -> No
     model = _NestedNet().eval()
     model.block.norm.register_forward_hook(_substituting_hook)  # nested 2 levels deep
     x = torch.randn(2, 8)
-    log = trace_fn(model, [x], {})
+    log = trace_fn(model, [x], input_kwargs={})
     try:
         placeholders = _functionless_replacement_ops(log)
         assert placeholders, "expected a genuine intervention_replacement placeholder"
@@ -8227,7 +8227,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None
     model = _Mlp().eval()
     model.register_forward_hook(_substituting_hook)  # DEPTH 0: hook on the root model
     x = torch.randn(3, 4)
-    log = trace_fn(model, [x], {})
+    log = trace_fn(model, [x], input_kwargs={})
     try:
         placeholders = _functionless_replacement_ops(log)
         assert placeholders, "expected a genuine intervention_replacement placeholder"
@@ -8290,7 +8290,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
     # The opaque return is a real capture gap: it is disclosed (module-exit
     # adoption record) while the boundary still logs it as an internal source.
     with pytest.warns(UserWarning, match=_OPAQUE_EXIT_DISCLOSURE):
-        log = trace_fn(model, [x], {})
+        log = trace_fn(model, [x], input_kwargs={})
     try:
         assert _functionless_replacement_ops(log) == []
         assert [op for op in log.ops if getattr(op, "intervention_replaced", False)] == []
@@ -8320,7 +8320,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
     model = _RawAtenReluNet().eval()
     x = torch.randn(3, 4)
     with pytest.warns(UserWarning, match=_OPAQUE_EXIT_DISCLOSURE):
-        log = trace_fn(model, [x], {})
+        log = trace_fn(model, [x], input_kwargs={})
     try:
         # No genuine intervention happened -> zero functionless placeholders and
         # zero intervention_replaced ops during plain capture.

@@ -40,8 +40,9 @@ def _capture(model: nn.Module, inputs: torch.Tensor, *, backward_ready: bool = F
     return tl.trace(
         model.eval(),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=backward_ready),
-        save_mode="reference" if backward_ready else "copy",
+        capture=tl.options.CaptureOptions(
+            backward_ready=backward_ready, save_mode="reference" if backward_ready else "copy"
+        ),
     )
 
 

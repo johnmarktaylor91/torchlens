@@ -72,7 +72,7 @@ def captured(capture_cache: dict[tuple[str, str], Any]):
                     trace = tl.trace(model, _token_ids())
                 elif family == "gpt2-ltk":
                     model = build_gpt2(impl).eval()
-                    trace = tl.trace(model, (_token_ids(),), {"logits_to_keep": 1})
+                    trace = tl.trace(model, (_token_ids(),), input_kwargs={"logits_to_keep": 1})
                 elif family == "opt":
                     model = _build_opt(impl)
                     trace = tl.trace(model, _token_ids())

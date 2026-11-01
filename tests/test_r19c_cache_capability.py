@@ -44,16 +44,18 @@ def test_cache_with_activation_transform_roundtrips(tmp_path):
     first = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir),
-        save=tl.options.SaveOptions(activation_transform=_act_transform),
+        capture=tl.options.CaptureOptions(
+            cache=True, cache_dir=cache_dir, activation_transform=_act_transform
+        ),
     )
     assert first.capture_cache_hit is False
 
     second = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(cache=True, cache_dir=cache_dir),
-        save=tl.options.SaveOptions(activation_transform=_act_transform),
+        capture=tl.options.CaptureOptions(
+            cache=True, cache_dir=cache_dir, activation_transform=_act_transform
+        ),
     )
     assert second.capture_cache_hit is True
 
@@ -68,9 +70,12 @@ def test_cache_with_grad_transform_roundtrips(tmp_path):
     first = tl.trace(
         model,
         x,
-        grad_transform=_grad_transform,
         capture=tl.options.CaptureOptions(
-            cache=True, cache_dir=cache_dir, save_grads=True, backward_ready=True
+            cache=True,
+            cache_dir=cache_dir,
+            save_grads=True,
+            backward_ready=True,
+            grad_transform=_grad_transform,
         ),
     )
     assert first.capture_cache_hit is False
@@ -78,9 +83,12 @@ def test_cache_with_grad_transform_roundtrips(tmp_path):
     second = tl.trace(
         model,
         x,
-        grad_transform=_grad_transform,
         capture=tl.options.CaptureOptions(
-            cache=True, cache_dir=cache_dir, save_grads=True, backward_ready=True
+            cache=True,
+            cache_dir=cache_dir,
+            save_grads=True,
+            backward_ready=True,
+            grad_transform=_grad_transform,
         ),
     )
     assert second.capture_cache_hit is True

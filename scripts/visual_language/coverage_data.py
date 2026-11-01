@@ -573,6 +573,7 @@ NONVISUAL_DRAW_PARAMS: Mapping[str, str] = {}
 #: Closed vocabularies that are not drawing choices.
 VOCABULARY_EXEMPT: Mapping[str, str] = {
     "_literals.OutputDeviceLiteral": "capture output device, not a drawing choice",
+    "_literals.OnNonfiniteLiteral": "capture NaN/Inf policy, not a drawing choice",
 }
 
 #: Legend section title to the row that teaches it.

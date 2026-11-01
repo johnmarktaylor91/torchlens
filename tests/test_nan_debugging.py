@@ -99,7 +99,7 @@ def test_raise_on_nan_raises_capture_error_with_partial_graph() -> None:
         tl.trace(
             NonFiniteFixture(),
             _input_tensor(),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
     error = exc_info.value
     assert "op='__truediv__'" in str(error)
@@ -121,7 +121,7 @@ def test_partial_trace_constructible_from_failed_capture() -> None:
         tl.trace(
             NonFiniteFixture(),
             _input_tensor(),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
     partial = tl._partial.from_failed_capture(exc_info.value)
     assert isinstance(partial, PartialTrace)

@@ -76,7 +76,9 @@ def test_mlx_save_raw_activations_false_drops_payloads_keeps_metadata() -> None:
 
     model = Tiny()
     x = mx.random.normal((2, 4))
-    log = tl.trace(model, x, backend="mlx", save=tl.options.SaveOptions(save_raw_activations=False))
+    log = tl.trace(
+        model, x, backend="mlx", capture=tl.options.CaptureOptions(save_raw_activations=False)
+    )
 
     assert log.num_ops > 0
     for op_label in log.op_labels:

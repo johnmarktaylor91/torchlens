@@ -142,7 +142,10 @@ def test_distilgpt2_structured_arms_and_bare_wrapper_positive_control():
 
     def edited_fork(model, args, kwargs):
         trace = tl.trace(
-            model, args, kwargs, capture=tl.options.CaptureOptions(intervention_ready=True)
+            model,
+            args,
+            input_kwargs=kwargs,
+            capture=tl.options.CaptureOptions(intervention_ready=True),
         )
         target = _first_module_op(trace, ("addmm", "linear", "conv1d"))
         fork = trace.fork()
@@ -202,7 +205,7 @@ def test_multi_leaf_container_slots_stay_exact():
 
     model, args, kwargs = families.build_structural("container-output")
     trace = tl.trace(
-        model, args, kwargs, capture=tl.options.CaptureOptions(intervention_ready=True)
+        model, args, input_kwargs=kwargs, capture=tl.options.CaptureOptions(intervention_ready=True)
     )
     target = _first_module_op(trace, ("linear",))
     fork = trace.fork()
@@ -238,7 +241,10 @@ def test_real_distilgpt2_nested_cache_do_lands():
     model = transformers.AutoModelForCausalLM.from_pretrained("distilgpt2").eval()
     ids = torch.randint(0, 1000, (1, 16), generator=torch.Generator().manual_seed(0))
     trace = tl.trace(
-        model, (), {"input_ids": ids}, capture=tl.options.CaptureOptions(intervention_ready=True)
+        model,
+        (),
+        input_kwargs={"input_ids": ids},
+        capture=tl.options.CaptureOptions(intervention_ready=True),
     )
     nested = [node for node in _output_nodes(trace) if len(tuple(node.container_path or ())) >= 3]
     assert nested, "real distilgpt2 exposes no nested-cache boundary nodes"

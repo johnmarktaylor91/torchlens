@@ -51,7 +51,6 @@ DEMOTED: dict[str, tuple[str, ...]] = {
         "merge_capture_options",
         "merge_intervention_options",
         "merge_replay_options",
-        "merge_save_options",
         "merge_streaming_options",
         "merge_visualization_options",
         "visualization_to_render_kwargs",

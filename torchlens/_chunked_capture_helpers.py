@@ -84,7 +84,7 @@ def _validate_chunked_forward_capture(
     if intervene is not None:
         raise ChunkedForwardConfigError("chunk_size cannot be combined with intervene=.")
     if halt is not None:
-        raise ChunkedForwardConfigError("chunk_size cannot be combined with halt=.")
+        raise ChunkedForwardConfigError("chunk_size cannot be combined with stop_after=.")
     if streaming.path is not None or streaming.on_save is not None:
         raise ChunkedForwardConfigError(
             "chunk_size is in-memory only in v1 and cannot be combined with streaming storage."

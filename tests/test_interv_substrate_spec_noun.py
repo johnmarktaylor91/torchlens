@@ -244,8 +244,7 @@ def test_backward_rules_of_multi_clause_spec_not_dropped() -> None:
         model,
         x,
         intervene=spec,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     staged = getattr(log, "_intervention_spec", None)
     assert staged is not None

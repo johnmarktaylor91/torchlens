@@ -52,7 +52,11 @@ def _check_at(model: nn.Module, inputs: torch.Tensor, name: str, unit: tuple[int
     """Trace a saturating model and check one interior unit against gradients."""
 
     capture = tl.options.CaptureOptions(backward_ready=True)
-    trace = tl.trace(model, inputs.requires_grad_(True), capture=capture, save_mode="reference")
+    trace = tl.trace(
+        model,
+        inputs.requires_grad_(True),
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
     target = [op for op in trace.layer_list if op.func_name == name][-1]
     input_op = next(op for op in trace.layer_list if op.is_input)
     return target.receptive_field.check(unit, input_op=input_op)
@@ -155,8 +159,7 @@ def test_upper_bound_claims_are_outside_the_tightness_contract() -> None:
     trace = tl.trace(
         nn.AdaptiveAvgPool1d(3),
         torch.ones(1, 1, 15, requires_grad=True),
-        capture=capture,
-        save_mode="reference",
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
     )
     target = [op for op in trace.layer_list if op.func_name == "adaptive_avg_pool1d"][-1]
     input_op = next(op for op in trace.layer_list if op.is_input)

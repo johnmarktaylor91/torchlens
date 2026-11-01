@@ -71,21 +71,21 @@ def _refuse_structure_only_conflicts(facts: _StructureOnlyEntryFacts) -> None:
     )
     if facts.raise_on_nan_value:
         raise StructureOnlyOptionConflictError(
-            "structure_only=True cannot combine with raise_on_nan=True: a "
+            "structure_only=True cannot combine with on_nonfinite='raise': a "
             "structure-only capture has no tensor values for a nonfinite "
             "predicate to test",
             code="structure_only_option_conflict",
             remedy=conflict_remedy,
-            arguments=("structure_only", "raise_on_nan"),
+            arguments=("structure_only", "on_nonfinite"),
         )
     if facts.track_nonfinite_value:
         raise StructureOnlyOptionConflictError(
-            "structure_only=True cannot combine with track_nonfinite=True: a "
+            "structure_only=True cannot combine with on_nonfinite='track' or 'warn': a "
             "structure-only capture has no tensor values for a per-op "
             "finiteness check to examine",
             code="structure_only_option_conflict",
             remedy=conflict_remedy,
-            arguments=("structure_only", "track_nonfinite"),
+            arguments=("structure_only", "on_nonfinite"),
         )
     if facts.intervention_ready:
         raise StructureOnlyOptionConflictError(

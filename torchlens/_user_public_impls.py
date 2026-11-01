@@ -139,7 +139,7 @@ def log_model_metadata(
     model_trace = _user_funcs.trace(
         model,
         input_args,
-        input_kwargs,
+        input_kwargs=input_kwargs,
         capture=CaptureOptions(
             layers_to_save=None,
             compute_input_output_distances=True,

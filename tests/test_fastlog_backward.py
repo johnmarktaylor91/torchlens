@@ -42,8 +42,8 @@ def test_recording_log_backward_grad_fn_id_link() -> None:
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
-        save_grads=True,
         return_output=True,
+        capture=tl.options.CaptureOptions(save_grads=True),
     )
     recording.backward(out.sum())
 
@@ -63,8 +63,8 @@ def test_recording_log_backward_intervening_grad_fn() -> None:
         save=lambda ctx: ctx.label == "relu_1",
         # A record-time predicate opts in to gradient hooks; the per-backward
         # predicate below overrides it.
-        save_grads=lambda _ctx: False,
         return_output=True,
+        capture=tl.options.CaptureOptions(save_grads=lambda _ctx: False),
     )
 
     def keep_intervening(ctx: GradRecordContext) -> CaptureSpec | bool:
@@ -85,8 +85,9 @@ def test_recording_log_backward_disk_only_rejects_save_grads(tmp_path: Path) -> 
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
         storage=tl.to_disk(tmp_path / "grad.tlfast"),
-        save_grads=lambda _ctx: False,  # opts in to gradient hooks
+        # opts in to gradient hooks
         return_output=True,
+        capture=tl.options.CaptureOptions(save_grads=lambda _ctx: False),
     )
 
     with pytest.raises(InvalidStorageError, match="disk-only"):
@@ -102,8 +103,9 @@ def test_recording_log_backward_disk_only_dynamic_save_grads_resolves(tmp_path: 
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
         storage=tl.to_disk(tmp_path / "grad.tlfast"),
-        save_grads=lambda _ctx: False,  # opts in to gradient hooks
+        # opts in to gradient hooks
         return_output=True,
+        capture=tl.options.CaptureOptions(save_grads=lambda _ctx: False),
     )
 
     with pytest.raises(InvalidStorageError, match="disk-only"):
@@ -160,8 +162,9 @@ def test_gradient_transform_alias_silent() -> None:
         trace = tl.trace(
             TinyRelu(),
             _input(),
-            grad_transform=lambda grad: torch.zeros_like(grad),
-            capture=tl.options.CaptureOptions(save_grads="all"),
+            capture=tl.options.CaptureOptions(
+                save_grads="all", grad_transform=lambda grad: torch.zeros_like(grad)
+            ),
         )
     trace.log_backward(trace[trace.output_layers[-1]].out.sum())
 

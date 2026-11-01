@@ -82,8 +82,7 @@ def capture(model: nn.Module, x: torch.Tensor) -> object:
     return tl.trace(
         model,
         x.detach().clone().requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 

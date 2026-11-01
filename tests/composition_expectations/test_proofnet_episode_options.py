@@ -198,7 +198,7 @@ def test_episode_x_halt_is_coupled_via_step_status_rows(episode_rig: dict[str, A
     import torchlens as tl
 
     rig = episode_rig
-    trace = tl.trace(rig["root"], rig["example"], episode=rig["spec"](), halt=tl.func("tanh"))
+    trace = tl.trace(rig["root"], rig["example"], episode=rig["spec"](), stop_after=tl.func("tanh"))
     classification, _ = _expect("halt_predicate")
     assert classification in {ORTHOGONAL, COUPLED}
     assert trace.outcome.status.name == "STOPPED"
@@ -276,7 +276,7 @@ def test_episode_x_raise_on_nan_is_orthogonal(episode_rig: dict[str, Any]) -> No
         rig["root"],
         rig["example"],
         episode=rig["spec"](),
-        capture=tl.options.CaptureOptions(raise_on_nan=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="raise"),
     )
     classification, _ = _expect("raise_on_nan")
     assert classification in {ORTHOGONAL, COUPLED}

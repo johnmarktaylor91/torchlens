@@ -122,8 +122,7 @@ def test_reconstructed_sdpa_facets_validate_against_actual_post_rope_inputs() ->
     log = tl.trace(
         model,
         x,
-        reconstruction_ready=True,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        capture=tl.options.CaptureOptions(layers_to_save="all", reconstruction_ready=True),
     )
     view = log.modules["attn"].facets
     op = _sdpa_op(log)
@@ -146,8 +145,7 @@ def test_reconstructed_sdpa_validation_is_non_vacuous_after_corruption() -> None
     log = tl.trace(
         model,
         torch.randn(2, 3, 8),
-        reconstruction_ready=True,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        capture=tl.options.CaptureOptions(layers_to_save="all", reconstruction_ready=True),
     )
     op = _sdpa_op(log)
     op.saved_args[0] = op.saved_args[0] + 10.0
@@ -165,8 +163,7 @@ def test_reconstructed_sdpa_gqa_and_causal_mask_validate() -> None:
     log = tl.trace(
         model,
         torch.randn(1, 4, 8),
-        reconstruction_ready=True,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        capture=tl.options.CaptureOptions(layers_to_save="all", reconstruction_ready=True),
     )
     view = log.modules["attn"].facets
     op = _sdpa_op(log)
@@ -197,8 +194,7 @@ def test_fused_pattern_intervention_requires_real_eager_facet() -> None:
     log = tl.trace(
         model,
         torch.randn(2, 3, 8),
-        reconstruction_ready=True,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        capture=tl.options.CaptureOptions(layers_to_save="all", reconstruction_ready=True),
     )
 
     with pytest.raises(SiteResolutionError, match="read-only"):
@@ -266,8 +262,7 @@ def test_transformerlens_aliases_are_opt_in() -> None:
     log = tl.trace(
         model,
         x,
-        reconstruction_ready=True,
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        capture=tl.options.CaptureOptions(layers_to_save="all", reconstruction_ready=True),
     )
     assert "hook_pattern" not in log.modules["attn"].facets.keys()
 
@@ -276,8 +271,7 @@ def test_transformerlens_aliases_are_opt_in() -> None:
         aliased = tl.trace(
             model,
             x,
-            reconstruction_ready=True,
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            capture=tl.options.CaptureOptions(layers_to_save="all", reconstruction_ready=True),
         )
         view = aliased.modules["attn"].facets
         assert "hook_pattern" in view.keys()

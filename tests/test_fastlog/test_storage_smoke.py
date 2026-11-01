@@ -55,7 +55,9 @@ class DeepLinearModel(nn.Module):
 def test_ram_only_roundtrip_records_in_memory() -> None:
     """RAM-only recording returns an in-memory Recording."""
 
-    recording = tl.record(TinyModel(), torch.ones(1, 3), default_op=True)
+    recording = tl.record(
+        TinyModel(), torch.ones(1, 3), recording=tl.options.RecordingOptions(default_op=True)
+    )
 
     assert recording.path is None
     assert recording.is_recovered is False
@@ -80,8 +82,8 @@ def test_disk_only_roundtrip_loads_bundle(tmp_path: Path) -> None:
     recording = tl.record(
         TinyModel(),
         torch.ones(1, 3),
-        default_op=True,
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        recording=tl.options.RecordingOptions(default_op=True),
     )
     loaded = tl.load(bundle_path)
 
@@ -111,7 +113,7 @@ def test_disk_only_deep_stack_stays_linear_and_round_trips(
         model,
         inputs,
         save=lambda ctx: ctx.kind == "op",
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
     elapsed = time.perf_counter() - start
     loaded = tl.load(bundle_path)
@@ -133,8 +135,8 @@ def test_keep_grad_disk_only_default_raises_at_construction(tmp_path: Path) -> N
         tl.record(
             TinyModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(save_grad=True),
-            streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+            storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
         )
 
     assert not bundle_path.exists()
@@ -155,7 +157,7 @@ def test_keep_grad_disk_only_predicate_raises_at_runtime(tmp_path: Path) -> None
             TinyModel(),
             torch.ones(1, 3),
             save=keep_first,
-            streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+            storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
         )
 
 
@@ -174,7 +176,7 @@ def test_keep_grad_integer_dtype_rejected_per_record() -> None:
         tl.record(
             IntegerModel(),
             torch.ones(1),
-            default_op=CaptureSpec(save_grad=True),
+            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
         )
 
 
@@ -185,8 +187,8 @@ def test_crash_recovery_from_partial_bundle(tmp_path: Path) -> None:
     tl.record(
         TinyModel(),
         torch.ones(1, 3),
-        default_op=True,
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        recording=tl.options.RecordingOptions(default_op=True),
     )
     partial_path = tmp_path / "partial_unfinalized.tlfast"
     bundle_path.rename(partial_path)

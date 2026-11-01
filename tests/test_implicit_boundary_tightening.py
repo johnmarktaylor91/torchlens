@@ -129,8 +129,9 @@ def _cpu_async_capture(*, engine_drain: bool, monkeypatch) -> tuple[tl.Trace, nn
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        save_mode="cpu_async",
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(
+            layers_to_save="all", save_grads="all", save_mode="cpu_async"
+        ),
     )
     _run_unmanaged_backward(trace)
     backward_mod._close_implicit_backward_pass_if_open(trace)

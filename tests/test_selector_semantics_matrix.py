@@ -236,9 +236,10 @@ def _probe_capture(model_key: str, make_selector: Callable[[], Any]) -> Any:
                 model,
                 x,
                 save=selector,
-                lookback=4,
-                lookback_payload_policy="detached_raw",
                 **_extra_trace_kwargs(model_key),
+                capture=tl.options.CaptureOptions(
+                    lookback=4, lookback_payload_policy="detached_raw"
+                ),
             )
     except Exception as exc:  # noqa: BLE001 - characterization records error shape
         return _error_cell(exc)

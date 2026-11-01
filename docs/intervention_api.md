@@ -66,8 +66,7 @@ windowed = tl.trace(
     model,
     x,
     save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 patched = tl.trace(
     model,
@@ -79,7 +78,7 @@ conditional = tl.trace(
     model,
     x,
     intervene=tl.when(tl.func("relu") & tl.preceded_by(tl.in_module("block")), tl.zero_ablate()),
-    lookback=4,
+capture=CaptureOptions(lookback=4),
 )
 ```
 

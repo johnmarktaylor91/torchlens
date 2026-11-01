@@ -415,7 +415,7 @@ def test_teaching_refusals_fire_identically_under_predicate_composition() -> Non
             IfBranch(),
             torch.randn(2, 4),
             capture=CaptureOptions(structure_only=True),
-            halt=tl.func("nonexistent_op_name"),
+            stop_after=tl.func("nonexistent_op_name"),
         )
     assert excinfo.value.fields["consumer_kind"] == "if_test"
     assert excinfo.value.fields["code"] == "value_dependent_branch_unsupported"

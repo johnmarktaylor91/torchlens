@@ -881,7 +881,9 @@ def overhead(
             def _run_trace() -> None:
                 """One full default capture, cleaned up immediately."""
 
-                _trace(model, list(args) if len(args) > 1 else args[0], kwargs).cleanup()
+                _trace(
+                    model, list(args) if len(args) > 1 else args[0], input_kwargs=kwargs
+                ).cleanup()
 
             median, spread = _measure(_run_trace)
             measurements.append(

@@ -11,7 +11,6 @@ from torchlens.options import (
     CaptureOptions,
     InterventionOptions,
     ReplayOptions,
-    SaveOptions,
     StorageOptions,
     VisualizationOptions,
     merge_streaming_options,
@@ -19,7 +18,6 @@ from torchlens.options import (
 
 _OPTION_CLASSES = [
     CaptureOptions,
-    SaveOptions,
     VisualizationOptions,
     ReplayOptions,
     InterventionOptions,

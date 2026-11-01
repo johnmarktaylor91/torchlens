@@ -58,8 +58,7 @@ outgoing = log.projective_fields(level="layer")
 # Arming the gradient tripwire needs requires_grad inputs, backward_ready=True,
 # and save_mode="reference"; verify().verdict is PASS / FAIL / INDETERMINATE.
 armed = tl.trace(model, x.requires_grad_(True),
-                 capture=tl.options.CaptureOptions(backward_ready=True),
-                 save_mode="reference")
+                 capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
 armed_op = armed["relu_1_2"]
 armed_unit = armed_op.receptive_field.center_unit(batch_index=0)
 gradient = armed_op.receptive_field.probe_grad(armed_unit, retain_graph=True)
@@ -84,8 +83,7 @@ log = tl.trace(
     model,
     x,
     save=conv_before_relu,
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 
 ablated = tl.trace(

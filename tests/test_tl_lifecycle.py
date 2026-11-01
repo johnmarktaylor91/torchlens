@@ -21,7 +21,7 @@ from torchlens.backends.torch._tl import (
 )
 from torchlens.backends.torch.model_prep import _tag_untagged_buffers
 from torchlens.intervention.runtime import _copy_tl_replacement_attrs
-from torchlens.options import CaptureOptions, SaveOptions
+from torchlens.options import CaptureOptions
 from torchlens.types import PartialTrace
 
 
@@ -87,8 +87,7 @@ def test_successful_capture_cleans_session_tensor_and_param_metadata() -> None:
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(save_args=True),
-        save=SaveOptions(activation_transform=lambda t: t.float().mean()),
+        capture=CaptureOptions(save_args=True, activation_transform=lambda t: t.float().mean()),
     )
 
     assert not hasattr(x, "_tl")

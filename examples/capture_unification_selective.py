@@ -65,8 +65,7 @@ def main() -> None:
         model,
         x,
         save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-        lookback=4,
-        lookback_payload_policy="detached_raw",
+        capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
     )
     print(
         "windowed saves:",

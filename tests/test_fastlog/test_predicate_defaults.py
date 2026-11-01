@@ -33,8 +33,7 @@ def test_default_op_accepts_bool_and_capture_spec(default_op: bool | CaptureSpec
     recording = tl.record(
         DefaultsModel(),
         torch.ones(1, 2),
-        default_module=True,
-        default_op=default_op,
+        recording=tl.options.RecordingOptions(default_module=True, default_op=default_op),
     )
 
     expected_any_ops = default_op is not False
@@ -51,7 +50,7 @@ def test_default_module_accepts_bool_and_capture_spec(
         DefaultsModel(),
         torch.ones(1, 2),
         save=lambda ctx: False,
-        default_module=default_module,
+        recording=tl.options.RecordingOptions(default_module=default_module),
     )
 
     expected_any_modules = default_module is not False
@@ -65,7 +64,9 @@ def test_none_abstain_uses_default_op() -> None:
         DefaultsModel(),
         torch.ones(1, 2),
         save=lambda ctx: None,
-        default_op=CaptureSpec(save_out=False, save_metadata=True),
+        recording=tl.options.RecordingOptions(
+            default_op=CaptureSpec(save_out=False, save_metadata=True)
+        ),
     )
 
     assert recording.records

@@ -27,7 +27,7 @@ from torch import nn
 import torchlens as tl
 from tests.oracles.test_legacy_graph_counts import Grad
 from torchlens.errors import ScalarEscapeWarning
-from torchlens.options import CaptureOptions, SaveOptions
+from torchlens.options import CaptureOptions
 
 G = torch.randn(4)  # a forward-global tensor a module consumes directly
 H = torch.randn(4)  # a forward-global tensor only a scalar read consumes
@@ -76,7 +76,7 @@ def test_capture_advisories_match_the_planted_kinds_and_counts() -> None:
 
 def _two_pass_trace(transform: Callable[[torch.Tensor], torch.Tensor] | None) -> tl.Trace:
     torch.manual_seed(0)
-    save = SaveOptions(grad_transform=transform) if transform is not None else None
+    save = CaptureOptions(grad_transform=transform) if transform is not None else None
     trace = tl.trace(
         Grad().train(), torch.randn(3, 4), capture=CaptureOptions(save_grads=True), save=save
     )

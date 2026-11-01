@@ -240,7 +240,7 @@ def m1_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     products["trace_structure_only"] = tl.trace(
         model, example, capture=tl.options.CaptureOptions(structure_only=True)
     )
-    products["trace_halted"] = tl.trace(model, example, halt=tl.func("relu"))
+    products["trace_halted"] = tl.trace(model, example, stop_after=tl.func("relu"))
     episode_products = build_episode_products()
     products["trace_episode"] = episode_products["episode"]
     products["trace_episode_coupled"] = episode_products["coupled"]

@@ -235,7 +235,7 @@ assert relu.out.shape == (2, 8)
 - **Keep the wrappers installed.** `tl.trace` keeps torch wrapped between calls by default.
   `CaptureOptions(unwrap_when_done=True)` re-wraps on the next call, a fixed 2 to 5% per trace
   on the small models.
-- **Stop early.** `halt=` ends the forward once the sites you need are captured; see the
+- **Stop early.** `stop_after=` ends the forward once the sites you need are captured; see the
   [performance guide](../performance.md).
 
 ### Install flash-linear-attention for Qwen3.5-class models

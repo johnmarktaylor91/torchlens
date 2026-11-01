@@ -181,7 +181,7 @@ def _bench_crash_flush(name: str, model: torch.nn.Module, x: torch.Tensor) -> di
                 crasher,
                 x,
                 narrate=NarrationOptions(sites=True, sink=flush_path, tail_on_error=20),
-                on_forward_error="return_partial",
+                recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
             )
     except Exception:  # noqa: BLE001, S110 - the crash row MEASURES a failing forward
         pass

@@ -485,8 +485,7 @@ class TestTraceGC:
         trace = tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         armed_keys = {key for key, ref in registry.items() if ref() is trace}
         assert armed_keys, "capture registered no backward triggers to observe"

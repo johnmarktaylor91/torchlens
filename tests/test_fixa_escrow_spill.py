@@ -174,7 +174,7 @@ def test_config_built_clip_visual_projection_bit_equal_through_forced_spill(forc
     kwargs["attention_mask"] = torch.ones_like(kwargs["input_ids"])
 
     structure = tl.trace(
-        model, (), kwargs, capture=tl.options.CaptureOptions(layers_to_save="none")
+        model, (), input_kwargs=kwargs, capture=tl.options.CaptureOptions(layers_to_save="none")
     )
     projection_ops = [
         op
@@ -185,7 +185,9 @@ def test_config_built_clip_visual_projection_bit_equal_through_forced_spill(forc
     assert projection_ops, "no visual_projection op captured on the R0 CLIP fixture"
     label = projection_ops[0].layer_label
 
-    log = tl.trace(model, (), kwargs, capture=tl.options.CaptureOptions(layers_to_save=[label]))
+    log = tl.trace(
+        model, (), input_kwargs=kwargs, capture=tl.options.CaptureOptions(layers_to_save=[label])
+    )
     oracle = _eager_module_output(model, "visual_projection", **kwargs)
     assert torch.equal(log[label].out, oracle), (
         f"R0 CLIP {label} escrow payload not bit-equal to the eager visual projection"
@@ -338,7 +340,10 @@ def test_real_clip_linear_73_288_bit_equal_to_visual_projection():
     oracle = _eager_module_output(model, "visual_projection", **kwargs)
 
     log = tl.trace(
-        model, (), kwargs, capture=tl.options.CaptureOptions(layers_to_save=["linear_73_300"])
+        model,
+        (),
+        input_kwargs=kwargs,
+        capture=tl.options.CaptureOptions(layers_to_save=["linear_73_300"]),
     )
     op = log["linear_73_300"]
     assert op.output_of_modules == ("visual_projection",)

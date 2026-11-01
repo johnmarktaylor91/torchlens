@@ -165,16 +165,16 @@ def _fold_finite(spine: RunningStats, finite: torch.Tensor) -> None:
 
 
 def stats_save_options() -> Any:
-    """Return the ``SaveOptions`` that ``save="stats"`` stands for.
+    """Return the save transforms that ``save="stats"`` stands for.
 
     The summary-role reducer as the activation transform with raw outs
     dropped: the capture's existing reduce-only path, so no raw clone is made
     and the save budget is charged only the packed vectors.
     """
 
-    from ..options import SaveOptions
+    from ..options import _SaveTransforms
 
-    return SaveOptions(activation_transform=_StatsReducer(), save_raw_activations=False)
+    return _SaveTransforms(activation_transform=_StatsReducer(), save_raw_activations=False)
 
 
 def refuse_reduced_payload_read(slot: Any, source_trace: Any) -> None:

@@ -268,9 +268,9 @@ Key entry points:
   (pass-qualified labels of ops whose output held NaN/Inf) +
   `trace.nonfinite_coverage` (evidence basis and coverage counts). Default
   captures serve it from the memoized saved-payload scan at zero capture cost;
-  `CaptureOptions(track_nonfinite=True)` opts into capture-time per-op checks
+  `CaptureOptions(on_nonfinite='track')` opts into capture-time per-op checks
   covering unsaved ops, with device flags drained in one batch at the finalize
-  seam (never a per-op CUDA sync). `raise_on_nan` is independent and unchanged.
+  seam (never a per-op CUDA sync). `on_nonfinite='raise'` is independent and unchanged.
 - Attribution kit (DOCUMENTED-UNSTABLE): `torchlens.attribution` ships
   `integrated_gradients`, `occlusion`, `grad_cam`, and the display-only
   `overlay` renderer, all operating on Traces. `grad_cam` also takes
@@ -298,7 +298,7 @@ Key entry points:
   (`torchlens/backends/paddle/interventions.py`; forward-only, builtin helper adapters
   `zero_ablate`/`scale`/`add`/`replace_with`, corroborated validation carve-out), and on the
   eager TF preview (static-label, two-level writable layer, fail-closed site reachability;
-  see invariant 15). `trace(halt=...)` runs on torch and Paddle; the remaining previews
+  see invariant 15). `trace(stop_after=...)` runs on torch and Paddle; the remaining previews
   refuse typed.
 - Visualization encoding channel (UNSTABLE naming, keyword-only): `Trace.draw(color_by=...)`
   fills op nodes from a sequential ramp (field name / scalar builtin / callable), dot-layout-only
@@ -361,8 +361,7 @@ windowed = tl.trace(
     model,
     x,
     save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 patched = tl.trace(
     model,
@@ -396,8 +395,7 @@ pf_table = torch_trace.projective_fields(level="layer")
 # Gradient verification needs requires_grad inputs, backward_ready=True, and
 # save_mode="reference"; verify().verdict is PASS / FAIL / INDETERMINATE.
 armed_trace = tl.trace(model, x.requires_grad_(True),
-                       capture=tl.options.CaptureOptions(backward_ready=True),
-                       save_mode="reference")
+                       capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
 armed_op = armed_trace["relu_1_2"]
 armed_unit = armed_op.receptive_field.center_unit(batch_index=0)
 rf_gradient = armed_op.receptive_field.probe_grad(armed_unit, retain_graph=True)

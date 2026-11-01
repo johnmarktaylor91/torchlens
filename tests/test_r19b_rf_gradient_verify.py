@@ -57,7 +57,11 @@ def _backward_trace(model: nn.Module, inputs: torch.Tensor) -> object:
     """Capture a backward-ready, graph-connected trace for RF probing."""
 
     capture = tl.options.CaptureOptions(backward_ready=True)
-    return tl.trace(model, inputs, capture=capture, save_mode="reference")
+    return tl.trace(
+        model,
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -60,6 +60,7 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "save_raw_grads",
     "echo",
     "detach_saved_activations",
+    "postprocess",
 )
 
 
@@ -113,6 +114,9 @@ class RecordingOptions:
     #: ``save_grad=True`` stays attached either way. Disk payloads are always
     #: detached inspection copies.
     detach_saved_activations: bool
+    #: Post-capture finalization pass: ``"none"`` (the default) or the
+    #: ``validate_postprocess`` vocabulary (``tl.record(recording=...)``).
+    postprocess: str
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
@@ -144,6 +148,7 @@ class RecordingOptions:
         save_raw_grads: bool | MissingType = MISSING,
         narrate: Any | None | MissingType = MISSING,
         detach_saved_activations: bool | MissingType = MISSING,
+        postprocess: str | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
 
@@ -203,6 +208,9 @@ class RecordingOptions:
             "echo": _resolve_recording_option("echo", narrate, None, specified_fields),
             "detach_saved_activations": _resolve_recording_option(
                 "detach_saved_activations", detach_saved_activations, True, specified_fields
+            ),
+            "postprocess": _resolve_recording_option(
+                "postprocess", postprocess, "none", specified_fields
             ),
         }
         _validate_recording_values(values)
@@ -399,6 +407,7 @@ def merge_recording_options(
     save_raw_grads: bool | MissingType = MISSING,
     narrate: Any | None | MissingType = MISSING,
     detach_saved_activations: bool | MissingType = MISSING,
+    postprocess: str | MissingType = MISSING,
 ) -> RecordingOptions:
     """Merge flat recording kwargs into a grouped options object."""
 
@@ -430,6 +439,7 @@ def merge_recording_options(
         # The narrate= keyword fills the stored echo field.
         "echo": narrate,
         "detach_saved_activations": detach_saved_activations,
+        "postprocess": postprocess,
     }
     for field_name, value in incoming.items():
         if value is MISSING:

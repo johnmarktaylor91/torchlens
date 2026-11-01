@@ -312,7 +312,7 @@ Fused `torch.nn.functional.scaled_dot_product_attention` hides `scores`,
 when the SDPA op saved its actual inputs and options:
 
 ```python
-log = tl.trace(model, x, reconstruction_ready=True)
+log = tl.trace(model, x, capture=CaptureOptions(reconstruction_ready=True))
 pattern = log.modules["blocks.0.attn"].facets.pattern
 z = log.modules["blocks.0.attn"].facets.z
 ```
