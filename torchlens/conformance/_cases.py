@@ -129,20 +129,11 @@ def _failure_detail(exc: Exception) -> str:
     return text
 
 
-def model_case_ids(model: RosterModel, tier: str, model_cases: tuple[str, ...]) -> tuple[str, ...]:
-    """The per-model case ids one rung defines for ``model``, in report order."""
-
-    if tier == "C1" and model.expected_op_kinds is not None:
-        return (model_cases[0], C1_INVENTORY_CASE, *model_cases[1:])
-    return model_cases
-
-
 def _unavailable_rows(
     adapter: Any,
     roster: tuple[RosterModel, ...],
     tier: str,
     model_cases: tuple[str, ...],
-    tail_cases: tuple[str, ...] = (),
 ) -> list[CaseResult] | None:
     """Named skips for every case when the adapter's framework cannot run here.
 
@@ -154,6 +145,9 @@ def _unavailable_rows(
     reason = probe() if callable(probe) else None
     if reason is None:
         return None
+    from ._protocol_cases import c1_row_case_ids, c1_tail_case_ids, c2_row_case_ids
+
+    row_ids = c1_row_case_ids if tier == "C1" else c2_row_case_ids
     rows = [
         CaseResult(
             case_id=case_id,
@@ -164,11 +158,11 @@ def _unavailable_rows(
             detail=reason,
         )
         for model in roster
-        for case_id in model_case_ids(model, tier, model_cases)
+        for case_id in row_ids(adapter, model)
     ]
+    tail = c1_tail_case_ids(adapter) if tier == "C1" else ()
     rows.extend(
-        CaseResult(case_id=case_id, tier=tier, outcome="skipped", detail=reason)
-        for case_id in tail_cases
+        CaseResult(case_id=case_id, tier=tier, outcome="skipped", detail=reason) for case_id in tail
     )
     return rows
 
@@ -267,9 +261,10 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
 
     import warnings
 
-    skipped = _unavailable_rows(
-        adapter, roster, "C1", C1_MODEL_CASES, ("c1_capabilities_consumed",)
-    )
+    from ._protocol_cases import run_c1_protocol_row_cases
+    from ._refusal_cases import run_c1_refusal_cases
+
+    skipped = _unavailable_rows(adapter, roster, "C1", C1_MODEL_CASES)
     if skipped is not None:
         return skipped
     results: list[CaseResult] = []
@@ -316,7 +311,9 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
                 )
         except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
             results.append(_failed("c1_deterministic_repeat", "C1", _failure_detail(exc), model))
+        results.extend(run_c1_protocol_row_cases(adapter, model, trace, reference))
     results.append(_capability_consumption_case(adapter, roster))
+    results.extend(run_c1_refusal_cases(adapter, roster))
     return results
 
 
@@ -377,6 +374,8 @@ def run_c2_cases(
 
     import warnings
 
+    from ._protocol_cases import run_c2_protocol_row_cases
+
     skipped = _unavailable_rows(adapter, roster, "C2", C2_MODEL_CASES)
     if skipped is not None:
         return skipped
@@ -386,7 +385,7 @@ def run_c2_cases(
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                _, trace, _ = _run_capture(adapter, model)
+                _, trace, reference = _run_capture(adapter, model)
                 adapter.save(trace, path)
                 loaded = adapter.load(path)
         except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
@@ -411,6 +410,7 @@ def run_c2_cases(
             results.append(
                 _failed("c2_structure_equal", "C2", "reloaded structure differs from live", model)
             )
-        else:
-            results.append(_passed("c2_structure_equal", "C2", model))
+            continue
+        results.append(_passed("c2_structure_equal", "C2", model))
+        results.extend(run_c2_protocol_row_cases(adapter, model, trace, loaded, reference))
     return results
