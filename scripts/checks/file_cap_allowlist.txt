@@ -529,7 +529,7 @@ torchlens/_trace_core/op_store.py::OpRowStore.__init__	72
 torchlens/_trace_core/op_store.py::_evict_payloads_in_cell	72
 torchlens/_trace_core/relation_views.py::freeze_op_relation_views	140
 torchlens/_trace_core/relation_views.py::freeze_trace_relation_views	79
-torchlens/_trace_selector_helpers.py	835
+torchlens/_trace_selector_helpers.py	834
 torchlens/_trace_selector_helpers.py::_make_layers_to_save_predicate	76
 torchlens/_training_validation.py::validate_training_compatibility	69
 torchlens/_user_funcs.py::trace	245
