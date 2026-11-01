@@ -350,10 +350,10 @@ torchlens/_ir/selector_eval.py::_evaluate_subject	185
 torchlens/_ir/selector_eval.py::normalize_selector_like	74
 torchlens/_ir/selector_eval.py::selector_from_spec	164
 torchlens/_kernel_telemetry.py::_payload_from_events	86
-torchlens/_merged/_artifact.py	1076
-torchlens/_merged/_artifact.py::_cached_join_refs	90
+torchlens/_merged/_artifact.py	1073
+torchlens/_merged/_artifact.py::_cached_join_refs	86
 torchlens/_merged/_artifact.py::_check_degraded_cache_coherence	140
-torchlens/_merged/_artifact.py::load_merged	297
+torchlens/_merged/_artifact.py::load_merged	296
 torchlens/_merged/_artifact.py::save_merged	206
 torchlens/_merged/_engine.py::derive_merge	76
 torchlens/_merged/_presenter.py	896

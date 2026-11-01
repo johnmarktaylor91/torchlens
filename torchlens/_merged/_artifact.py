@@ -43,6 +43,7 @@ from ._errors import MergedArtifactError, MergeInputError
 from ._evidence import extract_rank_evidence
 from ._presenter import MergedTrace, _RankHandle
 from ._rules import is_strict_int
+from ._witness import witness_consistency
 
 __all__ = ["canonical_json_bytes", "load_merged", "save_merged", "tree_hash"]
 
@@ -643,7 +644,6 @@ def _check_degraded_cache_coherence(cached: dict[str, Any], rederived: Any) -> N
 
     from ._engine import _STRUCTURAL_KINDS
     from ._enums import BoundaryConsistency, MergeAlignment, MergeValueStatus
-    from ._witness import witness_consistency
 
     cached_joins = cached.get("joins")
     if not isinstance(cached_joins, list):

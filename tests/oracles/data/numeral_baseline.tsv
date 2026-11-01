@@ -4275,6 +4275,11 @@ package-docstrings	torchlens/_merged/_presenter.py	37
 package-docstrings	torchlens/_merged/_presenter.py	41
 package-docstrings	torchlens/_merged/_presenter.py	45
 package-docstrings	torchlens/_merged/_relation_table.py	1.5
+package-docstrings	torchlens/_merged/_relation_table.py	18
+package-docstrings	torchlens/_merged/_rules.py	10
+package-docstrings	torchlens/_merged/_rules.py	256
+package-docstrings	torchlens/_merged/_witness.py	18
+package-docstrings	torchlens/_merged/_witness.py	3.3
 package-docstrings	torchlens/_model_wrappers.py	10
 package-docstrings	torchlens/_notebook/_access.py	16
 package-docstrings	torchlens/_notebook/_access.py	1_1
