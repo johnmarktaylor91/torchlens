@@ -2875,8 +2875,6 @@ docs-md	docs/reference/error_refusal_contract.md	65536
 docs-md	docs/reference/error_refusal_contract.md	657
 docs-md	docs/reference/error_refusal_contract.md	7.3
 docs-md	docs/reference/error_refusal_contract.md	90
-docs-md	docs/reference/experiment_ledger.md	144
-docs-md	docs/reference/experiment_ledger.md	50
 docs-md	docs/reference/export.md	0.1.32
 docs-md	docs/reference/export.md	10
 docs-md	docs/reference/export.md	5000
@@ -6160,10 +6158,6 @@ package-docstrings	torchlens/experiment/_engine.py	256
 package-docstrings	torchlens/experiment/_engine.py	3.1
 package-docstrings	torchlens/experiment/_engine.py	36
 package-docstrings	torchlens/experiment/_head_sugar.py	36
-package-docstrings	torchlens/experiment/_ledger.py	10
-package-docstrings	torchlens/experiment/_ledger.py	256
-package-docstrings	torchlens/experiment/_reader.py	11
-package-docstrings	torchlens/experiment/_reader.py	50
 package-docstrings	torchlens/export/__init__.py	11
 package-docstrings	torchlens/export/__init__.py	16,
 package-docstrings	torchlens/export/__init__.py	17
@@ -8088,7 +8082,6 @@ test-docstrings	tests/test_layer_sites.py	41
 test-docstrings	tests/test_layer_sites.py	42
 test-docstrings	tests/test_ledger_exp_head_oracle.py	12
 test-docstrings	tests/test_ledger_exp_head_oracle.py	36
-test-docstrings	tests/test_ledger_exp_ledger.py	11
 test-docstrings	tests/test_leverage_div_honesty.py	16
 test-docstrings	tests/test_lit_bridge_contract.py	10
 test-docstrings	tests/test_lit_bridge_contract.py	12

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1340 modules, 624388 lines, 0 modules without a docstring.
+84 packages, 1338 modules, 623020 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -60,9 +60,9 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8498 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 6 | 3892 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 98 | 51418 |
-| `torchlens.bridge` | External-tool bridge namespace. | 25 | 8013 |
+| `torchlens.bridge` | External-tool bridge namespace. | 25 | 7807 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 7995 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 7972 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3824 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2017 |
@@ -72,7 +72,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2214 |
 | `torchlens.errors` | Public TorchLens exception classes. | 4 | 1029 |
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 73 |
-| `torchlens.experiment` | torchlens.experiment — multi-run experiments as first-class objects. | 5 | 2280 |
+| `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 3 | 1141 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 333 |
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5233 |
@@ -1293,7 +1293,7 @@ Torch backend implementation package for TorchLens capture. (98 modules, 51418 l
 
 ### `torchlens.bridge`
 
-External-tool bridge namespace. (25 modules, 8013 lines)
+External-tool bridge namespace. (25 modules, 7807 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1309,7 +1309,7 @@ External-tool bridge namespace. (25 modules, 8013 lines)
 | `hf_attention` | TorchLens as a registered Hugging Face attention backend (DOCUMENTED-UNSTABLE). | 502 |
 | `huggingface_hub` | Hugging Face Hub publishing and loading helpers. | 393 |
 | `inseq` | inseq bridge helpers. | 132 |
-| `mcp` | Model Context Protocol (MCP) bridge: serve the agent registry over stdio. | 455 |
+| `mcp` | Model Context Protocol (MCP) bridge: serve the agent registry over stdio. | 249 |
 | `profiler` | Profiler bridge helpers. | 435 |
 | `pyreft` | Read a pyreft LoReFT artifact and apply it as a TorchLens subspace edit. | 471 |
 | `pytorch_grad_cam` | pytorch-grad-cam bridge helpers. | 179 |
@@ -1338,7 +1338,7 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2700 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (24 modules, 7995 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (24 modules, 7972 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1365,7 +1365,7 @@ Single Bundle type for intervention-ready TorchLens model logs. (24 modules, 799
 | `_selected_by` | The ''selected_by'' relation kind: a control decision between two traced calls. | 93 |
 | `_token_divergence` | ''Bundle.token_divergence'': where two runs of one call part, by exact token ids. | 223 |
 | `_token_spans` | Automatic ''fed_by'' span finding and the strict token-pair read. | 564 |
-| `_vary` | ''bundle.vary(mapping)'' — one explicit edit or identity PER member ( item 5). | 275 |
+| `_vary` | ''bundle.vary(mapping)'' — one explicit edit or identity PER member ( item 5). | 252 |
 
 ### `torchlens.callbacks`
 
@@ -1502,15 +1502,13 @@ Example-loading namespace for small TorchLens artifacts. (1 modules, 73 lines)
 
 ### `torchlens.experiment`
 
-torchlens.experiment — multi-run experiments as first-class objects. (5 modules, 2280 lines)
+torchlens.experiment: multi-run experiments as first-class objects. (3 modules, 1141 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | torchlens.experiment — multi-run experiments as first-class objects. | 46 |
-| `_engine` | The private candidate engine + the ''site_sweep'' face ( items 6-8). | 964 |
+| `__init__` | torchlens.experiment: multi-run experiments as first-class objects. | 76 |
+| `_engine` | The private candidate engine + the ''site_sweep'' face ( items 6-8). | 931 |
 | `_head_sugar` | Head-ablation sugar ( item 7b): the canonical mechinterp move, guarded. | 134 |
-| `_ledger` | The persistent experiment ledger ( items 9-10): event-sourced, chained. | 948 |
-| `_reader` | Read-only ledger reader ( item 11): ''tl.experiment.read_ledger(path)''. | 188 |
 
 ### `torchlens.experimental`
 

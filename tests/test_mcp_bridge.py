@@ -41,14 +41,8 @@ def test_tool_specs_are_wellformed_json_schemas() -> None:
 
     names = [spec["name"] for spec in tlmcp.TOOL_SPECS]
     assert len(names) == len(set(names))
-    # Nine registry tools plus the bridge-local experiment-ledger extension.
-    ledger_names = {spec["name"] for spec in tlmcp.LEDGER_TOOL_SPECS}
-    assert ledger_names == {
-        "torchlens_ledger_overview",
-        "torchlens_ledger_entry",
-        "torchlens_ledger_evidence",
-    }
-    assert len(names) == 9 + len(ledger_names)
+    # Nine registry tools; MCP serves the registry and nothing beside it.
+    assert len(names) == 9
     for spec in tlmcp.TOOL_SPECS:
         assert spec["name"].startswith("torchlens_")
         assert spec["description"]
@@ -56,12 +50,8 @@ def test_tool_specs_are_wellformed_json_schemas() -> None:
         assert schema["type"] == "object"
         assert schema.get("additionalProperties") is False
         assert spec["annotations"] == {"readOnlyHint": True, "idempotentHint": True}
-        # Registry tools serve agent envelopes; the ledger extension serves
-        # the raw torchlens.ledger_*_v1 payloads by contract.
-        expected_prefix = (
-            "torchlens.ledger_" if spec["name"] in ledger_names else "torchlens.agent."
-        )
-        assert spec["output_schema"].startswith(expected_prefix)
+        # Registry tools serve agent envelopes.
+        assert spec["output_schema"].startswith("torchlens.agent.")
         json.dumps(spec)
 
 
@@ -97,10 +87,8 @@ def test_doctor_and_api_map_tools_are_json_safe() -> None:
     assert capabilities["writes"] is False
     assert capabilities["executes_user_code"] is False
     # The capabilities block declares the agent-registry roster; MCP serves
-    # it plus the bridge-local experiment-ledger extension.
-    ledger_names = {spec["name"] for spec in tlmcp.LEDGER_TOOL_SPECS}
-    assert ledger_names.isdisjoint(capabilities["tools"])
-    assert set(capabilities["tools"]) | ledger_names == {spec["name"] for spec in tlmcp.TOOL_SPECS}
+    # exactly it.
+    assert set(capabilities["tools"]) == {spec["name"] for spec in tlmcp.TOOL_SPECS}
     assert "tl.report" in api_map["data"]["submodules_not_in_all"]
     json.dumps(api_map)
 

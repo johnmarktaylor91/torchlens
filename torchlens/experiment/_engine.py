@@ -1,6 +1,6 @@
 """The private candidate engine + the ``site_sweep`` face (F03 items 6-8).
 
-ONE engine, three customers (ledger memo D3a): the ``site_sweep`` face, the
+ONE engine, three customers: the ``site_sweep`` face, the
 tier-c selector conversion (:meth:`EffectsView.to_selection`), and the shipped
 occlusion attribution loop it generalizes. Given a baseline trace, an
 ordered candidate plan, a lane, a metric, and a retention policy, the engine
@@ -334,7 +334,7 @@ def _record_run_envelope(member: Any, spec: Any, *, started: float) -> None:
     """Write the run-door transaction envelope (the historical fourth-door gap).
 
     ``attach_hooks`` stages the spec and ``run()`` fires it, but the run door
-    wrote no InterventionEvent before this engine — exactly the ledger memo's
+    wrote no InterventionEvent before this engine — exactly the design memo's
     3.1 finding ("three of the four write doors record nothing"). The engine
     is the run door's first experiment customer, so it writes the envelope
     through the ONE shared writer with the fires this run minted.
@@ -670,28 +670,6 @@ def _record_sweep_operation(state: _SweepState) -> Any:
     return operation
 
 
-def _finalize_ledger_step(armed: Any, step_id: Any, bundle: Bundle, operation: Any) -> None:
-    """Finalize AFTER material work: a dead sink quarantines the entry and
-    the material Bundle is returned unharmed (D4g rule 3)."""
-
-    if armed is None or step_id is None:
-        return
-    from ._ledger import EvidenceRef
-
-    armed.end_step(
-        step_id,
-        outcome="completed",
-        refs=[
-            EvidenceRef(
-                kind="bundle",
-                uri=f"live://{bundle.id}",
-                object_id=f"{bundle.id}:{operation.operation_id}",
-            )
-        ],
-        material_result=bundle,
-    )
-
-
 def sweep_sites(
     baseline: Trace,
     *,
@@ -758,16 +736,6 @@ def sweep_sites(
 
     _validate_sweep_entry(engine=engine, metric=metric, retain=retain, model=model, x=inputs)
 
-    # Emission (item 9b): ONE material step per top-level operation — a
-    # 144-candidate sweep is ONE step referencing the effect table, never
-    # 144 (the operation context; nested member verbs never emit). The
-    # durable started event precedes material work (D4g rule 2); an unarmed
-    # context emits nothing and behavior is byte-identical.
-    from ._ledger import active_ledger
-
-    armed = active_ledger()
-    step_id = armed.begin_step("site_sweep") if armed is not None else None
-
     # ---- preflight (once, before any candidate runs) ----------------------
     pairs = _candidate_pairs(candidates)
     declared_multi = _declared_multi_ids(pairs, multi_site)
@@ -828,7 +796,6 @@ def sweep_sites(
     )
     bundle._effect_tables[operation.operation_id] = table
     bundle._session_effect_selections = dict(state.session_selections)  # type: ignore[attr-defined]
-    _finalize_ledger_step(armed, step_id, bundle, operation)
     return bundle
 
 

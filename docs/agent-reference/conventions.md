@@ -61,7 +61,7 @@
   `docs/reference/episode_capture.md`;
   refusal codes in `docs/reference/error_refusal_contract.md`.
 - Experiments remember (F03; spellings documented-unstable; doc of record
-  `docs/reference/experiment_ledger.md`): Bundles carry persisted lineage
+  `docs/reference/experiments.md`): Bundles carry persisted lineage
   (random `bundle_id`, `member_construction` origin anchors, hash-chained
   `operations` chronology; fork carries relations + anchors both ways);
   `bundle.why(member)` / `bundle.provenance()` are the derived provenance
@@ -74,11 +74,10 @@
   refused, complete effect table persisted incl. released/refused/failed
   rows, `bundle.effects()` reads, `bundle.map(fn)` keys released candidates `"unmeasured"`);
   `head_ablation_candidates` is the module-scoped v-facet sugar (GQA
-  refuses; hand-written-hook oracle in its test file); the experiment
-  ledger (`torchlens.experiment.ledger`) is the opt-in event-sourced
-  hash-chained semantic record (per-event fsync, kill-9-safe, quarantine
-  default, closed verdict vocabulary, `tl.experiment.read_ledger(path)` read-only
-  reading with `.overview`, `.entry(id)` and `.evidence(id, index)`, MCP `torchlens_ledger_*`).
+  refuses; hand-written-hook oracle in its test file). The experiment
+  ledger (the opt-in semantic record) was removed on 1 Nov 2026: the Bundle
+  is the record, and every old ledger spelling raises the typed redirect
+  (`docs/reference/deprecations.md`, "Experiment Ledger").
 - Checkpoint live-ref guard (spellings documented-unstable): cross-member parameter
   value/difference/trajectory reads on a Bundle (`SuperParam` views with >= 2 members:
   `weight_norm_diff`, `compare`, `aggregate`, `out`/`grad`) refuse BEFORE tensor lookup

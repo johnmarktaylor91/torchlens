@@ -1,11 +1,13 @@
-# Experiments remember: lineage, vary, site sweeps, and the experiment ledger
+# Experiments remember: lineage, vary, site sweeps and grids
 
 **Doc of record for the F03 surface. Every spelling DOCUMENTED-UNSTABLE
-pending naming-session ratification.** The design law: *the Bundle proves,
-the ledger remembers* — the Bundle is the MATERIAL record of an experiment
-(always on, travels with the artifact); the experiment ledger is the
-SEMANTIC record (hypothesis, metric choice, verdict — opt-in, references the
-material record, never duplicates it).
+pending naming-session ratification.** The design law: *the Bundle is the
+record* — the material record of an experiment, always on, travelling with
+the artifact: lineage, the operation chronology, and the complete
+per-candidate effect table. The semantic layer (hypothesis, metric choice,
+verdict) is the user's: the experiment ledger that once carried it was
+removed on 1 Nov 2026 (`deprecations.md`, "Experiment Ledger"), and every
+`tl.experiment.ledger`-family spelling now raises the typed redirect.
 
 ## The material record
 
@@ -80,38 +82,10 @@ derived standard-MHA geometry (GQA/MQA refuses
 `head_ablation_equivalence_undeclared`), proven against a hand-written
 pre-projection hook oracle in its own test file.
 
-## The experiment ledger
-
-`torchlens.experiment.ledger(path, hypothesis=, metric=)` arms a
-ContextVar-scoped, file-backed, single-writer ledger and opens entry 1
-(visibly DRAFT without a hypothesis). One entry = one semantic question;
-events are append-only and hash-chained; every event is fsynced before it is
-reported. Kill -9 after event k recovers exactly k events (a torn tail line
-is discarded AND disclosed; an interior break refuses). The three-layer
-honesty law: MECHANICAL fields are engine-derived, INTERPRETIVE fields
-(hypothesis, metric choice, note, verdict) are actor-stamped, and DERIVED
-projections never masquerade as either — a verdict without basis renders
-"asserted; no recorded basis", `declared_at_seq` makes pre-registration a
-checkable fact, and TorchLens LINTS (never blocks, never computes a
-verdict). Emission follows MUTATION: one material step per top-level
-operation (a 144-candidate sweep is ONE step); reads are quiet; observations
-are explicit. Write failures after material work QUARANTINE the entry and
-return the material result unharmed (`on_record_error="raise"` is the strict
-opt-in). Contents are references only (EvidenceRefs with digests; a bundle
-overwritten at the same path reads `stale`, never silently relinked).
-
-Reading is read-only and artifact-fresh mid-experiment:
-`tl.experiment.read_ledger(path)` opens the artifact once without arming it;
-`.overview` is the one-line-per-entry summary, `.entry(entry_id, page=0,
-page_size=50)` the paginated trajectory of one entry and `.evidence(entry_id,
-index=0)` one digest-verified evidence ref (also on the MCP stdio server as
-`torchlens_ledger_*`). No read runs a model, arms a process, writes a verdict,
-or executes an opaque metric.
-
 ## Deliberately not built
 
 No default metric, edit, or retention; no iterated search (ACDC-style
 discovery is user/agent strategy — TorchLens enumerates, executes, records);
-no verdict computation ever; no result-wrapper noun (the Bundle is the
-return); no MCP write door in v1 (its plumbing — actor ids, event ids,
-append-only amendments, one-writer rules — already rides the schema).
+no verdict computation ever; no semantic record (hypothesis, verdict and
+their file are the user's; the Bundle carries the material facts they cite);
+no result-wrapper noun for the flat sweep (the Bundle is the return).

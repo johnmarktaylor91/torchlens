@@ -192,7 +192,7 @@ work; do not under-apply it to unlicensed or copyleft work.
 - **Weights & Biases** -- attach-once `watch`,
   `wandb.Histogram(np_histogram=)`, `sync_tensorboard`, and (with **MLflow**)
   run-as-first-class-object and the run/experiment distinction behind the
-  experiment ledger; ours is local-first, file-based, and intervention-native.
+  Bundle's operation record; ours is local-first, file-based, and intervention-native.
 - **Neptune TorchWatcher** -- the activation-watch precedent and per-layer
   stat vocabulary (the hosted Neptune service shut down in March 2026). **ClearML** -- automatic TensorBoard capture and
   `Logger.report_histogram`'s precomputed-values contract. **Hugging Face

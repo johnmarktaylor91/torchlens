@@ -906,7 +906,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   member against the baseline (or `relative_to`), with lineage status, payload fidelity, value
   residual and comparability reported as separate axes. `b.provenance.summary()` is the per-member list of
   the same facts. Both are derived views; nothing is stored. Reference:
-  `docs/reference/experiment_ledger.md`.
+  `docs/reference/experiments.md`.
 
 **Bundle.vary** *(spelling documented-unstable)*
 : `b.vary(mapping, *, unmentioned=None)` applies one explicit intervention spec (or `None`, the
@@ -3819,7 +3819,6 @@ The sections above describe each surface in depth.
 | `tl.errors.TraceMutationWarning` | First root-log mutation; Trace mutators operate in place |
 | `tl.errors.TransformContractError` | Raised when a transform spec, chain, or plan violates its contract |
 | `tl.errors.UserTransformError` | Raised when activation_transform or grad_transform raises |
-| `tl.experiment.read_ledger` | Read a saved experiment ledger from disk and return a read-only reader that never arms it: `.overview`, `.entry(entry_id, *, page, page_size)`, `.evidence(entry_id, index)` |
 | `tl.experiment.sweep_sites` | Ablate every candidate site, one member per candidate, baseline first |
 | `tl.export.describe_target` | Return one export target's registration metadata (tier row included) |
 | `tl.export.list_targets` | Return the registered export-target names |
@@ -3992,9 +3991,6 @@ The sections above describe each surface in depth.
 | `EpisodeOptions.on_feed_break` | What a feed break does: `"disclose"` (default) returns the trace with the break disclosed; `"refuse"` raises |
 | `EpisodeOptions.rng` | Seeding discipline; only `"managed"` ships |
 | `EpisodeOptions.step_input_from` | Which stepped-call argument carries the step input: a position, a keyword name, or `None` |
-| `ExperimentLedger.begin_step` | Write the durable started event before the step's work |
-| `ExperimentLedger.end_step` | Finalize one step after its work |
-| `ExperimentLedger.open_entry` | Open the next entry (one question per entry) |
 | `FindNanReport.bad_tensors` | Tensor positions found non-finite (`("output",)` for an eager finding) |
 | `FindNanReport.first_bad_thing` | Project this result into the shared first-bad-thing vocabulary |
 | `FindNanReport.found` | Whether a NaN or Inf was found |
@@ -4061,7 +4057,6 @@ The sections above describe each surface in depth.
 | `Layer.is_edited` | Whether a user edit replaced the output of any pass of this layer |
 | `Layer.short_label` | Short pass-qualified label of a single-pass layer |
 | `Layer.short_layer_label` | Short layer label (no pass suffix) |
-| `LedgerEntry.is_draft` | Whether the entry is still a draft (no hypothesis declared yet) |
 | `LineageReport.message` | Human-readable status |
 | `LineageReport.start_label` | Resolved starting op label, or the requested label when lookup failed |
 | `MachineBalance.peak_bytes_per_s` | Peak memory bandwidth used for the roofline, in bytes per second |
