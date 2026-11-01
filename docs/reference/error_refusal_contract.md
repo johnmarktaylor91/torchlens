@@ -263,6 +263,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `backend_ambiguity` | Auto-resolution found multiple equal backend matches | Pass `backend=` explicitly |
 | `backend_capability_conformance` | Advertised backend capability has no implementation (`BackendCapabilityConformanceError`, dual `ValueError` + `NotImplementedError` lineage) | Disable it or register its implementation |
 | `backend_error` | Base-class default of the backend registry family — never raised directly; every live registry refusal carries one of the specific `backend_*`/`unknown_backend` codes below | Branch on the specific backend codes; this row exists only so an unmigrated future subclass is still documented |
+| `backend_maturity_invalid` | A `BackendSpec` declares a maturity label outside the closed set (`preview`, `stable`); `BackendRegistryError` at registration | Register the spec with maturity `preview` or `stable` |
 | `backend_mismatch` | Explicit backend cannot handle the model or inputs | Select the owning backend |
 | `bundle_load_failed` | Bundle load failed on torch/codec drift or a missing dependency | Inspect the chained cause; restore the missing dependency or re-save |
 | `bundle_metadata_integrity_refused` | Bundle metadata pickle is denylisted, corrupt, or truncated | Treat as tamper/corruption; re-save from the source capture |

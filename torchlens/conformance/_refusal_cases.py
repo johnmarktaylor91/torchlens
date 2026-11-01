@@ -281,5 +281,5 @@ def _issue_request(
         import tempfile
 
         adapter.save(trace, Path(tempfile.mkdtemp(prefix="tl_conf_save_")) / "refusal.tlspec")
-    else:  # pragma: no cover - the kinds are the closed set above
+    else:
         raise ValueError(f"unknown request kind {request.kind!r}")

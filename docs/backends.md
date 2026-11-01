@@ -267,7 +267,7 @@ declaration fails coverage against the emit-time inventory fingerprint. `mx.comp
 `mx.vmap` traced-transform wrappers refuse at capture entry, and a compiled attribute on the model
 ceilings the capture with `capture_verified=False` (`mlx_compiled_attribute_not_logged`). An output that no wrapped operation produced (an array operator such as `a + b`, an array
 method, or an `mx.*` function outside the wrapped surface) warns and ceilings the capture the same
-way (`mlx_output_not_produced_by_wrapped_op`); those operations are not logged.
+way (`unwrapped_op_in_capture`); those operations are not logged.
 
 MLX rejects `tl.model_output(...)`, `tl.where(...)`,
 `tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `recipes=`,
