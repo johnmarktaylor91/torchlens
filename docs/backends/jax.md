@@ -29,14 +29,14 @@ print(status.state)
 
 | Capability | Status | Note |
 |---|---|---|
-| backward_capture | not yet proven | True backward graphs are deferred. |
+| backward_capture | unsupported | True backward graphs are deferred. |
 | has_validation_replay | supported | Replay distinguishes verified operations and partial regions. |
-| fastlog | not yet proven | Sparse recording is not declared. |
-| interventions | not yet proven | Public static-label live interventions refuse. |
-| rng_replay | not yet proven | RNG replay is not declared. |
+| fastlog | unsupported | Sparse recording is not declared. |
+| interventions | unsupported | Public static-label live interventions refuse. |
+| rng_replay | unsupported | RNG replay is not declared. |
 | payload_materialization | supported | Portable forward and derived array payloads are materialized. |
-| has_streaming | not yet proven | Streaming capture refuses. |
-| structure_only_capture | not yet proven | Structure-only capture is not declared. |
+| has_streaming | unsupported | Streaming capture refuses. |
+| structure_only_capture | unsupported | Structure-only capture is not declared. |
 | intermediate_derived_grads | supported | Exact intermediate gradients use a separate AD replay. |
 
 ### Known gaps

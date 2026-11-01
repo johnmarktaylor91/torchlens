@@ -32,14 +32,14 @@ print(status.state)
 
 | Capability | Status | Note |
 |---|---|---|
-| backward_capture | not yet proven | True backward graphs are deferred. |
+| backward_capture | unsupported | True backward graphs are deferred. |
 | has_validation_replay | supported | Live replay reports its verification coverage. |
-| fastlog | not yet proven | Sparse recording is deferred. |
+| fastlog | unsupported | Sparse recording is deferred. |
 | interventions | supported | Static-label eager replacements use the writable wrapper layer. |
-| rng_replay | not yet proven | RNG replay is not declared. |
+| rng_replay | unsupported | RNG replay is not declared. |
 | payload_materialization | supported | Dense numeric and boolean array payloads can be persisted. |
-| has_streaming | not yet proven | Streaming capture is deferred. |
-| structure_only_capture | not yet proven | Structure-only capture is not declared. |
+| has_streaming | unsupported | Streaming capture is deferred. |
+| structure_only_capture | unsupported | Structure-only capture is not declared. |
 | intermediate_derived_grads | supported | Exact matched intermediate gradients use auxiliary replay. |
 
 ### Known gaps

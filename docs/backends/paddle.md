@@ -80,11 +80,11 @@ conformance cell yet.
 | Payload materialization after load (`payload_materialization`) | supported | |
 | Live forward interventions and halt (`interventions`) | supported | |
 | Derived gradients, including intermediates (`intermediate_derived_grads`) | supported | |
-| True backward capture (`backward_capture`) | not yet proven | `backward_capture_unsupported` |
-| Fast logging (`fastlog`) | not yet proven | `fastlog_unsupported` |
-| RNG replay (`rng_replay`) | not yet proven | `rng_replay_unsupported` |
-| Streaming (`has_streaming`) | not yet proven | `streaming_unsupported` |
-| Structure-only capture (`structure_only_capture`) | not yet proven | `structure_only_capture_unsupported` |
+| True backward capture (`backward_capture`) | unsupported | `backward_capture_unsupported` |
+| Fast logging (`fastlog`) | unsupported | `fastlog_unsupported` |
+| RNG replay (`rng_replay`) | unsupported | `rng_replay_unsupported` |
+| Streaming (`has_streaming`) | unsupported | `streaming_unsupported` |
+| Structure-only capture (`structure_only_capture`) | unsupported | `structure_only_capture_unsupported` |
 
 Other refusals the backend raises: `explicit_seed_unsupported` (`random_seed=`),
 `trace_option_unsupported` (an option outside the backend's list, or `grad_options=`
