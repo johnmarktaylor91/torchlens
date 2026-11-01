@@ -339,40 +339,11 @@ _TINYGRAD_INVENTORIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 
 
 def _roster_paddle() -> tuple[RosterModel, ...]:
-    """Function root plus a paddle.nn MLP for the paddle pack."""
+    """The Paddle packet's roster (``torchlens.conformance._rosters.paddle``)."""
 
-    def build_fn() -> tuple[Any, Any]:
-        """Build the function root and its example input."""
+    from ._rosters.paddle import roster
 
-        import paddle
-
-        weights = paddle.to_tensor(_WEIGHTS, dtype="float32")
-
-        def matmul_relu(x: Any) -> Any:
-            """Matmul then relu, the function root's whole computation."""
-
-            return paddle.nn.functional.relu(paddle.matmul(x, weights))
-
-        return matmul_relu, paddle.to_tensor(_INPUT, dtype="float32")
-
-    def build_module() -> tuple[Any, Any]:
-        """Build the module root and its example input."""
-
-        import paddle
-
-        paddle.seed(0)
-        model = paddle.nn.Sequential(
-            paddle.nn.Linear(4, 3), paddle.nn.ReLU(), paddle.nn.Linear(3, 2)
-        )
-        return model, paddle.to_tensor(_INPUT, dtype="float32")
-
-    return _rows(
-        build_fn,
-        build_module,
-        # ``weights`` is a closure tensor, recorded as a constant op (P0c's rule).
-        fn_ops=("input", "constant", "matmul", "functional.relu"),
-        module_ops=("input", "functional.linear", "functional.relu", "functional.linear"),
-    )
+    return roster()
 
 
 def _rows(
