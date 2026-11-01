@@ -252,6 +252,8 @@ def _copy_for_output(op: Op, *, _store: Any = None) -> Op:
 
     Parameters
     ----------
+    op:
+        The op record this function reads and writes.
     _store:
         Optional owning row store for the synthesized node.
 
@@ -274,6 +276,8 @@ def _copy_with_shallow_fields(
 
     Parameters
     ----------
+    op:
+        The op record this function reads and writes.
     extra_shallow_fields:
         Additional fields safe to share for this construction path.
     _store:
@@ -323,8 +327,7 @@ def _copy_with_shallow_fields(
 def save_activation(
     op: Op,
     t: torch.Tensor,
-    t_args: list[Any] | tuple[Any, ...],
-    t_kwargs: dict[str, Any],
+    call_args: tuple[list[Any] | tuple[Any, ...], dict[str, Any]],
     save_args: bool,
     activation_transform: Callable[..., Any] | None = None,
 ) -> None:
@@ -339,9 +342,9 @@ def save_activation(
     4. Optionally deep-copy function args/kwargs via ``_recursive_safe_copy``.
 
     Args:
+        op: The op record this function reads and writes.
         t: The output tensor of the operation.
-        t_args: Positional arguments passed to the operation.
-        t_kwargs: Keyword arguments passed to the operation.
+        call_args: The operation's ``(t_args, t_kwargs)`` pair.
         save_args: Whether to deep-copy and store args/kwargs.
         activation_transform: Optional transform applied to the tensor
             before storing (e.g. detach, to-numpy, normalize).
@@ -350,6 +353,7 @@ def save_activation(
     from .._save_budget import SaveBudgetExceededError
     from ..backends.torch._tl import mark_detached_saved_activation
 
+    t_args, t_kwargs = call_args
     trace = op._source_trace
     writer = getattr(trace, "_out_writer", None) if trace is not None else None
     try:
@@ -501,21 +505,21 @@ def _log_tensor_grad(
 ) -> None:
     """Save the grad tensor for this layer's output.
 
-    Called by the backward hook registered during the forward pass. The
-    saved value is the gradient of this op's output after TorchLens's edit
-    chain at this site (``tl.grad(site)`` edits run first), so ``.grad``
-    and an edit agree.
-    The grad is ``detach().clone()``'d - a bare copy, not deep-copied -
-    so it's independent of the autograd graph but cheap to store.
+    Called by the backward hook registered during the forward pass. The saved value is
+    the gradient of this op's output after TorchLens's edit chain at this site
+    (``tl.grad(site)`` edits run first), so ``.grad`` and an edit agree. The grad is
+    ``detach().clone()``'d - a bare copy, not deep-copied - so it's independent of the
+    autograd graph but cheap to store.
 
     Args:
+        op: The op record this function reads and writes.
+        copy_grad_payload: The backend's gradient payload copier
+            (``tensor_tracking._copy_grad_payload``).
         grad: The grad tensor flowing back through this operation.
-        prebuilt: Budget-charged ``(raw_payload, transformed_payload)``
-            pair already built (and transform-validated) by the
-            event-sidecar path for this exact grad. When given, the slot
-            REUSES those objects: no second clone, no second
-            ``grad_transform`` execution, no uncharged retention
-            (grind-r6 b5 R34-N1/R35-N1).
+        prebuilt: Budget-charged ``(raw_payload, transformed_payload)`` pair already built
+            (and transform-validated) by the event-sidecar path for this exact grad. When
+            given, the slot REUSES those objects: no second clone, no second
+            ``grad_transform`` execution, no uncharged retention (grind-r6 b5 R34-N1/R35-N1).
     """
     trace = op._source_trace
     raw_grad = grad
@@ -673,6 +677,8 @@ def _validate_streaming_transform_output(
 
     Parameters
     ----------
+    op:
+        The op record this function reads and writes.
     output:
         Value returned by the user transform.
     transform_kind:
@@ -708,6 +714,8 @@ def _abort_streaming_writer(op: Op, message: str) -> None:
 
     Parameters
     ----------
+    op:
+        The op record this function reads and writes.
     message:
         Reason written to the partial bundle marker.
 

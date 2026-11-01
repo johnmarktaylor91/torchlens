@@ -52,6 +52,8 @@ def grad_for(op: Op, *, bwd: int) -> torch.Tensor:
 
     Parameters
     ----------
+    op:
+        The op record this function reads and writes.
     bwd:
         One-based backward pass number.
 
@@ -85,6 +87,8 @@ def do(
 
     Parameters
     ----------
+    op:
+        The op record this function reads and writes.
     input_transform:
         Transform or hook to apply to this operation's output.
     model:
@@ -120,6 +124,8 @@ def set(
 
     Parameters
     ----------
+    op:
+        The op record this function reads and writes.
     value:
         Static replacement value or one-shot callable.
     strict:
@@ -153,6 +159,8 @@ def attach_hooks(
 
     Parameters
     ----------
+    op:
+        The op record this function reads and writes.
     hook:
         Hook or helper to attach to this operation.
     *extra_hooks:

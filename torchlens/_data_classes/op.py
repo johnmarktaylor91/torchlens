@@ -3001,7 +3001,7 @@ class Op(_SelectionOperand):
     ) -> None:
         """Save the output tensor (and optionally args) for this operation."""
 
-        _op_save.save_activation(self, t, t_args, t_kwargs, save_args, activation_transform)
+        _op_save.save_activation(self, t, (t_args, t_kwargs), save_args, activation_transform)
 
     def _save_call_args(
         self,
