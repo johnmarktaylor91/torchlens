@@ -24,6 +24,7 @@ from torch import nn
 from torchlens._ir.capture_events import CaptureEvents
 
 from ... import _state
+from ..._capture.projections import active_recording_state_or_none
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..._data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
@@ -325,6 +326,52 @@ def release_model(model: nn.Module) -> None:
         register_released_model(model)
 
 
+def _make_once_visitor(
+    model: nn.Module, addressed_module_ids: set[int]
+) -> Callable[[nn.Module, str, list[tuple[str, nn.Module, str]], bool], None]:
+    """Return the per-module visitor ``_prepare_model_once`` traverses ``model`` with.
+
+    ``addressed_module_ids`` collects the modules already given a canonical
+    address, so a shared module keeps its first registration path.
+    """
+
+    def _visit_once(
+        module: nn.Module,
+        address: str,
+        child_entries: list[tuple[str, nn.Module, str]],
+        is_root: bool,
+    ) -> None:
+        """Prepare one module and recursively visit its children once."""
+        # Stamp this module's current root and flag any prior root it was
+        # re-rooted away from as stale (role-swap bookkeeping).
+        _state.record_module_root_prep(model, module)
+
+        # Annotate children with their full dotted address path (root-relative).
+        # The traversal visits a shared module once per registration path; its
+        # canonical address is the FIRST one (``named_modules()`` order, the
+        # address stock-torch module hooks and the glossary use), so a later
+        # path never overwrites it. The other paths stay alias addresses.
+        for _, child_module, child_address in child_entries:
+            if id(child_module) in addressed_module_ids:
+                continue
+            addressed_module_ids.add(id(child_module))
+            set_module_meta(
+                child_module,
+                address=child_address,
+                module_type=str(type(child_module).__name__),
+            )
+
+        # Root module is handled separately by trace.
+        if is_root:
+            return
+
+        if id(module) not in addressed_module_ids:
+            addressed_module_ids.add(id(module))
+            set_module_meta(module, address=address, module_type=str(type(module).__name__))
+
+    return _visit_once
+
+
 def _prepare_model_once(model: nn.Module) -> None:
     """Phase 1: One-time (per role) model preparation.
 
@@ -367,42 +414,8 @@ def _prepare_model_once(model: nn.Module) -> None:
     # a stale non-root decoration from an earlier trace where it was a submodule.
     _restore_undecorated_forward(model)
 
-    def _visit_once(
-        module: nn.Module,
-        address: str,
-        child_entries: list[tuple[str, nn.Module, str]],
-        is_root: bool,
-    ) -> None:
-        """Prepare one module and recursively visit its children once."""
-        # Stamp this module's current root and flag any prior root it was
-        # re-rooted away from as stale (role-swap bookkeeping).
-        _state.record_module_root_prep(model, module)
-
-        # Annotate children with their full dotted address path (root-relative).
-        # The traversal visits a shared module once per registration path; its
-        # canonical address is the FIRST one (``named_modules()`` order, the
-        # address stock-torch module hooks and the glossary use), so a later
-        # path never overwrites it. The other paths stay alias addresses.
-        for _, child_module, child_address in child_entries:
-            if id(child_module) in addressed_module_ids:
-                continue
-            addressed_module_ids.add(id(child_module))
-            set_module_meta(
-                child_module,
-                address=child_address,
-                module_type=str(type(child_module).__name__),
-            )
-
-        # Root module is handled separately by trace.
-        if is_root:
-            return
-
-        if id(module) not in addressed_module_ids:
-            addressed_module_ids.add(id(module))
-            set_module_meta(module, address=address, module_type=str(type(module).__name__))
-
     addressed_module_ids: set[int] = set()
-    _traverse_model_modules(model, _visit_once)
+    _traverse_model_modules(model, _make_once_visitor(model, addressed_module_ids))
     _state._prepared_models.add(model)
 
 
@@ -411,36 +424,12 @@ def _prepare_model_once(model: nn.Module) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _prepare_model_session(
-    trace: "Trace",
-    model: nn.Module,
-    optimizer: Any = None,
-) -> None:
-    """Phase 2: Per-session model preparation, called on every ``trace``.
+def _record_model_identity(trace: "Trace", model: nn.Module) -> None:
+    """Record the root's class, signatures, docstrings and source locations on ``trace``.
 
-    Performs setup that must be fresh for each logging session:
-
-    1. Clears metadata caches (class metadata, dir cache).
-    2. Captures module metadata (source file, signatures, hooks, etc.) into
-       ``trace._module_capture_ws.module_metadata``.
-    3. Sets session-scoped Trace dictionaries for module pass counters and
-       tensor entry/exit tracking.
-    4. Creates ``Param`` objects and forces ``requires_grad=True`` on all
-       parameters (needed so ``grad_fn_handle`` chain is available for metadata).
-    5. Tags buffer tensors with ``_tl.address``.
-
-    All session-scoped state is cleaned up by ``_cleanup_model_session``.
+    Moved out of ``_prepare_model_session`` unchanged.
     """
-    # r83 C1: install this capture's label-anchoring session FIRST, before any
-    # path can stamp a label. A previously installed session is dropped here,
-    # so a label issued by an earlier capture resolves against nothing. The
-    # registry is module-level state in ``_tl`` (not a Trace field): it must be
-    # reachable from ``set_tensor_label`` itself, which is the choke point every
-    # label stamp flows through and which has no Trace in scope.
-    begin_label_session()
-    _state._dir_cache.clear()
-    trace._module_capture_ws.exhaustive_module_stack = []
-    _install_session_forward_wrappers(trace, model)
+
     # F41 bound-method roots: the synthetic TL-authored root's identity reads
     # the OWNER (type(owner).__name__, the owner's class/source metadata) and
     # the bound METHOD as the entry callable -- never the wrapper class name
@@ -486,6 +475,39 @@ def _prepare_model_session(
     except (OSError, TypeError):
         trace.forward_source_file = None
         trace.forward_source_line = None
+
+
+def _prepare_model_session(
+    trace: "Trace",
+    model: nn.Module,
+    optimizer: Any = None,
+) -> None:
+    """Phase 2: Per-session model preparation, called on every ``trace``.
+
+    Performs setup that must be fresh for each logging session:
+
+    1. Clears metadata caches (class metadata, dir cache).
+    2. Captures module metadata (source file, signatures, hooks, etc.) into
+       ``trace._module_capture_ws.module_metadata``.
+    3. Sets session-scoped Trace dictionaries for module pass counters and
+       tensor entry/exit tracking.
+    4. Creates ``Param`` objects and forces ``requires_grad=True`` on all
+       parameters (needed so ``grad_fn_handle`` chain is available for metadata).
+    5. Tags buffer tensors with ``_tl.address``.
+
+    All session-scoped state is cleaned up by ``_cleanup_model_session``.
+    """
+    # r83 C1: install this capture's label-anchoring session FIRST, before any
+    # path can stamp a label. A previously installed session is dropped here,
+    # so a label issued by an earlier capture resolves against nothing. The
+    # registry is module-level state in ``_tl`` (not a Trace field): it must be
+    # reachable from ``set_tensor_label`` itself, which is the choke point every
+    # label stamp flows through and which has no Trace in scope.
+    begin_label_session()
+    _state._dir_cache.clear()
+    trace._module_capture_ws.exhaustive_module_stack = []
+    _install_session_forward_wrappers(trace, model)
+    _record_model_identity(trace, model)
 
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: dict[int, str] = {}
@@ -702,8 +724,6 @@ def _register_predicate_session_params(model: nn.Module) -> None:
     prepared ``param.data = rhs`` rebind and a lazy module's in-forward
     initialization out of the op graph, exactly as exhaustive capture does.
     """
-
-    from ...capture.projections import active_recording_state_or_none
 
     state = active_recording_state_or_none()
     if state is None:

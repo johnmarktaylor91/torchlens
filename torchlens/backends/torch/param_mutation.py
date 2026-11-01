@@ -18,6 +18,7 @@ from typing import Any
 import torch
 
 from ... import _state
+from ..._capture.projections import active_recording_state_or_none
 from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
 from ..._utils.tensor_utils import safe_copy
 from ._tl import get_param_meta
@@ -242,8 +243,6 @@ def _prepared_parameter_lazy_flag(trace: Any, value: torch.nn.Parameter) -> bool
     """
 
     if getattr(trace, "capture_mode", None) == "predicate":
-        from ...capture.projections import active_recording_state_or_none
-
         state = active_recording_state_or_none()
         entry = None if state is None else state.prepared_params.get(id(value))
         if entry is None or entry[0]() is not value:
@@ -252,6 +251,19 @@ def _prepared_parameter_lazy_flag(trace: Any, value: torch.nn.Parameter) -> bool
     if is_unregistered_parameter(trace, value):
         return None
     return not is_prepared_parameter_receiver(trace, value)
+
+
+def _plain_parameter_snapshot(value: torch.nn.Parameter) -> torch.Tensor:
+    """Return a detached plain-Tensor copy of a mutated Parameter, logging paused."""
+
+    with _state.pause_logging():
+        if HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE:
+            plain_value = value.as_subclass(torch.Tensor)
+        else:
+            plain_value = torch.ops.aten.detach.default(value)
+        tensor = safe_copy(plain_value, detach_tensor=True)
+        tensor.requires_grad_(value.requires_grad)
+    return tensor
 
 
 def parameter_mutation_output_for_logging(
@@ -307,11 +319,4 @@ def parameter_mutation_output_for_logging(
     lazy_at_prep = _prepared_parameter_lazy_flag(trace, source)
     if lazy_at_prep is not None and (is_storage_rebind or lazy_at_prep):
         return value
-    with _state.pause_logging():
-        if HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE:
-            plain_value = value.as_subclass(torch.Tensor)
-        else:
-            plain_value = torch.ops.aten.detach.default(value)
-        tensor = safe_copy(plain_value, detach_tensor=True)
-        tensor.requires_grad_(value.requires_grad)
-    return tensor
+    return _plain_parameter_snapshot(value)
