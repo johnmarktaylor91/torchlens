@@ -29,6 +29,15 @@ if TYPE_CHECKING:
     from ..._ir.workspaces import RawGraphWorkspace
 
 
+_RECEIVER_RESIZE_NAMES = frozenset({"resize_", "resize_as_"})
+"""In-place resizes whose receiver keeps its identity and element prefix.
+
+Whether one of these calls reallocates the receiver's storage, changes its
+shape, or changes nothing depends only on the receiver's size and storage
+capacity at entry, so a resize of a registered buffer is journaled the same
+way from every entry state (see ``BufferWriteTracker._journal_resize``).
+"""
+
 _FUSED_MUTATOR_NAMES = {
     "batch_norm",
     "native_batch_norm",
@@ -54,6 +63,10 @@ class BufferSnapshot:
     ``rebinds_storage`` marks the registered buffer itself as the receiver of
     ``Tensor.set_``: the call rebinds its storage, so it is recorded as a
     storage rebind, never journaled as an in-place write.
+
+    ``resizes_in_place`` marks the registered buffer itself as the receiver of
+    ``Tensor.resize_`` / ``Tensor.resize_as_``: the call keeps the object and
+    its element prefix, so it is always journaled as one in-place write.
     """
 
     address: str
@@ -64,6 +77,7 @@ class BufferSnapshot:
     value: torch.Tensor
     writes_at_snapshot: int = 0
     rebinds_storage: bool = False
+    resizes_in_place: bool = False
 
 
 @dataclass(slots=True)
@@ -1013,14 +1027,49 @@ class BufferWriteTracker:
             if snapshot.rebinds_storage:
                 self._record_storage_rebind(snapshot, current)
                 continue
-            if self.storage_key(current) != snapshot.storage_key:
-                continue
             if self.address_write_counts.get(snapshot.address, 0) > snapshot.writes_at_snapshot:
                 # A NESTED wrapped call already journaled this address inside
                 # this call's window (W1-BUF-2 dedup); recording again would
                 # double the declared mutation.
                 continue
+            if snapshot.resizes_in_place:
+                self._journal_resize(func_name, snapshot, current, producer_label_raw)
+                continue
+            if self.storage_key(current) != snapshot.storage_key:
+                continue
             self._journal_snapshot_write(func_name, snapshot, current, producer_label_raw)
+
+    def _journal_resize(
+        self,
+        func_name: str,
+        snapshot: BufferSnapshot,
+        current: torch.Tensor,
+        producer_label_raw: str | None,
+    ) -> None:
+        """Journal a ``resize_`` / ``resize_as_`` on a registered buffer as one in-place write.
+
+        The same call reallocates the storage when it grows past the storage's
+        capacity (a fresh or emptied buffer), changes only the shape when it
+        shrinks, and changes nothing when the buffer already has the target
+        size (the state after one forward). The storage-key guard dropped the
+        reallocating call to the end-of-forward ``data_reassign`` record, and
+        the value/version gate dropped the unchanged call entirely, so the
+        captured graph depended on the entry state and validation's re-trace
+        of a copy taken after one forward disagreed with the first trace.
+        Every resize of the buffer itself is therefore journaled as an
+        ``inplace`` write produced by the resize op: later reads link to that
+        version, and the journal registers the post-call storage so the
+        reconcile sees no rebind. ``value_changed`` stays the observed
+        tri-state (``False`` for a same-size resize).
+        """
+
+        current_value = _copy_tensor_value(current)
+        values_equal = _tensor_equal_tristate(snapshot.value, current_value)
+        value_changed = None if values_equal is None else not values_equal
+        self._record_write(
+            snapshot.address, current, "inplace", producer_label_raw, value_changed, func_name
+        )
+        self._reconcile_journaled_buffer(snapshot, current_value)
 
     def _record_storage_rebind(self, snapshot: BufferSnapshot, current: torch.Tensor) -> None:
         """Defer a ``set_`` on a registered buffer to the end-of-forward rebind record.
@@ -1264,18 +1313,24 @@ class BufferWriteTracker:
                         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(self.trace)
 
     def snapshot_buffer_args(
-        self, tensors: list[torch.Tensor], *, receiver_rebinds_storage: bool = False
+        self,
+        tensors: list[torch.Tensor],
+        *,
+        receiver_rebinds_storage: bool = False,
+        receiver_resizes: bool = False,
     ) -> list[BufferSnapshot]:
         """Return pre-call snapshots for tensor args backed by registered buffers.
 
         ``receiver_rebinds_storage`` is set for ``Tensor.set_``: when its
         receiver (the first tensor argument) is a registered buffer itself, that
-        snapshot is marked ``rebinds_storage``.
+        snapshot is marked ``rebinds_storage``. ``receiver_resizes`` is set for
+        ``Tensor.resize_`` / ``Tensor.resize_as_`` and marks the receiver's
+        snapshot ``resizes_in_place`` the same way.
         """
 
         self.clear_storage_metadata_cache()
         snapshots: list[BufferSnapshot] = []
-        receiver = tensors[0] if receiver_rebinds_storage and tensors else None
+        receiver = tensors[0] if tensors else None
         for tensor in tensors:
             if isinstance(tensor, nn.Parameter):
                 continue
@@ -1292,7 +1347,8 @@ class BufferWriteTracker:
                     version=_tensor_version(registered),
                     value=_copy_tensor_value(registered),
                     writes_at_snapshot=self.address_write_counts.get(address, 0),
-                    rebinds_storage=receiver is not None and tensor is receiver is registered,
+                    rebinds_storage=receiver_rebinds_storage and tensor is receiver is registered,
+                    resizes_in_place=receiver_resizes and tensor is receiver is registered,
                 )
             )
         return snapshots
@@ -1609,7 +1665,11 @@ def snapshot_buffer_args(
         return []
     if not _is_fused_mutator(func_name) and not _could_mutate(func_name, kwargs):
         return []
-    return tracker.snapshot_buffer_args(tensors, receiver_rebinds_storage=func_name == "set_")
+    return tracker.snapshot_buffer_args(
+        tensors,
+        receiver_rebinds_storage=func_name == "set_",
+        receiver_resizes=func_name in _RECEIVER_RESIZE_NAMES,
+    )
 
 
 def record_op_buffer_writes(
