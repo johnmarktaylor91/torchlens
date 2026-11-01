@@ -1,15 +1,28 @@
 """Forward-pass control for the RUN stage: ``run_and_log_inputs_through_model``.
 
-Moved verbatim from ``torchlens._capture.trace`` by the capture seam.
+The skeleton's order (it matters for correctness):
+
+1. Seed pick, backend resolution, save-selector resolution.
+2. Capture-slot reservation, then the user-RNG snapshot and reseed, then
+   input placement (the reseed happens BEFORE ``active_logging``: entering
+   the logging context may run decorated operations that consume RNG state).
+3. Input tensor labeling, event stream, stop directive, capture sessions.
+4. Model instrumentation (the WRAP stage's ``instrumented()``), runnable
+   state snapshots.
+5. The forward pass under ``active_logging``.
+6. One of four exit arms: completed (outputs, cleanup,
+   postprocess, settlement), halted (``StopSignal``), failed (``Exception``)
+   or interrupted (``BaseException``), each ending in settlement and handing
+   the trace to the FINALIZE stage through ``ForwardResult``.
+7. The ``finally``: the one ``_drop_semantic_output_transients`` site
+   (B1-02), the teardown ladder, the RNG restore and the slot release.
 """
 
 import contextlib
 import random
 import sys
 import time
-import warnings
 from collections.abc import Callable
-from types import TracebackType
 from typing import TYPE_CHECKING, Any, cast
 
 from torch import get_default_dtype, nn
@@ -17,7 +30,7 @@ from torch import get_default_dtype, nn
 from torchlens import _state
 from torchlens.backends.registry import BackendUnsupportedError
 
-from .._capture_state_helpers import CompiledCapturePrep, prepare_compiled_capture
+from .._capture_state_helpers import CompiledCapturePrep
 from .._quantities import Duration
 from ..backends.registry import (
     TORCH_BACKEND_NAME,
@@ -60,7 +73,9 @@ from ._forward_helpers import (
     _clear_saved_activation_dedup_caches,
     _forward_peak_memory_bracket,
     _run_predicate_forward_with_root_frame,
+    _stamp_host_rng_verdict,
     _structure_only_forward_boundary,
+    _warn_unlogged_dynamo_region,
 )
 from ._input_records import (
     _get_op_nums_from_user_labels,
@@ -70,8 +85,10 @@ from ._input_records import (
     _record_runnable_module_training_modes,
     _register_model_input_container_snapshots,
 )
+from ._run_state import _attach_note, _RunState
 from .finalize.settle import (
     _drop_semantic_output_transients,
+    _extract_and_mark_outputs,
     _finalize_halted_trace,
     _publish_streamed_bundle_at_settlement,
     _scrub_failed_capture_transients,
@@ -138,52 +155,28 @@ def _fetch_label_move_input_tensors(
     )
 
 
-def run_and_log_inputs_through_model(
+def _begin_capture(
     self: "Trace",
     model: object,
-    input_args: Any | list[Any],
-    input_kwargs: dict[Any, Any] | None = None,
-    layers_to_save: str | list[str | int] | None = "all",
-    grad_layers_to_save: str | list[str | int] | None = "all",
-    seed: int | None = None,
-    postprocess: bool = True,
-    reservation_resume: object | None = None,
-) -> Any:
-    """Core orchestration: run a forward pass and log everything into Trace.
+    input_args: Any,
+    input_kwargs: dict[Any, Any] | None,
+    seed: int | None,
+) -> tuple[CaptureBackend, int]:
+    """Pick the seed, reset per-run caches and resolve the capture backend."""
 
-    Execution order (ordering matters for correctness):
-      1. Set RNG seed (MUST happen before active_logging — see below).
-      2. Resolve ``layers_to_save`` to internal tensor numbers.
-      3. Normalize/copy inputs, detect device.
-      4. Move inputs to model device.
-      5. Capture RNG state for explicit-refresh reproducibility.
-      6. Prepare model (one-time decoration + per-session hooks).
-      7. Enter ``active_logging()`` context — toggles ``_state._logging_enabled``.
-      8. Log source tensors (inputs), then run ``model(*args, **kwargs)``.
-      9. Exit logging context, extract/mark outputs, clean up, postprocess.
-
-    RNG ordering constraint: backend seeding and snapshots happen BEFORE
-    ``active_logging()`` because entering the logging context may trigger
-    decorated operations (e.g., module hooks) that consume RNG state. The fast
-    pass restores the same pre-forward RNG state so stochastic layers produce
-    identical graph structure.
-    """
     if seed is None:
         # R57 (neutrality half): the auto-seed pick draws from a PRIVATE
-        # entropy stream, never the user's global ``random`` engine. Drawing
+        # entropy stream, never the user's global ``random`` engine: drawing
         # from the global stream either leaked one ``randint`` advance past
-        # the restore bracket below (capture not byte-neutral to a seeded
-        # host process) or, if bracketed, made every ``seed=None``
-        # capture reuse the identical seed (correlated dropout across runs).
-        # The private stream keeps both properties: byte-exact global-engine
-        # neutrality AND fresh seeds per capture.
+        # the restore bracket (capture not byte-neutral to a seeded host
+        # process) or, if bracketed, made every ``seed=None`` capture reuse
+        # the identical seed (correlated dropout across runs).
         seed = _AUTO_SEED_ENTROPY.randint(1, 4294967294)
     self.random_seed = seed  # type: ignore[assignment]
-    # The per-capture code-context cache (and the call-site anchor stored
-    # inside it) is only valid for the stack of ONE capture run: the anchor
-    # frame is proven alive by identity for the duration of a single capture,
-    # but a re-capture on a carried-over Trace state (e.g. a live-refresh
-    # fork) must never consult a prior run's anchor or locations.
+    # The per-capture code-context cache (and the call-site anchor stored in
+    # it) is valid for the stack of ONE capture run: a re-capture on a
+    # carried-over Trace state (a live-refresh fork) must never consult a
+    # prior run's anchor or locations.
     self._code_context_cache = {}
     backend = _capture_backend_from_registry(
         _backend_name_for_trace(self),
@@ -192,17 +185,24 @@ def run_and_log_inputs_through_model(
         input_kwargs,
     )
     backend.set_capture_producer_policy(self, self.capture_mode)
-
     if getattr(self, "_source_model_ref", None) is None:
         # Needed so unlabeled output tensors that are direct registered-buffer
-        # reads (e.g. ``forward`` returning ``self.running_mean`` untouched)
-        # can be identified during output extraction. The exhaustive
-        # ``tl.trace()`` entry point (user_funcs.py) sets this before calling
-        # into this function; predicate/fastlog callers (tl.record()) do not,
-        # so set it here once, idempotently, for every capture path.
+        # reads (``forward`` returning ``self.running_mean`` untouched) can be
+        # identified during output extraction. The exhaustive door sets this
+        # before calling in; predicate/recorder callers do not, so set it here
+        # once, idempotently, for every capture path.
         from .._visualization.code_panel import make_weak_model_ref
 
         self._source_model_ref = make_weak_model_ref(model)  # type: ignore[arg-type]
+    return backend, seed
+
+
+def _resolve_save_selectors(
+    self: "Trace",
+    layers_to_save: str | list[str | int] | None,
+    grad_layers_to_save: str | list[str | int] | None,
+) -> None:
+    """Resolve the activation and gradient save selectors to raw op numbers."""
 
     if self.capture_mode == "predicate":
         self._layer_nums_to_save = []
@@ -237,761 +237,722 @@ def run_and_log_inputs_through_model(
             combined = set(layer_nums_to_save) | output_parent_nums
             self._layer_nums_to_save = sorted(combined)
 
-    # Reserve the capture slot BEFORE any capture-global side effect (label
-    # session swap in model prep, compiled-submodule swaps, the fastlog
-    # recording state installed by the recorder around this call): a
-    # concurrent capture destined for the typed ``ReentrantTraceError`` used
-    # to run those mutations first and orphan the admitted winner's session
-    # (runtime-probed ``capture_verified=False``). r8 R54 moved the claim
-    # ahead of the RNG snapshot + reseed and input/device setup too -- a
-    # refused loser used to reseed the process-global RNG engines mid-window
-    # (corrupting the admitted winner's replay determinism) and the refusal
-    # path skipped the R57 restore entirely; refusing FIRST covers that path
-    # for free (nothing is seeded yet). Same-thread re-entry from the
-    # recorder's outer reservation passes through only by presenting the
-    # recorder's continuation token (R55: a bare same-thread re-entry is a
-    # nested public capture from user code inside the window and refuses);
-    # the reservation is released in the outermost ``finally`` below.
-    capture_slot = _state.capture_reservation(resume=reservation_resume)
-    capture_slot.__enter__()
-    _rng_restorers: list[Any] = []
+
+def _snapshot_user_rng() -> Callable[[], None]:
+    """Snapshot the user's global RNG engines; return a restore-once callable.
+
+    R57 (restore half): capture seeding reseeds the USER'S three global RNG
+    engines (random / numpy / torch, plus CUDA). The primary capture used to
+    leave the process reseeded permanently; the snapshot is restored on EVERY
+    settlement path (the outermost ``finally`` plus the pre-``try`` failure
+    windows). The reseed POLICY itself (the fenced R21 fork) is unchanged.
+    """
+
+    pre_capture_rng_states = log_current_rng_states()
+    rng_restore_pending = [True]
+
+    def _restore_user_global_rng() -> None:
+        """Restore the user's pre-capture global RNG streams exactly once."""
+
+        if rng_restore_pending[0]:
+            rng_restore_pending[0] = False
+            set_rng_from_saved_states(pre_capture_rng_states)
+
+    return _restore_user_global_rng
+
+
+def _claim_slot_and_seed(self: "Trace", run: _RunState, reservation_resume: object | None) -> None:
+    """Reserve the capture slot, then seed the RNG and place the inputs.
+
+    The slot is claimed BEFORE any capture-global side effect (label-session
+    swap in model prep, compiled-submodule swaps, the recorder's fastlog
+    state): a concurrent capture destined for ``ReentrantTraceError`` used to
+    run those mutations first and orphan the admitted winner's session. r8 R54
+    moved the claim ahead of the RNG snapshot, reseed and input setup too, so
+    a refused loser never reseeds the process-global engines mid-window. A
+    same-thread re-entry passes only on the recorder's continuation token
+    (R55); the reservation is released in the outermost ``finally``.
+    """
+
+    run.capture_slot = _state.capture_reservation(resume=reservation_resume)
+    run.capture_slot.__enter__()
     try:
-        # R57 (restore half): capture seeding reseeds the USER'S three global
-        # RNG engines (random / numpy / torch, plus CUDA); the sibling refresh
-        # and fast-run paths snapshot and restore around their reseeds, but
-        # the primary capture used to leave the process reseeded permanently
-        # -- code after ``tl.trace()`` silently continued from the capture's
-        # stream, not the user's. Snapshot the pre-seed states here and
-        # restore them on EVERY settlement path (the outermost ``finally``
-        # below, plus the pre-``try`` failure windows). The reseed POLICY
-        # itself (whether capture seeds at all) is the fenced R21 fork and is
-        # deliberately unchanged.
-        pre_capture_rng_states = log_current_rng_states()
-        rng_restore_pending = [True]
-
-        def _restore_user_global_rng() -> None:
-            """Restore the user's pre-capture global RNG streams exactly once."""
-
-            if rng_restore_pending[0]:
-                rng_restore_pending[0] = False
-                set_rng_from_saved_states(pre_capture_rng_states)
-
-        _rng_restorers.append(_restore_user_global_rng)
-        backend.seed_rng(self, seed)
+        run.restore_rng = _snapshot_user_rng()
         try:
-            input_args, input_kwargs, input_arg_names, model_device = (
-                backend.setup_inputs_and_device(
-                    self,
-                    model,
-                    input_args,
-                    input_kwargs,
+            run.backend.seed_rng(self, run.seed)
+            run.input_args, run.input_kwargs, run.input_arg_names, run.model_device = (
+                run.backend.setup_inputs_and_device(
+                    self, run.model, run.input_args, run.input_kwargs
                 )
             )
-            # B3R4-R12-1: a non-total namedtuple `_fields` schema on any input
-            # site refuses typed HERE, for every capture. The tensor-extraction
+            # B3R4-R12-1: a non-total namedtuple ``_fields`` schema on any input
+            # site refuses typed HERE, for every capture: the tensor-extraction
             # BFS cannot see positional slots of tuple subclasses, so such an
-            # input used to lose its tensor leaves silently (no input node,
-            # parents dropped, the gap misattributed to a stale-reference
-            # escape) while settling COMPLETE.
+            # input used to lose its tensor leaves silently while settling COMPLETE.
             from torchlens._input_walk import refuse_nontotal_namedtuple_inputs
 
-            refuse_nontotal_namedtuple_inputs(input_args, input_kwargs)
+            refuse_nontotal_namedtuple_inputs(run.input_args, run.input_kwargs)
         except BaseException:
             # A pre-outer-``finally`` setup failure: the seeded engines must
             # not leak to the user.
-            _restore_user_global_rng()
+            run.restore_rng()
             raise
-
         self.capture_start_time = time.time()
         # Settlement state for this pass: the phase marker attributes failures
         # to FORWARD/FINALIZE/POSTPROCESS, and any stale stop-request latch
-        # from a prior pass on a carried-over Trace must never classify this
-        # one.
+        # from a prior pass on a carried-over Trace must never classify this one.
         set_capture_phase(self, CapturePhase.FORWARD)
         self.__dict__.pop("_stop_requested", None)
     except BaseException:
         # A raise between the reservation claim and the outer ``try`` would
         # otherwise leak the reservation and wedge every later admission.
-        for restorer in _rng_restorers:
-            restorer()
-        capture_slot.__exit__(None, None, None)
-        raise
-    input_tensors: list[Any] = []
-    capture_session: CaptureSession | None = None
-    capture_events: object | None = None
-    compiled_unwrap_exception: tuple[
-        type[BaseException] | None, BaseException | None, TracebackType | None
-    ] = (None, None, None)
-    try:
-        compiled_capture_context = (
-            prepare_compiled_capture(model)
-            if isinstance(model, nn.Module)
-            else contextlib.nullcontext()
-        )
-        compiled_capture_prep = compiled_capture_context.__enter__()
-    except BaseException:
-        # A raise between the reservation claim and the outer ``try`` would
-        # otherwise leak the reservation and wedge every later admission.
-        capture_slot.__exit__(None, None, None)
-        _restore_user_global_rng()
+        run.capture_slot.__exit__(None, None, None)
+        run.restore_rng()
         raise
 
+
+def _fetch_inputs(self: "Trace", run: _RunState) -> None:
+    """Move and label the input tensors through the active backend."""
+
+    global _ACTIVE_CAPTURE_BACKEND
+    previous_capture_backend = _ACTIVE_CAPTURE_BACKEND
+    _ACTIVE_CAPTURE_BACKEND = run.backend
     try:
-        # B8-25b: everything after ``__enter__`` runs INSIDE the try whose
-        # ``finally`` exits the context -- a KeyboardInterrupt between enter
-        # and try used to strand the compiled-submodule swaps on the user
-        # model with no unwind.
-        if not isinstance(compiled_capture_prep, CompiledCapturePrep):
-            compiled_capture_prep = CompiledCapturePrep(sites=(), force_eager_stance=False)
-        compiled_callable_sites = compiled_capture_prep.sites
-        global _ACTIVE_CAPTURE_BACKEND
-        previous_capture_backend = _ACTIVE_CAPTURE_BACKEND
-        _ACTIVE_CAPTURE_BACKEND = backend
-        try:
-            (
-                input_tensors_any,
-                input_tensor_addresses,
-            ) = _fetch_label_move_input_tensors(
-                self,
-                input_args,
-                input_arg_names,
-                input_kwargs,
-                model_device,
-            )
-        finally:
-            _ACTIVE_CAPTURE_BACKEND = previous_capture_backend
-        input_tensors = list(input_tensors_any)
-        self._raw_graph_ws.input_tensor_addresses = list(input_tensor_addresses)
-        self._output_attribution_input_tensors = input_tensors
-
-        # RNG state snapshot for deterministic explicit refreshes and legacy
-        # two-pass consistency (#58).
-        if self.capture_mode == "exhaustive":
-            self._pre_forward_rng_states = backend.snapshot_rng(self)
-
-        from torchlens._ir.capture_events import CaptureEvents
-
-        self.capture_events = CaptureEvents()
-        capture_events = self.capture_events
-        if not isinstance(getattr(self, "_stop_directive", None), StopDirective):
-            self._stop_directive = StopDirective(
-                halt_options=getattr(self, "_predicate_save_options", None),
-                raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
-                forward_error_mode=getattr(
-                    getattr(self, "_predicate_save_options", None),
-                    "on_forward_error",
-                    "raise",
-                ),
-                inference_only=bool(getattr(self, "inference_only", False)),
-            )
-        self._capture_config = InternalCaptureConfig(
-            capture_mode=str(self.capture_mode),
-            layers_to_save=layers_to_save,
-            grad_layers_to_save=grad_layers_to_save,
-            random_seed=seed,
-            postprocess=postprocess,
-            stop=self._stop_directive,
-        )
-        capture_session = attach_legacy_capture_session(
+        input_tensors_any, input_tensor_addresses = _fetch_label_move_input_tensors(
             self,
-            backend_token=backend,
-            backend_name=str(_backend_name_for_trace(self)),
-            layers_to_save=layers_to_save,
-            grad_layers_to_save=grad_layers_to_save,
-            seed=seed,
-            postprocess=postprocess,
+            run.input_args,
+            run.input_arg_names,
+            cast(dict[Any, Any], run.input_kwargs),
+            run.model_device,
         )
-        attach_capture_events_session(capture_events, capture_session)
+    finally:
+        _ACTIVE_CAPTURE_BACKEND = previous_capture_backend
+    run.input_tensors = list(input_tensors_any)
+    self._raw_graph_ws.input_tensor_addresses = list(input_tensor_addresses)
+    self._output_attribution_input_tensors = run.input_tensors
+    # RNG state snapshot for deterministic explicit refreshes and legacy
+    # two-pass consistency (#58).
+    if self.capture_mode == "exhaustive":
+        self._pre_forward_rng_states = run.backend.snapshot_rng(self)
 
-        with _timed_phase(self, "ctx_build:model_prepare"):
-            # One-time model preparation + incremental sys.modules crawl
-            backend.prepare_model_once(model)
 
-            # Per-session model preparation
-            backend.prepare_model_session(self, model)
-        self.setup_duration = Duration(time.time() - self.capture_start_time)
-        _vprint(self, f"Model prepared ({self.setup_duration:.2f s})")
+def _attach_sessions(
+    self: "Trace",
+    run: _RunState,
+    layers_to_save: str | list[str | int] | None,
+    grad_layers_to_save: str | list[str | int] | None,
+) -> None:
+    """Open the event stream, fix the stop directive and attach the capture sessions."""
 
-        # Print input summary
-        if getattr(self, "verbose", False):
-            devices = set()
-            for t in input_tensors:
-                if hasattr(t, "device"):
-                    devices.add(str(t.device))
-            device_str = ", ".join(sorted(devices)) if devices else "unknown"
-            _vprint(self, f"Inputs: {len(input_tensors)} tensor(s) on {device_str}")
+    from torchlens._ir.capture_events import CaptureEvents
 
-        if bool(getattr(self, "intervention_ready", False)):
-            from .._runnable_state import (
-                snapshot_capture_state,
-                snapshot_capture_state_signatures,
-                snapshot_persistent_buffer_universe,
-                snapshot_state_alias_topology,
-            )
-
-            # r37 corr2-4: the live bound-state alias topology (object identity,
-            # storage overlap) must be captured BEFORE ``snapshot_capture_state``'s
-            # clones erase it; the runnable producer refuses unsupported topologies
-            # at save and reproduces identity groups from this record.
-            self._runnable.state_alias_topology = snapshot_state_alias_topology(model)
-            # r63 C1: per-slot metadata signatures are stamped from the LIVE tensors
-            # PRE-clone -- the clone itself compacts ``storage_offset`` and
-            # materializes conj/neg, so a post-clone signature is blind to two of
-            # the four transport-lossy physical dims. Consumed by the escape-gated
-            # ``producer_state_metadata`` preflight.
-            self._runnable.capture_state_signatures = snapshot_capture_state_signatures(model)
-            self._runnable.capture_state = snapshot_capture_state(model)
-            # r77 F2: the persistent-buffer NAME universe survives non-tensor state
-            # (``get_extra_state()`` / packed entries), so a dead-model
-            # include_weights=False save declares the SAME slot universe as the
-            # live lane instead of silently dropping never-forward-used buffers.
-            self._runnable.persistent_buffer_universe = snapshot_persistent_buffer_universe(model)
-
-        if str(_backend_name_for_trace(self)) == TORCH_BACKEND_NAME:
-            # The provenance manifest needs the capture-time default, never the
-            # potentially different save-time default. Runnable-ready captures
-            # replace this minimal snapshot below with the complete ambient record.
-            self._runnable.capture_ambient = {"default_dtype": str(get_default_dtype())}
-
-        # Turn on the logging toggle and run the forward pass.
-        # Inside this context, every decorated torch function will log its
-        # inputs/outputs.  Source tensors (model inputs) are logged explicitly
-        # before invoking the model; all subsequent operations are captured
-        # automatically by the decorated wrappers.
-        _vprint(self, f"Running {self.capture_mode} forward pass...")
-        with backend.active_logging(self):
-            # Under an active ``force_eager`` stance (torch >= 2.6) the
-            # inventoried compiled callables run their original eager Python and
-            # their interiors ARE logged, so the capture keeps full verified
-            # semantics; the ceiling below is the honest pre-2.6 fallback.
-            if compiled_callable_sites and not compiled_capture_prep.force_eager_stance:
-                self._raw_dynamo_region_detected = True
-                self._raw_transform_escape_detected = True
-                _state._dynamo_warning_emitted = True
-                warnings.warn(
-                    "TorchLens detected a torch.compile (Dynamo) region on the captured model "
-                    f"at {', '.join(compiled_callable_sites)}. Operations that run inside the "
-                    "compiled region are not logged: on a cold compile the tensors there are "
-                    "data-free FakeTensors, while a warm-cache execution can bypass Python "
-                    "wrappers entirely. The returned Trace contains only operations that ran "
-                    "OUTSIDE the compiled region. Use the eager callable during capture if you "
-                    "need its interior logged (on torch >= 2.6, TorchLens instead runs compiled "
-                    "callables eagerly via torch.compiler.set_stance and this gap does not "
-                    "arise).",
-                    UserWarning,
-                    stacklevel=2,
-                )
-            for i, t in enumerate(input_tensors):
-                backend.log_source_tensor(self, t, "input", input_tensor_addresses[i])
-            _register_model_input_container_snapshots(self, input_args, input_kwargs)
-            _record_runnable_input_literal_leaves(self, input_args, input_kwargs)
-            _record_runnable_input_tensor_sites(self, input_args, input_kwargs)
-            _record_runnable_input_structure(self, input_args, input_kwargs)
-            _record_runnable_module_training_modes(self, model)
-            if bool(getattr(self, "intervention_ready", False)):
-                # r35 decision E: capture the ambient backend execution context the
-                # forward is about to run under (defaults, matmul precision,
-                # determinism, TF32/cuDNN flags, SDP toggles) so the sparse runnable
-                # descriptor can restore it explicitly at replay.
-                from .._utils._torch_compat import (
-                    AMBIENT_FP32_UNREPRESENTABLE_KEY,
-                    read_legacy_fp32_controls,
-                    snapshot_ambient_execution_context,
-                )
-
-                ambient = snapshot_ambient_execution_context()
-                # An fp32_precision policy (torch >= 2.9) the legacy record fields
-                # cannot express: capture proceeds and the runnable producer refuses
-                # typed. The disclosure rides the session-only snapshot mapping.
-                _, unrepresentable = read_legacy_fp32_controls()
-                if unrepresentable:
-                    ambient[AMBIENT_FP32_UNREPRESENTABLE_KEY] = unrepresentable
-                self._runnable.capture_ambient = ambient
-
-            # The root forward runs undecorated: keep its arguments for the root call.
-            self._module_capture_ws.root_forward_args = (input_args, input_kwargs)
-            if self.capture_mode == "predicate":
-                with _structure_only_forward_boundary(self):
-                    outputs = _run_predicate_forward_with_root_frame(
-                        self,
-                        backend,
-                        model,
-                        input_args,
-                        input_kwargs,
-                        model_device,
-                    )
-            else:
-                with _timed_phase(self, "dispatch:forward_model"):
-                    with _forward_peak_memory_bracket(self, model_device):
-                        with backend.inference_context(self):
-                            # Bracket the user forward with host-RNG snapshots so a
-                            # runnable descriptor can honestly record whether Python
-                            # ``random`` / NumPy control flow (an unwitnessed branch)
-                            # ran. TorchLens itself never draws host RNG here (its only
-                            # host draw seeds before this point), so any advance is the
-                            # user's. Reads are side-effect free -> capture unchanged.
-                            # r37 hon1_2: the four-layer channel monitor additionally
-                            # observes NON-global channels (RNG instances, SystemRandom,
-                            # os entropy, clocks, the default_rng factory) over the
-                            # frozen vocabulary. Any touch is permanently unreplayable
-                            # (no identifiable seed); monitor uncertainty downgrades
-                            # completeness, never reads as no-consumption.
-                            #
-                            # The channel monitor is armed ONLY for runnable-capable
-                            # captures: ``intervention_ready`` is the exact predicate
-                            # for "this capture can produce a passing sparse runnable
-                            # descriptor" (the same predicate that gates the ambient
-                            # execution-context snapshot above), and the descriptor
-                            # builder is the witness verdict's only consumer. A
-                            # disarmed capture stamps ``monitor_uncertain`` fail-closed
-                            # so any unforeseen descriptor build ceilings through the
-                            # existing RNG_MONITOR_UNCERTAIN witness gap
-                            # (unverifiable, never a silent false VERIFIED) -- channel
-                            # coverage on the disarmed lane is unknowable, not absent.
-                            # Stamp the FAIL-CLOSED verdict before the forward runs.
-                            # The real verdict is stamped after the monitor tears down,
-                            # several statements away from its only consumer
-                            # (``_io/runnable.py`` treats a falsy/``None`` flag as
-                            # CERTAIN), so anything raising in between -- the swallowed-
-                            # stop checkpoint, the global-engine diff, a Ctrl-C during
-                            # teardown -- used to leave the field ``None`` and read as a
-                            # proven-clean window. Pre-stamping means an unreached stamp
-                            # ceilings through the existing RNG_MONITOR_UNCERTAIN
-                            # witness gap instead.
-                            self._runnable.rng_monitor_uncertain = True
-                            self._runnable.rng_monitor_uncertain_detail = (
-                                "monitor_verdict_not_stamped",
-                            )
-                            _host_rng_before = snapshot_host_rng()
-                            if bool(getattr(self, "intervention_ready", False)):
-                                from .._utils.rng import host_nondeterminism_monitor
-
-                                with host_nondeterminism_monitor(model) as _rng_channels:
-                                    outputs = cast(Callable[..., Any], model)(
-                                        *input_args, **input_kwargs
-                                    )
-                            else:
-                                _rng_channels = None
-                                with _structure_only_forward_boundary(self):
-                                    outputs = cast(Callable[..., Any], model)(
-                                        *input_args, **input_kwargs
-                                    )
-                            _global_advanced = host_rng_advanced(
-                                _host_rng_before, snapshot_host_rng()
-                            )
-                            if _rng_channels is not None:
-                                # r65 CLUSTER Z stamping split: a torch RNG
-                                # ``replayable_read`` (the ``initial_seed`` family --
-                                # a host scalar fully determined by the capture seed)
-                                # sets CONSUMED without poisoning the capture seed, so
-                                # a run at the capture seed stays verified while any
-                                # other/absent seed ceilings; ceiling ``channels``
-                                # alone decide UNREPLAYABLE.
-                                self._runnable.host_rng_consumed = (
-                                    _global_advanced
-                                    or bool(_rng_channels.channels)
-                                    or bool(_rng_channels.replayable_reads)
-                                )
-                                self._runnable.host_rng_unreplayable = bool(_rng_channels.channels)
-                                self._runnable.host_rng_channels = tuple(
-                                    sorted(_rng_channels.channels)
-                                )
-                                self._runnable.host_rng_replayable_reads = tuple(
-                                    sorted(_rng_channels.replayable_reads)
-                                )
-                                self._runnable.rng_monitor_uncertain = bool(_rng_channels.uncertain)
-                                # r39 CLASS A: name the offending threads / coverage
-                                # failure so the INCOMPLETE ceiling's readiness
-                                # diagnostic is actionable.
-                                self._runnable.rng_monitor_uncertain_detail = tuple(
-                                    _rng_channels.uncertain_detail
-                                )
-                            else:
-                                # Global engines are still bracketed (cheap); the
-                                # channel verdict was never observed, so it must
-                                # read as UNKNOWABLE, never as no-consumption.
-                                self._runnable.host_rng_consumed = _global_advanced
-                                self._runnable.rng_monitor_uncertain = True
-                                self._runnable.rng_monitor_uncertain_detail = ("monitor_not_armed",)
-
-        # F6 boundary checkpoint: a "normal" forward return with the
-        # stop-request latch set means user code swallowed the control signal
-        # (halt or nonfinite abort) in a broad except. The capture must never
-        # be blessed COMPLETE; the typed error settles FAILED through the
-        # normal failure arm. Covers tl.trace and every Recorder pass.
-        swallowed_stop = self.__dict__.get("_stop_requested")
-        if swallowed_stop is not None:
-            from .outcome import StopSignalSwallowedError
-
-            raise StopSignalSwallowedError(
-                "TorchLens raised a "
-                f"{'halt' if swallowed_stop.kind == 'halt' else 'non-finite abort'} "
-                "stop signal during this forward, but the forward returned "
-                "normally: user code swallowed the control signal (typically a "
-                "broad `except:` or `except BaseException:` around the model "
-                "body). The capture cannot be trusted as complete. Stop "
-                f"boundary: {swallowed_stop.boundary_label or swallowed_stop.reason!r}.",
-                kind=swallowed_stop.kind,
-                boundary_label=swallowed_stop.boundary_label,
-            )
-        # an implied inference_only holds only if the forward discarded its graph.
-        cleared = cleared_inference_only_directive(self._stop_directive, outputs)
-        if cleared is not None:  # before settlement stamps the flag on the outcome
-            self.inference_only, self._stop_directive = False, cleared
-        set_capture_phase(self, CapturePhase.FINALIZE)
-        from .._data_classes._nonfinite import drain_pending_nonfinite
-        from .._utils.tensor_utils import synchronize_pending_cpu_async_copies
-
-        # Fence every cpu_async D2H copy recorded this forward BEFORE any
-        # host-side consumer (finalize, postprocess digests, ``op.out``,
-        # ``Trace.save`` serialization) can observe partial bytes (R36-1).
-        synchronize_pending_cpu_async_copies()
-        # Settle deferred track_nonfinite device flags here, after the forward
-        # is complete, so the record costs one batch of scalar reads instead of
-        # a per-op device synchronization (the flags' kernels are long done).
-        drain_pending_nonfinite(self)
-        backend.finalize_forward_session(self, self._raw_graph_ws)
-
-        output_transform = getattr(self, "_output_transform", None)
-        self.raw_output = output_transform(outputs) if output_transform is not None else None
-        from .._autoroute._builtin_output import decode_outputs_for_trace
-
-        decode_outputs_for_trace(self, outputs)
-        # Tight window on the normal arm: drop immediately after the only
-        # consumer. The outer ``finally`` repeats this for the arms that never
-        # reach here (halt, failure, interrupt) -- see B1-02.
-        _drop_semantic_output_transients(self)
-
-        self.forward_duration = Duration(
-            time.time() - self.capture_start_time - self.setup_duration
+    self.capture_events = CaptureEvents()
+    run.capture_events = self.capture_events
+    if not isinstance(getattr(self, "_stop_directive", None), StopDirective):
+        self._stop_directive = StopDirective(
+            halt_options=getattr(self, "_predicate_save_options", None),
+            raise_on_nan=bool(getattr(self, "raise_on_nan", False)),
+            forward_error_mode=getattr(
+                getattr(self, "_predicate_save_options", None),
+                "on_forward_error",
+                "raise",
+            ),
+            inference_only=bool(getattr(self, "inference_only", False)),
         )
-        _vprint(
+    self._capture_config = InternalCaptureConfig(
+        capture_mode=str(self.capture_mode),
+        layers_to_save=layers_to_save,
+        grad_layers_to_save=grad_layers_to_save,
+        random_seed=run.seed,
+        postprocess=run.postprocess,
+        stop=self._stop_directive,
+    )
+    run.capture_session = attach_legacy_capture_session(
+        self,
+        backend_token=run.backend,
+        backend_name=str(_backend_name_for_trace(self)),
+        layers_to_save=layers_to_save,
+        grad_layers_to_save=grad_layers_to_save,
+        seed=run.seed,
+        postprocess=run.postprocess,
+    )
+    attach_capture_events_session(run.capture_events, run.capture_session)
+
+
+def _enter_instrumentation(
+    self: "Trace", run: _RunState, stack: contextlib.ExitStack
+) -> CompiledCapturePrep | None:
+    """Prepare the model on ``stack``; return its compiled-capture preparation.
+
+    An ``nn.Module`` goes through the WRAP stage's ``instrumented()`` context
+    (compiled-submodule unwrapping plus model preparation). A plain callable
+    has no compiled slots to unwrap: it is prepared directly and the same
+    once-only session cleanup is registered on the stack.
+    """
+
+    payload = run.cleanup_payload()
+    if isinstance(run.model, nn.Module):
+        from ..backends.torch.instrument import instrumented
+
+        instrumented_model = stack.enter_context(
+            instrumented(cast(Any, run.backend), self, run.model, payload)
+        )
+        compiled_prep = instrumented_model.compiled_prep
+        return compiled_prep if isinstance(compiled_prep, CompiledCapturePrep) else None
+    run.backend.prepare_model_once(run.model)
+    run.backend.prepare_model_session(self, run.model)
+    stack.callback(run.backend.cleanup_model_session, self, payload)
+    return None
+
+
+def _instrument_model(self: "Trace", run: _RunState) -> None:
+    """Enter the WRAP stage: compiled-capture preparation plus model preparation.
+
+    The context is held open on ``run.instrumentation`` and closed by the
+    teardown ladder while the capture session is still attached, so its exit
+    cleanup is the session's once-only ``model_session`` action (a no-op after
+    the arm that already ran it) and the compiled-submodule swaps unwind
+    before the forward memory is reclaimed.
+    """
+
+    run.instrumentation = contextlib.ExitStack()
+    with _timed_phase(self, "ctx_build:model_prepare"):
+        run.compiled_prep = _enter_instrumentation(self, run, run.instrumentation)
+    self.setup_duration = Duration(time.time() - self.capture_start_time)
+    _vprint(self, f"Model prepared ({self.setup_duration:.2f s})")
+    if getattr(self, "verbose", False):
+        devices = set()
+        for t in run.input_tensors or ():
+            if hasattr(t, "device"):
+                devices.add(str(t.device))
+        device_str = ", ".join(sorted(devices)) if devices else "unknown"
+        _vprint(self, f"Inputs: {len(run.input_tensors or ())} tensor(s) on {device_str}")
+
+
+def _snapshot_runnable_state(self: "Trace", run: _RunState) -> None:
+    """Record the bound state a runnable descriptor needs, before the forward."""
+
+    if bool(getattr(self, "intervention_ready", False)):
+        from .._runnable_state import (
+            snapshot_capture_state,
+            snapshot_capture_state_signatures,
+            snapshot_persistent_buffer_universe,
+            snapshot_state_alias_topology,
+        )
+
+        model = run.model
+        # r37 corr2-4: the live bound-state alias topology (object identity,
+        # storage overlap) must be captured BEFORE ``snapshot_capture_state``'s
+        # clones erase it; the runnable producer refuses unsupported topologies
+        # at save and reproduces identity groups from this record.
+        self._runnable.state_alias_topology = snapshot_state_alias_topology(model)
+        # r63 C1: per-slot metadata signatures are stamped from the LIVE tensors
+        # PRE-clone: the clone compacts ``storage_offset`` and materializes
+        # conj/neg, so a post-clone signature is blind to two of the four
+        # transport-lossy physical dims.
+        self._runnable.capture_state_signatures = snapshot_capture_state_signatures(model)
+        self._runnable.capture_state = snapshot_capture_state(model)
+        # r77 F2: the persistent-buffer NAME universe survives non-tensor state
+        # (``get_extra_state()`` / packed entries), so a dead-model
+        # include_weights=False save declares the SAME slot universe as the
+        # live lane instead of silently dropping never-forward-used buffers.
+        self._runnable.persistent_buffer_universe = snapshot_persistent_buffer_universe(model)
+
+    if str(_backend_name_for_trace(self)) == TORCH_BACKEND_NAME:
+        # The provenance manifest needs the capture-time default, never the
+        # potentially different save-time default. Runnable-ready captures
+        # replace this minimal snapshot with the complete ambient record.
+        self._runnable.capture_ambient = {"default_dtype": str(get_default_dtype())}
+
+
+def _log_inputs(self: "Trace", run: _RunState) -> None:
+    """Log the source tensors and the runnable input records inside ``active_logging``."""
+
+    input_tensors = run.input_tensors or []
+    input_tensor_addresses = self._raw_graph_ws.input_tensor_addresses
+    for i, t in enumerate(input_tensors):
+        run.backend.log_source_tensor(self, t, "input", input_tensor_addresses[i])
+    input_args, input_kwargs = run.input_args, run.input_kwargs
+    _register_model_input_container_snapshots(self, input_args, input_kwargs)
+    _record_runnable_input_literal_leaves(self, input_args, input_kwargs)
+    _record_runnable_input_tensor_sites(self, input_args, input_kwargs)
+    _record_runnable_input_structure(self, input_args, input_kwargs)
+    _record_runnable_module_training_modes(self, run.model)
+    if bool(getattr(self, "intervention_ready", False)):
+        # r35 decision E: capture the ambient backend execution context the
+        # forward is about to run under (defaults, matmul precision,
+        # determinism, TF32/cuDNN flags, SDP toggles) so the sparse runnable
+        # descriptor can restore it explicitly at replay.
+        from .._utils._torch_compat import (
+            AMBIENT_FP32_UNREPRESENTABLE_KEY,
+            read_legacy_fp32_controls,
+            snapshot_ambient_execution_context,
+        )
+
+        ambient = snapshot_ambient_execution_context()
+        # An fp32_precision policy (torch >= 2.9) the legacy record fields
+        # cannot express: capture proceeds and the runnable producer refuses
+        # typed. The disclosure rides the session-only snapshot mapping.
+        _, unrepresentable = read_legacy_fp32_controls()
+        if unrepresentable:
+            ambient[AMBIENT_FP32_UNREPRESENTABLE_KEY] = unrepresentable
+        self._runnable.capture_ambient = ambient
+    # The root forward runs undecorated: keep its arguments for the root call.
+    self._module_capture_ws.root_forward_args = (input_args, input_kwargs)
+
+
+def _run_exhaustive_forward(self: "Trace", run: _RunState) -> Any:
+    """Run the user forward under the memory, inference and host-RNG brackets.
+
+    The host-RNG bracket lets a runnable descriptor record honestly whether
+    Python ``random`` / NumPy control flow ran (TorchLens itself draws no host
+    RNG here). r37 hon1_2: the channel monitor additionally observes
+    non-global channels (RNG instances, SystemRandom, os entropy, clocks, the
+    default_rng factory); any touch is permanently unreplayable, and monitor
+    uncertainty downgrades completeness, never reads as no-consumption. The
+    monitor is armed ONLY for runnable-capable captures (``intervention_ready``
+    is the exact predicate); a disarmed capture stamps ``monitor_uncertain``
+    fail-closed. The FAIL-CLOSED verdict is stamped BEFORE the forward: the
+    real verdict lands several statements later, so anything raising in
+    between used to leave the field ``None``, read as a proven-clean window.
+    """
+
+    model = cast(Callable[..., Any], run.model)
+    input_args, input_kwargs = run.input_args, cast(dict[Any, Any], run.input_kwargs)
+    with _timed_phase(self, "dispatch:forward_model"):
+        with _forward_peak_memory_bracket(self, run.model_device):
+            with run.backend.inference_context(self):
+                self._runnable.rng_monitor_uncertain = True
+                self._runnable.rng_monitor_uncertain_detail = ("monitor_verdict_not_stamped",)
+                _host_rng_before = snapshot_host_rng()
+                if bool(getattr(self, "intervention_ready", False)):
+                    from .._utils.rng import host_nondeterminism_monitor
+
+                    with host_nondeterminism_monitor(cast(nn.Module, run.model)) as _rng_channels:
+                        outputs = model(*input_args, **input_kwargs)
+                else:
+                    _rng_channels = None
+                    with _structure_only_forward_boundary(self):
+                        outputs = model(*input_args, **input_kwargs)
+                _global_advanced = host_rng_advanced(_host_rng_before, snapshot_host_rng())
+                _stamp_host_rng_verdict(self, _global_advanced, _rng_channels)
+    return outputs
+
+
+def _run_forward(self: "Trace", run: _RunState) -> Any:
+    """Log the inputs and run the forward pass under ``active_logging``."""
+
+    _vprint(self, f"Running {self.capture_mode} forward pass...")
+    with run.backend.active_logging(self):
+        _warn_unlogged_dynamo_region(self, run.compiled_prep)
+        _log_inputs(self, run)
+        if self.capture_mode == "predicate":
+            with _structure_only_forward_boundary(self):
+                return _run_predicate_forward_with_root_frame(
+                    self,
+                    run.backend,
+                    run.model,
+                    run.input_args,
+                    cast(dict[Any, Any], run.input_kwargs),
+                    run.model_device,
+                )
+        return _run_exhaustive_forward(self, run)
+
+
+def _refuse_swallowed_stop(self: "Trace") -> None:
+    """Fail a forward that returned normally after a stop signal was raised (F6).
+
+    The stop-request latch set on a normal return means user code swallowed
+    the control signal (halt or nonfinite abort) in a broad except. The
+    capture must never be blessed COMPLETE; the typed error settles FAILED
+    through the normal failure arm. Covers tl.trace and every Recorder pass.
+    """
+
+    swallowed_stop = self.__dict__.get("_stop_requested")
+    if swallowed_stop is None:
+        return
+    from .outcome import StopSignalSwallowedError
+
+    raise StopSignalSwallowedError(
+        "TorchLens raised a "
+        f"{'halt' if swallowed_stop.kind == 'halt' else 'non-finite abort'} "
+        "stop signal during this forward, but the forward returned "
+        "normally: user code swallowed the control signal (typically a "
+        "broad `except:` or `except BaseException:` around the model "
+        "body). The capture cannot be trusted as complete. Stop "
+        f"boundary: {swallowed_stop.boundary_label or swallowed_stop.reason!r}.",
+        kind=swallowed_stop.kind,
+        boundary_label=swallowed_stop.boundary_label,
+    )
+
+
+def _finalize_forward_outputs(self: "Trace", run: _RunState, outputs: Any) -> None:
+    """Close the forward phase: reconcile the session and decode the outputs."""
+
+    _refuse_swallowed_stop(self)
+    # an implied inference_only holds only if the forward discarded its graph.
+    cleared = cleared_inference_only_directive(self._stop_directive, outputs)
+    if cleared is not None:  # before settlement stamps the flag on the outcome
+        self.inference_only, self._stop_directive = False, cleared
+    set_capture_phase(self, CapturePhase.FINALIZE)
+    from .._data_classes._nonfinite import drain_pending_nonfinite
+    from .._utils.tensor_utils import synchronize_pending_cpu_async_copies
+
+    # Fence every cpu_async D2H copy recorded this forward BEFORE any
+    # host-side consumer (finalize, postprocess digests, ``op.out``,
+    # ``Trace.save`` serialization) can observe partial bytes (R36-1).
+    synchronize_pending_cpu_async_copies()
+    # Settle deferred track_nonfinite device flags here, after the forward
+    # is complete, so the record costs one batch of scalar reads instead of
+    # a per-op device synchronization (the flags' kernels are long done).
+    drain_pending_nonfinite(self)
+    run.backend.finalize_forward_session(self, self._raw_graph_ws)
+
+    output_transform = getattr(self, "_output_transform", None)
+    self.raw_output = output_transform(outputs) if output_transform is not None else None
+    from .._autoroute._builtin_output import decode_outputs_for_trace
+
+    decode_outputs_for_trace(self, outputs)
+    # Tight window on the normal arm: drop immediately after the only
+    # consumer. The outer ``finally`` repeats this for the arms that never
+    # reach here (halt, failure, interrupt); see B1-02.
+    _drop_semantic_output_transients(self)
+
+    self.forward_duration = Duration(time.time() - self.capture_start_time - self.setup_duration)
+    _vprint(
+        self,
+        f"Forward pass complete ({self.forward_duration:.2f s}, "
+        f"{len(self.capture_events.op_events)} raw operations)",
+    )
+
+
+def _completed_arm(self: "Trace", run: _RunState, outputs: Any) -> Any:
+    """Finish a forward pass that returned: outputs, cleanup, postprocess, settlement.
+
+    Output tensors are extracted and marked BEFORE ``cleanup_model_session``
+    strips TorchLens tensor metadata from every model-owned tensor (buffers
+    included); extracting afterward would let output attribution race against
+    that wipe. The recorder (``postprocess=False``) reads the scratch results
+    back off the trace and pops them immediately.
+    """
+
+    _finalize_forward_outputs(self, run, outputs)
+    output_tensors, output_tensor_addresses = _extract_and_mark_outputs(self, outputs, run.backend)
+    capture_session = cast(CaptureSession, run.capture_session)
+    if not run.postprocess:
+        self._fastlog_output_tensors = list(output_tensors)
+        self._fastlog_output_tensor_addresses = output_tensor_addresses
+        capture_session.snapshot_recording_projection(
             self,
-            f"Forward pass complete ({self.forward_duration:.2f s}, "
-            f"{len(self.capture_events.op_events)} raw operations)",
+            output_tensors=list(output_tensors),
+            output_tensor_addresses=output_tensor_addresses,
         )
-
-        if not postprocess:
-            # Extract/mark output tensors BEFORE cleanup, mirroring the
-            # postprocess=True branch below. cleanup_model_session() strips
-            # TorchLens tensor metadata from every model-owned tensor
-            # (buffers included, via _undecorate_model_tensors); extracting
-            # afterward would let output-attribution race against that wipe.
-            # Callers that skip postprocess (fastlog Recorder) read these
-            # scratch results back off the trace and pop them immediately.
-            output_tensors_any, output_tensor_addresses = backend.extract_and_mark_outputs(
-                self, outputs
-            )
-            self._fastlog_output_tensors = list(output_tensors_any)
-            self._fastlog_output_tensor_addresses = output_tensor_addresses
-            capture_session.snapshot_recording_projection(
-                self,
-                output_tensors=list(output_tensors_any),
-                output_tensor_addresses=output_tensor_addresses,
-            )
-            self._fastlog_captured_run_core = capture_session.seal()
-            self.__dict__.pop("_output_attribution_input_tensors", None)
-            backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
-            self.capture_end_time = time.time()
-            self.__dict__.pop("_capture_producer_policy", None)
-            settle_completed(self, capture_session)
-            return outputs
-
-        output_tensors_any, output_tensor_addresses = backend.extract_and_mark_outputs(
-            self, outputs
-        )
-        output_tensors = list(output_tensors_any)
+        self._fastlog_captured_run_core = capture_session.seal()
         self.__dict__.pop("_output_attribution_input_tensors", None)
-
-        backend.cleanup_model_session(self, (model, input_tensors, (input_args, input_kwargs)))
-        _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")
-        set_capture_phase(self, CapturePhase.POSTPROCESS)
-        self._postprocess(output_tensors, output_tensor_addresses)
+        run.backend.cleanup_model_session(self, run.cleanup_payload())
+        self.capture_end_time = time.time()
         self.__dict__.pop("_capture_producer_policy", None)
         settle_completed(self, capture_session)
-        _publish_streamed_bundle_at_settlement(self)
         return outputs
 
-    except StopSignal as halt_exc:
-        compiled_unwrap_exception = sys.exc_info()
-        options = getattr(self, "_predicate_save_options", None)
-        if (
-            options is not None
-            and getattr(options, "halt", None) is not None
-            and getattr(self, "_halt_returns_partial_trace", False)
-        ):
-            try:
-                halted_output = _finalize_halted_trace(
-                    self,
-                    backend,
-                    halt_exc,
-                    model,
-                    input_tensors,
-                    postprocess,
-                )
-            except Exception as secondary_exc:
-                # Halted-finalization secondary failure: the capture settles
-                # FAILED (FINALIZE or POSTPROCESS per the finalizer's phase
-                # markers) with a mandatory disclosure note; the secondary
-                # exception propagates with the HaltSignal chained, exactly
-                # as before settlement existed.
-                self.__dict__.pop("_capture_producer_policy", None)
-                settle_failed(
-                    self,
-                    capture_session,
-                    secondary_exc,
-                    note=(
-                        "halted finalization failed after halt at "
-                        f"{getattr(halt_exc, 'reason', '')!r}"
-                    ),
-                )
-                _scrub_failed_capture_transients(self)
-                raise
-            except BaseException as halt_interrupt_exc:
-                # Halted-arm interrupt: ``except Exception`` above cannot see a
-                # KeyboardInterrupt/SystemExit, which used to escape with NO
-                # settlement stamp -- the product read UNKNOWN only through the
-                # fail-closed no-sidecar default instead of a settled record.
-                # Stamp FAILED/interrupted like the outer BaseException arm.
-                self.__dict__.pop("_capture_producer_policy", None)
-                _settle_interrupted_halted_arm(self, capture_session, halt_interrupt_exc, halt_exc)
-                raise
-            self.__dict__.pop("_capture_producer_policy", None)
-            settle_halted(
-                self,
-                capture_session,
-                halt_exc,
-                finalize_partial=True,
-                postprocess_ran=postprocess,
-            )
-            _publish_streamed_bundle_at_settlement(self)
-            return halted_output
+    self.__dict__.pop("_output_attribution_input_tensors", None)
+    run.backend.cleanup_model_session(self, run.cleanup_payload())
+    _vprint(self, f"Postprocessing {len(self.capture_events.op_events)} operations...")
+    set_capture_phase(self, CapturePhase.POSTPROCESS)
+    self._postprocess(output_tensors, output_tensor_addresses)
+    self.__dict__.pop("_capture_producer_policy", None)
+    settle_completed(self, capture_session)
+    _publish_streamed_bundle_at_settlement(self)
+    return outputs
+
+
+def _halted_partial_trace(self: "Trace", run: _RunState, halt_exc: StopSignal) -> Any:
+    """Materialize the partial trace of a halt and settle HALTED; return its output."""
+
+    try:
+        halted_output = _finalize_halted_trace(
+            self, run.backend, halt_exc, run.model, run.input_tensors or [], run.postprocess
+        )
+    except Exception as secondary_exc:
+        # Halted-finalization secondary failure: the capture settles FAILED
+        # (FINALIZE or POSTPROCESS per the finalizer's phase markers) with a
+        # mandatory disclosure note; the secondary exception propagates with
+        # the HaltSignal chained, exactly as before settlement existed.
+        self.__dict__.pop("_capture_producer_policy", None)
+        settle_failed(
+            self,
+            run.capture_session,
+            secondary_exc,
+            note=(f"halted finalization failed after halt at {getattr(halt_exc, 'reason', '')!r}"),
+        )
+        _scrub_failed_capture_transients(self)
+        raise
+    except BaseException as halt_interrupt_exc:
+        # Halted-arm interrupt: ``except Exception`` cannot see a
+        # KeyboardInterrupt/SystemExit, which used to escape with NO
+        # settlement stamp. Stamp FAILED/interrupted like the outer arm.
+        self.__dict__.pop("_capture_producer_policy", None)
+        _settle_interrupted_halted_arm(self, run.capture_session, halt_interrupt_exc, halt_exc)
+        raise
+    self.__dict__.pop("_capture_producer_policy", None)
+    settle_halted(
+        self, run.capture_session, halt_exc, finalize_partial=True, postprocess_ran=run.postprocess
+    )
+    _publish_streamed_bundle_at_settlement(self)
+    return halted_output
+
+
+def _halted_seal_and_cleanup(self: "Trace", run: _RunState, halt_exc: StopSignal) -> None:
+    """Seal the recorder projection and tear the stopped session down."""
+
+    capture_session = run.capture_session
+    try:
+        # Same double-fault fence as the failed-forward arm: a raising seal
+        # must not skip the model-session teardown.
         try:
-            # Same double-fault fence as the failed-forward arm below: a raising
-            # seal must not skip the model-session teardown.
+            if capture_session is not None and not run.postprocess:
+                capture_session.snapshot_recording_projection(self)
+                self._fastlog_captured_run_core = capture_session.seal()
+        finally:
+            run.backend.cleanup_stopped_forward_session(self, run.cleanup_payload())
+    except Exception as secondary_exc:
+        self.__dict__.pop("_capture_producer_policy", None)
+        settle_failed(
+            self,
+            capture_session,
+            secondary_exc,
+            note=(f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"),
+        )
+        _scrub_failed_capture_transients(self)
+        raise
+    except BaseException as halt_interrupt_exc:
+        # Same halted-arm interrupt stamp as the finalize path: the
+        # seal/cleanup seam's ``except Exception`` cannot see an interrupt,
+        # which used to escape unsettled.
+        self.__dict__.pop("_capture_producer_policy", None)
+        _settle_interrupted_halted_arm(self, run.capture_session, halt_interrupt_exc, halt_exc)
+        raise
+    self.__dict__.pop("_capture_producer_policy", None)
+    settle_halted(self, capture_session, halt_exc, finalize_partial=False, postprocess_ran=False)
+
+
+def _halted_arm(self: "Trace", run: _RunState, halt_exc: StopSignal) -> Any:
+    """Dispatch a halt: return the partial trace's output, or clean up and re-raise."""
+
+    options = getattr(self, "_predicate_save_options", None)
+    if (
+        options is not None
+        and getattr(options, "halt", None) is not None
+        and getattr(self, "_halt_returns_partial_trace", False)
+    ):
+        return _halted_partial_trace(self, run, halt_exc)
+    _halted_seal_and_cleanup(self, run, halt_exc)
+    raise halt_exc
+
+
+def _failed_arm(self: "Trace", run: _RunState, e: Exception) -> None:
+    """Settle a forward that raised an ordinary exception, then re-raise it.
+
+    The seal runs FIRST (it reads live capture state that cleanup strips) but
+    must not be able to SKIP cleanup: a raising seal used to bypass
+    requires_grad restore, tl_* metadata stripping, buffer tracker uninstall
+    and end_label_session, leaving the user's model permanently altered.
+    grind-r6 b1 R06: the PRIMARY user error must propagate; an ordinary
+    seal/cleanup double-fault is attached as a note (a BaseException secondary
+    keeps escaping: interrupts always win, B8-23).
+    """
+
+    # Boundary facts snapshot eagerly at cause time: cleanup below may pop
+    # the event stream, and the settlement stamp must still carry the count.
+    committed_ops = count_committed_ops(self)
+    capture_session = run.capture_session
+    # Aborted-nonfinite label unification (observe item 1): postprocess the
+    # committed prefix with the offending tensor seeded as the output frontier,
+    # so every public surface reads FINAL labels. Failure-safe by contract.
+    if run.postprocess:
+        from ._nonfinite_prefix import maybe_finalize_nonfinite_prefix
+
+        maybe_finalize_nonfinite_prefix(self, run.backend, e, run.model, run.input_tensors or [])
+    try:
+        try:
             try:
-                if capture_session is not None and not postprocess:
+                if capture_session is not None and not run.postprocess:
                     capture_session.snapshot_recording_projection(self)
                     self._fastlog_captured_run_core = capture_session.seal()
             finally:
-                backend.cleanup_stopped_forward_session(
-                    self, (model, input_tensors, (input_args, input_kwargs))
-                )
-        except Exception as secondary_exc:
+                run.backend.cleanup_failed_forward_session(self, run.cleanup_payload(), e)
             self.__dict__.pop("_capture_producer_policy", None)
+        except Exception as cleanup_exc:
+            _attach_note(
+                e,
+                "TorchLens failed-forward cleanup also failed while handling "
+                f"this error: {type(cleanup_exc).__name__}: {safe_exception_str(cleanup_exc)}",
+            )
+    finally:
+        # Guaranteed settlement: a cleanup double-fault still stamps the
+        # terminal outcome before the exception escapes. The transient scrub
+        # runs after settlement (R11/R32: the escaping partial must not pin
+        # live input tensors or the payload-bearing event stream).
+        settle_failed(self, capture_session, e, num_committed_ops=committed_ops)
+        _scrub_failed_capture_transients(self)
+
+
+def _interrupted_arm(self: "Trace", run: _RunState, interrupt_exc: BaseException) -> None:
+    """Tear down and settle after a control-flow interrupt (KeyboardInterrupt, SystemExit).
+
+    The torch session forces gradient-capable parameters to require grads, so
+    its teardown must run before the escape propagates. B8-23: the PRIMARY
+    interrupt must propagate; an ordinary cleanup or settlement Exception is
+    attached as a note instead of raised, or a caller's ``except Exception``
+    retry loop would swallow Ctrl-C. An unsettled outcome reads UNKNOWN.
+    """
+
+    committed_ops = count_committed_ops(self)
+    capture_session = run.capture_session
+    try:
+        try:
+            run.backend.cleanup_model_session(self, run.cleanup_payload())
+        except Exception as cleanup_exc:
+            _attach_note(
+                interrupt_exc,
+                "TorchLens model-session cleanup also failed while handling "
+                f"this interrupt: {type(cleanup_exc).__name__}: {safe_exception_str(cleanup_exc)}",
+            )
+        self.__dict__.pop("_capture_producer_policy", None)
+    finally:
+        try:
             settle_failed(
                 self,
                 capture_session,
-                secondary_exc,
-                note=(f"halted cleanup failed after halt at {getattr(halt_exc, 'reason', '')!r}"),
+                interrupt_exc,
+                interrupted=True,
+                num_committed_ops=committed_ops,
             )
             _scrub_failed_capture_transients(self)
-            raise
-        except BaseException as halt_interrupt_exc:
-            # Same halted-arm interrupt stamp as the finalize path above: the
-            # seal/cleanup seam's ``except Exception`` cannot see an interrupt,
-            # which used to escape unsettled.
-            self.__dict__.pop("_capture_producer_policy", None)
-            _settle_interrupted_halted_arm(self, capture_session, halt_interrupt_exc, halt_exc)
-            raise
-        self.__dict__.pop("_capture_producer_policy", None)
-        settle_halted(
+        except Exception as settle_exc:
+            _attach_note(
+                interrupt_exc,
+                "TorchLens settlement/scrub also failed while handling "
+                f"this interrupt: {type(settle_exc).__name__}: {safe_exception_str(settle_exc)}",
+            )
+
+
+def _release_instrumentation(run: _RunState) -> None:
+    """Exit the WRAP context (once-only session cleanup, compiled swaps) while attached."""
+
+    instrumentation, run.instrumentation = run.instrumentation, None
+    if instrumentation is not None:
+        instrumentation.__exit__(*run.exc_info)
+
+
+def _teardown_ladder(self: "Trace", run: _RunState) -> None:
+    """Run the post-settlement teardown; demote the outcome if it faults.
+
+    Path 7: a teardown failure demotes the already-settled COMPLETE/HALTED
+    outcome to FAILED/TEARDOWN in both homes and the teardown exception
+    propagates. R63 (B8-23 one frame out): an ordinary teardown Exception
+    must not replace an unwinding KeyboardInterrupt/SystemExit; the demotion
+    stays, the failure is attached, and the ORIGINAL interrupt re-raises.
+    """
+
+    inflight_exc = sys.exc_info()[1]
+    try:
+        try:
+            _clear_saved_activation_dedup_caches(self)
+            # Release input tensor references so GC can reclaim backend memory.
+            run.input_tensors = None
+            _release_instrumentation(run)
+            try:
+                _cleanup_forward_memory_once(self, run.backend, run.capture_session)
+            finally:
+                if run.capture_session is not None and run.capture_events is not None:
+                    detach_capture_session(self, run.capture_events, run.capture_session)
+        finally:
+            _release_instrumentation(run)
+    except BaseException as teardown_exc:
+        demote_outcome(
             self,
-            capture_session,
-            halt_exc,
-            finalize_partial=False,
-            postprocess_ran=False,
+            run.capture_session,
+            note=f"teardown failed: {type(teardown_exc).__name__}: {safe_exception_str(teardown_exc)}",
+            exc=teardown_exc,
         )
-        raise
-
-    except Exception as e:
-        compiled_unwrap_exception = sys.exc_info()
-        # Boundary facts snapshot eagerly at cause time: cleanup below may pop
-        # the event stream (or double-fault on already-popped workspaces), and
-        # the stamp in ``finally`` must still carry the committed-op count.
-        committed_ops = count_committed_ops(self)
-        # Aborted-nonfinite label unification (observe item 1): postprocess
-        # the committed prefix with the offending tensor seeded as the output
-        # frontier, so every public surface reads FINAL labels through the
-        # step-8 identity map instead of leaking raw spellings. Failure-safe
-        # by contract: any finalization failure attaches as secondary
-        # evidence on ``e`` and this arm proceeds exactly as before.
-        if postprocess:
-            from ._nonfinite_prefix import maybe_finalize_nonfinite_prefix
-
-            maybe_finalize_nonfinite_prefix(self, backend, e, model, input_tensors)
-        try:
-            # The seal runs FIRST (it reads live capture state that cleanup
-            # strips) but must not be able to SKIP cleanup: a raising seal used
-            # to bypass requires_grad restore, tl_* metadata stripping, buffer
-            # tracker uninstall and end_label_session, leaving the user's model
-            # permanently altered by a failed capture.
-            try:
-                try:
-                    if capture_session is not None and not postprocess:
-                        capture_session.snapshot_recording_projection(self)
-                        self._fastlog_captured_run_core = capture_session.seal()
-                finally:
-                    backend.cleanup_failed_forward_session(
-                        self, (model, input_tensors, (input_args, input_kwargs)), e
-                    )
-                self.__dict__.pop("_capture_producer_policy", None)
-            except Exception as cleanup_exc:
-                # grind-r6 b1 R06 (sol MED, probe): the PRIMARY user error must
-                # propagate. An ordinary seal/cleanup double-fault used to
-                # escape INSTEAD of ``raise e`` -- the settled CaptureOutcome
-                # named the primary while the escaping exception was the
-                # secondary and carried no partial_log. Mirror the interrupt
-                # arm: attach the secondary as a note and re-raise the primary
-                # below. A BaseException secondary (Ctrl-C during cleanup)
-                # keeps escaping -- interrupts always win (B8-23 doctrine).
-                note = (
-                    "TorchLens failed-forward cleanup also failed while handling "
-                    f"this error: {type(cleanup_exc).__name__}: "
-                    f"{safe_exception_str(cleanup_exc)}"
-                )
-                add_note = getattr(e, "add_note", None)
-                if add_note is not None:
-                    add_note(note)
-                else:  # Python 3.10: no PEP 678 notes -- surface via warning.
-                    warnings.warn(note, RuntimeWarning, stacklevel=2)
-        finally:
-            # Guaranteed settlement: a cleanup double-fault still stamps the
-            # terminal outcome before the (original or secondary) exception
-            # escapes; exception identity/chaining is byte-identical to the
-            # pre-settlement arms. The transient scrub runs after settlement
-            # (R11/R32: the escaping partial must not pin live input tensors
-            # or the payload-bearing event stream).
-            settle_failed(self, capture_session, e, num_committed_ops=committed_ops)
-            _scrub_failed_capture_transients(self)
-        raise e
-
-    except BaseException as interrupt_exc:
-        # ``except Exception`` above handles ordinary failed-forward diagnostics,
-        # but user code may raise e.g. KeyboardInterrupt or a custom BaseException.
-        # The torch session forces gradient-capable parameters to require grads, so
-        # its teardown must run before re-raising any such escape.
-        compiled_unwrap_exception = sys.exc_info()
-        committed_ops = count_committed_ops(self)
-        try:
-            try:
-                backend.cleanup_model_session(
-                    self, (model, input_tensors, (input_args, input_kwargs))
-                )
-            except Exception as cleanup_exc:
-                # B8-23: the PRIMARY control-flow exception (KeyboardInterrupt /
-                # SystemExit) must propagate. Letting an ordinary cleanup
-                # Exception escape here demoted the KI to ``__context__``, and
-                # a caller's ``except Exception`` retry loop swallowed Ctrl-C
-                # outright. Attach the cleanup failure instead of raising it.
-                note = (
-                    "TorchLens model-session cleanup also failed while handling "
-                    f"this interrupt: {type(cleanup_exc).__name__}: "
-                    f"{safe_exception_str(cleanup_exc)}"
-                )
-                add_note = getattr(interrupt_exc, "add_note", None)
-                if add_note is not None:
-                    add_note(note)
-                else:  # Python 3.10: no PEP 678 notes -- surface via warning.
-                    warnings.warn(note, RuntimeWarning, stacklevel=2)
-            self.__dict__.pop("_capture_producer_policy", None)
-        finally:
-            try:
-                settle_failed(
-                    self,
-                    capture_session,
-                    interrupt_exc,
-                    interrupted=True,
-                    num_committed_ops=committed_ops,
-                )
-                _scrub_failed_capture_transients(self)
-            except Exception as settle_exc:
-                # B8-23 applies here too: an ordinary settlement/scrub failure
-                # inside this ``finally`` would replace the unwinding
-                # KeyboardInterrupt/SystemExit (demoting it to __context__),
-                # letting a caller's ``except Exception`` swallow Ctrl-C.
-                # Attach the failure to the interrupt instead; an unsettled
-                # outcome reads UNKNOWN (most restrictive), never blessed.
-                note = (
-                    "TorchLens settlement/scrub also failed while handling "
-                    f"this interrupt: {type(settle_exc).__name__}: "
-                    f"{safe_exception_str(settle_exc)}"
-                )
-                add_note = getattr(interrupt_exc, "add_note", None)
-                if add_note is not None:
-                    add_note(note)
-                else:  # Python 3.10: no PEP 678 notes -- surface via warning.
-                    warnings.warn(note, RuntimeWarning, stacklevel=2)
-        raise
-
-    finally:
-        # B1-02: the ONE site every settlement path passes through. The pop
-        # block above lives only on the normal forward-return arm, so a halt
-        # (or a failure, or a KeyboardInterrupt) used to exit with the live
-        # tokenizer and metadata key still pinned to the escaping product.
-        # Placed before the teardown ladder so a teardown double-fault cannot
-        # skip it.
-        _drop_semantic_output_transients(self)
-        # Snapshot the exception this ``finally`` is unwinding through (None on
-        # the normal return path): the teardown double-fault guard below needs
-        # to know whether an ordinary teardown Exception would be replacing a
-        # control-flow BaseException.
-        inflight_exc = sys.exc_info()[1]
-        try:
-            try:
-                _clear_saved_activation_dedup_caches(self)
-                # Release input tensor references so GC can reclaim backend memory.
-                input_tensors = None  # type: ignore[assignment]
-                try:
-                    _cleanup_forward_memory_once(self, backend, capture_session)
-                finally:
-                    if capture_session is not None and capture_events is not None:
-                        detach_capture_session(self, capture_events, capture_session)
-            finally:
-                compiled_capture_context.__exit__(*compiled_unwrap_exception)
-        except BaseException as teardown_exc:
-            # Post-settlement teardown failure (path 7): the already-settled
-            # COMPLETE/HALTED outcome demotes to FAILED/TEARDOWN in both homes
-            # and the teardown exception propagates -- the raise preempts the
-            # return, so no product escapes carrying an undemoted claim.
-            demote_outcome(
-                self,
-                capture_session,
-                note=(
-                    f"teardown failed: {type(teardown_exc).__name__}: "
-                    f"{safe_exception_str(teardown_exc)}"
-                ),
-                exc=teardown_exc,
+        if (
+            inflight_exc is not None
+            and not isinstance(inflight_exc, Exception)
+            and isinstance(teardown_exc, Exception)
+        ):
+            _attach_note(
+                inflight_exc,
+                "TorchLens post-settlement teardown also failed while handling "
+                f"this interrupt: {type(teardown_exc).__name__}: {safe_exception_str(teardown_exc)}",
             )
-            if (
-                inflight_exc is not None
-                and not isinstance(inflight_exc, Exception)
-                and isinstance(teardown_exc, Exception)
-            ):
-                # R63 (B8-23 one frame out): an ordinary teardown Exception
-                # must not replace an unwinding KeyboardInterrupt/SystemExit
-                # (demoting it to ``__context__``), or a caller's
-                # ``except Exception`` retry loop swallows Ctrl-C. Keep the
-                # demotion, attach the teardown failure, and re-raise the
-                # ORIGINAL interrupt (the teardown exception stays visible as
-                # its ``__context__``).
-                note = (
-                    "TorchLens post-settlement teardown also failed while handling "
-                    f"this interrupt: {type(teardown_exc).__name__}: "
-                    f"{safe_exception_str(teardown_exc)}"
-                )
-                add_note = getattr(inflight_exc, "add_note", None)
-                if add_note is not None:
-                    add_note(note)
-                else:  # Python 3.10: no PEP 678 notes -- surface via warning.
-                    warnings.warn(note, RuntimeWarning, stacklevel=2)
-                raise inflight_exc
-            raise
+            raise inflight_exc
+        raise
+
+
+def _finish_run(self: "Trace", run: _RunState) -> None:
+    """The outermost ``finally``: transient drop, teardown, RNG restore, slot release."""
+
+    # B1-02: the ONE site every settlement path passes through, placed
+    # before the teardown ladder so a teardown double-fault cannot skip it.
+    _drop_semantic_output_transients(self)
+    try:
+        _teardown_ladder(self, run)
+    finally:
+        # Outermost: a teardown double-fault must not leak the capture
+        # reservation, or every later admission refuses forever. The RNG
+        # restore (R57) runs first but can never displace the release.
+        try:
+            run.restore_rng()
         finally:
-            # Outermost: a teardown double-fault must not leak the capture
-            # reservation, or every later admission refuses forever. The RNG
-            # restore (R57) runs first but can never displace the release.
-            try:
-                _restore_user_global_rng()
-            finally:
-                capture_slot.__exit__(None, None, None)
+            run.capture_slot.__exit__(None, None, None)
+
+
+def run_and_log_inputs_through_model(
+    self: "Trace",
+    model: object,
+    input_args: Any | list[Any],
+    input_kwargs: dict[Any, Any] | None = None,
+    layers_to_save: str | list[str | int] | None = "all",
+    grad_layers_to_save: str | list[str | int] | None = "all",
+    seed: int | None = None,
+    postprocess: bool = True,
+    reservation_resume: object | None = None,
+) -> Any:
+    """Run one forward pass under capture and log everything into ``self``.
+
+    The RUN stage's control skeleton; the step order is documented in the
+    module docstring. Returns the forward's output (or the halted output).
+    """
+
+    backend, seed = _begin_capture(self, model, input_args, input_kwargs, seed)
+    _resolve_save_selectors(self, layers_to_save, grad_layers_to_save)
+    run = _RunState(
+        backend=backend,
+        model=model,
+        input_args=input_args,
+        input_kwargs=input_kwargs,
+        seed=seed,
+        postprocess=postprocess,
+    )
+    _claim_slot_and_seed(self, run, reservation_resume)
+    try:
+        _fetch_inputs(self, run)
+        _attach_sessions(self, run, layers_to_save, grad_layers_to_save)
+        _instrument_model(self, run)
+        _snapshot_runnable_state(self, run)
+        outputs = _run_forward(self, run)
+        return _completed_arm(self, run, outputs)
+    except StopSignal as halt_exc:
+        run.exc_info = sys.exc_info()
+        return _halted_arm(self, run, halt_exc)
+    except Exception as e:
+        run.exc_info = sys.exc_info()
+        _failed_arm(self, run, e)
+        raise e
+    except BaseException as interrupt_exc:
+        run.exc_info = sys.exc_info()
+        _interrupted_arm(self, run, interrupt_exc)
+        raise
+    finally:
+        _finish_run(self, run)

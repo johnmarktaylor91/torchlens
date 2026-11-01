@@ -1,13 +1,13 @@
 """Run entry for the RUN stage: one capture forward from slot claim to ``Trace``.
 
-Moved verbatim from ``torchlens._user_funcs`` by the capture seam.
+The RUN stage entry ``run_capture`` and the keyword adapter the rerun engine and the
+recorder still call by name.
 """
 
 import copy
-import weakref
 from collections.abc import Callable
-from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import torch
@@ -15,16 +15,7 @@ from torch import nn
 
 from torchlens import _state
 
-from .._autoroute._builtin_output import semantic_output_cache_key
 from .._capture_honesty import record_host_tensor_source_advisory
-from .._capture_state_helpers import (
-    _capture_output_metadata_from_model_config,
-    _fingerprint_model_weights,
-    _hash_input_signatures,
-    _input_id_for_relationship_evidence,
-    _move_tensors_to_device,
-    _qualname_for_model,
-)
 from .._data_classes.trace import (
     Trace,
 )
@@ -34,50 +25,35 @@ from .._errors import (
     UserTransformError,
 )
 from .._io import ArtifactError
-from .._io.streaming import BundleStreamWriter
 from .._ir import ParentEdge
 from .._ir.op_record import amend_graph_edge_insertion
-from .._ir.selector_eval import selector_contains_kind
 from .._literals import (
     OutputDeviceLiteral,
 )
 from .._save_budget import SaveBudgetExceededError, SaveBudgetOption
-from .._trace_state import TraceState
-from .._utils.introspection import _get_code_context
 from .._utils.tensor_utils import SaveMode
 from ..backends.torch._tl import get_tensor_label
 from ..backends.torch.bound_root import (
     TLBoundMethodRoot,
 )
-from ..intervention import injection as _injection
-from ..intervention._module_alias_guard import refuse_model_alias_spellings
-from ..intervention.hooks import (
-    normalize_hook_plan,
-    site_universe as _site_universe,
-)
 from ..intervention.predicates import InterventionPredicate
-from ..intervention.selectors import BaseSelector
-from ..intervention.types import InterventionDecision
-from ..options import (
-    StorageOptions,
-)
 from ..recording.exceptions import PredicateError
-from ..recording.options import HaltPredicateFn, PredicateFn, RecordingOptions
-from ..recording.types import CaptureSpec
+from ..recording.options import HaltPredicateFn, PredicateFn
 from ..types import _ActivationPostfunc, _GradientPostfunc
-from ._episode_ledger import (
-    attach_episode_header,
+from ._run_setup import (
+    _configure_predicate_options,
+    _construct_trace,
+    _open_streaming_writer,
+    _resolved_request,
+    _stamp_identity_and_sinks,
+    _stamp_save_request,
 )
+from .outcome import CaptureStatus
 from .prepare.resolve import (
-    _backward_intervention_spec_from_predicate,
-    _intervention_spec_from_hook_plan,
-    _merge_intervention_spec_hooks,
     _record_capture_intervention_event,
     _warn_zero_match_capture_selectors,
-    activation_only_predicate as _activation_only_predicate,
 )
-from .stages import CaptureRequest, ForwardResult
-from .stop import StopDirective
+from .stages import CaptureRequest, ForwardArm, ForwardResult
 
 
 def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> None:
@@ -398,406 +374,94 @@ def _run_model_and_save_specified_outs(
     -------
         Fully-populated Trace.
     """
-    # A shared module's alias spelling cannot select one call site: refuse before the forward.
-    alias_sources = (save_predicate, intervene_predicate, halt_predicate, hooks, intervention_spec)
-    deferred = (normalized_hook_plan, _deferred_retention_selector, _deferred_gradient_selector)
-    refuse_model_alias_spellings(model, *alias_sources, *deferred)
-    # Auto-detect model device from its first parameter and move inputs to match.
-    # This prevents silent device-mismatch errors when the model is on CUDA but
-    # the user ops CPU tensors (a common mistake). A META first parameter is
-    # never a destination: offload-hooked models (accelerate device_map /
-    # cpu/disk offload, lane F37) hold meta params between forwards and their
-    # hooks place inputs on the real execution device themselves — moving
-    # inputs to meta would poison the forward ("Cannot copy out of meta
-    # tensor") that runs fine unlogged.
-    model_device = next((p.device for p in model.parameters()), None)
-    if model_device is not None and model_device.type != "meta":
-        input_args = _move_tensors_to_device(input_args, model_device)
-        if input_kwargs is not None:
-            input_kwargs = _move_tensors_to_device(input_kwargs, model_device)
-
-    if isinstance(model, TLBoundMethodRoot):
-        # F41 bound-method root: the synthetic root's identity reads the
-        # OWNER (type(owner).__name__ / its qualified class name), never the
-        # TL-authored wrapper class or the string "method"; the entry-point
-        # fact below discloses the bound_method invocation kind.
-        model_class_name = model.tl_owner_class_name
-        model_class_qualname = model.tl_owner_class_qualname
-        root_entry_point = model.tl_root_entry_point
-    else:
-        model_class_name = str(type(model).__name__)
-        model_class_qualname = _qualname_for_model(model)
-        root_entry_point = f"module_call:{model_class_qualname}.forward"
-    model_object_id = id(model)
-    weight_fingerprint = _fingerprint_model_weights(model)
-    input_object_id = _input_id_for_relationship_evidence(input_args)
-    input_signature_hash = _hash_input_signatures(input_args, input_kwargs)
-    # A rerun replays the REQUEST on its new graph: a staged edit's inserted op
-    # shifts every later raw index, so the resolved save set does not transfer.
-    rerun_save_request = {
-        "layers_to_save": copy.copy(layers_to_save),
-        "save_predicate": save_predicate,
-        "lookback": lookback,
-        "lookback_payload_policy": lookback_payload_policy,
-        "retain_output_parents_for_layers_to_save": retain_output_parents_for_layers_to_save,
-        "_deferred_retention_selector": _deferred_retention_selector,
-    }
-    module_save_selector = (
-        save_predicate
-        if isinstance(save_predicate, BaseSelector)
-        and selector_contains_kind(save_predicate, "module")
-        else None
+    plan = {k: v for k, v in locals().items() if k not in _REQUEST_POSITIONALS}
+    request = CaptureRequest(
+        model=model, input_args=input_args, input_kwargs=input_kwargs, plan=plan
     )
-    if module_save_selector is not None:
-        if _deferred_retention_selector is None:
-            _deferred_retention_selector = module_save_selector
-        elif isinstance(_deferred_retention_selector, list):
-            _deferred_retention_selector = [
-                *_deferred_retention_selector,
-                module_save_selector,
-            ]
-        else:
-            _deferred_retention_selector = [
-                _deferred_retention_selector,
-                module_save_selector,
-            ]
-        if backward_ready and _deferred_gradient_selector is None:
-            _deferred_gradient_selector = "all"
-        save_predicate = None
-        layers_to_save = "none"
+    return run_capture(request).trace
 
-    module_intervene_selector = None
-    lowered_intervene_spec = None
-    module_intervene_entries: list[Any] = []
-    candidate_intervene_selector = getattr(intervene_predicate, "selector", None)
-    candidate_intervene_decision = getattr(intervene_predicate, "decision", None)
-    if (
-        isinstance(candidate_intervene_selector, BaseSelector)
-        and selector_contains_kind(candidate_intervene_selector, "module")
-        and isinstance(candidate_intervene_decision, InterventionDecision)
-        and candidate_intervene_decision.hook is not None
-        and _site_universe(candidate_intervene_selector) == "activation"
+
+_REQUEST_POSITIONALS = frozenset({"model", "input_args", "input_kwargs"})
+
+
+def _configure_runtime_context(r: SimpleNamespace) -> None:
+    """Reset and configure the process-global capture runtime context.
+
+    r8 R54 (sol 2-thread repro): this reset and configure used to run BEFORE
+    any admission check, so a concurrent capture destined for the typed
+    refusal first RESET the admitted winner's live context (clearing its
+    replay-template flag and intervention plan mid-capture). The caller claims
+    the capture slot first and releases it exactly once on every settlement path.
+    """
+
+    _state.reset_capture_runtime_context()
+    _state.configure_capture_runtime_context(
+        hook_plan=r.hook_plan,
+        intervention_spec=r.intervention_spec,
+        capture_replay_templates=r.intervention_ready,
+        model_object_id=r.model_object_id,
+        model_class_qualname=r.model_class_qualname,
+        weight_fingerprint=r.weight_fingerprint,
+        input_object_id=r.input_object_id,
+        input_signature_hash=r.input_signature_hash,
+    )
+
+
+def _forward_under_minter(trace: Trace, r: SimpleNamespace, reservation_token: object) -> None:
+    """Run the forward, arming the live site-key minter when a predicate needs it.
+
+    C03 live site-key minting (surgery Build 0c): when a configured predicate
+    addresses by structural site (tl.site), arm one streaming minter for
+    exactly this capture; captures are single-threaded, so the ContextVar
+    scope is exact and unarmed surfaces keep their typed capability refusal.
+    """
+
+    from contextlib import nullcontext
+
+    from ..intervention.site_keys import armed_live_minter, predicate_needs_live_site_keys
+
+    live_minter_scope = (
+        armed_live_minter()
+        if predicate_needs_live_site_keys(r.save_predicate, r.intervene_predicate, r.halt_predicate)
+        else nullcontext()
+    )
+    with live_minter_scope:
+        trace._run_and_log_inputs_through_model(
+            r.model,
+            cast(torch.Tensor | list[Any], r.input_args),
+            r.input_kwargs,
+            r.layers_to_save,
+            r.grads_to_save,
+            r.seed,
+            reservation_resume=reservation_token,
+        )
+
+
+def _abort_streaming_writer(trace: Trace, exc: BaseException) -> None:
+    """Abort the streaming writer of a failed forward; wrap ordinary errors as artifact errors.
+
+    F5: postprocess pops ``_out_writer`` at its transient-state seam, so a
+    post-seam failure (teardown, streaming tail) reaches this handler on a
+    trace WITHOUT the attribute; the unguarded read used to mask the real
+    exception with AttributeError.
+    """
+
+    out_writer = trace.__dict__.get("_out_writer")
+    if out_writer is None:
+        return
+    if not getattr(out_writer, "_closed", False):
+        out_writer.abort(str(exc))
+    if isinstance(exc, Exception) and not isinstance(
+        exc,
+        (PredicateError, SaveBudgetExceededError, ArtifactError, UserTransformError),
     ):
-        module_intervene_selector = candidate_intervene_selector
-        # .selector is non-None only for single-rule specs, so rules[0] is
-        # exact; the rule digest is unrecoverable downstream of this
-        # lowering (W051-BIND 2.3b).
-        spec_rules: Any = getattr(intervene_predicate, "rules", ())
-        lowered_rule_id = spec_rules[0].rule_id
-        module_intervene_entries = [
-            replace(
-                entry,
-                metadata={
-                    **dict(entry.metadata),
-                    "created_by": "intervene_predicate",
-                    "zero_match_ledger": "intervene_selector",
-                    "rule_id": lowered_rule_id,
-                },
-            )
-            for entry in normalize_hook_plan(
-                candidate_intervene_selector,
-                candidate_intervene_decision.hook,
-            )
-        ]
-        # Keep the original spec: the capture-door event must record the rules
-        # payload the loader's injected-op anchor (W051-BIND 2.3c) vouches by.
-        lowered_intervene_spec = intervene_predicate
-        intervene_predicate = None
-    hook_plan = list(normalized_hook_plan) if normalized_hook_plan is not None else []
-    # A plan an internal engine pre-normalized FROM the caller's spec (rerun)
-    # is already staged on that spec. Folding it back in re-appended the
-    # spec's own hooks to the live spec object on every rerun, so the staged
-    # plan doubled per call (1, 2, 4, 8) and each rerun fired it that often.
-    spec_derived_count = len(hook_plan) if intervention_spec is not None else 0
-    if intervention_spec is None:
-        intervention_spec = _backward_intervention_spec_from_predicate(intervene_predicate)
-    if hook_plan == [] and hooks:
-        hook_plan = normalize_hook_plan(hooks)
-    hook_plan.extend(module_intervene_entries)
-    hook_plan_spec = _intervention_spec_from_hook_plan(hook_plan[spec_derived_count:])
-    if intervention_spec is None:
-        intervention_spec = hook_plan_spec
-    elif hook_plan_spec is not None:
-        intervention_spec = _merge_intervention_spec_hooks(intervention_spec, hook_plan_spec)
-    # r8 R54 (sol 2-thread repro): the process-global runtime-context reset +
-    # configure below ran BEFORE any admission check, so a concurrent capture
-    # destined for the typed refusal first RESET the admitted winner's live
-    # context (clearing its replay-template flag and intervention plan
-    # mid-capture). Claim the capture slot FIRST; the inner claim in
-    # ``run_and_log_inputs_through_model`` passes through on the token. The
-    # slot is released exactly once on every settlement path.
-    _capture_slot = _state.capture_reservation()
-    _reservation_token = _capture_slot.__enter__()
-    _reservation_live = [True]
+        raise ArtifactError("Streaming out save failed during forward pass.") from exc
 
-    def _release_capture_slot() -> None:
-        """Release the early admission claim exactly once."""
 
-        if _reservation_live[0]:
-            _reservation_live[0] = False
-            _capture_slot.__exit__(None, None, None)
+def _finish_run_entry(trace: Trace, r: SimpleNamespace, echo_session: Any) -> None:
+    """Post-forward tail: root disclosure, echo close, zero-match warnings, events."""
 
-    try:
-        _state.reset_capture_runtime_context()
-        _state.configure_capture_runtime_context(
-            hook_plan=hook_plan,
-            intervention_spec=intervention_spec,
-            capture_replay_templates=intervention_ready,
-            model_object_id=model_object_id,
-            model_class_qualname=model_class_qualname,
-            weight_fingerprint=weight_fingerprint,
-            input_object_id=input_object_id,
-            input_signature_hash=input_signature_hash,
-        )
-    except BaseException:
-        _release_capture_slot()
-        raise
-    from .._snoop._entry import echo_forward_failure, finish_echo, open_echo_session
-
-    echo_session: Any = None
-    try:
-        from .._semantic import facets as facets_mod
-
-        trace = Trace(
-            model_class_name=model_class_name,
-            output_device=output_device,
-            activation_transform=activation_transform,
-            grad_transform=grad_transform,
-            save_raw_activations=save_raw_activations,
-            save_raw_grads=save_raw_grads,
-            save_mode=save_mode,
-            capture_tensor_grad_hooks=capture_tensor_grad_hooks,
-            keep_orphans=keep_orphans,
-            save_args=save_args,
-            save_grads=grads_to_save if save_grads else None,
-            detach_saved_activations=detach_saved_activations,
-            mark_layer_depths=mark_layer_depths,
-            source_context_lines=num_context_lines,
-            optimizer=optimizer,
-            save_source_context=save_source_context,
-            save_rng=save_rng,
-            recurrence_detection=recurrence_detection,
-            verbose=verbose,
-            backward_ready=backward_ready,
-            inference_only=inference_only,
-            module_filter=module_filter,
-            emit_nvtx=emit_nvtx,
-            measure_python_peak_memory=measure_python_peak_memory,
-            distributed_witness=distributed_witness,
-            save_budget=save_budget,
-            input_transform=transform,
-            raw_input=raw_input,
-            save_raw_input=save_raw_input,
-            batch_render=batch_render,
-            output_transform=output_transform,
-            save_transformed_output=save_transformed_output,
-            layer_visualizers=layer_visualizers,
-            save_visualizations=save_visualizations,
-            facet_registry_snapshot=facets_mod.snapshot(recipes),
-        )
-        # One session field carries the capture's save request: the torch
-        # backend reads its output-parent retention flag during the forward,
-        # and a legacy rerun replays it unless this is a refresh capture,
-        # whose resolved raw-index save set the projector rebinds instead.
-        trace._rerun_save_request = {
-            **rerun_save_request,
-            "replayable": _resolved_layer_nums_to_save is None,
-        }
-        if _resolved_layer_nums_to_save is not None:
-            trace._refresh_resolved_layer_nums_to_save = list(_resolved_layer_nums_to_save)
-        if _resolved_grad_layer_nums_to_save is not None:
-            trace._refresh_resolved_grad_layer_nums_to_save = _resolved_grad_layer_nums_to_save
-        if _deferred_retention_selector is not None:
-            trace._deferred_retention_selector = _deferred_retention_selector
-        if _deferred_gradient_selector is not None:
-            trace._deferred_gradient_selector = _deferred_gradient_selector
-        if _refresh_projection_capture:
-            trace._refresh_projection_capture = True
-        _capture_output_metadata_from_model_config(trace, model)
-        trace._output_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
-        trace._semantic_output_metadata = semantic_output_cache_key(model)
-        if intervention_spec is not None:
-            trace._intervention_spec = intervention_spec
-        trace.trace_label = name
-        trace.code_context = _get_code_context(
-            num_context_lines,
-            source_loading_enabled=save_source_context,
-        )
-        forward_code = getattr(model.forward, "__code__", None)
-        trace.forward_source_line = getattr(forward_code, "co_firstlineno", None)
-        trace.intervention_ready = intervention_ready
-        trace._capture_container_structure = capture_container_structure
-        if hook_plan:
-            trace.state = TraceState.LIVE_CAPTURED
-        trace.model_object_id = model_object_id
-        trace.model_class_qualname = model_class_qualname
-        trace.param_hash_quick = weight_fingerprint
-        trace.param_hash_full = weight_fingerprint
-        # C07X (iv)/D10: unconditional write; F41's fail-closed gate reads it.
-        # module_call for plain module roots, bound_method for the F41
-        # TL-authored wrapper root (derived beside the identity fields above).
-        trace.root_entry_point = root_entry_point
-        trace.input_object_id = input_object_id
-        trace.input_signature_hash = input_signature_hash
-        trace._source_code_blob = capture_model_source_code(model)
-        trace._source_model_ref = make_weak_model_ref(model)
-        trace._out_sink = out_sink
-        trace._keep_outs_in_memory = keep_outs_in_memory
-        trace._grad_stream_retain_in_memory = retain_grads_in_memory
-        trace._defer_streaming_bundle_finalization = grad_storage_path is not None
-        trace._wrapper_runtime_ws.in_exhaustive_pass = True
-        trace.raise_on_nan = raise_on_nan
-        trace.track_nonfinite = track_nonfinite
-        trace.track_device_memory = track_device_memory
-        trace.measure_host_peak_memory = measure_host_peak_memory
-        _injection.arm_injection_logging(trace, armed=log_injections)
-        # L7a mode-marker prep (S2 SEAM, labeled): the flag DECLARES the mode
-        # (memo sec 1.5) and stamps the mirror field here at entry. At S2
-        # ratification the settlement-side stamp moves to the
-        # _capture/outcome.py witness machinery in the S2 author's PR; this
-        # entry write stays as the declared-mode source of truth.
-        trace.structure_only = structure_only
-        trace._stop_directive = StopDirective(
-            halt_options=getattr(trace, "_predicate_save_options", None),
-            raise_on_nan=raise_on_nan,
-            forward_error_mode="raise",
-            inference_only=inference_only,
-            inference_only_implied=inference_only_implied,
-        )
-        if (
-            save_predicate is not None
-            or intervene_predicate is not None
-            or halt_predicate is not None
-        ):
-            predicate_history_size = lookback if lookback > 0 else 8
-            default_save = save_predicate is None and layers_to_save == "all"
-            default_op: bool | CaptureSpec = default_save
-            if backward_ready:
-                default_op = CaptureSpec(
-                    save_out=default_save,
-                    save_metadata=default_save,
-                    save_grad=True,
-                )
-            trace._predicate_save_options = RecordingOptions(
-                keep_op=save_predicate,
-                # The live forward sees only activation branches; gradient and
-                # node branches armed as sticky backward hooks above.
-                intervene=_activation_only_predicate(intervene_predicate),
-                halt=halt_predicate,
-                default_op=default_op,
-                streaming=StorageOptions(
-                    path=save_outs_to,
-                    retain_in_memory=keep_outs_in_memory,
-                    include_custom_attributes=stream_custom_attributes,
-                    include_buffer_values=stream_buffer_values,
-                    async_writes=stream_async_writes,
-                    max_pending_bytes=stream_max_pending_bytes,
-                )
-                if save_outs_to is not None
-                else None,
-                history_size=predicate_history_size,
-                lookback=lookback,
-                lookback_payload_policy=lookback_payload_policy,  # type: ignore[arg-type]
-                on_predicate_error="fail-fast",
-                # Selector saves honour the capture's detach choice in both
-                # directions, exactly like the save-all path.
-                detach_saved_activations=bool(detach_saved_activations),
-            )
-            trace._halt_returns_partial_trace = halt_predicate is not None
-            trace._stop_directive = StopDirective(
-                halt_options=trace._predicate_save_options,
-                raise_on_nan=raise_on_nan,
-                forward_error_mode=trace._predicate_save_options.on_forward_error,
-                inference_only=inference_only,
-                inference_only_implied=inference_only_implied,
-            )
-            trace._predicate_history_size = predicate_history_size
-            trace._predicate_lookback = lookback
-            trace._predicate_lookback_payload_policy = lookback_payload_policy
-        bundle_path = grad_storage_path if grad_storage_path is not None else save_outs_to
-        if bundle_path is not None:
-            trace._out_writer = BundleStreamWriter(
-                bundle_path,
-                include_custom_attributes=stream_custom_attributes,
-                include_buffer_values=stream_buffer_values,
-            )
-            # None = consumer default: trace captures overlap blob writes
-            # with the forward; False is the explicit synchronous opt-out.
-            if stream_async_writes is not False:
-                trace._out_writer.arm_async_writes(stream_max_pending_bytes)
-        if episode_resolved is not None:
-            # Pre-capture episode declaration marker: rides the partial
-            # product on failure and is visible to postprocess consumers; the
-            # settlement-time writer replaces it with the finalized ledger.
-            attach_episode_header(trace, episode_resolved)
-        # Echo narrator (snoop D1): one read-only observer per capture
-        # (runtime-only state). Opened INSIDE the guarded region: the echo
-        # sink opens its path eagerly, and a sink-open failure (missing
-        # directory, unwritable path) used to escape between the slot claim
-        # and the forward's own guard, leaking the capture reservation for as
-        # long as the exception object lived (AUD-CODE 2.15) -- the next
-        # tl.trace then refused reentrant_trace on an idle process.
-        echo_session = open_echo_session(trace, echo_options)
-    except BaseException:
-        # A pre-forward setup failure (the Trace ctor, the echo sink open, or
-        # any later pre-forward step) must not leak the capture-global runtime
-        # context configured just above: the forward's own try/finally only
-        # guards the window starting below. Reset here so the protected region
-        # begins no later than configure_capture_runtime_context().
-        _state.reset_capture_runtime_context()
-        _release_capture_slot()
-        raise
-    try:
-        # C03 live site-key minting (surgery Build 0c): when a configured
-        # predicate addresses by structural site (tl.site), arm one streaming
-        # minter for exactly this capture -- captures are single-threaded, so
-        # the ContextVar scope is exact and unarmed surfaces keep their typed
-        # capability refusal.
-        from contextlib import nullcontext
-
-        from ..intervention.site_keys import (
-            armed_live_minter,
-            predicate_needs_live_site_keys,
-        )
-
-        live_minter_scope = (
-            armed_live_minter()
-            if predicate_needs_live_site_keys(save_predicate, intervene_predicate, halt_predicate)
-            else nullcontext()
-        )
-        with live_minter_scope:
-            trace._run_and_log_inputs_through_model(
-                model,
-                cast(torch.Tensor | list[Any], input_args),
-                input_kwargs,
-                layers_to_save,
-                grads_to_save,
-                seed,
-                reservation_resume=_reservation_token,
-            )
-    except BaseException as exc:
-        # Crash tail (snoop D5 tail 2): synchronous flush; note rides PEP 678.
-        echo_forward_failure(echo_session, exc)
-        # F5: postprocess pops ``_out_writer`` at its transient-state seam, so
-        # a post-seam failure (teardown, streaming tail) reaches this handler
-        # on a trace WITHOUT the attribute; the unguarded read used to mask
-        # the real exception with AttributeError.
-        out_writer = trace.__dict__.get("_out_writer")
-        if out_writer is not None:
-            if not getattr(out_writer, "_closed", False):
-                out_writer.abort(str(exc))
-            if isinstance(exc, Exception) and not isinstance(
-                exc,
-                (PredicateError, SaveBudgetExceededError, ArtifactError, UserTransformError),
-            ):
-                raise ArtifactError("Streaming out save failed during forward pass.") from exc
-        raise
-    finally:
-        _state.reset_capture_runtime_context()
-        _release_capture_slot()
-        if hasattr(trace, "_capture_container_structure"):
-            delattr(trace, "_capture_container_structure")
-    if isinstance(model, TLBoundMethodRoot):
+    if isinstance(r.model, TLBoundMethodRoot):
         # F41 TL-authored-root disclosure (tlspec v9 entry-dark slot, C07X
         # item (iv)): the marker lands on the root op record -- the
         # output-boundary op records, the terminal records of the wrapper's
@@ -806,67 +470,141 @@ def _run_model_and_save_specified_outs(
         for output_label in trace.output_layers:
             for output_op in trace[output_label].ops:
                 output_op.tl_authored_root = True
+    from .._snoop._entry import finish_echo
+
     finish_echo(echo_session, trace)
     _warn_zero_match_capture_selectors(
         trace,
-        save_selector=module_save_selector or save_predicate,
+        save_selector=r.module_save_selector or r.save_predicate,
         intervene_selector=(
-            module_intervene_selector or getattr(intervene_predicate, "selector", None)
+            r.module_intervene_selector or getattr(r.intervene_predicate, "selector", None)
         ),
         # stop_after-compiled halts carry their OWN provenance-split never-fired
         # policy at the trace entry (typed refusal / coded warning); the generic
         # halt zero-match warning would double-disclose ahead of that refusal.
-        halt_selector=None if _halt_from_stop_after else halt_predicate,
-        layers_to_save_request=_selective_layers_to_save_request,
+        halt_selector=None if r._halt_from_stop_after else r.halt_predicate,
+        layers_to_save_request=r._selective_layers_to_save_request,
     )
     record_host_tensor_source_advisory(trace)
     _record_capture_intervention_event(
         trace,
-        intervene_predicate
-        if intervene_predicate is not None
+        r.intervene_predicate
+        if r.intervene_predicate is not None
         else (
-            lowered_intervene_spec
-            if lowered_intervene_spec is not None
-            else module_intervene_selector
+            r.lowered_intervene_spec
+            if r.lowered_intervene_spec is not None
+            else r.module_intervene_selector
         ),
     )
+
+
+def _forward_arm_of(trace: Trace) -> ForwardArm:
+    """Read the arm a returned trace settled on: completed, or halted on a stop."""
+
+    outcome = trace.__dict__.get("_capture_outcome")
+    status = getattr(outcome, "status", None)
+    return "halted" if status is CaptureStatus.STOPPED else "completed"
+
+
+def _build_trace_for_run(r: SimpleNamespace, release_slot: Callable[[], None]) -> tuple[Trace, Any]:
+    """Build and stamp the Trace and open the echo session inside the guarded region.
+
+    A pre-forward setup failure (the Trace ctor, the echo sink open, or any
+    later pre-forward step) must not leak the capture-global runtime context
+    configured just before: the forward's own try/finally only guards the
+    window starting after this. Reset here so the protected region begins no
+    later than ``configure_capture_runtime_context()``.
+    """
+
+    from .._snoop._entry import open_echo_session
+
+    try:
+        trace = _construct_trace(r)
+        _stamp_save_request(trace, r)
+        _stamp_identity_and_sinks(trace, r)
+        _configure_predicate_options(trace, r)
+        _open_streaming_writer(trace, r)
+        # Echo narrator (snoop D1): one read-only observer per capture
+        # (runtime-only state). Opened INSIDE the guarded region: the echo
+        # sink opens its path eagerly, and a sink-open failure (missing
+        # directory, unwritable path) used to escape between the slot claim
+        # and the forward's own guard, leaking the capture reservation for as
+        # long as the exception object lived (AUD-CODE 2.15) -- the next
+        # tl.trace then refused reentrant_trace on an idle process.
+        echo_session = open_echo_session(trace, r.echo_options)
+    except BaseException:
+        _state.reset_capture_runtime_context()
+        release_slot()
+        raise
+    return trace, echo_session
+
+
+def _run_resolved_request(r: SimpleNamespace) -> Trace:
+    """The run half: slot claim, runtime context, Trace build, forward, tail.
+
+    The slot is claimed FIRST (r8 R54, see ``_configure_runtime_context``); the
+    inner claim in ``run_and_log_inputs_through_model`` passes on the token.
+    """
+
+    capture_slot = _state.capture_reservation()
+    reservation_token = capture_slot.__enter__()
+    reservation_live = [True]
+
+    def _release_capture_slot() -> None:
+        """Release the early admission claim exactly once."""
+
+        if reservation_live[0]:
+            reservation_live[0] = False
+            capture_slot.__exit__(None, None, None)
+
+    try:
+        _configure_runtime_context(r)
+    except BaseException:
+        _release_capture_slot()
+        raise
+    from .._snoop._entry import echo_forward_failure
+
+    trace, echo_session = _build_trace_for_run(r, _release_capture_slot)
+    try:
+        _forward_under_minter(trace, r, reservation_token)
+    except BaseException as exc:
+        # Crash tail (snoop D5 tail 2): synchronous flush; note rides PEP 678.
+        echo_forward_failure(echo_session, exc)
+        _abort_streaming_writer(trace, exc)
+        raise
+    finally:
+        _state.reset_capture_runtime_context()
+        _release_capture_slot()
+        if hasattr(trace, "_capture_container_structure"):
+            delattr(trace, "_capture_container_structure")
+    _finish_run_entry(trace, r, echo_session)
     return trace
 
 
 def run_capture(request: CaptureRequest) -> ForwardResult:
     """Run one capture forward pass for a packed request.
 
-    Seam entry: unpacks the request into ``_run_model_and_save_specified_outs``
-    unchanged. The RUN lane moves the run half of that function behind this name.
+    RUN stage entry. The request's ``plan`` carries the flat keyword
+    arguments of ``_run_model_and_save_specified_outs``; resolution (alias
+    refusal, device placement, root identity, selector lowering, hook plan)
+    happens first, then the run half claims the capture slot, builds the
+    Trace, runs the forward and the post-forward tail.
 
     Parameters
     ----------
     request:
-        Request built by ``prepare_capture``.
+        Request built by ``prepare_capture`` or the keyword adapter.
 
     Returns
     -------
     ForwardResult
-        The populated trace on the completed arm.
+        The populated trace with the arm it settled on (``completed``, or
+        ``halted`` when a halt predicate returned a partial trace).
     """
-    trace = _run_model_and_save_specified_outs(
-        request.model,
-        request.input_args,
-        request.input_kwargs,
-        **dict(request.plan or {}),
+    trace = _run_resolved_request(_resolved_request(request))
+    return ForwardResult(
+        trace=trace,
+        request=request,
+        arm=_forward_arm_of(trace),
+        raw_output=getattr(trace, "raw_output", None),
     )
-    return ForwardResult(trace=trace, request=request)
-
-
-def capture_model_source_code(model: nn.Module) -> dict[str, str]:
-    """Capture the code-panel source text (deferred: the code panel sits above this layer)."""
-    from .._visualization.code_panel import capture_model_source_code as _capture
-
-    return _capture(model)
-
-
-def make_weak_model_ref(model: nn.Module) -> "weakref.ReferenceType[nn.Module] | None":
-    """Weakly reference the model for the code panel (deferred like the function above)."""
-    from .._visualization.code_panel import make_weak_model_ref as _make_ref
-
-    return _make_ref(model)
