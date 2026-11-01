@@ -9,7 +9,7 @@ supported control-flow regions disclose partial replay verification.
 ## Tutorial
 
 ```python
-# tutorial: executed by tests/test_backend_docs_lockstep.py under the backend marker
+# tutorial: executed by tests/test_jax_docs_page.py under the backend_jax marker
 import jax.numpy as jnp
 import torchlens as tl
 
@@ -41,8 +41,9 @@ print(status.state)
 
 ### Known gaps
 
-- Closed-over array constants in raw function roots refuse; pass them as explicit
-  pytree leaves instead.
+- Closed-over array constants in raw function roots are recorded as `constant` source
+  ops with a saved payload (the shared constants rule); the derived-gradient path
+  (`grad_options=`) still refuses them, so pass them as explicit pytree leaves there.
 - Loaded traces report replay validation `unavailable`.
 - The ecosystem roster is parked until Flax checkpoints have a dependency path:
   transformers 5 removed its Flax models.

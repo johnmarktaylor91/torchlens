@@ -10,7 +10,7 @@ payload persistence, and derived gradients; true backward capture remains deferr
 ## Tutorial
 
 ```python
-# tutorial: executed by tests/test_backend_docs_lockstep.py under the backend marker
+# tutorial: executed by tests/backends/test_tf_docs_page.py under the tf_backend marker
 import keras
 import tensorflow as tf
 import torchlens as tl
@@ -47,6 +47,10 @@ print(status.state)
 - Replay validation reports `unverified`, rather than `passed`, on Keras models
   because parameter reads (`ReadVariableOp`) count as unverified regions.
 - Loaded traces cannot be replay-validated because runtime captures are not persisted.
+- Array-valued closure constants (closure weights, `tf.constant([...])`) are recorded as
+  `constant` source ops with a saved payload; rank-zero literals stay replayable values on
+  the op that consumed them. A `tf.ones`/`tf.fill` inside the forward is a literal
+  producer: zero parents, payload saved, replayed from its arguments.
 
 ## Framework requirement
 
