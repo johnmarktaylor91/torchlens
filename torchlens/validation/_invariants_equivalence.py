@@ -70,7 +70,7 @@ def _canonical_equivalent_ops(owner: object) -> object:
     return _EQUIVALENT_OPS_UNAVAILABLE
 
 
-def _equivalence_member_index(ml: Trace) -> tuple[dict[str, set], dict[str, object]]:
+def _equivalence_members(ml: Trace) -> tuple[dict[str, set], dict[str, object]]:
     """Map each grouped op label to its ``op_equivalence_classes`` group and key."""
 
     # Membership index: per-op ``equivalence_class`` carries the module suffix
@@ -155,7 +155,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
     # be recycled onto a different object mid-check.
     verified_op_pairs: set[tuple[int, int]] = set()
     verified_keepalive: list[object] = []
-    group_by_member, key_by_member = _equivalence_member_index(ml)
+    group_by_member, key_by_member = _equivalence_members(ml)
     for op in ml.layer_list:
         equivalence_class = getattr(op, "equivalence_class", None)
         expected_group = None

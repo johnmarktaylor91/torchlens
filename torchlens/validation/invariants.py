@@ -617,6 +617,7 @@ _check_buffer_replay_validated_versions = _rebind_function(
 _canonical_equivalent_ops = _rebind_function(
     _invariants_equivalence._canonical_equivalent_ops, globals()
 )
+_equivalence_members = _rebind_function(_invariants_equivalence._equivalence_members, globals())
 _check_equivalence_symmetry = _rebind_function(
     _invariants_equivalence._check_equivalence_symmetry, globals()
 )
@@ -624,8 +625,7 @@ _check_graph_ordering = _rebind_function(_invariants_equivalence._check_graph_or
 _check_loop_detection_invariants = _rebind_function(
     _invariants_equivalence._check_loop_detection_invariants, globals()
 )
-# Call-site grouping helpers (callsite_v1); rebound so the namespace push
-# leaves no second patchable copy in the child.
+# Call-site grouping helpers (callsite_v1); rebound so the child keeps no patchable copy.
 _OUTINDEX_TOKEN = _invariants_equivalence._OUTINDEX_TOKEN
 _is_call_site_grouped = _rebind_function(_invariants_equivalence._is_call_site_grouped, globals())
 _equivalence_class_components = _rebind_function(
