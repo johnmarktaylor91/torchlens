@@ -1012,6 +1012,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_deploy_env.py", "__all__"),
         ("torchlens/_distributed.py", "__all__"),
         ("torchlens/_episode_spec.py", "__all__"),
+        ("torchlens/_extract_refusals.py", "__all__"),
         ("torchlens/_extraction/__init__.py", "__all__"),
         ("torchlens/_extraction/callable_identity.py", "__all__"),
         ("torchlens/_extraction/context.py", "__all__"),

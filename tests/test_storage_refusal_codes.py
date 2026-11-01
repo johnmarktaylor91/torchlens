@@ -17,8 +17,6 @@ import torchlens as tl
 from torchlens.errors import TorchLensError
 from torchlens.intervention.errors import ChunkedForwardConfigError
 
-pytestmark = [pytest.mark.smoke]
-
 
 def _code(exc: BaseException) -> Any:
     return exc.fields.get("code") if isinstance(exc, TorchLensError) else None
