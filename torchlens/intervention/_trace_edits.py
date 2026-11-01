@@ -175,7 +175,7 @@ def set_site(
             f"set(..., direction={direction!r}) no longer edits gradients: a gradient "
             "is addressed as a site, tl.grad(site)",
             code="intervention_direction_invalid",
-            remedy="do(trace, tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
+            remedy="trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
             "trace.attach_hooks(tl.grad(site), edit) then trace.backward(loss)",
             argument="direction",
         )
@@ -596,7 +596,9 @@ def warn_if_root_mutation(trace: Trace, *, confirm_mutation: bool) -> None:
         "TraceMutationWarning: Trace mutators modify root logs in place. "
         "Use log.fork(...) for isolated edits or pass confirm_mutation=True.",
         TraceMutationWarning,
-        stacklevel=3,
+        # One frame deeper than the method body this replaced: the record's thin
+        # method sits between the caller and this function.
+        stacklevel=4,
     )
     trace._warned_mutate_in_place = True
 

@@ -27,11 +27,19 @@ else:
 from ..intervention.types import FrozenInterventionSpec, InterventionSpec, TargetSpec
 from ..options import InterventionOptions
 from . import _doors, _fork_lineage, _trace_intervention_records
-from ._trace_fork import build_fork
-from ._trace_grad_sites import armed_edits, armed_summary_line
+from ._trace_fork import _STREAM_DERIVED_GUARD_FIELDS, _ForkMemo, _memoized_deep_copy, build_fork
+from ._trace_grad_sites import armed_edits, armed_summary_line, settle_armed_gradient_edits
 from ._trace_intervention_records import _DoTransaction
 
-__all__ = ["TraceInterventionMixin"]
+# The re-exports stay until the fold removes this module: the torch backward door
+# reads ``settle_armed_gradient_edits`` from here by name, and tests import the rest.
+__all__ = [
+    "_STREAM_DERIVED_GUARD_FIELDS",
+    "TraceInterventionMixin",
+    "_ForkMemo",
+    "_memoized_deep_copy",
+    "settle_armed_gradient_edits",
+]
 
 
 class TraceInterventionMixin(_TraceMixinBase):
@@ -489,15 +497,15 @@ class TraceInterventionMixin(_TraceMixinBase):
 
     @staticmethod
     def _is_selection_batch(value: Any) -> bool:
-        """Forward to ``_doors.intervention()._trace_edits.is_selection_batch``."""
+        """Forward to ``_doors.intervention()._trace_selection_edits.is_selection_batch``."""
 
-        return _doors.intervention()._trace_edits.is_selection_batch(value)
+        return _doors.intervention()._trace_selection_edits.is_selection_batch(value)
 
     @staticmethod
     def _selection_batch_kind(selection: Any) -> str:
-        """Forward to ``_doors.intervention()._trace_edits.selection_batch_kind``."""
+        """Forward to ``_doors.intervention()._trace_selection_edits.selection_batch_kind``."""
 
-        return _doors.intervention()._trace_edits.selection_batch_kind(selection)
+        return _doors.intervention()._trace_selection_edits.selection_batch_kind(selection)
 
     def _apply_selection_batch_do(
         self: "Trace",

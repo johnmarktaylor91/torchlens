@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes._trace_grad_sites import settle_armed_gradient_edits
+from torchlens._data_classes._trace_intervention import settle_armed_gradient_edits
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention.spec import (
     addresses_autograd_nodes,
