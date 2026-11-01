@@ -16,6 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._selection import selectors as _selectors
 from torchlens._selection.resolver import (
     resolve_site_plan,
     split_site_branches,
@@ -398,7 +399,7 @@ def test_root_exports_grad_and_drop_gradient_only_helpers() -> None:
 
     assert "grad" in tl.__all__
     assert "clip_norm" in tl.__all__
-    assert tl.grad is tl.intervention.selectors.grad
+    assert tl.grad is _selectors.grad
     for removed in (
         "zero_grad",
         "scale_grad",
