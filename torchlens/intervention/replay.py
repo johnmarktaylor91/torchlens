@@ -161,7 +161,7 @@ def push(
 
     replay_options = merge_replay_options(replay=replay)
     _preflight_log(trace)
-    _refuse_armed_gradient_rules(trace)
+    _refuse_armed_gradient_rules(trace, replay_options.hooks)
     _warn_if_direct_writes_will_be_overlaid(trace)
     hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
     origins = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
@@ -216,12 +216,20 @@ def gradient_edit_replay_text(sites: str) -> tuple[str, str]:
     return message, remedy
 
 
-def _refuse_armed_gradient_rules(trace: Trace) -> None:
-    """Refuse a push whose recipe holds gradient (``tl.grad``) rules.
+def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
+    """Refuse a push whose recipe or explicit replay hooks address a gradient.
 
-    Replay recomputes forward values off the autograd graph, so an armed
-    gradient rule could never fire there; refusing keeps a push from
-    returning a result that silently dropped it.
+    Replay recomputes forward values off the autograd graph, so a gradient
+    rule could never fire there, whether the recipe arms it or the call
+    passes it as ``ReplayOptions(hooks={tl.grad(site): edit})``; refusing
+    keeps a push from returning a result that silently dropped it.
+
+    Parameters
+    ----------
+    trace:
+        Trace about to be pushed.
+    hooks:
+        The push's explicit ``ReplayOptions.hooks`` mapping, or ``None``.
 
     Raises
     ------
@@ -232,11 +240,10 @@ def _refuse_armed_gradient_rules(trace: Trace) -> None:
     from .spec import is_gradient_site
 
     spec = getattr(trace, "_intervention_spec", None)
-    sites = [
-        repr(hook_spec.site_target)
-        for hook_spec in getattr(spec, "hook_specs", ())
-        if is_gradient_site(hook_spec.site_target)
-    ]
+    targets = [hook_spec.site_target for hook_spec in getattr(spec, "hook_specs", ())]
+    if isinstance(hooks, Mapping):
+        targets.extend(hooks)
+    sites = [repr(target) for target in targets if is_gradient_site(target)]
     if sites:
         message, remedy = gradient_edit_replay_text(", ".join(dict.fromkeys(sites)))
         raise InvalidArgumentError(

@@ -273,6 +273,23 @@ def test_a22_gradient_edit_without_a_rerun_refuses_before_mutation(engine: str |
     assert len(trace.state_history) == history_before
 
 
+def test_push_replay_hooks_refuse_a_gradient_edit() -> None:
+    """SPEC 3.6: a gradient edit passed as push replay hooks refuses; nothing changes."""
+
+    model = _BranchMLP()
+    trace = _capture(model, _X)
+    relu = _label(trace, "relu")
+    out_before = trace[relu].out.clone()
+    audit_before = list(trace.intervention_audit)
+    replay = tl.options.ReplayOptions(hooks={tl.grad(relu): tl.scale(0)})
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        trace.push(replay=replay)
+    assert excinfo.value.fields["code"] == "replay_gradient_edit_unsupported"
+    assert "Replay re-executes forward ops only" in str(excinfo.value)
+    assert torch.equal(trace[relu].out, out_before)
+    assert trace.intervention_audit == audit_before
+
+
 def test_a23_loss_refusals() -> None:
     """A23: a tensor loss and a loss with no gradient site refuse typed."""
 
