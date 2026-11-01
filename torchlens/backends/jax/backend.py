@@ -269,6 +269,148 @@ class _JaxIntermediateTapSpec:
 _UNSUPPORTED_CONTAINER_SPEC: Final = object()
 
 
+def _stamp_jaxpr_results(trace: Trace, closed_jaxpr: Any, result: Any, static_argnums: Any) -> None:
+    """Record the interpreted jaxpr and its captures on the trace."""
+
+    trace.jax_closed_jaxpr = closed_jaxpr
+    trace.jax_equation_captures = result.equations
+    trace.jax_ordered_captures = result.captures
+    trace.jax_region_captures = tuple(
+        capture for capture in result.captures if isinstance(capture, JaxRegionCapture)
+    )
+    trace.jax_inlined_call_primitives = result.inlined_call_primitives
+    trace.jax_static_argnums = static_argnums
+
+
+def _jax_pre_replay_failure_status(
+    trace: Trace, log: _JaxValidationLog, exc: BaseException
+) -> ValidationStatus:
+    """The failed status recorded when validation raised before any replay verdict."""
+
+    _record_jax_decision(
+        log,
+        "<trace>",
+        "",
+        _JaxVerdict("metadata", "failed", "metadata_invariant_exception"),
+    )
+    status_result = ValidationStatus.result(
+        passed=False,
+        backend="jax",
+        source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
+        payload_load_status=getattr(trace, "payload_load_status", None),
+        num_failed_ops=1,
+        decisions=tuple(log.decisions),
+    )
+    return replace(
+        status_result,
+        message=f"Replay validation failed before replay: {type(exc).__name__}: {exc}",
+    )
+
+
+def _jax_captures_consistent(
+    captures: tuple[Any, ...], equation_ops: Sequence[Any], log: _JaxValidationLog
+) -> bool:
+    """Equation captures and equation ops agree in count and in kind multiset."""
+
+    if len(captures) != len(equation_ops):
+        _record_jax_decision(
+            log,
+            "<trace>",
+            "",
+            _JaxVerdict("metadata", "failed", "capture_inconsistent"),
+            f"{len(captures)} equation captures for {len(equation_ops)} equation ops",
+        )
+        return False
+    capture_kind_counts = Counter(capture.kind for capture in captures)
+    op_kind_counts = Counter(_jax_op_capture_kind(op) for op in equation_ops)
+    if capture_kind_counts != op_kind_counts:
+        _record_jax_decision(
+            log,
+            "<trace>",
+            "",
+            _JaxVerdict("metadata", "failed", "capture_inconsistent"),
+            "equation capture kinds differ from op capture kinds",
+        )
+        return False
+    return True
+
+
+def _jax_ops_by_label(trace: Trace) -> dict[str, Any]:
+    """Index ops by raw, final and (for single-pass ops) bare labels."""
+
+    # TORCH PARITY: ``parent_arg_positions`` (and ``parents``/``children``)
+    # resolve through the CONDITIONAL label map -- a single-pass op's bare
+    # ``layer_label``, a multi-pass op's pass-qualified ``label`` -- so a
+    # lookup keyed only by raw/final-qualified labels misses every
+    # single-pass parent reference. Index the bare label too (safe: a
+    # single-pass op's bare label is unambiguous).
+    ops_by_label: dict[str, Any] = {}
+    for op in getattr(trace, "layer_list", []):
+        labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
+        if getattr(op, "num_passes", 1) == 1:
+            labels.append(getattr(op, "layer_label", None))
+        for label in labels:
+            if isinstance(label, str):
+                ops_by_label[label] = op
+    return ops_by_label
+
+
+def _validate_one_jax_equation(
+    jax: Any,
+    capture: Any,
+    op: Any,
+    ops_by_label: dict[str, Any],
+    hidden_outputs_by_label: dict[str, tuple[Any, ...]],
+    log: _JaxValidationLog,
+) -> bool:
+    """Replay one equation against its saved outputs and record the verdict."""
+
+    op_label = str(getattr(op, "label", getattr(op, "_label_raw", "")))
+    func_name = str(getattr(op, "func_name", capture.primitive))
+    if capture.kind != _jax_op_capture_kind(op):
+        _record_jax_decision(
+            log,
+            op_label,
+            func_name,
+            _JaxVerdict("metadata", "failed", "capture_inconsistent"),
+        )
+        return False
+    try:
+        inputs = _inputs_from_trace_graph(capture, op, ops_by_label, hidden_outputs_by_label)
+        replayed = replay_equation(capture, inputs)
+        saved_outputs = _saved_op_outputs(
+            op,
+            len(replayed),
+            hidden_outputs_by_label=hidden_outputs_by_label,
+        )
+    except Exception as exc:  # noqa: BLE001 - name the op, then fail closed
+        _record_jax_decision(
+            log,
+            op_label,
+            func_name,
+            _JaxVerdict("replay", "failed", "replay_mismatch"),
+            f"{type(exc).__name__}: {exc}",
+        )
+        return False
+    if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
+        _record_jax_decision(
+            log, op_label, func_name, _JaxVerdict("replay", "failed", "replay_mismatch")
+        )
+        return False
+    if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
+        _record_jax_decision(
+            log,
+            op_label,
+            func_name,
+            _JaxVerdict("perturbation", "failed", "perturbation_insensitive"),
+        )
+        return False
+    _record_jax_decision(
+        log, op_label, func_name, _JaxVerdict("replay", "validated", "replay_match")
+    )
+    return True
+
+
 class JAXBackend:
     """JAX adapter that captures forward graphs from closed jaxprs."""
 
@@ -619,14 +761,7 @@ class JAXBackend:
             module_tree if use_pytree_module else None,
             result.equations,
         )
-        trace.jax_closed_jaxpr = closed_jaxpr
-        trace.jax_equation_captures = result.equations
-        trace.jax_ordered_captures = result.captures
-        trace.jax_region_captures = tuple(
-            capture for capture in result.captures if isinstance(capture, JaxRegionCapture)
-        )
-        trace.jax_inlined_call_primitives = result.inlined_call_primitives
-        trace.jax_static_argnums = static_argnums
+        _stamp_jaxpr_results(trace, closed_jaxpr, result, static_argnums)
         apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")
         if grad_options is not None:
             self._attach_derived_grads(
@@ -722,24 +857,7 @@ class JAXBackend:
                 )
             status_result = self._validation_status_from_counts(trace, passed=passed, log=log)
         except Exception as exc:  # noqa: BLE001 - the tripwire reports, never raises
-            _record_jax_decision(
-                log,
-                "<trace>",
-                "",
-                _JaxVerdict("metadata", "failed", "metadata_invariant_exception"),
-            )
-            status_result = ValidationStatus.result(
-                passed=False,
-                backend="jax",
-                source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
-                payload_load_status=getattr(trace, "payload_load_status", None),
-                num_failed_ops=1,
-                decisions=tuple(log.decisions),
-            )
-            status_result = replace(
-                status_result,
-                message=f"Replay validation failed before replay: {type(exc).__name__}: {exc}",
-            )
+            status_result = _jax_pre_replay_failure_status(trace, log, exc)
         trace._validation_replay_status = status_result
         return status_result
 
@@ -819,40 +937,9 @@ class JAXBackend:
             log = _JaxValidationLog()
         captures = tuple(getattr(trace, "jax_equation_captures", ()))
         equation_ops = _jax_equation_ops(trace)
-        if len(captures) != len(equation_ops):
-            _record_jax_decision(
-                log,
-                "<trace>",
-                "",
-                _JaxVerdict("metadata", "failed", "capture_inconsistent"),
-                f"{len(captures)} equation captures for {len(equation_ops)} equation ops",
-            )
+        if not _jax_captures_consistent(captures, equation_ops, log):
             return False
-        capture_kind_counts = Counter(capture.kind for capture in captures)
-        op_kind_counts = Counter(_jax_op_capture_kind(op) for op in equation_ops)
-        if capture_kind_counts != op_kind_counts:
-            _record_jax_decision(
-                log,
-                "<trace>",
-                "",
-                _JaxVerdict("metadata", "failed", "capture_inconsistent"),
-                "equation capture kinds differ from op capture kinds",
-            )
-            return False
-        # TORCH PARITY: ``parent_arg_positions`` (and ``parents``/``children``)
-        # resolve through the CONDITIONAL label map -- a single-pass op's bare
-        # ``layer_label``, a multi-pass op's pass-qualified ``label`` -- so a
-        # lookup keyed only by raw/final-qualified labels misses every
-        # single-pass parent reference. Index the bare label too (safe: a
-        # single-pass op's bare label is unambiguous).
-        ops_by_label: dict[str, Any] = {}
-        for op in getattr(trace, "layer_list", []):
-            labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
-            if getattr(op, "num_passes", 1) == 1:
-                labels.append(getattr(op, "layer_label", None))
-            for label in labels:
-                if isinstance(label, str):
-                    ops_by_label[label] = op
+        ops_by_label = _jax_ops_by_label(trace)
         hidden_outputs_by_label: dict[str, tuple[Any, ...]] = {
             label: value if isinstance(value, tuple) else (value,)
             for label, value in getattr(trace, "_selective_save_hidden_payloads", {}).items()
@@ -860,51 +947,10 @@ class JAXBackend:
         # The len(captures) != len(equation_ops) guard above already returned
         # False, so these pair exactly.
         for capture, op in zip(captures, equation_ops, strict=True):
-            op_label = str(getattr(op, "label", getattr(op, "_label_raw", "")))
-            func_name = str(getattr(op, "func_name", capture.primitive))
-            if capture.kind != _jax_op_capture_kind(op):
-                _record_jax_decision(
-                    log,
-                    op_label,
-                    func_name,
-                    _JaxVerdict("metadata", "failed", "capture_inconsistent"),
-                )
+            if not _validate_one_jax_equation(
+                jax, capture, op, ops_by_label, hidden_outputs_by_label, log
+            ):
                 return False
-            try:
-                inputs = _inputs_from_trace_graph(
-                    capture, op, ops_by_label, hidden_outputs_by_label
-                )
-                replayed = replay_equation(capture, inputs)
-                saved_outputs = _saved_op_outputs(
-                    op,
-                    len(replayed),
-                    hidden_outputs_by_label=hidden_outputs_by_label,
-                )
-            except Exception as exc:  # noqa: BLE001 - name the op, then fail closed
-                _record_jax_decision(
-                    log,
-                    op_label,
-                    func_name,
-                    _JaxVerdict("replay", "failed", "replay_mismatch"),
-                    f"{type(exc).__name__}: {exc}",
-                )
-                return False
-            if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
-                _record_jax_decision(
-                    log, op_label, func_name, _JaxVerdict("replay", "failed", "replay_mismatch")
-                )
-                return False
-            if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
-                _record_jax_decision(
-                    log,
-                    op_label,
-                    func_name,
-                    _JaxVerdict("perturbation", "failed", "perturbation_insensitive"),
-                )
-                return False
-            _record_jax_decision(
-                log, op_label, func_name, _JaxVerdict("replay", "validated", "replay_match")
-            )
         return True
 
     def _validate_jax_regions(self, trace: Trace) -> bool:
