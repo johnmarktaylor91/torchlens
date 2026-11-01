@@ -22,8 +22,6 @@ import torchlens as tl
 from torchlens._utils import _package_frames, introspection
 from torchlens._utils._package_frames import is_torchlens_code, normalized_filename
 
-pytestmark = pytest.mark.smoke
-
 
 def _user_module_code(path: Path, source: str) -> object:
     """Compile ``source`` as if it were the module at ``path`` and return its code."""
@@ -88,6 +86,7 @@ class _Outer(nn.Module):
         return self.inner(x) * 2
 
 
+@pytest.mark.smoke
 def test_code_context_walk_agrees_with_the_frame_filter(monkeypatch: pytest.MonkeyPatch) -> None:
     """The walk's inline verdict lookup keeps or drops exactly the frames the filter would."""
 
