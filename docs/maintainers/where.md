@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-81 packages, 1281 modules, 622466 lines, 0 modules without a docstring.
+81 packages, 1281 modules, 622551 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -22,7 +22,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 50 | 34731 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 50 | 34732 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10953 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
@@ -74,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5228 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 64 | 35160 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 64 | 35244 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 682 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 328 |
@@ -419,7 +419,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10552 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (50 modules, 34731 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (50 modules, 34732 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -438,7 +438,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `_pre3_module_paths` | The one refusal for a file saved by torchlens 2.x. | 183 |
 | `_rehydrate_lazy_names` | Pure naming helpers mapping manifest blob kinds to lazy-reference fields. | 53 |
 | `_root_manifest` | Route a ''.tlspec'' directory by its root manifest before trace-bundle parsing. | 106 |
-| `_safe_unpickle` | Restricted unpickler for TorchLens portable-bundle metadata. | 1983 |
+| `_safe_unpickle` | Restricted unpickler for TorchLens portable-bundle metadata. | 1984 |
 | `_save_gates` | Save-entry gate helpers for ''torchlens._io.bundle.save''. | 185 |
 | `_small_raw` | Bounded portable previews of raw inputs and outputs under ''save_raw_input="small"''. | 183 |
 | `_source_privacy` | Source-embedding privacy policy for portable saves (split from scrub.py). | 479 |
@@ -1506,7 +1506,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3005 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (64 modules, 35160 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (64 modules, 35244 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1544,7 +1544,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_subspace_projection` | Projection-valued subspace edits: ''do(subspace(...), edit)'' edits the component. | 529 |
 | `_subspace_spec` | Reload a saved ''subspace_edit'': the portable form of a projection-valued edit. | 277 |
 | `_zero_fire` | One zero-fire policy for every intervention door (spelling DOCUMENTED-UNSTABLE). | 228 |
-| `audit` | The ONE FireRecord builder and the InterventionEvent envelope. | 554 |
+| `audit` | The ONE FireRecord builder and the InterventionEvent envelope. | 562 |
 | `binding` | ''spec.bind(model)'' -- the capture-free bound intervention executor. | 1576 |
 | `bundle` | Compatibility shim for the relocated Bundle implementation. | 9 |
 | `compose` | ''tl.compose'': the explicit value algebra for chained edits (edits -). | 233 |
@@ -1565,15 +1565,15 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `rerun` | Full-forward rerun engine for TorchLens interventions. | 1692 |
 | `resolver` | Resolve TorchLens intervention selectors against model logs. | 1128 |
 | `runtime` | Runtime context ownership for TorchLens intervention execution. | 1668 |
-| `save` | Persistence for TorchLens intervention specifications. | 2279 |
+| `save` | Persistence for TorchLens intervention specifications. | 2324 |
 | `selectors` | Typed selectors for TorchLens intervention site resolution. | 1713 |
 | `site_keys` | Live site-key minting (surgery memo Build 0c). | 159 |
 | `sites` | Structured intervention site collections for sweeps. | 200 |
 | `spec` | The ONE immutable public intervention spec ( substrate). | 752 |
 | `spec_compat` | Saved intervention-spec compatibility checking (site-key-first). | 299 |
-| `stochastic` | Stochastic/population edit verbs and the derived-seed law (edits memo). | 1379 |
+| `stochastic` | Stochastic/population edit verbs and the derived-seed law (edits memo). | 1382 |
 | `sweep` | Convenience constructor for value-sweep intervention bundles. | 552 |
-| `types` | Shared dataclass ownership for TorchLens intervention schemas. | 963 |
+| `types` | Shared dataclass ownership for TorchLens intervention schemas. | 991 |
 
 ### `torchlens.intervention._super`
 
