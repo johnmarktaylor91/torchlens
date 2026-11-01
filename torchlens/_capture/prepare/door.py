@@ -1426,8 +1426,6 @@ def _run_request(request: CaptureRequest) -> ForwardResult:
                 armed_capture(episode_resolved, run_prepared) as capture_callable,
                 pending_admission(facts["meta_admission"]),
             ):
-                # Looked up on the module at call time: the rescue seam is a
-                # documented patch point (tests isolate the sensor from the re-run).
                 trace = _rescue.capture_with_rescue(
                     capture_callable, eligible=facts["rescue_eligible"], model=model
                 )
